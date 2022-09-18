@@ -59,12 +59,14 @@ class FileDownloader {
     _initialized = true;
   }
 
+  /// Resets downoader and cancels all outstanding tasks
   static Future<void> reset() async {
     assert(_initialized, 'FileDownloader must be initialized before use');
     print('invoking resetDownloadWorker');
     await _channel.invokeMethod<String>('reset');
   }
 
+  /// Start a new download task
   static Future<void> enqueue(BackgroundDownloadTask task) async {
     assert(_initialized, 'FileDownloader must be initialized before use');
     final arg = jsonEncode(task,
@@ -74,6 +76,7 @@ class FileDownloader {
     await _channel.invokeMethod<bool>('enqueueDownload', arg);
   }
 
+  /// Returns a list of taskIds of all tasks currently running
   static Future<List<String>> allTaskIds() async {
     assert(_initialized, 'FileDownloader must be initialized before use');
     print('invoking allTasks');
@@ -81,5 +84,10 @@ class FileDownloader {
     return result.map((e) => e as String).toList();
   }
 
-
+  /// Delete all tasks matching the taskIds in the list
+  static Future<void> cancelTasksWithIds(List<String> taskIds) async {
+    assert(_initialized, 'FileDownloader must be initialized before use');
+    print('invoking cancelTasksWithIds');
+    await _channel.invokeMethod<bool>('cancelTasksWithIds', taskIds);
+  }
 }

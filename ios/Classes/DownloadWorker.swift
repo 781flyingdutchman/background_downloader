@@ -57,8 +57,8 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
       methodEnqueueDownload(call: call, result: result)
     case "allTasks":
       methodAllTasks(call: call, result: result)
-//    case "removeTasksWithId":
-//      methodRemoveTasksWithId(call: call, result: result)
+    case "cancelTasksWithIds":
+      methodCancelTasksWithIds(call: call, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -131,7 +131,26 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
     })
   }
   
- 
+  /// Cancels ongoing tasks whose taskId is in the list provided with this call
+  private func methodCancelTasksWithIds(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    os_log("Method cancelTasksWithIds", log: log)
+    guard let taskIds = call.arguments as? [String] else {
+      os_log("Invalid arguments", log: log)
+      return
+    }
+    let taskIdMap = getTaskIdMap()
+    urlSession = urlSession ?? createUrlSession()
+    urlSession?.getAllTasks(completionHandler: { tasks in
+      for task in tasks {
+        guard let taskId = taskIdMap[String(task.taskIdentifier)],
+              taskIds.contains(taskId)
+        else {continue}
+        os_log("Canceling %@", log: self.log, taskId)
+        task.cancel()
+      }
+      result(nil)
+    })
+  }
   
   /// Handle potential errors sent by the urlSession
   ///

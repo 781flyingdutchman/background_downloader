@@ -45,8 +45,9 @@ class _MyAppState extends State<MyApp> {
             directory: "directory",
             baseDirectory: BaseDirectory.applicationDocuments);
         await FileDownloader.enqueue(backgroundDownloadTask);
-        print(await FileDownloader.allTaskIds());
       }
+      var taskIds = await FileDownloader.allTaskIds();
+      await FileDownloader.cancelTasksWithIds(taskIds.sublist(2));
 
 
 
