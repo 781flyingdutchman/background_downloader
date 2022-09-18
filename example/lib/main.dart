@@ -10,7 +10,6 @@ void main() {
 }
 
 void myCallback(String taskId, bool success) {
-  var log = Logger("callback");
   print("in my callback with $taskId and $success");
 }
 
@@ -34,6 +33,8 @@ class _MyAppState extends State<MyApp> {
     int platformVersion = 100;
 
     FileDownloader.initialize(callback: myCallback);
+    FileDownloader.initialize();
+
     await FileDownloader.resetDownloadWorker();
 
       for (var n = 0; n < 5; n++) {

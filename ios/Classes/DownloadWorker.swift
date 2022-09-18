@@ -290,7 +290,6 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
         )
       }
     } else {
-      os_log("App is in foreground", log: self.log)
       // app is in forground, so call back to Dart
       // get the handle to the dart function passed with the task
       guard let channel = DownloadWorker.backgroundChannel else {
