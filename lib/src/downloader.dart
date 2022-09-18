@@ -24,6 +24,7 @@ class FileDownloader {
 
   bool get initialized => _initialized;
 
+  /// Initialize the downloader and register a completion callback
   static void initialize({DownloadCallback? callback}) {
     const portName = 'file_downloader_send_port';
     if (callback != null) {
@@ -58,7 +59,7 @@ class FileDownloader {
     _initialized = true;
   }
 
-  static Future<void> resetDownloadWorker() async {
+  static Future<void> reset() async {
     assert(_initialized, 'FileDownloader must be initialized before use');
     print('invoking resetDownloadWorker');
     await _channel.invokeMethod<String>('reset');
@@ -72,4 +73,13 @@ class FileDownloader {
     print('invoking enqueueDownload');
     await _channel.invokeMethod<bool>('enqueueDownload', arg);
   }
+
+  static Future<List<String>> allTaskIds() async {
+    assert(_initialized, 'FileDownloader must be initialized before use');
+    print('invoking allTasks');
+    final result = await _channel.invokeMethod<List<Object?>>('allTasks') ?? [];
+    return result.map((e) => e as String).toList();
+  }
+
+
 }

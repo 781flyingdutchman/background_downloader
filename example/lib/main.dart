@@ -35,7 +35,7 @@ class _MyAppState extends State<MyApp> {
     FileDownloader.initialize(callback: myCallback);
     FileDownloader.initialize();
 
-    await FileDownloader.resetDownloadWorker();
+    await FileDownloader.reset();
 
       for (var n = 0; n < 5; n++) {
         final backgroundDownloadTask = BackgroundDownloadTask(
@@ -44,7 +44,8 @@ class _MyAppState extends State<MyApp> {
             filename: "filename$n",
             directory: "directory",
             baseDirectory: BaseDirectory.applicationDocuments);
-        FileDownloader.enqueue(backgroundDownloadTask);
+        await FileDownloader.enqueue(backgroundDownloadTask);
+        print(await FileDownloader.allTaskIds());
       }
 
 

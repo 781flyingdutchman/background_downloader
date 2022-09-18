@@ -19,8 +19,8 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   
   private static var resourceTimeout = 5 * 60.0 // seconds
   public static var sessionIdentifier = "com.bbflight.file_downloader.DownloadWorker"
-  private static var keySuccess = "com.bbflight.file_downloader.success"
-  private static var keyFailure = "com.bbflight.file_downloader.failure"
+  private static var keyTaskMap = "com.bbflight.file_downloader.taskMap"
+  private static var keyNativeMap = "com.bbflight.file_downloader.nativeMap"
   private static var keyTaskIdMap = "com.bbflight.file_downloader.taskIdMap"
   public static var flutterPluginRegistrantCallback: FlutterPluginRegistrantCallback?
   private static var backgroundChannel: FlutterMethodChannel?
@@ -43,7 +43,9 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   @objc
   public static func setPluginRegistrantCallback(_ callback: @escaping FlutterPluginRegistrantCallback) {
     flutterPluginRegistrantCallback = callback
-    
+//    UserDefaults.standard.removeObject(forKey: keyNativeMap)
+//    UserDefaults.standard.removeObject(forKey: keyTaskIdMap)
+//    UserDefaults.standard.removeObject(forKey: keyTaskMap)
   }
   
   /// Handler for Flutter plugin method channel calls
@@ -53,10 +55,10 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
       methodReset(call: call, result: result)
     case "enqueueDownload":
       methodEnqueueDownload(call: call, result: result)
-    case "movingToBackground":
-      methodMovingToBackground(call: call, result: result)
-    case "movingToForeground":
-      methodMovingToForeground(call: call, result: result)
+    case "allTasks":
+      methodAllTasks(call: call, result: result)
+//    case "removeTasksWithId":
+//      methodRemoveTasksWithId(call: call, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -67,10 +69,13 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
     os_log("Method reset", log: log)
     appIsInBackground = false
     urlSession = urlSession ?? createUrlSession()
-    os_log("Invalidating urlSession", log: log)
-    urlSession?.invalidateAndCancel()
-    urlSession = nil;
-    result(nil)
+    os_log("removing all running tasks", log: log)
+    urlSession?.getAllTasks(completionHandler: { tasks in
+      for task in tasks {
+        task.cancel()
+      }
+      result(nil)
+    })
   }
   
   /// Starts the download worker. The argument is a JSON String representing a list of BackgroundDownloadTasks
@@ -93,43 +98,40 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
     defer {
       userDefaultsLock.unlock()
     }
-    var taskIdMap = getTaskIdMap()
+    var taskMap = getTaskMap()
     let encoder = JSONEncoder()
     let jsonString = String(data: try! encoder.encode(backgroundDownloadTask), encoding: .utf8)
-    taskIdMap[String(urlSessionDownloadTask.taskIdentifier)] = jsonString
+    taskMap[String(urlSessionDownloadTask.taskIdentifier)] = jsonString
+    var nativeMap = getNativeMap()
+    nativeMap[backgroundDownloadTask.taskId] = urlSessionDownloadTask.taskIdentifier
+    var taskIdMap = getTaskIdMap()
+    taskIdMap[String(urlSessionDownloadTask.taskIdentifier)] = backgroundDownloadTask.taskId
+    UserDefaults.standard.set(taskMap, forKey: DownloadWorker.keyTaskMap)
+    UserDefaults.standard.set(nativeMap, forKey: DownloadWorker.keyNativeMap)
     UserDefaults.standard.set(taskIdMap, forKey: DownloadWorker.keyTaskIdMap)
     // now start the task
     urlSessionDownloadTask.resume()
     result(true)
   }
   
-  /// Signals to the plugin that the main app is moving to background, and does not want to receive status updates
-  ///
-  /// From here on, completed tasks (success or failure) are recorded in UserDefaults and can be retrieved by the main
-  /// app on resume, using the movingToForeground method call.  For reference, this method returns
-  /// a list of successes and failures kept by the plugin (though they should have been collected through movingToForeground)
-  private func methodMovingToBackground(call: FlutterMethodCall, result: @escaping FlutterResult) {
-    appIsInBackground = true
-    let success = UserDefaults.standard.object(forKey: DownloadWorker.keySuccess) as? [String] ?? []
-    let failure = UserDefaults.standard.object(forKey: DownloadWorker.keyFailure) as? [String] ?? []
-    // Clear list of successes and failures
-    UserDefaults.standard.removeObject(forKey: DownloadWorker.keySuccess)
-    UserDefaults.standard.removeObject(forKey: DownloadWorker.keyFailure)
-    result(["success": success, "failure": failure])
+  /// Returns a list with tasks (in JSON String format) for all tasks in progress
+  private func methodAllTasks(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    let taskIdMap = getTaskIdMap()
+    var taskIds: [String] = []
+    urlSession = urlSession ?? createUrlSession()
+    urlSession?.getAllTasks(completionHandler: { tasks in
+      os_log("Found %d tasks", log: self.log, tasks.count)
+      for task in tasks {
+        guard
+          let taskId = taskIdMap[String(task.taskIdentifier)] else { continue }
+        taskIds.append(taskId)
+      }
+      os_log("Found taskIds: %@", log: self.log, taskIds)
+      result(taskIds)
+    })
   }
   
-  /// Signals to the plugin that the main app is moving to the foreground, and wants to receive status updates again
-  ///
-  /// The return value is a map/dictionary with 'success' and 'failure', each containing the taskIds of the respective tasks
-  private func methodMovingToForeground(call: FlutterMethodCall, result: @escaping FlutterResult) {
-    appIsInBackground = false
-    let success = UserDefaults.standard.object(forKey: DownloadWorker.keySuccess) as? [String] ?? []
-    let failure = UserDefaults.standard.object(forKey: DownloadWorker.keyFailure) as? [String] ?? []
-    // Clear list of successes and failures
-    UserDefaults.standard.removeObject(forKey: DownloadWorker.keySuccess)
-    UserDefaults.standard.removeObject(forKey: DownloadWorker.keyFailure)
-    result(["success": success, "failure": failure])
-  }
+ 
   
   /// Handle potential errors sent by the urlSession
   ///
@@ -142,7 +144,7 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
     if error != nil {
       os_log("Error for download with error %@", log: self.log, error!.localizedDescription)
       // map the urlSessionDownloadTask taskidentifier to the original BackgroudnDownloadTask's taskId
-      let taskIdMap = getTaskIdMap()
+      let taskIdMap = getTaskMap()
       guard let backgroundDownloadTaskJsonString = taskIdMap[String(task.taskIdentifier)] else {
         os_log("Could not map urlSessionDownloadTask identifier %d to a taskId", log: log, task.taskIdentifier)
         return
@@ -162,7 +164,7 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
                          didFinishDownloadingTo location: URL) {
     // os_log("Did finish download %@", log: self.log, downloadTask.taskIdentifier)
     // map the urlSessionDownloadTask taskidentifier to the original BackgroudnDownloadTask's taskId
-    let taskIdMap = getTaskIdMap()
+    let taskIdMap = getTaskMap()
     guard let backgroundDownloadTaskJsonString = taskIdMap[String(downloadTask.taskIdentifier)] else {
       os_log("Could not map urlSessionDownloadTask identifier %d to a taskId", log: log, downloadTask.taskIdentifier)
       return
@@ -220,7 +222,17 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
     }
   }
   
-  /// Get the taskId map from UserDefaults. The values are still in JSON String format. Must surround with locks
+  /// Get the task map from UserDefaults. Maps the native id to a JSON String representing the DownloadTask.
+  private func getTaskMap() -> [String:String] {
+    return (UserDefaults.standard.object(forKey: DownloadWorker.keyTaskMap) ?? [:]) as! [String:String]
+  }
+  
+  /// Get the native map from UserDefaults. Maps taskId to native id
+  private func getNativeMap() -> [String:Int] {
+    return (UserDefaults.standard.object(forKey: DownloadWorker.keyNativeMap) ?? [:]) as! [String:Int]
+  }
+  
+  /// Get the taskId map from TaskMap. Maps the native id to the taskId of the DownloadTask.
   private func getTaskIdMap() -> [String:String] {
     return (UserDefaults.standard.object(forKey: DownloadWorker.keyTaskIdMap) ?? [:]) as! [String:String]
   }
@@ -232,6 +244,8 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
     return backgroundDownloadTasks
   }
   
+
+
   
   
   /// When the app restarts, recreate the urlSession if needed, and store the completion handler
@@ -270,36 +284,17 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   /// If in background, adds the taskId to the list in preferences, for later retrieval when returning to foreground
   private func recordSuccessOrFailure(task: BackgroundDownloadTask, success: Bool) {
     os_log("recordSuccessOrFailure for taskId %@", log: self.log, task.taskId)
-    if (appIsInBackground) {
-      os_log("App is in background", log: self.log)
-      userDefaultsLock.lock()  // Only one thread can access prefs at the same time
-      defer {
-        userDefaultsLock.unlock()
-      }
-      let prefsKey = (success ? DownloadWorker.keySuccess : DownloadWorker.keyFailure)
-      var existing = UserDefaults.standard.object(forKey: prefsKey) as? [String] ?? []
-      existing.append(task.taskId)
-      UserDefaults.standard.set(existing, forKey: prefsKey)
-      if (!success) {
-        os_log(
-          "Failed background download for taskId %@ from %@ to %@", log: self.log, task.taskId, task.url, task.filename
-        )
-      } else {
-        os_log(
-          "Successful background download for taskId %@ from %@ to %@", log: self.log, task.taskId, task.url, task.filename
-        )
-      }
-    } else {
-      // app is in forground, so call back to Dart
-      // get the handle to the dart function passed with the task
-      guard let channel = DownloadWorker.backgroundChannel else {
-        os_log("Could not find callback information", log: self.log)
-        return
-      }
-      DispatchQueue.main.async {
-        channel.invokeMethod("completion", arguments: [task.taskId, success])
-      }
+    
+    // app is in forground, so call back to Dart
+    // get the handle to the dart function passed with the task
+    guard let channel = DownloadWorker.backgroundChannel else {
+      os_log("Could not find callback information", log: self.log)
+      return
     }
+    DispatchQueue.main.async {
+      channel.invokeMethod("completion", arguments: [task.taskId, success])
+    }
+    
   }
   
   /// Creates a urlSession
