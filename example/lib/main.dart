@@ -1,9 +1,17 @@
+import 'package:file_downloader/file_downloader.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'package:file_downloader/file_downloader.dart';
+
+import 'package:logging/logging.dart';
+
 
 void main() {
   runApp(const MyApp());
+}
+
+void myCallback(String taskId, bool success) {
+  var log = Logger("callback");
+  print("in my callback with $taskId and $success");
 }
 
 class MyApp extends StatefulWidget {
@@ -25,12 +33,19 @@ class _MyAppState extends State<MyApp> {
   Future<void> initPlatformState() async {
     int platformVersion = 100;
 
-    FileDownloader.initialize();
+    FileDownloader.initialize(callback: myCallback);
     await FileDownloader.resetDownloadWorker();
-    // await FlutterDownloader.initializeDownloadWorker();
-    await FileDownloader.enqueueSomeTasks();
-    // await Future.delayed(const Duration(seconds: 5));
-    // await FlutterDownloader.moveToBackground();
+
+      for (var n = 0; n < 5; n++) {
+        final backgroundDownloadTask = BackgroundDownloadTask(
+            taskId: 'taskId$n',
+            url: "https://google.com",
+            filename: "filename$n",
+            directory: "directory",
+            baseDirectory: BaseDirectory.applicationDocuments);
+        FileDownloader.enqueue(backgroundDownloadTask);
+      }
+
 
 
 

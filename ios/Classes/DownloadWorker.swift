@@ -8,7 +8,7 @@ struct BackgroundDownloadTask : Codable {
   var taskId: String
   var url: String
   var filename: String
-  var savedDir: String
+  var directory: String
   var baseDirectory: Int
 }
     
@@ -195,16 +195,16 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
                               in: .userDomainMask,
                               appropriateFor: nil,
                               create: false)
-      let savedDir = documentsURL.appendingPathComponent(backgroundDownloadTask.savedDir)
-      os_log("SavedDir=%@", log: log, savedDir.path)
+      let directory = documentsURL.appendingPathComponent(backgroundDownloadTask.directory)
+      os_log("Full path=%@", log: log, directory.path)
       do
       {
-        try FileManager.default.createDirectory(at: savedDir, withIntermediateDirectories:  true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories:  true)
       } catch {
-        os_log("Failed to create directory %@", log: log, savedDir.path)
+        os_log("Failed to create directory %@", log: log, directory.path)
         return
       }
-      let filePath = savedDir.appendingPathComponent(backgroundDownloadTask.filename)
+      let filePath = directory.appendingPathComponent(backgroundDownloadTask.filename)
       if FileManager.default.fileExists(atPath: filePath.path) {
         try? FileManager.default.removeItem(at: filePath)
       }

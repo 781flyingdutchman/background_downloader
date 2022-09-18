@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'dart:math';
 
 /// Defines a set of possible states which a [DownloadTask] can be in.
 enum DownloadTaskStatus {
@@ -6,9 +6,7 @@ enum DownloadTaskStatus {
   enqueued,
   running,
   complete,
-  failed,
-  canceled,
-  paused;
+  failed;
 }
 
 /// Base directory in which files will be stored, based on their relative
@@ -21,72 +19,28 @@ enum BaseDirectory {
   applicationSupport // getApplicationSupportDirectory()
 }
 
-/// Encapsulates all information of a single download task.
-///
-/// This is also the structure of the record saved in the SQLite database.
-class DownloadTask {
-  /// Creates a new [DownloadTask].
-  DownloadTask(
-      {required this.taskId,
-      required this.status,
-      required this.progress,
-      required this.url,
-      required this.filename,
-      required this.savedDir,
-      required this.timeCreated,
-      this.baseDirectory = BaseDirectory.applicationDocuments});
-
-  /// Unique identifier of this task.
-  final String taskId;
-
-  /// Status of this task.
-  final DownloadTaskStatus status;
-
-  /// Progress between 0 (inclusive) and 100 (inclusive).
-  final int progress;
-
-  /// URL from which the file is downloaded.
-  final String url;
-
-  /// Local file name of the downloaded file.
-  final String? filename;
-
-  /// Path to the directory where the downloaded file will saved, relative to
-  /// the base directory
-  final String savedDir;
-
-  /// Timestamp when the task was created.
-  final int timeCreated;
-
-  /// Base directory in which downloaded files are stored
-  final BaseDirectory baseDirectory;
-
-  @override
-  String toString() =>
-      'DownloadTask(taskId: $taskId, status: $status, progress: $progress, url: $url, filename: $filename, savedDir: $savedDir, timeCreated: $timeCreated, baseDirectory $baseDirectory)';
-}
-
-/// Partial version of the Dart side DownloadTask, only used for background loading
+/// Information related to a download
 class BackgroundDownloadTask {
   final String taskId;
   final String url;
   final String filename;
-  final String savedDir;
-  final int baseDirectory;
+  final String directory;
+  final BaseDirectory baseDirectory;
 
   BackgroundDownloadTask(
-      this.taskId, this.url, this.filename, this.savedDir, this.baseDirectory);
-
-  BackgroundDownloadTask.fromDownloadTask(DownloadTask task)
-      : this(task.taskId, task.url, task.filename!, task.savedDir,
-            task.baseDirectory.index);
+      {String? taskId,
+      required this.url,
+      required this.filename,
+      this.directory = "",
+      this.baseDirectory = BaseDirectory.applicationDocuments})
+      : taskId = taskId ?? Random().nextInt(1 << 32).toString();
 
   /// Creates JSON map of this object
   Map toJson() => {
         'taskId': taskId,
         'url': url,
         'filename': filename,
-        'savedDir': savedDir,
-        'baseDirectory': baseDirectory // stored as int
+        'directory': directory,
+        'baseDirectory': baseDirectory.index // stored as int
       };
 }

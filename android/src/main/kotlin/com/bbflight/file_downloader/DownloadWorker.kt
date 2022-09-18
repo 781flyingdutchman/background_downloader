@@ -33,7 +33,7 @@ class BackgroundDownloadTask(
     val taskId: String,
     val url: String,
     val filename: String,
-    val savedDir: String,
+    val directory: String,
     val baseDirectory: Int
 )
 
@@ -69,9 +69,6 @@ class DownloadWorker(
         val filePath = pathToFileForTask(downloadTask)
         val success = downloadFile(downloadTask.url, filePath)
         recordSuccessOrFailure(downloadTask, success)
-//        val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
-//        Log.v(TAG, "Success= ${prefs.getString(prefsSuccess, "EMPTY")}")
-//        Log.v(TAG, "Failure= ${prefs.getString(prefsFailure, "EMPTY")}")
         return Result.success()
     }
 
@@ -174,7 +171,7 @@ class DownloadWorker(
             2 -> applicationContext.filesDir
             else -> throw IllegalArgumentException("BaseDirectory int value ${task.baseDirectory} out of range")
         }
-        val path = Path(baseDir.path, task.savedDir)
+        val path = Path(baseDir.path, task.directory)
         return Path(path.pathString, task.filename).pathString
     }
 
