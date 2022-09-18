@@ -6,7 +6,9 @@ enum DownloadTaskStatus {
   enqueued,
   running,
   complete,
-  failed;
+  notFound,
+  failed,
+  canceled;
 }
 
 /// Base directory in which files will be stored, based on their relative

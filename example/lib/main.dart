@@ -9,8 +9,8 @@ void main() {
   runApp(const MyApp());
 }
 
-void myCallback(String taskId, bool success) {
-  print("in my callback with $taskId and $success");
+void myCallback(String taskId, DownloadTaskStatus status) {
+  print("in my callback with $taskId and $status");
 }
 
 class MyApp extends StatefulWidget {
@@ -33,7 +33,6 @@ class _MyAppState extends State<MyApp> {
     int platformVersion = 100;
 
     FileDownloader.initialize(callback: myCallback);
-    FileDownloader.initialize();
 
     await FileDownloader.reset();
 

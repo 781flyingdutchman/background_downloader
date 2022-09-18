@@ -1,19 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:isolate';
 import 'dart:ui';
 
 import 'package:file_downloader/file_downloader.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
 
 import 'models.dart';
 
 /// Signature for a function you can register to be called
 /// when the download state of a task with [id] changes.
-typedef DownloadCallback = void Function(String taskId, bool success);
+typedef DownloadCallback = void Function(String taskId, DownloadTaskStatus status);
 
 /// Provides access to all functions of the plugin in a single place.
 class FileDownloader {
@@ -37,10 +34,9 @@ class FileDownloader {
         IsolateNameServer.registerPortWithName(receivePort.sendPort, portName);
       }
       receivePort.listen((dynamic data) {
-        print('Received $data');
         final taskId = data[0] as String;
-        final success = data[1] as bool;
-        callback(taskId, success);
+        final status = DownloadTaskStatus.values[data[1] as int];
+        callback(taskId, status);
       });
     }
     _backgroundChannel.setMethodCallHandler((call) async {
@@ -48,12 +44,11 @@ class FileDownloader {
       if (callback != null) {
         // send the update to the main isolate, where it will be passed
         // on to the registered callback
-        print("callback is not null");
         final args = call.arguments as List<dynamic>;
         final taskId = args.first as String;
-        final success = args.last as bool;
+        final status = args.last as int;
         final sendPort = IsolateNameServer.lookupPortByName(portName);
-        sendPort?.send([taskId, success]);
+        sendPort?.send([taskId, status]);
       }
     });
     _initialized = true;
@@ -72,7 +67,7 @@ class FileDownloader {
     final arg = jsonEncode(task,
         toEncodable: (Object? value) =>
             value is BackgroundDownloadTask ? value.toJson() : null);
-    print('invoking enqueueDownload');
+    print('invoking enqueueDownload with taskId ${task.taskId} for file ${task.filename}');
     await _channel.invokeMethod<bool>('enqueueDownload', arg);
   }
 

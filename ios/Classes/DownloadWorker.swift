@@ -11,6 +11,17 @@ struct BackgroundDownloadTask : Codable {
   var directory: String
   var baseDirectory: Int
 }
+
+/// Defines a set of possible states which a [DownloadTask] can be in.
+enum DownloadTaskStatus: Int {
+  case undefined,
+       enqueued,
+       running,
+       complete,
+       notFound,
+       failed,
+       canceled
+}
     
 
 public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDelegate, URLSessionDelegate, URLSessionDownloadDelegate {
@@ -111,6 +122,7 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
     UserDefaults.standard.set(taskIdMap, forKey: DownloadWorker.keyTaskIdMap)
     // now start the task
     urlSessionDownloadTask.resume()
+    sendStatusUpdate(task: backgroundDownloadTask, status: DownloadTaskStatus.running)
     result(true)
   }
   
@@ -156,9 +168,9 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   ///
   /// Notre that this is called frequently with error == nil, and can then be ignored
   public func urlSession(
-      _ session: URLSession,
-      task: URLSessionTask,
-      didCompleteWithError error: Error?
+    _ session: URLSession,
+    task: URLSessionTask,
+    didCompleteWithError error: Error?
   ) {
     if error != nil {
       os_log("Error for download with error %@", log: self.log, error!.localizedDescription)
@@ -169,9 +181,13 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
         return
       }
       guard let backgroundDownloadTask = backgroundDownloadTaskFromJsonString(jsonString: backgroundDownloadTaskJsonString) else {return}
-      recordSuccessOrFailure(task: backgroundDownloadTask, success: false)
+      if error!.localizedDescription.contains("cancelled") {
+        sendStatusUpdate(task: backgroundDownloadTask, status: DownloadTaskStatus.canceled)
+      }
+      else {
+        sendStatusUpdate(task: backgroundDownloadTask, status: DownloadTaskStatus.failed)
+      }
     }
-    
   }
 
   
@@ -188,17 +204,21 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
       os_log("Could not map urlSessionDownloadTask identifier %d to a taskId", log: log, downloadTask.taskIdentifier)
       return
     }
-    guard let backgroundDownloadTask = backgroundDownloadTaskFromJsonString(jsonString: backgroundDownloadTaskJsonString) else {return}
-    guard
-      let response = downloadTask.response as? HTTPURLResponse,
-      (200...299).contains(response.statusCode)  else {
-      recordSuccessOrFailure(task: backgroundDownloadTask, success: false)
+    guard let backgroundDownloadTask = backgroundDownloadTaskFromJsonString(jsonString: backgroundDownloadTaskJsonString),
+          let response = downloadTask.response as? HTTPURLResponse
+    else {return}
+    if response.statusCode == 404 {
+      sendStatusUpdate(task: backgroundDownloadTask, status: DownloadTaskStatus.notFound)
+      return
+    }
+    if !(200...299).contains(response.statusCode)   {
+      sendStatusUpdate(task: backgroundDownloadTask, status: DownloadTaskStatus.failed)
       return
     }
     do {
-      var success = false
+      var success = DownloadTaskStatus.failed
       defer {
-        recordSuccessOrFailure(task: backgroundDownloadTask, success: success)
+        sendStatusUpdate(task: backgroundDownloadTask, status: success)
       }
       var dir: FileManager.SearchPathDirectory
       switch backgroundDownloadTask.baseDirectory {
@@ -235,7 +255,7 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
         os_log("Failed to move file from %@ to %@: %@", log: log, location.path, filePath.path, error.localizedDescription)
         return
       }
-      success = true
+      success = DownloadTaskStatus.complete
     } catch {
       os_log("File download error for taskId %@ and file %@: %@", log: log, backgroundDownloadTask.taskId, backgroundDownloadTask.filename, error.localizedDescription)
     }
@@ -301,8 +321,8 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   ///
   /// If in foreground, calls the darCallbackFunction
   /// If in background, adds the taskId to the list in preferences, for later retrieval when returning to foreground
-  private func recordSuccessOrFailure(task: BackgroundDownloadTask, success: Bool) {
-    os_log("recordSuccessOrFailure for taskId %@", log: self.log, task.taskId)
+  private func sendStatusUpdate(task: BackgroundDownloadTask, status: DownloadTaskStatus) {
+    os_log("sendStatusUpdate for taskId %@ with %d", log: self.log, task.taskId, status.rawValue)
     
     // app is in forground, so call back to Dart
     // get the handle to the dart function passed with the task
@@ -311,7 +331,7 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
       return
     }
     DispatchQueue.main.async {
-      channel.invokeMethod("completion", arguments: [task.taskId, success])
+      channel.invokeMethod("completion", arguments: [task.taskId, status.rawValue])
     }
     
   }
