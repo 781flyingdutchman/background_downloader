@@ -1,11 +1,11 @@
 package com.bbflight.file_downloader
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import androidx.preference.PreferenceManager
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.google.gson.Gson
@@ -37,6 +37,18 @@ class BackgroundDownloadTask(
     val baseDirectory: Int
 )
 
+/// Defines a set of possible states which a [DownloadTask] can be in.
+enum class DownloadTaskStatus {
+    undefined,
+    enqueued,
+    running,
+    complete,
+    notFound,
+    failed,
+    canceled
+}
+
+
 /***
  * A simple worker that will post your input back to your Flutter application.
  *
@@ -51,6 +63,25 @@ class DownloadWorker(
     companion object {
         const val TAG = "DownloadWorker"
         const val keyDownloadTask = "downloadTask"
+        const val keyTaskMap = "com.bbflight.file_downloader.taskMap"
+        const val keyNativeMap = "com.bbflight.file_downloader.nativeMap"
+        const val keyTaskIdMap = "com.bbflight.file_downloader.taskIdMap"
+
+        /** Get the native map from UserDefaults. Maps taskId to native id */
+        fun getNativeMap(prefs: SharedPreferences): MutableMap<String, String> {
+            val jsonString = prefs.getString(keyNativeMap, "{}")
+            val gson = Gson()
+            val mapType = object : TypeToken<MutableMap<String, String>>() {}.type
+            return gson.fromJson(jsonString, mapType)
+        }
+
+        /** Get the taskId map from TaskMap. Maps the native id to the taskId of the DownloadTask */
+        fun getTaskIdMap(prefs: SharedPreferences): MutableMap<String, String> {
+            val jsonString = prefs.getString(keyTaskIdMap, "{}")
+            val gson = Gson()
+            val mapType = object : TypeToken<MutableMap<String, String>>() {}.type
+            return gson.fromJson(jsonString, mapType)
+        }
     }
 
     private val prefsSuccess = "com.bbflight.file_downloader.success"
@@ -67,20 +98,24 @@ class DownloadWorker(
         )
         Log.i(TAG, " Starting download for taskId ${downloadTask.taskId}")
         val filePath = pathToFileForTask(downloadTask)
-        val success = downloadFile(downloadTask.url, filePath)
-        recordSuccessOrFailure(downloadTask, success)
+        val status = downloadFile(downloadTask.url, filePath)
+        sendStatusUpdate(downloadTask, status)
         return Result.success()
     }
 
     /** download a file from the urlString to the filePath */
-    private suspend fun downloadFile(urlString: String, filePath: String): Boolean {
+    private suspend fun downloadFile(urlString: String, filePath: String): DownloadTaskStatus {
         try {
             val client = HttpClient(CIO)
             return client.prepareGet(urlString).execute { httpResponse ->
                 if (httpResponse.status.value in 200..299) {
                     withContext(Dispatchers.IO) {
                         var dir = applicationContext.cacheDir
-                        val tempFile = File.createTempFile("com.bbflight.file_downloader", Random.nextInt().toString(), dir)
+                        val tempFile = File.createTempFile(
+                            "com.bbflight.file_downloader",
+                            Random.nextInt().toString(),
+                            dir
+                        )
                         val channel: ByteReadChannel = httpResponse.body()
                         while (!channel.isClosedForRead) {
                             val packet = channel.readRemaining(DEFAULT_BUFFER_SIZE.toLong())
@@ -95,70 +130,58 @@ class DownloadWorker(
                             dir.mkdirs()
                         }
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            Files.move(tempFile.toPath(), destFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
-                        }
-                        else {
+                            Files.move(
+                                tempFile.toPath(),
+                                destFile.toPath(),
+                                StandardCopyOption.REPLACE_EXISTING
+                            )
+                        } else {
                             tempFile.copyTo(destFile, overwrite = true)
                             tempFile.delete()
                         }
                     }
-                    return@execute true
+                    return@execute DownloadTaskStatus.complete
                 } else {
-                    Log.w(TAG, "Response code ${httpResponse.status.value} for download from  $urlString to $filePath")
-                    return@execute false
+                    Log.w(
+                        TAG,
+                        "Response code ${httpResponse.status.value} for download from  $urlString to $filePath"
+                    )
+                    if (httpResponse.status.value == 404) {
+                        return@execute DownloadTaskStatus.notFound
+                    } else {
+                        return@execute DownloadTaskStatus.failed
+                    }
                 }
             }
         } catch (e: Exception) {
             when (e) {
-                is FileSystemException -> Log.w(TAG, "Filesystem exception downloading from $urlString to $filePath: ${e.message}")
-                is HttpRequestTimeoutException -> Log.w(TAG, "Request timeout downloading from $urlString to $filePath: ${e.message}")
+                is FileSystemException -> Log.w(
+                    TAG,
+                    "Filesystem exception downloading from $urlString to $filePath: ${e.message}"
+                )
+                is HttpRequestTimeoutException -> Log.w(
+                    TAG,
+                    "Request timeout downloading from $urlString to $filePath: ${e.message}"
+                )
+                is CancellationException -> {
+                    Log.i(TAG, "Job cancelled: $urlString to $filePath: ${e.message}")
+                    return DownloadTaskStatus.canceled;
+                }
                 else -> Log.w(TAG, "Error downloading from $urlString to $filePath: ${e.message}")
             }
-            return false
+            return DownloadTaskStatus.failed
         }
     }
 
     /** Records success or failure for this task by adding it to the list in preferences */
-    private fun recordSuccessOrFailure(task: BackgroundDownloadTask, success: Boolean) {
+    private fun sendStatusUpdate(task: BackgroundDownloadTask, status: DownloadTaskStatus) {
         Handler(Looper.getMainLooper()).post {
             try {
-                val arg = listOf<Any>(task.taskId, success)
+                val arg = listOf<Any>(task.taskId, status.ordinal)
                 FileDownloaderPlugin.backgroundChannel?.invokeMethod("completion", arg)
             } catch (e: Exception) {
                 Log.w(TAG, "Exception trying to post result: ${e.message}")
             }
-        }
-        prefsLock.lock()  // Only one thread can access prefs at the same time
-        try {
-            val prefsKey = if (success) prefsSuccess else prefsFailure
-            val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
-            val existingAsJsonString = prefs.getString(prefsKey, "")
-            val gson = Gson()
-            val arrayBackgroundDownloadTaskType =
-                object : TypeToken<MutableList<BackgroundDownloadTask>>() {}.type
-            val existing =
-                if (existingAsJsonString?.isNotEmpty() == true) gson.fromJson(
-                    existingAsJsonString,
-                    arrayBackgroundDownloadTaskType
-                ) else mutableListOf<BackgroundDownloadTask>()
-            existing.add(task)
-            val newAsJsonString = gson.toJson(existing)
-            val editor = prefs.edit()
-            editor.putString(prefsKey, newAsJsonString)
-            editor.apply()
-            if (!success) {
-                Log.w(
-                    TAG,
-                    "Failed background download for taskId ${task.taskId} from ${task.url} to ${task.filename}"
-                )
-            } else {
-                Log.d(
-                    TAG,
-                    "Successful background download for taskId ${task.taskId} from ${task.url} to ${task.filename}"
-                )
-            }
-        } finally {
-            prefsLock.unlock()
         }
     }
 

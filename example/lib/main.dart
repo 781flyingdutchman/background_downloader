@@ -46,6 +46,7 @@ class _MyAppState extends State<MyApp> {
         await FileDownloader.enqueue(backgroundDownloadTask);
       }
       var taskIds = await FileDownloader.allTaskIds();
+      print('All taskIds = $taskIds');
       await FileDownloader.cancelTasksWithIds(taskIds.sublist(2));
 
 

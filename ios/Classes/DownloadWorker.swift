@@ -78,7 +78,6 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   /// Resets the downloadworker by cancelling all ongoing download tasks
   private func methodReset(call: FlutterMethodCall, result: @escaping FlutterResult) {
     os_log("Method reset", log: log)
-    appIsInBackground = false
     urlSession = urlSession ?? createUrlSession()
     os_log("removing all running tasks", log: log)
     urlSession?.getAllTasks(completionHandler: { tasks in
@@ -126,7 +125,7 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
     result(true)
   }
   
-  /// Returns a list with tasks (in JSON String format) for all tasks in progress
+  /// Returns a list with taskIds for all tasks in progress
   private func methodAllTasks(call: FlutterMethodCall, result: @escaping FlutterResult) {
     let taskIdMap = getTaskIdMap()
     var taskIds: [String] = []
@@ -261,17 +260,17 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
     }
   }
   
-  /// Get the task map from UserDefaults. Maps the native id to a JSON String representing the DownloadTask.
+  /// Get the task map from UserDefaults. Maps from the native id to a JSON String representing the DownloadTask.
   private func getTaskMap() -> [String:String] {
     return (UserDefaults.standard.object(forKey: DownloadWorker.keyTaskMap) ?? [:]) as! [String:String]
   }
   
-  /// Get the native map from UserDefaults. Maps taskId to native id
+  /// Get the native map from UserDefaults. Maps from taskId to native id
   private func getNativeMap() -> [String:Int] {
     return (UserDefaults.standard.object(forKey: DownloadWorker.keyNativeMap) ?? [:]) as! [String:Int]
   }
   
-  /// Get the taskId map from TaskMap. Maps the native id to the taskId of the DownloadTask.
+  /// Get the taskId map from TaskMap. Maps from the native id to the taskId of the DownloadTask.
   private func getTaskIdMap() -> [String:String] {
     return (UserDefaults.standard.object(forKey: DownloadWorker.keyTaskIdMap) ?? [:]) as! [String:String]
   }
