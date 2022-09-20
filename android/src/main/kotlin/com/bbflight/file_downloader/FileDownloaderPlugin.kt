@@ -43,7 +43,6 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     }
 
     override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
-        Log.d(TAG, "method call: ${call.method}")
         when (call.method) {
             "reset" -> methodReset(result)
             "enqueueDownload" -> methodEnqueueDownload(call, result)
@@ -54,7 +53,10 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     }
 
 
-    /** Initialization: store the handler to the workerDispatcher and the debug mode */
+    /** Resets the downloadworker by cancelling all ongoing download tasks
+     *
+     *  Returns the number of tasks canceled
+     */
     private fun methodReset(@NonNull result: Result) {
         var counter = 0
         val workInfos = workManager.getWorkInfosByTag(TAG).get().filter { !it.state.isFinished }
@@ -63,10 +65,13 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
             counter++
         }
         Log.v(TAG, "methodReset removed $counter unfinished tasks")
-        result.success(null)
+        result.success(counter)
     }
 
-    /** Enqueues the downloadTask */
+    /** Starts the download for one task, passed as JSON String representing a BackgroundDownloadTasks
+     *
+     *  Returns null, but will emit a status update that the background task is running
+     */
     private fun methodEnqueueDownload(@NonNull call: MethodCall, @NonNull result: Result) {
         val downloadTaskJsonString = call.arguments as String
         val gson = Gson()
@@ -74,7 +79,7 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
             downloadTaskJsonString,
             BackgroundDownloadTask::class.java
         )
-        Log.d(TAG, "Enqueueing task  $downloadTaskJsonString")
+        Log.d(TAG, "Starting task with id ${downloadTask.taskId}")
         val data = Data.Builder()
             .putString(DownloadWorker.keyDownloadTask, downloadTaskJsonString)
             .build()
@@ -88,13 +93,21 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
             .addTag("taskId=${downloadTask.taskId}")
             .build()
         val operation = workManager.enqueue(request)
-        Log.d(TAG, "Operation ${operation.result}")
-        result.success(null)
+        try {
+            val operationResult = operation.result.get()
+            DownloadWorker.sendStatusUpdate(downloadTask, DownloadTaskStatus.running)
+        } catch (e: Throwable) {
+            Log.w(
+                TAG,
+                "Unable to start background request for taskId ${downloadTask.taskId} in operation: $operation"
+            )
+            result.success(false)
+        }
+        result.success(true)
     }
 
     /** Returns a ist of taskIds for all tasks in progress */
     private fun methodAllTasks(@NonNull result: Result) {
-        Log.d(TAG, "In methodAllTasks")
         val workInfos = workManager.getWorkInfosByTag(TAG).get().filter { !it.state.isFinished }
         val taskIds = mutableListOf<String>()
         for (workInfo in workInfos) {
@@ -103,14 +116,14 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
                 taskIds.add(tags.first().substring(7))
             }
         }
-        Log.d(TAG, "methodAllTasks returns ${taskIds.size} unfinished tasks: $taskIds")
+        Log.d(TAG, "Returning ${taskIds.size} unfinished tasks: $taskIds")
         result.success(taskIds)
     }
 
     /** Cancels ongoing tasks whose taskId is in the list provided with this call */
     private fun methodCancelTasksWithIds(@NonNull call: MethodCall, @NonNull result: Result) {
         val taskIds = call.arguments as List<*>
-        Log.d(TAG, "Canceling $taskIds")
+        Log.d(TAG, "Canceling taskIds $taskIds")
         for (taskId in taskIds) {
             workManager.cancelAllWorkByTag("taskId=$taskId")
         }

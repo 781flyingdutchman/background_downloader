@@ -21,8 +21,11 @@ class FileDownloader {
 
   bool get initialized => _initialized;
 
-  /// Initialize the downloader and register a completion callback
+  /// Initialize the downloader and register a callback to handle status
+  /// updates
   static void initialize({DownloadCallback? callback}) {
+    // Incoming calls from the native code will be on the backgroundChannel,
+    // so this isolate listener moves it from background to foreground
     const portName = 'file_downloader_send_port';
     if (callback != null) {
       // create simple listener Isolate to receive download updates in the
@@ -40,7 +43,6 @@ class FileDownloader {
       });
     }
     _backgroundChannel.setMethodCallHandler((call) async {
-      print("Received background callback with arguments ${call.arguments}");
       if (callback != null) {
         // send the update to the main isolate, where it will be passed
         // on to the registered callback
@@ -54,21 +56,25 @@ class FileDownloader {
     _initialized = true;
   }
 
-  /// Resets downoader and cancels all outstanding tasks
+  /// Resets the downloader by cancelling all ongoing download tasks
+  ///
+  /// Returns the number of tasks cancelled. Every canceled task wil emit a
+  /// [DownloadTaskStatus.canceled] update to the registered callback
   static Future<void> reset() async {
     assert(_initialized, 'FileDownloader must be initialized before use');
-    print('invoking resetDownloadWorker');
-    await _channel.invokeMethod<String>('reset');
+    await _channel.invokeMethod<int>('reset');
   }
 
   /// Start a new download task
-  static Future<void> enqueue(BackgroundDownloadTask task) async {
+  ///
+  /// Returns true if successfully enqueued. A new task will also generate
+  /// a [DownloadTaskStatus.running] update to the registered callback
+  static Future<bool> enqueue(BackgroundDownloadTask task) async {
     assert(_initialized, 'FileDownloader must be initialized before use');
     final arg = jsonEncode(task,
         toEncodable: (Object? value) =>
             value is BackgroundDownloadTask ? value.toJson() : null);
-    print('invoking enqueueDownload with taskId ${task.taskId} for file ${task.filename}');
-    await _channel.invokeMethod<bool>('enqueueDownload', arg);
+    return await _channel.invokeMethod<bool>('enqueueDownload', arg) ?? false;
   }
 
   /// Returns a list of taskIds of all tasks currently running
@@ -79,9 +85,11 @@ class FileDownloader {
   }
 
   /// Delete all tasks matching the taskIds in the list
+  ///
+  /// Every canceled task wil emit a [DownloadTaskStatus.canceled] update to
+  /// the registered callback
   static Future<void> cancelTasksWithIds(List<String> taskIds) async {
     assert(_initialized, 'FileDownloader must be initialized before use');
-    print('invoking cancelTasksWithIds');
     await _channel.invokeMethod<bool>('cancelTasksWithIds', taskIds);
   }
 }

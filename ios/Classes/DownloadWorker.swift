@@ -28,7 +28,7 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   
   let log = OSLog.init(subsystem: "FileDownloaderPlugin", category: "DownloadWorker")
   
-  private static var resourceTimeout = 5 * 60.0 // seconds
+  private static var resourceTimeout = 60 * 60.0 // seconds
   public static var sessionIdentifier = "com.bbflight.file_downloader.DownloadWorker"
   private static var keyTaskMap = "com.bbflight.file_downloader.taskMap"
   private static var keyNativeMap = "com.bbflight.file_downloader.nativeMap"
@@ -52,9 +52,6 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   @objc
   public static func setPluginRegistrantCallback(_ callback: @escaping FlutterPluginRegistrantCallback) {
     flutterPluginRegistrantCallback = callback
-//    UserDefaults.standard.removeObject(forKey: keyNativeMap)
-//    UserDefaults.standard.removeObject(forKey: keyTaskIdMap)
-//    UserDefaults.standard.removeObject(forKey: keyTaskMap)
   }
   
   /// Handler for Flutter plugin method channel calls
@@ -65,7 +62,7 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
     case "enqueueDownload":
       methodEnqueueDownload(call: call, result: result)
     case "allTasks":
-      methodAllUnfinishedTasks(call: call, result: result)
+      methodAllTasks(call: call, result: result)
     case "cancelTasksWithIds":
       methodCancelTasksWithIds(call: call, result: result)
     default:
@@ -74,22 +71,22 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   }
   
   /// Resets the downloadworker by cancelling all ongoing download tasks
+  ///
+  /// Returns the number of tasks canceled
   private func methodReset(call: FlutterMethodCall, result: @escaping FlutterResult) {
-    os_log("Method reset", log: log)
     urlSession = urlSession ?? createUrlSession()
-    os_log("removing all running tasks", log: log)
     urlSession?.getAllTasks(completionHandler: { tasks in
       for task in tasks {
         task.cancel()
       }
-      result(nil)
+      os_log("methodReset removed %d unfinished tasks", log: self.log, tasks.count)
+      result(tasks.count)
     })
   }
   
-  /// Starts the download worker. The argument is a JSON String representing a list of BackgroundDownloadTasks
+  /// Starts the download for one task, passed as JSON String representing a BackgroundDownloadTasks
   ///
-  /// This method is called when the app switches to background. When the app switches back to foreground, the
-  /// method getDownloadWorkerResult must be called to receive a list of failures and success of the background effort
+  /// Returns null, but will emit a status update that the background task is running
   private func methodEnqueueDownload(call: FlutterMethodCall, result: @escaping FlutterResult) {
     let decoder = JSONDecoder()
     guard let backgroundDownloadTask: BackgroundDownloadTask = try? decoder.decode(BackgroundDownloadTask.self, from: (call.arguments as! String).data(using: .utf8)!)
@@ -97,7 +94,7 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
       result(false)
       return
     }
-    os_log("Received task with id %@", log: log, backgroundDownloadTask.taskId)
+    os_log("Starting task with id %@", log: log, backgroundDownloadTask.taskId)
     urlSession = urlSession ?? createUrlSession()
     let urlSessionDownloadTask = urlSession!.downloadTask(with: URL(string: backgroundDownloadTask.url)!)
     // update the map from urlSessionDownloadTask's taskIdentifier to the BackgroundDownloadTask's taskId
@@ -124,7 +121,7 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   }
   
   /// Returns a list with taskIds for all tasks in progress
-  private func methodAllUnfinishedTasks(call: FlutterMethodCall, result: @escaping FlutterResult) {
+  private func methodAllTasks(call: FlutterMethodCall, result: @escaping FlutterResult) {
     let taskIdMap = getTaskIdMap()
     var taskIds: [String] = []
     urlSession = urlSession ?? createUrlSession()
@@ -135,18 +132,18 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
           let taskId = taskIdMap[String(task.taskIdentifier)] else { continue }
         taskIds.append(taskId)
       }
-      os_log("Found taskIds: %@", log: self.log, taskIds)
+      os_log("Returning %d unfinished tasks: %@", log: self.log,taskIds.count, taskIds)
       result(taskIds)
     })
   }
   
   /// Cancels ongoing tasks whose taskId is in the list provided with this call
   private func methodCancelTasksWithIds(call: FlutterMethodCall, result: @escaping FlutterResult) {
-    os_log("Method cancelTasksWithIds", log: log)
     guard let taskIds = call.arguments as? [String] else {
       os_log("Invalid arguments", log: log)
       return
     }
+    os_log("Canceling taskIds %@", log: log, taskIds)
     let taskIdMap = getTaskIdMap()
     urlSession = urlSession ?? createUrlSession()
     urlSession?.getAllTasks(completionHandler: { tasks in
@@ -154,7 +151,6 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
         guard let taskId = taskIdMap[String(task.taskIdentifier)],
               taskIds.contains(taskId)
         else {continue}
-        os_log("Canceling %@", log: self.log, taskId)
         task.cancel()
       }
       result(nil)
@@ -170,7 +166,6 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
     didCompleteWithError error: Error?
   ) {
     if error != nil {
-      os_log("Error for download with error %@", log: self.log, error!.localizedDescription)
       // map the urlSessionDownloadTask taskidentifier to the original BackgroudnDownloadTask's taskId
       let taskIdMap = getTaskMap()
       guard let backgroundDownloadTaskJsonString = taskIdMap[String(task.taskIdentifier)] else {
@@ -182,6 +177,7 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
         sendStatusUpdate(task: backgroundDownloadTask, status: DownloadTaskStatus.canceled)
       }
       else {
+        os_log("Error for download with error %@", log: self.log, error!.localizedDescription)
         sendStatusUpdate(task: backgroundDownloadTask, status: DownloadTaskStatus.failed)
       }
     }
@@ -234,7 +230,6 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
                               appropriateFor: nil,
                               create: false)
       let directory = documentsURL.appendingPathComponent(backgroundDownloadTask.directory)
-      os_log("Full path=%@", log: log, directory.path)
       do
       {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories:  true)
@@ -314,21 +309,14 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   
   
   
-  /// Records success or failure for this task
-  ///
-  /// If in foreground, calls the darCallbackFunction
-  /// If in background, adds the taskId to the list in preferences, for later retrieval when returning to foreground
+  /// Sends status update via the backgroudn channel to Flutter
   private func sendStatusUpdate(task: BackgroundDownloadTask, status: DownloadTaskStatus) {
-    os_log("sendStatusUpdate for taskId %@ with %d", log: self.log, task.taskId, status.rawValue)
-    
-    // app is in forground, so call back to Dart
-    // get the handle to the dart function passed with the task
     guard let channel = DownloadWorker.backgroundChannel else {
-      os_log("Could not find callback information", log: self.log)
+      os_log("Could not find background channel", log: self.log)
       return
     }
     DispatchQueue.main.async {
-      channel.invokeMethod("completion", arguments: [task.taskId, status.rawValue])
+      channel.invokeMethod("update", arguments: [task.taskId, status.rawValue])
     }
     
   }

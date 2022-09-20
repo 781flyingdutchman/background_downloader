@@ -63,6 +63,18 @@ class DownloadWorker(
     companion object {
         const val TAG = "DownloadWorker"
         const val keyDownloadTask = "downloadTask"
+
+        /** Records success or failure for this task by adding it to the list in preferences */
+        fun sendStatusUpdate(task: BackgroundDownloadTask, status: DownloadTaskStatus) {
+            Handler(Looper.getMainLooper()).post {
+                try {
+                    val arg = listOf<Any>(task.taskId, status.ordinal)
+                    FileDownloaderPlugin.backgroundChannel?.invokeMethod("update", arg)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Exception trying to post result: ${e.message}")
+                }
+            }
+        }
     }
 
     override suspend fun doWork(): Result {
@@ -127,7 +139,7 @@ class DownloadWorker(
                         Log.d(TAG, "Canceled task for $filePath")
                         return@execute DownloadTaskStatus.canceled
                     }
-                    Log.d(TAG, "Successfully downloaded to $filePath")
+                    Log.i(TAG, "Successfully downloaded to $filePath")
                     return@execute DownloadTaskStatus.complete
                 } else {
                     Log.w(
@@ -161,17 +173,7 @@ class DownloadWorker(
         }
     }
 
-    /** Records success or failure for this task by adding it to the list in preferences */
-    private fun sendStatusUpdate(task: BackgroundDownloadTask, status: DownloadTaskStatus) {
-        Handler(Looper.getMainLooper()).post {
-            try {
-                val arg = listOf<Any>(task.taskId, status.ordinal)
-                FileDownloaderPlugin.backgroundChannel?.invokeMethod("completion", arg)
-            } catch (e: Exception) {
-                Log.w(TAG, "Exception trying to post result: ${e.message}")
-            }
-        }
-    }
+
 
 
     /** Returns full path (String) to the file to be downloaded */
