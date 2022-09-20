@@ -39,8 +39,6 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   private final var userDefaultsLock = NSLock()
   private final var backgroundCompletionHandler: (() -> Void)?
   private final var urlSession: URLSession?
-
-  private var appIsInBackground = false
   
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(name: "com.bbflight.file_downloader", binaryMessenger: registrar.messenger())
@@ -67,7 +65,7 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
     case "enqueueDownload":
       methodEnqueueDownload(call: call, result: result)
     case "allTasks":
-      methodAllTasks(call: call, result: result)
+      methodAllUnfinishedTasks(call: call, result: result)
     case "cancelTasksWithIds":
       methodCancelTasksWithIds(call: call, result: result)
     default:
@@ -126,7 +124,7 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   }
   
   /// Returns a list with taskIds for all tasks in progress
-  private func methodAllTasks(call: FlutterMethodCall, result: @escaping FlutterResult) {
+  private func methodAllUnfinishedTasks(call: FlutterMethodCall, result: @escaping FlutterResult) {
     let taskIdMap = getTaskIdMap()
     var taskIds: [String] = []
     urlSession = urlSession ?? createUrlSession()

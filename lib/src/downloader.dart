@@ -74,7 +74,6 @@ class FileDownloader {
   /// Returns a list of taskIds of all tasks currently running
   static Future<List<String>> allTaskIds() async {
     assert(_initialized, 'FileDownloader must be initialized before use');
-    print('invoking allTasks');
     final result = await _channel.invokeMethod<List<Object?>>('allTasks') ?? [];
     return result.map((e) => e as String).toList();
   }

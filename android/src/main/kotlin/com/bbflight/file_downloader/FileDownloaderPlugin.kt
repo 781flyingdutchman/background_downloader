@@ -3,20 +3,14 @@ package com.bbflight.file_downloader
 import android.content.SharedPreferences
 import android.util.Log
 import androidx.annotation.NonNull
-import androidx.concurrent.futures.await
 import androidx.preference.PreferenceManager
 import androidx.work.*
 import com.google.gson.Gson
-
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
-import io.flutter.util.Predicate
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.withContext
-import kotlin.coroutines.coroutineContext
 
 /** FlutterDownloaderPlugin */
 class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
@@ -32,10 +26,14 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         channel =
             MethodChannel(flutterPluginBinding.binaryMessenger, "com.bbflight.file_downloader")
         backgroundChannel =
-            MethodChannel(flutterPluginBinding.binaryMessenger, "com.bbflight.file_downloader.background")
+            MethodChannel(
+                flutterPluginBinding.binaryMessenger,
+                "com.bbflight.file_downloader.background"
+            )
         channel?.setMethodCallHandler(this)
         workManager = WorkManager.getInstance(flutterPluginBinding.applicationContext)
-        prefs = PreferenceManager.getDefaultSharedPreferences(flutterPluginBinding.applicationContext)
+        prefs =
+            PreferenceManager.getDefaultSharedPreferences(flutterPluginBinding.applicationContext)
     }
 
     override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
@@ -47,9 +45,9 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
         Log.d(TAG, "method call: ${call.method}")
         when (call.method) {
-            "reset" -> methodReset(call, result)
+            "reset" -> methodReset(result)
             "enqueueDownload" -> methodEnqueueDownload(call, result)
-            "allTasks" -> methodAllTasks(call, result)
+            "allTasks" -> methodAllTasks(result)
             "cancelTasksWithIds" -> methodCancelTasksWithIds(call, result)
             else -> result.notImplemented()
         }
@@ -57,8 +55,14 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
 
 
     /** Initialization: store the handler to the workerDispatcher and the debug mode */
-    private fun methodReset(@NonNull call: MethodCall, @NonNull result: Result) {
-        workManager.cancelAllWorkByTag(TAG)
+    private fun methodReset(@NonNull result: Result) {
+        var counter = 0
+        val workInfos = workManager.getWorkInfosByTag(TAG).get().filter { !it.state.isFinished }
+        for (workInfo in workInfos) {
+            workManager.cancelWorkById(workInfo.id)
+            counter++
+        }
+        Log.v(TAG, "methodReset removed $counter unfinished tasks")
         result.success(null)
     }
 
@@ -81,7 +85,7 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
             .setInputData(data)
             .setConstraints(constraints)
             .addTag(TAG)
-            .addTag(downloadTask.taskId)
+            .addTag("taskId=${downloadTask.taskId}")
             .build()
         val operation = workManager.enqueue(request)
         Log.d(TAG, "Operation ${operation.result}")
@@ -89,16 +93,18 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     }
 
     /** Returns a ist of taskIds for all tasks in progress */
-    private fun methodAllTasks(@NonNull call: MethodCall, @NonNull result: Result) {
-        val workInfos = workManager.getWorkInfosByTag(TAG).get()
+    private fun methodAllTasks(@NonNull result: Result) {
+        Log.d(TAG, "In methodAllTasks")
+        val workInfos = workManager.getWorkInfosByTag(TAG).get().filter { !it.state.isFinished }
         val taskIds = mutableListOf<String>()
         for (workInfo in workInfos) {
-            val tags = workInfo.tags.filter { it != TAG && it != "com.bbflight.file_downloader.DownloadWorker" }
+            val tags = workInfo.tags.filter { it.contains("taskId=") }
             if (tags.isNotEmpty()) {
-                taskIds.add(tags.first())
+                taskIds.add(tags.first().substring(7))
             }
         }
-        result.success(taskIds);
+        Log.d(TAG, "methodAllTasks returns ${taskIds.size} unfinished tasks: $taskIds")
+        result.success(taskIds)
     }
 
     /** Cancels ongoing tasks whose taskId is in the list provided with this call */
@@ -106,7 +112,7 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         val taskIds = call.arguments as List<*>
         Log.d(TAG, "Canceling $taskIds")
         for (taskId in taskIds) {
-            workManager.cancelAllWorkByTag(taskId as String)
+            workManager.cancelAllWorkByTag("taskId=$taskId")
         }
         result.success(null)
     }
