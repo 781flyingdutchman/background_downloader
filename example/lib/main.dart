@@ -1,9 +1,7 @@
-import 'package:file_downloader/file_downloader.dart';
-import 'package:flutter/material.dart';
 import 'dart:async';
 
-import 'package:logging/logging.dart';
-
+import 'package:file_downloader/file_downloader.dart';
+import 'package:flutter/material.dart';
 
 void main() {
   runApp(const MyApp());
@@ -36,21 +34,18 @@ class _MyAppState extends State<MyApp> {
 
     await FileDownloader.reset();
 
-      for (var n = 0; n < 5; n++) {
-        final backgroundDownloadTask = BackgroundDownloadTask(
-            taskId: 'taskId$n',
-            url: "https://google.com",
-            filename: "filename$n",
-            directory: "directory",
-            baseDirectory: BaseDirectory.applicationDocuments);
-        await FileDownloader.enqueue(backgroundDownloadTask);
-      }
-      var taskIds = await FileDownloader.allTaskIds();
-      print('All taskIds = $taskIds');
-      await FileDownloader.cancelTasksWithIds(taskIds.sublist(2));
-
-
-
+    for (var n = 0; n < 5; n++) {
+      final backgroundDownloadTask = BackgroundDownloadTask(
+          taskId: 'taskId$n',
+          url: "https://google.com",
+          filename: "filename$n",
+          directory: "directory",
+          baseDirectory: BaseDirectory.applicationDocuments);
+      await FileDownloader.enqueue(backgroundDownloadTask);
+    }
+    var taskIds = await FileDownloader.allTaskIds();
+    print('All taskIds = $taskIds');
+    await FileDownloader.cancelTasksWithIds(taskIds.sublist(2));
 
     // If the widget was removed from the tree while the asynchronous platform
     // message was in flight, we want to discard the reply rather than calling

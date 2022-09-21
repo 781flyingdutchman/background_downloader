@@ -70,7 +70,7 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
 
     /** Starts the download for one task, passed as JSON String representing a BackgroundDownloadTasks
      *
-     *  Returns null, but will emit a status update that the background task is running
+     *  Returns true if successful, but will emit a status update that the background task is running
      */
     private fun methodEnqueueDownload(@NonNull call: MethodCall, @NonNull result: Result) {
         val downloadTaskJsonString = call.arguments as String
@@ -94,7 +94,7 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
             .build()
         val operation = workManager.enqueue(request)
         try {
-            val operationResult = operation.result.get()
+            operation.result.get()
             DownloadWorker.sendStatusUpdate(downloadTask, DownloadTaskStatus.running)
         } catch (e: Throwable) {
             Log.w(
