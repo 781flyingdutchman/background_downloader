@@ -80,6 +80,12 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
         task.cancel()
       }
       os_log("methodReset removed %d unfinished tasks", log: self.log, tasks.count)
+      if tasks.count == 0 {
+        // remove all persistent storage if reset did not remove any outstanding tasks
+        UserDefaults.standard.removeObject(forKey: DownloadWorker.keyTaskMap)
+        UserDefaults.standard.removeObject(forKey: DownloadWorker.keyNativeMap)
+        UserDefaults.standard.removeObject(forKey: DownloadWorker.keyTaskIdMap)
+      }
       result(tasks.count)
     })
   }
