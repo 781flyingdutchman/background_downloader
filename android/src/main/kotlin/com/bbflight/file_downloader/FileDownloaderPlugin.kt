@@ -68,17 +68,23 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         result.success(counter)
     }
 
-    /** Starts the download for one task, passed as JSON String representing a BackgroundDownloadTasks
+    /** Starts the download for one task, passed as list of values representing a
+     * [BackgroundDownloadTask]
      *
      *  Returns true if successful, but will emit a status update that the background task is running
      */
     private fun methodEnqueueDownload(@NonNull call: MethodCall, @NonNull result: Result) {
-        val downloadTaskJsonString = call.arguments as String
-        val gson = Gson()
-        val downloadTask = gson.fromJson(
-            downloadTaskJsonString,
-            BackgroundDownloadTask::class.java
+        val args = call.arguments as List<*>
+        val downloadTask = BackgroundDownloadTask(
+            taskId = args[0] as String,
+            url = args[1] as String,
+            filename = args[2] as String,
+            directory = args[3] as String,
+            baseDirectory = args[4] as Int
         )
+        val gson = Gson()
+        val downloadTaskJsonString = gson.toJson(downloadTask)
+        print("Starting task with id ${downloadTask.taskId}")
         Log.d(TAG, "Starting task with id ${downloadTask.taskId}")
         val data = Data.Builder()
             .putString(DownloadWorker.keyDownloadTask, downloadTaskJsonString)

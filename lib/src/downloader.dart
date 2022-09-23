@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:isolate';
 import 'dart:ui';
 
@@ -10,7 +9,8 @@ import 'models.dart';
 
 /// Signature for a function you can register to be called
 /// when the download state of a task with [id] changes.
-typedef DownloadCallback = void Function(String taskId, DownloadTaskStatus status);
+typedef DownloadCallback = void Function(
+    String taskId, DownloadTaskStatus status);
 
 /// Provides access to all functions of the plugin in a single place.
 class FileDownloader {
@@ -71,10 +71,14 @@ class FileDownloader {
   /// a [DownloadTaskStatus.running] update to the registered callback
   static Future<bool> enqueue(BackgroundDownloadTask task) async {
     assert(_initialized, 'FileDownloader must be initialized before use');
-    final arg = jsonEncode(task,
-        toEncodable: (Object? value) =>
-            value is BackgroundDownloadTask ? value.toJson() : null);
-    return await _channel.invokeMethod<bool>('enqueueDownload', arg) ?? false;
+    return await _channel.invokeMethod<bool>('enqueueDownload', [
+          task.taskId,
+          task.url,
+          task.filename,
+          task.directory,
+          task.baseDirectory.index
+        ]) ??
+        false;
   }
 
   /// Returns a list of taskIds of all tasks currently running
