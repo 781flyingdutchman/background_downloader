@@ -88,12 +88,8 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   ///
   /// Returns null, but will emit a status update that the background task is running
   private func methodEnqueueDownload(call: FlutterMethodCall, result: @escaping FlutterResult) {
-    let decoder = JSONDecoder()
-    guard let backgroundDownloadTask: BackgroundDownloadTask = try? decoder.decode(BackgroundDownloadTask.self, from: (call.arguments as! String).data(using: .utf8)!)
-    else {
-      result(false)
-      return
-    }
+    let args = call.arguments as! [Any]
+    let backgroundDownloadTask = BackgroundDownloadTask(taskId: args[0] as! String, url: args[1] as! String, filename: args[2] as! String, directory: args[3] as! String, baseDirectory: args[4] as! Int)
     os_log("Starting task with id %@", log: log, backgroundDownloadTask.taskId)
     urlSession = urlSession ?? createUrlSession()
     let urlSessionDownloadTask = urlSession!.downloadTask(with: URL(string: backgroundDownloadTask.url)!)
@@ -130,7 +126,10 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
       for task in tasks {
         guard
           let taskId = taskIdMap[String(task.taskIdentifier)] else { continue }
-        taskIds.append(taskId)
+        if task.state == URLSessionTask.State.running || task.state == URLSessionTask.State.suspended
+        {
+          taskIds.append(taskId)
+        }
       }
       os_log("Returning %d unfinished tasks: %@", log: self.log,taskIds.count, taskIds)
       result(taskIds)
@@ -274,11 +273,7 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
     let backgroundDownloadTasks: BackgroundDownloadTask? = try? decoder.decode(BackgroundDownloadTask.self, from: (jsonString).data(using: .utf8)!)
     return backgroundDownloadTasks
   }
-  
-
-
-  
-  
+    
   /// When the app restarts, recreate the urlSession if needed, and store the completion handler
   public func application(_ application: UIApplication,
                           handleEventsForBackgroundURLSession identifier: String,
@@ -318,7 +313,19 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
     DispatchQueue.main.async {
       channel.invokeMethod("update", arguments: [task.taskId, status.rawValue])
     }
-    
+    // remove the task from the UserDefault maps
+    if status != DownloadTaskStatus.running && status != DownloadTaskStatus.enqueued {
+      var taskIdMap = getTaskIdMap()
+      var nativeMap = getNativeMap()
+      let nativeId = nativeMap[task.taskId] ?? 0
+      taskIdMap.removeValue(forKey: String(nativeId))
+      nativeMap.removeValue(forKey: task.taskId)
+      var taskMap = getTaskMap()
+      taskMap.removeValue(forKey: String(nativeId))
+      UserDefaults.standard.set(taskMap, forKey: DownloadWorker.keyTaskMap)
+      UserDefaults.standard.set(nativeMap, forKey: DownloadWorker.keyNativeMap)
+      UserDefaults.standard.set(taskIdMap, forKey: DownloadWorker.keyTaskIdMap)
+    }
   }
   
   /// Creates a urlSession
