@@ -2,13 +2,23 @@ import 'dart:async';
 
 import 'package:file_downloader/file_downloader.dart';
 import 'package:flutter/material.dart';
+import 'package:logging/logging.dart';
 
 void main() {
+  Logger.root.onRecord.listen((LogRecord rec) {
+      print('${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
+  });
+
   runApp(const MyApp());
 }
 
-void myCallback(String taskId, DownloadTaskStatus status) {
-  print("in my callback with $taskId and $status");
+void myStatusCallback(BackgroundDownloadTask task, DownloadTaskStatus status) {
+  print("in my callback with $task and $status");
+}
+
+void myProgressCallback(
+BackgroundDownloadTask task, double progress) {
+  print('In progress callback with $task and $progress');
 }
 
 class MyApp extends StatefulWidget {
@@ -30,22 +40,23 @@ class _MyAppState extends State<MyApp> {
   Future<void> initPlatformState() async {
     int platformVersion = 100;
 
-    FileDownloader.initialize(callback: myCallback);
+    FileDownloader.initialize(downloadStatusCallback: myStatusCallback, downloadProgressCallback: myProgressCallback);
 
     await FileDownloader.reset();
 
-    for (var n = 0; n < 5; n++) {
+    for (var n = 0; n < 1; n++) {
       final backgroundDownloadTask = BackgroundDownloadTask(
           taskId: 'taskId$n',
-          url: "https://google.com",
+          url: "http://speedtest.ftp.otenet.gr/files/test10Mb.db",
           filename: "filename$n",
           directory: "directory",
-          baseDirectory: BaseDirectory.applicationDocuments);
+          baseDirectory: BaseDirectory.applicationDocuments,
+      progressUpdates: DownloadTaskProgressUpdates.statusChange);
       await FileDownloader.enqueue(backgroundDownloadTask);
     }
     var taskIds = await FileDownloader.allTaskIds();
     print('All taskIds = $taskIds');
-    await FileDownloader.cancelTasksWithIds(taskIds.sublist(2));
+    // await FileDownloader.cancelTasksWithIds(taskIds.sublist(2));
 
     // If the widget was removed from the tree while the asynchronous platform
     // message was in flight, we want to discard the reply rather than calling

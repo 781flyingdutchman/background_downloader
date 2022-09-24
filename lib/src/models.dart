@@ -21,6 +21,14 @@ enum BaseDirectory {
   applicationSupport // getApplicationSupportDirectory()
 }
 
+/// Type of download updates requested for a group of downloads
+enum DownloadTaskProgressUpdates {
+  none, // no status or progress updates
+  statusChange, // only calls upon change in DownloadTaskStatus
+  progressUpdates, // only progress updates
+  statusChangeAndProgressUpdates, // calls also for progress along the way
+}
+
 /// Information related to a download
 class BackgroundDownloadTask {
   final String taskId;
@@ -28,21 +36,49 @@ class BackgroundDownloadTask {
   final String filename;
   final String directory;
   final BaseDirectory baseDirectory;
+  final String group;
+  final DownloadTaskProgressUpdates progressUpdates;
 
   BackgroundDownloadTask(
       {String? taskId,
       required this.url,
       required this.filename,
-      this.directory = "",
-      this.baseDirectory = BaseDirectory.applicationDocuments})
+      this.directory = '',
+      this.baseDirectory = BaseDirectory.applicationDocuments,
+      this.group = 'default',
+      this.progressUpdates = DownloadTaskProgressUpdates.statusChange})
       : taskId = taskId ?? Random().nextInt(1 << 32).toString();
 
+  /// Creates object from JsonMap
+  BackgroundDownloadTask.fromJsonMap(Map<String, dynamic> jsonMap)
+      : taskId = jsonMap['taskId'],
+        url = jsonMap['url'],
+        filename = jsonMap['filename'],
+        directory = jsonMap['directory'],
+        baseDirectory = BaseDirectory.values[jsonMap['baseDirectory']],
+        group = jsonMap['group'],
+        progressUpdates =
+            DownloadTaskProgressUpdates.values[jsonMap['progressUpdates']];
+
   /// Creates JSON map of this object
-  Map toJson() => {
+  Map toJsonMap() => {
         'taskId': taskId,
         'url': url,
         'filename': filename,
         'directory': directory,
-        'baseDirectory': baseDirectory.index // stored as int
+        'baseDirectory': baseDirectory.index, // stored as int
+        'group': group,
+        'progressUpdates': progressUpdates.index
       };
+
+  /// If true, task expects progress updates
+  bool get providesProgressUpdates =>
+      progressUpdates == DownloadTaskProgressUpdates.progressUpdates ||
+      progressUpdates ==
+          DownloadTaskProgressUpdates.statusChangeAndProgressUpdates;
+
+  @override
+  String toString() {
+    return 'BackgroundDownloadTask{taskId: $taskId, url: $url, filename: $filename, directory: $directory, baseDirectory: $baseDirectory, group: $group, progressUpdates: $progressUpdates}';
+  }
 }
