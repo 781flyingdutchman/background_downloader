@@ -77,6 +77,12 @@ class BackgroundDownloadTask {
       progressUpdates ==
           DownloadTaskProgressUpdates.statusChangeAndProgressUpdates;
 
+  /// If true, task expects status updates
+  bool get providesStatusUpdates =>
+      progressUpdates == DownloadTaskProgressUpdates.statusChange ||
+          progressUpdates ==
+              DownloadTaskProgressUpdates.statusChangeAndProgressUpdates;
+
   @override
   String toString() {
     return 'BackgroundDownloadTask{taskId: $taskId, url: $url, filename: $filename, directory: $directory, baseDirectory: $baseDirectory, group: $group, progressUpdates: $progressUpdates}';

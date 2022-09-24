@@ -15,6 +15,7 @@ import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.http.*
+import io.ktor.util.date.*
 import io.ktor.utils.io.*
 import io.ktor.utils.io.core.*
 import kotlinx.coroutines.Dispatchers
@@ -86,6 +87,13 @@ class BackgroundDownloadTask(
         return progressUpdates == DownloadTaskProgressUpdates.progressUpdates ||
                 progressUpdates == DownloadTaskProgressUpdates.statusChangeAndProgressUpdates;
     }
+
+    /** True if this task expects to provide status updates */
+    fun providesStatusUpdates(): Boolean {
+        return progressUpdates == DownloadTaskProgressUpdates.statusChange ||
+                progressUpdates == DownloadTaskProgressUpdates.statusChangeAndProgressUpdates;
+    }
+
 }
 
 /** Defines a set of possible states which a [BackgroundDownloadTask] can be in.
@@ -120,7 +128,7 @@ class DownloadWorker(
 
         /** Sends status update for this task */
         fun sendStatusUpdate(task: BackgroundDownloadTask, status: DownloadTaskStatus) {
-            if (task.progressUpdates != DownloadTaskProgressUpdates.none) {
+            if (task.providesStatusUpdates()) {
                 Handler(Looper.getMainLooper()).post {
                     try {
                         val gson = Gson()
@@ -137,7 +145,6 @@ class DownloadWorker(
             if (task.providesProgressUpdates()) {
                 Handler(Looper.getMainLooper()).post {
                     try {
-                        Log.v(TAG, "Sending progress update for taskId ${task.taskId}: $progress")
                         val gson = Gson()
                         val arg = listOf<Any>(gson.toJson(task.toJsonMap()), progress)
                         FileDownloaderPlugin.backgroundChannel?.invokeMethod("progressUpdate", arg)
@@ -161,6 +168,13 @@ class DownloadWorker(
         val filePath = pathToFileForTask(downloadTask)
         val status = downloadFile(downloadTask, filePath)
         sendStatusUpdate(downloadTask, status)
+        when (status) {
+            DownloadTaskStatus.complete -> sendProgressUpdate(downloadTask, 1.0)
+            DownloadTaskStatus.failed -> sendProgressUpdate(downloadTask, -1.0)
+            DownloadTaskStatus.canceled -> sendProgressUpdate(downloadTask, -2.0)
+            DownloadTaskStatus.notFound -> sendProgressUpdate(downloadTask, -3.0);
+            else -> {}
+        }
         return Result.success()
     }
 
@@ -173,7 +187,7 @@ class DownloadWorker(
         try {
             val client = HttpClient(CIO) {
                 install(HttpTimeout) {
-                    requestTimeoutMillis = 60000
+                    requestTimeoutMillis = 8 * 60 * 1000 // 8 minutes
                 }
             }
             return withContext(Dispatchers.IO) {
@@ -189,6 +203,7 @@ class DownloadWorker(
                         }
                         var bytesReceivedTotal: Long = 0
                         var lastProgressUpdate = 0.0
+                        var nextProgressUpdateTime = 0L
                         var dir = applicationContext.cacheDir
                         val tempFile = File.createTempFile(
                             "com.bbflight.file_downloader",
@@ -201,12 +216,15 @@ class DownloadWorker(
                             while (!packet.isEmpty) {
                                 val bytes = packet.readBytes()
                                 tempFile.appendBytes(bytes)
-                                if (downloadTask.providesProgressUpdates() && contentLength > 0) {
+                                if (downloadTask.providesProgressUpdates()
+                                    && contentLength > 0
+                                    && getTimeMillis() > nextProgressUpdateTime) {
                                     bytesReceivedTotal += bytes.size
                                     val progress = bytesReceivedTotal.toDouble() / contentLength
                                     if (progress - lastProgressUpdate > 0.02) {
                                         sendProgressUpdate(downloadTask, progress)
                                         lastProgressUpdate = progress
+                                        nextProgressUpdateTime = getTimeMillis() + 500
                                     }
                                 }
                             }

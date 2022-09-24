@@ -17,6 +17,11 @@ typedef DownloadStatusCallback = void Function(
 
 /// Signature for a function you can register to be called
 /// for every download progress change of a [task].
+///
+/// A successfully downloaded task will always finish with progress 1.0
+/// [DownloadTaskStatus.failed] results in progress -1.0
+/// [DownloadTaskStatus.canceled] results in progress -2.0
+/// [DownloadTaskStatus.notFound] results in progress -3.0
 typedef DownloadProgressCallback = void Function(
     BackgroundDownloadTask task, double progress);
 
@@ -26,7 +31,7 @@ class FileDownloader {
   static const defaultGroup = 'default';
   static const _channel = MethodChannel('com.bbflight.file_downloader');
   static const _backgroundChannel =
-  MethodChannel('com.bbflight.file_downloader.background');
+      MethodChannel('com.bbflight.file_downloader.background');
   static bool _initialized = false;
   static final statusCallbacks = <String, DownloadStatusCallback>{};
   static final progressCallbacks = <String, DownloadProgressCallback>{};
@@ -35,9 +40,10 @@ class FileDownloader {
 
   /// Initialize the downloader and potentially register callbacks to
   /// handle status and progress updates
-  static void initialize({String group = defaultGroup,
-    DownloadStatusCallback? downloadStatusCallback,
-    DownloadProgressCallback? downloadProgressCallback}) {
+  static void initialize(
+      {String group = defaultGroup,
+      DownloadStatusCallback? downloadStatusCallback,
+      DownloadProgressCallback? downloadProgressCallback}) {
     WidgetsFlutterBinding.ensureInitialized();
     // Incoming calls from the native code will be on the backgroundChannel,
     // so this isolate listener moves it from background to foreground
@@ -53,65 +59,31 @@ class FileDownloader {
     receivePort.listen((dynamic data) {
       final taskAsJsonMapString = data[1] as String;
       final task =
-      BackgroundDownloadTask.fromJsonMap(jsonDecode(taskAsJsonMapString));
+          BackgroundDownloadTask.fromJsonMap(jsonDecode(taskAsJsonMapString));
       switch (data[0] as String) {
         case 'statusUpdate':
-          final downloadStatusCallback = statusCallbacks[task.group];
-          if (downloadStatusCallback != null) {
-            var downloadTaskStatus = DownloadTaskStatus.values[data[2] as int];
-            if (task.providesProgressUpdates) {
-              // Send a 100% progress update for complete and not found,
-              // and a -1 or -2 for failed and canceled
-              // if those updates are requested
-              final progressUpdateCallback = progressCallbacks[task.group];
-              print('checking for progressupdateCallback');
-              if (progressUpdateCallback != null) {
-                print('found progressupdateCallback with status $downloadTaskStatus');
-                switch (downloadTaskStatus) {
-
-                  case DownloadTaskStatus.undefined:
-                  case DownloadTaskStatus.enqueued:
-                  case DownloadTaskStatus.running:
-                    break;
-                  case DownloadTaskStatus.complete:
-                  case DownloadTaskStatus.notFound:
-                  print('sending progressupdateCallback');
-                    progressUpdateCallback(task, 1);
-                    break;
-                  case DownloadTaskStatus.failed:
-                    progressUpdateCallback(task, -1);
-                    break;
-                  case DownloadTaskStatus.canceled:
-                    progressUpdateCallback(task, -2);
-                    break;
-                }
-              } else {
-                log.warning(
-                    'Requested progress updates for task ${task
-                        .taskId} in group ${task
-                        .group} but no progressUpdateCallback was registered');
-              }
-            }
-            downloadStatusCallback(task, downloadTaskStatus);
-          } else {
-            if (task.progressUpdates != DownloadTaskProgressUpdates.none) {
+          if (task.providesStatusUpdates) {
+            final downloadStatusCallback = statusCallbacks[task.group];
+            if (downloadStatusCallback != null) {
+              var downloadTaskStatus =
+                  DownloadTaskStatus.values[data[2] as int];
+              downloadStatusCallback(task, downloadTaskStatus);
+            } else {
               log.warning(
-                  'Requested status updates for task ${task
-                      .taskId} in group ${task
-                      .group} but no downloadStatusCallback was registered');
+                  'Requested status updates for task ${task.taskId} in group ${task.group} but no downloadStatusCallback was registered');
             }
           }
           break;
 
         case 'progressUpdate':
-          final progressUpdateCallback = progressCallbacks[task.group];
-          if (progressUpdateCallback != null) {
-            progressUpdateCallback(task, data[2] as double);
-          } else {
-            log.warning(
-                'Requested progress updates for task ${task
-                    .taskId} in group ${task
-                    .group} but no progressUpdateCallback was registered');
+          if (task.providesProgressUpdates) {
+            final progressUpdateCallback = progressCallbacks[task.group];
+            if (progressUpdateCallback != null) {
+              progressUpdateCallback(task, data[2] as double);
+            } else {
+              log.warning(
+                  'Requested progress updates for task ${task.taskId} in group ${task.group} but no progressUpdateCallback was registered');
+            }
           }
           break;
 
@@ -163,12 +135,13 @@ class FileDownloader {
   /// Status callbacks are called only when the state changes, while
   /// progress callbacks are called to inform of intermediate progress.
   /// If progress updates are requested, a status update is also requested.
-  static void registerCallbacks({String group = defaultGroup,
-    DownloadStatusCallback? downloadStatusCallback,
-    DownloadProgressCallback? downloadProgressCallback}) {
+  static void registerCallbacks(
+      {String group = defaultGroup,
+      DownloadStatusCallback? downloadStatusCallback,
+      DownloadProgressCallback? downloadProgressCallback}) {
     assert(_initialized, 'FileDownloader must be initialized before use');
     assert(downloadStatusCallback != null || (downloadProgressCallback != null),
-    'Must provide a status update callback or a progress update callback, or both');
+        'Must provide a status update callback or a progress update callback, or both');
     if (downloadStatusCallback != null) {
       statusCallbacks[group] = downloadStatusCallback;
     }
@@ -177,7 +150,6 @@ class FileDownloader {
     }
   }
 
-
   /// Start a new download task
   ///
   /// Returns true if successfully enqueued. A new task will also generate
@@ -185,10 +157,9 @@ class FileDownloader {
   static Future<bool> enqueue(BackgroundDownloadTask task) async {
     assert(_initialized, 'FileDownloader must be initialized before use');
     return await _channel.invokeMethod<bool>(
-        'enqueueDownload', [jsonEncode(task.toJsonMap())]) ??
+            'enqueueDownload', [jsonEncode(task.toJsonMap())]) ??
         false;
   }
-
 
   /// Resets the downloader by cancelling all ongoing download tasks within
   /// the provided group
@@ -204,7 +175,8 @@ class FileDownloader {
   /// Returns a list of taskIds of all tasks currently running
   static Future<List<String>> allTaskIds({String? group = defaultGroup}) async {
     assert(_initialized, 'FileDownloader must be initialized before use');
-    final result = await _channel.invokeMethod<List<Object?>>('allTasks', group) ?? [];
+    final result =
+        await _channel.invokeMethod<List<Object?>>('allTasks', group) ?? [];
     return result.map((e) => e as String).toList();
   }
 
@@ -214,7 +186,8 @@ class FileDownloader {
   /// the registered callback
   static Future<bool> cancelTasksWithIds(List<String> taskIds) async {
     assert(_initialized, 'FileDownloader must be initialized before use');
-    return await _channel.invokeMethod<bool>('cancelTasksWithIds', taskIds) ?? false;
+    return await _channel.invokeMethod<bool>('cancelTasksWithIds', taskIds) ??
+        false;
   }
 
   /// Destroy the [FileDownloader]. Subsequent use requires initialization
