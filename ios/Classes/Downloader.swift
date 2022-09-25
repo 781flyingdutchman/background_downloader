@@ -117,6 +117,8 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
       methodAllTaskIds(call: call, result: result)
     case "cancelTasksWithIds":
       methodCancelTasksWithIds(call: call, result: result)
+    case "taskForId":
+      methodTaskForId(call: call, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -208,6 +210,25 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
           task.cancel() }
       }
       result(true)
+    })
+  }
+  
+  /// Returns BackgroundDownloadTask for this taskId, or nil
+  private func methodTaskForId(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    let taskId = call.arguments as! String
+    urlSession = urlSession ?? createUrlSession()
+    urlSession?.getAllTasks(completionHandler: { tasks in
+      for task in tasks {
+        guard let backgroundDownloadTask = self.getTaskFrom(urlSessionDownloadTask: task)
+        else { continue }
+        os_log("Found taskId %@", log: self.log, backgroundDownloadTask.taskId)
+        if backgroundDownloadTask.taskId == taskId
+        {
+          result(self.jsonStringFor(backgroundDownloadTask: backgroundDownloadTask))
+          return
+        }
+      }
+      result(nil)
     })
   }
   

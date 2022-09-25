@@ -10,6 +10,6 @@
 
 @implementation FileDownloaderPlugin
 + (void)registerWithRegistrar:(NSObject<FlutterPluginRegistrar>*)registrar {
-  [DownloadWorker registerWithRegistrar:registrar];
+  [Downloader registerWithRegistrar:registrar];
 }
 @end

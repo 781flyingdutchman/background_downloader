@@ -83,6 +83,30 @@ class BackgroundDownloadTask {
           progressUpdates ==
               DownloadTaskProgressUpdates.statusChangeAndProgressUpdates;
 
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BackgroundDownloadTask &&
+          runtimeType == other.runtimeType &&
+          taskId == other.taskId &&
+          url == other.url &&
+          filename == other.filename &&
+          directory == other.directory &&
+          baseDirectory == other.baseDirectory &&
+          group == other.group &&
+          progressUpdates == other.progressUpdates;
+
+  @override
+  int get hashCode =>
+      taskId.hashCode ^
+      url.hashCode ^
+      filename.hashCode ^
+      directory.hashCode ^
+      baseDirectory.hashCode ^
+      group.hashCode ^
+      progressUpdates.hashCode;
+
   @override
   String toString() {
     return 'BackgroundDownloadTask{taskId: $taskId, url: $url, filename: $filename, directory: $directory, baseDirectory: $baseDirectory, group: $group, progressUpdates: $progressUpdates}';

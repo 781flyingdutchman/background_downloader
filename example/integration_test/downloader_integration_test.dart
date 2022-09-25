@@ -104,6 +104,7 @@ void main() {
       path = join((await getLibraryDirectory()).path, task.filename);
       await enqueueAndFileExists(path);
     }
+    print('Finished enqueue');
   });
 
   testWidgets('enqueue with progress', (widgetTester) async {
@@ -145,6 +146,7 @@ void main() {
     expect(downloadProgressCallbackCounter, greaterThan(1));
     await downloadStatusCallbackCompleter.future;
     expect(downloadStatusCallbackCounter, equals(2));
+    print('Finished enqueue with progress');
   });
 
   testWidgets('enqueue with non-default group callbacks', (widgetTester) async {
@@ -161,6 +163,7 @@ void main() {
     expect(File(path).existsSync(), isTrue); // file still downloads
     expect(downloadStatusCallbackCompleter.isCompleted, isFalse);
     expect(downloadStatusCallbackCounter, equals(0));
+    print('Finished enqueue with non-default group callbacks');
   });
 
   testWidgets('reset', (widgetTester) async {
@@ -171,6 +174,7 @@ void main() {
     await downloadStatusCallbackCompleter.future;
     expect(downloadStatusCallbackCounter, equals(2));
     expect(lastDownloadStatus, equals(DownloadTaskStatus.canceled));
+    print('Finished reset');
   });
 
   testWidgets('allTaskIds', (widgetTester) async {
@@ -181,6 +185,7 @@ void main() {
     await downloadStatusCallbackCompleter.future;
     expect(downloadStatusCallbackCounter, equals(2));
     expect(lastDownloadStatus, equals(DownloadTaskStatus.complete));
+    print('Finished alTaskIds');
   });
 
   testWidgets('cancelTasksWithIds', (widgetTester) async {
@@ -193,6 +198,19 @@ void main() {
     await downloadStatusCallbackCompleter.future;
     expect(downloadStatusCallbackCounter, equals(2));
     expect(lastDownloadStatus, equals(DownloadTaskStatus.canceled));
+    print('Finished cancelTasksWithIds');
+  });
+
+  testWidgets('taskForId', (widgetTester) async {
+    FileDownloader.initialize(downloadStatusCallback: downloadStatusCallback);
+    expect(await FileDownloader.taskForId('something'), isNull);
+    expect(await FileDownloader.enqueue(task), isTrue);
+    expect(await FileDownloader.taskForId('something'), isNull);
+    expect(await FileDownloader.taskForId(task.taskId), equals(task));
+    await downloadStatusCallbackCompleter.future;
+    expect(downloadStatusCallbackCounter, equals(2));
+    expect(lastDownloadStatus, equals(DownloadTaskStatus.complete));
+    print('Finished taskForId');
   });
 }
 

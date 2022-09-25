@@ -191,6 +191,19 @@ class FileDownloader {
         false;
   }
 
+  /// Return [BackgroundDownloadTask] for the given [taskId], or null
+  /// if not found.
+  ///
+  /// Returning a task does not guarantee the task is still in progress
+  static Future<BackgroundDownloadTask?> taskForId(String taskId) async {
+    assert(_initialized, 'FileDownloader must be initialized before use');
+    final jsonString = await _channel.invokeMethod<String>('taskForId', taskId);
+    if (jsonString != null) {
+      return BackgroundDownloadTask.fromJsonMap(jsonDecode(jsonString));
+    }
+    return null;
+  }
+
   /// Destroy the [FileDownloader]. Subsequent use requires initialization
   static void destroy() {
     _initialized = false;
