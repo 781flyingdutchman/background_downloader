@@ -100,7 +100,6 @@ class FileDownloader {
       final args = call.arguments as List<dynamic>;
       final sendPort = IsolateNameServer.lookupPortByName(portName);
       final taskAsJsonMapString = args.first as String;
-      print('Incoming ${call.method}: $taskAsJsonMapString');
       switch (call.method) {
         case 'statusUpdate':
           final status = args.last as int;

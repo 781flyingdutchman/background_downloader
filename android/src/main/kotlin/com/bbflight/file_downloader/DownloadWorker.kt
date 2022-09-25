@@ -26,6 +26,7 @@ import java.io.File
 import java.lang.Double.min
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import kotlin.concurrent.write
 import kotlin.io.path.Path
 import kotlin.io.path.pathString
 import kotlin.random.Random
@@ -133,7 +134,7 @@ class DownloadWorker(
          * Processes a change in status for the task
          *
          * Sends status update via the background channel to Flutter, if requested, and if the task
-         * is finished, processes a final status update
+         * is finished, processes a final status update and remove references to persistent storage
          * */
         fun processStatusUpdate(task: BackgroundDownloadTask, status: DownloadTaskStatus) {
             if (task.providesStatusUpdates()) {
@@ -147,7 +148,8 @@ class DownloadWorker(
                     }
                 }
             }
-            // if task is in final state, process a final progressUpdate
+            // if task is in final state, process a final progressUpdate and remove from
+            // persistent storage
             if (status != DownloadTaskStatus.running && status != DownloadTaskStatus.enqueued) {
                 when (status) {
                     DownloadTaskStatus.complete -> processProgressUpdate(task, 1.0)
@@ -155,6 +157,22 @@ class DownloadWorker(
                     DownloadTaskStatus.canceled -> processProgressUpdate(task, -2.0)
                     DownloadTaskStatus.notFound -> processProgressUpdate(task, -3.0)
                     else -> {}
+                }
+                FileDownloaderPlugin.prefsLock.write {
+                    val jsonString =
+                        FileDownloaderPlugin.prefs.getString(FileDownloaderPlugin.keyTasksMap, "{}")
+                    val backgroundDownloadTaskMap =
+                        FileDownloaderPlugin.gson.fromJson<Map<String, Any>>(
+                            jsonString,
+                            FileDownloaderPlugin.mapType
+                        ).toMutableMap()
+                    backgroundDownloadTaskMap.remove(task.taskId)
+                    val editor = FileDownloaderPlugin.prefs.edit()
+                    editor.putString(
+                        FileDownloaderPlugin.keyTasksMap,
+                        FileDownloaderPlugin.gson.toJson(backgroundDownloadTaskMap)
+                    )
+                    editor.apply()
                 }
             }
         }
@@ -231,9 +249,11 @@ class DownloadWorker(
                                 tempFile.appendBytes(bytes)
                                 if (downloadTask.providesProgressUpdates()
                                     && contentLength > 0
-                                    && getTimeMillis() > nextProgressUpdateTime) {
+                                    && getTimeMillis() > nextProgressUpdateTime
+                                ) {
                                     bytesReceivedTotal += bytes.size
-                                    val progress = min(bytesReceivedTotal.toDouble() / contentLength, 0.999)
+                                    val progress =
+                                        min(bytesReceivedTotal.toDouble() / contentLength, 0.999)
                                     if (progress - lastProgressUpdate > 0.02) {
                                         processProgressUpdate(downloadTask, progress)
                                         lastProgressUpdate = progress
@@ -262,7 +282,7 @@ class DownloadWorker(
                         }
 
                         if (isStopped) {
-                            Log.i(TAG, "Canceled task for $filePath")
+                            Log.v(TAG, "Canceled task for $filePath")
                             return@execute DownloadTaskStatus.canceled
                         }
                         Log.i(
@@ -271,7 +291,7 @@ class DownloadWorker(
                         )
                         return@execute DownloadTaskStatus.complete
                     } else {
-                        Log.w(
+                        Log.i(
                             TAG,
                             "Response code ${httpResponse.status.value} for download from  $urlString to $filePath"
                         )
@@ -289,12 +309,12 @@ class DownloadWorker(
                     TAG,
                     "Filesystem exception downloading from $urlString to $filePath: ${e.message}"
                 )
-                is HttpRequestTimeoutException -> Log.w(
+                is HttpRequestTimeoutException -> Log.i(
                     TAG,
                     "Request timeout downloading from $urlString to $filePath: ${e.message}"
                 )
                 is CancellationException -> {
-                    Log.i(TAG, "Job cancelled: $urlString to $filePath: ${e.message}")
+                    Log.v(TAG, "Job cancelled: $urlString to $filePath: ${e.message}")
                     return DownloadTaskStatus.canceled
                 }
                 else -> Log.w(TAG, "Error downloading from $urlString to $filePath: ${e.message}")

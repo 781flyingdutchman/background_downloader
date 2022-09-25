@@ -12,15 +12,22 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
+import java.util.concurrent.locks.ReentrantReadWriteLock
+import kotlin.concurrent.read
+import kotlin.concurrent.write
 
 /** FlutterDownloaderPlugin */
 class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     companion object {
         const val TAG = "FileDownloaderPlugin"
+        const val keyTasksMap = "com.ggflight.file_downloader.taskMap"
         private var channel: MethodChannel? = null
         var backgroundChannel: MethodChannel? = null
+        val prefsLock = ReentrantReadWriteLock()
         private lateinit var workManager: WorkManager
-        private lateinit var prefs: SharedPreferences
+        lateinit var prefs: SharedPreferences
+        val gson = Gson()
+        val mapType = object : TypeToken<Map<String, Any>>() {}.type
     }
 
     override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
@@ -35,6 +42,13 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         workManager = WorkManager.getInstance(flutterPluginBinding.applicationContext)
         prefs =
             PreferenceManager.getDefaultSharedPreferences(flutterPluginBinding.applicationContext)
+        val allWorkInfos = workManager.getWorkInfosByTag(TAG).get()
+        if (allWorkInfos.isEmpty()) {
+            // remove persistent storage if no jobs found at all
+            val editor = prefs.edit()
+            editor.remove(keyTasksMap)
+            editor.apply()
+        }
     }
 
     override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
@@ -49,6 +63,7 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
             "reset" -> methodReset(call, result)
             "allTaskIds" -> methodAllTaskIds(call, result)
             "cancelTasksWithIds" -> methodCancelTasksWithIds(call, result)
+            "taskForId" -> methodTaskForId(call, result)
             else -> result.notImplemented()
         }
     }
@@ -61,14 +76,11 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
      */
     private fun methodEnqueue(@NonNull call: MethodCall, @NonNull result: Result) {
         val args = call.arguments as List<*>
-        val gson = Gson()
-        val mapType = object : TypeToken<Map<String, Any>>() {}.type
         val downloadTaskJsonMapString = args[0] as String
-        Log.d(TAG, "downloadTaskJsonMapString $downloadTaskJsonMapString")
-        val downloadTask = BackgroundDownloadTask(
+        val backgroundDownloadTask = BackgroundDownloadTask(
             gson.fromJson(downloadTaskJsonMapString, mapType)
         )
-        Log.d(TAG, "Starting task with id ${downloadTask.taskId}")
+        Log.v(TAG, "Starting task with id ${backgroundDownloadTask.taskId}")
         val data = Data.Builder()
             .putString(DownloadWorker.keyDownloadTask, downloadTaskJsonMapString)
             .build()
@@ -79,19 +91,29 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
             .setInputData(data)
             .setConstraints(constraints)
             .addTag(TAG)
-            .addTag("taskId=${downloadTask.taskId}")
-            .addTag("group=${downloadTask.group}")
+            .addTag("taskId=${backgroundDownloadTask.taskId}")
+            .addTag("group=${backgroundDownloadTask.group}")
             .build()
         val operation = workManager.enqueue(request)
         try {
             operation.result.get()
-            DownloadWorker.processStatusUpdate(downloadTask, DownloadTaskStatus.running)
+            DownloadWorker.processStatusUpdate(backgroundDownloadTask, DownloadTaskStatus.running)
         } catch (e: Throwable) {
             Log.w(
                 TAG,
-                "Unable to start background request for taskId ${downloadTask.taskId} in operation: $operation"
+                "Unable to start background request for taskId ${backgroundDownloadTask.taskId} in operation: $operation"
             )
             result.success(false)
+        }
+        // store Task in persistent storage, as Json representation keyed by taskId
+        prefsLock.write {
+            val jsonString = prefs.getString(keyTasksMap, "{}")
+            val backgroundDownloadTaskMap =
+                gson.fromJson<Map<String, Any>>(jsonString, mapType).toMutableMap()
+            backgroundDownloadTaskMap[backgroundDownloadTask.taskId] = gson.toJson(backgroundDownloadTask.toJsonMap())
+            val editor = prefs.edit()
+            editor.putString(keyTasksMap, gson.toJson(backgroundDownloadTaskMap))
+            editor.apply()
         }
         result.success(true)
     }
@@ -125,7 +147,7 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
                 taskIds.add(tags.first().substring(7))
             }
         }
-        Log.d(TAG, "Returning ${taskIds.size} unfinished tasks in group $group: $taskIds")
+        Log.v(TAG, "Returning ${taskIds.size} unfinished tasks in group $group: $taskIds")
         result.success(taskIds)
     }
 
@@ -135,7 +157,7 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
      * */
     private fun methodCancelTasksWithIds(@NonNull call: MethodCall, @NonNull result: Result) {
         val taskIds = call.arguments as List<*>
-        Log.d(TAG, "Canceling taskIds $taskIds")
+        Log.v(TAG, "Canceling taskIds $taskIds")
         for (taskId in taskIds) {
             val operation = workManager.cancelAllWorkByTag("taskId=$taskId")
             try {
@@ -149,6 +171,18 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
             }
         }
         result.success(true)
+    }
+
+    /** Returns BackgroundDownloadTask for this taskId, or nil */
+    private fun methodTaskForId(@NonNull call: MethodCall, @NonNull result: Result) {
+        val taskId = call.arguments as String
+        Log.v(TAG, "Returning task for taskId $taskId")
+        prefsLock.read {
+            val jsonString = prefs.getString(keyTasksMap, "{}")
+            val backgroundDownloadTaskMap =
+                gson.fromJson<Map<String, Any>>(jsonString, mapType).toMutableMap()
+            result.success(backgroundDownloadTaskMap[taskId])
+        }
     }
 }
 
