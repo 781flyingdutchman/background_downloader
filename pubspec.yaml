@@ -1,7 +1,7 @@
 name: file_downloader
 description: A background file downloader for iOS and Android
 version: 1.0.0
-homepage: https://github.com/781flyingdutchman/file_downloader
+repository: https://github.com/781flyingdutchman/file_downloader
 
 environment:
   sdk: '>=2.18.0 <3.0.0'
