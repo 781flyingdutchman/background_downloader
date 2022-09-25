@@ -23,6 +23,7 @@ import io.ktor.utils.io.core.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.lang.Double.min
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import kotlin.io.path.Path
@@ -128,8 +129,13 @@ class DownloadWorker(
         const val TAG = "DownloadWorker"
         const val keyDownloadTask = "downloadTask"
 
-        /** Sends status update for this task */
-        fun sendStatusUpdate(task: BackgroundDownloadTask, status: DownloadTaskStatus) {
+        /**
+         * Processes a change in status for the task
+         *
+         * Sends status update via the background channel to Flutter, if requested, and if the task
+         * is finished, processes a final status update
+         * */
+        fun processStatusUpdate(task: BackgroundDownloadTask, status: DownloadTaskStatus) {
             if (task.providesStatusUpdates()) {
                 Handler(Looper.getMainLooper()).post {
                     try {
@@ -141,9 +147,19 @@ class DownloadWorker(
                     }
                 }
             }
+            // if task is in final state, process a final progressUpdate
+            if (status != DownloadTaskStatus.running && status != DownloadTaskStatus.enqueued) {
+                when (status) {
+                    DownloadTaskStatus.complete -> processProgressUpdate(task, 1.0)
+                    DownloadTaskStatus.failed -> processProgressUpdate(task, -1.0)
+                    DownloadTaskStatus.canceled -> processProgressUpdate(task, -2.0)
+                    DownloadTaskStatus.notFound -> processProgressUpdate(task, -3.0)
+                    else -> {}
+                }
+            }
         }
 
-        fun sendProgressUpdate(task: BackgroundDownloadTask, progress: Double) {
+        fun processProgressUpdate(task: BackgroundDownloadTask, progress: Double) {
             if (task.providesProgressUpdates()) {
                 Handler(Looper.getMainLooper()).post {
                     try {
@@ -170,14 +186,7 @@ class DownloadWorker(
         Log.i(TAG, " Starting download for taskId ${downloadTask.taskId}")
         val filePath = pathToFileForTask(downloadTask)
         val status = downloadFile(downloadTask, filePath)
-        sendStatusUpdate(downloadTask, status)
-        when (status) {
-            DownloadTaskStatus.complete -> sendProgressUpdate(downloadTask, 1.0)
-            DownloadTaskStatus.failed -> sendProgressUpdate(downloadTask, -1.0)
-            DownloadTaskStatus.canceled -> sendProgressUpdate(downloadTask, -2.0)
-            DownloadTaskStatus.notFound -> sendProgressUpdate(downloadTask, -3.0)
-            else -> {}
-        }
+        processStatusUpdate(downloadTask, status)
         return Result.success()
     }
 
@@ -224,9 +233,9 @@ class DownloadWorker(
                                     && contentLength > 0
                                     && getTimeMillis() > nextProgressUpdateTime) {
                                     bytesReceivedTotal += bytes.size
-                                    val progress = bytesReceivedTotal.toDouble() / contentLength
+                                    val progress = min(bytesReceivedTotal.toDouble() / contentLength, 0.999)
                                     if (progress - lastProgressUpdate > 0.02) {
-                                        sendProgressUpdate(downloadTask, progress)
+                                        processProgressUpdate(downloadTask, progress)
                                         lastProgressUpdate = progress
                                         nextProgressUpdateTime = getTimeMillis() + 500
                                     }

@@ -47,7 +47,7 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         when (call.method) {
             "enqueue" -> methodEnqueue(call, result)
             "reset" -> methodReset(call, result)
-            "allTasks" -> methodAllTasks(call, result)
+            "allTaskIds" -> methodAllTaskIds(call, result)
             "cancelTasksWithIds" -> methodCancelTasksWithIds(call, result)
             else -> result.notImplemented()
         }
@@ -85,7 +85,7 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         val operation = workManager.enqueue(request)
         try {
             operation.result.get()
-            DownloadWorker.sendStatusUpdate(downloadTask, DownloadTaskStatus.running)
+            DownloadWorker.processStatusUpdate(downloadTask, DownloadTaskStatus.running)
         } catch (e: Throwable) {
             Log.w(
                 TAG,
@@ -96,7 +96,7 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         result.success(true)
     }
 
-    /** Resets the downloadworker by cancelling all ongoing download tasks
+    /** Resets the download worker by cancelling all ongoing download tasks for the group
      *
      *  Returns the number of tasks canceled
      */
@@ -114,7 +114,7 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     }
 
     /** Returns a ist of taskIds for all tasks in progress */
-    private fun methodAllTasks(@NonNull call: MethodCall, @NonNull result: Result) {
+    private fun methodAllTaskIds(@NonNull call: MethodCall, @NonNull result: Result) {
         val group = call.arguments as String
         val workInfos = workManager.getWorkInfosByTag(TAG).get()
             .filter { !it.state.isFinished && it.tags.contains("group=$group") }
