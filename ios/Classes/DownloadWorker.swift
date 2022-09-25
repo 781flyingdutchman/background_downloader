@@ -224,6 +224,8 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   }
   
   /// Cancels ongoing tasks whose taskId is in the list provided with this call
+  ///
+  /// Returns true if all cancellations were successful
   private func methodCancelTasksWithIds(call: FlutterMethodCall, result: @escaping FlutterResult) {
     let taskIds = call.arguments as! [String]
     os_log("Canceling taskIds %@", log: log, taskIds)
@@ -233,10 +235,10 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
       for task in tasks {
         guard let taskId = taskIdMap[String(task.taskIdentifier)],
               taskIds.contains(taskId)
-        else {continue}
+        else { continue }
         task.cancel()
       }
-      result(nil)
+      result(true)
     })
   }
   
@@ -286,16 +288,11 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   public func urlSession(_ session: URLSession,
                          downloadTask: URLSessionDownloadTask,
                          didFinishDownloadingTo location: URL) {
-    // os_log("Did finish download %@", log: self.log, downloadTask.taskIdentifier)
-    // map the urlSessionDownloadTask taskidentifier to the original BackgroudnDownloadTask's taskId
-    let taskIdMap = getTaskMap()
-    guard let backgroundDownloadTaskJsonString = taskIdMap[String(downloadTask.taskIdentifier)] else {
-      os_log("Could not map urlSessionDownloadTask identifier %d to a taskId", log: log, downloadTask.taskIdentifier)
-      return
-    }
-    guard let backgroundDownloadTask = backgroundDownloadTaskFromJsonString(jsonString: backgroundDownloadTaskJsonString),
+    guard let backgroundDownloadTask = getTaskForNativeId(nativeId: downloadTask.taskIdentifier),
           let response = downloadTask.response as? HTTPURLResponse
-    else {return}
+    else {
+      os_log("Could not find task associated with native id %d, or did not get HttpResponse", log: log, downloadTask.taskIdentifier)
+      return}
     if response.statusCode == 404 {
       processStatusUpdate(task: backgroundDownloadTask, status: DownloadTaskStatus.notFound)
       return
@@ -416,7 +413,6 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   /// Sends status update via the background channel to Flutter, if requested, and if the task is finished,
   /// processes a final status update, then removes it from permanent storage
   private func processStatusUpdate(task: BackgroundDownloadTask, status: DownloadTaskStatus) {
-    os_log("Sending status update", log: self.log)
     guard let channel = DownloadWorker.backgroundChannel else {
       os_log("Could not find background channel", log: self.log)
       return
@@ -425,7 +421,6 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
       let jsonString = jsonStringForBackgroundDownloadTask(task: task)
       if (jsonString != nil)
       {
-        os_log("update %@ status %d", log: self.log, jsonString!, status.rawValue)
         DispatchQueue.main.async {
           channel.invokeMethod("statusUpdate", arguments: [jsonString!, status.rawValue])
         }
@@ -464,7 +459,6 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   /// Sends progress update via the background channel to Flutter, if requested, and if the task is finished, removes
   /// it from the cache
   private func processProgressUpdate(nativeId: Int, progress: Double) {
-    os_log("Processing progress update", log: self.log)
     guard let channel = DownloadWorker.backgroundChannel else {
       os_log("Could not find background channel", log: self.log)
       return
@@ -476,7 +470,6 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
       let jsonString = jsonStringForBackgroundDownloadTask(task: task)
       if (jsonString != nil)
       {
-        os_log("progress update %@ progress %f", log: self.log, jsonString!, progress)
         DispatchQueue.main.async {
           channel.invokeMethod("progressUpdate", arguments: [jsonString!, progress])
         }
@@ -484,7 +477,6 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
     }
     // if this is a final progress update, remove from cache
     if progress == 1.0 || progress < 0 {
-      os_log("Final progress update", log: self.log)
       let nativeIdString = String(nativeId)
       nativeToTaskMap.removeValue(forKey: nativeIdString)
       lastProgressUpdate.removeValue(forKey: nativeIdString)
@@ -520,7 +512,7 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   
   /// Creates a urlSession
   private func createUrlSession() -> URLSession {
-    os_log("Recreating URLSession", log: log)
+    os_log("Creating URLSession", log: log)
     if urlSession != nil {
       os_log("createUrlSession called with non-null urlSession")
     }
