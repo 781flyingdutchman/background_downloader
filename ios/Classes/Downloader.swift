@@ -65,7 +65,6 @@ enum DownloadTaskProgressUpdates: Int {
 /// Defines a set of possible states which a [DownloadTask] can be in.
 enum DownloadTaskStatus: Int {
   case undefined,
-       enqueued,
        running,
        complete,
        notFound,
@@ -80,7 +79,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
   
   let log = OSLog.init(subsystem: "FileDownloaderPlugin", category: "DownloadWorker")
   
-  private static var resourceTimeout = 60 * 60.0 // in seconds
+  private static var resourceTimeout = 4 * 60 * 60.0 // in seconds
   public static var sessionIdentifier = "com.bbflight.file_downloader.DownloadWorker"
   public static var flutterPluginRegistrantCallback: FlutterPluginRegistrantCallback?
   private static var backgroundChannel: FlutterMethodChannel?
@@ -397,7 +396,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
       }
     }
     // if task is in final state then process a final progressUpdate
-    if status != DownloadTaskStatus.running && status != DownloadTaskStatus.enqueued {
+    if status != DownloadTaskStatus.running {
       switch (status) {
       case .complete:
         processProgressUpdate(backgroundDownloadTask: backgroundDownloadTask, progress: 1.0)

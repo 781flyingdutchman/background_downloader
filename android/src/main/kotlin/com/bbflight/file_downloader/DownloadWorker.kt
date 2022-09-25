@@ -106,7 +106,6 @@ class BackgroundDownloadTask(
  */
 enum class DownloadTaskStatus {
     undefined,
-    enqueued,
     running,
     complete,
     notFound,
@@ -136,12 +135,12 @@ class DownloadWorker(
          * Sends status update via the background channel to Flutter, if requested, and if the task
          * is finished, processes a final status update and remove references to persistent storage
          * */
-        fun processStatusUpdate(task: BackgroundDownloadTask, status: DownloadTaskStatus) {
-            if (task.providesStatusUpdates()) {
+        fun processStatusUpdate(backgroundDownloadTask: BackgroundDownloadTask, status: DownloadTaskStatus) {
+            if (backgroundDownloadTask.providesStatusUpdates()) {
                 Handler(Looper.getMainLooper()).post {
                     try {
                         val gson = Gson()
-                        val arg = listOf<Any>(gson.toJson(task.toJsonMap()), status.ordinal)
+                        val arg = listOf<Any>(gson.toJson(backgroundDownloadTask.toJsonMap()), status.ordinal)
                         FileDownloaderPlugin.backgroundChannel?.invokeMethod("statusUpdate", arg)
                     } catch (e: Exception) {
                         Log.w(TAG, "Exception trying to post status update: ${e.message}")
@@ -150,12 +149,12 @@ class DownloadWorker(
             }
             // if task is in final state, process a final progressUpdate and remove from
             // persistent storage
-            if (status != DownloadTaskStatus.running && status != DownloadTaskStatus.enqueued) {
+            if (status != DownloadTaskStatus.running) {
                 when (status) {
-                    DownloadTaskStatus.complete -> processProgressUpdate(task, 1.0)
-                    DownloadTaskStatus.failed -> processProgressUpdate(task, -1.0)
-                    DownloadTaskStatus.canceled -> processProgressUpdate(task, -2.0)
-                    DownloadTaskStatus.notFound -> processProgressUpdate(task, -3.0)
+                    DownloadTaskStatus.complete -> processProgressUpdate(backgroundDownloadTask, 1.0)
+                    DownloadTaskStatus.failed -> processProgressUpdate(backgroundDownloadTask, -1.0)
+                    DownloadTaskStatus.canceled -> processProgressUpdate(backgroundDownloadTask, -2.0)
+                    DownloadTaskStatus.notFound -> processProgressUpdate(backgroundDownloadTask, -3.0)
                     else -> {}
                 }
                 FileDownloaderPlugin.prefsLock.write {
@@ -166,7 +165,7 @@ class DownloadWorker(
                             jsonString,
                             FileDownloaderPlugin.mapType
                         ).toMutableMap()
-                    backgroundDownloadTaskMap.remove(task.taskId)
+                    backgroundDownloadTaskMap.remove(backgroundDownloadTask.taskId)
                     val editor = FileDownloaderPlugin.prefs.edit()
                     editor.putString(
                         FileDownloaderPlugin.keyTasksMap,
@@ -177,12 +176,17 @@ class DownloadWorker(
             }
         }
 
-        fun processProgressUpdate(task: BackgroundDownloadTask, progress: Double) {
-            if (task.providesProgressUpdates()) {
+        /**
+         * Processes a progress update for the [backgroundDownloadTask]
+         *
+         * Sends progress update via the background channel to Flutter, if requested
+         */
+        fun processProgressUpdate(backgroundDownloadTask: BackgroundDownloadTask, progress: Double) {
+            if (backgroundDownloadTask.providesProgressUpdates()) {
                 Handler(Looper.getMainLooper()).post {
                     try {
                         val gson = Gson()
-                        val arg = listOf<Any>(gson.toJson(task.toJsonMap()), progress)
+                        val arg = listOf<Any>(gson.toJson(backgroundDownloadTask.toJsonMap()), progress)
                         FileDownloaderPlugin.backgroundChannel?.invokeMethod("progressUpdate", arg)
                     } catch (e: Exception) {
                         Log.w(TAG, "Exception trying to post progress update: ${e.message}")

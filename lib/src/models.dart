@@ -1,13 +1,27 @@
+import 'dart:io';
 import 'dart:math';
 
 /// Defines a set of possible states which a [DownloadTask] can be in.
 enum DownloadTaskStatus {
+  /// Unknown state
   undefined,
-  enqueued,
+  /// Not currently used
   running,
+  /// Task has completed successfully and the file is available
+  ///
+  /// This is a final state
   complete,
+  /// Task has completed because the url was not found (Http status code 404)
+  ///
+  /// This is a final state
   notFound,
+  /// Task has failed to download due to an error
+  ///
+  /// This is a final state
   failed,
+  /// Task has been canceled by the user or the system
+  ///
+  /// This is a final state
   canceled;
 }
 
@@ -16,27 +30,41 @@ enum DownloadTaskStatus {
 ///
 /// These correspond to the directories provided by the path_provider package
 enum BaseDirectory {
-  applicationDocuments, // getApplicationDocumentsDirectory()
-  temporary, // getTemporaryDirectory()
-  applicationSupport // getApplicationSupportDirectory()
+  /// As returned by getApplicationDocumentsDirectory()
+  applicationDocuments,
+  /// As returned by getTemporaryDirectory()
+  temporary,
+  /// As returned by getApplicationSupportDirectory() - iOS only
+  applicationSupport
 }
 
 /// Type of download updates requested for a group of downloads
 enum DownloadTaskProgressUpdates {
-  none, // no status or progress updates
-  statusChange, // only calls upon change in DownloadTaskStatus
-  progressUpdates, // only progress updates
-  statusChangeAndProgressUpdates, // calls also for progress along the way
+  /// no status change or progress updates
+  none,
+  /// only status changes
+  statusChange,
+  /// only progress updates while downloading, no status change updates
+  progressUpdates,
+  /// Status change updates and progress updates while downloading
+  statusChangeAndProgressUpdates,
 }
 
 /// Information related to a download
 class BackgroundDownloadTask {
+  /// Identifier for the task - auto generated if omitted
   final String taskId;
+  /// String representation of the url from which to download
   final String url;
+  /// Filename of the file to store
   final String filename;
+  /// Optional directory, relative to the base directory
   final String directory;
+  /// Base directory
   final BaseDirectory baseDirectory;
+  /// Group that this task belongs to
   final String group;
+  /// Type of progress updates desired
   final DownloadTaskProgressUpdates progressUpdates;
 
   BackgroundDownloadTask(
@@ -47,7 +75,17 @@ class BackgroundDownloadTask {
       this.baseDirectory = BaseDirectory.applicationDocuments,
       this.group = 'default',
       this.progressUpdates = DownloadTaskProgressUpdates.statusChange})
-      : taskId = taskId ?? Random().nextInt(1 << 32).toString();
+      : taskId = taskId ?? Random().nextInt(1 << 32).toString() {
+    if (filename.isEmpty) {
+      throw ArgumentError('Filename cannot be empty');
+    }
+    if (filename.contains(Platform.pathSeparator)) {
+      throw ArgumentError('Filename cannot contain path separators');
+    }
+    if (directory.startsWith(Platform.pathSeparator)) {
+      throw ArgumentError('Directory must be relative to the baseDirectory specified in the baseDirectory argument');
+    }
+  }
 
   /// Creates object from JsonMap
   BackgroundDownloadTask.fromJsonMap(Map<String, dynamic> jsonMap)
