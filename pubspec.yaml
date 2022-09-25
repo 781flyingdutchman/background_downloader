@@ -1,7 +1,7 @@
 name: file_downloader
-description: A simple backgroudn file downloader plugin for iOS and Android
-version: 0.0.1
-homepage:
+description: A background file downloader for iOS and Android
+version: 1.0.0
+homepage: https://github.com/781flyingdutchman/file_downloader
 
 environment:
   sdk: '>=2.18.0 <3.0.0'
@@ -10,7 +10,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-#  plugin_platform_interface: ^2.0.2
   logging: ^1.0.2
 
 dev_dependencies:
