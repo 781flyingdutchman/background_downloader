@@ -48,7 +48,7 @@ class _MyAppState extends State<MyApp> {
     for (var n = 0; n < 1; n++) {
       final backgroundDownloadTask = BackgroundDownloadTask(
           taskId: 'taskId$n',
-          url: "http://speedtest.ftp.otenet.gr/files/test10Mb.db",
+          url: "https://google.com",
           filename: "filename$n",
           directory: "directory",
           baseDirectory: BaseDirectory.applicationDocuments,

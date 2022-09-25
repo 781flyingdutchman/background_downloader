@@ -3,7 +3,7 @@
 # Run `pod lib lint file_downloader.podspec` to validate before publishing.
 #
 Pod::Spec.new do |s|
-  s.name             = 'file_downloader'
+  s.name             = 'background_downloader'
   s.version          = '0.0.1'
   s.summary          = 'A new Flutter plugin project.'
   s.description      = <<-DESC
