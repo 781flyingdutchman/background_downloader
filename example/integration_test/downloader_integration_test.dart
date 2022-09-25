@@ -142,7 +142,6 @@ void main() {
             DownloadTaskProgressUpdates.statusChangeAndProgressUpdates);
     expect(await FileDownloader.enqueue(task), isTrue);
     await downloadProgressCallbackCompleter.future;
-    // because google.com has no content-length, we only expect the 1.0 progress update
     expect(downloadProgressCallbackCounter, greaterThan(1));
     await downloadStatusCallbackCompleter.future;
     expect(downloadStatusCallbackCounter, equals(2));

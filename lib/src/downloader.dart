@@ -100,6 +100,7 @@ class FileDownloader {
       final args = call.arguments as List<dynamic>;
       final sendPort = IsolateNameServer.lookupPortByName(portName);
       final taskAsJsonMapString = args.first as String;
+      print('Incoming ${call.method}: $taskAsJsonMapString');
       switch (call.method) {
         case 'statusUpdate':
           final status = args.last as int;
@@ -157,7 +158,7 @@ class FileDownloader {
   static Future<bool> enqueue(BackgroundDownloadTask task) async {
     assert(_initialized, 'FileDownloader must be initialized before use');
     return await _channel.invokeMethod<bool>(
-            'enqueueDownload', [jsonEncode(task.toJsonMap())]) ??
+            'enqueue', [jsonEncode(task.toJsonMap())]) ??
         false;
   }
 
