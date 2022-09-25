@@ -117,8 +117,8 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
       methodReset(call: call, result: result)
     case "enqueue":
       methodEnqueue(call: call, result: result)
-    case "allTasks":
-      methodAllTasks(call: call, result: result)
+    case "allTaskIds":
+      methodAllTaskIds(call: call, result: result)
     case "cancelTasksWithIds":
       methodCancelTasksWithIds(call: call, result: result)
     default:
@@ -202,18 +202,20 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   }
   
   /// Returns a list with taskIds for all tasks in progress
-  private func methodAllTasks(call: FlutterMethodCall, result: @escaping FlutterResult) {
-    let taskIdMap = getTaskIdMap()
+  private func methodAllTaskIds(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    let group = call.arguments as! String
     var taskIds: [String] = []
     urlSession = urlSession ?? createUrlSession()
     urlSession?.getAllTasks(completionHandler: { tasks in
       os_log("Found %d tasks", log: self.log, tasks.count)
       for task in tasks {
-        guard
-          let taskId = taskIdMap[String(task.taskIdentifier)] else { continue }
-        if task.state == URLSessionTask.State.running || task.state == URLSessionTask.State.suspended
-        {
-          taskIds.append(taskId)
+        guard let downloadTask = self.getTaskForNativeId(nativeId: task.taskIdentifier)
+        else { continue }
+        if downloadTask.group == group {
+          if task.state == URLSessionTask.State.running || task.state == URLSessionTask.State.suspended
+          {
+            taskIds.append(downloadTask.taskId)
+          }
         }
       }
       os_log("Returning %d unfinished tasks: %@", log: self.log,taskIds.count, taskIds)
@@ -223,10 +225,7 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   
   /// Cancels ongoing tasks whose taskId is in the list provided with this call
   private func methodCancelTasksWithIds(call: FlutterMethodCall, result: @escaping FlutterResult) {
-    guard let taskIds = call.arguments as? [String] else {
-      os_log("Invalid arguments", log: log)
-      return
-    }
+    let taskIds = call.arguments as! [String]
     os_log("Canceling taskIds %@", log: log, taskIds)
     let taskIdMap = getTaskIdMap()
     urlSession = urlSession ?? createUrlSession()

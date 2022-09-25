@@ -177,7 +177,7 @@ class FileDownloader {
   static Future<List<String>> allTaskIds({String? group = defaultGroup}) async {
     assert(_initialized, 'FileDownloader must be initialized before use');
     final result =
-        await _channel.invokeMethod<List<Object?>>('allTasks', group) ?? [];
+        await _channel.invokeMethod<List<Object?>>('allTaskIds', group) ?? [];
     return result.map((e) => e as String).toList();
   }
 
