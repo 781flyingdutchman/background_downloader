@@ -1,6 +1,6 @@
 @file:Suppress("EnumEntryName")
 
-package com.bbflight.file_downloader
+package com.bbflight.background_downloader
 
 import android.content.Context
 import android.os.Build
@@ -141,7 +141,7 @@ class DownloadWorker(
                     try {
                         val gson = Gson()
                         val arg = listOf<Any>(gson.toJson(backgroundDownloadTask.toJsonMap()), status.ordinal)
-                        FileDownloaderPlugin.backgroundChannel?.invokeMethod("statusUpdate", arg)
+                        BackgroundDownloaderPlugin.backgroundChannel?.invokeMethod("statusUpdate", arg)
                     } catch (e: Exception) {
                         Log.w(TAG, "Exception trying to post status update: ${e.message}")
                     }
@@ -157,19 +157,19 @@ class DownloadWorker(
                     DownloadTaskStatus.notFound -> processProgressUpdate(backgroundDownloadTask, -3.0)
                     else -> {}
                 }
-                FileDownloaderPlugin.prefsLock.write {
+                BackgroundDownloaderPlugin.prefsLock.write {
                     val jsonString =
-                        FileDownloaderPlugin.prefs.getString(FileDownloaderPlugin.keyTasksMap, "{}")
+                        BackgroundDownloaderPlugin.prefs.getString(BackgroundDownloaderPlugin.keyTasksMap, "{}")
                     val backgroundDownloadTaskMap =
-                        FileDownloaderPlugin.gson.fromJson<Map<String, Any>>(
+                        BackgroundDownloaderPlugin.gson.fromJson<Map<String, Any>>(
                             jsonString,
-                            FileDownloaderPlugin.mapType
+                            BackgroundDownloaderPlugin.mapType
                         ).toMutableMap()
                     backgroundDownloadTaskMap.remove(backgroundDownloadTask.taskId)
-                    val editor = FileDownloaderPlugin.prefs.edit()
+                    val editor = BackgroundDownloaderPlugin.prefs.edit()
                     editor.putString(
-                        FileDownloaderPlugin.keyTasksMap,
-                        FileDownloaderPlugin.gson.toJson(backgroundDownloadTaskMap)
+                        BackgroundDownloaderPlugin.keyTasksMap,
+                        BackgroundDownloaderPlugin.gson.toJson(backgroundDownloadTaskMap)
                     )
                     editor.apply()
                 }
@@ -187,7 +187,7 @@ class DownloadWorker(
                     try {
                         val gson = Gson()
                         val arg = listOf<Any>(gson.toJson(backgroundDownloadTask.toJsonMap()), progress)
-                        FileDownloaderPlugin.backgroundChannel?.invokeMethod("progressUpdate", arg)
+                        BackgroundDownloaderPlugin.backgroundChannel?.invokeMethod("progressUpdate", arg)
                     } catch (e: Exception) {
                         Log.w(TAG, "Exception trying to post progress update: ${e.message}")
                     }
@@ -241,7 +241,7 @@ class DownloadWorker(
                         var nextProgressUpdateTime = 0L
                         var dir = applicationContext.cacheDir
                         val tempFile = File.createTempFile(
-                            "com.bbflight.file_downloader",
+                            "com.bbflight.background_downloader",
                             Random.nextInt().toString(),
                             dir
                         )

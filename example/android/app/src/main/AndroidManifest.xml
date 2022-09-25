@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.bbflight.file_downloader_example">
+    package="com.bbflight.background_downloader_example">
    <application
-        android:label="file_downloader_example"
+        android:label="background_downloader_example"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

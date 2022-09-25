@@ -1,4 +1,4 @@
-package com.bbflight.file_downloader
+package com.bbflight.background_downloader
 
 import android.content.SharedPreferences
 import android.util.Log
@@ -16,11 +16,11 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
 
-/** FlutterDownloaderPlugin */
-class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
+/** BackgroundDownloaderPlugin */
+class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     companion object {
-        const val TAG = "FileDownloaderPlugin"
-        const val keyTasksMap = "com.ggflight.file_downloader.taskMap"
+        const val TAG = "BackgroundDownloaderPlugin"
+        const val keyTasksMap = "com.bbflight.background_downloader.taskMap"
         private var channel: MethodChannel? = null
         var backgroundChannel: MethodChannel? = null
         val prefsLock = ReentrantReadWriteLock()
@@ -32,11 +32,11 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
 
     override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         channel =
-            MethodChannel(flutterPluginBinding.binaryMessenger, "com.bbflight.file_downloader")
+            MethodChannel(flutterPluginBinding.binaryMessenger, "com.bbflight.background_downloader")
         backgroundChannel =
             MethodChannel(
                 flutterPluginBinding.binaryMessenger,
-                "com.bbflight.file_downloader.background"
+                "com.bbflight.background_downloader.background"
             )
         channel?.setMethodCallHandler(this)
         workManager = WorkManager.getInstance(flutterPluginBinding.applicationContext)

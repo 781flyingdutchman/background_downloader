@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:file_downloader/file_downloader.dart';
+
+import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
 

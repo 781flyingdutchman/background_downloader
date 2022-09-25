@@ -1,4 +1,4 @@
-package com.bbflight.file_downloader_example
+package com.bbflight.background_downloader_example
 
 import io.flutter.embedding.android.FlutterActivity
 

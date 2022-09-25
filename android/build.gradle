@@ -1,4 +1,4 @@
-group 'com.bbflight.file_downloader'
+group 'com.bbflight.background_downloader'
 version '1.0-SNAPSHOT'
 
 buildscript {

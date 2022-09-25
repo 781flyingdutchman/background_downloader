@@ -1,7 +1,7 @@
-name: file_downloader
+name: background_downloader
 description: A background file downloader for iOS and Android
 version: 1.0.0
-repository: https://github.com/781flyingdutchman/file_downloader
+repository: https://github.com/781flyingdutchman/background_downloader
 
 environment:
   sdk: '>=2.18.0 <3.0.0'
@@ -26,7 +26,7 @@ flutter:
   plugin:
     platforms:
       android:
-        package: com.bbflight.file_downloader
-        pluginClass: FileDownloaderPlugin
+        package: com.bbflight.background_downloader
+        pluginClass: BackgroundDownloaderPlugin
       ios:
-        pluginClass: FileDownloaderPlugin
+        pluginClass: BackgroundDownloaderPlugin

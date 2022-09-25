@@ -80,7 +80,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
   let log = OSLog.init(subsystem: "FileDownloaderPlugin", category: "DownloadWorker")
   
   private static var resourceTimeout = 4 * 60 * 60.0 // in seconds
-  public static var sessionIdentifier = "com.bbflight.file_downloader.DownloadWorker"
+  public static var sessionIdentifier = "com.bbflight.background_downloader.DownloadWorker"
   public static var flutterPluginRegistrantCallback: FlutterPluginRegistrantCallback?
   private static var backgroundChannel: FlutterMethodChannel?
   
@@ -91,8 +91,8 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
   private var nextProgressUpdateTime = [String:Date]()
   
   public static func register(with registrar: FlutterPluginRegistrar) {
-    let channel = FlutterMethodChannel(name: "com.bbflight.file_downloader", binaryMessenger: registrar.messenger())
-    backgroundChannel = FlutterMethodChannel(name: "com.bbflight.file_downloader.background", binaryMessenger: registrar.messenger())
+    let channel = FlutterMethodChannel(name: "com.bbflight.background_downloader", binaryMessenger: registrar.messenger())
+    backgroundChannel = FlutterMethodChannel(name: "com.bbflight.background_downloader.background", binaryMessenger: registrar.messenger())
     let instance = Downloader()
     registrar.addMethodCallDelegate(instance, channel: channel)
     registrar.addApplicationDelegate(instance)

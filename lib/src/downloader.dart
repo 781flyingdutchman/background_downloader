@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:isolate';
 import 'dart:ui';
 
-import 'package:file_downloader/file_downloader.dart';
+
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:logging/logging.dart';
@@ -29,9 +29,9 @@ typedef DownloadProgressCallback = void Function(
 class FileDownloader {
   static final log = Logger('FileDownloader');
   static const defaultGroup = 'default';
-  static const _channel = MethodChannel('com.bbflight.file_downloader');
+  static const _channel = MethodChannel('com.bbflight.background_downloader');
   static const _backgroundChannel =
-      MethodChannel('com.bbflight.file_downloader.background');
+      MethodChannel('com.bbflight.background_downloader.background');
   static bool _initialized = false;
   static final statusCallbacks = <String, DownloadStatusCallback>{};
   static final progressCallbacks = <String, DownloadProgressCallback>{};
@@ -47,7 +47,7 @@ class FileDownloader {
     WidgetsFlutterBinding.ensureInitialized();
     // Incoming calls from the native code will be on the backgroundChannel,
     // so this isolate listener moves it from background to foreground
-    const portName = 'file_downloader_send_port';
+    const portName = 'background_downloader_send_port';
     // create simple listener Isolate to receive download updates in the
     // main isolate
     final receivePort = ReceivePort();

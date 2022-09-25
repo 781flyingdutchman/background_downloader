@@ -1,6 +1,6 @@
 # A background file downloader for iOS and Android
 
-Define where to get your file from, where to store it, and how you want to monitor the download, and the background loader will ensure this is done in a responsible way using native platform background downloaders.  `file_downloader` uses URLSessions on iOS and DownloadWorker on Android, so tasks will complete also when your app is in the background.
+Define where to get your file from, where to store it, and how you want to monitor the download, and the background loader will ensure this is done in a responsible way using native platform background downloaders.  `background_downloader` uses URLSessions on iOS and DownloadWorker on Android, so tasks will complete also when your app is in the background.
 
 ## Concepts and basic usage
 
@@ -116,7 +116,7 @@ No setup is required for Android
 ## Limitations
 
 * On Android, once started, a background download must complete within 8 minutes
-* On iOS, once enqueued, a background donwload must complete within 4 hours
-* On both platforms, downloads will not start without a network connecton, and do not distinguish between metered (cellular) and unmetered (WiFi) connections
+* On iOS, once enqueued, a background download must complete within 4 hours
+* On both platforms, downloads will not start without a network connection, and do not distinguish between metered (cellular) and unmetered (WiFi) connections
 * Redirects will be followed
 * Background downloads are aggressively controlled by the native platform. You should therefore always assume that a task that was started may not complete, and may disappear without providing any status or progress update to indicate why.
