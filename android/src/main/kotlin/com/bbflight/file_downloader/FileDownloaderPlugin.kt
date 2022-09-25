@@ -45,7 +45,7 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
 
     override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
         when (call.method) {
-            "enqueueDownload" -> methodEnqueueDownload(call, result)
+            "enqueue" -> methodEnqueue(call, result)
             "reset" -> methodReset(call, result)
             "allTasks" -> methodAllTasks(call, result)
             "cancelTasksWithIds" -> methodCancelTasksWithIds(call, result)
@@ -54,13 +54,12 @@ class FileDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     }
 
 
-    /** Starts the download for one task, passed as list of values representing a
+    /** Starts the download for one task, passed as map of values representing a
      * [BackgroundDownloadTask]
      *
      *  Returns true if successful, but will emit a status update that the background task is running
      */
-    private fun methodEnqueueDownload(@NonNull call: MethodCall, @NonNull result: Result) {
-        print(call.method)
+    private fun methodEnqueue(@NonNull call: MethodCall, @NonNull result: Result) {
         val args = call.arguments as List<*>
         val gson = Gson()
         val mapType = object : TypeToken<Map<String, Any>>() {}.type

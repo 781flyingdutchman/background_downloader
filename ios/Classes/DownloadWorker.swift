@@ -3,6 +3,7 @@ import UIKit
 import BackgroundTasks
 import os.log
 
+
 /// Partial version of the Dart side DownloadTask, only used for background loading
 struct BackgroundDownloadTask : Codable {
   var taskId: String
@@ -10,6 +11,55 @@ struct BackgroundDownloadTask : Codable {
   var filename: String
   var directory: String
   var baseDirectory: Int
+  var group: String
+  var progressUpdates: Int
+}
+
+/// Creates JSON map of the task
+func jsonMapFromTask(task: BackgroundDownloadTask) -> [String: Any] {
+  return
+    ["taskId": task.taskId,
+     "url": task.url,
+     "filename": task.filename,
+     "directory": task.directory,
+     "baseDirectory": task.baseDirectory, // stored as Int
+     "group": task.group,
+     "progressUpdates": task.progressUpdates // stored as Int
+    ]
+  
+}
+
+/// Creates task from JsonMap
+func taskFromJsonMap(map: [String: Any]) -> BackgroundDownloadTask {
+  return BackgroundDownloadTask(taskId: map["taskId"] as! String, url: map["url"] as! String, filename: map["filename"] as! String, directory: map["directory"] as! String, baseDirectory: map["baseDirectory"] as! Int, group: map["group"] as! String, progressUpdates: map["progressUpdates"] as! Int)
+}
+
+/// True if this task expects to provide progress updates
+func providesProgressUpdates(task: BackgroundDownloadTask) -> Bool {
+  return task.progressUpdates == DownloadTaskProgressUpdates.progressUpdates.rawValue || task.progressUpdates == DownloadTaskProgressUpdates.statusChangeAndProgressUpdates.rawValue
+}
+
+/// True if this task expects to provide status updates
+func providesStatusUpdates(task: BackgroundDownloadTask) -> Bool {
+  return task.progressUpdates == DownloadTaskProgressUpdates.statusChange.rawValue || task.progressUpdates == DownloadTaskProgressUpdates.statusChangeAndProgressUpdates.rawValue
+}
+
+/// Base directory in which files will be stored, based on their relative
+/// path.
+///
+/// These correspond to the directories provided by the path_provider package
+enum BaseDirectory: Int {
+  case applicationDocuments, // getApplicationDocumentsDirectory()
+  temporary, // getTemporaryDirectory()
+  applicationSupport // getApplicationSupportDirectory()
+}
+
+/// Type of download updates requested for a group of downloads
+enum DownloadTaskProgressUpdates: Int {
+    case none,  // no status or progress updates
+    statusChange, // only calls upon change in DownloadTaskStatus
+    progressUpdates, // only calls for progress
+    statusChangeAndProgressUpdates // calls also for progress along the way
 }
 
 /// Defines a set of possible states which a [DownloadTask] can be in.
@@ -22,6 +72,8 @@ enum DownloadTaskStatus: Int {
        failed,
        canceled
 }
+
+
     
 
 public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDelegate, URLSessionDelegate, URLSessionDownloadDelegate {
@@ -39,6 +91,8 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   private final var userDefaultsLock = NSLock()
   private final var backgroundCompletionHandler: (() -> Void)?
   private final var urlSession: URLSession?
+  private var statusUpdates  = [String: Bool]()
+  private var progressUpdates  = [String: Bool]()
   
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(name: "com.bbflight.file_downloader", binaryMessenger: registrar.messenger())
@@ -56,11 +110,12 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   
   /// Handler for Flutter plugin method channel calls
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    os_log("Method call %@", log: log, call.method)
     switch call.method {
     case "reset":
       methodReset(call: call, result: result)
-    case "enqueueDownload":
-      methodEnqueueDownload(call: call, result: result)
+    case "enqueue":
+      methodEnqueue(call: call, result: result)
     case "allTasks":
       methodAllTasks(call: call, result: result)
     case "cancelTasksWithIds":
@@ -68,6 +123,52 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
     default:
       result(FlutterMethodNotImplemented)
     }
+  }
+  
+
+  
+  /// Starts the download for one task, passed as map of values representing a BackgroundDownloadTasks
+  ///
+  /// Returns true if successful, but will emit a status update that the background task is running
+  private func methodEnqueue(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    let args = call.arguments as! [Any]
+    let downloadTaskJsonMapString = args[0] as! String
+    os_log("methodEnqueue with %@", log: log, downloadTaskJsonMapString)
+    guard let backgroundDownloadTask = backgroundDownloadTaskFromJsonString(jsonString: downloadTaskJsonMapString)
+    else {
+      os_log("Could not decode %@ to downloadTask", log: log, downloadTaskJsonMapString)
+      result(false)
+      return
+    }
+    os_log("Starting task with id %@", log: log, backgroundDownloadTask.taskId)
+    urlSession = urlSession ?? createUrlSession()
+    let urlSessionDownloadTask = urlSession!.downloadTask(with: URL(string: backgroundDownloadTask.url)!)
+    // update the map from urlSessionDownloadTask's taskIdentifier to the BackgroundDownloadTask's taskId
+    // and store that map in UserDefaults
+    userDefaultsLock.lock()
+    defer {
+      userDefaultsLock.unlock()
+    }
+    // store maps for taskId -> task, nativeId -> TaskId, taskId -> NativeId
+    var taskMap = getTaskMap()
+    let encoder = JSONEncoder()
+    let jsonString = String(data: try! encoder.encode(backgroundDownloadTask), encoding: .utf8)
+    taskMap[String(urlSessionDownloadTask.taskIdentifier)] = jsonString
+    var nativeMap = getNativeMap()
+    nativeMap[backgroundDownloadTask.taskId] = urlSessionDownloadTask.taskIdentifier
+    var taskIdMap = getTaskIdMap()
+    taskIdMap[String(urlSessionDownloadTask.taskIdentifier)] = backgroundDownloadTask.taskId
+    UserDefaults.standard.set(taskMap, forKey: DownloadWorker.keyTaskMap)
+    UserDefaults.standard.set(nativeMap, forKey: DownloadWorker.keyNativeMap)
+    UserDefaults.standard.set(taskIdMap, forKey: DownloadWorker.keyTaskIdMap)
+    // store locally whether task needs status and/or progress udpates
+    statusUpdates[String(urlSessionDownloadTask.taskIdentifier)] = providesStatusUpdates(task: backgroundDownloadTask)
+    progressUpdates[String(urlSessionDownloadTask.taskIdentifier)] = providesProgressUpdates(task: backgroundDownloadTask)
+    
+    // now start the task
+    urlSessionDownloadTask.resume()
+    sendStatusUpdate(task: backgroundDownloadTask, status: DownloadTaskStatus.running)
+    result(true)
   }
   
   /// Resets the downloadworker by cancelling all ongoing download tasks
@@ -88,38 +189,6 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
       }
       result(tasks.count)
     })
-  }
-  
-  /// Starts the download for one task, passed as JSON String representing a BackgroundDownloadTasks
-  ///
-  /// Returns null, but will emit a status update that the background task is running
-  private func methodEnqueueDownload(call: FlutterMethodCall, result: @escaping FlutterResult) {
-    let args = call.arguments as! [Any]
-    let backgroundDownloadTask = BackgroundDownloadTask(taskId: args[0] as! String, url: args[1] as! String, filename: args[2] as! String, directory: args[3] as! String, baseDirectory: args[4] as! Int)
-    os_log("Starting task with id %@", log: log, backgroundDownloadTask.taskId)
-    urlSession = urlSession ?? createUrlSession()
-    let urlSessionDownloadTask = urlSession!.downloadTask(with: URL(string: backgroundDownloadTask.url)!)
-    // update the map from urlSessionDownloadTask's taskIdentifier to the BackgroundDownloadTask's taskId
-    // and store that map in UserDefaults
-    userDefaultsLock.lock()
-    defer {
-      userDefaultsLock.unlock()
-    }
-    var taskMap = getTaskMap()
-    let encoder = JSONEncoder()
-    let jsonString = String(data: try! encoder.encode(backgroundDownloadTask), encoding: .utf8)
-    taskMap[String(urlSessionDownloadTask.taskIdentifier)] = jsonString
-    var nativeMap = getNativeMap()
-    nativeMap[backgroundDownloadTask.taskId] = urlSessionDownloadTask.taskIdentifier
-    var taskIdMap = getTaskIdMap()
-    taskIdMap[String(urlSessionDownloadTask.taskIdentifier)] = backgroundDownloadTask.taskId
-    UserDefaults.standard.set(taskMap, forKey: DownloadWorker.keyTaskMap)
-    UserDefaults.standard.set(nativeMap, forKey: DownloadWorker.keyNativeMap)
-    UserDefaults.standard.set(taskIdMap, forKey: DownloadWorker.keyTaskIdMap)
-    // now start the task
-    urlSessionDownloadTask.resume()
-    sendStatusUpdate(task: backgroundDownloadTask, status: DownloadTaskStatus.running)
-    result(true)
   }
   
   /// Returns a list with taskIds for all tasks in progress
@@ -279,6 +348,16 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
     let backgroundDownloadTasks: BackgroundDownloadTask? = try? decoder.decode(BackgroundDownloadTask.self, from: (jsonString).data(using: .utf8)!)
     return backgroundDownloadTasks
   }
+  
+  /// Returns a JSON string for this BackgroundDownloadTask
+  private func jsonStringForBackgroundDownloadTask(task: BackgroundDownloadTask) -> String? {
+    let jsonEncoder = JSONEncoder()
+    guard let jsonResultData = try? jsonEncoder.encode(task)
+    else {
+      return nil
+    }
+    return String(data: jsonResultData, encoding: .utf8)
+  }
     
   /// When the app restarts, recreate the urlSession if needed, and store the completion handler
   public func application(_ application: UIApplication,
@@ -312,14 +391,22 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   
   /// Sends status update via the backgroudn channel to Flutter
   private func sendStatusUpdate(task: BackgroundDownloadTask, status: DownloadTaskStatus) {
+    os_log("Sending status update", log: self.log)
     guard let channel = DownloadWorker.backgroundChannel else {
       os_log("Could not find background channel", log: self.log)
       return
     }
-    DispatchQueue.main.async {
-      channel.invokeMethod("update", arguments: [task.taskId, status.rawValue])
+    if providesStatusUpdates(task: task) {
+      let jsonString = jsonStringForBackgroundDownloadTask(task: task)
+      if (jsonString != nil)
+      {
+        os_log("update %@ status %d", log: self.log, jsonString!, status.rawValue)
+        DispatchQueue.main.async {
+          channel.invokeMethod("statusUpdate", arguments: [jsonString!, status.rawValue])
+        }
+      }
     }
-    // remove the task from the UserDefault maps
+    // remove the task from the UserDefault maps and cached maps
     if status != DownloadTaskStatus.running && status != DownloadTaskStatus.enqueued {
       var taskIdMap = getTaskIdMap()
       var nativeMap = getNativeMap()
@@ -331,6 +418,8 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
       UserDefaults.standard.set(taskMap, forKey: DownloadWorker.keyTaskMap)
       UserDefaults.standard.set(nativeMap, forKey: DownloadWorker.keyNativeMap)
       UserDefaults.standard.set(taskIdMap, forKey: DownloadWorker.keyTaskIdMap)
+      statusUpdates.removeValue(forKey: String(nativeId))
+      progressUpdates.removeValue(forKey: String(nativeId))
     }
   }
   
