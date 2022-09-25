@@ -179,19 +179,25 @@ public class DownloadWorker: NSObject, FlutterPlugin, FlutterApplicationLifeCycl
   ///
   /// Returns the number of tasks canceled
   private func methodReset(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    let group = call.arguments as! String
     urlSession = urlSession ?? createUrlSession()
+    var counter = 0
     urlSession?.getAllTasks(completionHandler: { tasks in
       for task in tasks {
+        let downloadTask = self.getTaskForNativeId(nativeId: task.taskIdentifier)
+        if downloadTask?.group == group {
         task.cancel()
+          counter += 1
+        }
       }
-      os_log("methodReset removed %d unfinished tasks", log: self.log, tasks.count)
+      os_log("methodReset removed %d unfinished tasks", log: self.log, counter)
       if tasks.count == 0 {
-        // remove all persistent storage if reset did not remove any outstanding tasks
+        // remove all persistent storage if reset revealed no outstanding tasks across all groups
         UserDefaults.standard.removeObject(forKey: DownloadWorker.keyTaskMap)
         UserDefaults.standard.removeObject(forKey: DownloadWorker.keyNativeMap)
         UserDefaults.standard.removeObject(forKey: DownloadWorker.keyTaskIdMap)
       }
-      result(tasks.count)
+      result(counter)
     })
   }
   
