@@ -1,3 +1,5 @@
+@file:Suppress("EnumEntryName")
+
 package com.bbflight.file_downloader
 
 import android.content.Context
@@ -85,13 +87,13 @@ class BackgroundDownloadTask(
     /** True if this task expects to provide progress updates */
     fun providesProgressUpdates(): Boolean {
         return progressUpdates == DownloadTaskProgressUpdates.progressUpdates ||
-                progressUpdates == DownloadTaskProgressUpdates.statusChangeAndProgressUpdates;
+                progressUpdates == DownloadTaskProgressUpdates.statusChangeAndProgressUpdates
     }
 
     /** True if this task expects to provide status updates */
     fun providesStatusUpdates(): Boolean {
         return progressUpdates == DownloadTaskProgressUpdates.statusChange ||
-                progressUpdates == DownloadTaskProgressUpdates.statusChangeAndProgressUpdates;
+                progressUpdates == DownloadTaskProgressUpdates.statusChangeAndProgressUpdates
     }
 
 }
@@ -156,6 +158,7 @@ class DownloadWorker(
         }
     }
 
+
     override suspend fun doWork(): Result {
         val gson = Gson()
         val downloadTaskJsonMapString = inputData.getString(keyDownloadTask)
@@ -172,13 +175,14 @@ class DownloadWorker(
             DownloadTaskStatus.complete -> sendProgressUpdate(downloadTask, 1.0)
             DownloadTaskStatus.failed -> sendProgressUpdate(downloadTask, -1.0)
             DownloadTaskStatus.canceled -> sendProgressUpdate(downloadTask, -2.0)
-            DownloadTaskStatus.notFound -> sendProgressUpdate(downloadTask, -3.0);
+            DownloadTaskStatus.notFound -> sendProgressUpdate(downloadTask, -3.0)
             else -> {}
         }
         return Result.success()
     }
 
     /** download a file from the urlString to the filePath */
+    @Suppress("BlockingMethodInNonBlockingContext")
     private suspend fun downloadFile(
         downloadTask: BackgroundDownloadTask,
         filePath: String
