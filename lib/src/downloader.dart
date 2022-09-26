@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:isolate';
 import 'dart:ui';
 
-
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:logging/logging.dart';
@@ -156,8 +155,8 @@ class FileDownloader {
   /// a [DownloadTaskStatus.running] update to the registered callback
   static Future<bool> enqueue(BackgroundDownloadTask task) async {
     assert(_initialized, 'FileDownloader must be initialized before use');
-    return await _channel.invokeMethod<bool>(
-            'enqueue', [jsonEncode(task.toJsonMap())]) ??
+    return await _channel
+            .invokeMethod<bool>('enqueue', [jsonEncode(task.toJsonMap())]) ??
         false;
   }
 

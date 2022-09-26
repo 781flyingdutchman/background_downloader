@@ -25,7 +25,7 @@ A basic file download with just status monitoring (no progress) then requires in
 ``` 
   FileDownloader.initialize(downloadStatusCallback: downloadStatusCallback);
   final successFullyEnqueued = await FileDownloader.enqueue(
-      BackgroundDownloadTask(url: 'https://google.com', filename: 'google.html'))
+      BackgroundDownloadTask(url: 'https://google.com', filename: 'google.html'));
 ```
 
 Note that success only refers to the enqueing of the download task, not its result, which must be monitored via the downloadStatusCallback. It will receive an update with status `DownloadTaskStatus.running`, followed by a status update with the result (e.g. `DownloadTaskStatus.complete` or `DownloadTaskStatus.failed`).

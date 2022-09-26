@@ -1,6 +1,6 @@
 name: background_downloader
-description: A background file downloader for iOS and Android
-version: 1.0.0
+description: A background file downloader for iOS and Android. Define where to get your file from, where to store it, and how you want to monitor the download, and the background loader will ensure this is done in a responsible way using native platform background downloaders. background_downloader uses URLSessions on iOS and DownloadWorker on Android, so tasks will complete also when your app is in the background.
+version: 1.0.1
 repository: https://github.com/781flyingdutchman/background_downloader
 
 environment:
