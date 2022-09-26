@@ -26,19 +26,33 @@ typedef DownloadProgressCallback = void Function(
 
 /// Provides access to all functions of the plugin in a single place.
 class FileDownloader {
-  static final log = Logger('FileDownloader');
+  static final _log = Logger('FileDownloader');
   static const defaultGroup = 'default';
   static const _channel = MethodChannel('com.bbflight.background_downloader');
   static const _backgroundChannel =
       MethodChannel('com.bbflight.background_downloader.background');
   static bool _initialized = false;
+
+  /// Registered [DownloadStatusCallback] for each group
   static final statusCallbacks = <String, DownloadStatusCallback>{};
+
+  /// Registered [DownloadProgressCallback] for each group
   static final progressCallbacks = <String, DownloadProgressCallback>{};
 
+  /// True if [FileDownloader] was initialized
   static bool get initialized => _initialized;
 
   /// Initialize the downloader and potentially register callbacks to
   /// handle status and progress updates
+  ///
+  /// Status callbacks are called only when the state changes, while
+  /// progress callbacks are called to inform of intermediate progress.
+  ///
+  /// Note that callbacks will be called based on a task's [progressUpdates]
+  /// property, which defaults to status change callbacks only. To also get
+  /// progress updates make sure to register a [DownloadProgressCallback] and
+  /// set the task's [progressUpdates] property to .progressUpdates or
+  /// .statusChangeAndProgressUpdates
   static void initialize(
       {String group = defaultGroup,
       DownloadStatusCallback? downloadStatusCallback,
@@ -68,7 +82,7 @@ class FileDownloader {
                   DownloadTaskStatus.values[data[2] as int];
               downloadStatusCallback(task, downloadTaskStatus);
             } else {
-              log.warning(
+              _log.warning(
                   'Requested status updates for task ${task.taskId} in group ${task.group} but no downloadStatusCallback was registered');
             }
           }
@@ -80,7 +94,7 @@ class FileDownloader {
             if (progressUpdateCallback != null) {
               progressUpdateCallback(task, data[2] as double);
             } else {
-              log.warning(
+              _log.warning(
                   'Requested progress updates for task ${task.taskId} in group ${task.group} but no progressUpdateCallback was registered');
             }
           }
@@ -127,13 +141,18 @@ class FileDownloader {
 
   /// Register status or progress callbacks to monitor download progress.
   ///
+  /// Status callbacks are called only when the state changes, while
+  /// progress callbacks are called to inform of intermediate progress.
+  ///
   /// Different callbacks can be set for different groups, and the group
   /// can be passed on with the [BackgroundDownloadTask] to ensure the
   /// appropriate callbacks are called for that group.
   ///
-  /// Status callbacks are called only when the state changes, while
-  /// progress callbacks are called to inform of intermediate progress.
-  /// If progress updates are requested, a status update is also requested.
+  /// Note that callbacks will be called based on a task's [progressUpdates]
+  /// property, which defaults to status change callbacks only. To also get
+  /// progress updates make sure to register a [DownloadProgressCallback] and
+  /// set the task's [progressUpdates] property to .progressUpdates or
+  /// .statusChangeAndProgressUpdates
   static void registerCallbacks(
       {String group = defaultGroup,
       DownloadStatusCallback? downloadStatusCallback,
@@ -152,7 +171,8 @@ class FileDownloader {
   /// Start a new download task
   ///
   /// Returns true if successfully enqueued. A new task will also generate
-  /// a [DownloadTaskStatus.running] update to the registered callback
+  /// a [DownloadTaskStatus.running] update to the registered callback,
+  /// if requested by its [progressUpdates] property
   static Future<bool> enqueue(BackgroundDownloadTask task) async {
     assert(_initialized, 'FileDownloader must be initialized before use');
     return await _channel
@@ -165,13 +185,13 @@ class FileDownloader {
   ///
   /// Returns the number of tasks cancelled. Every canceled task wil emit a
   /// [DownloadTaskStatus.canceled] update to the registered callback, if
-  /// configured
+  /// requested
   static Future<int> reset({String? group = defaultGroup}) async {
     assert(_initialized, 'FileDownloader must be initialized before use');
     return await _channel.invokeMethod<int>('reset', group) ?? -1;
   }
 
-  /// Returns a list of taskIds of all tasks currently running
+  /// Returns a list of taskIds of all tasks currently running in this group
   static Future<List<String>> allTaskIds({String? group = defaultGroup}) async {
     assert(_initialized, 'FileDownloader must be initialized before use');
     final result =
@@ -182,7 +202,7 @@ class FileDownloader {
   /// Delete all tasks matching the taskIds in the list
   ///
   /// Every canceled task wil emit a [DownloadTaskStatus.canceled] update to
-  /// the registered callback
+  /// the registered callback, if requested
   static Future<bool> cancelTasksWithIds(List<String> taskIds) async {
     assert(_initialized, 'FileDownloader must be initialized before use');
     return await _channel.invokeMethod<bool>('cancelTasksWithIds', taskIds) ??
@@ -192,7 +212,9 @@ class FileDownloader {
   /// Return [BackgroundDownloadTask] for the given [taskId], or null
   /// if not found.
   ///
-  /// Returning a task does not guarantee the task is still in progress
+  /// Only running tasks are guaranteed to be returned, but returning a task
+  /// does not guarantee that the task is still running. To keep track of
+  /// the status of tasks, use a [DownloadStatusCallback]
   static Future<BackgroundDownloadTask?> taskForId(String taskId) async {
     assert(_initialized, 'FileDownloader must be initialized before use');
     final jsonString = await _channel.invokeMethod<String>('taskForId', taskId);

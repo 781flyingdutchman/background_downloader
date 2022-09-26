@@ -5,7 +5,7 @@ import 'dart:math';
 enum DownloadTaskStatus {
   /// Unknown state
   undefined,
-  /// Not currently used
+  /// Task is being handled by the native platform
   running,
   /// Task has completed successfully and the file is available
   ///
