@@ -26,7 +26,9 @@ dependencies:
     # the parent directory to use the current plugin's version.
     path: ../
 
-  logging:
+  logging: ^1.0.2
+  connectivity_plus: ^2.3.6
+  provider: ^6.0.3
 
 dev_dependencies:
   flutter_test:
