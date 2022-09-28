@@ -11,19 +11,15 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import io.ktor.client.*
-import io.ktor.client.call.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.plugins.*
-import io.ktor.client.request.*
-import io.ktor.http.*
-import io.ktor.util.date.*
-import io.ktor.utils.io.*
-import io.ktor.utils.io.core.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CancellationException
+import java.io.BufferedInputStream
 import java.io.File
+import java.io.FileOutputStream
 import java.lang.Double.min
+import java.lang.System.currentTimeMillis
+import java.net.HttpURLConnection
+import java.net.SocketException
+import java.net.URL
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import kotlin.concurrent.write
@@ -135,13 +131,22 @@ class DownloadWorker(
          * Sends status update via the background channel to Flutter, if requested, and if the task
          * is finished, processes a final status update and remove references to persistent storage
          * */
-        fun processStatusUpdate(backgroundDownloadTask: BackgroundDownloadTask, status: DownloadTaskStatus) {
+        fun processStatusUpdate(
+            backgroundDownloadTask: BackgroundDownloadTask,
+            status: DownloadTaskStatus
+        ) {
             if (backgroundDownloadTask.providesStatusUpdates()) {
                 Handler(Looper.getMainLooper()).post {
                     try {
                         val gson = Gson()
-                        val arg = listOf<Any>(gson.toJson(backgroundDownloadTask.toJsonMap()), status.ordinal)
-                        BackgroundDownloaderPlugin.backgroundChannel?.invokeMethod("statusUpdate", arg)
+                        val arg = listOf<Any>(
+                            gson.toJson(backgroundDownloadTask.toJsonMap()),
+                            status.ordinal
+                        )
+                        BackgroundDownloaderPlugin.backgroundChannel?.invokeMethod(
+                            "statusUpdate",
+                            arg
+                        )
                     } catch (e: Exception) {
                         Log.w(TAG, "Exception trying to post status update: ${e.message}")
                     }
@@ -151,15 +156,27 @@ class DownloadWorker(
             // persistent storage
             if (status != DownloadTaskStatus.running) {
                 when (status) {
-                    DownloadTaskStatus.complete -> processProgressUpdate(backgroundDownloadTask, 1.0)
+                    DownloadTaskStatus.complete -> processProgressUpdate(
+                        backgroundDownloadTask,
+                        1.0
+                    )
                     DownloadTaskStatus.failed -> processProgressUpdate(backgroundDownloadTask, -1.0)
-                    DownloadTaskStatus.canceled -> processProgressUpdate(backgroundDownloadTask, -2.0)
-                    DownloadTaskStatus.notFound -> processProgressUpdate(backgroundDownloadTask, -3.0)
+                    DownloadTaskStatus.canceled -> processProgressUpdate(
+                        backgroundDownloadTask,
+                        -2.0
+                    )
+                    DownloadTaskStatus.notFound -> processProgressUpdate(
+                        backgroundDownloadTask,
+                        -3.0
+                    )
                     else -> {}
                 }
                 BackgroundDownloaderPlugin.prefsLock.write {
                     val jsonString =
-                        BackgroundDownloaderPlugin.prefs.getString(BackgroundDownloaderPlugin.keyTasksMap, "{}")
+                        BackgroundDownloaderPlugin.prefs.getString(
+                            BackgroundDownloaderPlugin.keyTasksMap,
+                            "{}"
+                        )
                     val backgroundDownloadTaskMap =
                         BackgroundDownloaderPlugin.gson.fromJson<Map<String, Any>>(
                             jsonString,
@@ -181,13 +198,20 @@ class DownloadWorker(
          *
          * Sends progress update via the background channel to Flutter, if requested
          */
-        fun processProgressUpdate(backgroundDownloadTask: BackgroundDownloadTask, progress: Double) {
+        fun processProgressUpdate(
+            backgroundDownloadTask: BackgroundDownloadTask,
+            progress: Double
+        ) {
             if (backgroundDownloadTask.providesProgressUpdates()) {
                 Handler(Looper.getMainLooper()).post {
                     try {
                         val gson = Gson()
-                        val arg = listOf<Any>(gson.toJson(backgroundDownloadTask.toJsonMap()), progress)
-                        BackgroundDownloaderPlugin.backgroundChannel?.invokeMethod("progressUpdate", arg)
+                        val arg =
+                            listOf<Any>(gson.toJson(backgroundDownloadTask.toJsonMap()), progress)
+                        BackgroundDownloaderPlugin.backgroundChannel?.invokeMethod(
+                            "progressUpdate",
+                            arg
+                        )
                     } catch (e: Exception) {
                         Log.w(TAG, "Exception trying to post progress update: ${e.message}")
                     }
@@ -213,119 +237,232 @@ class DownloadWorker(
     }
 
     /** download a file from the urlString to the filePath */
-    @Suppress("BlockingMethodInNonBlockingContext")
-    private suspend fun downloadFile(
+    private fun downloadFile(
         downloadTask: BackgroundDownloadTask,
         filePath: String
     ): DownloadTaskStatus {
-        val urlString = downloadTask.url
         try {
-            val client = HttpClient(CIO) {
-                install(HttpTimeout) {
-                    requestTimeoutMillis = 8 * 60 * 1000 // 8 minutes
-                }
+            val urlString = downloadTask.url
+            var url = URL(urlString)
+            var httpConnection: HttpURLConnection = url.openConnection() as HttpURLConnection
+            httpConnection.requestMethod = "HEAD"
+            var responseCode = httpConnection.responseCode
+            var redirects = 0
+            while (responseCode in 301..307 && redirects < 5) {
+                redirects++
+                url = URL(httpConnection.getHeaderField("Location"))
+                Log.v(TAG, "Redirecting to $url")
+                httpConnection = url.openConnection() as HttpURLConnection
+                httpConnection.requestMethod = "HEAD"
+                responseCode = httpConnection.responseCode
             }
-            return withContext(Dispatchers.IO) {
-                return@withContext client.prepareGet(urlString).execute { httpResponse ->
-                    if (httpResponse.status.value in 200..299) {
-                        // try to determine content length. If not available, set to -1
-                        val contentLengthString =
-                            httpResponse.headers[HttpHeaders.ContentLength] ?: "-1"
-                        val contentLength = try {
-                            contentLengthString.toLong()
-                        } catch (e: NumberFormatException) {
-                            -1
-                        }
-                        var bytesReceivedTotal: Long = 0
-                        var lastProgressUpdate = 0.0
-                        var nextProgressUpdateTime = 0L
-                        var dir = applicationContext.cacheDir
-                        val tempFile = File.createTempFile(
-                            "com.bbflight.background_downloader",
-                            Random.nextInt().toString(),
-                            dir
-                        )
-                        val channel: ByteReadChannel = httpResponse.body()
-                        while (!channel.isClosedForRead && !isStopped) {
-                            val packet = channel.readRemaining(DEFAULT_BUFFER_SIZE.toLong())
-                            while (!packet.isEmpty) {
-                                val bytes = packet.readBytes()
-                                tempFile.appendBytes(bytes)
-                                if (downloadTask.providesProgressUpdates()
-                                    && contentLength > 0
-                                    && getTimeMillis() > nextProgressUpdateTime
+            if (responseCode in 200..299) {
+                val contentLength = httpConnection.contentLengthLong
+                var bytesReceivedTotal: Long = 0
+                var lastProgressUpdate = 0.0
+                var nextProgressUpdateTime = 0L
+                var dir = applicationContext.cacheDir
+                val tempFile = File.createTempFile(
+                    "com.bbflight.background_downloader",
+                    Random.nextInt().toString(),
+                    dir
+                )
+                try {
+                    BufferedInputStream(url.openStream()).use { `in` ->
+                        FileOutputStream(tempFile).use { fileOutputStream ->
+                            val dataBuffer = ByteArray(8096)
+                            var bytesRead: Int
+                            while (`in`.read(dataBuffer, 0, 8096).also { bytesRead = it } != -1) {
+                                if (isStopped) {
+                                    break
+                                }
+                                fileOutputStream.write(dataBuffer, 0, bytesRead)
+                                bytesReceivedTotal += bytesRead
+                                val progress =
+                                    min(bytesReceivedTotal.toDouble() / contentLength, 0.999)
+                                if (contentLength > 0 &&
+                                    (bytesReceivedTotal < 10000 || (progress - lastProgressUpdate > 0.02 && currentTimeMillis() > nextProgressUpdateTime))
                                 ) {
-                                    bytesReceivedTotal += bytes.size
-                                    val progress =
-                                        min(bytesReceivedTotal.toDouble() / contentLength, 0.999)
-                                    if (progress - lastProgressUpdate > 0.02) {
-                                        processProgressUpdate(downloadTask, progress)
-                                        lastProgressUpdate = progress
-                                        nextProgressUpdateTime = getTimeMillis() + 500
-                                    }
+                                    processProgressUpdate(downloadTask, progress)
+                                    lastProgressUpdate = progress
+                                    nextProgressUpdateTime = currentTimeMillis() + 500
                                 }
                             }
                         }
-
-                        if (!isStopped) {
-                            val destFile = File(filePath)
-                            dir = destFile.parentFile
-                            if (!dir.exists()) {
-                                dir.mkdirs()
-                            }
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                Files.move(
-                                    tempFile.toPath(),
-                                    destFile.toPath(),
-                                    StandardCopyOption.REPLACE_EXISTING
-                                )
-                            } else {
-                                tempFile.copyTo(destFile, overwrite = true)
-                                tempFile.delete()
-                            }
-                        }
-
-                        if (isStopped) {
-                            Log.v(TAG, "Canceled task for $filePath")
-                            return@execute DownloadTaskStatus.canceled
-                        }
-                        Log.i(
-                            TAG,
-                            "Successfully downloaded taskId ${downloadTask.taskId} to $filePath"
-                        )
-                        return@execute DownloadTaskStatus.complete
-                    } else {
-                        Log.i(
-                            TAG,
-                            "Response code ${httpResponse.status.value} for download from  $urlString to $filePath"
-                        )
-                        if (httpResponse.status.value == 404) {
-                            return@execute DownloadTaskStatus.notFound
-                        } else {
-                            return@execute DownloadTaskStatus.failed
-                        }
                     }
+                    if (!isStopped) {
+                        val destFile = File(filePath)
+                        dir = destFile.parentFile
+                        if (!dir.exists()) {
+                            dir.mkdirs()
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            Files.move(
+                                tempFile.toPath(),
+                                destFile.toPath(),
+                                StandardCopyOption.REPLACE_EXISTING
+                            )
+                        } else {
+                            tempFile.copyTo(destFile, overwrite = true)
+                            tempFile.delete()
+                        }
+                    } else {
+                        Log.v(TAG, "Canceled task for $filePath")
+                        return DownloadTaskStatus.canceled
+                    }
+                    Log.i(
+                        TAG,
+                        "Successfully downloaded taskId ${downloadTask.taskId} to $filePath"
+                    )
+                    return DownloadTaskStatus.complete
+                } catch (e: Exception) {
+                    when (e) {
+                        is FileSystemException -> Log.w(
+                            TAG,
+                            "Filesystem exception downloading from $urlString to $filePath: ${e.message}"
+                        )
+                        is SocketException -> Log.i(
+                            TAG,
+                            "Socket exception downloading from $urlString to $filePath: ${e.message}"
+                        )
+                        is CancellationException -> {
+                            Log.v(TAG, "Job cancelled: $urlString to $filePath: ${e.message}")
+                            return DownloadTaskStatus.canceled
+                        }
+                        else -> Log.w(
+                            TAG,
+                            "Error downloading from $urlString to $filePath: ${e.message}"
+                        )
+                    }
+                }
+                return DownloadTaskStatus.failed
+            } else {
+                Log.i(
+                    TAG,
+                    "Response code $responseCode for download from  $urlString to $filePath"
+                )
+                return if (responseCode == 404) {
+                    DownloadTaskStatus.notFound
+                } else {
+                    DownloadTaskStatus.failed
                 }
             }
         } catch (e: Exception) {
-            when (e) {
-                is FileSystemException -> Log.w(
-                    TAG,
-                    "Filesystem exception downloading from $urlString to $filePath: ${e.message}"
-                )
-                is HttpRequestTimeoutException -> Log.i(
-                    TAG,
-                    "Request timeout downloading from $urlString to $filePath: ${e.message}"
-                )
-                is CancellationException -> {
-                    Log.v(TAG, "Job cancelled: $urlString to $filePath: ${e.message}")
-                    return DownloadTaskStatus.canceled
-                }
-                else -> Log.w(TAG, "Error downloading from $urlString to $filePath: ${e.message}")
-            }
+            Log.w(
+                TAG,
+                "Error downloading from ${downloadTask.url} to ${downloadTask.filename}: $e"
+            )
         }
         return DownloadTaskStatus.failed
     }
+
+
+//
+//        try {
+//            val client = HttpClient(CIO) {
+//                install(HttpTimeout) {
+//                    requestTimeoutMillis = 8 * 60 * 1000 // 8 minutes
+//                }
+//            }
+//            return withContext(Dispatchers.IO) {
+//                return@withContext client.prepareGet(urlString).execute { httpResponse ->
+//                    if (httpResponse.status.value in 200..299) {
+//                        // try to determine content length. If not available, set to -1
+//                        val contentLengthString =
+//                            httpResponse.headers[HttpHeaders.ContentLength] ?: "-1"
+//                        val contentLength = try {
+//                            contentLengthString.toLong()
+//                        } catch (e: NumberFormatException) {
+//                            -1
+//                        }
+//                        var bytesReceivedTotal: Long = 0
+//                        var lastProgressUpdate = 0.0
+//                        var nextProgressUpdateTime = 0L
+//                        var dir = applicationContext.cacheDir
+//                        val tempFile = File.createTempFile(
+//                            "com.bbflight.background_downloader",
+//                            Random.nextInt().toString(),
+//                            dir
+//                        )
+//                        val channel: ByteReadChannel = httpResponse.body()
+//                        while (!channel.isClosedForRead && !isStopped) {
+//                            val packet = channel.readRemaining(DEFAULT_BUFFER_SIZE.toLong())
+//                            while (!packet.isEmpty) {
+//                                val bytes = packet.readBytes()
+//                                tempFile.appendBytes(bytes)
+//                                if (downloadTask.providesProgressUpdates()
+//                                    && contentLength > 0
+//                                    && getTimeMillis() > nextProgressUpdateTime
+//                                ) {
+//                                    bytesReceivedTotal += bytes.size
+//                                    val progress =
+//                                        min(bytesReceivedTotal.toDouble() / contentLength, 0.999)
+//                                    if (progress - lastProgressUpdate > 0.02) {
+//                                        processProgressUpdate(downloadTask, progress)
+//                                        lastProgressUpdate = progress
+//                                        nextProgressUpdateTime = getTimeMillis() + 500
+//                                    }
+//                                }
+//                            }
+//                        }
+//
+//                        if (!isStopped) {
+//                            val destFile = File(filePath)
+//                            dir = destFile.parentFile
+//                            if (!dir.exists()) {
+//                                dir.mkdirs()
+//                            }
+//                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+//                                Files.move(
+//                                    tempFile.toPath(),
+//                                    destFile.toPath(),
+//                                    StandardCopyOption.REPLACE_EXISTING
+//                                )
+//                            } else {
+//                                tempFile.copyTo(destFile, overwrite = true)
+//                                tempFile.delete()
+//                            }
+//                        } else {
+//                            Log.v(TAG, "Canceled task for $filePath")
+//                            return@execute DownloadTaskStatus.canceled
+//                        }
+//                        Log.i(
+//                            TAG,
+//                            "Successfully downloaded taskId ${downloadTask.taskId} to $filePath"
+//                        )
+//                        return@execute DownloadTaskStatus.complete
+//                    } else {
+//                        Log.i(
+//                            TAG,
+//                            "Response code ${httpResponse.status.value} for download from  $urlString to $filePath"
+//                        )
+//                        if (httpResponse.status.value == 404) {
+//                            return@execute DownloadTaskStatus.notFound
+//                        } else {
+//                            return@execute DownloadTaskStatus.failed
+//                        }
+//                    }
+//                }
+//            }
+//        } catch (e: Exception) {
+//            when (e) {
+//                is FileSystemException -> Log.w(
+//                    TAG,
+//                    "Filesystem exception downloading from $urlString to $filePath: ${e.message}"
+//                )
+//                is HttpRequestTimeoutException -> Log.i(
+//                    TAG,
+//                    "Request timeout downloading from $urlString to $filePath: ${e.message}"
+//                )
+//                is CancellationException -> {
+//                    Log.v(TAG, "Job cancelled: $urlString to $filePath: ${e.message}")
+//                    return DownloadTaskStatus.canceled
+//                }
+//                else -> Log.w(TAG, "Error downloading from $urlString to $filePath: ${e.message}")
+//            }
+//        }
+//        return DownloadTaskStatus.failed
+//    }
 
 
     /** Returns full path (String) to the file to be downloaded */
