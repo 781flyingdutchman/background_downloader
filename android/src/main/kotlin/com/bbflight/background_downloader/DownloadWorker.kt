@@ -51,10 +51,12 @@ class BackgroundDownloadTask(
     val taskId: String,
     val url: String,
     val filename: String,
+    val headers: Map<String, String>,
     val directory: String,
     val baseDirectory: BaseDirectory,
     val group: String,
-    val progressUpdates: DownloadTaskProgressUpdates
+    val progressUpdates: DownloadTaskProgressUpdates,
+    val metaData: String
 ) {
 
     /** Creates object from JsonMap */
@@ -62,11 +64,13 @@ class BackgroundDownloadTask(
         taskId = jsonMap["taskId"] as String,
         url = jsonMap["url"] as String,
         filename = jsonMap["filename"] as String,
+        headers = jsonMap["headers"] as Map<String, String>,
         directory = jsonMap["directory"] as String,
         baseDirectory = BaseDirectory.values()[(jsonMap["baseDirectory"] as Double).toInt()],
         group = jsonMap["group"] as String,
         progressUpdates =
-        DownloadTaskProgressUpdates.values()[(jsonMap["progressUpdates"] as Double).toInt()]
+        DownloadTaskProgressUpdates.values()[(jsonMap["progressUpdates"] as Double).toInt()],
+        metaData = jsonMap["metaData"] as String
     )
 
     /** Creates JSON map of this object */
@@ -75,10 +79,12 @@ class BackgroundDownloadTask(
             "taskId" to taskId,
             "url" to url,
             "filename" to filename,
+            "headers" to headers,
             "directory" to directory,
             "baseDirectory" to baseDirectory.ordinal, // stored as int
             "group" to group,
-            "progressUpdates" to progressUpdates.ordinal
+            "progressUpdates" to progressUpdates.ordinal,
+            "metaData" to metaData
         )
     }
 
@@ -246,6 +252,9 @@ class DownloadWorker(
             var url = URL(urlString)
             var httpConnection: HttpURLConnection = url.openConnection() as HttpURLConnection
             httpConnection.requestMethod = "HEAD"
+            for (header in downloadTask.headers) {
+                httpConnection.setRequestProperty(header.key, header.value)
+            }
             var responseCode = httpConnection.responseCode
             var redirects = 0
             while (responseCode in 301..307 && redirects < 5) {
@@ -256,7 +265,7 @@ class DownloadWorker(
                 httpConnection.requestMethod = "HEAD"
                 responseCode = httpConnection.responseCode
             }
-            if (responseCode in 200..299) {
+            if (responseCode in 200..206) {
                 val contentLength = httpConnection.contentLengthLong
                 var bytesReceivedTotal: Long = 0
                 var lastProgressUpdate = 0.0

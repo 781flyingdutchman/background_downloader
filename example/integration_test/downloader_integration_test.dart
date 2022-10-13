@@ -138,7 +138,7 @@ void main() {
     downloadStatusCallbackCompleter = Completer<void>();
     downloadProgressCallbackCompleter = Completer<void>();
     task = BackgroundDownloadTask(
-        url: 'http://ipv4.download.thinkbroadband.com/5MB.zip',
+        url: 'https://github.com/yourkin/fileupload-fastapi/raw/a85a697cab2f887780b3278059a0dd52847d80f3/tests/data/test-5mb.bin',
         filename: 'google.html',
         progressUpdates:
             DownloadTaskProgressUpdates.statusChangeAndProgressUpdates);
@@ -203,11 +203,12 @@ void main() {
   });
 
   testWidgets('taskForId', (widgetTester) async {
+    final complexTask = BackgroundDownloadTask(url: 'https://google.com', filename: 'google.html', headers: {'Auth': 'Test'}, directory: 'directory', metaData: 'someMetaData');
     FileDownloader.initialize(downloadStatusCallback: downloadStatusCallback);
     expect(await FileDownloader.taskForId('something'), isNull);
-    expect(await FileDownloader.enqueue(task), isTrue);
+    expect(await FileDownloader.enqueue(complexTask), isTrue);
     expect(await FileDownloader.taskForId('something'), isNull);
-    expect(await FileDownloader.taskForId(task.taskId), equals(task));
+    expect(await FileDownloader.taskForId(complexTask.taskId), equals(complexTask));
     await downloadStatusCallbackCompleter.future;
     expect(downloadStatusCallbackCounter, equals(2));
     expect(lastDownloadStatus, equals(DownloadTaskStatus.complete));
