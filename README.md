@@ -77,6 +77,8 @@ Because you can use the `progress` value to derive task status, you can choose t
 
 ## Advanced use
 
+Optionally, `headers` can be added to the `BackgroundDownloadTask`, which will be added to the http request. This may be useful for authentication, for example. Also optionally, `metaData` can be added to the `BackgroundDownloadTask`, which is ignored by the downloader but may be helpful when receiving an update about the task.
+
 To manage or monitor tasks, use the following methods:
 * `reset` to reset the downloader by cancelling all ongoing download tasks
 * `allTaskIds` to get a list of `taskId` values of all tasks currently running (i.e. not completed in any way)
