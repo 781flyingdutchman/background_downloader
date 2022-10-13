@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' hide equals;
@@ -138,7 +137,8 @@ void main() {
     downloadStatusCallbackCompleter = Completer<void>();
     downloadProgressCallbackCompleter = Completer<void>();
     task = BackgroundDownloadTask(
-        url: 'https://github.com/yourkin/fileupload-fastapi/raw/a85a697cab2f887780b3278059a0dd52847d80f3/tests/data/test-5mb.bin',
+        url:
+            'https://github.com/yourkin/fileupload-fastapi/raw/a85a697cab2f887780b3278059a0dd52847d80f3/tests/data/test-5mb.bin',
         filename: 'google.html',
         progressUpdates:
             DownloadTaskProgressUpdates.statusChangeAndProgressUpdates);
@@ -203,12 +203,18 @@ void main() {
   });
 
   testWidgets('taskForId', (widgetTester) async {
-    final complexTask = BackgroundDownloadTask(url: 'https://google.com', filename: 'google.html', headers: {'Auth': 'Test'}, directory: 'directory', metaData: 'someMetaData');
+    final complexTask = BackgroundDownloadTask(
+        url: 'https://google.com',
+        filename: 'google.html',
+        headers: {'Auth': 'Test'},
+        directory: 'directory',
+        metaData: 'someMetaData');
     FileDownloader.initialize(downloadStatusCallback: downloadStatusCallback);
     expect(await FileDownloader.taskForId('something'), isNull);
     expect(await FileDownloader.enqueue(complexTask), isTrue);
     expect(await FileDownloader.taskForId('something'), isNull);
-    expect(await FileDownloader.taskForId(complexTask.taskId), equals(complexTask));
+    expect(await FileDownloader.taskForId(complexTask.taskId),
+        equals(complexTask));
     await downloadStatusCallbackCompleter.future;
     expect(downloadStatusCallbackCounter, equals(2));
     expect(lastDownloadStatus, equals(DownloadTaskStatus.complete));
