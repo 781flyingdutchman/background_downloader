@@ -9,10 +9,12 @@ struct BackgroundDownloadTask : Codable {
   var taskId: String
   var url: String
   var filename: String
+  var headers: [String:String]
   var directory: String
   var baseDirectory: Int
   var group: String
   var progressUpdates: Int
+  var metaData: String
 }
 
 /// Creates JSON map of the task
@@ -21,17 +23,19 @@ func jsonMapFromTask(task: BackgroundDownloadTask) -> [String: Any] {
     ["taskId": task.taskId,
      "url": task.url,
      "filename": task.filename,
+     "headers": task.headers,
      "directory": task.directory,
      "baseDirectory": task.baseDirectory, // stored as Int
      "group": task.group,
-     "progressUpdates": task.progressUpdates // stored as Int
+     "progressUpdates": task.progressUpdates, // stored as Int
+     "metaData": task.metaData
     ]
   
 }
 
 /// Creates task from JsonMap
 func taskFromJsonMap(map: [String: Any]) -> BackgroundDownloadTask {
-  return BackgroundDownloadTask(taskId: map["taskId"] as! String, url: map["url"] as! String, filename: map["filename"] as! String, directory: map["directory"] as! String, baseDirectory: map["baseDirectory"] as! Int, group: map["group"] as! String, progressUpdates: map["progressUpdates"] as! Int)
+  return BackgroundDownloadTask(taskId: map["taskId"] as! String, url: map["url"] as! String, filename: map["filename"] as! String, headers: map["headers"] as! [String:String], directory: map["directory"] as! String, baseDirectory: map["baseDirectory"] as! Int, group: map["group"] as! String, progressUpdates: map["progressUpdates"] as! Int, metaData: map["metaData"] as! String)
 }
 
 /// True if this task expects to provide progress updates
@@ -77,10 +81,10 @@ enum DownloadTaskStatus: Int {
 
 public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDelegate, URLSessionDelegate, URLSessionDownloadDelegate {
   
-  let log = OSLog.init(subsystem: "FileDownloaderPlugin", category: "DownloadWorker")
+  let log = OSLog.init(subsystem: "FileDownloaderPlugin", category: "Downloader")
   
   private static var resourceTimeout = 4 * 60 * 60.0 // in seconds
-  public static var sessionIdentifier = "com.bbflight.background_downloader.DownloadWorker"
+  public static var sessionIdentifier = "com.bbflight.background_downloader.Downloader"
   public static var flutterPluginRegistrantCallback: FlutterPluginRegistrantCallback?
   private static var backgroundChannel: FlutterMethodChannel?
   
@@ -106,7 +110,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
   
   /// Handler for Flutter plugin method channel calls
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    os_log("Method call %@", log: log, call.method)
+    os_log("Method call %@", log: log, type: .debug, call.method)
     switch call.method {
     case "reset":
       methodReset(call: call, result: result)
@@ -131,16 +135,20 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
   private func methodEnqueue(call: FlutterMethodCall, result: @escaping FlutterResult) {
     let args = call.arguments as! [Any]
     let jsonString = args[0] as! String
-    os_log("methodEnqueue with %@", log: log, jsonString)
+    os_log("methodEnqueue with %@", log: log, type: .debug, jsonString)
     guard let backgroundDownloadTask = downloadTaskFrom(jsonString: jsonString)
     else {
       os_log("Could not decode %@ to downloadTask", log: log, jsonString)
       result(false)
       return
     }
-    os_log("Starting task with id %@", log: log, backgroundDownloadTask.taskId)
+    os_log("Starting task with id %@", log: log, type: .info, backgroundDownloadTask.taskId)
     urlSession = urlSession ?? createUrlSession()
-    let urlSessionDownloadTask = urlSession!.downloadTask(with: URL(string: backgroundDownloadTask.url)!)
+    var request = URLRequest(url: URL(string: backgroundDownloadTask.url)!)
+    for (key, value) in backgroundDownloadTask.headers {
+      request.setValue(value, forHTTPHeaderField: key)
+    }
+    let urlSessionDownloadTask = urlSession!.downloadTask(with: request)
     urlSessionDownloadTask.taskDescription = jsonString
     // store local maps related to progress updates
     lastProgressUpdate[backgroundDownloadTask.taskId] = 0.0
@@ -167,7 +175,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
           counter += 1
         }
       }
-      os_log("methodReset removed %d unfinished tasks", log: self.log, counter)
+      os_log("methodReset removed %d unfinished tasks", log: self.log, type: .debug, counter)
       result(counter)
     })
   }
@@ -188,7 +196,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
           }
         }
       }
-      os_log("Returning %d unfinished tasks: %@", log: self.log,taskIds.count, taskIds)
+      os_log("Returning %d unfinished tasks: %@", log: self.log, type: .debug, taskIds.count, taskIds)
       result(taskIds)
     })
   }
@@ -198,7 +206,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
   /// Returns true if all cancellations were successful
   private func methodCancelTasksWithIds(call: FlutterMethodCall, result: @escaping FlutterResult) {
     let taskIds = call.arguments as! [String]
-    os_log("Canceling taskIds %@", log: log, taskIds)
+    os_log("Canceling taskIds %@", log: log, type: .debug, taskIds)
     urlSession = urlSession ?? createUrlSession()
     urlSession?.getAllTasks(completionHandler: { tasks in
       for task in tasks {
@@ -220,7 +228,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
       for task in tasks {
         guard let backgroundDownloadTask = self.getTaskFrom(urlSessionDownloadTask: task)
         else { continue }
-        os_log("Found taskId %@", log: self.log, backgroundDownloadTask.taskId)
+        os_log("Found taskId %@", log: self.log, type: .debug, backgroundDownloadTask.taskId)
         if backgroundDownloadTask.taskId == taskId
         {
           result(self.jsonStringFor(backgroundDownloadTask: backgroundDownloadTask))
@@ -245,7 +253,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         processStatusUpdate(backgroundDownloadTask: backgroundDownloadTask, status: DownloadTaskStatus.canceled)
       }
       else {
-        os_log("Error for download with error %@", log: self.log, error!.localizedDescription)
+        os_log("Error for download with error %@", log: self.log, type: .error, error!.localizedDescription)
         processStatusUpdate(backgroundDownloadTask: backgroundDownloadTask, status: DownloadTaskStatus.failed)
       }
     }
@@ -274,13 +282,13 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     guard let backgroundDownloadTask = self.getTaskFrom(urlSessionDownloadTask: downloadTask),
           let response = downloadTask.response as? HTTPURLResponse
     else {
-      os_log("Could not find task associated with native id %d, or did not get HttpResponse", log: log, downloadTask.taskIdentifier)
+      os_log("Could not find task associated with native id %d, or did not get HttpResponse", log: log,  type: .info, downloadTask.taskIdentifier)
       return}
     if response.statusCode == 404 {
       processStatusUpdate(backgroundDownloadTask: backgroundDownloadTask, status: DownloadTaskStatus.notFound)
       return
     }
-    if !(200...299).contains(response.statusCode)   {
+    if !(200...206).contains(response.statusCode)   {
       processStatusUpdate(backgroundDownloadTask: backgroundDownloadTask, status: DownloadTaskStatus.failed)
       return
     }
@@ -310,7 +318,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
       {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories:  true)
       } catch {
-        os_log("Failed to create directory %@", log: log, directory.path)
+        os_log("Failed to create directory %@", log: log, type: .error, directory.path)
         return
       }
       let filePath = directory.appendingPathComponent(backgroundDownloadTask.filename)
@@ -320,12 +328,12 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
       do {
         try FileManager.default.moveItem(at: location, to: filePath)
       } catch {
-        os_log("Failed to move file from %@ to %@: %@", log: log, location.path, filePath.path, error.localizedDescription)
+        os_log("Failed to move file from %@ to %@: %@", log: log, type: .error, location.path, filePath.path, error.localizedDescription)
         return
       }
       success = DownloadTaskStatus.complete
     } catch {
-      os_log("File download error for taskId %@ and file %@: %@", log: log, backgroundDownloadTask.taskId, backgroundDownloadTask.filename, error.localizedDescription)
+      os_log("File download error for taskId %@ and file %@: %@", log: log, type: .error, backgroundDownloadTask.taskId, backgroundDownloadTask.filename, error.localizedDescription)
     }
   }
 
@@ -351,7 +359,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
   public func application(_ application: UIApplication,
                           handleEventsForBackgroundURLSession identifier: String,
                           completionHandler: @escaping () -> Void) -> Bool {
-    os_log("In handleEventsForBackgroundURLSession with identifier %@", log: log, identifier)
+    os_log("In handleEventsForBackgroundURLSession with identifier %@", log: log, type: .debug, identifier)
     if (identifier == Downloader.sessionIdentifier) {
       backgroundCompletionHandler = completionHandler
       urlSession = urlSession ?? createUrlSession()
@@ -362,13 +370,13 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
   
   /// Upon completion of download of all files, call the completion handler
   public func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
-    os_log("In urlSessionDidFinishEvents, calling completionHandler", log: log)
+    os_log("In urlSessionDidFinishEvents, calling completionHandler", log: log, type: .debug)
     DispatchQueue.main.async {
       guard
         let handler = self.backgroundCompletionHandler,
         session.configuration.identifier == Downloader.sessionIdentifier
       else {
-        os_log("No handler or no identifier match", log: self.log)
+        os_log("No handler or no identifier match", log: self.log, type: .debug)
         return
       }
       handler()
@@ -383,7 +391,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
   /// processes a final status update, then removes it from permanent storage
   private func processStatusUpdate(backgroundDownloadTask: BackgroundDownloadTask, status: DownloadTaskStatus) {
     guard let channel = Downloader.backgroundChannel else {
-      os_log("Could not find background channel", log: self.log)
+      os_log("Could not find background channel", log: self.log, type: .error)
       return
     }
     if providesStatusUpdates(downloadTask: backgroundDownloadTask) {
@@ -418,7 +426,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
   /// it from the cache
   private func processProgressUpdate(backgroundDownloadTask: BackgroundDownloadTask, progress: Double) {
     guard let channel = Downloader.backgroundChannel else {
-      os_log("Could not find background channel", log: self.log)
+      os_log("Could not find background channel", log: self.log, type: .error)
       return
     }
     if providesProgressUpdates(task: backgroundDownloadTask) {
@@ -451,9 +459,9 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
   
   /// Creates a urlSession
   private func createUrlSession() -> URLSession {
-    os_log("Creating URLSession", log: log)
+    os_log("Creating URLSession", log: log, type: .debug)
     if urlSession != nil {
-      os_log("createUrlSession called with non-null urlSession")
+      os_log("createUrlSession called with non-null urlSession", log: log, type: .info)
     }
     let config = URLSessionConfiguration.background(withIdentifier: Downloader.sessionIdentifier)
     config.timeoutIntervalForResource = Downloader.resourceTimeout
