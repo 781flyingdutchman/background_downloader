@@ -75,6 +75,15 @@ Progress updates will be sent periodically, not more than twice per second per t
 
 Because you can use the `progress` value to derive task status, you can choose to not receive status updates by setting the `progressUpdates` parameter of a task to `DownloadTaskProgressUpdates.progressUpdates` (and you won't need to register a `DownloadStatusCallback`). If you don't want to use any callbacks (and just check if the file exists after a while!) set the `progressUpdates` parameter of a task to `DownloadTaskProgressUpdates.none`.
 
+## Simplified use
+
+If status and progress monitoring is not required, you can also use the convenience methode `download`, which will only return when the file download has  completed or failed:
+```
+    final result = await FileDownloader.download(task);
+```
+
+The `result` will be a `DownloadTaskStatus` and should be checked for completion, failure etc.  Note that for this use, `BackgroundDownloadTask` fields `group` and `progressUpdates` should not be set, as they are used by the `FileDownloader` for this convenience method.
+
 ## Advanced use
 
 Optionally, `headers` can be added to the `BackgroundDownloadTask`, which will be added to the http request. This may be useful for authentication, for example. Also optionally, `metaData` can be added to the `BackgroundDownloadTask`, which is ignored by the downloader but may be helpful when receiving an update about the task.
