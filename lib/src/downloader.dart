@@ -32,6 +32,7 @@ class FileDownloader {
   static const _backgroundChannel =
       MethodChannel('com.bbflight.background_downloader.background');
   static bool _initialized = false;
+  static final _downloadCompleters = <String, Completer<DownloadTaskStatus>>{};
 
   /// Registered [DownloadStatusCallback] for each group
   static final statusCallbacks = <String, DownloadStatusCallback>{};
@@ -178,6 +179,44 @@ class FileDownloader {
     return await _channel
             .invokeMethod<bool>('enqueue', [jsonEncode(task.toJsonMap())]) ??
         false;
+  }
+
+  /// Download a file
+  ///
+  /// Different from [enqueue], this method does not return until the file
+  /// has been downloaded, or an error has occurred.  While it uses the same
+  /// download mechanism as [enqueue], and will execute the download also when
+  /// the app moves to the background, it is meant for downloads that are
+  /// awaited while the app is in the foreground.
+  ///
+  /// Note that [group] is ignored as it is replaced with an internal group
+  /// name '_foregroundDownload' to track status
+  static Future<DownloadTaskStatus> download(
+      BackgroundDownloadTask task) async {
+    const groupName = '_foregroundDownload';
+
+    /// internal callback function that completes the completer associated
+    /// with this task
+    internalCallback(BackgroundDownloadTask task, DownloadTaskStatus status) {
+      if (status.isFinalState) {
+        var downloadCompleter = _downloadCompleters.remove(task.taskId);
+        downloadCompleter?.complete(status);
+      }
+    }
+
+    registerCallbacks(
+        group: groupName, downloadStatusCallback: internalCallback);
+    final downloadCompleter = Completer<DownloadTaskStatus>();
+    _downloadCompleters[task.taskId] = downloadCompleter;
+    final internalTask = task.copyWith(
+        group: groupName,
+        progressUpdates: DownloadTaskProgressUpdates.statusChange);
+    final enqueueSuccess = await enqueue(internalTask);
+    if (!enqueueSuccess) {
+      _log.warning('Could not enqueue task $task}');
+      return Future.value(DownloadTaskStatus.failed);
+    }
+    return downloadCompleter.future;
   }
 
   /// Resets the downloader by cancelling all ongoing download tasks within
