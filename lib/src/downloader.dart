@@ -208,7 +208,9 @@ class FileDownloader {
         group: groupName, downloadStatusCallback: internalCallback);
     final downloadCompleter = Completer<DownloadTaskStatus>();
     _downloadCompleters[task.taskId] = downloadCompleter;
-    final internalTask = task.copyWith(group: groupName);
+    final internalTask = task.copyWith(
+        group: groupName,
+        progressUpdates: DownloadTaskProgressUpdates.statusChange);
     final enqueueSuccess = await enqueue(internalTask);
     if (!enqueueSuccess) {
       _log.warning('Could not enqueue task $task}');
