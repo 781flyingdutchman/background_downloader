@@ -30,6 +30,26 @@ enum DownloadTaskStatus {
   ///
   /// This is a final state
   canceled;
+
+  /// True if this state is one of the 'final' states, meaning no more
+  /// state changes are possible
+  bool get isFinalState {
+    switch (this) {
+      case DownloadTaskStatus.complete:
+      case DownloadTaskStatus.notFound:
+      case DownloadTaskStatus.failed:
+      case DownloadTaskStatus.canceled:
+        return true;
+
+      case DownloadTaskStatus.undefined:
+      case DownloadTaskStatus.running:
+        return false;
+    }
+  }
+
+  /// True if this state is not a 'final' state, meaning more
+  /// state changes are possible
+  bool get isNotFinalState => !isFinalState;
 }
 
 /// Base directory in which files will be stored, based on their relative
@@ -113,6 +133,29 @@ class BackgroundDownloadTask {
           'Directory must be relative to the baseDirectory specified in the baseDirectory argument');
     }
   }
+
+  /// Returns a copy of the [BackgroundDownloadTask] with optional changes to
+  /// specific fields
+  BackgroundDownloadTask copyWith(
+          {String? taskId,
+          String? url,
+          String? filename,
+          Map<String, String>? headers,
+          String? directory,
+          BaseDirectory? baseDirectory,
+          String? group,
+          DownloadTaskProgressUpdates? progressUpdates,
+          String? metaData}) =>
+      BackgroundDownloadTask(
+          taskId: taskId ?? this.taskId,
+          url: url ?? this.url,
+          filename: filename ?? this.filename,
+          headers: headers ?? this.headers,
+          directory: directory ?? this.directory,
+          baseDirectory: baseDirectory ?? this.baseDirectory,
+          group: group ?? this.group,
+          progressUpdates: progressUpdates ?? this.progressUpdates,
+          metaData: metaData ?? this.metaData);
 
   /// Creates object from JsonMap
   BackgroundDownloadTask.fromJsonMap(Map<String, dynamic> jsonMap)

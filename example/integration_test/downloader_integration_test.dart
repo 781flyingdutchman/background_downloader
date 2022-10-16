@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' hide equals;
@@ -138,7 +137,8 @@ void main() {
     downloadStatusCallbackCompleter = Completer<void>();
     downloadProgressCallbackCompleter = Completer<void>();
     task = BackgroundDownloadTask(
-        url: 'https://github.com/yourkin/fileupload-fastapi/raw/a85a697cab2f887780b3278059a0dd52847d80f3/tests/data/test-5mb.bin',
+        url:
+            'https://github.com/yourkin/fileupload-fastapi/raw/a85a697cab2f887780b3278059a0dd52847d80f3/tests/data/test-5mb.bin',
         filename: 'google.html',
         progressUpdates:
             DownloadTaskProgressUpdates.statusChangeAndProgressUpdates);
@@ -203,16 +203,71 @@ void main() {
   });
 
   testWidgets('taskForId', (widgetTester) async {
-    final complexTask = BackgroundDownloadTask(url: 'https://google.com', filename: 'google.html', headers: {'Auth': 'Test'}, directory: 'directory', metaData: 'someMetaData');
+    final complexTask = BackgroundDownloadTask(
+        url: 'https://google.com',
+        filename: 'google.html',
+        headers: {'Auth': 'Test'},
+        directory: 'directory',
+        metaData: 'someMetaData');
     FileDownloader.initialize(downloadStatusCallback: downloadStatusCallback);
     expect(await FileDownloader.taskForId('something'), isNull);
     expect(await FileDownloader.enqueue(complexTask), isTrue);
     expect(await FileDownloader.taskForId('something'), isNull);
-    expect(await FileDownloader.taskForId(complexTask.taskId), equals(complexTask));
+    expect(await FileDownloader.taskForId(complexTask.taskId),
+        equals(complexTask));
     await downloadStatusCallbackCompleter.future;
     expect(downloadStatusCallbackCounter, equals(2));
     expect(lastDownloadStatus, equals(DownloadTaskStatus.complete));
     print('Finished taskForId');
+  });
+
+  testWidgets('download with await', (widgetTester) async {
+    FileDownloader.initialize();
+    var path =
+        join((await getApplicationDocumentsDirectory()).path, task.filename);
+    var exists = await File(path).exists();
+    if (exists) {
+      await File(path).delete();
+    }
+    final status = await FileDownloader.download(task);
+    expect(status, equals(DownloadTaskStatus.complete));
+    exists = await File(path).exists();
+    expect(exists, isTrue);
+    await File(path).delete();
+  });
+
+  testWidgets('multiple download with futures', (widgetTester) async {
+    FileDownloader.initialize();
+    final secondTask =
+        task.copyWith(taskId: 'secondTask', filename: 'second.html');
+    var path =
+        join((await getApplicationDocumentsDirectory()).path, task.filename);
+    var exists = await File(path).exists();
+    if (exists) {
+      await File(path).delete();
+    }
+    path = join(
+        (await getApplicationDocumentsDirectory()).path, secondTask.filename);
+    exists = await File(path).exists();
+    if (exists) {
+      await File(path).delete();
+    }
+    // note that using a Future (without await) is unusual and is done here
+    // just for testing.  Normal use would be
+    // var result = await FileDownloader.download(task);
+    final taskFuture = FileDownloader.download(task);
+    final secondTaskFuture = FileDownloader.download(secondTask);
+    var statuses = await Future.wait([taskFuture, secondTaskFuture]);
+    for (var status in statuses) {
+      expect(status, equals(DownloadTaskStatus.complete));
+    }
+    exists = await File(path).exists();
+    expect(exists, isTrue);
+    await File(path).delete();
+    path = join((await getApplicationDocumentsDirectory()).path, task.filename);
+    exists = await File(path).exists();
+    expect(exists, isTrue);
+    await File(path).delete();
   });
 }
 
