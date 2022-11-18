@@ -1,3 +1,7 @@
+## 1.2.0
+
+Added FileDownloader.download as a convenience method for simple downloads. This method's Future completes only after the download has completed or failed, and can be used for simple downloads where status and progress checking is not required.
+
 ## 1.1.0
 
 Added headers and metaData fields to the BackgroundDownloadTask. Headers will be added to the request, and metaData is ignored but may be helpful to the user
