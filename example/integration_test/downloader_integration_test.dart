@@ -270,6 +270,55 @@ void main() {
     expect(lastDownloadStatus, equals(DownloadTaskStatus.complete));
     print('Finished taskForId');
   });
+
+  testWidgets('download with await', (widgetTester) async {
+    FileDownloader.initialize();
+    var path =
+        join((await getApplicationDocumentsDirectory()).path, task.filename);
+    var exists = await File(path).exists();
+    if (exists) {
+      await File(path).delete();
+    }
+    final status = await FileDownloader.download(task);
+    expect(status, equals(DownloadTaskStatus.complete));
+    exists = await File(path).exists();
+    expect(exists, isTrue);
+    await File(path).delete();
+  });
+
+  testWidgets('multiple download with futures', (widgetTester) async {
+    FileDownloader.initialize();
+    final secondTask =
+        task.copyWith(taskId: 'secondTask', filename: 'second.html');
+    var path =
+        join((await getApplicationDocumentsDirectory()).path, task.filename);
+    var exists = await File(path).exists();
+    if (exists) {
+      await File(path).delete();
+    }
+    path = join(
+        (await getApplicationDocumentsDirectory()).path, secondTask.filename);
+    exists = await File(path).exists();
+    if (exists) {
+      await File(path).delete();
+    }
+    // note that using a Future (without await) is unusual and is done here
+    // just for testing.  Normal use would be
+    // var result = await FileDownloader.download(task);
+    final taskFuture = FileDownloader.download(task);
+    final secondTaskFuture = FileDownloader.download(secondTask);
+    var statuses = await Future.wait([taskFuture, secondTaskFuture]);
+    for (var status in statuses) {
+      expect(status, equals(DownloadTaskStatus.complete));
+    }
+    exists = await File(path).exists();
+    expect(exists, isTrue);
+    await File(path).delete();
+    path = join((await getApplicationDocumentsDirectory()).path, task.filename);
+    exists = await File(path).exists();
+    expect(exists, isTrue);
+    await File(path).delete();
+  });
 }
 
 /// Helper: make sure [task] is set as desired, and this will enqueue, wait for
