@@ -184,3 +184,31 @@ class BackgroundDownloadTask {
     return 'BackgroundDownloadTask{taskId: $taskId, url: $url, filename: $filename, headers: $headers, directory: $directory, baseDirectory: $baseDirectory, group: $group, progressUpdates: $progressUpdates, metaData: $metaData}';
   }
 }
+
+/// Event related to [task] is either a [DownloadTaskStatus] update or
+/// a [double] progress update.
+///
+/// When receiving an event, test [isStatusUpdate] or [isProgressUpdate]
+/// and treat the event accordingly.
+class BackgroundDownloadEvent {
+  final BackgroundDownloadTask task;
+  // ignore: prefer_typing_uninitialized_variables
+  final statusOrProgress;
+
+  /// Create [BackgroundDownloadEvent]
+  ///
+  /// Parameter [statusOrProgress] must be a [DownloadTaskStatus] or [double]
+  BackgroundDownloadEvent(this.task, this.statusOrProgress) {
+    assert(statusOrProgress is DownloadTaskStatus || statusOrProgress is double);
+  }
+
+  /// True if this event is a status update.
+  ///
+  /// [statusOrProgress] is of type [DownloadTaskStatus]
+  bool get isStatusUpdate => statusOrProgress is DownloadTaskStatus;
+
+  /// True if this event is a progress update.
+  ///
+  /// [statusOrProgress] is of type [double]
+  bool get isProgressUpdate => !isStatusUpdate;
+}

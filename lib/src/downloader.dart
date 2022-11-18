@@ -39,6 +39,13 @@ class FileDownloader {
   /// Registered [DownloadProgressCallback] for each group
   static final progressCallbacks = <String, DownloadProgressCallback>{};
 
+  /// StreamController for [BackgroundDownloadEvent] updates
+  static final _updates = StreamController<BackgroundDownloadEvent>();
+
+  /// Stream of [BackgroundDownloadEvent] updates for downloads that do
+  /// not have a registered callback
+  static Stream<BackgroundDownloadEvent> get updates => _updates.stream;
+
   /// True if [FileDownloader] was initialized
   static bool get initialized => _initialized;
 
@@ -76,14 +83,21 @@ class FileDownloader {
       switch (data[0] as String) {
         case 'statusUpdate':
           if (task.providesStatusUpdates) {
+            final downloadTaskStatus =
+                DownloadTaskStatus.values[data[2] as int];
             final downloadStatusCallback = statusCallbacks[task.group];
             if (downloadStatusCallback != null) {
-              var downloadTaskStatus =
-                  DownloadTaskStatus.values[data[2] as int];
               downloadStatusCallback(task, downloadTaskStatus);
             } else {
-              _log.warning(
-                  'Requested status updates for task ${task.taskId} in group ${task.group} but no downloadStatusCallback was registered');
+              if (_updates.hasListener) {
+                _updates.add(BackgroundDownloadEvent(task, downloadTaskStatus));
+              } else {
+                _log.warning(
+                    'Requested status updates for task ${task.taskId} in '
+                    'group ${task.group} but no downloadStatusCallback '
+                    'was registered, and there is no listener to the '
+                    'updates stream');
+              }
             }
           }
           break;
@@ -93,9 +107,14 @@ class FileDownloader {
             final progressUpdateCallback = progressCallbacks[task.group];
             if (progressUpdateCallback != null) {
               progressUpdateCallback(task, data[2] as double);
+            } else if (_updates.hasListener) {
+              _updates.add(BackgroundDownloadEvent(task, data[2] as double));
             } else {
               _log.warning(
-                  'Requested progress updates for task ${task.taskId} in group ${task.group} but no progressUpdateCallback was registered');
+                  'Requested progress updates for task ${task.taskId} in '
+                  'group ${task.group} but no progressUpdateCallback '
+                  'was registered, and there is no listener to the '
+                  'updates stream');
             }
           }
           break;

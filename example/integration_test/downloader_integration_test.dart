@@ -167,6 +167,56 @@ void main() {
     print('Finished enqueue with non-default group callbacks');
   });
 
+  testWidgets('enqueue with event listener for status updates', (widgetTester) async {
+    FileDownloader.initialize();
+    final path =
+    join((await getApplicationDocumentsDirectory()).path, task.filename);
+    try {
+      File(path).deleteSync(recursive: true);
+    } on FileSystemException {}
+    expect(await FileDownloader.enqueue(task), isTrue);
+    await Future.delayed(const Duration(seconds: 3)); // can't know for sure!
+    expect(File(path).existsSync(), isTrue); // file still downloads
+    try {
+      File(path).deleteSync(recursive: true);
+    } on FileSystemException {}
+    print(
+        'Check log output -> should have warned that there is no callback or listener');
+    // register listener. For testing convenience, we simply route the event
+    // to the completer function we have defined
+    final subscription = FileDownloader.updates.listen((event) {
+      expect(event.isStatusUpdate, isTrue);
+      downloadStatusCallback(task, event.statusOrProgress);
+    });
+    expect(await FileDownloader.enqueue(task), isTrue);
+    await downloadStatusCallbackCompleter.future;
+    expect(downloadStatusCallbackCounter, equals(2));
+    expect(lastDownloadStatus, equals(DownloadTaskStatus.complete));
+    expect(File(path).existsSync(), isTrue);
+    subscription.cancel();
+  });
+
+  testWidgets('enqueue with event listener for progress updates', (widgetTester) async {
+    FileDownloader.initialize();
+    final path =
+    join((await getApplicationDocumentsDirectory()).path, task.filename);
+    try {
+      File(path).deleteSync(recursive: true);
+    } on FileSystemException {}
+    // register listener. For testing convenience, we simply route the event
+    // to the completer function we have defined
+    final subscription = FileDownloader.updates.listen((event) {
+      expect(event.isStatusUpdate, isTrue);
+      downloadStatusCallback(task, event.statusOrProgress);
+    });
+    expect(await FileDownloader.enqueue(task), isTrue);
+    await downloadStatusCallbackCompleter.future;
+    expect(downloadStatusCallbackCounter, equals(2));
+    expect(lastDownloadStatus, equals(DownloadTaskStatus.complete));
+    expect(File(path).existsSync(), isTrue);
+    subscription.cancel();
+  });
+
   testWidgets('reset', (widgetTester) async {
     FileDownloader.initialize(downloadStatusCallback: downloadStatusCallback);
     expect(await FileDownloader.enqueue(task), isTrue);
