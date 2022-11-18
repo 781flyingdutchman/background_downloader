@@ -41,7 +41,7 @@ class FileDownloader {
   static final progressCallbacks = <String, DownloadProgressCallback>{};
 
   /// StreamController for [BackgroundDownloadEvent] updates
-  static final _updates = StreamController<BackgroundDownloadEvent>();
+  static var _updates = StreamController<BackgroundDownloadEvent>();
 
   /// Stream of [BackgroundDownloadEvent] updates for downloads that do
   /// not have a registered callback
@@ -66,6 +66,11 @@ class FileDownloader {
       DownloadStatusCallback? downloadStatusCallback,
       DownloadProgressCallback? downloadProgressCallback}) {
     WidgetsFlutterBinding.ensureInitialized();
+    if (_updates.hasListener) {
+      _log.warning('initialize called while the updates stream is still '
+          'being listened to. That listener will no longer receive status updates.');
+    }
+    _updates = StreamController<BackgroundDownloadEvent>();
     // Incoming calls from the native code will be on the backgroundChannel,
     // so this isolate listener moves it from background to foreground
     const portName = 'background_downloader_send_port';

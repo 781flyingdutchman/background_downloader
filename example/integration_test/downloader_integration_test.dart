@@ -41,7 +41,7 @@ void downloadProgressCallback(BackgroundDownloadTask task, double progress) {
 }
 
 void main() {
-  setUp(() {
+  setUp(() async {
     task = BackgroundDownloadTask(
         url: 'https://google.com', filename: 'google.html');
     downloadStatusCallbackCounter = 0;
@@ -50,6 +50,11 @@ void main() {
     downloadProgressCallbackCompleter = Completer<void>();
     lastDownloadStatus = DownloadTaskStatus.undefined;
     FileDownloader.destroy();
+    final path =
+        join((await getApplicationDocumentsDirectory()).path, task.filename);
+    try {
+      File(path).deleteSync(recursive: true);
+    } on FileSystemException {}
   });
 
   test('initialize', () {
@@ -114,7 +119,7 @@ void main() {
     expect(await FileDownloader.enqueue(task), isTrue);
     await downloadStatusCallbackCompleter.future;
     expect(downloadStatusCallbackCounter, equals(2));
-    // because we have not set progresUpdates to something that provides
+    // because we have not set progressUpdates to something that provides
     // progress updates, we should just get no updates
     expect(downloadProgressCallbackCompleter.isCompleted, isFalse);
     expect(downloadProgressCallbackCounter, equals(0));
@@ -167,10 +172,11 @@ void main() {
     print('Finished enqueue with non-default group callbacks');
   });
 
-  testWidgets('enqueue with event listener for status updates', (widgetTester) async {
+  testWidgets('enqueue with event listener for status updates',
+      (widgetTester) async {
     FileDownloader.initialize();
     final path =
-    join((await getApplicationDocumentsDirectory()).path, task.filename);
+        join((await getApplicationDocumentsDirectory()).path, task.filename);
     try {
       File(path).deleteSync(recursive: true);
     } on FileSystemException {}
@@ -182,11 +188,11 @@ void main() {
     } on FileSystemException {}
     print(
         'Check log output -> should have warned that there is no callback or listener');
-    // register listener. For testing convenience, we simply route the event
+    // Register listener. For testing convenience, we simply route the event
     // to the completer function we have defined
     final subscription = FileDownloader.updates.listen((event) {
       expect(event.isStatusUpdate, isTrue);
-      downloadStatusCallback(task, event.statusOrProgress);
+      downloadStatusCallback(event.task, event.statusOrProgress);
     });
     expect(await FileDownloader.enqueue(task), isTrue);
     await downloadStatusCallbackCompleter.future;
@@ -196,23 +202,45 @@ void main() {
     subscription.cancel();
   });
 
-  testWidgets('enqueue with event listener for progress updates', (widgetTester) async {
-    FileDownloader.initialize();
+  testWidgets('enqueue with event listener and callback for status updates',
+      (widgetTester) async {
+    FileDownloader.initialize(downloadStatusCallback: downloadStatusCallback);
     final path =
-    join((await getApplicationDocumentsDirectory()).path, task.filename);
-    try {
-      File(path).deleteSync(recursive: true);
-    } on FileSystemException {}
-    // register listener. For testing convenience, we simply route the event
-    // to the completer function we have defined
+        join((await getApplicationDocumentsDirectory()).path, task.filename);
+    // Register listener. Because we also have a callback registered, no
+    // events should be received
+    bool receivedEvent = false;
     final subscription = FileDownloader.updates.listen((event) {
-      expect(event.isStatusUpdate, isTrue);
-      downloadStatusCallback(task, event.statusOrProgress);
+      receivedEvent = true;
     });
     expect(await FileDownloader.enqueue(task), isTrue);
     await downloadStatusCallbackCompleter.future;
     expect(downloadStatusCallbackCounter, equals(2));
     expect(lastDownloadStatus, equals(DownloadTaskStatus.complete));
+    expect(File(path).existsSync(), isTrue);
+    expect(receivedEvent, isFalse);
+    subscription.cancel();
+  });
+
+  testWidgets('enqueue with event listener for progress updates',
+      (widgetTester) async {
+    task = BackgroundDownloadTask(
+        url:
+            'https://github.com/yourkin/fileupload-fastapi/raw/a85a697cab2f887780b3278059a0dd52847d80f3/tests/data/test-5mb.bin',
+        filename: 'google.html',
+        progressUpdates: DownloadTaskProgressUpdates.progressUpdates);
+    FileDownloader.initialize();
+    final path =
+        join((await getApplicationDocumentsDirectory()).path, task.filename);
+    // Register listener. For testing convenience, we simply route the event
+    // to the completer function we have defined
+    final subscription = FileDownloader.updates.listen((event) {
+      expect(event.isProgressUpdate, isTrue);
+      downloadProgressCallback(event.task, event.statusOrProgress);
+    });
+    expect(await FileDownloader.enqueue(task), isTrue);
+    await downloadProgressCallbackCompleter.future;
+    expect(downloadProgressCallbackCounter, greaterThan(1));
     expect(File(path).existsSync(), isTrue);
     subscription.cancel();
   });

@@ -235,6 +235,7 @@ class BackgroundDownloadTask {
 /// and treat the event accordingly.
 class BackgroundDownloadEvent {
   final BackgroundDownloadTask task;
+
   // ignore: prefer_typing_uninitialized_variables
   final statusOrProgress;
 
@@ -242,7 +243,8 @@ class BackgroundDownloadEvent {
   ///
   /// Parameter [statusOrProgress] must be a [DownloadTaskStatus] or [double]
   BackgroundDownloadEvent(this.task, this.statusOrProgress) {
-    assert(statusOrProgress is DownloadTaskStatus || statusOrProgress is double);
+    assert(
+        statusOrProgress is DownloadTaskStatus || statusOrProgress is double);
   }
 
   /// True if this event is a status update.
