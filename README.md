@@ -4,7 +4,9 @@ Define where to get your file from, where to store it, and how you want to monit
 
 ## Concepts and basic usage
 
-A download is defined by a `BackgroundDownloadTask` object that contains the download instructions, and updates related to that task are passed on to callbacks that you need to register.
+A download is defined by a `BackgroundDownloadTask` object that contains the download instructions, and updates related to that task are passed on to callbacks that you need to register, and/or to an event stream that you can listen to.
+
+### Callbacks
 
 The `DownloadStatusCallback` receives the `BackgroundDownloadTask` and the updated `DownloadTaskStatus`, so a simple callback function is:
 ```
@@ -29,6 +31,25 @@ A basic file download with just status monitoring (no progress) then requires in
 ```
 
 Note that success only refers to the enqueueing of the download task, not its result, which must be monitored via the `downloadStatusCallback`. It will receive an update with status `DownloadTaskStatus.running`, followed by a status update with the result (e.g. `DownloadTaskStatus.complete` or `DownloadTaskStatus.failed`).
+
+### Using an event listener
+
+As an alternative to callbacks, you can choose to listen to events from the downloader, and process those. For example, the following monitors status and progress updates for the download tasks, without registering callbacks:
+```
+  FileDownloader.initialize();
+  final subscription = FileDownloader.updates.listen((event) {
+      if (event.isStatusUpdate) {
+        // event is a status update: event.statusOrProgress is a DownloadTaskStatus
+        print('Status update for ${event.task} with status ${event.statusOrProgress}');
+      } else {
+        // event is a progress update: event.statusOrProgress is a double
+        print('Progress update for ${event.task} with progress ${event.statusOrProgress}');
+    });
+```
+
+You can start your subscription in a conventient place, like a widget's `initState`, and don't forget to cancel your subscription to the stream using `subscription.cancel()`. Note the stream can only be listened to once: to listen again, first call `FileDownloader.initialize()`.
+
+Events will only be posted to the stream if there is no callback registered for that event type, for that task.
 
 ## Location of the downloaded file
 
@@ -58,7 +79,7 @@ Note: the reason you cannot simply pass a full absolute directory path to the do
 
 ## Monitoring progress while downloading
 
-To also monitor progress while the file is downloading, register the `DownloadProgressCallback` and add a `progressUpdates` parameter to the task:
+To also monitor progress while the file is downloading, register the `DownloadProgressCallback` (or listen to the `Filedownloader.updates` stream) and add a `progressUpdates` parameter to the task:
 ``` 
     FileDownloader.initialize(
         downloadStatusCallback: downloadStatusCallback,
@@ -74,6 +95,8 @@ To also monitor progress while the file is downloading, register the `DownloadPr
 Progress updates will be sent periodically, not more than twice per second per task.  If a task completes successfully, the `DownloadProgressCallback` is called with a `progress` value of 1.0. Failed tasks generate `progress` of -1, cancelled tasks -2 and notFound tasks -3.
 
 Because you can use the `progress` value to derive task status, you can choose to not receive status updates by setting the `progressUpdates` parameter of a task to `DownloadTaskProgressUpdates.progressUpdates` (and you won't need to register a `DownloadStatusCallback`). If you don't want to use any callbacks (and just check if the file exists after a while!) set the `progressUpdates` parameter of a task to `DownloadTaskProgressUpdates.none`.
+
+If instead of using callbacks you are listening to the `Filedownloader.updates` stream, you can distinguish progress updates from status updates by testing the event's `.isProgressUpdate` or `.isStatusUpdate` and interpret the `.statusOrProgress` field as a double or `DownloadTaskStatus` respectively.
 
 ## Simplified use
 
