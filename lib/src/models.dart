@@ -228,32 +228,52 @@ class BackgroundDownloadTask {
   }
 }
 
-/// Event related to [task] is either a [DownloadTaskStatus] update or
-/// a [double] progress update.
+/// Event related to [task] is either a status update or
+/// a progress update.
 ///
 /// When receiving an event, test [isStatusUpdate] or [isProgressUpdate]
-/// and treat the event accordingly.
+/// and use fields [status] or [progress] accordingly. Incorrect use will
+/// throw an [AssertionError]
 class BackgroundDownloadEvent {
   final BackgroundDownloadTask task;
+  final dynamic _statusOrProgress;  // [DownloadTaskStatus] or [double]
 
-  // ignore: prefer_typing_uninitialized_variables
-  final statusOrProgress;
-
-  /// Create [BackgroundDownloadEvent]
+  /// Create a [BackgroundDownloadEvent]
   ///
-  /// Parameter [statusOrProgress] must be a [DownloadTaskStatus] or [double]
-  BackgroundDownloadEvent(this.task, this.statusOrProgress) {
+  /// Parameter [_statusOrProgress] must be a [DownloadTaskStatus] or [double]
+  BackgroundDownloadEvent(this.task, this._statusOrProgress) {
     assert(
-        statusOrProgress is DownloadTaskStatus || statusOrProgress is double);
+        _statusOrProgress is DownloadTaskStatus || _statusOrProgress is double);
   }
 
   /// True if this event is a status update.
   ///
-  /// [statusOrProgress] is of type [DownloadTaskStatus]
-  bool get isStatusUpdate => statusOrProgress is DownloadTaskStatus;
+  /// [_statusOrProgress] is of type [DownloadTaskStatus]
+  bool get isStatusUpdate => _statusOrProgress is DownloadTaskStatus;
 
   /// True if this event is a progress update.
   ///
-  /// [statusOrProgress] is of type [double]
+  /// [_statusOrProgress] is of type [double]
   bool get isProgressUpdate => !isStatusUpdate;
+
+  /// The [DownloadTaskStatus] of the task
+  ///
+  /// Should only be called if [isStatusUpdate] is true.
+  DownloadTaskStatus get status {
+    assert(isStatusUpdate, 'This event is not a status update event');
+    return _statusOrProgress as DownloadTaskStatus;
+  }
+
+  /// The progress of the task (a double)
+  ///
+  /// Should only be called if [isProgressUpdate] is true.
+  ///
+  /// A successfully downloaded task will always finish with progress 1.0
+  /// [DownloadTaskStatus.failed] results in progress -1.0
+  /// [DownloadTaskStatus.canceled] results in progress -2.0
+  /// [DownloadTaskStatus.notFound] results in progress -3.0
+  double get progress {
+    assert(isProgressUpdate, 'This event is not a progress update event');
+    return _statusOrProgress as double;
+  }
 }
