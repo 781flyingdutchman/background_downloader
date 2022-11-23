@@ -227,3 +227,34 @@ class BackgroundDownloadTask {
     return 'BackgroundDownloadTask{taskId: $taskId, url: $url, filename: $filename, headers: $headers, directory: $directory, baseDirectory: $baseDirectory, group: $group, progressUpdates: $progressUpdates, metaData: $metaData}';
   }
 }
+
+/// Base class for events related to [task]. Actual events are
+/// either a status update or a progress update.
+///
+/// When receiving an event, test if the event is a
+/// [BackgroundDownloadStatusEvent] or a [BackgroundDownloadProgressEvent]
+/// and treat the event accordingly
+class BackgroundDownloadEvent {
+  final BackgroundDownloadTask task;
+
+  BackgroundDownloadEvent(this.task);
+}
+
+/// A status update event
+class BackgroundDownloadStatusEvent extends BackgroundDownloadEvent {
+  final DownloadTaskStatus status;
+
+  BackgroundDownloadStatusEvent(super.task, this.status);
+}
+
+/// A progress update event
+///
+/// A successfully downloaded task will always finish with progress 1.0
+/// [DownloadTaskStatus.failed] results in progress -1.0
+/// [DownloadTaskStatus.canceled] results in progress -2.0
+/// [DownloadTaskStatus.notFound] results in progress -3.0
+class BackgroundDownloadProgressEvent extends BackgroundDownloadEvent {
+  final double progress;
+
+  BackgroundDownloadProgressEvent(super.task, this.progress);
+}

@@ -1,3 +1,7 @@
+## 1.3.0
+
+Added option to use an event listener instead of (or in addition to) callbacks
+
 ## 1.2.0
 
 Added FileDownloader.download as a convenience method for simple downloads. This method's Future completes only after the download has completed or failed, and can be used for simple downloads where status and progress checking is not required.
