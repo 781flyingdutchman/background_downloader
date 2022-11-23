@@ -1,6 +1,6 @@
 ## 1.3.0
 
-Added option to use event listener instead of (or in addition to) callbacks
+Added option to use an event listener instead of (or in addition to) callbacks
 
 ## 1.2.0
 

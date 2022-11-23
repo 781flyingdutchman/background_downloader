@@ -12,11 +12,9 @@ For simple downloads you listen to events from the downloader, and process those
 ```
   FileDownloader.initialize();  // initialize before starting to listen
   final subscription = FileDownloader.updates.listen((event) {
-      if (event.isStatusUpdate) {
-        // event.status is a DownloadTaskStatus
+      if (event is BackgroundDownloadStatusEvent) {
         print('Status update for ${event.task} with status ${event.status}');
-      } else {
-        // event.progress is a double representing fraction of progress
+      } else if (event is BackgroundDownloadProgressEvent) {
         print('Progress update for ${event.task} with progress ${event.progress}');
     });
     // initate a download
@@ -102,7 +100,7 @@ Progress updates will be sent periodically, not more than twice per second per t
 
 Because you can use the `progress` value to derive task status, you can choose to not receive status updates by setting the `progressUpdates` parameter of a task to `DownloadTaskProgressUpdates.progressUpdates` (and you won't need to register a `DownloadStatusCallback` or listen for status updates). If you don't want to use any callbacks (and just check if the file exists after a while!) set the `progressUpdates` parameter of a task to `DownloadTaskProgressUpdates.none`.
 
-If instead of using callbacks you are listening to the `Filedownloader.updates` stream, you can distinguish progress updates from status updates by testing the event's `.isProgressUpdate` or `.isStatusUpdate` and use the `.status` or `progress` field to extract the appropriate value.
+If instead of using callbacks you are listening to the `Filedownloader.updates` stream, you can distinguish progress updates from status updates by testing the event's type (`BackgroundDownloadStatusEvent` or `BackgroundDownloadProgressEvent`) and handle it accordingly.
 
 ## Simplified use
 

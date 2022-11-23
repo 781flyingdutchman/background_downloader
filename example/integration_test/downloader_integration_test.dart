@@ -191,9 +191,9 @@ void main() {
     // Register listener. For testing convenience, we simply route the event
     // to the completer function we have defined
     final subscription = FileDownloader.updates.listen((event) {
-      expect(event.isStatusUpdate, isTrue);
-      expect(() => event.progress, throwsAssertionError);
-      downloadStatusCallback(event.task, event.status);
+      if (event is BackgroundDownloadStatusEvent) {
+        downloadStatusCallback(event.task, event.status);
+      }
     });
     expect(await FileDownloader.enqueue(task), isTrue);
     await downloadStatusCallbackCompleter.future;
@@ -236,9 +236,10 @@ void main() {
     // Register listener. For testing convenience, we simply route the event
     // to the completer function we have defined
     final subscription = FileDownloader.updates.listen((event) {
-      expect(event.isProgressUpdate, isTrue);
-      expect(() => event.status, throwsAssertionError);
-      downloadProgressCallback(event.task, event.progress);
+      expect(event is BackgroundDownloadProgressEvent, isTrue);
+      if (event is BackgroundDownloadProgressEvent) {
+        downloadProgressCallback(event.task, event.progress);
+      }
     });
     expect(await FileDownloader.enqueue(task), isTrue);
     await downloadProgressCallbackCompleter.future;

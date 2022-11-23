@@ -96,7 +96,8 @@ class FileDownloader {
               downloadStatusCallback(task, downloadTaskStatus);
             } else {
               if (_updates.hasListener) {
-                _updates.add(BackgroundDownloadEvent(task, downloadTaskStatus));
+                _updates.add(
+                    BackgroundDownloadStatusEvent(task, downloadTaskStatus));
               } else {
                 _log.warning(
                     'Requested status updates for task ${task.taskId} in '
@@ -114,7 +115,8 @@ class FileDownloader {
             if (progressUpdateCallback != null) {
               progressUpdateCallback(task, data[2] as double);
             } else if (_updates.hasListener) {
-              _updates.add(BackgroundDownloadEvent(task, data[2] as double));
+              _updates.add(
+                  BackgroundDownloadProgressEvent(task, data[2] as double));
             } else {
               _log.warning(
                   'Requested progress updates for task ${task.taskId} in '
