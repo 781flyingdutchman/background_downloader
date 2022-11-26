@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:isolate';
 import 'dart:ui';
 
+import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:logging/logging.dart';
@@ -32,7 +33,9 @@ class FileDownloader {
   static const _backgroundChannel =
       MethodChannel('com.bbflight.background_downloader.background');
   static bool _initialized = false;
-  static final _downloadCompleters = <String, Completer<DownloadTaskStatus>>{};
+  static final _downloadCompleters =
+      <BackgroundDownloadTask, Completer<DownloadTaskStatus>>{};
+  static final _batches = <BackgroundDownloadBatch>[];
 
   /// Registered [DownloadStatusCallback] for each group
   static final statusCallbacks = <String, DownloadStatusCallback>{};
@@ -225,24 +228,78 @@ class FileDownloader {
     /// with this task
     internalCallback(BackgroundDownloadTask task, DownloadTaskStatus status) {
       if (status.isFinalState) {
-        var downloadCompleter = _downloadCompleters.remove(task.taskId);
+        if (_batches.isNotEmpty) {
+          // check if this task is part of a batch
+          for (final batch in _batches) {
+            if (batch.tasks.contains(task)) {
+              batch.results[task] = status;
+              if (batch.batchDownloadProgressCallback != null) {
+                batch.batchDownloadProgressCallback!(
+                    batch.numSucceeded, batch.numFailed);
+              }
+              break;
+            }
+          }
+        }
+        var downloadCompleter = _downloadCompleters.remove(task);
         downloadCompleter?.complete(status);
       }
     }
 
     registerCallbacks(
         group: groupName, downloadStatusCallback: internalCallback);
-    final downloadCompleter = Completer<DownloadTaskStatus>();
-    _downloadCompleters[task.taskId] = downloadCompleter;
     final internalTask = task.copyWith(
         group: groupName,
         progressUpdates: DownloadTaskProgressUpdates.statusChange);
+    final downloadCompleter = Completer<DownloadTaskStatus>();
+    _downloadCompleters[internalTask] = downloadCompleter;
     final enqueueSuccess = await enqueue(internalTask);
     if (!enqueueSuccess) {
       _log.warning('Could not enqueue task $task}');
       return Future.value(DownloadTaskStatus.failed);
     }
     return downloadCompleter.future;
+  }
+
+  /// Enqueues a list of files to download and returns when all downloads
+  /// have finished (successfully or otherwise). The returned value is a
+  /// [BackgroundDownloadBatch] object that contains the original [tasks], the
+  /// [results] and convenience getters to filter successful and failed results.
+  ///
+  /// If an optional [batchDownloadProgressCallback] function is provided, it will be
+  /// called upon completion (successfully or otherwise) of each task in the
+  /// batch, with two parameters: the number of succeeded and the number of
+  /// failed tasks. The callback can be used, for instance, to show a progress
+  /// indicator for the batch, where
+  ///    double percent_complete = (succeeded + failed) / tasks.length
+  ///
+  /// Note that to allow for special processing of tasks in a batch, the task's
+  /// [group] and [progressUpdates] value will be modified when enqueued, and
+  /// those modified tasks are returned as part of the [BackgroundDownloadBatch]
+  /// object.
+  static Future<BackgroundDownloadBatch> downloadBatch(
+      final List<BackgroundDownloadTask> tasks,
+      [BatchDownloadProgressCallback? batchDownloadProgressCallback]) async {
+    assert(tasks.isNotEmpty, 'List of tasks cannot be empty');
+    if (batchDownloadProgressCallback != null) {
+      batchDownloadProgressCallback(0, 0); // initial callback
+    }
+    final batch = BackgroundDownloadBatch(tasks, batchDownloadProgressCallback);
+    _batches.add(batch);
+    final downloadFutures = <Future<DownloadTaskStatus>>[];
+    var counter = 0;
+    for (final task in tasks) {
+      downloadFutures.add(download(task));
+      counter++;
+      if (counter % 3 == 0) {
+        // To prevent blocking the UI we 'yield' for a few ms after every 3
+        // tasks we enqueue
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
+    }
+    await Future.wait(downloadFutures); // wait for all downloads to complete
+    _batches.remove(batch);
+    return batch;
   }
 
   /// Resets the downloader by cancelling all ongoing download tasks within
