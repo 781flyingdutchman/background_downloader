@@ -1,8 +1,6 @@
 import 'dart:io';
 import 'dart:math';
 
-import 'package:flutter/foundation.dart';
-
 /// Defines a set of possible states which a [DownloadTask] can be in.
 enum DownloadTaskStatus {
   /// Unknown state
@@ -83,6 +81,9 @@ enum DownloadTaskProgressUpdates {
 }
 
 /// Information related to a download
+///
+/// An equality test on a [BackgroundDownloadTask] is a test on the [taskId]
+/// only - all other fields are ignored in that test
 class BackgroundDownloadTask {
   /// Identifier for the task - auto generated if omitted
   final String taskId;
@@ -200,32 +201,50 @@ class BackgroundDownloadTask {
       identical(this, other) ||
       other is BackgroundDownloadTask &&
           runtimeType == other.runtimeType &&
-          taskId == other.taskId &&
-          url == other.url &&
-          filename == other.filename &&
-          mapEquals(headers, other.headers) &&
-          directory == other.directory &&
-          baseDirectory == other.baseDirectory &&
-          group == other.group &&
-          progressUpdates == other.progressUpdates &&
-          metaData == other.metaData;
+          taskId == other.taskId;
 
   @override
-  int get hashCode =>
-      taskId.hashCode ^
-      url.hashCode ^
-      filename.hashCode ^
-      headers.hashCode ^
-      directory.hashCode ^
-      baseDirectory.hashCode ^
-      group.hashCode ^
-      progressUpdates.hashCode ^
-      metaData.hashCode;
+  int get hashCode => taskId.hashCode;
 
   @override
   String toString() {
     return 'BackgroundDownloadTask{taskId: $taskId, url: $url, filename: $filename, headers: $headers, directory: $directory, baseDirectory: $baseDirectory, group: $group, progressUpdates: $progressUpdates, metaData: $metaData}';
   }
+}
+
+/// Signature for a function you can provide to the [downloadBatch] method
+/// that will be called upon completion of each file download in the batch.
+///
+/// [succeeded] will count the number of successful downloads, and
+/// [failed] counts the number of failed downloads (for any reason).
+typedef BatchDownloadProgressCallback = void Function(
+    int succeeded, int failed);
+
+/// Contains tasks and results related to a batch of downloads
+class BackgroundDownloadBatch {
+  final List<BackgroundDownloadTask> tasks;
+  final BatchDownloadProgressCallback? batchDownloadProgressCallback;
+  final results = <BackgroundDownloadTask, DownloadTaskStatus>{};
+
+  BackgroundDownloadBatch(this.tasks, this.batchDownloadProgressCallback);
+
+  /// Returns an Iterable with successful downloads in this batch
+  Iterable<BackgroundDownloadTask> get succeeded => results.entries
+      .where((entry) => entry.value == DownloadTaskStatus.complete)
+      .map((e) => e.key);
+
+  /// Returns the number of successful downloads in this batch
+  int get numSucceeded => results.values
+      .where((result) => result == DownloadTaskStatus.complete)
+      .length;
+
+  /// Returns an Iterable with failed downloads in this batch
+  Iterable<BackgroundDownloadTask> get failed => results.entries
+      .where((entry) => entry.value != DownloadTaskStatus.complete)
+      .map((e) => e.key);
+
+  /// Returns the number of failed downloads in this batch
+  int get numFailed => results.values.length - numSucceeded;
 }
 
 /// Base class for events related to [task]. Actual events are

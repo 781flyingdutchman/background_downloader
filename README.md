@@ -104,12 +104,32 @@ If instead of using callbacks you are listening to the `Filedownloader.updates` 
 
 ## Simplified use
 
+### Awaiting a download
+
 If status and progress monitoring is not required, you can also use the convenience methode `download`, which returns a `Future` that completes when the file download has completed or failed:
 ```
     final result = await FileDownloader.download(task);
 ```
 
-The `result` will be a `DownloadTaskStatus` and should be checked for completion, failure etc.  Note that for this use, `BackgroundDownloadTask` fields `group` and `progressUpdates` should not be set, as they are used by the `FileDownloader` for this convenience method.
+The `result` will be a `DownloadTaskStatus` and should be checked for completion, failure etc.
+
+### Awaiting a batch download
+
+To download a batch of files and wait for completion, create a `List` of `BackgroundDownloadTask` objects and call `downloadBatch`:
+```
+   final result = await FileDownloader.downloadBatch(tasks);
+```
+
+The result is a `BackgroundDownloadBatch` object that contains the result for each task in `.results` (or use `.succeeded` or `.failed` to iterate over successful or failed tasks within the batch only).  If you want to get progress updates for the batch (in terms of how many files have been downloaded) then add a callback:
+```
+   final result = await FileDownloader.downloadBatch(tasks, (succeeded, failed) {
+      print('$succeeded files succeeded, $failed have failed');
+      print('Progress is ${(succeeded + failed) / tasks.length} %');
+   });
+```
+The callback will be called upon completion of each task (whether successful or not), and will start with (0, 0) before any downloads start, so you can use that to start a progress indicator.
+
+Note that for simplified use, `BackgroundDownloadTask` fields `group` and `progressUpdates` should not be set, as they are used by the `FileDownloader` for these convenience methods.
 
 ## Advanced use
 
