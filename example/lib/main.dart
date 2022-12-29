@@ -130,7 +130,7 @@ class _MyAppState extends State<MyApp> {
         // start download
         backgroundDownloadTask = BackgroundDownloadTask(
             url: downloadWithError
-                ? 'https://sitethatdoesnotexist.com'
+                ? 'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/get_current_app_data' // returns 403 status code
                 : 'https://github.com/yourkin/fileupload-fastapi/raw/a85a697cab2f887780b3278059a0dd52847d80f3/tests/data/test-5mb.bin',
             filename: 'zipfile.zip',
             directory: 'my/directory',

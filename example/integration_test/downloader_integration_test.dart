@@ -378,7 +378,7 @@ void main() {
             ? BackgroundDownloadTask(
                 url: 'https://google.com', filename: filename)
             : BackgroundDownloadTask(
-                url: 'https://sitethatdoesnotexist.com', filename: filename));
+                url: 'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/get_current_app_data', filename: filename));
       }
       final result = await FileDownloader.downloadBatch(tasks);
       // confirm results contain two successes and one failure
@@ -426,7 +426,7 @@ void main() {
             ? BackgroundDownloadTask(
                 url: 'https://google.com', filename: filename)
             : BackgroundDownloadTask(
-                url: 'https://sitethatdoesnotexist.com', filename: filename));
+                url: 'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/get_current_app_data', filename: filename));
       }
       var numSucceeded = 0;
       var numFailed = 0;
