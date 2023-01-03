@@ -83,7 +83,7 @@ Note: the reason you cannot simply pass a full absolute directory path to the do
 
 ### Monitoring progress while downloading
 
-To also monitor progress while the file is downloading, register the `DownloadProgressCallback` (or listen for progress updates on the `Filedownloader.updates` stream) and add a `progressUpdates` parameter to the task:
+To also monitor progress while the file is downloading, listen for `BackgroundDownloadProgressEvent` on the `Filedownloader.updates` stream (or register a `DownloadProgressCallback`) and add a `progressUpdates` parameter to the task:
 ``` 
     FileDownloader.initialize(
         downloadStatusCallback: downloadStatusCallback,
@@ -106,7 +106,7 @@ If instead of using callbacks you are listening to the `Filedownloader.updates` 
 
 ### Awaiting a download
 
-If status and progress monitoring is not required, you can also use the convenience methode `download`, which returns a `Future` that completes when the file download has completed or failed:
+If status and progress monitoring is not required, you can also use the convenience method `download`, which returns a `Future` that completes when the file download has completed or failed:
 ```
     final result = await FileDownloader.download(task);
 ```
@@ -189,4 +189,5 @@ No setup is required for Android.
 * On iOS, once enqueued, a background download must complete within 4 hours
 * On both platforms, downloads will not start without a network connection, and do not distinguish between metered (cellular) and unmetered (WiFi) connections
 * Redirects will be followed
+* Background downloads will not be retried upon failure
 * Background downloads are aggressively controlled by the native platform. You should therefore always assume that a task that was started may not complete, and may disappear without providing any status or progress update to indicate why. For example, if a user swipes your app up from the iOS App Switcher, all scheduled background downloads are terminated without notification 
