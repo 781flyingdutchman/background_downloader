@@ -1,3 +1,11 @@
+## 1.4.1
+
+Improved example app, updated documentation and fixed minor Android bug
+
+## 1.4.0
+
+Added `downloadBatch` method to enqueue and wait for completion of a batch of downloads
+
 ## 1.3.0
 
 Added option to use an event listener instead of (or in addition to) callbacks

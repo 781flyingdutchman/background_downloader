@@ -83,7 +83,7 @@ Note: the reason you cannot simply pass a full absolute directory path to the do
 
 ### Monitoring progress while downloading
 
-To also monitor progress while the file is downloading, register the `DownloadProgressCallback` (or listen for progress updates on the `Filedownloader.updates` stream) and add a `progressUpdates` parameter to the task:
+To also monitor progress while the file is downloading, listen for `BackgroundDownloadProgressEvent` on the `Filedownloader.updates` stream (or register a `DownloadProgressCallback`) and add a `progressUpdates` parameter to the task:
 ``` 
     FileDownloader.initialize(
         downloadStatusCallback: downloadStatusCallback,
@@ -104,12 +104,32 @@ If instead of using callbacks you are listening to the `Filedownloader.updates` 
 
 ## Simplified use
 
-If status and progress monitoring is not required, you can also use the convenience methode `download`, which returns a `Future` that completes when the file download has completed or failed:
+### Awaiting a download
+
+If status and progress monitoring is not required, you can also use the convenience method `download`, which returns a `Future` that completes when the file download has completed or failed:
 ```
     final result = await FileDownloader.download(task);
 ```
 
-The `result` will be a `DownloadTaskStatus` and should be checked for completion, failure etc.  Note that for this use, `BackgroundDownloadTask` fields `group` and `progressUpdates` should not be set, as they are used by the `FileDownloader` for this convenience method.
+The `result` will be a `DownloadTaskStatus` and should be checked for completion, failure etc.
+
+### Awaiting a batch download
+
+To download a batch of files and wait for completion, create a `List` of `BackgroundDownloadTask` objects and call `downloadBatch`:
+```
+   final result = await FileDownloader.downloadBatch(tasks);
+```
+
+The result is a `BackgroundDownloadBatch` object that contains the result for each task in `.results` (or use `.succeeded` or `.failed` to iterate over successful or failed tasks within the batch only).  If you want to get progress updates for the batch (in terms of how many files have been downloaded) then add a callback:
+```
+   final result = await FileDownloader.downloadBatch(tasks, (succeeded, failed) {
+      print('$succeeded files succeeded, $failed have failed');
+      print('Progress is ${(succeeded + failed) / tasks.length} %');
+   });
+```
+The callback will be called upon completion of each task (whether successful or not), and will start with (0, 0) before any downloads start, so you can use that to start a progress indicator.
+
+Note that for simplified use, `BackgroundDownloadTask` fields `group` and `progressUpdates` should not be set, as they are used by the `FileDownloader` for these convenience methods.
 
 ## Advanced use
 
@@ -169,4 +189,5 @@ No setup is required for Android.
 * On iOS, once enqueued, a background download must complete within 4 hours
 * On both platforms, downloads will not start without a network connection, and do not distinguish between metered (cellular) and unmetered (WiFi) connections
 * Redirects will be followed
+* Background downloads will not be retried upon failure
 * Background downloads are aggressively controlled by the native platform. You should therefore always assume that a task that was started may not complete, and may disappear without providing any status or progress update to indicate why. For example, if a user swipes your app up from the iOS App Switcher, all scheduled background downloads are terminated without notification 

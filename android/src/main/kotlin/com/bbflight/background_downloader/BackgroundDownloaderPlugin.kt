@@ -104,6 +104,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
                 "Unable to start background request for taskId ${backgroundDownloadTask.taskId} in operation: $operation"
             )
             result.success(false)
+            return
         }
         // store Task in persistent storage, as Json representation keyed by taskId
         prefsLock.write {
