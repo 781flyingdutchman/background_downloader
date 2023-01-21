@@ -48,43 +48,43 @@ enum class DownloadTaskProgressUpdates {
 
 /// Partial version of the Dart side DownloadTask, only used for background loading
 class BackgroundDownloadTask(
-    val taskId: String,
-    val url: String,
-    val filename: String,
-    val headers: Map<String, String>,
-    val directory: String,
-    val baseDirectory: BaseDirectory,
-    val group: String,
-    val progressUpdates: DownloadTaskProgressUpdates,
-    val metaData: String
+        val taskId: String,
+        val url: String,
+        val filename: String,
+        val headers: Map<String, String>,
+        val directory: String,
+        val baseDirectory: BaseDirectory,
+        val group: String,
+        val progressUpdates: DownloadTaskProgressUpdates,
+        val metaData: String
 ) {
 
     /** Creates object from JsonMap */
     constructor(jsonMap: Map<String, Any>) : this(
-        taskId = jsonMap["taskId"] as String,
-        url = jsonMap["url"] as String,
-        filename = jsonMap["filename"] as String,
-        headers = jsonMap["headers"] as Map<String, String>,
-        directory = jsonMap["directory"] as String,
-        baseDirectory = BaseDirectory.values()[(jsonMap["baseDirectory"] as Double).toInt()],
-        group = jsonMap["group"] as String,
-        progressUpdates =
-        DownloadTaskProgressUpdates.values()[(jsonMap["progressUpdates"] as Double).toInt()],
-        metaData = jsonMap["metaData"] as String
+            taskId = jsonMap["taskId"] as String,
+            url = jsonMap["url"] as String,
+            filename = jsonMap["filename"] as String,
+            headers = jsonMap["headers"] as Map<String, String>,
+            directory = jsonMap["directory"] as String,
+            baseDirectory = BaseDirectory.values()[(jsonMap["baseDirectory"] as Double).toInt()],
+            group = jsonMap["group"] as String,
+            progressUpdates =
+            DownloadTaskProgressUpdates.values()[(jsonMap["progressUpdates"] as Double).toInt()],
+            metaData = jsonMap["metaData"] as String
     )
 
     /** Creates JSON map of this object */
     fun toJsonMap(): Map<String, Any> {
         return mapOf(
-            "taskId" to taskId,
-            "url" to url,
-            "filename" to filename,
-            "headers" to headers,
-            "directory" to directory,
-            "baseDirectory" to baseDirectory.ordinal, // stored as int
-            "group" to group,
-            "progressUpdates" to progressUpdates.ordinal,
-            "metaData" to metaData
+                "taskId" to taskId,
+                "url" to url,
+                "filename" to filename,
+                "headers" to headers,
+                "directory" to directory,
+                "baseDirectory" to baseDirectory.ordinal, // stored as int
+                "group" to group,
+                "progressUpdates" to progressUpdates.ordinal,
+                "metaData" to metaData
         )
     }
 
@@ -122,10 +122,10 @@ enum class DownloadTaskStatus {
  * It will block the background thread until a value of either true or false is received back from Flutter code.
  */
 class DownloadWorker(
-    applicationContext: Context,
-    workerParams: WorkerParameters
+        applicationContext: Context,
+        workerParams: WorkerParameters
 ) :
-    CoroutineWorker(applicationContext, workerParams) {
+        CoroutineWorker(applicationContext, workerParams) {
 
     companion object {
         const val TAG = "DownloadWorker"
@@ -138,20 +138,20 @@ class DownloadWorker(
          * is finished, processes a final status update and remove references to persistent storage
          * */
         fun processStatusUpdate(
-            backgroundDownloadTask: BackgroundDownloadTask,
-            status: DownloadTaskStatus
+                backgroundDownloadTask: BackgroundDownloadTask,
+                status: DownloadTaskStatus
         ) {
             if (backgroundDownloadTask.providesStatusUpdates()) {
                 Handler(Looper.getMainLooper()).post {
                     try {
                         val gson = Gson()
                         val arg = listOf<Any>(
-                            gson.toJson(backgroundDownloadTask.toJsonMap()),
-                            status.ordinal
+                                gson.toJson(backgroundDownloadTask.toJsonMap()),
+                                status.ordinal
                         )
                         BackgroundDownloaderPlugin.backgroundChannel?.invokeMethod(
-                            "statusUpdate",
-                            arg
+                                "statusUpdate",
+                                arg
                         )
                     } catch (e: Exception) {
                         Log.w(TAG, "Exception trying to post status update: ${e.message}")
@@ -163,36 +163,38 @@ class DownloadWorker(
             if (status != DownloadTaskStatus.running) {
                 when (status) {
                     DownloadTaskStatus.complete -> processProgressUpdate(
-                        backgroundDownloadTask,
-                        1.0
+                            backgroundDownloadTask,
+                            1.0
                     )
-                    DownloadTaskStatus.failed -> processProgressUpdate(backgroundDownloadTask, -1.0)
+                    DownloadTaskStatus.failed -> processProgressUpdate(
+                            backgroundDownloadTask,
+                            -1.0)
                     DownloadTaskStatus.canceled -> processProgressUpdate(
-                        backgroundDownloadTask,
-                        -2.0
+                            backgroundDownloadTask,
+                            -2.0
                     )
                     DownloadTaskStatus.notFound -> processProgressUpdate(
-                        backgroundDownloadTask,
-                        -3.0
+                            backgroundDownloadTask,
+                            -3.0
                     )
                     else -> {}
                 }
                 BackgroundDownloaderPlugin.prefsLock.write {
                     val jsonString =
-                        BackgroundDownloaderPlugin.prefs.getString(
-                            BackgroundDownloaderPlugin.keyTasksMap,
-                            "{}"
-                        )
+                            BackgroundDownloaderPlugin.prefs.getString(
+                                    BackgroundDownloaderPlugin.keyTasksMap,
+                                    "{}"
+                            )
                     val backgroundDownloadTaskMap =
-                        BackgroundDownloaderPlugin.gson.fromJson<Map<String, Any>>(
-                            jsonString,
-                            BackgroundDownloaderPlugin.mapType
-                        ).toMutableMap()
+                            BackgroundDownloaderPlugin.gson.fromJson<Map<String, Any>>(
+                                    jsonString,
+                                    BackgroundDownloaderPlugin.mapType
+                            ).toMutableMap()
                     backgroundDownloadTaskMap.remove(backgroundDownloadTask.taskId)
                     val editor = BackgroundDownloaderPlugin.prefs.edit()
                     editor.putString(
-                        BackgroundDownloaderPlugin.keyTasksMap,
-                        BackgroundDownloaderPlugin.gson.toJson(backgroundDownloadTaskMap)
+                            BackgroundDownloaderPlugin.keyTasksMap,
+                            BackgroundDownloaderPlugin.gson.toJson(backgroundDownloadTaskMap)
                     )
                     editor.apply()
                 }
@@ -205,18 +207,18 @@ class DownloadWorker(
          * Sends progress update via the background channel to Flutter, if requested
          */
         fun processProgressUpdate(
-            backgroundDownloadTask: BackgroundDownloadTask,
-            progress: Double
+                backgroundDownloadTask: BackgroundDownloadTask,
+                progress: Double
         ) {
             if (backgroundDownloadTask.providesProgressUpdates()) {
                 Handler(Looper.getMainLooper()).post {
                     try {
                         val gson = Gson()
                         val arg =
-                            listOf<Any>(gson.toJson(backgroundDownloadTask.toJsonMap()), progress)
+                                listOf<Any>(gson.toJson(backgroundDownloadTask.toJsonMap()), progress)
                         BackgroundDownloaderPlugin.backgroundChannel?.invokeMethod(
-                            "progressUpdate",
-                            arg
+                                "progressUpdate",
+                                arg
                         )
                     } catch (e: Exception) {
                         Log.w(TAG, "Exception trying to post progress update: ${e.message}")
@@ -233,7 +235,7 @@ class DownloadWorker(
 
         val mapType = object : TypeToken<Map<String, Any>>() {}.type
         val downloadTask = BackgroundDownloadTask(
-            gson.fromJson(downloadTaskJsonMapString, mapType)
+                gson.fromJson(downloadTaskJsonMapString, mapType)
         )
         Log.i(TAG, " Starting download for taskId ${downloadTask.taskId}")
         val filePath = pathToFileForTask(downloadTask)
@@ -244,8 +246,8 @@ class DownloadWorker(
 
     /** download a file from the urlString to the filePath */
     private fun downloadFile(
-        downloadTask: BackgroundDownloadTask,
-        filePath: String
+            downloadTask: BackgroundDownloadTask,
+            filePath: String
     ): DownloadTaskStatus {
         try {
             val urlString = downloadTask.url
@@ -272,9 +274,9 @@ class DownloadWorker(
                 var nextProgressUpdateTime = 0L
                 var dir = applicationContext.cacheDir
                 val tempFile = File.createTempFile(
-                    "com.bbflight.background_downloader",
-                    Random.nextInt().toString(),
-                    dir
+                        "com.bbflight.background_downloader",
+                        Random.nextInt().toString(),
+                        dir
                 )
                 try {
                     BufferedInputStream(url.openStream()).use { `in` ->
@@ -288,9 +290,9 @@ class DownloadWorker(
                                 fileOutputStream.write(dataBuffer, 0, bytesRead)
                                 bytesReceivedTotal += bytesRead
                                 val progress =
-                                    min(bytesReceivedTotal.toDouble() / contentLength, 0.999)
+                                        min(bytesReceivedTotal.toDouble() / contentLength, 0.999)
                                 if (contentLength > 0 &&
-                                    (bytesReceivedTotal < 10000 || (progress - lastProgressUpdate > 0.02 && currentTimeMillis() > nextProgressUpdateTime))
+                                        (bytesReceivedTotal < 10000 || (progress - lastProgressUpdate > 0.02 && currentTimeMillis() > nextProgressUpdateTime))
                                 ) {
                                     processProgressUpdate(downloadTask, progress)
                                     lastProgressUpdate = progress
@@ -307,9 +309,9 @@ class DownloadWorker(
                         }
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                             Files.move(
-                                tempFile.toPath(),
-                                destFile.toPath(),
-                                StandardCopyOption.REPLACE_EXISTING
+                                    tempFile.toPath(),
+                                    destFile.toPath(),
+                                    StandardCopyOption.REPLACE_EXISTING
                             )
                         } else {
                             tempFile.copyTo(destFile, overwrite = true)
@@ -320,35 +322,35 @@ class DownloadWorker(
                         return DownloadTaskStatus.canceled
                     }
                     Log.i(
-                        TAG,
-                        "Successfully downloaded taskId ${downloadTask.taskId} to $filePath"
+                            TAG,
+                            "Successfully downloaded taskId ${downloadTask.taskId} to $filePath"
                     )
                     return DownloadTaskStatus.complete
                 } catch (e: Exception) {
                     when (e) {
                         is FileSystemException -> Log.w(
-                            TAG,
-                            "Filesystem exception downloading from $urlString to $filePath: ${e.message}"
+                                TAG,
+                                "Filesystem exception downloading from $urlString to $filePath: ${e.message}"
                         )
                         is SocketException -> Log.i(
-                            TAG,
-                            "Socket exception downloading from $urlString to $filePath: ${e.message}"
+                                TAG,
+                                "Socket exception downloading from $urlString to $filePath: ${e.message}"
                         )
                         is CancellationException -> {
                             Log.v(TAG, "Job cancelled: $urlString to $filePath: ${e.message}")
                             return DownloadTaskStatus.canceled
                         }
                         else -> Log.w(
-                            TAG,
-                            "Error downloading from $urlString to $filePath: ${e.message}"
+                                TAG,
+                                "Error downloading from $urlString to $filePath: ${e.message}"
                         )
                     }
                 }
                 return DownloadTaskStatus.failed
             } else {
                 Log.i(
-                    TAG,
-                    "Response code $responseCode for download from  $urlString to $filePath"
+                        TAG,
+                        "Response code $responseCode for download from  $urlString to $filePath"
                 )
                 return if (responseCode == 404) {
                     DownloadTaskStatus.notFound
@@ -358,8 +360,8 @@ class DownloadWorker(
             }
         } catch (e: Exception) {
             Log.w(
-                TAG,
-                "Error downloading from ${downloadTask.url} to ${downloadTask.filename}: $e"
+                    TAG,
+                    "Error downloading from ${downloadTask.url} to ${downloadTask.filename}: $e"
             )
         }
         return DownloadTaskStatus.failed
@@ -370,8 +372,8 @@ class DownloadWorker(
     private fun pathToFileForTask(task: BackgroundDownloadTask): String {
         val baseDirPath = when (task.baseDirectory) {
             BaseDirectory.applicationDocuments -> Path(
-                applicationContext.dataDir.path,
-                "app_flutter"
+                    applicationContext.dataDir.path,
+                    "app_flutter"
             ).pathString
             BaseDirectory.temporary -> applicationContext.cacheDir.path
             BaseDirectory.applicationSupport -> applicationContext.filesDir.path

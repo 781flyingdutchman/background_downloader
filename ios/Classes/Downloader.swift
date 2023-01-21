@@ -169,8 +169,9 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     var counter = 0
     urlSession?.getAllTasks(completionHandler: { tasks in
       for task in tasks {
-        let backgroundDownloadTask = self.getTaskFrom(urlSessionDownloadTask: task)
-        if backgroundDownloadTask?.group == group {
+        guard let backgroundDownloadTask = self.getTaskFrom(urlSessionDownloadTask: task)
+        else { continue }
+        if backgroundDownloadTask.group == group {
         task.cancel()
           counter += 1
         }
@@ -196,7 +197,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
           }
         }
       }
-      os_log("Returning %d unfinished tasks: %@", log: self.log, type: .debug, taskIds.count, taskIds)
+      os_log("Returning %d unfinished taskIds: %@", log: self.log, type: .debug, taskIds.count, taskIds)
       result(taskIds)
     })
   }
@@ -337,23 +338,8 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     }
   }
 
-  
-  /// Returns a BackgroundDownloadTask from the supplied jsonString, or nil
-  private func downloadTaskFrom(jsonString: String) -> BackgroundDownloadTask? {
-    let decoder = JSONDecoder()
-    let backgroundDownloadTasks: BackgroundDownloadTask? = try? decoder.decode(BackgroundDownloadTask.self, from: (jsonString).data(using: .utf8)!)
-    return backgroundDownloadTasks
-  }
-  
-  /// Returns a JSON string for this BackgroundDownloadTask, or nil
-  private func jsonStringFor(backgroundDownloadTask: BackgroundDownloadTask) -> String? {
-    let jsonEncoder = JSONEncoder()
-    guard let jsonResultData = try? jsonEncoder.encode(backgroundDownloadTask)
-    else {
-      return nil
-    }
-    return String(data: jsonResultData, encoding: .utf8)
-  }
+    
+  //MARK: URLSession delegate methods
     
   /// When the app restarts, recreate the urlSession if needed, and store the completion handler
   public func application(_ application: UIApplication,
@@ -383,6 +369,24 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     }
   }
   
+  //MARK: helper methods
+    
+  /// Returns a BackgroundDownloadTask from the supplied jsonString, or nil
+  private func downloadTaskFrom(jsonString: String) -> BackgroundDownloadTask? {
+    let decoder = JSONDecoder()
+    let backgroundDownloadTasks: BackgroundDownloadTask? = try? decoder.decode(BackgroundDownloadTask.self, from: (jsonString).data(using: .utf8)!)
+    return backgroundDownloadTasks
+  }
+  
+  /// Returns a JSON string for this BackgroundDownloadTask, or nil
+  private func jsonStringFor(backgroundDownloadTask: BackgroundDownloadTask) -> String? {
+    let jsonEncoder = JSONEncoder()
+    guard let jsonResultData = try? jsonEncoder.encode(backgroundDownloadTask)
+    else {
+      return nil
+    }
+    return String(data: jsonResultData, encoding: .utf8)
+  }
   
   
   /// Processes a change in status for the task
@@ -450,7 +454,6 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
   private func getTaskFrom(urlSessionDownloadTask: URLSessionTask) -> BackgroundDownloadTask? {
     let decoder = JSONDecoder()
     guard let jsonData = urlSessionDownloadTask.taskDescription?.data(using: .utf8)
-            
     else {
       return nil
     }

@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print, empty_catches
+
 import 'dart:async';
 import 'dart:io';
 
@@ -431,8 +433,7 @@ void main() {
       var numSucceeded = 0;
       var numFailed = 0;
       var numcalled = 0;
-      final result =
-          await FileDownloader.downloadBatch(tasks, (succeeded, failed) {
+      await FileDownloader.downloadBatch(tasks, (succeeded, failed) {
         print('Succeeded: $succeeded, failed: $failed');
         numcalled++;
         numSucceeded = succeeded;

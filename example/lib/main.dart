@@ -9,6 +9,7 @@ import 'widgets.dart';
 
 void main() {
   Logger.root.onRecord.listen((LogRecord rec) {
+    // ignore: avoid_print
     print('${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
   });
 
