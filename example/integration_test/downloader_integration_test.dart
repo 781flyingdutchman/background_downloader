@@ -151,7 +151,7 @@ void main() {
       downloadProgressCallbackCompleter = Completer<void>();
       task = BackgroundDownloadTask(
           url:
-              'https://github.com/yourkin/fileupload-fastapi/raw/a85a697cab2f887780b3278059a0dd52847d80f3/tests/data/test-5mb.bin',
+              'https://storage.googleapis.com/approachcharts/test/5MB-test.ZIP',
           filename: 'google.html',
           progressUpdates:
               DownloadTaskProgressUpdates.statusChangeAndProgressUpdates);
@@ -236,7 +236,7 @@ void main() {
         (widgetTester) async {
       task = BackgroundDownloadTask(
           url:
-              'https://github.com/yourkin/fileupload-fastapi/raw/a85a697cab2f887780b3278059a0dd52847d80f3/tests/data/test-5mb.bin',
+              'https://storage.googleapis.com/approachcharts/test/5MB-test.ZIP',
           filename: 'google.html',
           progressUpdates: DownloadTaskProgressUpdates.progressUpdates);
       FileDownloader.initialize();
@@ -380,7 +380,9 @@ void main() {
             ? BackgroundDownloadTask(
                 url: 'https://google.com', filename: filename)
             : BackgroundDownloadTask(
-                url: 'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/get_current_app_data', filename: filename));
+                url:
+                    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/get_current_app_data',
+                filename: filename));
       }
       final result = await FileDownloader.downloadBatch(tasks);
       // confirm results contain two successes and one failure
@@ -428,7 +430,9 @@ void main() {
             ? BackgroundDownloadTask(
                 url: 'https://google.com', filename: filename)
             : BackgroundDownloadTask(
-                url: 'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/get_current_app_data', filename: filename));
+                url:
+                    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/get_current_app_data',
+                filename: filename));
       }
       var numSucceeded = 0;
       var numFailed = 0;
