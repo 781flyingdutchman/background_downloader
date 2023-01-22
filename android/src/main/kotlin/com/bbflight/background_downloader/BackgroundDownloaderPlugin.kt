@@ -2,7 +2,6 @@ package com.bbflight.background_downloader
 
 import android.content.SharedPreferences
 import android.util.Log
-import androidx.annotation.NonNull
 import androidx.preference.PreferenceManager
 import androidx.work.*
 import com.google.gson.Gson
@@ -30,18 +29,18 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         val mapType = object : TypeToken<Map<String, Any>>() {}.type
     }
 
-    override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
+    override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         channel =
-            MethodChannel(flutterPluginBinding.binaryMessenger, "com.bbflight.background_downloader")
+                MethodChannel(flutterPluginBinding.binaryMessenger, "com.bbflight.background_downloader")
         backgroundChannel =
-            MethodChannel(
-                flutterPluginBinding.binaryMessenger,
-                "com.bbflight.background_downloader.background"
-            )
+                MethodChannel(
+                        flutterPluginBinding.binaryMessenger,
+                        "com.bbflight.background_downloader.background"
+                )
         channel?.setMethodCallHandler(this)
         workManager = WorkManager.getInstance(flutterPluginBinding.applicationContext)
         prefs =
-            PreferenceManager.getDefaultSharedPreferences(flutterPluginBinding.applicationContext)
+                PreferenceManager.getDefaultSharedPreferences(flutterPluginBinding.applicationContext)
         val allWorkInfos = workManager.getWorkInfosByTag(TAG).get()
         if (allWorkInfos.isEmpty()) {
             // remove persistent storage if no jobs found at all
@@ -51,13 +50,13 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         }
     }
 
-    override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
+    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel?.setMethodCallHandler(null)
         channel = null
         backgroundChannel = null
     }
 
-    override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
+    override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
             "enqueue" -> methodEnqueue(call, result)
             "reset" -> methodReset(call, result)
@@ -74,34 +73,34 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
      *
      *  Returns true if successful, but will emit a status update that the background task is running
      */
-    private fun methodEnqueue(@NonNull call: MethodCall, @NonNull result: Result) {
+    private fun methodEnqueue(call: MethodCall, result: Result) {
         val args = call.arguments as List<*>
         val downloadTaskJsonMapString = args[0] as String
         val backgroundDownloadTask = BackgroundDownloadTask(
-            gson.fromJson(downloadTaskJsonMapString, mapType)
+                gson.fromJson(downloadTaskJsonMapString, mapType)
         )
         Log.v(TAG, "Starting task with id ${backgroundDownloadTask.taskId}")
         val data = Data.Builder()
-            .putString(DownloadWorker.keyDownloadTask, downloadTaskJsonMapString)
-            .build()
+                .putString(DownloadWorker.keyDownloadTask, downloadTaskJsonMapString)
+                .build()
         val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
         val request = OneTimeWorkRequestBuilder<DownloadWorker>()
-            .setInputData(data)
-            .setConstraints(constraints)
-            .addTag(TAG)
-            .addTag("taskId=${backgroundDownloadTask.taskId}")
-            .addTag("group=${backgroundDownloadTask.group}")
-            .build()
+                .setInputData(data)
+                .setConstraints(constraints)
+                .addTag(TAG)
+                .addTag("taskId=${backgroundDownloadTask.taskId}")
+                .addTag("group=${backgroundDownloadTask.group}")
+                .build()
         val operation = workManager.enqueue(request)
         try {
             operation.result.get()
             DownloadWorker.processStatusUpdate(backgroundDownloadTask, DownloadTaskStatus.running)
         } catch (e: Throwable) {
             Log.w(
-                TAG,
-                "Unable to start background request for taskId ${backgroundDownloadTask.taskId} in operation: $operation"
+                    TAG,
+                    "Unable to start background request for taskId ${backgroundDownloadTask.taskId} in operation: $operation"
             )
             result.success(false)
             return
@@ -110,7 +109,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         prefsLock.write {
             val jsonString = prefs.getString(keyTasksMap, "{}")
             val backgroundDownloadTaskMap =
-                gson.fromJson<Map<String, Any>>(jsonString, mapType).toMutableMap()
+                    gson.fromJson<Map<String, Any>>(jsonString, mapType).toMutableMap()
             backgroundDownloadTaskMap[backgroundDownloadTask.taskId] = gson.toJson(backgroundDownloadTask.toJsonMap())
             val editor = prefs.edit()
             editor.putString(keyTasksMap, gson.toJson(backgroundDownloadTaskMap))
@@ -123,11 +122,11 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
      *
      *  Returns the number of tasks canceled
      */
-    private fun methodReset(@NonNull call: MethodCall, @NonNull result: Result) {
+    private fun methodReset(call: MethodCall, result: Result) {
         val group = call.arguments as String
         var counter = 0
         val workInfos = workManager.getWorkInfosByTag(TAG).get()
-            .filter { !it.state.isFinished && it.tags.contains("group=$group") }
+                .filter { !it.state.isFinished && it.tags.contains("group=$group") }
         for (workInfo in workInfos) {
             workManager.cancelWorkById(workInfo.id)
             counter++
@@ -137,10 +136,10 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     }
 
     /** Returns a ist of taskIds for all tasks in progress */
-    private fun methodAllTaskIds(@NonNull call: MethodCall, @NonNull result: Result) {
+    private fun methodAllTaskIds(call: MethodCall, result: Result) {
         val group = call.arguments as String
         val workInfos = workManager.getWorkInfosByTag(TAG).get()
-            .filter { !it.state.isFinished && it.tags.contains("group=$group") }
+                .filter { !it.state.isFinished && it.tags.contains("group=$group") }
         val taskIds = mutableListOf<String>()
         for (workInfo in workInfos) {
             val tags = workInfo.tags.filter { it.contains("taskId=") }
@@ -156,7 +155,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
      *
      * Returns true if all cancellations were successful
      * */
-    private fun methodCancelTasksWithIds(@NonNull call: MethodCall, @NonNull result: Result) {
+    private fun methodCancelTasksWithIds(call: MethodCall, result: Result) {
         val taskIds = call.arguments as List<*>
         Log.v(TAG, "Canceling taskIds $taskIds")
         for (taskId in taskIds) {
@@ -165,8 +164,8 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
                 operation.result.get()
             } catch (e: Throwable) {
                 Log.w(
-                    TAG,
-                    "Unable to cancel taskId $taskId in operation: $operation"
+                        TAG,
+                        "Unable to cancel taskId $taskId in operation: $operation"
                 )
                 result.success(false)
             }
@@ -175,13 +174,13 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     }
 
     /** Returns BackgroundDownloadTask for this taskId, or nil */
-    private fun methodTaskForId(@NonNull call: MethodCall, @NonNull result: Result) {
+    private fun methodTaskForId(call: MethodCall, result: Result) {
         val taskId = call.arguments as String
         Log.v(TAG, "Returning task for taskId $taskId")
         prefsLock.read {
             val jsonString = prefs.getString(keyTasksMap, "{}")
             val backgroundDownloadTaskMap =
-                gson.fromJson<Map<String, Any>>(jsonString, mapType).toMutableMap()
+                    gson.fromJson<Map<String, Any>>(jsonString, mapType).toMutableMap()
             result.success(backgroundDownloadTaskMap[taskId])
         }
     }
