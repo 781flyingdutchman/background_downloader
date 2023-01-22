@@ -1,3 +1,7 @@
+## 1.5.0
+
+Added `allTasks` method to get a list of running tasks. Use `allTaskIds` to get a list of taskIds only.
+
 ## 1.4.2
 
 Added note to README referring to an issue (and [fix](https://github.com/firebase/flutterfire/issues/9689#issuecomment-1304491789)) where the firebase plugin interferes with the downloader 

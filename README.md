@@ -8,7 +8,7 @@ A download is defined by a `BackgroundDownloadTask` object that contains the dow
 
 ### Using an event listener
 
-For simple downloads you listen to events from the downloader, and process those. For example, the following monitors status and progress updates for the download tasks, and then enqueues a task as an example:
+For simple downloads you listen to events from the downloader, and process those. For example, the following creates a listener to monitor status and progress updates for downloads, and then enqueues a task as an example:
 ```
   FileDownloader.initialize();  // initialize before starting to listen
   final subscription = FileDownloader.updates.listen((event) {
@@ -20,7 +20,7 @@ For simple downloads you listen to events from the downloader, and process those
     // initate a download
     final successFullyEnqueued = await FileDownloader.enqueue(
       BackgroundDownloadTask(url: 'https://google.com', filename: 'google.html'));
-    // update events will be sent to your subscription listener
+    // status update events will be sent to your subscription listener
 ```
 
 Note that `successFullyEnqueued` only refers to the enqueueing of the download task, not its result, which must be monitored via the listener. It will receive an update with status `DownloadTaskStatus.running`, followed by a status update with the result (e.g. `DownloadTaskStatus.complete` or `DownloadTaskStatus.failed`).
@@ -29,7 +29,7 @@ You can start your subscription in a convenient place, like a widget's `initStat
 
 ### Using callbacks
 
-For more complex downloads (e.g. if you want different handlers for different groups of downloads - see below) you can register a callback for status updates, and/or a callback for progress updates.
+For more complex downloads (e.g. if you want different handlers for different groups of downloads - see [below](#grouping-tasks)) you can register a callback for status updates, and/or a callback for progress updates.
 
 The `DownloadStatusCallback` receives the `BackgroundDownloadTask` and the updated `DownloadTaskStatus`, so a simple callback function is:
 ```
@@ -83,7 +83,7 @@ Note: the reason you cannot simply pass a full absolute directory path to the do
 
 ### Monitoring progress while downloading
 
-To also monitor progress while the file is downloading, listen for `BackgroundDownloadProgressEvent` on the `Filedownloader.updates` stream (or register a `DownloadProgressCallback`) and add a `progressUpdates` parameter to the task:
+Status updates only report on start and finish of a download. To also monitor progress while the file is downloading, listen for `BackgroundDownloadProgressEvent` on the `Filedownloader.updates` stream (or register a `DownloadProgressCallback`) and add a `progressUpdates` parameter to the task:
 ``` 
     FileDownloader.initialize(
         downloadStatusCallback: downloadStatusCallback,
@@ -104,9 +104,11 @@ If instead of using callbacks you are listening to the `Filedownloader.updates` 
 
 ## Simplified use
 
+Simplified use does not require you to register callbacks or listen to updates: you just call `.download` or `.downloadBatch` and wait for the result.  Note that for simplified use, `BackgroundDownloadTask` fields `group` and `progressUpdates` should not be set, as they are used by the `FileDownloader` for these convenience methods, and may be overwritten.
+
 ### Awaiting a download
 
-If status and progress monitoring is not required, you can also use the convenience method `download`, which returns a `Future` that completes when the file download has completed or failed:
+If status and progress monitoring is not required, use the convenience method `download`, which returns a `Future` that completes when the file download has completed or failed:
 ```
     final result = await FileDownloader.download(task);
 ```
@@ -120,16 +122,14 @@ To download a batch of files and wait for completion, create a `List` of `Backgr
    final result = await FileDownloader.downloadBatch(tasks);
 ```
 
-The result is a `BackgroundDownloadBatch` object that contains the result for each task in `.results` (or use `.succeeded` or `.failed` to iterate over successful or failed tasks within the batch only).  If you want to get progress updates for the batch (in terms of how many files have been downloaded) then add a callback:
+The result is a `BackgroundDownloadBatch` object that contains the result for each task in `.results`. You can use `.numSucceeded` and `.numFailed` to check if all files in the batch downloaded successfully, and use `.succeeded` or `.failed` to iterate over successful or failed tasks within the batch - for example to report back, or to retry.  If you want to get progress updates for the batch (in terms of how many files have been downloaded) then add a callback:
 ```
    final result = await FileDownloader.downloadBatch(tasks, (succeeded, failed) {
       print('$succeeded files succeeded, $failed have failed');
       print('Progress is ${(succeeded + failed) / tasks.length} %');
    });
 ```
-The callback will be called upon completion of each task (whether successful or not), and will start with (0, 0) before any downloads start, so you can use that to start a progress indicator.
-
-Note that for simplified use, `BackgroundDownloadTask` fields `group` and `progressUpdates` should not be set, as they are used by the `FileDownloader` for these convenience methods.
+The callback will be called upon completion of each task (whether successful or not), and will start with (0, 0) before any downloads start, so you can use that to start a progress indicator.  Note that it is not possible to monitor download progress of individual files within the batch - you need to  `enqueue` individual files to do that.
 
 ## Advanced use
 
@@ -145,9 +145,10 @@ Also optionally, `metaData` can be added to the `BackgroundDownloadTask` (a `Str
 
 To manage or monitor tasks, use the following methods:
 * `reset` to reset the downloader by cancelling all ongoing download tasks
-* `allTaskIds` to get a list of `taskId` values of all tasks currently running (i.e. not completed in any way)
+* `allTaskIds` to get a list of `taskId` values of all tasks currently running (i.e. not in a final state)
+* `allTasks` to get a list of all tasks currently running (i.e. not in a final state)
 * `cancelTasksWithIds` to cancel all tasks with a `taskId` in the provided list of taskIds
-* `taskForId` to get the `BackgroundDownloadTask` for the given `taskId`, or `null` if not found. Only tasks that are running (ie. not completed in any way) are guaranteed to be returned, but returning a task does not guarantee that it is running
+* `taskForId` to get the `BackgroundDownloadTask` for the given `taskId`, or `null` if not found. Only tasks that are running (ie. not in a final state) are guaranteed to be returned, but returning a task does not guarantee that it is running
 
 ### Grouping tasks
 
@@ -166,7 +167,7 @@ Because an app may require different types of downloads, and handle those differ
   final successFullyEnqueued = await FileDownloader.enqueue(task);
 ```
 
-The methods `initialize`, `registerCallBacks`, `reset` and `allTaskIds` all take an optional `group` parameter to target tasks in a specific group. Note that if tasks are enqueued with a `group` other than default, calling any of these methods without a group parameter will not affect/include those tasks - only the default tasks.
+The methods `initialize`, `registerCallBacks`, `reset`, `allTaskIds` and `allTasks` all take an optional `group` parameter to target tasks in a specific group. Note that if tasks are enqueued with a `group` other than default, calling any of these methods without a group parameter will not affect/include those tasks - only the default tasks.
 
 If you listen to the `updates` stream instead of using callbacks, you can test for the task's `group` field in your event listener, and process the event differently for different groups.
 
@@ -183,9 +184,9 @@ Note that iOS by default requires all URLs to be https (and not http). See [here
 
 No setup is required for Android.
 
-## Known issue with Firebase plugin `onBackgroundMessage handler`
+## Known issue with Firebase plugin `onBackgroundMessage handler` on Android
 
-In some cases, the Firebase plugin may interfere with other plugins, including this one. If your download does not complete, and/or if you don't receive status or progress updates, please check this [issue](https://github.com/firebase/flutterfire/issues/9689) to see if it affects you, and use this [fix](https://github.com/firebase/flutterfire/issues/9689#issuecomment-1304491789) as a work-around.
+In [some cases](https://github.com/781flyingdutchman/background_downloader/issues/6), the Firebase plugin may interfere with other plugins, including this one. If your download does not complete, and/or if you don't receive status or progress updates, please check this [issue](https://github.com/firebase/flutterfire/issues/9689) to see if it affects you, and use this [fix](https://github.com/firebase/flutterfire/issues/9689#issuecomment-1304491789) as a work-around.
 
 ## Limitations
 
