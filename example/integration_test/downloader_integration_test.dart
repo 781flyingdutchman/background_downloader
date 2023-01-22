@@ -65,6 +65,7 @@ void main() {
       expect(() => FileDownloader.registerCallbacks(), throwsAssertionError);
       expect(() => FileDownloader.enqueue(task), throwsAssertionError);
       expect(() => FileDownloader.allTaskIds(), throwsAssertionError);
+      expect(() => FileDownloader.allTasks(), throwsAssertionError);
       expect(() => FileDownloader.reset(), throwsAssertionError);
       // now initialize
       FileDownloader.initialize();
@@ -279,6 +280,19 @@ void main() {
       expect(downloadStatusCallbackCounter, equals(2));
       expect(lastDownloadStatus, equals(DownloadTaskStatus.complete));
       print('Finished alTaskIds');
+    });
+
+    testWidgets('allTasks', (widgetTester) async {
+      FileDownloader.initialize(downloadStatusCallback: downloadStatusCallback);
+      expect(await FileDownloader.enqueue(task), isTrue);
+      expect(await FileDownloader.allTasks(group: 'non-default'), isEmpty);
+      final tasks = await FileDownloader.allTasks();
+      expect(tasks.length, equals(1));
+      expect(tasks.first, equals(task));
+      await downloadStatusCallbackCompleter.future;
+      expect(downloadStatusCallbackCounter, equals(2));
+      expect(lastDownloadStatus, equals(DownloadTaskStatus.complete));
+      print('Finished alTasks');
     });
 
     testWidgets('cancelTasksWithIds', (widgetTester) async {

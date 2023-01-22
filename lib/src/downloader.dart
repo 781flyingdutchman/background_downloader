@@ -317,9 +317,18 @@ class FileDownloader {
   static Future<List<String>> allTaskIds({String? group = defaultGroup}) async {
     assert(_initialized, 'FileDownloader must be initialized before use');
     final result =
-        await _channel.invokeMethod<List<Object?>>('allTaskIds', group) ?? [];
+        await _channel.invokeMethod<List<dynamic>?>('allTaskIds', group) ?? [];
     return result.map((e) => e as String).toList();
   }
+
+  /// Returns a list of all tasks currently running in this group
+  static Future<List<BackgroundDownloadTask>> allTasks({String? group = defaultGroup}) async {
+    assert(_initialized, 'FileDownloader must be initialized before use');
+    final result =
+        await _channel.invokeMethod<List<dynamic>?>('allTasks', group) ?? [];
+    return result.map((e) => BackgroundDownloadTask.fromJsonMap(jsonDecode(e as String))).toList();
+  }
+
 
   /// Delete all tasks matching the taskIds in the list
   ///
