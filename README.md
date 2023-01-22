@@ -183,6 +183,10 @@ Note that iOS by default requires all URLs to be https (and not http). See [here
 
 No setup is required for Android.
 
+## Known issue with Firebase plugin `onBackgroundMessage handler`
+
+In some cases, the Firebase plugin may interfere with other plugins, including this one. If your download does not complete, and/or if you don't receive status or progress updates, please check this [issue](https://github.com/firebase/flutterfire/issues/9689) to see if it affects you, and use this [fix](https://github.com/firebase/flutterfire/issues/9689#issuecomment-1304491789) as a work-around.
+
 ## Limitations
 
 * On Android, once started, a background download must complete within 8 minutes

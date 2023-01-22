@@ -1,3 +1,7 @@
+## 1.4.2
+
+Added note to README referring to an issue (and [fix](https://github.com/firebase/flutterfire/issues/9689#issuecomment-1304491789)) where the firebase plugin interferes with the downloader 
+
 ## 1.4.1
 
 Improved example app, updated documentation and fixed minor Android bug
