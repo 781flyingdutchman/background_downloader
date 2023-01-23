@@ -109,6 +109,9 @@ class BackgroundDownloadTask {
   /// Type of progress updates desired
   final DownloadTaskProgressUpdates progressUpdates;
 
+  /// If true, will not download over cellular (metered) network
+  final bool requiresWiFi;
+
   /// User-defined metadata
   final String metaData;
 
@@ -121,6 +124,7 @@ class BackgroundDownloadTask {
       this.baseDirectory = BaseDirectory.applicationDocuments,
       this.group = 'default',
       this.progressUpdates = DownloadTaskProgressUpdates.statusChange,
+      this.requiresWiFi = false,
       this.metaData = ''})
       : taskId = taskId ?? Random().nextInt(1 << 32).toString() {
     if (filename.isEmpty) {
@@ -146,6 +150,7 @@ class BackgroundDownloadTask {
           BaseDirectory? baseDirectory,
           String? group,
           DownloadTaskProgressUpdates? progressUpdates,
+          bool? requiresWiFi,
           String? metaData}) =>
       BackgroundDownloadTask(
           taskId: taskId ?? this.taskId,
@@ -156,6 +161,7 @@ class BackgroundDownloadTask {
           baseDirectory: baseDirectory ?? this.baseDirectory,
           group: group ?? this.group,
           progressUpdates: progressUpdates ?? this.progressUpdates,
+          requiresWiFi: requiresWiFi ?? this.requiresWiFi,
           metaData: metaData ?? this.metaData);
 
   /// Creates object from JsonMap
@@ -169,6 +175,7 @@ class BackgroundDownloadTask {
         group = jsonMap['group'],
         progressUpdates =
             DownloadTaskProgressUpdates.values[jsonMap['progressUpdates']],
+        requiresWiFi = jsonMap['requiresWiFi'],
         metaData = jsonMap['metaData'];
 
   /// Creates JSON map of this object
@@ -180,7 +187,8 @@ class BackgroundDownloadTask {
         'directory': directory,
         'baseDirectory': baseDirectory.index, // stored as int
         'group': group,
-        'progressUpdates': progressUpdates.index,
+        'progressUpdates': progressUpdates.index, // stored as int
+        'requiresWiFi': requiresWiFi,
         'metaData': metaData
       };
 

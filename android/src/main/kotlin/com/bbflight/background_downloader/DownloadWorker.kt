@@ -56,6 +56,7 @@ class BackgroundDownloadTask(
         val baseDirectory: BaseDirectory,
         val group: String,
         val progressUpdates: DownloadTaskProgressUpdates,
+        val requiresWiFi: Boolean,
         val metaData: String
 ) {
 
@@ -70,6 +71,7 @@ class BackgroundDownloadTask(
             group = jsonMap["group"] as String,
             progressUpdates =
             DownloadTaskProgressUpdates.values()[(jsonMap["progressUpdates"] as Double).toInt()],
+            requiresWiFi = jsonMap["requiresWiFi"] as Boolean,
             metaData = jsonMap["metaData"] as String
     )
 
@@ -84,6 +86,7 @@ class BackgroundDownloadTask(
                 "baseDirectory" to baseDirectory.ordinal, // stored as int
                 "group" to group,
                 "progressUpdates" to progressUpdates.ordinal,
+                "requiresWiFi" to requiresWiFi,
                 "metaData" to metaData
         )
     }

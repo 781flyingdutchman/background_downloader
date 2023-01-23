@@ -137,6 +137,11 @@ The callback will be called upon completion of each task (whether successful or 
 
 Optionally, `headers` can be added to the `BackgroundDownloadTask`, which will be added to the HTTP request. This may be useful for authentication, for example.
 
+### Requiring WiFi
+
+If the `requiresWiFi` field of a `BackgroundDownloadTask` is set to true, the task won't start downloading unless a WiFi network is available. By default `requiresWiFi` is false, and downloads will use the cellular (or metered) network if WiFi is not available, which may incur cost.
+
+
 ### Metadata
 
 Also optionally, `metaData` can be added to the `BackgroundDownloadTask` (a `String`). Metadata is ignored by the downloader but may be helpful when receiving an update about the task.

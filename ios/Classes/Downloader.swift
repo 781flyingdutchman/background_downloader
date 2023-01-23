@@ -14,6 +14,7 @@ struct BackgroundDownloadTask : Codable {
     var baseDirectory: Int
     var group: String
     var progressUpdates: Int
+    var requiresWiFi: Bool
     var metaData: String
 }
 
@@ -28,6 +29,7 @@ func jsonMapFromTask(task: BackgroundDownloadTask) -> [String: Any] {
          "baseDirectory": task.baseDirectory, // stored as Int
          "group": task.group,
          "progressUpdates": task.progressUpdates, // stored as Int
+         "requiresWiFi": task.requiresWiFi,
          "metaData": task.metaData
         ]
     
@@ -35,7 +37,7 @@ func jsonMapFromTask(task: BackgroundDownloadTask) -> [String: Any] {
 
 /// Creates task from JsonMap
 func taskFromJsonMap(map: [String: Any]) -> BackgroundDownloadTask {
-    return BackgroundDownloadTask(taskId: map["taskId"] as! String, url: map["url"] as! String, filename: map["filename"] as! String, headers: map["headers"] as! [String:String], directory: map["directory"] as! String, baseDirectory: map["baseDirectory"] as! Int, group: map["group"] as! String, progressUpdates: map["progressUpdates"] as! Int, metaData: map["metaData"] as! String)
+    return BackgroundDownloadTask(taskId: map["taskId"] as! String, url: map["url"] as! String, filename: map["filename"] as! String, headers: map["headers"] as! [String:String], directory: map["directory"] as! String, baseDirectory: map["baseDirectory"] as! Int, group: map["group"] as! String, progressUpdates: map["progressUpdates"] as! Int, requiresWiFi: map["requiresWiFi"] as! Bool, metaData: map["metaData"] as! String)
 }
 
 /// True if this task expects to provide progress updates
@@ -147,6 +149,9 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         os_log("Starting task with id %@", log: log, type: .info, backgroundDownloadTask.taskId)
         urlSession = urlSession ?? createUrlSession()
         var request = URLRequest(url: URL(string: backgroundDownloadTask.url)!)
+        if backgroundDownloadTask.requiresWiFi {
+            request.allowsCellularAccess = false
+        }
         for (key, value) in backgroundDownloadTask.headers {
             request.setValue(value, forHTTPHeaderField: key)
         }

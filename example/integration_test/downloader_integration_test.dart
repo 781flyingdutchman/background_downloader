@@ -326,6 +326,42 @@ void main() {
       expect(lastDownloadStatus, equals(DownloadTaskStatus.complete));
       print('Finished taskForId');
     });
+
+    testWidgets('Task to and from Json', (widgetTester) async {
+      final complexTask = BackgroundDownloadTask(
+          taskId: 'uniqueId',
+          url: 'https://google.com',
+          filename: 'google.html',
+          headers: {'Auth': 'Test'},
+          directory: 'directory',
+          baseDirectory: BaseDirectory.temporary,
+          group: 'someGroup',
+          progressUpdates:
+              DownloadTaskProgressUpdates.statusChangeAndProgressUpdates,
+          requiresWiFi: true,
+          metaData: 'someMetaData');
+      FileDownloader.initialize(
+          group: complexTask.group,
+          downloadStatusCallback: downloadStatusCallback);
+      expect(await FileDownloader.taskForId(complexTask.taskId), isNull);
+      expect(await FileDownloader.enqueue(complexTask), isTrue);
+      final task = await FileDownloader.taskForId(complexTask.taskId);
+      expect(task, equals(complexTask));
+      if (task != null) {
+        expect(task.taskId, equals(complexTask.taskId));
+        expect(task.url, equals(complexTask.url));
+        expect(task.filename, equals(complexTask.filename));
+        expect(task.headers, equals(complexTask.headers));
+        expect(task.directory, equals(complexTask.directory));
+        expect(task.baseDirectory, equals(complexTask.baseDirectory));
+        expect(task.group, equals(complexTask.group));
+        expect(task.progressUpdates, equals(complexTask.progressUpdates));
+        expect(task.requiresWiFi, equals(complexTask.requiresWiFi));
+        expect(task.metaData, equals(complexTask.metaData));
+      }
+      await downloadStatusCallbackCompleter.future;
+      expect(lastDownloadStatus, equals(DownloadTaskStatus.complete));
+    });
   });
 
   group('Convenience downloads', () {
