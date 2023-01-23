@@ -58,7 +58,7 @@ class BackgroundDownloadTask(
         val progressUpdates: DownloadTaskProgressUpdates,
         val requiresWiFi: Boolean,
         val retries: Int,
-        val _retriesRemaining: Int,
+        val retriesRemaining: Int,
         val metaData: String
 ) {
 
@@ -75,7 +75,7 @@ class BackgroundDownloadTask(
             DownloadTaskProgressUpdates.values()[(jsonMap["progressUpdates"] as Double).toInt()],
             requiresWiFi = jsonMap["requiresWiFi"] as Boolean,
             retries = (jsonMap["retries"] as Double).toInt(),
-            _retriesRemaining = (jsonMap["_retriesRemaining"] as Double).toInt(),
+            retriesRemaining = (jsonMap["retriesRemaining"] as Double).toInt(),
             metaData = jsonMap["metaData"] as String
     )
 
@@ -92,7 +92,7 @@ class BackgroundDownloadTask(
                 "progressUpdates" to progressUpdates.ordinal,
                 "requiresWiFi" to requiresWiFi,
                 "retries" to retries,
-                "_retriesRemaining" to _retriesRemaining,
+                "retriesRemaining" to retriesRemaining,
                 "metaData" to metaData
         )
     }
@@ -129,7 +129,7 @@ enum class DownloadTaskStatus {
     }
 
     fun isFinalState(): Boolean {
-        return !isNotFinalState();
+        return !isNotFinalState()
     }
 }
 
@@ -161,7 +161,7 @@ class DownloadWorker(
         ) {
             // Post update if task expects one, or if failed and retry is needed
             val retryNeeded =
-                    status == DownloadTaskStatus.failed && backgroundDownloadTask._retriesRemaining > 0
+                    status == DownloadTaskStatus.failed && backgroundDownloadTask.retriesRemaining > 0
             if (backgroundDownloadTask.providesStatusUpdates() || retryNeeded) {
                 Handler(Looper.getMainLooper()).post {
                     try {

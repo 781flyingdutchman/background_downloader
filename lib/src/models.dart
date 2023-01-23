@@ -204,7 +204,7 @@ class BackgroundDownloadTask {
             DownloadTaskProgressUpdates.values[jsonMap['progressUpdates']],
         requiresWiFi = jsonMap['requiresWiFi'],
         retries = jsonMap['retries'],
-        _retriesRemaining = jsonMap['_retriesRemaining'],
+        _retriesRemaining = jsonMap['retriesRemaining'],
         metaData = jsonMap['metaData'];
 
   /// Creates JSON map of this object
@@ -219,7 +219,7 @@ class BackgroundDownloadTask {
         'progressUpdates': progressUpdates.index, // stored as int
         'requiresWiFi': requiresWiFi,
         'retries': retries,
-        '_retriesRemaining': _retriesRemaining,
+        'retriesRemaining': _retriesRemaining,
         'metaData': metaData
       };
 
