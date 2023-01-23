@@ -15,29 +15,9 @@ struct BackgroundDownloadTask : Codable {
     var group: String
     var progressUpdates: Int
     var requiresWiFi: Bool
+    var retries: Int
+    var retriesRemaining: Int
     var metaData: String
-}
-
-/// Creates JSON map of the task
-func jsonMapFromTask(task: BackgroundDownloadTask) -> [String: Any] {
-    return
-        ["taskId": task.taskId,
-         "url": task.url,
-         "filename": task.filename,
-         "headers": task.headers,
-         "directory": task.directory,
-         "baseDirectory": task.baseDirectory, // stored as Int
-         "group": task.group,
-         "progressUpdates": task.progressUpdates, // stored as Int
-         "requiresWiFi": task.requiresWiFi,
-         "metaData": task.metaData
-        ]
-    
-}
-
-/// Creates task from JsonMap
-func taskFromJsonMap(map: [String: Any]) -> BackgroundDownloadTask {
-    return BackgroundDownloadTask(taskId: map["taskId"] as! String, url: map["url"] as! String, filename: map["filename"] as! String, headers: map["headers"] as! [String:String], directory: map["directory"] as! String, baseDirectory: map["baseDirectory"] as! Int, group: map["group"] as! String, progressUpdates: map["progressUpdates"] as! Int, requiresWiFi: map["requiresWiFi"] as! Bool, metaData: map["metaData"] as! String)
 }
 
 /// True if this task expects to provide progress updates
@@ -70,19 +50,25 @@ enum DownloadTaskProgressUpdates: Int {
 
 /// Defines a set of possible states which a [DownloadTask] can be in.
 enum DownloadTaskStatus: Int {
-    case undefined,
+    case enqueued,
          running,
          complete,
          notFound,
          failed,
-         canceled
+         canceled,
+         waitingToRetry
 }
 
+private func isNotFinalState(status: DownloadTaskStatus) -> Bool {
+    return status == .enqueued || status == .running || status == .waitingToRetry
+}
 
-
+private func isFinalState(status: DownloadTaskStatus) -> Bool {
+    return !isNotFinalState(status: status)
+}
 
 public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDelegate, URLSessionDelegate, URLSessionDownloadDelegate {
-    
+
     let log = OSLog.init(subsystem: "FileDownloaderPlugin", category: "Downloader")
     
     private static var resourceTimeout = 4 * 60 * 60.0 // in seconds
@@ -104,7 +90,6 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         registrar.addApplicationDelegate(instance)
     }
     
-    
     @objc
     public static func setPluginRegistrantCallback(_ callback: @escaping FlutterPluginRegistrantCallback) {
         flutterPluginRegistrantCallback = callback
@@ -112,14 +97,12 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     
     /// Handler for Flutter plugin method channel calls
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-        os_log("Method call %@", log: log, type: .debug, call.method)
+        os_log("Method call %@", log: log, type: .info, call.method)
         switch call.method {
         case "reset":
             methodReset(call: call, result: result)
         case "enqueue":
             methodEnqueue(call: call, result: result)
-        case "allTaskIds":
-            methodAllTaskIds(call: call, result: result)
         case "allTasks":
             methodAllTasks(call: call, result: result)
         case "cancelTasksWithIds":
@@ -139,7 +122,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     private func methodEnqueue(call: FlutterMethodCall, result: @escaping FlutterResult) {
         let args = call.arguments as! [Any]
         let jsonString = args[0] as! String
-        os_log("methodEnqueue with %@", log: log, type: .debug, jsonString)
+        os_log("methodEnqueue with %@", log: log, type: .info, jsonString)
         guard let backgroundDownloadTask = downloadTaskFrom(jsonString: jsonString)
         else {
             os_log("Could not decode %@ to downloadTask", log: log, jsonString)
@@ -157,13 +140,9 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         }
         let urlSessionDownloadTask = urlSession!.downloadTask(with: request)
         urlSessionDownloadTask.taskDescription = jsonString
-        // store local maps related to progress updates
-        lastProgressUpdate[backgroundDownloadTask.taskId] = 0.0
-        nextProgressUpdateTime[backgroundDownloadTask.taskId] = Date(timeIntervalSince1970: 0)
-        
         // now start the task
         urlSessionDownloadTask.resume()
-        processStatusUpdate(backgroundDownloadTask: backgroundDownloadTask, status: DownloadTaskStatus.running)
+        processStatusUpdate(backgroundDownloadTask: backgroundDownloadTask, status: DownloadTaskStatus.enqueued)
         result(true)
     }
     
@@ -183,29 +162,8 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
                     counter += 1
                 }
             }
-            os_log("methodReset removed %d unfinished tasks", log: self.log, type: .debug, counter)
+            os_log("methodReset removed %d unfinished tasks", log: self.log, type: .info, counter)
             result(counter)
-        })
-    }
-    
-    /// Returns a list with taskIds for all tasks in progress
-    private func methodAllTaskIds(call: FlutterMethodCall, result: @escaping FlutterResult) {
-        let group = call.arguments as! String
-        var taskIds: [String] = []
-        urlSession = urlSession ?? createUrlSession()
-        urlSession?.getAllTasks(completionHandler: { tasks in
-            for task in tasks {
-                guard let backgroundDownloadTask = self.getTaskFrom(urlSessionDownloadTask: task)
-                else { continue }
-                if backgroundDownloadTask.group == group {
-                    if task.state == URLSessionTask.State.running || task.state == URLSessionTask.State.suspended
-                    {
-                        taskIds.append(backgroundDownloadTask.taskId)
-                    }
-                }
-            }
-            os_log("Returning %d unfinished taskIds: %@", log: self.log, type: .debug, taskIds.count, taskIds)
-            result(taskIds)
         })
     }
     
@@ -228,7 +186,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
                     }
                 }
             }
-            os_log("Returning %d unfinished tasks", log: self.log, type: .debug, tasksAsListOfJsonStrings.count)
+            os_log("Returning %d unfinished tasks", log: self.log, type: .info, tasksAsListOfJsonStrings.count)
             result(tasksAsListOfJsonStrings)
         })
     }
@@ -239,7 +197,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     /// Returns true if all cancellations were successful
     private func methodCancelTasksWithIds(call: FlutterMethodCall, result: @escaping FlutterResult) {
         let taskIds = call.arguments as! [String]
-        os_log("Canceling taskIds %@", log: log, type: .debug, taskIds)
+        os_log("Canceling taskIds %@", log: log, type: .info, taskIds)
         urlSession = urlSession ?? createUrlSession()
         urlSession?.getAllTasks(completionHandler: { tasks in
             for task in tasks {
@@ -261,7 +219,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
             for task in tasks {
                 guard let backgroundDownloadTask = self.getTaskFrom(urlSessionDownloadTask: task)
                 else { continue }
-                os_log("Found taskId %@", log: self.log, type: .debug, backgroundDownloadTask.taskId)
+                os_log("Found taskId %@", log: self.log, type: .info, backgroundDownloadTask.taskId)
                 if backgroundDownloadTask.taskId == taskId
                 {
                     result(self.jsonStringFor(backgroundDownloadTask: backgroundDownloadTask))
@@ -294,8 +252,17 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     
     //MARK: URLSessionDownloadTask delegate methods
     
+    /// Process progress update
+    ///
+    /// If the task requires progress updates, provide these at some reasonable interval
+    /// If this is the first update for this file, also emit a 'running' status update
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         guard let backgroundDownloadTask = self.getTaskFrom(urlSessionDownloadTask: downloadTask) else {return}
+        if lastProgressUpdate[backgroundDownloadTask.taskId] == nil {
+            // send 'running' status update
+            processStatusUpdate(backgroundDownloadTask: backgroundDownloadTask, status: DownloadTaskStatus.running)
+            lastProgressUpdate[backgroundDownloadTask.taskId] = 0.0
+        }
         if totalBytesExpectedToWrite != NSURLSessionTransferSizeUnknown && Date() > nextProgressUpdateTime[backgroundDownloadTask.taskId] ?? Date(timeIntervalSince1970: 0) {
             let progress = min(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite), 0.999)
             if progress - (lastProgressUpdate[backgroundDownloadTask.taskId] ?? 0.0) > 0.02 {
@@ -322,6 +289,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
             return
         }
         if !(200...206).contains(response.statusCode)   {
+            os_log("TaskId %@ returned response code %d", log: log,  type: .info, backgroundDownloadTask.taskId, response.statusCode)
             processStatusUpdate(backgroundDownloadTask: backgroundDownloadTask, status: DownloadTaskStatus.failed)
             return
         }
@@ -394,7 +362,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
                 let handler = self.backgroundCompletionHandler,
                 session.configuration.identifier == Downloader.sessionIdentifier
             else {
-                os_log("No handler or no identifier match", log: self.log, type: .debug)
+                os_log("No handler or no identifier match", log: self.log, type: .info)
                 return
             }
             handler()
@@ -430,7 +398,9 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
             os_log("Could not find background channel", log: self.log, type: .error)
             return
         }
-        if providesStatusUpdates(downloadTask: backgroundDownloadTask) {
+        // Post update if task expects one, or if failed and retry is needed
+        let retryNeeded = status == DownloadTaskStatus.failed && backgroundDownloadTask.retriesRemaining > 0
+        if providesStatusUpdates(downloadTask: backgroundDownloadTask) || retryNeeded {
             let jsonString = jsonStringFor(backgroundDownloadTask: backgroundDownloadTask)
             if (jsonString != nil)
             {
@@ -439,13 +409,18 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
                 }
             }
         }
-        // if task is in final state then process a final progressUpdate
-        if status != DownloadTaskStatus.running {
+        // if task is in final state, process a final progressUpdate and remove from
+        // persistent storage. A 'failed' progress update is only provided if
+        // a retry is not needed: if it is needed, a `waitingToRetry` progress update
+        // will be generated on the Dart side
+        if isFinalState(status: status) {
             switch (status) {
             case .complete:
                 processProgressUpdate(backgroundDownloadTask: backgroundDownloadTask, progress: 1.0)
             case .failed:
-                processProgressUpdate(backgroundDownloadTask: backgroundDownloadTask, progress: -1.0)
+                if !retryNeeded {
+                    processProgressUpdate(backgroundDownloadTask: backgroundDownloadTask, progress: -1.0)
+                }
             case .canceled:
                 processProgressUpdate(backgroundDownloadTask: backgroundDownloadTask, progress: -2.0)
             case .notFound:
@@ -453,13 +428,15 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
             default:
                 break
             }
+            nativeToTaskMap.removeValue(forKey: backgroundDownloadTask.taskId)
+            lastProgressUpdate.removeValue(forKey: backgroundDownloadTask.taskId)
+            nextProgressUpdateTime.removeValue(forKey: backgroundDownloadTask.taskId)
         }
     }
     
     /// Processes a progress update for the task
     ///
-    /// Sends progress update via the background channel to Flutter, if requested, and if the task is finished, removes
-    /// it from the cache
+    /// Sends progress update via the background channel to Flutter, if requested
     private func processProgressUpdate(backgroundDownloadTask: BackgroundDownloadTask, progress: Double) {
         guard let channel = Downloader.backgroundChannel else {
             os_log("Could not find background channel", log: self.log, type: .error)
@@ -473,12 +450,6 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
                     channel.invokeMethod("progressUpdate", arguments: [jsonString!, progress])
                 }
             }
-        }
-        // if this is a final progress update, remove from cache
-        if progress == 1.0 || progress < 0 {
-            nativeToTaskMap.removeValue(forKey: backgroundDownloadTask.taskId)
-            lastProgressUpdate.removeValue(forKey: backgroundDownloadTask.taskId)
-            nextProgressUpdateTime.removeValue(forKey: backgroundDownloadTask.taskId)
         }
     }
     
@@ -494,7 +465,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     
     /// Creates a urlSession
     private func createUrlSession() -> URLSession {
-        os_log("Creating URLSession", log: log, type: .debug)
+        os_log("Creating URLSession", log: log, type: .info)
         if urlSession != nil {
             os_log("createUrlSession called with non-null urlSession", log: log, type: .info)
         }

@@ -275,7 +275,8 @@ void main() {
       expect(await FileDownloader.reset(group: 'non-default'), equals(0));
       expect(await FileDownloader.reset(), equals(1));
       await downloadStatusCallbackCompleter.future;
-      expect(downloadStatusCallbackCounter, equals(3));
+      // on iOS, the quick cancellation may not yield a 'running' state
+      expect(downloadStatusCallbackCounter, lessThanOrEqualTo(3));
       expect(lastDownloadStatus, equals(DownloadTaskStatus.canceled));
       print('Finished reset');
     });
@@ -312,7 +313,8 @@ void main() {
       expect(taskIds.first, equals(task.taskId));
       expect(await FileDownloader.cancelTasksWithIds(taskIds), isTrue);
       await downloadStatusCallbackCompleter.future;
-      expect(downloadStatusCallbackCounter, equals(3));
+      // on iOS, the quick cancellation may not yield a 'running' state
+      expect(downloadStatusCallbackCounter, lessThanOrEqualTo(3));
       expect(lastDownloadStatus, equals(DownloadTaskStatus.canceled));
       print('Finished cancelTasksWithIds');
     });
@@ -532,18 +534,22 @@ void main() {
           downloadStatusCallbackCounter, equals((retryTask.retries + 1) * 3));
     });
 
-    testWidgets('Basic with progress updates', (widgetTester)
-    async {
+    testWidgets('Basic with progress updates', (widgetTester) async {
       FileDownloader.initialize(
           downloadStatusCallback: downloadStatusCallback,
           downloadProgressCallback: downloadProgressCallback);
       final retryTaskWithProgress = retryTask.copyWith(
           progressUpdates:
-          DownloadTaskProgressUpdates.statusChangeAndProgressUpdates);
+              DownloadTaskProgressUpdates.statusChangeAndProgressUpdates);
       expect(await FileDownloader.enqueue(retryTaskWithProgress), isTrue);
       await Future.delayed(const Duration(seconds: 4));
       expect(lastDownloadProgress, equals(progressWaitingToRetry));
-      expect(downloadProgressCallbackCounter, equals(2));
+      // iOS emits a 0.999 progress update for a 403 response with the
+      // text of the response, before sharing the response code, triggering
+      // the -4.0 progress response.
+      // On Android, no progress is emitted other than the -4.0
+      expect(
+          downloadProgressCallbackCounter, equals(Platform.isAndroid ? 2 : 4));
       await downloadStatusCallbackCompleter.future;
       expect(lastDownloadStatus, equals(DownloadTaskStatus.failed));
       // wait a sec for the last progress update
@@ -572,19 +578,24 @@ void main() {
       expect(await FileDownloader.taskForId(retryTask.taskId), isNull);
     });
 
-    testWidgets('Retry progress updates with cancellation', (widgetTester)
-    async {
+    testWidgets('Retry progress updates with cancellation',
+        (widgetTester) async {
       FileDownloader.initialize(
           downloadStatusCallback: downloadStatusCallback,
           downloadProgressCallback: downloadProgressCallback);
       final retryTaskWithProgress = retryTask.copyWith(
           progressUpdates:
-          DownloadTaskProgressUpdates.statusChangeAndProgressUpdates);
+              DownloadTaskProgressUpdates.statusChangeAndProgressUpdates);
       expect(await FileDownloader.enqueue(retryTaskWithProgress), isTrue);
       expect(downloadProgressCallbackCounter, equals(0));
       await Future.delayed(const Duration(seconds: 4));
       expect(lastDownloadProgress, equals(progressWaitingToRetry));
-      expect(downloadProgressCallbackCounter, equals(2));
+      // iOS emits a 0.999 progress update for a 403 response with the
+      // text of the response, before sharing the response code, triggering
+      // the -4.0 progress response.
+      // On Android, no progress is emitted other than the -4.0
+      expect(
+          downloadProgressCallbackCounter, equals(Platform.isAndroid ? 2 : 4));
       final retriedTask = await FileDownloader.taskForId(retryTask.taskId);
       expect(retriedTask, equals(retryTask));
       if (retriedTask != null) {
@@ -597,7 +608,6 @@ void main() {
         expect(await FileDownloader.taskForId(retryTask.taskId), isNull);
       }
     });
-
 
     testWidgets('Queue management: allTasks with retries',
         (widgetTester) async {
@@ -639,7 +649,6 @@ void main() {
       expect(await FileDownloader.taskForId(task.taskId), isNull);
       await FileDownloader.cancelTasksWithIds([retryTask.taskId]);
     });
-
   });
 }
 
