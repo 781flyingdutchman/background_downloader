@@ -20,6 +20,7 @@ typedef DownloadStatusCallback = void Function(
 /// [DownloadTaskStatus.failed] results in progress -1.0
 /// [DownloadTaskStatus.canceled] results in progress -2.0
 /// [DownloadTaskStatus.notFound] results in progress -3.0
+/// [DownloadTaskStatus.waitingToRetry] results in progress -4.0
 typedef DownloadProgressCallback = void Function(
     BackgroundDownloadTask task, double progress);
 
@@ -34,6 +35,8 @@ class FileDownloader {
   static final _downloadCompleters =
       <BackgroundDownloadTask, Completer<DownloadTaskStatus>>{};
   static final _batches = <BackgroundDownloadBatch>[];
+
+  static final _tasksWaitingToRetry = <BackgroundDownloadTask>[];
 
   /// Registered [DownloadStatusCallback] for each group
   static final statusCallbacks = <String, DownloadStatusCallback>{};
@@ -67,58 +70,60 @@ class FileDownloader {
       DownloadStatusCallback? downloadStatusCallback,
       DownloadProgressCallback? downloadProgressCallback}) {
     WidgetsFlutterBinding.ensureInitialized();
+    _tasksWaitingToRetry.clear();
+    _batches.clear();
+    _downloadCompleters.clear();
     if (_updates.hasListener) {
       _log.warning('initialize called while the updates stream is still '
           'being listened to. That listener will no longer receive status updates.');
     }
     _updates = StreamController<BackgroundDownloadEvent>();
-    // listen to the background channel and pass messages to main isolate
+    // listen to the background channel, receiving updates on download status
+    // or progress
     _backgroundChannel.setMethodCallHandler((call) async {
-      // send the update to the main isolate, where it will be passed
-      // on to the registered callback
-
       final args = call.arguments as List<dynamic>;
       final task =
           BackgroundDownloadTask.fromJsonMap(jsonDecode(args.first as String));
       switch (call.method) {
         case 'statusUpdate':
-          if (task.providesStatusUpdates) {
-            final downloadTaskStatus =
-                DownloadTaskStatus.values[args.last as int];
-            final downloadStatusCallback = statusCallbacks[task.group];
-            if (downloadStatusCallback != null) {
-              downloadStatusCallback(task, downloadTaskStatus);
-            } else {
-              if (_updates.hasListener) {
-                _updates.add(
-                    BackgroundDownloadStatusEvent(task, downloadTaskStatus));
-              } else {
-                _log.warning(
-                    'Requested status updates for task ${task.taskId} in '
-                    'group ${task.group} but no downloadStatusCallback '
-                    'was registered, and there is no listener to the '
-                    'updates stream');
+          // Normal status updates are only sent here when the task is expected
+          // to provide those.  The exception is a .failed status when a task
+          // has retriesRemaining > 0: those are always sent here, and are
+          // intercepted to hold the task and reschedule in the near future
+          final downloadTaskStatus =
+              DownloadTaskStatus.values[args.last as int];
+          // intercept failed download if task has retries left
+          if (downloadTaskStatus == DownloadTaskStatus.failed &&
+              task.retriesRemaining > 0) {
+            _provideStatusUpdate(task, DownloadTaskStatus.waitingToRetry);
+            task.reduceRetriesRemaining();
+            _tasksWaitingToRetry.add(task);
+            final waitTime =
+                Duration(seconds: 2 ^ (task.retries - task.retriesRemaining));
+            _log.finer(
+                'TaskId ${task.taskId} failed, waiting ${waitTime.inSeconds}'
+                ' seconds before retrying. ${task.retriesRemaining}'
+                ' retries remaining');
+            Future.delayed(waitTime, () async {
+              // after delay, enqueue task again if it's still waiting
+              if (_tasksWaitingToRetry.remove(task)) {
+                if (!await enqueue(task)) {
+                  _log.warning(
+                      'Could not enqueue task $task after retry timeout');
+                  _provideStatusUpdate(task, DownloadTaskStatus.failed);
+                  _provideProgressUpdate(task, -4.0);
+                }
               }
-            }
+            });
+          } else {
+            // normal status update
+            _provideStatusUpdate(task, downloadTaskStatus);
           }
           break;
 
         case 'progressUpdate':
-          if (task.providesProgressUpdates) {
-            final progress = args.last as double;
-            final progressUpdateCallback = progressCallbacks[task.group];
-            if (progressUpdateCallback != null) {
-              progressUpdateCallback(task, progress);
-            } else if (_updates.hasListener) {
-              _updates.add(BackgroundDownloadProgressEvent(task, progress));
-            } else {
-              _log.warning(
-                  'Requested progress updates for task ${task.taskId} in '
-                  'group ${task.group} but no progressUpdateCallback '
-                  'was registered, and there is no listener to the '
-                  'updates stream');
-            }
-          }
+          final progress = args.last as double;
+          _provideProgressUpdate(task, progress);
           break;
 
         default:
@@ -133,6 +138,43 @@ class FileDownloader {
           group: group,
           downloadStatusCallback: downloadStatusCallback,
           downloadProgressCallback: downloadProgressCallback);
+    }
+  }
+
+  /// Provide the status update for this task to its callback or listener
+  static void _provideStatusUpdate(
+      BackgroundDownloadTask task, DownloadTaskStatus downloadTaskStatus) {
+    if (task.providesStatusUpdates) {
+      final downloadStatusCallback = statusCallbacks[task.group];
+      if (downloadStatusCallback != null) {
+        downloadStatusCallback(task, downloadTaskStatus);
+      } else {
+        if (_updates.hasListener) {
+          _updates.add(BackgroundDownloadStatusEvent(task, downloadTaskStatus));
+        } else {
+          _log.warning('Requested status updates for task ${task.taskId} in '
+              'group ${task.group} but no downloadStatusCallback '
+              'was registered, and there is no listener to the '
+              'updates stream');
+        }
+      }
+    }
+  }
+
+  /// Provide the progress update for this task to its callback or listener
+  static void _provideProgressUpdate(BackgroundDownloadTask task, progress) {
+    if (task.providesProgressUpdates) {
+      final progressUpdateCallback = progressCallbacks[task.group];
+      if (progressUpdateCallback != null) {
+        progressUpdateCallback(task, progress);
+      } else if (_updates.hasListener) {
+        _updates.add(BackgroundDownloadProgressEvent(task, progress));
+      } else {
+        _log.warning('Requested progress updates for task ${task.taskId} in '
+            'group ${task.group} but no progressUpdateCallback '
+            'was registered, and there is no listener to the '
+            'updates stream');
+      }
     }
   }
 
@@ -277,26 +319,40 @@ class FileDownloader {
   /// requested
   static Future<int> reset({String? group = defaultGroup}) async {
     assert(_initialized, 'FileDownloader must be initialized before use');
+    _tasksWaitingToRetry.clear();
     return await _channel.invokeMethod<int>('reset', group) ?? -1;
   }
 
-  /// Returns a list of taskIds of all tasks currently running in this group
-  static Future<List<String>> allTaskIds({String? group = defaultGroup}) async {
-    assert(_initialized, 'FileDownloader must be initialized before use');
-    final result =
-        await _channel.invokeMethod<List<dynamic>?>('allTaskIds', group) ?? [];
-    return result.map((e) => e as String).toList();
-  }
+  /// Returns a list of taskIds of all tasks currently active in this group
+  ///
+  /// Active means enqueued or running, and if [includeTasksWaitingToRetry] is
+  /// true also tasks that are waiting to be retried
+  static Future<List<String>> allTaskIds(
+          {String group = defaultGroup,
+          bool includeTasksWaitingToRetry = true}) async =>
+      (await allTasks(
+              group: group,
+              includeTasksWaitingToRetry: includeTasksWaitingToRetry))
+          .map((task) => task.taskId)
+          .toList();
 
-  /// Returns a list of all tasks currently running in this group
+  /// Returns a list of all tasks currently active in this group
+  ///
+  /// Active means enqueued or running, and if [includeTasksWaitingToRetry] is
+  /// true also tasks that are waiting to be retried
   static Future<List<BackgroundDownloadTask>> allTasks(
-      {String? group = defaultGroup}) async {
+      {String group = defaultGroup,
+      bool includeTasksWaitingToRetry = true}) async {
     assert(_initialized, 'FileDownloader must be initialized before use');
     final result =
         await _channel.invokeMethod<List<dynamic>?>('allTasks', group) ?? [];
-    return result
+    final tasks = result
         .map((e) => BackgroundDownloadTask.fromJsonMap(jsonDecode(e as String)))
         .toList();
+    if (includeTasksWaitingToRetry) {
+      tasks.addAll(_tasksWaitingToRetry.where((task) => task.group == group));
+    }
+    return tasks;
   }
 
   /// Delete all tasks matching the taskIds in the list
@@ -305,8 +361,24 @@ class FileDownloader {
   /// the registered callback, if requested
   static Future<bool> cancelTasksWithIds(List<String> taskIds) async {
     assert(_initialized, 'FileDownloader must be initialized before use');
-    return await _channel.invokeMethod<bool>('cancelTasksWithIds', taskIds) ??
-        false;
+    final matchingTasksWaitingToRetry =
+        _tasksWaitingToRetry.where((task) => taskIds.contains(task.taskId));
+    final matchingTaskIdsWaitingToRetry =
+        matchingTasksWaitingToRetry.map((task) => task.taskId);
+    // remove tasks waiting to retry from the list so they won't be retried
+    for (final task in matchingTasksWaitingToRetry) {
+      _tasksWaitingToRetry.remove(task);
+    }
+    // cancel remaining taskIds on the native platform
+    final remainingTaskIds = taskIds
+        .where((taskId) => !matchingTaskIdsWaitingToRetry.contains(taskId))
+        .toList(growable: false);
+    if (remainingTaskIds.isNotEmpty) {
+      return await _channel.invokeMethod<bool>(
+              'cancelTasksWithIds', remainingTaskIds) ??
+          false;
+    }
+    return true;
   }
 
   /// Return [BackgroundDownloadTask] for the given [taskId], or null
@@ -317,6 +389,12 @@ class FileDownloader {
   /// the status of tasks, use a [DownloadStatusCallback]
   static Future<BackgroundDownloadTask?> taskForId(String taskId) async {
     assert(_initialized, 'FileDownloader must be initialized before use');
+    // check if task with this Id is waiting to retry
+    final taskWaitingToRetry = _tasksWaitingToRetry.where((task) => task.taskId == taskId);
+    if (taskWaitingToRetry.isNotEmpty) {
+      return taskWaitingToRetry.first;
+    }
+    // if not, ask the native platform for the task matching this id
     final jsonString = await _channel.invokeMethod<String>('taskForId', taskId);
     if (jsonString != null) {
       return BackgroundDownloadTask.fromJsonMap(jsonDecode(jsonString));
@@ -327,6 +405,9 @@ class FileDownloader {
   /// Destroy the [FileDownloader]. Subsequent use requires initialization
   static void destroy() {
     _initialized = false;
+    _tasksWaitingToRetry.clear();
+    _batches.clear();
+    _downloadCompleters.clear();
     statusCallbacks.clear();
     progressCallbacks.clear();
   }

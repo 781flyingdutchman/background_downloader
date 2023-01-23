@@ -159,7 +159,9 @@ class DownloadWorker(
                 backgroundDownloadTask: BackgroundDownloadTask,
                 status: DownloadTaskStatus
         ) {
-            if (backgroundDownloadTask.providesStatusUpdates()) {
+            // Post update if task expects one, or if failed and retry is needed
+            if (backgroundDownloadTask.providesStatusUpdates() || (status == DownloadTaskStatus
+                            .failed && backgroundDownloadTask._retriesRemaining > 0)) {
                 Handler(Looper.getMainLooper()).post {
                     try {
                         val gson = Gson()
@@ -194,10 +196,6 @@ class DownloadWorker(
                     DownloadTaskStatus.notFound -> processProgressUpdate(
                             backgroundDownloadTask,
                             -3.0
-                    )
-                    DownloadTaskStatus.waitingToRetry -> processProgressUpdate(
-                            backgroundDownloadTask,
-                            -4.0
                     )
                     else -> {}
                 }

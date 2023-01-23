@@ -225,6 +225,11 @@ class BackgroundDownloadTask {
         'metaData': metaData
       };
 
+  /// Reduce count of retries remaining by 1
+  ///
+  /// Used by [FileDownloader]
+  void reduceRetriesRemaining() => _retriesRemaining--;
+
   /// If true, task expects progress updates
   bool get providesProgressUpdates =>
       progressUpdates == DownloadTaskProgressUpdates.progressUpdates ||

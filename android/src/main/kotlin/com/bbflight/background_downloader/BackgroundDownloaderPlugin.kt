@@ -57,7 +57,6 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         when (call.method) {
             "enqueue" -> methodEnqueue(call, result)
             "reset" -> methodReset(call, result)
-            "allTaskIds" -> methodAllTaskIds(call, result)
             "allTasks" -> methodAllTasks(call, result)
             "cancelTasksWithIds" -> methodCancelTasksWithIds(call, result)
             "taskForId" -> methodTaskForId(call, result)
@@ -125,22 +124,6 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         }
         Log.v(TAG, "methodReset removed $counter unfinished tasks in group $group")
         result.success(counter)
-    }
-
-    /** Returns a list of taskIds for all tasks in progress */
-    private fun methodAllTaskIds(call: MethodCall, result: Result) {
-        val group = call.arguments as String
-        val workInfos = workManager.getWorkInfosByTag(TAG).get()
-                .filter { !it.state.isFinished && it.tags.contains("group=$group") }
-        val taskIds = mutableListOf<String>()
-        for (workInfo in workInfos) {
-            val tags = workInfo.tags.filter { it.contains("taskId=") }
-            if (tags.isNotEmpty()) {
-                taskIds.add(tags.first().substring(7))
-            }
-        }
-        Log.v(TAG, "Returning ${taskIds.size} unfinished tasks in group $group: $taskIds")
-        result.success(taskIds)
     }
 
     /** Returns a list of tasks for all tasks in progress, as a list of JSON strings */
