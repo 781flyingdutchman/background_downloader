@@ -104,8 +104,8 @@ class FileDownloader {
             final waitTime = Duration(
                 seconds:
                     pow(2, (task.retries - task.retriesRemaining)).toInt());
-            _log.finer('TaskId ${task.taskId} failed, waiting ${waitTime
-                .inSeconds}'
+            _log.finer(
+                'TaskId ${task.taskId} failed, waiting ${waitTime.inSeconds}'
                 ' seconds before retrying. ${task.retriesRemaining}'
                 ' retries remaining');
             Future.delayed(waitTime, () async {
