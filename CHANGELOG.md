@@ -1,9 +1,31 @@
+## 2.0.0
+
+Added option to automatically retry failed downloads. This is a breaking change, though for most
+existing implementations no or very little change is required.
+
+The main change is the addition of `enqueued` and `waitingToRetry` status to the
+`DownloadTaskStatus` enum (and removal of `undefined`). As a result, when checking a
+`DownloadStatusUpdate` (e.g. using a `switch` statement) you need to cover these new cases (and 
+for existing implementations can typically just ignore them).  The progressUpdate equivalent of 
+`waitingToRetry` is a value of -4.0, but for existing implementations this will never be 
+emitted, as they won't have retries.
+
+The second change is that a task now emits `enqueued` when enqueued, and `running` once the actual
+download (on the native platform) starts. In existing applications this can generally be ignored,
+but it allows for more precise status updates.
+
+To use automatic retries, simply set the `retries` field of the `BackgroundDownloadTask` to an
+integer between 0 and 10. A normal download (without the need for retries) will follow status
+updates from `enqueued` -> `running` -> `complete` (or `notFound`). If `retries` has been set and
+the task fails, the sequence will be `enqueued` -> `running` ->
+`waitingToRetry` -> `enqueued` -> `running` -> `complete` (if the second try succeeds, or more
+retries if needed).
+
 ## 1.6.0
 
 Added option to set `requiresWiFi` on the `BackgroundDownloadTask`, which ensures the task won't
-start downloading unless a WiFi network is available. By default `requiresWiFi` is false, and 
-downloads will use the cellular (or metered) network if WiFi is not available, which may incur
-cost.
+start downloading unless a WiFi network is available. By default `requiresWiFi` is false, and
+downloads will use the cellular (or metered) network if WiFi is not available, which may incur cost.
 
 ## 1.5.0
 

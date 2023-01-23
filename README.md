@@ -6,6 +6,8 @@ Define where to get your file from, where to store it, and how you want to monit
 
 A download is defined by a `BackgroundDownloadTask` object that contains the download instructions, and updates related to that task are passed on to a stream you can listen to, or alternatively to callback functions that you register.
 
+Once a task is enqueued for download, you will receive an update with `DownloadTaskStatus.enqueued` almost immediately, followed by `.running` when the actual download starts, followed by a status update with the result (e.g. `.complete`, `.failed`, `.notFound`, or - if [retries](#retries) are enabled - `.waitingToRetry`).  If you [cancel](#managing-and-monitoring-tasks-in-the-queue) the task you will receive `.canceled`.
+
 ### Using an event listener
 
 For simple downloads you listen to events from the downloader, and process those. For example, the following creates a listener to monitor status and progress updates for downloads, and then enqueues a task as an example:
@@ -23,7 +25,7 @@ For simple downloads you listen to events from the downloader, and process those
     // status update events will be sent to your subscription listener
 ```
 
-Note that `successFullyEnqueued` only refers to the enqueueing of the download task, not its result, which must be monitored via the listener. It will receive an update with status `DownloadTaskStatus.running`, followed by a status update with the result (e.g. `DownloadTaskStatus.complete` or `DownloadTaskStatus.failed`).
+Note that `successFullyEnqueued` only refers to the enqueueing of the download task, not its result, which must be monitored via the listener.
 
 You can start your subscription in a convenient place, like a widget's `initState`, and don't forget to cancel your subscription to the stream using `subscription.cancel()`. Note the stream can only be listened to once: to listen again, first call `FileDownloader.initialize()`.
 
@@ -96,7 +98,7 @@ Status updates only report on start and finish of a download. To also monitor pr
     final successFullyEnqueued = await FileDownloader.enqueue(task);
 ```
 
-Progress updates will be sent periodically, not more than twice per second per task.  If a task completes successfully you will receive a progress update with a `progress` value of 1.0. Failed tasks generate `progress` of -1, cancelled tasks -2 and notFound tasks -3.
+Progress updates will be sent periodically, not more than twice per second per task.  If a task completes successfully you will receive a progress update with a `progress` value of 1.0. Failed tasks generate `progress` of -1, cancelled tasks -2, notFound tasks -3 and waitingToRetry tasks -4.
 
 Because you can use the `progress` value to derive task status, you can choose to not receive status updates by setting the `progressUpdates` parameter of a task to `DownloadTaskProgressUpdates.progressUpdates` (and you won't need to register a `DownloadStatusCallback` or listen for status updates). If you don't want to use any callbacks (and just check if the file exists after a while!) set the `progressUpdates` parameter of a task to `DownloadTaskProgressUpdates.none`.
 
@@ -104,7 +106,7 @@ If instead of using callbacks you are listening to the `Filedownloader.updates` 
 
 ## Simplified use
 
-Simplified use does not require you to register callbacks or listen to updates: you just call `.download` or `.downloadBatch` and wait for the result.  Note that for simplified use, `BackgroundDownloadTask` fields `group` and `progressUpdates` should not be set, as they are used by the `FileDownloader` for these convenience methods, and may be overwritten.
+Simplified use does not require you to register callbacks or listen to updates: you just call `.download` or `.downloadBatch` and wait for the result.  Note that for simplified use, `BackgroundDownloadTask` fields `group` and `progressUpdates` should not be set, as they are used by the `FileDownloader` for these convenience methods, and may be overwritten. For tasks scheduled using the convenience methods below, no download or progress callbacks will be called, and no updates will be sent to your listener.
 
 ### Awaiting a download
 
@@ -141,6 +143,14 @@ Optionally, `headers` can be added to the `BackgroundDownloadTask`, which will b
 
 If the `requiresWiFi` field of a `BackgroundDownloadTask` is set to true, the task won't start downloading unless a WiFi network is available. By default `requiresWiFi` is false, and downloads will use the cellular (or metered) network if WiFi is not available, which may incur cost.
 
+### Retries
+
+To schedule automatic retries of failed downloads (with exponential backoff), set the `retries` field of the `BackgroundDownloadTask` to an
+integer between 0 and 10. A normal download (without the need for retries) will follow status
+updates from `enqueued` -> `running` -> `complete` (or `notFound`). If `retries` has been set and
+the task fails, the sequence will be `enqueued` -> `running` ->
+`waitingToRetry` -> `enqueued` -> `running` -> `complete` (if the second try succeeds, or more
+retries if needed).
 
 ### Metadata
 
@@ -150,8 +160,8 @@ Also optionally, `metaData` can be added to the `BackgroundDownloadTask` (a `Str
 
 To manage or monitor tasks, use the following methods:
 * `reset` to reset the downloader by cancelling all ongoing download tasks
-* `allTaskIds` to get a list of `taskId` values of all tasks currently running (i.e. not in a final state)
-* `allTasks` to get a list of all tasks currently running (i.e. not in a final state)
+* `allTaskIds` to get a list of `taskId` values of all tasks currently active (i.e. not in a final state). You can exclude tasks waiting for retries by setting `includeTasksWaitingToRetry` to `false`
+* `allTasks` to get a list of all tasks currently active (i.e. not in a final state). You can exclude tasks waiting for retries by setting `includeTasksWaitingToRetry` to `false`
 * `cancelTasksWithIds` to cancel all tasks with a `taskId` in the provided list of taskIds
 * `taskForId` to get the `BackgroundDownloadTask` for the given `taskId`, or `null` if not found. Only tasks that are running (ie. not in a final state) are guaranteed to be returned, but returning a task does not guarantee that it is running
 
@@ -197,7 +207,5 @@ In [some cases](https://github.com/781flyingdutchman/background_downloader/issue
 
 * On Android, once started, a background download must complete within 8 minutes
 * On iOS, once enqueued, a background download must complete within 4 hours
-* On both platforms, downloads will not start without a network connection, and do not distinguish between metered (cellular) and unmetered (WiFi) connections
 * Redirects will be followed
-* Background downloads will not be retried upon failure
 * Background downloads are aggressively controlled by the native platform. You should therefore always assume that a task that was started may not complete, and may disappear without providing any status or progress update to indicate why. For example, if a user swipes your app up from the iOS App Switcher, all scheduled background downloads are terminated without notification 
