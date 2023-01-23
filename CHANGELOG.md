@@ -1,3 +1,8 @@
+## 2.0.1
+
+Fix for [issue](https://github.com/781flyingdutchman/background_downloader/issues/6) with
+Firebase plugin `onMethodCall` handler
+
 ## 2.0.0
 
 Added option to automatically retry failed downloads. This is a breaking change, though for most
@@ -20,6 +25,11 @@ updates from `enqueued` -> `running` -> `complete` (or `notFound`). If `retries`
 the task fails, the sequence will be `enqueued` -> `running` ->
 `waitingToRetry` -> `enqueued` -> `running` -> `complete` (if the second try succeeds, or more
 retries if needed).
+
+## 1.6.1
+
+Fix for [issue](https://github.com/781flyingdutchman/background_downloader/issues/6) with
+Firebase plugin `onMethodCall` handler
 
 ## 1.6.0
 

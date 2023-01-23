@@ -71,6 +71,10 @@ void main() {
     } on FileSystemException {}
   });
 
+  tearDown(() async {
+    FileDownloader.destroy();
+  });
+
   group('Initialization', () {
     test('initialize', () {
       // confirm asserts work

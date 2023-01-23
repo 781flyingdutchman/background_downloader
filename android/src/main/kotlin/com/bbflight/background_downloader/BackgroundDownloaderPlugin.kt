@@ -17,10 +17,11 @@ import kotlin.concurrent.write
 
 /** BackgroundDownloaderPlugin */
 class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
+    private var channel: MethodChannel? = null
+
     companion object {
         const val TAG = "BackgroundDownloaderPlugin"
         const val keyTasksMap = "com.bbflight.background_downloader.taskMap"
-        private var channel: MethodChannel? = null
         var backgroundChannel: MethodChannel? = null
         val prefsLock = ReentrantReadWriteLock()
         private lateinit var workManager: WorkManager
@@ -30,10 +31,15 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     }
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
+        if (backgroundChannel == null) {
+            // only set background channel once, as it has to be static field
+            // and per https://github.com/firebase/flutterfire/issues/9689 other
+            // plugins can create multiple instances of the plugin
+            backgroundChannel = MethodChannel(flutterPluginBinding.binaryMessenger,
+                    "com.bbflight.background_downloader.background")
+        }
         channel = MethodChannel(flutterPluginBinding.binaryMessenger,
                 "com.bbflight.background_downloader")
-        backgroundChannel = MethodChannel(flutterPluginBinding.binaryMessenger,
-                "com.bbflight.background_downloader.background")
         channel?.setMethodCallHandler(this)
         workManager = WorkManager.getInstance(flutterPluginBinding.applicationContext)
         prefs = PreferenceManager.getDefaultSharedPreferences(
@@ -50,7 +56,6 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel?.setMethodCallHandler(null)
         channel = null
-        backgroundChannel = null
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {

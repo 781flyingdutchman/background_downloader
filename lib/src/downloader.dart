@@ -198,12 +198,13 @@ class FileDownloader {
   /// progress updates make sure to register a [DownloadProgressCallback] and
   /// set the task's [progressUpdates] property to .progressUpdates or
   /// .statusChangeAndProgressUpdates
-  static void registerCallbacks({String group = defaultGroup,
-    DownloadStatusCallback? downloadStatusCallback,
-    DownloadProgressCallback? downloadProgressCallback}) {
+  static void registerCallbacks(
+      {String group = defaultGroup,
+      DownloadStatusCallback? downloadStatusCallback,
+      DownloadProgressCallback? downloadProgressCallback}) {
     _ensureInitialized();
     assert(downloadStatusCallback != null || (downloadProgressCallback != null),
-    'Must provide a status update callback or a progress update callback, or both');
+        'Must provide a status update callback or a progress update callback, or both');
     if (downloadStatusCallback != null) {
       statusCallbacks[group] = downloadStatusCallback;
     }
@@ -220,7 +221,7 @@ class FileDownloader {
   static Future<bool> enqueue(BackgroundDownloadTask task) async {
     _ensureInitialized();
     return await _channel
-        .invokeMethod<bool>('enqueue', [jsonEncode(task.toJsonMap())]) ??
+            .invokeMethod<bool>('enqueue', [jsonEncode(task.toJsonMap())]) ??
         false;
   }
 
@@ -332,11 +333,12 @@ class FileDownloader {
   ///
   /// Active means enqueued or running, and if [includeTasksWaitingToRetry] is
   /// true also tasks that are waiting to be retried
-  static Future<List<String>> allTaskIds({String group = defaultGroup,
-    bool includeTasksWaitingToRetry = true}) async =>
+  static Future<List<String>> allTaskIds(
+          {String group = defaultGroup,
+          bool includeTasksWaitingToRetry = true}) async =>
       (await allTasks(
-          group: group,
-          includeTasksWaitingToRetry: includeTasksWaitingToRetry))
+              group: group,
+              includeTasksWaitingToRetry: includeTasksWaitingToRetry))
           .map((task) => task.taskId)
           .toList();
 
@@ -346,7 +348,7 @@ class FileDownloader {
   /// true also tasks that are waiting to be retried
   static Future<List<BackgroundDownloadTask>> allTasks(
       {String group = defaultGroup,
-        bool includeTasksWaitingToRetry = true}) async {
+      bool includeTasksWaitingToRetry = true}) async {
     _ensureInitialized();
     final result =
         await _channel.invokeMethod<List<dynamic>?>('allTasks', group) ?? [];
@@ -383,7 +385,7 @@ class FileDownloader {
         .toList(growable: false);
     if (remainingTaskIds.isNotEmpty) {
       return await _channel.invokeMethod<bool>(
-          'cancelTasksWithIds', remainingTaskIds) ??
+              'cancelTasksWithIds', remainingTaskIds) ??
           false;
     }
     return true;
@@ -399,7 +401,7 @@ class FileDownloader {
     _ensureInitialized();
     // check if task with this Id is waiting to retry
     final taskWaitingToRetry =
-    _tasksWaitingToRetry.where((task) => task.taskId == taskId);
+        _tasksWaitingToRetry.where((task) => task.taskId == taskId);
     if (taskWaitingToRetry.isNotEmpty) {
       return taskWaitingToRetry.first;
     }
