@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:isolate';
-import 'dart:ui';
 
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter/services.dart';
@@ -74,26 +72,19 @@ class FileDownloader {
           'being listened to. That listener will no longer receive status updates.');
     }
     _updates = StreamController<BackgroundDownloadEvent>();
-    // Incoming calls from the native code will be on the backgroundChannel,
-    // so this isolate listener moves it from background to foreground
-    const portName = 'background_downloader_send_port';
-    // create simple listener Isolate to receive download updates in the
-    // main isolate
-    final receivePort = ReceivePort();
-    if (!IsolateNameServer.registerPortWithName(
-        receivePort.sendPort, portName)) {
-      IsolateNameServer.removePortNameMapping(portName);
-      IsolateNameServer.registerPortWithName(receivePort.sendPort, portName);
-    }
-    receivePort.listen((dynamic data) {
-      final taskAsJsonMapString = data[1] as String;
+    // listen to the background channel and pass messages to main isolate
+    _backgroundChannel.setMethodCallHandler((call) async {
+      // send the update to the main isolate, where it will be passed
+      // on to the registered callback
+
+      final args = call.arguments as List<dynamic>;
       final task =
-          BackgroundDownloadTask.fromJsonMap(jsonDecode(taskAsJsonMapString));
-      switch (data[0] as String) {
+          BackgroundDownloadTask.fromJsonMap(jsonDecode(args.first as String));
+      switch (call.method) {
         case 'statusUpdate':
           if (task.providesStatusUpdates) {
             final downloadTaskStatus =
-                DownloadTaskStatus.values[data[2] as int];
+                DownloadTaskStatus.values[args.last as int];
             final downloadStatusCallback = statusCallbacks[task.group];
             if (downloadStatusCallback != null) {
               downloadStatusCallback(task, downloadTaskStatus);
@@ -114,12 +105,12 @@ class FileDownloader {
 
         case 'progressUpdate':
           if (task.providesProgressUpdates) {
+            final progress = args.last as double;
             final progressUpdateCallback = progressCallbacks[task.group];
             if (progressUpdateCallback != null) {
-              progressUpdateCallback(task, data[2] as double);
+              progressUpdateCallback(task, progress);
             } else if (_updates.hasListener) {
-              _updates.add(
-                  BackgroundDownloadProgressEvent(task, data[2] as double));
+              _updates.add(BackgroundDownloadProgressEvent(task, progress));
             } else {
               _log.warning(
                   'Requested progress updates for task ${task.taskId} in '
@@ -128,30 +119,6 @@ class FileDownloader {
                   'updates stream');
             }
           }
-          break;
-
-        default:
-          throw UnimplementedError(
-              'Isolate received call ${data[0]} which is not supported');
-      }
-    });
-    // listen to the background channel and pass messages to main isolate
-    _backgroundChannel.setMethodCallHandler((call) async {
-      // send the update to the main isolate, where it will be passed
-      // on to the registered callback
-
-      final args = call.arguments as List<dynamic>;
-      final sendPort = IsolateNameServer.lookupPortByName(portName);
-      final taskAsJsonMapString = args.first as String;
-      switch (call.method) {
-        case 'statusUpdate':
-          final status = args.last as int;
-          sendPort?.send([call.method, taskAsJsonMapString, status]);
-          break;
-
-        case 'progressUpdate':
-          final progress = args.last as double;
-          sendPort?.send([call.method, taskAsJsonMapString, progress]);
           break;
 
         default:
@@ -322,13 +289,15 @@ class FileDownloader {
   }
 
   /// Returns a list of all tasks currently running in this group
-  static Future<List<BackgroundDownloadTask>> allTasks({String? group = defaultGroup}) async {
+  static Future<List<BackgroundDownloadTask>> allTasks(
+      {String? group = defaultGroup}) async {
     assert(_initialized, 'FileDownloader must be initialized before use');
     final result =
         await _channel.invokeMethod<List<dynamic>?>('allTasks', group) ?? [];
-    return result.map((e) => BackgroundDownloadTask.fromJsonMap(jsonDecode(e as String))).toList();
+    return result
+        .map((e) => BackgroundDownloadTask.fromJsonMap(jsonDecode(e as String)))
+        .toList();
   }
-
 
   /// Delete all tasks matching the taskIds in the list
   ///
