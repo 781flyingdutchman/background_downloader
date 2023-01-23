@@ -28,7 +28,7 @@ class _MyAppState extends State<MyApp> {
 
   ButtonState buttonState = ButtonState.download;
   bool downloadWithError = false;
-  DownloadTaskStatus downloadTaskStatus = DownloadTaskStatus.undefined;
+  DownloadTaskStatus? downloadTaskStatus;
   BackgroundDownloadTask? backgroundDownloadTask;
   StreamController<DownloadProgressIndicatorUpdate> updateStream =
       StreamController();
@@ -114,7 +114,7 @@ class _MyAppState extends State<MyApp> {
                       child: Row(
                         children: [
                           const Expanded(child: Text('File download status:')),
-                          Text('$downloadTaskStatus')
+                          Text('${downloadTaskStatus ?? "undefined"}')
                         ],
                       ),
                     )
@@ -148,7 +148,7 @@ class _MyAppState extends State<MyApp> {
         }
         break;
       case ButtonState.reset:
-        downloadTaskStatus = DownloadTaskStatus.undefined;
+        downloadTaskStatus = null;
         buttonState = ButtonState.download;
         break;
     }
