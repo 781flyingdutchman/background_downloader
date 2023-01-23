@@ -127,7 +127,7 @@ void main() {
           downloadProgressCallback: downloadProgressCallback);
       expect(await FileDownloader.enqueue(task), isTrue);
       await downloadStatusCallbackCompleter.future;
-      expect(downloadStatusCallbackCounter, equals(2));
+      expect(downloadStatusCallbackCounter, equals(3));
       // because we have not set progressUpdates to something that provides
       // progress updates, we should just get no updates
       expect(downloadProgressCallbackCompleter.isCompleted, isFalse);
@@ -144,7 +144,7 @@ void main() {
       // because google.com has no content-length, we only expect the 1.0 progress update
       expect(downloadProgressCallbackCounter, equals(1));
       await downloadStatusCallbackCompleter.future;
-      expect(downloadStatusCallbackCounter, equals(2));
+      expect(downloadStatusCallbackCounter, equals(3));
       // now try a file that has content length
       downloadStatusCallbackCounter = 0;
       downloadProgressCallbackCounter = 0;
@@ -160,7 +160,7 @@ void main() {
       await downloadProgressCallbackCompleter.future;
       expect(downloadProgressCallbackCounter, greaterThan(1));
       await downloadStatusCallbackCompleter.future;
-      expect(downloadStatusCallbackCounter, equals(2));
+      expect(downloadStatusCallbackCounter, equals(3));
       print('Finished enqueue with progress');
     });
 
@@ -207,7 +207,7 @@ void main() {
       });
       expect(await FileDownloader.enqueue(task), isTrue);
       await downloadStatusCallbackCompleter.future;
-      expect(downloadStatusCallbackCounter, equals(2));
+      expect(downloadStatusCallbackCounter, equals(3));
       expect(lastDownloadStatus, equals(DownloadTaskStatus.complete));
       expect(File(path).existsSync(), isTrue);
       subscription.cancel();
@@ -226,7 +226,7 @@ void main() {
       });
       expect(await FileDownloader.enqueue(task), isTrue);
       await downloadStatusCallbackCompleter.future;
-      expect(downloadStatusCallbackCounter, equals(2));
+      expect(downloadStatusCallbackCounter, equals(3));
       expect(lastDownloadStatus, equals(DownloadTaskStatus.complete));
       expect(File(path).existsSync(), isTrue);
       expect(receivedEvent, isFalse);
@@ -266,7 +266,7 @@ void main() {
       expect(await FileDownloader.reset(group: 'non-default'), equals(0));
       expect(await FileDownloader.reset(), equals(1));
       await downloadStatusCallbackCompleter.future;
-      expect(downloadStatusCallbackCounter, equals(2));
+      expect(downloadStatusCallbackCounter, equals(3));
       expect(lastDownloadStatus, equals(DownloadTaskStatus.canceled));
       print('Finished reset');
     });
@@ -277,7 +277,7 @@ void main() {
       expect(await FileDownloader.allTaskIds(group: 'non-default'), isEmpty);
       expect((await FileDownloader.allTaskIds()).length, equals(1));
       await downloadStatusCallbackCompleter.future;
-      expect(downloadStatusCallbackCounter, equals(2));
+      expect(downloadStatusCallbackCounter, equals(3));
       expect(lastDownloadStatus, equals(DownloadTaskStatus.complete));
       print('Finished alTaskIds');
     });
@@ -290,7 +290,7 @@ void main() {
       expect(tasks.length, equals(1));
       expect(tasks.first, equals(task));
       await downloadStatusCallbackCompleter.future;
-      expect(downloadStatusCallbackCounter, equals(2));
+      expect(downloadStatusCallbackCounter, equals(3));
       expect(lastDownloadStatus, equals(DownloadTaskStatus.complete));
       print('Finished alTasks');
     });
@@ -303,7 +303,7 @@ void main() {
       expect(taskIds.first, equals(task.taskId));
       expect(await FileDownloader.cancelTasksWithIds(taskIds), isTrue);
       await downloadStatusCallbackCompleter.future;
-      expect(downloadStatusCallbackCounter, equals(2));
+      expect(downloadStatusCallbackCounter, equals(3));
       expect(lastDownloadStatus, equals(DownloadTaskStatus.canceled));
       print('Finished cancelTasksWithIds');
     });
@@ -322,7 +322,7 @@ void main() {
       expect(await FileDownloader.taskForId(complexTask.taskId),
           equals(complexTask));
       await downloadStatusCallbackCompleter.future;
-      expect(downloadStatusCallbackCounter, equals(2));
+      expect(downloadStatusCallbackCounter, equals(3));
       expect(lastDownloadStatus, equals(DownloadTaskStatus.complete));
       print('Finished taskForId');
     });
@@ -532,5 +532,6 @@ Future<void> enqueueAndFileExists(String path) async {
   try {
     File(path).deleteSync(recursive: true);
   } on FileSystemException {}
-  expect(downloadStatusCallbackCounter, equals(2)); // running + complete
+  // Expect 3 status callbacks: enqueued + running + complete
+  expect(downloadStatusCallbackCounter, equals(3));
 }

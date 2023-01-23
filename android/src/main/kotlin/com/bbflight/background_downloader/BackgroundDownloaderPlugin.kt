@@ -89,7 +89,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         val operation = workManager.enqueue(request)
         try {
             operation.result.get()
-            DownloadWorker.processStatusUpdate(backgroundDownloadTask, DownloadTaskStatus.running)
+            DownloadWorker.processStatusUpdate(backgroundDownloadTask, DownloadTaskStatus.enqueued)
         } catch (e: Throwable) {
             Log.w(TAG,
                     "Unable to start background request for taskId ${backgroundDownloadTask.taskId} in operation: $operation")

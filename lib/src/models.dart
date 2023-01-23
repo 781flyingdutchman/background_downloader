@@ -44,15 +44,15 @@ enum DownloadTaskStatus {
   /// state changes are possible
   bool get isFinalState {
     switch (this) {
-      case DownloadTaskStatus.enqueued:
       case DownloadTaskStatus.complete:
       case DownloadTaskStatus.notFound:
       case DownloadTaskStatus.failed:
       case DownloadTaskStatus.canceled:
-      case DownloadTaskStatus.waitingToRetry:
         return true;
 
+      case DownloadTaskStatus.enqueued:
       case DownloadTaskStatus.running:
+      case DownloadTaskStatus.waitingToRetry:
         return false;
     }
   }

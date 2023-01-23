@@ -122,7 +122,15 @@ enum class DownloadTaskStatus {
     notFound,
     failed,
     canceled,
-    waitingToRetry
+    waitingToRetry;
+
+    fun isNotFinalState(): Boolean {
+        return this == enqueued || this == running || this == waitingToRetry
+    }
+
+    fun isFinalState(): Boolean {
+        return !isNotFinalState();
+    }
 }
 
 
@@ -170,7 +178,7 @@ class DownloadWorker(
             }
             // if task is in final state, process a final progressUpdate and remove from
             // persistent storage
-            if (status != DownloadTaskStatus.running) {
+            if (status.isFinalState()) {
                 when (status) {
                     DownloadTaskStatus.complete -> processProgressUpdate(
                             backgroundDownloadTask,
@@ -186,6 +194,10 @@ class DownloadWorker(
                     DownloadTaskStatus.notFound -> processProgressUpdate(
                             backgroundDownloadTask,
                             -3.0
+                    )
+                    DownloadTaskStatus.waitingToRetry -> processProgressUpdate(
+                            backgroundDownloadTask,
+                            -4.0
                     )
                     else -> {}
                 }
@@ -225,7 +237,8 @@ class DownloadWorker(
                     try {
                         val gson = Gson()
                         val arg =
-                                listOf<Any>(gson.toJson(backgroundDownloadTask.toJsonMap()), progress)
+                                listOf<Any>(gson.toJson(backgroundDownloadTask.toJsonMap()),
+                                        progress)
                         BackgroundDownloaderPlugin.backgroundChannel?.invokeMethod(
                                 "progressUpdate",
                                 arg
@@ -242,12 +255,12 @@ class DownloadWorker(
     override suspend fun doWork(): Result {
         val gson = Gson()
         val downloadTaskJsonMapString = inputData.getString(keyDownloadTask)
-
         val mapType = object : TypeToken<Map<String, Any>>() {}.type
         val downloadTask = BackgroundDownloadTask(
                 gson.fromJson(downloadTaskJsonMapString, mapType)
         )
         Log.i(TAG, " Starting download for taskId ${downloadTask.taskId}")
+        processStatusUpdate(downloadTask, DownloadTaskStatus.running)
         val filePath = pathToFileForTask(downloadTask)
         val status = downloadFile(downloadTask, filePath)
         processStatusUpdate(downloadTask, status)
