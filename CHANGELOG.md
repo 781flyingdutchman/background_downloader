@@ -1,3 +1,8 @@
+## 1.6.1
+
+Fix for [issue](https://github.com/781flyingdutchman/background_downloader/issues/6) with 
+Firebase plugin `onMethodCall` handler
+
 ## 1.6.0
 
 Added option to set `requiresWiFi` on the `BackgroundDownloadTask`, which ensures the task won't
