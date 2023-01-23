@@ -3,10 +3,14 @@ import 'dart:math';
 
 /// Defines a set of possible states which a [DownloadTask] can be in.
 enum DownloadTaskStatus {
-  /// Unknown state
-  undefined,
+  /// Task is enqueued on the native platform and waiting to start
+  ///
+  /// It may wait for resources, or for an appropriate network to become
+  /// available before starting the actual download and changing state to
+  /// `running`.
+  enqueued,
 
-  /// Task is being handled by the native platform
+  /// Task is running, i.e. actively downloading
   running,
 
   /// Task has completed successfully and the file is available
@@ -27,19 +31,27 @@ enum DownloadTaskStatus {
   /// Task has been canceled by the user or the system
   ///
   /// This is a final state
-  canceled;
+  canceled,
+
+  /// Task failed, and is now waiting to retry
+  ///
+  /// The task is held in this state until the exponential backoff time for
+  /// this retry has passed, and will then be rescheduled on the native
+  /// platform, switching state to `enqueued` and then `running`
+  waitingToRetry;
 
   /// True if this state is one of the 'final' states, meaning no more
   /// state changes are possible
   bool get isFinalState {
     switch (this) {
+      case DownloadTaskStatus.enqueued:
       case DownloadTaskStatus.complete:
       case DownloadTaskStatus.notFound:
       case DownloadTaskStatus.failed:
       case DownloadTaskStatus.canceled:
+      case DownloadTaskStatus.waitingToRetry:
         return true;
 
-      case DownloadTaskStatus.undefined:
       case DownloadTaskStatus.running:
         return false;
     }
@@ -112,6 +124,14 @@ class BackgroundDownloadTask {
   /// If true, will not download over cellular (metered) network
   final bool requiresWiFi;
 
+  /// Maximum number of retries the downloader should attempt
+  ///
+  /// Defaults to 0, meaning no retry will be attempted
+  final int retries;
+
+  /// Number of retries remaining
+  int _retriesRemaining;
+
   /// User-defined metadata
   final String metaData;
 
@@ -125,8 +145,10 @@ class BackgroundDownloadTask {
       this.group = 'default',
       this.progressUpdates = DownloadTaskProgressUpdates.statusChange,
       this.requiresWiFi = false,
+      this.retries = 0,
       this.metaData = ''})
-      : taskId = taskId ?? Random().nextInt(1 << 32).toString() {
+      : taskId = taskId ?? Random().nextInt(1 << 32).toString(),
+        _retriesRemaining = retries {
     if (filename.isEmpty) {
       throw ArgumentError('Filename cannot be empty');
     }
@@ -136,6 +158,11 @@ class BackgroundDownloadTask {
     if (directory.startsWith(Platform.pathSeparator)) {
       throw ArgumentError(
           'Directory must be relative to the baseDirectory specified in the baseDirectory argument');
+    }
+    if (retries < 0 || retries > 10) {
+      throw ArgumentError(
+        'Number of retries must be between 0 and 10'
+      );
     }
   }
 
@@ -151,6 +178,7 @@ class BackgroundDownloadTask {
           String? group,
           DownloadTaskProgressUpdates? progressUpdates,
           bool? requiresWiFi,
+          int? retries,
           String? metaData}) =>
       BackgroundDownloadTask(
           taskId: taskId ?? this.taskId,
@@ -162,6 +190,7 @@ class BackgroundDownloadTask {
           group: group ?? this.group,
           progressUpdates: progressUpdates ?? this.progressUpdates,
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
+          retries: retries ?? this.retries,
           metaData: metaData ?? this.metaData);
 
   /// Creates object from JsonMap
@@ -176,6 +205,8 @@ class BackgroundDownloadTask {
         progressUpdates =
             DownloadTaskProgressUpdates.values[jsonMap['progressUpdates']],
         requiresWiFi = jsonMap['requiresWiFi'],
+        retries = jsonMap['retries'],
+        _retriesRemaining = jsonMap['_retriesRemaining'],
         metaData = jsonMap['metaData'];
 
   /// Creates JSON map of this object
@@ -189,6 +220,8 @@ class BackgroundDownloadTask {
         'group': group,
         'progressUpdates': progressUpdates.index, // stored as int
         'requiresWiFi': requiresWiFi,
+        'retries': retries,
+        '_retriesRemaining': _retriesRemaining,
         'metaData': metaData
       };
 
@@ -203,6 +236,8 @@ class BackgroundDownloadTask {
       progressUpdates == DownloadTaskProgressUpdates.statusChange ||
       progressUpdates ==
           DownloadTaskProgressUpdates.statusChangeAndProgressUpdates;
+
+  int get retriesRemaining => _retriesRemaining;
 
   @override
   bool operator ==(Object other) =>

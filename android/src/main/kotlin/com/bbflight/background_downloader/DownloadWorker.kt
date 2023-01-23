@@ -57,6 +57,8 @@ class BackgroundDownloadTask(
         val group: String,
         val progressUpdates: DownloadTaskProgressUpdates,
         val requiresWiFi: Boolean,
+        val retries: Int,
+        val _retriesRemaining: Int,
         val metaData: String
 ) {
 
@@ -72,6 +74,8 @@ class BackgroundDownloadTask(
             progressUpdates =
             DownloadTaskProgressUpdates.values()[(jsonMap["progressUpdates"] as Double).toInt()],
             requiresWiFi = jsonMap["requiresWiFi"] as Boolean,
+            retries = (jsonMap["retries"] as Double).toInt(),
+            _retriesRemaining = (jsonMap["_retriesRemaining"] as Double).toInt(),
             metaData = jsonMap["metaData"] as String
     )
 
@@ -87,6 +91,8 @@ class BackgroundDownloadTask(
                 "group" to group,
                 "progressUpdates" to progressUpdates.ordinal,
                 "requiresWiFi" to requiresWiFi,
+                "retries" to retries,
+                "_retriesRemaining" to _retriesRemaining,
                 "metaData" to metaData
         )
     }
@@ -110,12 +116,13 @@ class BackgroundDownloadTask(
  * Must match the Dart equivalent enum, as value are passed as ordinal/index integer
  */
 enum class DownloadTaskStatus {
-    undefined,
+    enqueued,
     running,
     complete,
     notFound,
     failed,
-    canceled
+    canceled,
+    waitingToRetry
 }
 
 

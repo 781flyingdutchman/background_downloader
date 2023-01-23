@@ -14,7 +14,7 @@ var downloadProgressCallbackCounter = 0;
 
 var downloadStatusCallbackCompleter = Completer<void>();
 var downloadProgressCallbackCompleter = Completer<void>();
-var lastDownloadStatus = DownloadTaskStatus.undefined;
+var lastDownloadStatus = DownloadTaskStatus.enqueued;
 
 var task =
     BackgroundDownloadTask(url: 'https://google.com', filename: 'google.html');
@@ -50,7 +50,7 @@ void main() {
     downloadProgressCallbackCounter = 0;
     downloadStatusCallbackCompleter = Completer<void>();
     downloadProgressCallbackCompleter = Completer<void>();
-    lastDownloadStatus = DownloadTaskStatus.undefined;
+    lastDownloadStatus = DownloadTaskStatus.enqueued;
     FileDownloader.destroy();
     final path =
         join((await getApplicationDocumentsDirectory()).path, task.filename);
@@ -339,6 +339,7 @@ void main() {
           progressUpdates:
               DownloadTaskProgressUpdates.statusChangeAndProgressUpdates,
           requiresWiFi: true,
+          retries: 5,
           metaData: 'someMetaData');
       FileDownloader.initialize(
           group: complexTask.group,
@@ -357,6 +358,9 @@ void main() {
         expect(task.group, equals(complexTask.group));
         expect(task.progressUpdates, equals(complexTask.progressUpdates));
         expect(task.requiresWiFi, equals(complexTask.requiresWiFi));
+        expect(task.retries, equals(complexTask.retries));
+        expect(task.retriesRemaining, equals(complexTask.retriesRemaining));
+        expect(task.retriesRemaining, equals(task.retries));
         expect(task.metaData, equals(complexTask.metaData));
       }
       await downloadStatusCallbackCompleter.future;
