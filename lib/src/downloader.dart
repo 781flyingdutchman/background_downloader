@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter/services.dart';
@@ -21,6 +22,7 @@ typedef DownloadStatusCallback = void Function(
 /// [DownloadTaskStatus.canceled] results in progress -2.0
 /// [DownloadTaskStatus.notFound] results in progress -3.0
 /// [DownloadTaskStatus.waitingToRetry] results in progress -4.0
+/// These constants are available as [progressFailed] etc
 typedef DownloadProgressCallback = void Function(
     BackgroundDownloadTask task, double progress);
 
@@ -96,12 +98,14 @@ class FileDownloader {
           if (downloadTaskStatus == DownloadTaskStatus.failed &&
               task.retriesRemaining > 0) {
             _provideStatusUpdate(task, DownloadTaskStatus.waitingToRetry);
+            _provideProgressUpdate(task, progressWaitingToRetry);
             task.reduceRetriesRemaining();
             _tasksWaitingToRetry.add(task);
-            final waitTime =
-                Duration(seconds: 2 ^ (task.retries - task.retriesRemaining));
-            _log.finer(
-                'TaskId ${task.taskId} failed, waiting ${waitTime.inSeconds}'
+            final waitTime = Duration(
+                seconds:
+                    pow(2, (task.retries - task.retriesRemaining)).toInt());
+            _log.finer('TaskId ${task.taskId} failed, waiting ${waitTime
+                .inSeconds}'
                 ' seconds before retrying. ${task.retriesRemaining}'
                 ' retries remaining');
             Future.delayed(waitTime, () async {
@@ -111,7 +115,7 @@ class FileDownloader {
                   _log.warning(
                       'Could not enqueue task $task after retry timeout');
                   _provideStatusUpdate(task, DownloadTaskStatus.failed);
-                  _provideProgressUpdate(task, -4.0);
+                  _provideProgressUpdate(task, progressFailed);
                 }
               }
             });
@@ -196,7 +200,7 @@ class FileDownloader {
       {String group = defaultGroup,
       DownloadStatusCallback? downloadStatusCallback,
       DownloadProgressCallback? downloadProgressCallback}) {
-    assert(_initialized, 'FileDownloader must be initialized before use');
+    _ensureInitialized();
     assert(downloadStatusCallback != null || (downloadProgressCallback != null),
         'Must provide a status update callback or a progress update callback, or both');
     if (downloadStatusCallback != null) {
@@ -213,7 +217,7 @@ class FileDownloader {
   /// a [DownloadTaskStatus.running] update to the registered callback,
   /// if requested by its [progressUpdates] property
   static Future<bool> enqueue(BackgroundDownloadTask task) async {
-    assert(_initialized, 'FileDownloader must be initialized before use');
+    _ensureInitialized();
     return await _channel
             .invokeMethod<bool>('enqueue', [jsonEncode(task.toJsonMap())]) ??
         false;
@@ -318,7 +322,7 @@ class FileDownloader {
   /// [DownloadTaskStatus.canceled] update to the registered callback, if
   /// requested
   static Future<int> reset({String? group = defaultGroup}) async {
-    assert(_initialized, 'FileDownloader must be initialized before use');
+    _ensureInitialized();
     _tasksWaitingToRetry.clear();
     return await _channel.invokeMethod<int>('reset', group) ?? -1;
   }
@@ -343,7 +347,7 @@ class FileDownloader {
   static Future<List<BackgroundDownloadTask>> allTasks(
       {String group = defaultGroup,
       bool includeTasksWaitingToRetry = true}) async {
-    assert(_initialized, 'FileDownloader must be initialized before use');
+    _ensureInitialized();
     final result =
         await _channel.invokeMethod<List<dynamic>?>('allTasks', group) ?? [];
     final tasks = result
@@ -360,14 +364,18 @@ class FileDownloader {
   /// Every canceled task wil emit a [DownloadTaskStatus.canceled] update to
   /// the registered callback, if requested
   static Future<bool> cancelTasksWithIds(List<String> taskIds) async {
-    assert(_initialized, 'FileDownloader must be initialized before use');
-    final matchingTasksWaitingToRetry =
-        _tasksWaitingToRetry.where((task) => taskIds.contains(task.taskId));
-    final matchingTaskIdsWaitingToRetry =
-        matchingTasksWaitingToRetry.map((task) => task.taskId);
+    _ensureInitialized();
+    final matchingTasksWaitingToRetry = _tasksWaitingToRetry
+        .where((task) => taskIds.contains(task.taskId))
+        .toList(growable: false);
+    final matchingTaskIdsWaitingToRetry = matchingTasksWaitingToRetry
+        .map((task) => task.taskId)
+        .toList(growable: false);
     // remove tasks waiting to retry from the list so they won't be retried
     for (final task in matchingTasksWaitingToRetry) {
       _tasksWaitingToRetry.remove(task);
+      _provideStatusUpdate(task, DownloadTaskStatus.canceled);
+      _provideProgressUpdate(task, progressCanceled);
     }
     // cancel remaining taskIds on the native platform
     final remainingTaskIds = taskIds
@@ -388,9 +396,10 @@ class FileDownloader {
   /// does not guarantee that the task is still running. To keep track of
   /// the status of tasks, use a [DownloadStatusCallback]
   static Future<BackgroundDownloadTask?> taskForId(String taskId) async {
-    assert(_initialized, 'FileDownloader must be initialized before use');
+    _ensureInitialized();
     // check if task with this Id is waiting to retry
-    final taskWaitingToRetry = _tasksWaitingToRetry.where((task) => task.taskId == taskId);
+    final taskWaitingToRetry =
+        _tasksWaitingToRetry.where((task) => task.taskId == taskId);
     if (taskWaitingToRetry.isNotEmpty) {
       return taskWaitingToRetry.first;
     }
@@ -400,6 +409,11 @@ class FileDownloader {
       return BackgroundDownloadTask.fromJsonMap(jsonDecode(jsonString));
     }
     return null;
+  }
+
+  /// Assert that the [FileDownloader] has been initialized
+  static void _ensureInitialized() {
+    assert(_initialized, 'FileDownloader must be initialized before use');
   }
 
   /// Destroy the [FileDownloader]. Subsequent use requires initialization

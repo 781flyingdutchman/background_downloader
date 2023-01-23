@@ -160,9 +160,7 @@ class BackgroundDownloadTask {
           'Directory must be relative to the baseDirectory specified in the baseDirectory argument');
     }
     if (retries < 0 || retries > 10) {
-      throw ArgumentError(
-        'Number of retries must be between 0 and 10'
-      );
+      throw ArgumentError('Number of retries must be between 0 and 10');
     }
   }
 
@@ -256,7 +254,7 @@ class BackgroundDownloadTask {
 
   @override
   String toString() {
-    return 'BackgroundDownloadTask{taskId: $taskId, url: $url, filename: $filename, headers: $headers, directory: $directory, baseDirectory: $baseDirectory, group: $group, progressUpdates: $progressUpdates, metaData: $metaData}';
+    return 'BackgroundDownloadTask{taskId: $taskId, url: $url, filename: $filename, headers: $headers, directory: $directory, baseDirectory: $baseDirectory, group: $group, progressUpdates: $progressUpdates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, metaData: $metaData}';
   }
 }
 
@@ -320,8 +318,16 @@ class BackgroundDownloadStatusEvent extends BackgroundDownloadEvent {
 /// [DownloadTaskStatus.failed] results in progress -1.0
 /// [DownloadTaskStatus.canceled] results in progress -2.0
 /// [DownloadTaskStatus.notFound] results in progress -3.0
+/// [DownloadTaskStatus.waitingToRetry] results in progress -4.0
 class BackgroundDownloadProgressEvent extends BackgroundDownloadEvent {
   final double progress;
 
   BackgroundDownloadProgressEvent(super.task, this.progress);
 }
+
+// Progress values representing a status
+const progressComplete = 1.0;
+const progressFailed = -1.0;
+const progressCanceled = -2.0;
+const progressNotFound = -3.0;
+const progressWaitingToRetry = -4.0;

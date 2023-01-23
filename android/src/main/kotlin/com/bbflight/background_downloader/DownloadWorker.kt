@@ -160,8 +160,9 @@ class DownloadWorker(
                 status: DownloadTaskStatus
         ) {
             // Post update if task expects one, or if failed and retry is needed
-            if (backgroundDownloadTask.providesStatusUpdates() || (status == DownloadTaskStatus
-                            .failed && backgroundDownloadTask._retriesRemaining > 0)) {
+            val retryNeeded =
+                    status == DownloadTaskStatus.failed && backgroundDownloadTask._retriesRemaining > 0
+            if (backgroundDownloadTask.providesStatusUpdates() || retryNeeded) {
                 Handler(Looper.getMainLooper()).post {
                     try {
                         val gson = Gson()
@@ -179,14 +180,16 @@ class DownloadWorker(
                 }
             }
             // if task is in final state, process a final progressUpdate and remove from
-            // persistent storage
+            // persistent storage. A 'failed' progress update is only provided if
+            // a retry is not needed: if it is needed, a `waitingToRetry` progress update
+            // will be generated on the Dart side
             if (status.isFinalState()) {
                 when (status) {
                     DownloadTaskStatus.complete -> processProgressUpdate(
                             backgroundDownloadTask,
                             1.0
                     )
-                    DownloadTaskStatus.failed -> processProgressUpdate(
+                    DownloadTaskStatus.failed -> if (!retryNeeded) processProgressUpdate(
                             backgroundDownloadTask,
                             -1.0)
                     DownloadTaskStatus.canceled -> processProgressUpdate(
