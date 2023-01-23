@@ -377,6 +377,56 @@ void main() {
       await downloadStatusCallbackCompleter.future;
       expect(lastDownloadStatus, equals(DownloadTaskStatus.complete));
     });
+
+    test('BackgroundDownloadTask url and urlQueryParameters', () {
+      final task0 = BackgroundDownloadTask(
+          url: 'url with space',
+          filename: defaultFilename,
+          urlQueryParameters: {});
+      expect(task0.url, equals('url%20with%20space'));
+      final task1 = BackgroundDownloadTask(
+          url: 'url',
+          filename: defaultFilename,
+          urlQueryParameters: {'param1': '1', 'param2': 'with space'});
+      expect(task1.url, equals('url?param1=1&param2=with%20space'));
+      final task2 = BackgroundDownloadTask(
+          url: 'url?param0=0',
+          filename: defaultFilename,
+          urlQueryParameters: {'param1': '1', 'param2': 'with space'});
+      expect(task2.url, equals('url?param0=0&param1=1&param2=with%20space'));
+      final task3 = BackgroundDownloadTask(
+          url: 'url?param0=encoded%20url',
+          filename: defaultFilename,
+          urlQueryParameters: {'param1': '1', 'param2': 'with space'});
+      // Note that the encoded url is encoded again (the % is encoded) leading
+      // to what is likely not the desired url
+      expect(task3.url,
+          equals('url?param0=encoded%2520url&param1=1&param2=with%20space'));
+      final task4 = BackgroundDownloadTask(
+          url: urlWithContentLength,
+          filename: defaultFilename);
+      expect(task4.url, equals(urlWithContentLength
+      ));
+    });
+
+    test('BackgroundDownloadTask filename', () {
+      final task0 = BackgroundDownloadTask(url: workingUrl);
+      expect(task0.filename.isNotEmpty, isTrue);
+      final task1 = BackgroundDownloadTask(url: workingUrl, filename: defaultFilename);
+      expect(task1.filename, equals(defaultFilename));
+      expect(() => BackgroundDownloadTask(url: workingUrl, filename:
+      'somedir/$defaultFilename'), throwsArgumentError);
+    });
+
+    test('BackgroundDownloadTask directory', () {
+      final task0 = BackgroundDownloadTask(url: workingUrl);
+      expect(task0.directory.isEmpty, isTrue);
+      final task1 = BackgroundDownloadTask(url: workingUrl, directory:
+      'testDir');
+      expect(task1.directory, equals('testDir'));
+      expect(() => BackgroundDownloadTask(url: workingUrl, directory:
+      '/testDir'), throwsArgumentError);
+    });
   });
 
   group('Convenience downloads', () {

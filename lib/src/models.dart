@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 /// Defines a set of possible states which a [DownloadTask] can be in.
 enum DownloadTaskStatus {
@@ -101,6 +102,9 @@ class BackgroundDownloadTask {
   final String taskId;
 
   /// String representation of the url from which to download
+  ///
+  /// If the url contains special characters it will be encoded, so ensure
+  /// the url provided is not already encoded
   final String url;
 
   /// Filename of the file to store
@@ -108,6 +112,16 @@ class BackgroundDownloadTask {
 
   /// potential additional headers to send with the request
   final Map<String, String> headers;
+
+  /// For tasks used in serverRequest, set [post] to make the request using
+  /// POST instead of GET. Post must be one of the following:
+  /// true: POST request without a body
+  /// a String: POST request with [post] as the body, encoded in utf8 and
+  ///   content-type 'text/plain'
+  /// a List of bytes: POST request with [post] as the body
+  /// a Map: POST request with [post] as form fields, encoded in utf8 and
+  ///   content-type 'application/x-www-form-urlencoded'
+  final Object? post;
 
   /// Optional directory, relative to the base directory
   final String directory;
@@ -137,9 +151,11 @@ class BackgroundDownloadTask {
 
   BackgroundDownloadTask(
       {String? taskId,
-      required this.url,
-      required this.filename,
+      required String url,
+      Map<String, String>? urlQueryParameters,
+      String? filename,
       this.headers = const {},
+      this.post,
       this.directory = '',
       this.baseDirectory = BaseDirectory.applicationDocuments,
       this.group = 'default',
@@ -148,11 +164,13 @@ class BackgroundDownloadTask {
       this.retries = 0,
       this.metaData = ''})
       : taskId = taskId ?? Random().nextInt(1 << 32).toString(),
-        _retriesRemaining = retries {
-    if (filename.isEmpty) {
+        _retriesRemaining = retries,
+        url = _urlWithQueryParameters(url, urlQueryParameters),
+        filename = filename ?? Random().nextInt(1 << 32).toString() {
+    if (filename?.isEmpty == true) {
       throw ArgumentError('Filename cannot be empty');
     }
-    if (filename.contains(Platform.pathSeparator)) {
+    if (filename?.contains(Platform.pathSeparator) == true) {
       throw ArgumentError('Filename cannot contain path separators');
     }
     if (directory.startsWith(Platform.pathSeparator)) {
@@ -160,7 +178,16 @@ class BackgroundDownloadTask {
           'Directory must be relative to the baseDirectory specified in the baseDirectory argument');
     }
     if (retries < 0 || retries > 10) {
-      throw ArgumentError('Number of retries must be between 0 and 10');
+      throw ArgumentError('Number of retries must be in range 1 through 10');
+    }
+    if (!((post == null ||
+        post == true) ||
+        post is String ||
+        post is Uint8List ||
+        post is Map<String, String>)) {
+      throw ArgumentError(
+          'Field post must be null, true, a String, a Uint8List or'
+          ' a Map<String, String>');
     }
   }
 
@@ -171,6 +198,7 @@ class BackgroundDownloadTask {
           String? url,
           String? filename,
           Map<String, String>? headers,
+          Object? post,
           String? directory,
           BaseDirectory? baseDirectory,
           String? group,
@@ -183,6 +211,7 @@ class BackgroundDownloadTask {
           url: url ?? this.url,
           filename: filename ?? this.filename,
           headers: headers ?? this.headers,
+          post: post ?? this.post,
           directory: directory ?? this.directory,
           baseDirectory: baseDirectory ?? this.baseDirectory,
           group: group ?? this.group,
@@ -197,6 +226,7 @@ class BackgroundDownloadTask {
         url = jsonMap['url'],
         filename = jsonMap['filename'],
         headers = Map<String, String>.from(jsonMap['headers']),
+        post = jsonMap['post'],
         directory = jsonMap['directory'],
         baseDirectory = BaseDirectory.values[jsonMap['baseDirectory']],
         group = jsonMap['group'],
@@ -213,6 +243,7 @@ class BackgroundDownloadTask {
         'url': url,
         'filename': filename,
         'headers': headers,
+        'post': post,
         'directory': directory,
         'baseDirectory': baseDirectory.index, // stored as int
         'group': group,
@@ -256,6 +287,20 @@ class BackgroundDownloadTask {
   String toString() {
     return 'BackgroundDownloadTask{taskId: $taskId, url: $url, filename: $filename, headers: $headers, directory: $directory, baseDirectory: $baseDirectory, group: $group, progressUpdates: $progressUpdates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, metaData: $metaData}';
   }
+}
+
+/// Return fully encoded url String composed of the [url] and the
+/// [urlQueryParameters], if given
+///
+/// Note the assumption is that the original [url] is not encoded
+String _urlWithQueryParameters(
+    String url, Map<String, String>? urlQueryParameters) {
+  if (urlQueryParameters == null || urlQueryParameters.isEmpty) {
+    return Uri.encodeFull(url);
+  }
+  final separator = url.contains('?') ? '&' : '?';
+  return Uri.encodeFull(
+      '$url$separator${urlQueryParameters.entries.map((e) => '${e.key}=${e.value}').join('&')}');
 }
 
 /// Signature for a function you can provide to the [downloadBatch] method
