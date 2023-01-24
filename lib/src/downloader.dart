@@ -34,11 +34,11 @@ class FileDownloader {
   static const defaultGroup = 'default';
   static const _channel = MethodChannel('com.bbflight.background_downloader');
   static const _backgroundChannel =
-  MethodChannel('com.bbflight.background_downloader.background');
+      MethodChannel('com.bbflight.background_downloader.background');
   static http.Client? httpClient;
   static bool _initialized = false;
   static final _downloadCompleters =
-  <BackgroundDownloadTask, Completer<DownloadTaskStatus>>{};
+      <BackgroundDownloadTask, Completer<DownloadTaskStatus>>{};
   static final _batches = <BackgroundDownloadBatch>[];
 
   static final _tasksWaitingToRetry = <BackgroundDownloadTask>[];
@@ -70,9 +70,10 @@ class FileDownloader {
   /// progress updates make sure to register a [DownloadProgressCallback] and
   /// set the task's [progressUpdates] property to .progressUpdates or
   /// .statusChangeAndProgressUpdates
-  static void initialize({String group = defaultGroup,
-    DownloadStatusCallback? downloadStatusCallback,
-    DownloadProgressCallback? downloadProgressCallback}) {
+  static void initialize(
+      {String group = defaultGroup,
+      DownloadStatusCallback? downloadStatusCallback,
+      DownloadProgressCallback? downloadProgressCallback}) {
     WidgetsFlutterBinding.ensureInitialized();
     _tasksWaitingToRetry.clear();
     _batches.clear();
@@ -87,29 +88,29 @@ class FileDownloader {
     _backgroundChannel.setMethodCallHandler((call) async {
       final args = call.arguments as List<dynamic>;
       final task =
-      BackgroundDownloadTask.fromJsonMap(jsonDecode(args.first as String));
+          BackgroundDownloadTask.fromJsonMap(jsonDecode(args.first as String));
       switch (call.method) {
         case 'statusUpdate':
-        // Normal status updates are only sent here when the task is expected
-        // to provide those.  The exception is a .failed status when a task
-        // has retriesRemaining > 0: those are always sent here, and are
-        // intercepted to hold the task and reschedule in the near future
+          // Normal status updates are only sent here when the task is expected
+          // to provide those.  The exception is a .failed status when a task
+          // has retriesRemaining > 0: those are always sent here, and are
+          // intercepted to hold the task and reschedule in the near future
           final downloadTaskStatus =
-          DownloadTaskStatus.values[args.last as int];
+              DownloadTaskStatus.values[args.last as int];
           // intercept failed download if task has retries left
           if (downloadTaskStatus == DownloadTaskStatus.failed &&
               task.retriesRemaining > 0) {
             _provideStatusUpdate(task, DownloadTaskStatus.waitingToRetry);
             _provideProgressUpdate(task, progressWaitingToRetry);
-            task.reduceRetriesRemaining();
+            task.retriesRemaining--;
             _tasksWaitingToRetry.add(task);
             final waitTime = Duration(
                 seconds:
-                pow(2, (task.retries - task.retriesRemaining)).toInt());
+                    pow(2, (task.retries - task.retriesRemaining)).toInt());
             _log.finer(
                 'TaskId ${task.taskId} failed, waiting ${waitTime.inSeconds}'
-                    ' seconds before retrying. ${task.retriesRemaining}'
-                    ' retries remaining');
+                ' seconds before retrying. ${task.retriesRemaining}'
+                ' retries remaining');
             Future.delayed(waitTime, () async {
               // after delay, enqueue task again if it's still waiting
               if (_tasksWaitingToRetry.remove(task)) {
@@ -148,8 +149,8 @@ class FileDownloader {
   }
 
   /// Provide the status update for this task to its callback or listener
-  static void _provideStatusUpdate(BackgroundDownloadTask task,
-      DownloadTaskStatus downloadTaskStatus) {
+  static void _provideStatusUpdate(
+      BackgroundDownloadTask task, DownloadTaskStatus downloadTaskStatus) {
     if (task.providesStatusUpdates) {
       final downloadStatusCallback = statusCallbacks[task.group];
       if (downloadStatusCallback != null) {
@@ -413,7 +414,7 @@ class FileDownloader {
     return null;
   }
 
-  /// Perform a server request for this [task]
+  /// Perform a server request for this [request]
   ///
   /// A server request returns an [http.Response] object that includes
   /// the [body] as String, the [bodyBytes] as [UInt8List] and the [json]
@@ -421,15 +422,14 @@ class FileDownloader {
   /// It also contains the [statusCode] and [reasonPhrase] that may indicate
   /// an error, and several other fields that may be useful.
   ///
-  /// The request will abide by the [retries] set on the [task], and set
-  /// [headers] included in the [task]
+  /// The request will abide by the [retries] set on the [request], and set
+  /// [headers] included in the [request]
   ///
   /// The [http.Client] object used for this request is the [httpClient] field of
   /// the downloader. If not set, the default [http.Client] will be used.
   /// The request is executed on an Isolate, to ensure minimal interference
   /// with the main Isolate
-  Future<http.Response> serverRequest(BackgroundDownloadTask task) =>
-      compute(doServerRequest, task);
+  Future<http.Response> request(Request request) => compute(doRequest, request);
 
   /// Assert that the [FileDownloader] has been initialized
   static void _ensureInitialized() {
@@ -451,26 +451,27 @@ class FileDownloader {
 ///
 /// This function is run on an Isolate to ensure performance on the main
 /// Isolate is not affected
-Future<http.Response> doServerRequest(BackgroundDownloadTask task) async {
+Future<http.Response> doRequest(Request request) async {
   FileDownloader.httpClient ??= http.Client();
   final client = FileDownloader.httpClient!;
-  while (task.retriesRemaining >= 0) {
-    final response = task.post == null ?
-      await client.get(Uri.parse(task.url), headers: task.headers) :
-      await client.post(Uri.parse(task.url), headers: task.headers,
-          body: task.post);
+  while (request.retriesRemaining >= 0) {
+    final response = request.post == null
+        ? await client.get(Uri.parse(request.url), headers: request.headers)
+        : await client.post(Uri.parse(request.url),
+            headers: request.headers, body: request.post);
     if ([200, 201, 202, 203, 204, 205, 206, 404]
         .contains(response.statusCode)) {
       return response;
     }
     // error, retry if allowed
-    task.reduceRetriesRemaining();
-    if (task.retriesRemaining < 0) {
+    request.retriesRemaining--;
+    if (request.retriesRemaining < 0) {
       return response; // final response with error
     }
     final waitTime = Duration(
-        seconds: pow(2, (task.retries - task.retriesRemaining)).toInt());
+        seconds: pow(2, (request.retries - request.retriesRemaining)).toInt());
     await Future.delayed(waitTime);
   }
-  throw ArgumentError('Task ${task.taskId} had negative retriesRemaining');
+  throw ArgumentError('Request to ${request.url} had negative '
+      'retriesRemaining');
 }

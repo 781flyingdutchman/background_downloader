@@ -642,7 +642,7 @@ void main() {
               DownloadTaskProgressUpdates.statusChangeAndProgressUpdates);
       expect(await FileDownloader.enqueue(retryTaskWithProgress), isTrue);
       expect(downloadProgressCallbackCounter, equals(0));
-      await Future.delayed(const Duration(seconds: 4));
+      await Future.delayed(const Duration(seconds: 6));
       expect(lastDownloadProgress, equals(progressWaitingToRetry));
       // iOS emits a 0.999 progress update for a 403 response with the
       // text of the response, before sharing the response code, triggering

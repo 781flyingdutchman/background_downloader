@@ -93,35 +93,98 @@ enum DownloadTaskProgressUpdates {
   statusChangeAndProgressUpdates,
 }
 
-/// Information related to a download
+/// Information related to a server Request
 ///
-/// An equality test on a [BackgroundDownloadTask] is a test on the [taskId]
-/// only - all other fields are ignored in that test
-class BackgroundDownloadTask {
-  /// Identifier for the task - auto generated if omitted
-  final String taskId;
-
-  /// String representation of the url from which to download
-  ///
-  /// If the url contains special characters it will be encoded, so ensure
-  /// the url provided is not already encoded
+/// An equality test on a [Request] is an equality test on the [url]
+class Request {
+  /// String representation of the url, urlEncoded
   final String url;
-
-  /// Filename of the file to store
-  final String filename;
 
   /// potential additional headers to send with the request
   final Map<String, String> headers;
 
-  /// For tasks used in serverRequest, set [post] to make the request using
-  /// POST instead of GET. Post must be one of the following:
-  /// true: POST request without a body
-  /// a String: POST request with [post] as the body, encoded in utf8 and
+  /// Set [post] to make the request using POST instead of GET.
+  /// Post must be one of the following:
+  /// - true: POST request without a body
+  /// - a String: POST request with [post] as the body, encoded in utf8 and
   ///   content-type 'text/plain'
-  /// a List of bytes: POST request with [post] as the body
-  /// a Map: POST request with [post] as form fields, encoded in utf8 and
+  /// - a List of bytes: POST request with [post] as the body
+  /// - a Map: POST request with [post] as form fields, encoded in utf8 and
   ///   content-type 'application/x-www-form-urlencoded'
   final Object? post;
+
+  /// Maximum number of retries the downloader should attempt
+  ///
+  /// Defaults to 0, meaning no retry will be attempted
+  final int retries;
+
+  /// Number of retries remaining
+  int retriesRemaining;
+
+  /// Creates a [Request]
+  ///
+  /// [url] must not be encoded and can include query parameters
+  /// [urlQueryParameters] may be added and will be appended to the [url]
+  /// [headers] an optional map of HTTP request headers
+  /// [post] if set, uses POST instead of GET. Post must be one of the
+  /// following:
+  /// - true: POST request without a body
+  /// - a String: POST request with [post] as the body, encoded in utf8 and
+  ///   content-type 'text/plain'
+  /// - a List of bytes: POST request with [post] as the body
+  /// - a Map: POST request with [post] as form fields, encoded in utf8 and
+  ///   content-type 'application/x-www-form-urlencoded'
+  ///
+  /// [retries] if >0 will retry a failed download this many times
+  /// [retriesRemaining] number of retries remaining. Used internally by the
+  /// downloader, so do not pass this parameter when constructing your task
+  Request(
+      {required String url,
+      Map<String, String>? urlQueryParameters,
+      this.headers = const {},
+      this.post,
+      this.retries = 0,
+      retriesRemaining})
+      : retriesRemaining = retriesRemaining ?? retries,
+        url = _urlWithQueryParameters(url, urlQueryParameters) {
+    if (retries < 0 || retries > 10) {
+      throw ArgumentError('Number of retries must be in range 1 through 10');
+    }
+    if (!((post == null || post == true) ||
+        post is String ||
+        post is Uint8List ||
+        post is Map<String, String>)) {
+      throw ArgumentError(
+          'Field post must be null, true, a String, a Uint8List or'
+          ' a Map<String, String>');
+    }
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Request && runtimeType == other.runtimeType && url == other.url;
+
+  @override
+  int get hashCode => url.hashCode;
+
+  @override
+  String toString() {
+    return 'Request{url: $url, headers: $headers, post: ${post == null ? "null" : "not null"}, '
+        'retries: $retries, retriesRemaining: $retriesRemaining}';
+  }
+}
+
+/// Information related to a download
+///
+/// An equality test on a [BackgroundDownloadTask] is a test on the [taskId]
+/// only - all other fields are ignored in that test
+class BackgroundDownloadTask extends Request {
+  /// Identifier for the task - auto generated if omitted
+  final String taskId;
+
+  /// Filename of the file to store
+  final String filename;
 
   /// Optional directory, relative to the base directory
   final String directory;
@@ -138,34 +201,53 @@ class BackgroundDownloadTask {
   /// If true, will not download over cellular (metered) network
   final bool requiresWiFi;
 
-  /// Maximum number of retries the downloader should attempt
-  ///
-  /// Defaults to 0, meaning no retry will be attempted
-  final int retries;
-
-  /// Number of retries remaining
-  int _retriesRemaining;
-
   /// User-defined metadata
   final String metaData;
 
+  /// Creates a [BackgroundDownloadTask]
+  ///
+  /// [taskId] must be unique. A unique id will be generated if omitted
+  /// [url] must not be encoded and can include query parameters
+  /// [urlQueryParameters] may be added and will be appended to the [url]
+  /// [filename] of the file to save. If omitted, a random filename will be
+  /// generated
+  /// [headers] an optional map of HTTP request headers
+  /// [post] if set, uses POST instead of GET. Post must be one of the
+  /// following:
+  /// - true: POST request without a body
+  /// - a String: POST request with [post] as the body, encoded in utf8 and
+  ///   content-type 'text/plain'
+  /// - a List of bytes: POST request with [post] as the body
+  /// - a Map: POST request with [post] as form fields, encoded in utf8 and
+  ///   content-type 'application/x-www-form-urlencoded'
+  ///
+  /// [directory] optional directory name, precedes [filename]
+  /// [baseDirectory] one of the base directories, precedes [directory]
+  /// [group] if set allows different callbacks or processing for different
+  /// groups
+  /// [progressUpdates] the kind of progress updates requested
+  /// [requiresWiFi] if set, will not start download until WiFi is available.
+  /// If not set may start download over cellular network
+  /// [retries] if >0 will retry a failed download this many times
+  /// [retriesRemaining] number of retries remaining. Used internally by the
+  /// downloader, so do not pass this parameter when constructing your task
+  /// [metadata] user data
   BackgroundDownloadTask(
       {String? taskId,
-      required String url,
-      Map<String, String>? urlQueryParameters,
+      required super.url,
+      super.urlQueryParameters,
       String? filename,
-      this.headers = const {},
-      this.post,
+      super.headers,
+      super.post,
       this.directory = '',
       this.baseDirectory = BaseDirectory.applicationDocuments,
       this.group = 'default',
       this.progressUpdates = DownloadTaskProgressUpdates.statusChange,
       this.requiresWiFi = false,
-      this.retries = 0,
+      super.retries,
+      super.retriesRemaining,
       this.metaData = ''})
       : taskId = taskId ?? Random().nextInt(1 << 32).toString(),
-        _retriesRemaining = retries,
-        url = _urlWithQueryParameters(url, urlQueryParameters),
         filename = filename ?? Random().nextInt(1 << 32).toString() {
     if (filename?.isEmpty == true) {
       throw ArgumentError('Filename cannot be empty');
@@ -176,18 +258,6 @@ class BackgroundDownloadTask {
     if (directory.startsWith(Platform.pathSeparator)) {
       throw ArgumentError(
           'Directory must be relative to the baseDirectory specified in the baseDirectory argument');
-    }
-    if (retries < 0 || retries > 10) {
-      throw ArgumentError('Number of retries must be in range 1 through 10');
-    }
-    if (!((post == null ||
-        post == true) ||
-        post is String ||
-        post is Uint8List ||
-        post is Map<String, String>)) {
-      throw ArgumentError(
-          'Field post must be null, true, a String, a Uint8List or'
-          ' a Map<String, String>');
     }
   }
 
@@ -205,6 +275,7 @@ class BackgroundDownloadTask {
           DownloadTaskProgressUpdates? progressUpdates,
           bool? requiresWiFi,
           int? retries,
+          int? retriesRemaining,
           String? metaData}) =>
       BackgroundDownloadTask(
           taskId: taskId ?? this.taskId,
@@ -218,24 +289,26 @@ class BackgroundDownloadTask {
           progressUpdates: progressUpdates ?? this.progressUpdates,
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
           retries: retries ?? this.retries,
+          retriesRemaining: retriesRemaining ?? this.retriesRemaining,
           metaData: metaData ?? this.metaData);
 
   /// Creates object from JsonMap
   BackgroundDownloadTask.fromJsonMap(Map<String, dynamic> jsonMap)
       : taskId = jsonMap['taskId'],
-        url = jsonMap['url'],
         filename = jsonMap['filename'],
-        headers = Map<String, String>.from(jsonMap['headers']),
-        post = jsonMap['post'],
         directory = jsonMap['directory'],
         baseDirectory = BaseDirectory.values[jsonMap['baseDirectory']],
         group = jsonMap['group'],
         progressUpdates =
             DownloadTaskProgressUpdates.values[jsonMap['progressUpdates']],
         requiresWiFi = jsonMap['requiresWiFi'],
-        retries = jsonMap['retries'],
-        _retriesRemaining = jsonMap['retriesRemaining'],
-        metaData = jsonMap['metaData'];
+        metaData = jsonMap['metaData'],
+        super(
+            url: jsonMap['url'],
+            headers: Map<String, String>.from(jsonMap['headers']),
+            post: jsonMap['post'],
+            retries: jsonMap['retries'],
+            retriesRemaining: jsonMap['retriesRemaining']);
 
   /// Creates JSON map of this object
   Map toJsonMap() => {
@@ -250,14 +323,9 @@ class BackgroundDownloadTask {
         'progressUpdates': progressUpdates.index, // stored as int
         'requiresWiFi': requiresWiFi,
         'retries': retries,
-        'retriesRemaining': _retriesRemaining,
+        'retriesRemaining': retriesRemaining,
         'metaData': metaData
       };
-
-  /// Reduce count of retries remaining by 1
-  ///
-  /// Used by [FileDownloader]
-  void reduceRetriesRemaining() => _retriesRemaining--;
 
   /// If true, task expects progress updates
   bool get providesProgressUpdates =>
@@ -270,8 +338,6 @@ class BackgroundDownloadTask {
       progressUpdates == DownloadTaskProgressUpdates.statusChange ||
       progressUpdates ==
           DownloadTaskProgressUpdates.statusChangeAndProgressUpdates;
-
-  int get retriesRemaining => _retriesRemaining;
 
   @override
   bool operator ==(Object other) =>
