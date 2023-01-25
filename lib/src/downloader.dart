@@ -102,7 +102,7 @@ class FileDownloader {
               task.retriesRemaining > 0) {
             _provideStatusUpdate(task, DownloadTaskStatus.waitingToRetry);
             _provideProgressUpdate(task, progressWaitingToRetry);
-            task.retriesRemaining--;
+            task.decreaseRetriesRemaining();
             _tasksWaitingToRetry.add(task);
             final waitTime = Duration(
                 seconds:
@@ -421,6 +421,8 @@ class FileDownloader {
   /// representation if available.
   /// It also contains the [statusCode] and [reasonPhrase] that may indicate
   /// an error, and several other fields that may be useful.
+  /// A local error (e.g. a SocketException) will yield [statusCode] 499, with
+  /// details in the [reasonPhrase]
   ///
   /// The request will abide by the [retries] set on the [request], and set
   /// [headers] included in the [request]
@@ -429,7 +431,8 @@ class FileDownloader {
   /// the downloader. If not set, the default [http.Client] will be used.
   /// The request is executed on an Isolate, to ensure minimal interference
   /// with the main Isolate
-  Future<http.Response> request(Request request) => compute(doRequest, request);
+  static Future<http.Response> request(Request request) =>
+      compute(doRequest, request);
 
   /// Assert that the [FileDownloader] has been initialized
   static void _ensureInitialized() {
@@ -452,19 +455,33 @@ class FileDownloader {
 /// This function is run on an Isolate to ensure performance on the main
 /// Isolate is not affected
 Future<http.Response> doRequest(Request request) async {
+  Logger.root.level = Level.ALL;
+  Logger.root.onRecord.listen((LogRecord rec) {
+    if (kDebugMode) {
+      print('${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
+    }
+  });
+  final log = Logger('FileDownloader.request');
   FileDownloader.httpClient ??= http.Client();
   final client = FileDownloader.httpClient!;
+  var response = http.Response('', 499, reasonPhrase: 'Not attempted'); // dummy to start with
   while (request.retriesRemaining >= 0) {
-    final response = request.post == null
-        ? await client.get(Uri.parse(request.url), headers: request.headers)
-        : await client.post(Uri.parse(request.url),
-            headers: request.headers, body: request.post);
-    if ([200, 201, 202, 203, 204, 205, 206, 404]
-        .contains(response.statusCode)) {
-      return response;
+    try {
+      response = request.post == null
+              ? await client.get(Uri.parse(request.url), headers: request.headers)
+              : await client.post(Uri.parse(request.url),
+                  headers: request.headers,
+                  body: request.post);
+      if ([200, 201, 202, 203, 204, 205, 206, 404]
+              .contains(response.statusCode)) {
+            return response;
+          }
+    } catch (e) {
+      log.warning(e);
+      response = http.Response('', 499, reasonPhrase: e.toString());
     }
     // error, retry if allowed
-    request.retriesRemaining--;
+    request.decreaseRetriesRemaining();
     if (request.retriesRemaining < 0) {
       return response; // final response with error
     }

@@ -142,9 +142,7 @@ class Request {
       throw ArgumentError('Number of retries must be in range 1 through 10');
     }
     if (!(post == null || post is String || post is Uint8List)) {
-      print(post.runtimeType);
-      throw ArgumentError(
-          'Field post must be a String or a Uint8List');
+      throw ArgumentError('Field post must be a String or a Uint8List');
     }
   }
 

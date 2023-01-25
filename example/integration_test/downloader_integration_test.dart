@@ -1,7 +1,9 @@
 // ignore_for_file: avoid_print, empty_catches
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,9 +22,14 @@ var lastDownloadProgress = -100.0;
 
 const workingUrl = 'https://google.com';
 const failingUrl = 'https://avmaps-dot-bbflightserver-hrd.appspot'
-    '.com/public/get_current_app_data';
+    '.com/public/get_current_app_data?key=background_downloader_integration_test';
 const urlWithContentLength = 'https://storage.googleapis'
     '.com/approachcharts/test/5MB-test.ZIP';
+//TODO remove 4-1-3-dot- version number from urls
+const getTestUrl =
+    'https://4-1-3-dot-avmaps-dot-bbflightserver-hrd.appspot.com/public/test_get_data';
+const postTestUrl =
+    'https://4-1-3-dot-avmaps-dot-bbflightserver-hrd.appspot.com/public/test_post_data';
 
 const defaultFilename = 'google.html';
 
@@ -407,29 +414,31 @@ void main() {
       expect(task3.url,
           equals('url?param0=encoded%2520url&param1=1&param2=with%20space'));
       final task4 = BackgroundDownloadTask(
-          url: urlWithContentLength,
-          filename: defaultFilename);
-      expect(task4.url, equals(urlWithContentLength
-      ));
+          url: urlWithContentLength, filename: defaultFilename);
+      expect(task4.url, equals(urlWithContentLength));
     });
 
     test('BackgroundDownloadTask filename', () {
       final task0 = BackgroundDownloadTask(url: workingUrl);
       expect(task0.filename.isNotEmpty, isTrue);
-      final task1 = BackgroundDownloadTask(url: workingUrl, filename: defaultFilename);
+      final task1 =
+          BackgroundDownloadTask(url: workingUrl, filename: defaultFilename);
       expect(task1.filename, equals(defaultFilename));
-      expect(() => BackgroundDownloadTask(url: workingUrl, filename:
-      'somedir/$defaultFilename'), throwsArgumentError);
+      expect(
+          () => BackgroundDownloadTask(
+              url: workingUrl, filename: 'somedir/$defaultFilename'),
+          throwsArgumentError);
     });
 
     test('BackgroundDownloadTask directory', () {
       final task0 = BackgroundDownloadTask(url: workingUrl);
       expect(task0.directory.isEmpty, isTrue);
-      final task1 = BackgroundDownloadTask(url: workingUrl, directory:
-      'testDir');
+      final task1 =
+          BackgroundDownloadTask(url: workingUrl, directory: 'testDir');
       expect(task1.directory, equals('testDir'));
-      expect(() => BackgroundDownloadTask(url: workingUrl, directory:
-      '/testDir'), throwsArgumentError);
+      expect(
+          () => BackgroundDownloadTask(url: workingUrl, directory: '/testDir'),
+          throwsArgumentError);
     });
   });
 
@@ -658,6 +667,7 @@ void main() {
             isTrue);
         await downloadStatusCallbackCompleter.future;
         expect(lastDownloadStatus, equals(DownloadTaskStatus.canceled));
+        await Future.delayed(const Duration(milliseconds: 500));
         expect(lastDownloadProgress, equals(progressCanceled));
         expect(await FileDownloader.taskForId(retryTask.taskId), isNull);
       }
@@ -702,6 +712,121 @@ void main() {
           await FileDownloader.taskForId(retryTask.taskId), equals(retryTask));
       expect(await FileDownloader.taskForId(task.taskId), isNull);
       await FileDownloader.cancelTasksWithIds([retryTask.taskId]);
+    });
+  });
+
+  group('Request', () {
+    testWidgets('get request', (widgetTester) async {
+      final request = Request(
+          url: getTestUrl,
+          urlQueryParameters: {'json': 'true', 'request-type': 'get'},
+          headers: {'Header1': 'headerValue1'});
+      // note: json=true required to get results as JSON string
+      final response = await FileDownloader.request(request);
+      expect(response.statusCode, equals(200));
+      final result = jsonDecode(response.body);
+      expect(result['args']['json'], equals('true'));
+      expect(result['args']['request-type'], equals('get'));
+      expect(result['headers']['Header1'], equals('headerValue1'));
+    });
+
+    testWidgets('post request with post is empty body', (widgetTester) async {
+      final request = Request(
+          url: postTestUrl,
+          urlQueryParameters: {'request-type': 'post-empty'},
+          headers: {'Header1': 'headerValue1'},
+          post: '');
+      final response = await FileDownloader.request(request);
+      expect(response.statusCode, equals(200));
+      final result = jsonDecode(response.body);
+      expect(result['args']['request-type'], equals('post-empty'));
+      expect(result['headers']['Header1'], equals('headerValue1'));
+      expect((result['data'] as String).isEmpty, isTrue);
+      expect(result['json'], isNull);
+    });
+
+    testWidgets('post request with post is String', (widgetTester) async {
+      final request = Request(
+          url: postTestUrl,
+          urlQueryParameters: {'request-type': 'post-String'},
+          headers: {'Header1': 'headerValue1'},
+          post: 'testPost');
+      final response = await FileDownloader.request(request);
+      expect(response.statusCode, equals(200));
+      final result = jsonDecode(response.body);
+      expect(result['args']['request-type'], equals('post-String'));
+      expect(result['headers']['Header1'], equals('headerValue1'));
+      expect(result['data'], equals('testPost'));
+      expect(result['json'], isNull);
+    });
+
+    testWidgets('post request with post is Uint8List', (widgetTester) async {
+      final request = Request(
+          url: postTestUrl,
+          urlQueryParameters: {'request-type': 'post-Uint8List'},
+          headers: {'Header1': 'headerValue1'},
+          post: Uint8List.fromList('testPost'.codeUnits));
+      final response = await FileDownloader.request(request);
+      expect(response.statusCode, equals(200));
+      final result = jsonDecode(response.body);
+      expect(result['args']['request-type'], equals('post-Uint8List'));
+      expect(result['headers']['Header1'], equals('headerValue1'));
+      expect(result['data'], equals('testPost'));
+      expect(result['json'], isNull);
+    });
+
+    testWidgets('post request with post is JsonString', (widgetTester) async {
+      final request = Request(
+          url: postTestUrl,
+          urlQueryParameters: {'request-type': 'post-json'},
+          headers: {
+            'Header1': 'headerValue1',
+            'content-type': 'application/json'
+          },
+          post: '{"field1": 1}');
+      final response = await FileDownloader.request(request);
+      expect(response.statusCode, equals(200));
+      final result = jsonDecode(response.body);
+      expect(result['args']['request-type'], equals('post-json'));
+      expect(result['headers']['Header1'], equals('headerValue1'));
+      expect(result['data'], equals('{"field1": 1}'));
+      // confirm the server side interpreted this as JSON
+      expect(result['json'], equals({'field1': 1}));
+    });
+
+    testWidgets('post request with post is invalid type', (widgetTester) async {
+      expect(
+          () => Request(
+              url: postTestUrl,
+              urlQueryParameters: {'request-type': 'invalid'},
+              headers: {'Header1': 'headerValue1'},
+              post: {'invalid': 'map'}),
+          throwsArgumentError);
+    });
+
+    testWidgets('get request with server error, no retries', (widgetTester) async {
+      final request = Request(url: failingUrl);
+      final response = await FileDownloader.request(request);
+      expect(response.statusCode, equals(403));
+      expect(response.reasonPhrase, equals('Forbidden'));
+    });
+
+    testWidgets('get request with server error, with retries', (widgetTester) async {
+      // There is no easy way to confirm the retries are happening, because the
+      // Request object is modified within the Isolate and not passed back to
+      // the main isolate. We therefore observe the three retries by
+      // examining the server logs
+      final request = Request(url: failingUrl, retries: 3);
+      final response = await FileDownloader.request(request);
+      expect(response.statusCode, equals(403));
+      expect(response.reasonPhrase, equals('Forbidden'));
+    });
+
+    testWidgets('get request with malformed url error, no retries', (widgetTester) async {
+      final request = Request(url: 'somethingRandom');
+      final response = await FileDownloader.request(request);
+      expect(response.statusCode, equals(499));
+      expect(response.reasonPhrase, equals('Invalid argument(s): No host specified in URI somethingRandom'));
     });
   });
 }
