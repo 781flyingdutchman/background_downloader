@@ -93,7 +93,7 @@ enum DownloadTaskProgressUpdates {
   statusChangeAndProgressUpdates,
 }
 
-/// Information related to a server Request
+/// A server Request
 ///
 /// An equality test on a [Request] is an equality test on the [url]
 class Request {
@@ -105,12 +105,9 @@ class Request {
 
   /// Set [post] to make the request using POST instead of GET.
   /// Post must be one of the following:
-  /// - true: POST request without a body
   /// - a String: POST request with [post] as the body, encoded in utf8 and
-  ///   content-type 'text/plain'
+  ///   default content-type 'text/plain'
   /// - a List of bytes: POST request with [post] as the body
-  /// - a Map: POST request with [post] as form fields, encoded in utf8 and
-  ///   content-type 'application/x-www-form-urlencoded'
   final Object? post;
 
   /// Maximum number of retries the downloader should attempt
@@ -119,7 +116,7 @@ class Request {
   final int retries;
 
   /// Number of retries remaining
-  int retriesRemaining;
+  int _retriesRemaining;
 
   /// Creates a [Request]
   ///
@@ -128,37 +125,51 @@ class Request {
   /// [headers] an optional map of HTTP request headers
   /// [post] if set, uses POST instead of GET. Post must be one of the
   /// following:
-  /// - true: POST request without a body
   /// - a String: POST request with [post] as the body, encoded in utf8 and
-  ///   content-type 'text/plain'
+  ///   default content-type 'text/plain'
   /// - a List of bytes: POST request with [post] as the body
-  /// - a Map: POST request with [post] as form fields, encoded in utf8 and
-  ///   content-type 'application/x-www-form-urlencoded'
   ///
   /// [retries] if >0 will retry a failed download this many times
-  /// [retriesRemaining] number of retries remaining. Used internally by the
-  /// downloader, so do not pass this parameter when constructing your task
   Request(
       {required String url,
       Map<String, String>? urlQueryParameters,
       this.headers = const {},
       this.post,
-      this.retries = 0,
-      retriesRemaining})
-      : retriesRemaining = retriesRemaining ?? retries,
+      this.retries = 0})
+      : _retriesRemaining = retries,
         url = _urlWithQueryParameters(url, urlQueryParameters) {
     if (retries < 0 || retries > 10) {
       throw ArgumentError('Number of retries must be in range 1 through 10');
     }
-    if (!((post == null || post == true) ||
-        post is String ||
-        post is Uint8List ||
-        post is Map<String, String>)) {
+    if (!(post == null || post is String || post is Uint8List)) {
+      print(post.runtimeType);
       throw ArgumentError(
-          'Field post must be null, true, a String, a Uint8List or'
-          ' a Map<String, String>');
+          'Field post must be a String or a Uint8List');
     }
   }
+
+  /// Creates object from JsonMap
+  Request.fromJsonMap(Map<String, dynamic> jsonMap)
+      : url = jsonMap['url'],
+        headers = Map<String, String>.from(jsonMap['headers']),
+        post = jsonMap['post'],
+        retries = jsonMap['retries'],
+        _retriesRemaining = jsonMap['retriesRemaining'];
+
+  /// Creates JSON map of this object
+  Map toJsonMap() => {
+        'url': url,
+        'headers': headers,
+        'post': post,
+        'retries': retries,
+        'retriesRemaining': _retriesRemaining,
+      };
+
+  /// Decrease [_retriesRemaining] by one
+  void decreaseRetriesRemaining() => _retriesRemaining--;
+
+  /// Number of retries remaining
+  int get retriesRemaining => _retriesRemaining;
 
   @override
   bool operator ==(Object other) =>
@@ -171,11 +182,11 @@ class Request {
   @override
   String toString() {
     return 'Request{url: $url, headers: $headers, post: ${post == null ? "null" : "not null"}, '
-        'retries: $retries, retriesRemaining: $retriesRemaining}';
+        'retries: $retries, retriesRemaining: $_retriesRemaining}';
   }
 }
 
-/// Information related to a download
+/// Information related to a download task
 ///
 /// An equality test on a [BackgroundDownloadTask] is a test on the [taskId]
 /// only - all other fields are ignored in that test
@@ -229,9 +240,7 @@ class BackgroundDownloadTask extends Request {
   /// [requiresWiFi] if set, will not start download until WiFi is available.
   /// If not set may start download over cellular network
   /// [retries] if >0 will retry a failed download this many times
-  /// [retriesRemaining] number of retries remaining. Used internally by the
-  /// downloader, so do not pass this parameter when constructing your task
-  /// [metadata] user data
+  /// [metaData] user data
   BackgroundDownloadTask(
       {String? taskId,
       required super.url,
@@ -245,7 +254,6 @@ class BackgroundDownloadTask extends Request {
       this.progressUpdates = DownloadTaskProgressUpdates.statusChange,
       this.requiresWiFi = false,
       super.retries,
-      super.retriesRemaining,
       this.metaData = ''})
       : taskId = taskId ?? Random().nextInt(1 << 32).toString(),
         filename = filename ?? Random().nextInt(1 << 32).toString() {
@@ -289,8 +297,8 @@ class BackgroundDownloadTask extends Request {
           progressUpdates: progressUpdates ?? this.progressUpdates,
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
           retries: retries ?? this.retries,
-          retriesRemaining: retriesRemaining ?? this.retriesRemaining,
-          metaData: metaData ?? this.metaData);
+          metaData: metaData ?? this.metaData)
+        .._retriesRemaining = retriesRemaining ?? this._retriesRemaining;
 
   /// Creates object from JsonMap
   BackgroundDownloadTask.fromJsonMap(Map<String, dynamic> jsonMap)
@@ -303,27 +311,19 @@ class BackgroundDownloadTask extends Request {
             DownloadTaskProgressUpdates.values[jsonMap['progressUpdates']],
         requiresWiFi = jsonMap['requiresWiFi'],
         metaData = jsonMap['metaData'],
-        super(
-            url: jsonMap['url'],
-            headers: Map<String, String>.from(jsonMap['headers']),
-            post: jsonMap['post'],
-            retries: jsonMap['retries'],
-            retriesRemaining: jsonMap['retriesRemaining']);
+        super.fromJsonMap(jsonMap);
 
   /// Creates JSON map of this object
+  @override
   Map toJsonMap() => {
+        ...super.toJsonMap(),
         'taskId': taskId,
-        'url': url,
         'filename': filename,
-        'headers': headers,
-        'post': post,
         'directory': directory,
         'baseDirectory': baseDirectory.index, // stored as int
         'group': group,
         'progressUpdates': progressUpdates.index, // stored as int
         'requiresWiFi': requiresWiFi,
-        'retries': retries,
-        'retriesRemaining': retriesRemaining,
         'metaData': metaData
       };
 
@@ -351,7 +351,7 @@ class BackgroundDownloadTask extends Request {
 
   @override
   String toString() {
-    return 'BackgroundDownloadTask{taskId: $taskId, url: $url, filename: $filename, headers: $headers, directory: $directory, baseDirectory: $baseDirectory, group: $group, progressUpdates: $progressUpdates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, metaData: $metaData}';
+    return 'BackgroundDownloadTask{taskId: $taskId, url: $url, filename: $filename, headers: $headers, directory: $directory, baseDirectory: $baseDirectory, group: $group, progressUpdates: $progressUpdates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $_retriesRemaining, metaData: $metaData}';
   }
 }
 
