@@ -21,6 +21,7 @@ import java.lang.System.currentTimeMillis
 import java.net.HttpURLConnection
 import java.net.SocketException
 import java.net.URL
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import kotlin.concurrent.write
@@ -313,18 +314,18 @@ class DownloadWorker(
                 connection.doOutput = true
                 when (downloadTask.post) {
                     is String -> {
-                        connection.setRequestProperty(
-                            "Content-Length",
-                            downloadTask.post.length.toString()
-                        )
+//                        val bytes = downloadTask.post.toByteArray(StandardCharsets.UTF_8)
+                        connection.setFixedLengthStreamingMode(downloadTask.post.length)
+                        Log.v(TAG, "String=${downloadTask.post}")
                         DataOutputStream(connection.outputStream).use { it.writeBytes(downloadTask.post) }
                     }
-                    is ByteArray -> {
-                        connection.setRequestProperty(
-                            "Content-Length",
-                            downloadTask.post.size.toString()
-                        )
-                        DataOutputStream(connection.outputStream).use { it.write(downloadTask.post) }
+                    is ArrayList<*> -> {
+
+                        val byteArray =
+                            ByteArray(downloadTask.post.size) { pos -> (downloadTask.post[pos] as Double).toInt().toByte() }
+                        connection.setFixedLengthStreamingMode(byteArray.size)
+                        Log.v(TAG, "String=${byteArray}")
+                        DataOutputStream(connection.outputStream).use { it.write(byteArray) }
                     }
                     else -> {
                         Log.w(
