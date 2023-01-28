@@ -349,7 +349,7 @@ class BackgroundDownloadTask extends Request {
 
   @override
   String toString() {
-    return 'BackgroundDownloadTask{taskId: $taskId, url: $url, filename: $filename, headers: $headers, directory: $directory, baseDirectory: $baseDirectory, group: $group, progressUpdates: $progressUpdates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $_retriesRemaining, metaData: $metaData}';
+    return 'BackgroundDownloadTask{taskId: $taskId, url: $url, filename: $filename, headers: $headers, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, progressUpdates: $progressUpdates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $_retriesRemaining, metaData: $metaData}';
   }
 }
 
