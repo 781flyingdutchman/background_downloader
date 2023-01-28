@@ -370,9 +370,10 @@ void main() {
     testWidgets('Task to and from Json', (widgetTester) async {
       final complexTask = BackgroundDownloadTask(
           taskId: 'uniqueId',
-          url: workingUrl,
+          url: postTestUrl,
           filename: defaultFilename,
           headers: {'Auth': 'Test'},
+          post: 'TestPost',
           directory: 'directory',
           baseDirectory: BaseDirectory.temporary,
           group: 'someGroup',
@@ -393,6 +394,7 @@ void main() {
         expect(task.url, equals(complexTask.url));
         expect(task.filename, equals(complexTask.filename));
         expect(task.headers, equals(complexTask.headers));
+        expect(task.post, equals(complexTask.post));
         expect(task.directory, equals(complexTask.directory));
         expect(task.baseDirectory, equals(complexTask.baseDirectory));
         expect(task.group, equals(complexTask.group));
@@ -747,6 +749,7 @@ void main() {
       expect(await FileDownloader.download(task),
           equals(DownloadTaskStatus.complete));
       final result = jsonDecode(await File(path).readAsString());
+      print(result);
       expect(result['args']['request-type'], equals('post-empty'));
       expect(result['headers']['Header1'], equals('headerValue1'));
       expect((result['data'] as String).isEmpty, isTrue);
@@ -766,6 +769,7 @@ void main() {
       expect(await FileDownloader.download(task),
           equals(DownloadTaskStatus.complete));
       final result = jsonDecode(await File(path).readAsString());
+      print(result);
       expect(result['args']['request-type'], equals('post-String'));
       expect(result['headers']['Content-Type'], equals('text/plain'));
       expect(result['data'], equals('testPost'));
@@ -785,6 +789,7 @@ void main() {
       expect(await FileDownloader.download(task),
           equals(DownloadTaskStatus.complete));
       final result = jsonDecode(await File(path).readAsString());
+      print(result);
       expect(result['args']['request-type'], equals('post-Uint8List'));
       expect(result['headers']['Content-Type'], equals('application/octet-stream'));
       expect(result['data'], equals('testPost'));
@@ -807,6 +812,7 @@ void main() {
       expect(await FileDownloader.download(task),
           equals(DownloadTaskStatus.complete));
       final result = jsonDecode(await File(path).readAsString());
+      print(result);
       expect(result['args']['request-type'], equals('post-json'));
       expect(result['headers']['Header1'], equals('headerValue1'));
       expect(result['data'], equals('{"field1": 1}'));
@@ -822,7 +828,7 @@ void main() {
               filename: defaultFilename,
               headers: {'Header1': 'headerValue1'},
               post: {'invalid': 'map'}),
-          throwsArgumentError);
+          throwsA(isA<TypeError>()));
     });
   });
 
@@ -912,7 +918,7 @@ void main() {
               urlQueryParameters: {'request-type': 'invalid'},
               headers: {'Header1': 'headerValue1'},
               post: {'invalid': 'map'}),
-          throwsArgumentError);
+          throwsA(isA<TypeError>()));
     });
 
     testWidgets('get request with server error, no retries',

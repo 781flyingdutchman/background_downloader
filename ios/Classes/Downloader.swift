@@ -10,6 +10,7 @@ struct BackgroundDownloadTask : Codable {
     var url: String
     var filename: String
     var headers: [String:String]
+    var post: [UInt8]?
     var directory: String
     var baseDirectory: Int
     var group: String
@@ -132,6 +133,10 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         os_log("Starting task with id %@", log: log, type: .info, backgroundDownloadTask.taskId)
         urlSession = urlSession ?? createUrlSession()
         var request = URLRequest(url: URL(string: backgroundDownloadTask.url)!)
+        if backgroundDownloadTask.post != nil {
+            request.httpMethod = "POST"
+            request.httpBody = Data(backgroundDownloadTask.post!)
+        }
         if backgroundDownloadTask.requiresWiFi {
             request.allowsCellularAccess = false
         }

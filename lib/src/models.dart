@@ -104,11 +104,12 @@ class Request {
   final Map<String, String> headers;
 
   /// Set [post] to make the request using POST instead of GET.
-  /// Post must be one of the following:
-  /// - a String: POST request with [post] as the body, encoded in utf8 and
-  ///   default content-type 'text/plain'
+  /// In the constructor, [post] must be one of the following:
+  /// - a String: POST request with [post] as the body, encoded in utf8
   /// - a List of bytes: POST request with [post] as the body
-  final Object? post;
+  ///
+  /// The field [post] will be a UInt8List representing the bytes, or the String
+  final Uint8List? post;
 
   /// Maximum number of retries the downloader should attempt
   ///
@@ -125,8 +126,7 @@ class Request {
   /// [headers] an optional map of HTTP request headers
   /// [post] if set, uses POST instead of GET. Post must be one of the
   /// following:
-  /// - a String: POST request with [post] as the body, encoded in utf8 and
-  ///   default content-type 'text/plain'
+  /// - a String: POST request with [post] as the body, encoded in utf8
   /// - a List of bytes: POST request with [post] as the body
   ///
   /// [retries] if >0 will retry a failed download this many times
@@ -134,15 +134,13 @@ class Request {
       {required String url,
       Map<String, String>? urlQueryParameters,
       this.headers = const {},
-      this.post,
+      post,
       this.retries = 0})
       : _retriesRemaining = retries,
-        url = _urlWithQueryParameters(url, urlQueryParameters) {
+        url = _urlWithQueryParameters(url, urlQueryParameters),
+        post = post is String ? Uint8List.fromList(post.codeUnits) : post {
     if (retries < 0 || retries > 10) {
       throw ArgumentError('Number of retries must be in range 1 through 10');
-    }
-    if (!(post == null || post is String || post is Uint8List)) {
-      throw ArgumentError('Field post must be a String or a Uint8List');
     }
   }
 
@@ -150,7 +148,8 @@ class Request {
   Request.fromJsonMap(Map<String, dynamic> jsonMap)
       : url = jsonMap['url'],
         headers = Map<String, String>.from(jsonMap['headers']),
-        post = jsonMap['post'],
+        post = jsonMap['post'] == null ? null : Uint8List.fromList(jsonMap['post']
+            .cast<int>()),
         retries = jsonMap['retries'],
         _retriesRemaining = jsonMap['retriesRemaining'];
 
