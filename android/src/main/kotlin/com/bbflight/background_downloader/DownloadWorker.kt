@@ -21,7 +21,6 @@ import java.lang.System.currentTimeMillis
 import java.net.HttpURLConnection
 import java.net.SocketException
 import java.net.URL
-import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import kotlin.concurrent.write
@@ -54,7 +53,7 @@ class BackgroundDownloadTask(
     val url: String,
     val filename: String,
     val headers: Map<String, String>,
-    val post: Any?,
+    val post: String?,
     val directory: String,
     val baseDirectory: BaseDirectory,
     val group: String,
@@ -71,7 +70,7 @@ class BackgroundDownloadTask(
         url = jsonMap["url"] as String,
         filename = jsonMap["filename"] as String,
         headers = jsonMap["headers"] as Map<String, String>,
-        post = jsonMap["post"],
+        post = jsonMap["post"] as String?,
         directory = jsonMap["directory"] as String,
         baseDirectory = BaseDirectory.values()[(jsonMap["baseDirectory"] as Double).toInt()],
         group = jsonMap["group"] as String,
@@ -269,6 +268,7 @@ class DownloadWorker(
             gson.fromJson(downloadTaskJsonMapString, mapType)
         )
         Log.i(TAG, " Starting download for taskId ${downloadTask.taskId}")
+        Log.i(TAG, " task= ${downloadTask.toJsonMap()}")
         processStatusUpdate(downloadTask, DownloadTaskStatus.running)
         val filePath = pathToFileForTask(downloadTask)
         val status = downloadFile(downloadTask, filePath)
@@ -309,32 +309,11 @@ class DownloadWorker(
         try {
             if (downloadTask.post != null) {
                 Log.v(TAG, "POST request")
-                // post the data and requery the content length of the response
                 connection.requestMethod = "POST"
                 connection.doOutput = true
-                when (downloadTask.post) {
-                    is String -> {
-//                        val bytes = downloadTask.post.toByteArray(StandardCharsets.UTF_8)
-                        connection.setFixedLengthStreamingMode(downloadTask.post.length)
-                        Log.v(TAG, "String=${downloadTask.post}")
-                        DataOutputStream(connection.outputStream).use { it.writeBytes(downloadTask.post) }
-                    }
-                    is ArrayList<*> -> {
-
-                        val byteArray =
-                            ByteArray(downloadTask.post.size) { pos -> (downloadTask.post[pos] as Double).toInt().toByte() }
-                        connection.setFixedLengthStreamingMode(byteArray.size)
-                        Log.v(TAG, "String=${byteArray}")
-                        DataOutputStream(connection.outputStream).use { it.write(byteArray) }
-                    }
-                    else -> {
-                        Log.w(
-                            TAG,
-                            "Type of post field must be String or ByteArray and is ${downloadTask.post::class}"
-                        )
-                        return DownloadTaskStatus.failed
-                    }
-                }
+                connection.setFixedLengthStreamingMode(downloadTask.post.length)
+                Log.v(TAG, "String=${downloadTask.post}")
+                DataOutputStream(connection.outputStream).use { it.writeBytes(downloadTask.post) }
             } else {
                 Log.v(TAG, "GET request")
                 connection.requestMethod = "GET"

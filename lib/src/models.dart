@@ -109,7 +109,7 @@ class Request {
   /// - a List of bytes: POST request with [post] as the body
   ///
   /// The field [post] will be a UInt8List representing the bytes, or the String
-  final Uint8List? post;
+  final String? post;
 
   /// Maximum number of retries the downloader should attempt
   ///
@@ -138,7 +138,7 @@ class Request {
       this.retries = 0})
       : _retriesRemaining = retries,
         url = _urlWithQueryParameters(url, urlQueryParameters),
-        post = post is String ? Uint8List.fromList(post.codeUnits) : post {
+        post = post is Uint8List ? String.fromCharCodes(post) : post {
     if (retries < 0 || retries > 10) {
       throw ArgumentError('Number of retries must be in range 1 through 10');
     }
@@ -148,8 +148,7 @@ class Request {
   Request.fromJsonMap(Map<String, dynamic> jsonMap)
       : url = jsonMap['url'],
         headers = Map<String, String>.from(jsonMap['headers']),
-        post = jsonMap['post'] == null ? null : Uint8List.fromList(jsonMap['post']
-            .cast<int>()),
+        post = jsonMap['post'],
         retries = jsonMap['retries'],
         _retriesRemaining = jsonMap['retriesRemaining'];
 
