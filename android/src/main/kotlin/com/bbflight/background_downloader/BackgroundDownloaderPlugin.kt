@@ -23,6 +23,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         const val TAG = "BackgroundDownloaderPlugin"
         const val keyTasksMap = "com.bbflight.background_downloader.taskMap"
         var backgroundChannel: MethodChannel? = null
+        var backgroundChannelCounter = 0  // reference counter
         val prefsLock = ReentrantReadWriteLock()
         private lateinit var workManager: WorkManager
         lateinit var prefs: SharedPreferences
@@ -31,6 +32,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     }
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
+        backgroundChannelCounter++
         if (backgroundChannel == null) {
             // only set background channel once, as it has to be static field
             // and per https://github.com/firebase/flutterfire/issues/9689 other
@@ -53,9 +55,14 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         }
     }
 
+    /** Free up resources. BackgroundChannel is only released if no more references to an engine */
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel?.setMethodCallHandler(null)
         channel = null
+        backgroundChannelCounter--
+        if (backgroundChannelCounter == 0) {
+            backgroundChannel = null
+        }
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
