@@ -268,7 +268,6 @@ class DownloadWorker(
             gson.fromJson(downloadTaskJsonMapString, mapType)
         )
         Log.i(TAG, " Starting download for taskId ${downloadTask.taskId}")
-        Log.i(TAG, " task= ${downloadTask.toJsonMap()}")
         processStatusUpdate(downloadTask, DownloadTaskStatus.running)
         val filePath = pathToFileForTask(downloadTask)
         val status = downloadFile(downloadTask, filePath)
@@ -282,7 +281,6 @@ class DownloadWorker(
         filePath: String
     ): DownloadTaskStatus {
         try {
-            Log.v(TAG, "downloadFile")
             val urlString = downloadTask.url
             val url = URL(urlString)
             with(url.openConnection() as HttpURLConnection) {
@@ -308,14 +306,11 @@ class DownloadWorker(
         }
         try {
             if (downloadTask.post != null) {
-                Log.v(TAG, "POST request")
                 connection.requestMethod = "POST"
                 connection.doOutput = true
                 connection.setFixedLengthStreamingMode(downloadTask.post.length)
-                Log.v(TAG, "String=${downloadTask.post}")
                 DataOutputStream(connection.outputStream).use { it.writeBytes(downloadTask.post) }
             } else {
-                Log.v(TAG, "GET request")
                 connection.requestMethod = "GET"
             }
             return processResponse(connection, downloadTask, filePath)
@@ -330,9 +325,9 @@ class DownloadWorker(
                     "Socket exception downloading from ${downloadTask.url} to $filePath: ${e.message}"
                 )
                 is CancellationException -> {
-                    Log.v(
+                    Log.i(
                         TAG,
-                        "Job cancelled: ${downloadTask.url} to $filePath: ${e.message}"
+                        "DownloadWorker job cancelled: ${downloadTask.url} to $filePath: ${e.message}"
                     )
                     return DownloadTaskStatus.canceled
                 }
@@ -405,7 +400,7 @@ class DownloadWorker(
                     tempFile.delete()
                 }
             } else {
-                Log.v(TAG, "Canceled task for $filePath")
+                Log.i(TAG, "Canceled task for $filePath")
                 return DownloadTaskStatus.canceled
             }
             Log.i(

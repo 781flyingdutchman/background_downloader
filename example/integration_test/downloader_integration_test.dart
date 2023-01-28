@@ -25,13 +25,12 @@ const failingUrl = 'https://avmaps-dot-bbflightserver-hrd.appspot'
     '.com/public/get_current_app_data?key=background_downloader_integration_test';
 const urlWithContentLength = 'https://storage.googleapis'
     '.com/approachcharts/test/5MB-test.ZIP';
-//TODO remove 4-1-3-dot- version number from urls
 const getTestUrl =
-    'https://4-1-3-dot-avmaps-dot-bbflightserver-hrd.appspot.com/public/test_get_data';
+    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_get_data';
 const getRedirectTestUrl =
-    'https://4-1-3-dot-avmaps-dot-bbflightserver-hrd.appspot.com/public/test_get_redirect';
+    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_get_redirect';
 const postTestUrl =
-    'https://4-1-3-dot-avmaps-dot-bbflightserver-hrd.appspot.com/public/test_post_data';
+    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_post_data';
 
 const defaultFilename = 'google.html';
 
@@ -736,7 +735,8 @@ void main() {
   });
 
   group('downloadTask with POST request', () {
-    testWidgets('post BackgroundDownloadTask with post is empty body', (widgetTester) async {
+    testWidgets('post BackgroundDownloadTask with post is empty body',
+        (widgetTester) async {
       FileDownloader.initialize();
       final task = BackgroundDownloadTask(
           url: postTestUrl,
@@ -756,7 +756,8 @@ void main() {
       expect(result['json'], isNull);
     });
 
-    testWidgets('post BackgroundDownloadTask with post is String', (widgetTester) async {
+    testWidgets('post BackgroundDownloadTask with post is String',
+        (widgetTester) async {
       FileDownloader.initialize();
       final task = BackgroundDownloadTask(
           url: postTestUrl,
@@ -765,7 +766,7 @@ void main() {
           headers: {'content-type': 'text/plain'},
           post: 'testPost');
       final path =
-      join((await getApplicationDocumentsDirectory()).path, task.filename);
+          join((await getApplicationDocumentsDirectory()).path, task.filename);
       expect(await FileDownloader.download(task),
           equals(DownloadTaskStatus.complete));
       final result = jsonDecode(await File(path).readAsString());
@@ -776,7 +777,8 @@ void main() {
       expect(result['json'], isNull);
     });
 
-    testWidgets('post BackgroundDownloadTask with post is Uint8List', (widgetTester) async {
+    testWidgets('post BackgroundDownloadTask with post is Uint8List',
+        (widgetTester) async {
       FileDownloader.initialize();
       final task = BackgroundDownloadTask(
           url: postTestUrl,
@@ -785,18 +787,20 @@ void main() {
           headers: {'Content-Type': 'application/octet-stream'},
           post: Uint8List.fromList('testPost'.codeUnits));
       final path =
-      join((await getApplicationDocumentsDirectory()).path, task.filename);
+          join((await getApplicationDocumentsDirectory()).path, task.filename);
       expect(await FileDownloader.download(task),
           equals(DownloadTaskStatus.complete));
       final result = jsonDecode(await File(path).readAsString());
       print(result);
       expect(result['args']['request-type'], equals('post-Uint8List'));
-      expect(result['headers']['Content-Type'], equals('application/octet-stream'));
+      expect(result['headers']['Content-Type'],
+          equals('application/octet-stream'));
       expect(result['data'], equals('testPost'));
       expect(result['json'], isNull);
     });
 
-    testWidgets('post BackgroundDownloadTask with post is JsonString', (widgetTester) async {
+    testWidgets('post BackgroundDownloadTask with post is JsonString',
+        (widgetTester) async {
       FileDownloader.initialize();
       final task = BackgroundDownloadTask(
           url: postTestUrl,
@@ -808,7 +812,7 @@ void main() {
           },
           post: '{"field1": 1}');
       final path =
-      join((await getApplicationDocumentsDirectory()).path, task.filename);
+          join((await getApplicationDocumentsDirectory()).path, task.filename);
       expect(await FileDownloader.download(task),
           equals(DownloadTaskStatus.complete));
       final result = jsonDecode(await File(path).readAsString());
@@ -820,7 +824,8 @@ void main() {
       expect(result['json'], equals({'field1': 1}));
     });
 
-    testWidgets('post BackgroundDownloadTask with post is invalid type', (widgetTester) async {
+    testWidgets('post BackgroundDownloadTask with post is invalid type',
+        (widgetTester) async {
       expect(
           () => BackgroundDownloadTask(
               url: postTestUrl,

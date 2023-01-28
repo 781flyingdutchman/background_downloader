@@ -464,18 +464,18 @@ Future<http.Response> doRequest(Request request) async {
   final log = Logger('FileDownloader.request');
   FileDownloader.httpClient ??= http.Client();
   final client = FileDownloader.httpClient!;
-  var response = http.Response('', 499, reasonPhrase: 'Not attempted'); // dummy to start with
+  var response = http.Response('', 499,
+      reasonPhrase: 'Not attempted'); // dummy to start with
   while (request.retriesRemaining >= 0) {
     try {
       response = request.post == null
-              ? await client.get(Uri.parse(request.url), headers: request.headers)
-              : await client.post(Uri.parse(request.url),
-                  headers: request.headers,
-                  body: request.post);
+          ? await client.get(Uri.parse(request.url), headers: request.headers)
+          : await client.post(Uri.parse(request.url),
+              headers: request.headers, body: request.post);
       if ([200, 201, 202, 203, 204, 205, 206, 404]
-              .contains(response.statusCode)) {
-            return response;
-          }
+          .contains(response.statusCode)) {
+        return response;
+      }
     } catch (e) {
       log.warning(e);
       response = http.Response('', 499, reasonPhrase: e.toString());

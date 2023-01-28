@@ -86,7 +86,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         val downloadTaskJsonMapString = args[0] as String
         val backgroundDownloadTask =
                 BackgroundDownloadTask(gson.fromJson(downloadTaskJsonMapString, mapType))
-        Log.v(TAG, "Starting task with id ${backgroundDownloadTask.taskId}")
+        Log.i(TAG, "Starting task with id ${backgroundDownloadTask.taskId}")
         val data =
                 Data.Builder().putString(DownloadWorker.keyDownloadTask, downloadTaskJsonMapString)
                         .build()
