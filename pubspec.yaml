@@ -1,6 +1,6 @@
 name: background_downloader
 description: A background file downloader for iOS and Android. Define where to get your file from, where to store it, enqueue your task and monitor it
-version: 2.1.0
+version: 2.1.1
 repository: https://github.com/781flyingdutchman/background_downloader
 
 environment:

@@ -356,7 +356,6 @@ class BackgroundDownloadTask extends Request {
 /// [urlQueryParameters], if given
 String _urlWithQueryParameters(
     String url, Map<String, String>? urlQueryParameters) {
-
   if (urlQueryParameters == null || urlQueryParameters.isEmpty) {
     return url;
   }

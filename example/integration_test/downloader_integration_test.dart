@@ -144,9 +144,11 @@ void main() {
       }
       // test url with encoded parameter
       task = BackgroundDownloadTask(
-          url: getTestUrl, urlQueryParameters: {'json': 'true', 'test': 'with%20space'}, filename: defaultFilename);
+          url: getTestUrl,
+          urlQueryParameters: {'json': 'true', 'test': 'with%20space'},
+          filename: defaultFilename);
       path =
-      join((await getApplicationDocumentsDirectory()).path, task.filename);
+          join((await getApplicationDocumentsDirectory()).path, task.filename);
       expect(await FileDownloader.download(task),
           equals(DownloadTaskStatus.complete));
       final result = jsonDecode(await File(path).readAsString());
@@ -424,25 +426,17 @@ void main() {
           url: 'url with space',
           filename: defaultFilename,
           urlQueryParameters: {});
-      expect(task0.url, equals('url%20with%20space'));
+      expect(task0.url, equals('url with space'));
       final task1 = BackgroundDownloadTask(
           url: 'url',
           filename: defaultFilename,
           urlQueryParameters: {'param1': '1', 'param2': 'with space'});
-      expect(task1.url, equals('url?param1=1&param2=with%20space'));
+      expect(task1.url, equals('url?param1=1&param2=with space'));
       final task2 = BackgroundDownloadTask(
           url: 'url?param0=0',
           filename: defaultFilename,
           urlQueryParameters: {'param1': '1', 'param2': 'with space'});
-      expect(task2.url, equals('url?param0=0&param1=1&param2=with%20space'));
-      final task3 = BackgroundDownloadTask(
-          url: 'url?param0=encoded%20url',
-          filename: defaultFilename,
-          urlQueryParameters: {'param1': '1', 'param2': 'with space'});
-      // Note that the encoded url is encoded again (the % is encoded) leading
-      // to what is likely not the desired url
-      expect(task3.url,
-          equals('url?param0=encoded%2520url&param1=1&param2=with%20space'));
+      expect(task2.url, equals('url?param0=0&param1=1&param2=with space'));
       final task4 = BackgroundDownloadTask(
           url: urlWithContentLength, filename: defaultFilename);
       expect(task4.url, equals(urlWithContentLength));

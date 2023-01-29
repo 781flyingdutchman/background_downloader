@@ -1,3 +1,7 @@
+## 2.1.1
+
+The url and urlQueryParameters passed to a `BackgroundDownloadTask` or `Request` must be encoded if necessary. For example, if the url or query parameters contain a space, it must be replaced with %20 per urlencoding
+
 ## 2.1.0
 
 Changes:
