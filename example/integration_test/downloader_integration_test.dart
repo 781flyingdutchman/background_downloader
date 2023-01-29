@@ -142,6 +142,17 @@ void main() {
         path = join((await getLibraryDirectory()).path, task.filename);
         await enqueueAndFileExists(path);
       }
+      // test url with encoded parameter
+      task = BackgroundDownloadTask(
+          url: getTestUrl, urlQueryParameters: {'json': 'true', 'test': 'with%20space'}, filename: defaultFilename);
+      path =
+      join((await getApplicationDocumentsDirectory()).path, task.filename);
+      expect(await FileDownloader.download(task),
+          equals(DownloadTaskStatus.complete));
+      final result = jsonDecode(await File(path).readAsString());
+      expect(result['args']['json'], equals('true'));
+      expect(result['args']['test'], equals('with space'));
+      await File(path).delete();
       print('Finished enqueue');
     });
 
@@ -841,14 +852,14 @@ void main() {
     testWidgets('get request', (widgetTester) async {
       final request = Request(
           url: getTestUrl,
-          urlQueryParameters: {'json': 'true', 'request-type': 'get'},
+          urlQueryParameters: {'json': 'true', 'request-type': 'get%20it'},
           headers: {'Header1': 'headerValue1'});
       // note: json=true required to get results as JSON string
       final response = await FileDownloader.request(request);
       expect(response.statusCode, equals(200));
       final result = jsonDecode(response.body);
       expect(result['args']['json'], equals('true'));
-      expect(result['args']['request-type'], equals('get'));
+      expect(result['args']['request-type'], equals('get it'));
       expect(result['headers']['Header1'], equals('headerValue1'));
     });
 

@@ -214,8 +214,9 @@ class BackgroundDownloadTask extends Request {
   /// Creates a [BackgroundDownloadTask]
   ///
   /// [taskId] must be unique. A unique id will be generated if omitted
-  /// [url] must not be encoded and can include query parameters
-  /// [urlQueryParameters] may be added and will be appended to the [url]
+  /// [url] properly encoded if necessary, can include query parameters
+  /// [urlQueryParameters] may be added and will be appended to the [url], must
+  ///   be properly encoded if necessary
   /// [filename] of the file to save. If omitted, a random filename will be
   /// generated
   /// [headers] an optional map of HTTP request headers
@@ -294,7 +295,7 @@ class BackgroundDownloadTask extends Request {
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
           retries: retries ?? this.retries,
           metaData: metaData ?? this.metaData)
-        .._retriesRemaining = retriesRemaining ?? this._retriesRemaining;
+        .._retriesRemaining = retriesRemaining ?? _retriesRemaining;
 
   /// Creates object from JsonMap
   BackgroundDownloadTask.fromJsonMap(Map<String, dynamic> jsonMap)
@@ -351,18 +352,16 @@ class BackgroundDownloadTask extends Request {
   }
 }
 
-/// Return fully encoded url String composed of the [url] and the
+/// Return url String composed of the [url] and the
 /// [urlQueryParameters], if given
-///
-/// Note the assumption is that the original [url] is not encoded
 String _urlWithQueryParameters(
     String url, Map<String, String>? urlQueryParameters) {
+
   if (urlQueryParameters == null || urlQueryParameters.isEmpty) {
-    return Uri.encodeFull(url);
+    return url;
   }
   final separator = url.contains('?') ? '&' : '?';
-  return Uri.encodeFull(
-      '$url$separator${urlQueryParameters.entries.map((e) => '${e.key}=${e.value}').join('&')}');
+  return '$url$separator${urlQueryParameters.entries.map((e) => '${e.key}=${e.value}').join('&')}';
 }
 
 /// Signature for a function you can provide to the [downloadBatch] method
