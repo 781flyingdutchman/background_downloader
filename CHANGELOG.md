@@ -1,3 +1,11 @@
+## 2.1.0
+
+Changes:
+- Added option to use a POST request: setting the `post` field to a String or UInt8List passes that data to the server using the POST method to obtain your file
+- Added `request` method, taking a `Request` object (a superclass of `BackgroundDownloadTask`), for simple server requests, where you process the server response directly (i.e. not in a file).
+- Refactored Android Kotlin code and made small improvement to the fix for [issue](https://github.com/781flyingdutchman/background_downloader/issues/6) with
+  Firebase plugin `onMethodCall` handler
+
 ## 2.0.1
 
 Fix for [issue](https://github.com/781flyingdutchman/background_downloader/issues/6) with

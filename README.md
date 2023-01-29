@@ -1,6 +1,13 @@
 # A background file downloader for iOS and Android
 
-Define where to get your file from, where to store it, and how you want to monitor the download, and the background loader will ensure this is done in a responsible way using native platform background downloaders.  `background_downloader` uses URLSessions on iOS and DownloadWorker on Android, so tasks will complete also when your app is in the background.
+Define where to get your file from, where to store it, and how you want to monitor the download in a [BackgroundDownloadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/BackgroundDownloadTask-class.html), then `enqueue` the task.  Background_downloader uses URLSessions on iOS and DownloadWorker on Android, so tasks will complete also when your app is in the background.
+
+You can monitor download tasks using an [event listener](#using-an-event-listener) or [callbacks](#using-callbacks), or use convenience functions to `await` the download of a [file](#awaiting-a-download) or a [batch](#awaiting-a-batch-download) of files. If you just want to make a regular [server request](#server-requests-without-file-download) using similar terminology, create a [Request](https://pub.dev/documentation/background_downloader/latest/background_downloader/Request-class.html) and call `request`.
+
+The downloader supports [headers](#headers), [retries](#retries), [requiring WiFi](#requiring-wifi) before starting the download, user-defined [metadata](#metadata) and GET and [POST](#post-requests) http(s) requests. You can [manage and monitor the tasks in the queue](#managing-and-monitoring-tasks-in-the-queue), and have different handlers for updates by [group](#grouping-tasks).
+
+No setup is required for Android, and only minimal [setup for iOS](#initial-setup-for-ios).
+
 
 ## Concepts and basic usage
 
@@ -133,15 +140,15 @@ The result is a `BackgroundDownloadBatch` object that contains the result for ea
 ```
 The callback will be called upon completion of each task (whether successful or not), and will start with (0, 0) before any downloads start, so you can use that to start a progress indicator.  Note that it is not possible to monitor download progress of individual files within the batch - you need to  `enqueue` individual files to do that.
 
+### Server requests without file download
+
+To make a regular server request (e.g. to obtain a response from an API end point that you process directly in your app) use the `request` method.  It works similar to the `download` request, except you can pass a `Request` object that has fewer fields than the `BackgroundDownloadTask`, but is similar in structure.  You `await` the response, which will be a `Resonse` object as defined in the dart `http` package, and includes getters for the response body (as a `String` or as `UInt8List`), `statusCode` and `reasonPhrase`.
+
 ## Advanced use
 
 ### Headers
 
 Optionally, `headers` can be added to the `BackgroundDownloadTask`, which will be added to the HTTP request. This may be useful for authentication, for example.
-
-### Requiring WiFi
-
-If the `requiresWiFi` field of a `BackgroundDownloadTask` is set to true, the task won't start downloading unless a WiFi network is available. By default `requiresWiFi` is false, and downloads will use the cellular (or metered) network if WiFi is not available, which may incur cost.
 
 ### Retries
 
@@ -152,9 +159,17 @@ the task fails, the sequence will be `enqueued` -> `running` ->
 `waitingToRetry` -> `enqueued` -> `running` -> `complete` (if the second try succeeds, or more
 retries if needed).
 
+### Requiring WiFi
+
+If the `requiresWiFi` field of a `BackgroundDownloadTask` is set to true, the task won't start downloading unless a WiFi network is available. By default `requiresWiFi` is false, and downloads will use the cellular (or metered) network if WiFi is not available, which may incur cost.
+
 ### Metadata
 
 Also optionally, `metaData` can be added to the `BackgroundDownloadTask` (a `String`). Metadata is ignored by the downloader but may be helpful when receiving an update about the task.
+
+### POST requests
+
+If the server request is a HTTP POST request (instead of the default GET request) then set the `post` field of the `BackgroundDownloadTask` to a `String` or `UInt8List` representing the data to be posted (for example, a JSON representation of an object). To make a POST request with no data, set `post` to an empty `String`.
 
 ### Managing and monitoring tasks in the queue
 
