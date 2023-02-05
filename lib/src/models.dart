@@ -352,6 +352,56 @@ class BackgroundDownloadTask extends Request {
   }
 }
 
+/// Information related to an upload task
+///
+/// An equality test on a [BackgroundUploadTask] is a test on the [taskId]
+/// only - all other fields are ignored in that test
+class BackgroundUploadTask extends BackgroundDownloadTask {
+  /// Creates [BackgroundUploadTask]
+  ///
+  /// [taskId] must be unique. A unique id will be generated if omitted
+  /// [url] properly encoded if necessary, can include query parameters
+  /// [urlQueryParameters] may be added and will be appended to the [url], must
+  ///   be properly encoded if necessary
+  /// [filename] of the file to upload
+  /// [headers] an optional map of HTTP request headers
+  /// [directory] optional directory name, precedes [filename]
+  /// [baseDirectory] one of the base directories, precedes [directory]
+  /// [group] if set allows different callbacks or processing for different
+  /// groups
+  /// [progressUpdates] the kind of progress updates requested
+  /// [requiresWiFi] if set, will not start upload until WiFi is available.
+  /// If not set may start upload over cellular network
+  /// [retries] if >0 will retry a failed upload this many times
+  /// [metaData] user data
+  BackgroundUploadTask(
+      {String? taskId,
+      required super.url,
+      super.urlQueryParameters,
+      required String filename,
+      super.headers,
+      super.directory,
+      super.baseDirectory,
+      super.group,
+      super.progressUpdates,
+      super.requiresWiFi,
+      super.retries,
+      super.metaData})
+      : assert(filename.isNotEmpty, 'A filename is required'),
+        super(filename: filename, post: null);
+
+  /// Creates [BackgroundUploadTask] object from JsonMap
+  BackgroundUploadTask.fromJsonMap(Map<String, dynamic> jsonMap)
+      : assert(
+            jsonMap['isUploadTask'] == true,
+            'The provided JSON map is not'
+            ' an upload task, because key "isUploadTask" is not true.'),
+        super.fromJsonMap(jsonMap);
+
+  @override
+  Map toJsonMap() => {...super.toJsonMap(), 'isUploadTask': true};
+}
+
 /// Return url String composed of the [url] and the
 /// [urlQueryParameters], if given
 String _urlWithQueryParameters(
