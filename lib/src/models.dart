@@ -63,6 +63,7 @@ enum DownloadTaskStatus {
   bool get isNotFinalState => !isFinalState;
 }
 
+
 /// Base directory in which files will be stored, based on their relative
 /// path.
 ///
@@ -117,7 +118,7 @@ class Request {
   final int retries;
 
   /// Number of retries remaining
-  int _retriesRemaining;
+  int retriesRemaining;
 
   /// Creates a [Request]
   ///
@@ -136,7 +137,7 @@ class Request {
       this.headers = const {},
       post,
       this.retries = 0})
-      : _retriesRemaining = retries,
+      : retriesRemaining = retries,
         url = _urlWithQueryParameters(url, urlQueryParameters),
         post = post is Uint8List ? String.fromCharCodes(post) : post {
     if (retries < 0 || retries > 10) {
@@ -150,7 +151,7 @@ class Request {
         headers = Map<String, String>.from(jsonMap['headers']),
         post = jsonMap['post'],
         retries = jsonMap['retries'],
-        _retriesRemaining = jsonMap['retriesRemaining'];
+        retriesRemaining = jsonMap['retriesRemaining'];
 
   /// Creates JSON map of this object
   Map toJsonMap() => {
@@ -158,14 +159,11 @@ class Request {
         'headers': headers,
         'post': post,
         'retries': retries,
-        'retriesRemaining': _retriesRemaining,
+        'retriesRemaining': retriesRemaining,
       };
 
-  /// Decrease [_retriesRemaining] by one
-  void decreaseRetriesRemaining() => _retriesRemaining--;
-
-  /// Number of retries remaining
-  int get retriesRemaining => _retriesRemaining;
+  /// Decrease [retriesRemaining] by one
+  void decreaseRetriesRemaining() => retriesRemaining--;
 
   @override
   bool operator ==(Object other) =>
@@ -178,15 +176,18 @@ class Request {
   @override
   String toString() {
     return 'Request{url: $url, headers: $headers, post: ${post == null ? "null" : "not null"}, '
-        'retries: $retries, retriesRemaining: $_retriesRemaining}';
+        'retries: $retries, retriesRemaining: $retriesRemaining}';
   }
 }
 
-/// Information related to a download task
+/// Information related to a [Task]
 ///
-/// An equality test on a [BackgroundDownloadTask] is a test on the [taskId]
+/// A [Task] is the base class for [BackgroundDownloadTask] and
+/// [BackgroundUploadTask]
+///
+/// An equality test on a [Task] is a test on the [taskId]
 /// only - all other fields are ignored in that test
-class BackgroundDownloadTask extends Request {
+abstract class Task extends Request {
   /// Identifier for the task - auto generated if omitted
   final String taskId;
 
@@ -211,7 +212,7 @@ class BackgroundDownloadTask extends Request {
   /// User-defined metadata
   final String metaData;
 
-  /// Creates a [BackgroundDownloadTask]
+  /// Creates a [Task]
   ///
   /// [taskId] must be unique. A unique id will be generated if omitted
   /// [url] properly encoded if necessary, can include query parameters
@@ -238,7 +239,7 @@ class BackgroundDownloadTask extends Request {
   /// If not set may start download over cellular network
   /// [retries] if >0 will retry a failed download this many times
   /// [metaData] user data
-  BackgroundDownloadTask(
+  Task(
       {String? taskId,
       required super.url,
       super.urlQueryParameters,
@@ -268,7 +269,7 @@ class BackgroundDownloadTask extends Request {
 
   /// Returns a copy of the [BackgroundDownloadTask] with optional changes to
   /// specific fields
-  BackgroundDownloadTask copyWith(
+  Task copyWith(
           {String? taskId,
           String? url,
           String? filename,
@@ -281,24 +282,10 @@ class BackgroundDownloadTask extends Request {
           bool? requiresWiFi,
           int? retries,
           int? retriesRemaining,
-          String? metaData}) =>
-      BackgroundDownloadTask(
-          taskId: taskId ?? this.taskId,
-          url: url ?? this.url,
-          filename: filename ?? this.filename,
-          headers: headers ?? this.headers,
-          post: post ?? this.post,
-          directory: directory ?? this.directory,
-          baseDirectory: baseDirectory ?? this.baseDirectory,
-          group: group ?? this.group,
-          progressUpdates: progressUpdates ?? this.progressUpdates,
-          requiresWiFi: requiresWiFi ?? this.requiresWiFi,
-          retries: retries ?? this.retries,
-          metaData: metaData ?? this.metaData)
-        .._retriesRemaining = retriesRemaining ?? _retriesRemaining;
+          String? metaData});
 
   /// Creates object from JsonMap
-  BackgroundDownloadTask.fromJsonMap(Map<String, dynamic> jsonMap)
+  Task.fromJsonMap(Map<String, dynamic> jsonMap)
       : taskId = jsonMap['taskId'],
         filename = jsonMap['filename'],
         directory = jsonMap['directory'],
@@ -339,7 +326,7 @@ class BackgroundDownloadTask extends Request {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is BackgroundDownloadTask &&
+      other is Task &&
           runtimeType == other.runtimeType &&
           taskId == other.taskId;
 
@@ -348,15 +335,102 @@ class BackgroundDownloadTask extends Request {
 
   @override
   String toString() {
-    return 'BackgroundDownloadTask{taskId: $taskId, url: $url, filename: $filename, headers: $headers, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, progressUpdates: $progressUpdates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $_retriesRemaining, metaData: $metaData}';
+    return 'BackgroundTask{taskId: $taskId, url: $url, filename: $filename, headers: $headers, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, progressUpdates: $progressUpdates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, metaData: $metaData}';
   }
+}
+
+class BackgroundDownloadTask extends Task {
+
+  /// Creates a [BackgroundDownloadTask]
+  ///
+  /// [taskId] must be unique. A unique id will be generated if omitted
+  /// [url] properly encoded if necessary, can include query parameters
+  /// [urlQueryParameters] may be added and will be appended to the [url], must
+  ///   be properly encoded if necessary
+  /// [filename] of the file to save. If omitted, a random filename will be
+  /// generated
+  /// [headers] an optional map of HTTP request headers
+  /// [post] if set, uses POST instead of GET. Post must be one of the
+  /// following:
+  /// - true: POST request without a body
+  /// - a String: POST request with [post] as the body, encoded in utf8 and
+  ///   content-type 'text/plain'
+  /// - a List of bytes: POST request with [post] as the body
+  /// - a Map: POST request with [post] as form fields, encoded in utf8 and
+  ///   content-type 'application/x-www-form-urlencoded'
+  ///
+  /// [directory] optional directory name, precedes [filename]
+  /// [baseDirectory] one of the base directories, precedes [directory]
+  /// [group] if set allows different callbacks or processing for different
+  /// groups
+  /// [progressUpdates] the kind of progress updates requested
+  /// [requiresWiFi] if set, will not start download until WiFi is available.
+  /// If not set may start download over cellular network
+  /// [retries] if >0 will retry a failed download this many times
+  /// [metaData] user data
+  BackgroundDownloadTask(
+      {String? taskId,
+        required super.url,
+        super.urlQueryParameters,
+        String? filename,
+        super.headers,
+        super.post,
+        super.directory,
+        super.baseDirectory,
+        super.group,
+        super.progressUpdates,
+        super.requiresWiFi,
+        super.retries,
+        super.metaData}
+      ) : super(filename: filename);
+
+  /// Creates [BackgroundDownloadTask] object from JsonMap
+  BackgroundDownloadTask.fromJsonMap(Map<String, dynamic> jsonMap)
+      : assert(
+  jsonMap['taskType'] == 'downloadTask',
+  'The provided JSON map is not'
+      ' an upload task, because key "taskType" is not "downloadTask".'),
+        super.fromJsonMap(jsonMap);
+
+  @override
+  Map toJsonMap() => {...super.toJsonMap(), 'taskType': 'downloadTask'};
+
+  @override
+  BackgroundDownloadTask copyWith(
+      {String? taskId,
+      String? url,
+      String? filename,
+      Map<String, String>? headers,
+      Object? post,
+      String? directory,
+      BaseDirectory? baseDirectory,
+      String? group,
+      DownloadTaskProgressUpdates? progressUpdates,
+      bool? requiresWiFi,
+      int? retries,
+      int? retriesRemaining,
+      String? metaData}) => BackgroundDownloadTask(
+      taskId: taskId ?? this.taskId,
+      url: url ?? this.url,
+      filename: filename ?? this.filename,
+      headers: headers ?? this.headers,
+      post: post ?? this.post,
+      directory: directory ?? this.directory,
+      baseDirectory: baseDirectory ?? this.baseDirectory,
+      group: group ?? this.group,
+      progressUpdates: progressUpdates ?? this.progressUpdates,
+      requiresWiFi: requiresWiFi ?? this.requiresWiFi,
+      retries: retries ?? this.retries,
+      metaData: metaData ?? this.metaData)
+    ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 }
 
 /// Information related to an upload task
 ///
 /// An equality test on a [BackgroundUploadTask] is a test on the [taskId]
 /// only - all other fields are ignored in that test
-class BackgroundUploadTask extends BackgroundDownloadTask {
+class BackgroundUploadTask extends Task {
+
   /// Creates [BackgroundUploadTask]
   ///
   /// [taskId] must be unique. A unique id will be generated if omitted
@@ -393,13 +467,35 @@ class BackgroundUploadTask extends BackgroundDownloadTask {
   /// Creates [BackgroundUploadTask] object from JsonMap
   BackgroundUploadTask.fromJsonMap(Map<String, dynamic> jsonMap)
       : assert(
-            jsonMap['isUploadTask'] == true,
+            jsonMap['taskType'] == 'uploadTask',
             'The provided JSON map is not'
-            ' an upload task, because key "isUploadTask" is not true.'),
+            ' an upload task, because key "taskType" is not "uploadTask".'),
         super.fromJsonMap(jsonMap);
 
   @override
-  Map toJsonMap() => {...super.toJsonMap(), 'isUploadTask': true};
+  Map toJsonMap() => {...super.toJsonMap(), 'taskType': 'uploadTask'};
+
+  @override
+  BackgroundUploadTask copyWith({String? taskId, String? url, String? filename, Map<
+      String,
+      String>? headers, Object? post, String? directory, BaseDirectory?
+  baseDirectory, String? group, DownloadTaskProgressUpdates? progressUpdates,
+    bool? requiresWiFi, int? retries, int? retriesRemaining, String?
+    metaData}) => BackgroundUploadTask(
+      taskId: taskId ?? this.taskId,
+      url: url ?? this.url,
+      filename: filename ?? this.filename,
+      headers: headers ?? this.headers,
+      directory: directory ?? this.directory,
+      baseDirectory: baseDirectory ?? this.baseDirectory,
+      group: group ?? this.group,
+      progressUpdates: progressUpdates ?? this.progressUpdates,
+      requiresWiFi: requiresWiFi ?? this.requiresWiFi,
+      retries: retries ?? this.retries,
+      metaData: metaData ?? this.metaData)
+    ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
+
+
 }
 
 /// Return url String composed of the [url] and the

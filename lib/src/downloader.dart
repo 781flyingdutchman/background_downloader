@@ -37,8 +37,8 @@ class FileDownloader {
       MethodChannel('com.bbflight.background_downloader.background');
   static http.Client? httpClient;
   static bool _initialized = false;
-  static final _downloadCompleters =
-      <BackgroundDownloadTask, Completer<DownloadTaskStatus>>{};
+  static final _taskCompleters =
+      <Task, Completer<DownloadTaskStatus>>{};
   static final _batches = <BackgroundDownloadBatch>[];
 
   static final _tasksWaitingToRetry = <BackgroundDownloadTask>[];
@@ -77,7 +77,7 @@ class FileDownloader {
     WidgetsFlutterBinding.ensureInitialized();
     _tasksWaitingToRetry.clear();
     _batches.clear();
-    _downloadCompleters.clear();
+    _taskCompleters.clear();
     if (_updates.hasListener) {
       _log.warning('initialize called while the updates stream is still '
           'being listened to. That listener will no longer receive status updates.');
@@ -214,12 +214,12 @@ class FileDownloader {
     }
   }
 
-  /// Start a new download task
+  /// Start a new task
   ///
   /// Returns true if successfully enqueued. A new task will also generate
   /// a [DownloadTaskStatus.running] update to the registered callback,
   /// if requested by its [progressUpdates] property
-  static Future<bool> enqueue(BackgroundDownloadTask task) async {
+  static Future<bool> enqueue(Task task) async {
     _ensureInitialized();
     return await _channel
             .invokeMethod<bool>('enqueue', [jsonEncode(task.toJsonMap())]) ??
@@ -257,7 +257,7 @@ class FileDownloader {
             }
           }
         }
-        var downloadCompleter = _downloadCompleters.remove(task);
+        var downloadCompleter = _taskCompleters.remove(task);
         downloadCompleter?.complete(status);
       }
     }
@@ -268,7 +268,7 @@ class FileDownloader {
         group: groupName,
         progressUpdates: DownloadTaskProgressUpdates.statusChange);
     final downloadCompleter = Completer<DownloadTaskStatus>();
-    _downloadCompleters[internalTask] = downloadCompleter;
+    _taskCompleters[internalTask] = downloadCompleter;
     final enqueueSuccess = await enqueue(internalTask);
     if (!enqueueSuccess) {
       _log.warning('Could not enqueue task $task}');
@@ -444,7 +444,7 @@ class FileDownloader {
     _initialized = false;
     _tasksWaitingToRetry.clear();
     _batches.clear();
-    _downloadCompleters.clear();
+    _taskCompleters.clear();
     statusCallbacks.clear();
     progressCallbacks.clear();
   }
