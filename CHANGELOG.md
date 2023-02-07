@@ -1,3 +1,20 @@
+## 3.0.0
+
+Introducing `UploadTask` and `FileDownloader.upload`.
+
+To align naming convention, several class and enum names have been changed:
+- class BackgroundDownloadTask -> DownloadTask, and field progressUpdates -> updates
+- enum DownloadTaskStatus -> TaskStatus
+- enum DownloadProgressUpdates -> Updates
+- class BackgroundDownloadBatch -> DownloadBatch
+- class BackgroundDownloadEvent -> TaskUpdate
+- class BackgroundDownloadStatusEvent -> TaskStatusUpdate
+- class BackgroundDownloadProgressEvent -> TaskProgressUpdate
+- typedef DownloadStatusCallback -> TaskStatusCallback
+- typedef DownloadProgressCallback -> TaskProgressCallback
+- class DownloadBatch -> Batch
+- class BatchDownloadProgressCallback -> BatchProgressCallback
+
 ## 2.1.1
 
 The url and urlQueryParameters passed to a `BackgroundDownloadTask` or `Request` must be encoded if necessary. For example, if the url or query parameters contain a space, it must be replaced with %20 per urlencoding

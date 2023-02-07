@@ -28,8 +28,8 @@ class _MyAppState extends State<MyApp> {
 
   ButtonState buttonState = ButtonState.download;
   bool downloadWithError = false;
-  DownloadTaskStatus? downloadTaskStatus;
-  BackgroundDownloadTask? backgroundDownloadTask;
+  TaskStatus? downloadTaskStatus;
+  DownloadTask? backgroundDownloadTask;
   StreamController<DownloadProgressIndicatorUpdate> updateStream =
       StreamController();
 
@@ -37,17 +37,17 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     FileDownloader.initialize(
-        downloadStatusCallback: myDownloadStatusCallback,
-        downloadProgressCallback: myDownloadProgressCallback);
+        taskStatusCallback: myDownloadStatusCallback,
+        taskProgressCallback: myDownloadProgressCallback);
   }
 
   /// Process the status updates coming from the downloader
   ///
   /// Stores the task status
   void myDownloadStatusCallback(
-      BackgroundDownloadTask task, DownloadTaskStatus status) {
+      Task task, TaskStatus status) {
     if (task == backgroundDownloadTask) {
-      buttonState = status == DownloadTaskStatus.running
+      buttonState = status == TaskStatus.running
           ? ButtonState.cancel
           : ButtonState.reset;
       setState(() {
@@ -60,7 +60,7 @@ class _MyAppState extends State<MyApp> {
   ///
   /// Adds an update object to the stream that the main UI listens to
   void myDownloadProgressCallback(
-      BackgroundDownloadTask task, double progress) {
+      Task task, double progress) {
     updateStream.add(DownloadProgressIndicatorUpdate(task.filename, progress));
   }
 
@@ -87,7 +87,7 @@ class _MyAppState extends State<MyApp> {
                           Expanded(
                               child: Text('Force error',
                                   style:
-                                      Theme.of(context).textTheme.headline6)),
+                                      Theme.of(context).textTheme.titleLarge)),
                           Switch(
                               value: downloadWithError,
                               onChanged: (value) {
@@ -105,7 +105,7 @@ class _MyAppState extends State<MyApp> {
                         buttonTexts[buttonState.index],
                         style: Theme.of(context)
                             .textTheme
-                            .headline4
+                            .headlineMedium
                             ?.copyWith(color: Colors.white),
                       ),
                     )),
@@ -129,15 +129,15 @@ class _MyAppState extends State<MyApp> {
     switch (buttonState) {
       case ButtonState.download:
         // start download
-        backgroundDownloadTask = BackgroundDownloadTask(
+        backgroundDownloadTask = DownloadTask(
             url: downloadWithError
                 ? 'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/get_current_app_data' // returns 403 status code
                 : 'https://storage.googleapis.com/approachcharts/test/5MB-test.ZIP',
             filename: 'zipfile.zip',
             directory: 'my/directory',
             baseDirectory: BaseDirectory.applicationDocuments,
-            progressUpdates:
-                DownloadTaskProgressUpdates.statusChangeAndProgressUpdates);
+            updates:
+                Updates.statusChangeAndProgressUpdates);
         await FileDownloader.enqueue(backgroundDownloadTask!);
         break;
       case ButtonState.cancel:

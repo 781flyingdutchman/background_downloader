@@ -11,22 +11,7 @@ import 'package:logging/logging.dart';
 
 import 'models.dart';
 
-/// Signature for a function you can register to be called
-/// when the download state of a [task] changes.
-typedef DownloadStatusCallback = void Function(
-    BackgroundDownloadTask task, DownloadTaskStatus status);
 
-/// Signature for a function you can register to be called
-/// for every download progress change of a [task].
-///
-/// A successfully downloaded task will always finish with progress 1.0
-/// [DownloadTaskStatus.failed] results in progress -1.0
-/// [DownloadTaskStatus.canceled] results in progress -2.0
-/// [DownloadTaskStatus.notFound] results in progress -3.0
-/// [DownloadTaskStatus.waitingToRetry] results in progress -4.0
-/// These constants are available as [progressFailed] etc
-typedef DownloadProgressCallback = void Function(
-    BackgroundDownloadTask task, double progress);
 
 /// Provides access to all functions of the plugin in a single place.
 class FileDownloader {
@@ -38,23 +23,23 @@ class FileDownloader {
   static http.Client? httpClient;
   static bool _initialized = false;
   static final _taskCompleters =
-      <Task, Completer<DownloadTaskStatus>>{};
-  static final _batches = <BackgroundDownloadBatch>[];
+      <Task, Completer<TaskStatus>>{};
+  static final _batches = <Batch>[];
 
-  static final _tasksWaitingToRetry = <BackgroundDownloadTask>[];
+  static final _tasksWaitingToRetry = <Task>[];
 
-  /// Registered [DownloadStatusCallback] for each group
-  static final statusCallbacks = <String, DownloadStatusCallback>{};
+  /// Registered [TaskStatusCallback] for each group
+  static final taskStatusCallbacks = <String, TaskStatusCallback>{};
 
-  /// Registered [DownloadProgressCallback] for each group
-  static final progressCallbacks = <String, DownloadProgressCallback>{};
+  /// Registered [TaskProgressCallback] for each group
+  static final taskProgressCallbacks = <String, TaskProgressCallback>{};
 
-  /// StreamController for [BackgroundDownloadEvent] updates
-  static var _updates = StreamController<BackgroundDownloadEvent>();
+  /// StreamController for [TaskUpdate] updates
+  static var _updates = StreamController<TaskUpdate>();
 
-  /// Stream of [BackgroundDownloadEvent] updates for downloads that do
+  /// Stream of [TaskUpdate] updates for downloads that do
   /// not have a registered callback
-  static Stream<BackgroundDownloadEvent> get updates => _updates.stream;
+  static Stream<TaskUpdate> get updates => _updates.stream;
 
   /// True if [FileDownloader] was initialized
   static bool get initialized => _initialized;
@@ -65,15 +50,15 @@ class FileDownloader {
   /// Status callbacks are called only when the state changes, while
   /// progress callbacks are called to inform of intermediate progress.
   ///
-  /// Note that callbacks will be called based on a task's [progressUpdates]
+  /// Note that callbacks will be called based on a task's [updates]
   /// property, which defaults to status change callbacks only. To also get
-  /// progress updates make sure to register a [DownloadProgressCallback] and
-  /// set the task's [progressUpdates] property to .progressUpdates or
+  /// progress updates make sure to register a [TaskProgressCallback] and
+  /// set the task's [updates] property to .progressUpdates or
   /// .statusChangeAndProgressUpdates
   static void initialize(
       {String group = defaultGroup,
-      DownloadStatusCallback? downloadStatusCallback,
-      DownloadProgressCallback? downloadProgressCallback}) {
+      TaskStatusCallback? taskStatusCallback,
+      TaskProgressCallback? taskProgressCallback}) {
     WidgetsFlutterBinding.ensureInitialized();
     _tasksWaitingToRetry.clear();
     _batches.clear();
@@ -82,25 +67,25 @@ class FileDownloader {
       _log.warning('initialize called while the updates stream is still '
           'being listened to. That listener will no longer receive status updates.');
     }
-    _updates = StreamController<BackgroundDownloadEvent>();
+    _updates = StreamController<TaskUpdate>();
     // listen to the background channel, receiving updates on download status
     // or progress
     _backgroundChannel.setMethodCallHandler((call) async {
       final args = call.arguments as List<dynamic>;
       final task =
-          BackgroundDownloadTask.fromJsonMap(jsonDecode(args.first as String));
+          Task.createFromJsonMap(jsonDecode(args.first as String));
       switch (call.method) {
         case 'statusUpdate':
           // Normal status updates are only sent here when the task is expected
           // to provide those.  The exception is a .failed status when a task
           // has retriesRemaining > 0: those are always sent here, and are
           // intercepted to hold the task and reschedule in the near future
-          final downloadTaskStatus =
-              DownloadTaskStatus.values[args.last as int];
+          final taskStatus =
+              TaskStatus.values[args.last as int];
           // intercept failed download if task has retries left
-          if (downloadTaskStatus == DownloadTaskStatus.failed &&
+          if (taskStatus == TaskStatus.failed &&
               task.retriesRemaining > 0) {
-            _provideStatusUpdate(task, DownloadTaskStatus.waitingToRetry);
+            _provideStatusUpdate(task, TaskStatus.waitingToRetry);
             _provideProgressUpdate(task, progressWaitingToRetry);
             task.decreaseRetriesRemaining();
             _tasksWaitingToRetry.add(task);
@@ -117,14 +102,14 @@ class FileDownloader {
                 if (!await enqueue(task)) {
                   _log.warning(
                       'Could not enqueue task $task after retry timeout');
-                  _provideStatusUpdate(task, DownloadTaskStatus.failed);
+                  _provideStatusUpdate(task, TaskStatus.failed);
                   _provideProgressUpdate(task, progressFailed);
                 }
               }
             });
           } else {
             // normal status update
-            _provideStatusUpdate(task, downloadTaskStatus);
+            _provideStatusUpdate(task, taskStatus);
           }
           break;
 
@@ -140,27 +125,27 @@ class FileDownloader {
     });
     // register any callbacks provided with initialization
     _initialized = true;
-    if (downloadStatusCallback != null || downloadProgressCallback != null) {
+    if (taskStatusCallback != null || taskProgressCallback != null) {
       registerCallbacks(
           group: group,
-          downloadStatusCallback: downloadStatusCallback,
-          downloadProgressCallback: downloadProgressCallback);
+          taskStatusCallback: taskStatusCallback,
+          taskProgressCallback: taskProgressCallback);
     }
   }
 
   /// Provide the status update for this task to its callback or listener
   static void _provideStatusUpdate(
-      BackgroundDownloadTask task, DownloadTaskStatus downloadTaskStatus) {
+      Task task, TaskStatus taskStatus) {
     if (task.providesStatusUpdates) {
-      final downloadStatusCallback = statusCallbacks[task.group];
-      if (downloadStatusCallback != null) {
-        downloadStatusCallback(task, downloadTaskStatus);
+      final taskStatusCallback = taskStatusCallbacks[task.group];
+      if (taskStatusCallback != null) {
+        taskStatusCallback(task, taskStatus);
       } else {
         if (_updates.hasListener) {
-          _updates.add(BackgroundDownloadStatusEvent(task, downloadTaskStatus));
+          _updates.add(TaskStatusUpdate(task, taskStatus));
         } else {
           _log.warning('Requested status updates for task ${task.taskId} in '
-              'group ${task.group} but no downloadStatusCallback '
+              'group ${task.group} but no TaskStatusCallback '
               'was registered, and there is no listener to the '
               'updates stream');
         }
@@ -169,16 +154,16 @@ class FileDownloader {
   }
 
   /// Provide the progress update for this task to its callback or listener
-  static void _provideProgressUpdate(BackgroundDownloadTask task, progress) {
+  static void _provideProgressUpdate(Task task, progress) {
     if (task.providesProgressUpdates) {
-      final progressUpdateCallback = progressCallbacks[task.group];
-      if (progressUpdateCallback != null) {
-        progressUpdateCallback(task, progress);
+      final taskProgressCallback = taskProgressCallbacks[task.group];
+      if (taskProgressCallback != null) {
+        taskProgressCallback(task, progress);
       } else if (_updates.hasListener) {
-        _updates.add(BackgroundDownloadProgressEvent(task, progress));
+        _updates.add(TaskProgressUpdate(task, progress));
       } else {
         _log.warning('Requested progress updates for task ${task.taskId} in '
-            'group ${task.group} but no progressUpdateCallback '
+            'group ${task.group} but no TaskProgressCallback '
             'was registered, and there is no listener to the '
             'updates stream');
       }
@@ -191,34 +176,34 @@ class FileDownloader {
   /// progress callbacks are called to inform of intermediate progress.
   ///
   /// Different callbacks can be set for different groups, and the group
-  /// can be passed on with the [BackgroundDownloadTask] to ensure the
+  /// can be passed on with the [DownloadTask] to ensure the
   /// appropriate callbacks are called for that group.
   ///
-  /// Note that callbacks will be called based on a task's [progressUpdates]
+  /// Note that callbacks will be called based on a task's [updates]
   /// property, which defaults to status change callbacks only. To also get
-  /// progress updates make sure to register a [DownloadProgressCallback] and
-  /// set the task's [progressUpdates] property to .progressUpdates or
+  /// progress updates make sure to register a [TaskProgressCallback] and
+  /// set the task's [updates] property to .progressUpdates or
   /// .statusChangeAndProgressUpdates
   static void registerCallbacks(
       {String group = defaultGroup,
-      DownloadStatusCallback? downloadStatusCallback,
-      DownloadProgressCallback? downloadProgressCallback}) {
+      TaskStatusCallback? taskStatusCallback,
+      TaskProgressCallback? taskProgressCallback}) {
     _ensureInitialized();
-    assert(downloadStatusCallback != null || (downloadProgressCallback != null),
-        'Must provide a status update callback or a progress update callback, or both');
-    if (downloadStatusCallback != null) {
-      statusCallbacks[group] = downloadStatusCallback;
+    assert(taskStatusCallback != null || (taskProgressCallback != null),
+        'Must provide a TaskStatusCallback or a TaskProgressCallback, or both');
+    if (taskStatusCallback != null) {
+      taskStatusCallbacks[group] = taskStatusCallback;
     }
-    if (downloadProgressCallback != null) {
-      progressCallbacks[group] = downloadProgressCallback;
+    if (taskProgressCallback != null) {
+      taskProgressCallbacks[group] = taskProgressCallback;
     }
   }
 
   /// Start a new task
   ///
   /// Returns true if successfully enqueued. A new task will also generate
-  /// a [DownloadTaskStatus.running] update to the registered callback,
-  /// if requested by its [progressUpdates] property
+  /// a [TaskStatus.running] update to the registered callback,
+  /// if requested by its [updates] property
   static Future<bool> enqueue(Task task) async {
     _ensureInitialized();
     return await _channel
@@ -236,21 +221,21 @@ class FileDownloader {
   ///
   /// Note that [group] is ignored as it is replaced with an internal group
   /// name '_foregroundDownload' to track status
-  static Future<DownloadTaskStatus> download(
-      BackgroundDownloadTask task) async {
+  static Future<TaskStatus> download(
+      DownloadTask task) async {
     const groupName = '_foregroundDownload';
 
     /// internal callback function that completes the completer associated
     /// with this task
-    internalCallback(BackgroundDownloadTask task, DownloadTaskStatus status) {
+    internalCallback(Task task, TaskStatus status) {
       if (status.isFinalState) {
         if (_batches.isNotEmpty) {
           // check if this task is part of a batch
           for (final batch in _batches) {
             if (batch.tasks.contains(task)) {
               batch.results[task] = status;
-              if (batch.batchDownloadProgressCallback != null) {
-                batch.batchDownloadProgressCallback!(
+              if (batch.batchProgressCallback != null) {
+                batch.batchProgressCallback!(
                     batch.numSucceeded, batch.numFailed);
               }
               break;
@@ -263,26 +248,26 @@ class FileDownloader {
     }
 
     registerCallbacks(
-        group: groupName, downloadStatusCallback: internalCallback);
+        group: groupName, taskStatusCallback: internalCallback);
     final internalTask = task.copyWith(
         group: groupName,
-        progressUpdates: DownloadTaskProgressUpdates.statusChange);
-    final downloadCompleter = Completer<DownloadTaskStatus>();
-    _taskCompleters[internalTask] = downloadCompleter;
+        updates: Updates.statusChange);
+    final taskCompleter = Completer<TaskStatus>();
+    _taskCompleters[internalTask] = taskCompleter;
     final enqueueSuccess = await enqueue(internalTask);
     if (!enqueueSuccess) {
       _log.warning('Could not enqueue task $task}');
-      return Future.value(DownloadTaskStatus.failed);
+      return Future.value(TaskStatus.failed);
     }
-    return downloadCompleter.future;
+    return taskCompleter.future;
   }
 
   /// Enqueues a list of files to download and returns when all downloads
   /// have finished (successfully or otherwise). The returned value is a
-  /// [BackgroundDownloadBatch] object that contains the original [tasks], the
+  /// [Batch] object that contains the original [tasks], the
   /// [results] and convenience getters to filter successful and failed results.
   ///
-  /// If an optional [batchDownloadProgressCallback] function is provided, it will be
+  /// If an optional [batchProgressCallback] function is provided, it will be
   /// called upon completion (successfully or otherwise) of each task in the
   /// batch, with two parameters: the number of succeeded and the number of
   /// failed tasks. The callback can be used, for instance, to show a progress
@@ -290,22 +275,23 @@ class FileDownloader {
   ///    double percent_complete = (succeeded + failed) / tasks.length
   ///
   /// Note that to allow for special processing of tasks in a batch, the task's
-  /// [group] and [progressUpdates] value will be modified when enqueued, and
-  /// those modified tasks are returned as part of the [BackgroundDownloadBatch]
+  /// [group] and [updates] value will be modified when enqueued, and
+  /// those modified tasks are returned as part of the [Batch]
   /// object.
-  static Future<BackgroundDownloadBatch> downloadBatch(
-      final List<BackgroundDownloadTask> tasks,
-      [BatchDownloadProgressCallback? batchDownloadProgressCallback]) async {
+  static Future<Batch> downloadBatch(
+      final List<DownloadTask> tasks,
+      [BatchProgressCallback? batchProgressCallback]) async {
+    //TODO move body to common function and introduce uploadBatch
     assert(tasks.isNotEmpty, 'List of tasks cannot be empty');
-    if (batchDownloadProgressCallback != null) {
-      batchDownloadProgressCallback(0, 0); // initial callback
+    if (batchProgressCallback != null) {
+      batchProgressCallback(0, 0); // initial callback
     }
-    final batch = BackgroundDownloadBatch(tasks, batchDownloadProgressCallback);
+    final batch = Batch(tasks, batchProgressCallback);
     _batches.add(batch);
-    final downloadFutures = <Future<DownloadTaskStatus>>[];
+    final taskFutures = <Future<TaskStatus>>[];
     var counter = 0;
     for (final task in tasks) {
-      downloadFutures.add(download(task));
+      taskFutures.add(download(task));
       counter++;
       if (counter % 3 == 0) {
         // To prevent blocking the UI we 'yield' for a few ms after every 3
@@ -313,7 +299,7 @@ class FileDownloader {
         await Future.delayed(const Duration(milliseconds: 50));
       }
     }
-    await Future.wait(downloadFutures); // wait for all downloads to complete
+    await Future.wait(taskFutures); // wait for all downloads to complete
     _batches.remove(batch);
     return batch;
   }
@@ -322,7 +308,7 @@ class FileDownloader {
   /// the provided group
   ///
   /// Returns the number of tasks cancelled. Every canceled task wil emit a
-  /// [DownloadTaskStatus.canceled] update to the registered callback, if
+  /// [TaskStatus.canceled] update to the registered callback, if
   /// requested
   static Future<int> reset({String? group = defaultGroup}) async {
     _ensureInitialized();
@@ -347,14 +333,14 @@ class FileDownloader {
   ///
   /// Active means enqueued or running, and if [includeTasksWaitingToRetry] is
   /// true also tasks that are waiting to be retried
-  static Future<List<BackgroundDownloadTask>> allTasks(
+  static Future<List<Task>> allTasks(
       {String group = defaultGroup,
       bool includeTasksWaitingToRetry = true}) async {
     _ensureInitialized();
     final result =
         await _channel.invokeMethod<List<dynamic>?>('allTasks', group) ?? [];
     final tasks = result
-        .map((e) => BackgroundDownloadTask.fromJsonMap(jsonDecode(e as String)))
+        .map((e) => Task.createFromJsonMap(jsonDecode(e as String)))
         .toList();
     if (includeTasksWaitingToRetry) {
       tasks.addAll(_tasksWaitingToRetry.where((task) => task.group == group));
@@ -364,7 +350,7 @@ class FileDownloader {
 
   /// Delete all tasks matching the taskIds in the list
   ///
-  /// Every canceled task wil emit a [DownloadTaskStatus.canceled] update to
+  /// Every canceled task wil emit a [TaskStatus.canceled] update to
   /// the registered callback, if requested
   static Future<bool> cancelTasksWithIds(List<String> taskIds) async {
     _ensureInitialized();
@@ -377,7 +363,7 @@ class FileDownloader {
     // remove tasks waiting to retry from the list so they won't be retried
     for (final task in matchingTasksWaitingToRetry) {
       _tasksWaitingToRetry.remove(task);
-      _provideStatusUpdate(task, DownloadTaskStatus.canceled);
+      _provideStatusUpdate(task, TaskStatus.canceled);
       _provideProgressUpdate(task, progressCanceled);
     }
     // cancel remaining taskIds on the native platform
@@ -392,13 +378,13 @@ class FileDownloader {
     return true;
   }
 
-  /// Return [BackgroundDownloadTask] for the given [taskId], or null
+  /// Return [DownloadTask] for the given [taskId], or null
   /// if not found.
   ///
   /// Only running tasks are guaranteed to be returned, but returning a task
   /// does not guarantee that the task is still running. To keep track of
-  /// the status of tasks, use a [DownloadStatusCallback]
-  static Future<BackgroundDownloadTask?> taskForId(String taskId) async {
+  /// the status of tasks, use a [TaskStatusCallback]
+  static Future<Task?> taskForId(String taskId) async {
     _ensureInitialized();
     // check if task with this Id is waiting to retry
     final taskWaitingToRetry =
@@ -409,7 +395,7 @@ class FileDownloader {
     // if not, ask the native platform for the task matching this id
     final jsonString = await _channel.invokeMethod<String>('taskForId', taskId);
     if (jsonString != null) {
-      return BackgroundDownloadTask.fromJsonMap(jsonDecode(jsonString));
+      return Task.createFromJsonMap(jsonDecode(jsonString));
     }
     return null;
   }
@@ -445,8 +431,8 @@ class FileDownloader {
     _tasksWaitingToRetry.clear();
     _batches.clear();
     _taskCompleters.clear();
-    statusCallbacks.clear();
-    progressCallbacks.clear();
+    taskStatusCallbacks.clear();
+    taskProgressCallbacks.clear();
   }
 }
 

@@ -2,8 +2,8 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
-/// Defines a set of possible states which a [DownloadTask] can be in.
-enum DownloadTaskStatus {
+/// Defines a set of possible states which a [Task] can be in.
+enum TaskStatus {
   /// Task is enqueued on the native platform and waiting to start
   ///
   /// It may wait for resources, or for an appropriate network to become
@@ -14,7 +14,7 @@ enum DownloadTaskStatus {
   /// Task is running, i.e. actively downloading
   running,
 
-  /// Task has completed successfully and the file is available
+  /// Task has completed successfully
   ///
   /// This is a final state
   complete,
@@ -24,7 +24,7 @@ enum DownloadTaskStatus {
   /// This is a final state
   notFound,
 
-  /// Task has failed to download due to an error
+  /// Task has failed due to an error
   ///
   /// This is a final state
   failed,
@@ -45,15 +45,15 @@ enum DownloadTaskStatus {
   /// state changes are possible
   bool get isFinalState {
     switch (this) {
-      case DownloadTaskStatus.complete:
-      case DownloadTaskStatus.notFound:
-      case DownloadTaskStatus.failed:
-      case DownloadTaskStatus.canceled:
+      case TaskStatus.complete:
+      case TaskStatus.notFound:
+      case TaskStatus.failed:
+      case TaskStatus.canceled:
         return true;
 
-      case DownloadTaskStatus.enqueued:
-      case DownloadTaskStatus.running:
-      case DownloadTaskStatus.waitingToRetry:
+      case TaskStatus.enqueued:
+      case TaskStatus.running:
+      case TaskStatus.waitingToRetry:
         return false;
     }
   }
@@ -62,7 +62,6 @@ enum DownloadTaskStatus {
   /// state changes are possible
   bool get isNotFinalState => !isFinalState;
 }
-
 
 /// Base directory in which files will be stored, based on their relative
 /// path.
@@ -79,8 +78,8 @@ enum BaseDirectory {
   applicationSupport
 }
 
-/// Type of download updates requested for a group of downloads
-enum DownloadTaskProgressUpdates {
+/// Type of updates requested for a task or group of tasks
+enum Updates {
   /// no status change or progress updates
   none,
 
@@ -93,6 +92,21 @@ enum DownloadTaskProgressUpdates {
   /// Status change updates and progress updates while downloading
   statusChangeAndProgressUpdates,
 }
+
+/// Signature for a function you can register to be called
+/// when the state of a [task] changes.
+typedef TaskStatusCallback = void Function(Task task, TaskStatus status);
+
+/// Signature for a function you can register to be called
+/// for every progress change of a [task].
+///
+/// A successfully completed task will always finish with progress 1.0
+/// [TaskStatus.failed] results in progress -1.0
+/// [TaskStatus.canceled] results in progress -2.0
+/// [TaskStatus.notFound] results in progress -3.0
+/// [TaskStatus.waitingToRetry] results in progress -4.0
+/// These constants are available as [progressFailed] etc
+typedef TaskProgressCallback = void Function(Task task, double progress);
 
 /// A server Request
 ///
@@ -182,8 +196,8 @@ class Request {
 
 /// Information related to a [Task]
 ///
-/// A [Task] is the base class for [BackgroundDownloadTask] and
-/// [BackgroundUploadTask]
+/// A [Task] is the base class for [DownloadTask] and
+/// [UploadTask]
 ///
 /// An equality test on a [Task] is a test on the [taskId]
 /// only - all other fields are ignored in that test
@@ -204,7 +218,7 @@ abstract class Task extends Request {
   final String group;
 
   /// Type of progress updates desired
-  final DownloadTaskProgressUpdates progressUpdates;
+  final Updates updates;
 
   /// If true, will not download over cellular (metered) network
   final bool requiresWiFi;
@@ -234,7 +248,7 @@ abstract class Task extends Request {
   /// [baseDirectory] one of the base directories, precedes [directory]
   /// [group] if set allows different callbacks or processing for different
   /// groups
-  /// [progressUpdates] the kind of progress updates requested
+  /// [updates] the kind of progress updates requested
   /// [requiresWiFi] if set, will not start download until WiFi is available.
   /// If not set may start download over cellular network
   /// [retries] if >0 will retry a failed download this many times
@@ -249,7 +263,7 @@ abstract class Task extends Request {
       this.directory = '',
       this.baseDirectory = BaseDirectory.applicationDocuments,
       this.group = 'default',
-      this.progressUpdates = DownloadTaskProgressUpdates.statusChange,
+      this.updates = Updates.statusChange,
       this.requiresWiFi = false,
       super.retries,
       this.metaData = ''})
@@ -267,32 +281,36 @@ abstract class Task extends Request {
     }
   }
 
-  /// Returns a copy of the [BackgroundDownloadTask] with optional changes to
-  /// specific fields
-  Task copyWith(
-          {String? taskId,
-          String? url,
-          String? filename,
-          Map<String, String>? headers,
-          Object? post,
-          String? directory,
-          BaseDirectory? baseDirectory,
-          String? group,
-          DownloadTaskProgressUpdates? progressUpdates,
-          bool? requiresWiFi,
-          int? retries,
-          int? retriesRemaining,
-          String? metaData});
+  // Create a new [Task] subclass from the provided [jsonMap]
+  factory Task.createFromJsonMap(Map<String, dynamic> jsonMap) =>
+      jsonMap['taskType'] == 'UploadTask'
+          ? UploadTask.fromJsonMap(jsonMap)
+          : DownloadTask.fromJsonMap(jsonMap);
 
-  /// Creates object from JsonMap
+  /// Returns a copy of the [Task] with optional changes to specific fields
+  Task copyWith(
+      {String? taskId,
+      String? url,
+      String? filename,
+      Map<String, String>? headers,
+      Object? post,
+      String? directory,
+      BaseDirectory? baseDirectory,
+      String? group,
+      Updates? updates,
+      bool? requiresWiFi,
+      int? retries,
+      int? retriesRemaining,
+      String? metaData});
+
+  /// Creates [Task] object from JsonMap
   Task.fromJsonMap(Map<String, dynamic> jsonMap)
       : taskId = jsonMap['taskId'],
         filename = jsonMap['filename'],
         directory = jsonMap['directory'],
         baseDirectory = BaseDirectory.values[jsonMap['baseDirectory']],
         group = jsonMap['group'],
-        progressUpdates =
-            DownloadTaskProgressUpdates.values[jsonMap['progressUpdates']],
+        updates = Updates.values[jsonMap['updates']],
         requiresWiFi = jsonMap['requiresWiFi'],
         metaData = jsonMap['metaData'],
         super.fromJsonMap(jsonMap);
@@ -306,22 +324,20 @@ abstract class Task extends Request {
         'directory': directory,
         'baseDirectory': baseDirectory.index, // stored as int
         'group': group,
-        'progressUpdates': progressUpdates.index, // stored as int
+        'updates': updates.index, // stored as int
         'requiresWiFi': requiresWiFi,
         'metaData': metaData
       };
 
   /// If true, task expects progress updates
   bool get providesProgressUpdates =>
-      progressUpdates == DownloadTaskProgressUpdates.progressUpdates ||
-      progressUpdates ==
-          DownloadTaskProgressUpdates.statusChangeAndProgressUpdates;
+      updates == Updates.progressUpdates ||
+      updates == Updates.statusChangeAndProgressUpdates;
 
   /// If true, task expects status updates
   bool get providesStatusUpdates =>
-      progressUpdates == DownloadTaskProgressUpdates.statusChange ||
-      progressUpdates ==
-          DownloadTaskProgressUpdates.statusChangeAndProgressUpdates;
+      updates == Updates.statusChange ||
+      updates == Updates.statusChangeAndProgressUpdates;
 
   @override
   bool operator ==(Object other) =>
@@ -335,13 +351,12 @@ abstract class Task extends Request {
 
   @override
   String toString() {
-    return 'BackgroundTask{taskId: $taskId, url: $url, filename: $filename, headers: $headers, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, progressUpdates: $progressUpdates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, metaData: $metaData}';
+    return 'BackgroundTask{taskId: $taskId, url: $url, filename: $filename, headers: $headers, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, updates: $updates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, metaData: $metaData}';
   }
 }
 
-class BackgroundDownloadTask extends Task {
-
-  /// Creates a [BackgroundDownloadTask]
+class DownloadTask extends Task {
+  /// Creates a [DownloadTask]
   ///
   /// [taskId] must be unique. A unique id will be generated if omitted
   /// [url] properly encoded if necessary, can include query parameters
@@ -363,75 +378,75 @@ class BackgroundDownloadTask extends Task {
   /// [baseDirectory] one of the base directories, precedes [directory]
   /// [group] if set allows different callbacks or processing for different
   /// groups
-  /// [progressUpdates] the kind of progress updates requested
+  /// [updates] the kind of progress updates requested
   /// [requiresWiFi] if set, will not start download until WiFi is available.
   /// If not set may start download over cellular network
   /// [retries] if >0 will retry a failed download this many times
   /// [metaData] user data
-  BackgroundDownloadTask(
+  DownloadTask(
       {String? taskId,
-        required super.url,
-        super.urlQueryParameters,
-        String? filename,
-        super.headers,
-        super.post,
-        super.directory,
-        super.baseDirectory,
-        super.group,
-        super.progressUpdates,
-        super.requiresWiFi,
-        super.retries,
-        super.metaData}
-      ) : super(filename: filename);
+      required super.url,
+      super.urlQueryParameters,
+      String? filename,
+      super.headers,
+      super.post,
+      super.directory,
+      super.baseDirectory,
+      super.group,
+      super.updates,
+      super.requiresWiFi,
+      super.retries,
+      super.metaData})
+      : super(filename: filename);
 
-  /// Creates [BackgroundDownloadTask] object from JsonMap
-  BackgroundDownloadTask.fromJsonMap(Map<String, dynamic> jsonMap)
+  /// Creates [DownloadTask] object from JsonMap
+  DownloadTask.fromJsonMap(Map<String, dynamic> jsonMap)
       : assert(
-  jsonMap['taskType'] == 'downloadTask',
-  'The provided JSON map is not'
-      ' an upload task, because key "taskType" is not "downloadTask".'),
+            jsonMap['taskType'] == 'DownloadTask',
+            'The provided JSON map is not'
+            ' a DownloadTask, because key "taskType" is not "DownloadTask".'),
         super.fromJsonMap(jsonMap);
 
   @override
-  Map toJsonMap() => {...super.toJsonMap(), 'taskType': 'downloadTask'};
+  Map toJsonMap() => {...super.toJsonMap(), 'taskType': 'DownloadTask'};
 
   @override
-  BackgroundDownloadTask copyWith(
-      {String? taskId,
-      String? url,
-      String? filename,
-      Map<String, String>? headers,
-      Object? post,
-      String? directory,
-      BaseDirectory? baseDirectory,
-      String? group,
-      DownloadTaskProgressUpdates? progressUpdates,
-      bool? requiresWiFi,
-      int? retries,
-      int? retriesRemaining,
-      String? metaData}) => BackgroundDownloadTask(
-      taskId: taskId ?? this.taskId,
-      url: url ?? this.url,
-      filename: filename ?? this.filename,
-      headers: headers ?? this.headers,
-      post: post ?? this.post,
-      directory: directory ?? this.directory,
-      baseDirectory: baseDirectory ?? this.baseDirectory,
-      group: group ?? this.group,
-      progressUpdates: progressUpdates ?? this.progressUpdates,
-      requiresWiFi: requiresWiFi ?? this.requiresWiFi,
-      retries: retries ?? this.retries,
-      metaData: metaData ?? this.metaData)
-    ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
+  DownloadTask copyWith(
+          {String? taskId,
+          String? url,
+          String? filename,
+          Map<String, String>? headers,
+          Object? post,
+          String? directory,
+          BaseDirectory? baseDirectory,
+          String? group,
+          Updates? updates,
+          bool? requiresWiFi,
+          int? retries,
+          int? retriesRemaining,
+          String? metaData}) =>
+      DownloadTask(
+          taskId: taskId ?? this.taskId,
+          url: url ?? this.url,
+          filename: filename ?? this.filename,
+          headers: headers ?? this.headers,
+          post: post ?? this.post,
+          directory: directory ?? this.directory,
+          baseDirectory: baseDirectory ?? this.baseDirectory,
+          group: group ?? this.group,
+          updates: updates ?? this.updates,
+          requiresWiFi: requiresWiFi ?? this.requiresWiFi,
+          retries: retries ?? this.retries,
+          metaData: metaData ?? this.metaData)
+        ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 }
 
 /// Information related to an upload task
 ///
-/// An equality test on a [BackgroundUploadTask] is a test on the [taskId]
+/// An equality test on a [UploadTask] is a test on the [taskId]
 /// only - all other fields are ignored in that test
-class BackgroundUploadTask extends Task {
-
-  /// Creates [BackgroundUploadTask]
+class UploadTask extends Task {
+  /// Creates [UploadTask]
   ///
   /// [taskId] must be unique. A unique id will be generated if omitted
   /// [url] properly encoded if necessary, can include query parameters
@@ -443,12 +458,12 @@ class BackgroundUploadTask extends Task {
   /// [baseDirectory] one of the base directories, precedes [directory]
   /// [group] if set allows different callbacks or processing for different
   /// groups
-  /// [progressUpdates] the kind of progress updates requested
+  /// [updates] the kind of progress updates requested
   /// [requiresWiFi] if set, will not start upload until WiFi is available.
   /// If not set may start upload over cellular network
   /// [retries] if >0 will retry a failed upload this many times
   /// [metaData] user data
-  BackgroundUploadTask(
+  UploadTask(
       {String? taskId,
       required super.url,
       super.urlQueryParameters,
@@ -457,45 +472,52 @@ class BackgroundUploadTask extends Task {
       super.directory,
       super.baseDirectory,
       super.group,
-      super.progressUpdates,
+      super.updates,
       super.requiresWiFi,
       super.retries,
       super.metaData})
       : assert(filename.isNotEmpty, 'A filename is required'),
         super(filename: filename, post: null);
 
-  /// Creates [BackgroundUploadTask] object from JsonMap
-  BackgroundUploadTask.fromJsonMap(Map<String, dynamic> jsonMap)
+  /// Creates [UploadTask] object from JsonMap
+  UploadTask.fromJsonMap(Map<String, dynamic> jsonMap)
       : assert(
-            jsonMap['taskType'] == 'uploadTask',
+            jsonMap['taskType'] == 'UploadTask',
             'The provided JSON map is not'
-            ' an upload task, because key "taskType" is not "uploadTask".'),
+            ' an UploadTask, because key "taskType" is not "UploadTask".'),
         super.fromJsonMap(jsonMap);
 
   @override
-  Map toJsonMap() => {...super.toJsonMap(), 'taskType': 'uploadTask'};
+  Map toJsonMap() => {...super.toJsonMap(), 'taskType': 'UploadTask'};
 
   @override
-  BackgroundUploadTask copyWith({String? taskId, String? url, String? filename, Map<
-      String,
-      String>? headers, Object? post, String? directory, BaseDirectory?
-  baseDirectory, String? group, DownloadTaskProgressUpdates? progressUpdates,
-    bool? requiresWiFi, int? retries, int? retriesRemaining, String?
-    metaData}) => BackgroundUploadTask(
-      taskId: taskId ?? this.taskId,
-      url: url ?? this.url,
-      filename: filename ?? this.filename,
-      headers: headers ?? this.headers,
-      directory: directory ?? this.directory,
-      baseDirectory: baseDirectory ?? this.baseDirectory,
-      group: group ?? this.group,
-      progressUpdates: progressUpdates ?? this.progressUpdates,
-      requiresWiFi: requiresWiFi ?? this.requiresWiFi,
-      retries: retries ?? this.retries,
-      metaData: metaData ?? this.metaData)
-    ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
-
-
+  UploadTask copyWith(
+          {String? taskId,
+          String? url,
+          String? filename,
+          Map<String, String>? headers,
+          Object? post,
+          String? directory,
+          BaseDirectory? baseDirectory,
+          String? group,
+          Updates? updates,
+          bool? requiresWiFi,
+          int? retries,
+          int? retriesRemaining,
+          String? metaData}) =>
+      UploadTask(
+          taskId: taskId ?? this.taskId,
+          url: url ?? this.url,
+          filename: filename ?? this.filename,
+          headers: headers ?? this.headers,
+          directory: directory ?? this.directory,
+          baseDirectory: baseDirectory ?? this.baseDirectory,
+          group: group ?? this.group,
+          updates: updates ?? this.updates,
+          requiresWiFi: requiresWiFi ?? this.requiresWiFi,
+          retries: retries ?? this.retries,
+          metaData: metaData ?? this.metaData)
+        ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 }
 
 /// Return url String composed of the [url] and the
@@ -514,30 +536,28 @@ String _urlWithQueryParameters(
 ///
 /// [succeeded] will count the number of successful downloads, and
 /// [failed] counts the number of failed downloads (for any reason).
-typedef BatchDownloadProgressCallback = void Function(
-    int succeeded, int failed);
+typedef BatchProgressCallback = void Function(int succeeded, int failed);
 
-/// Contains tasks and results related to a batch of downloads
-class BackgroundDownloadBatch {
-  final List<BackgroundDownloadTask> tasks;
-  final BatchDownloadProgressCallback? batchDownloadProgressCallback;
-  final results = <BackgroundDownloadTask, DownloadTaskStatus>{};
+/// Contains tasks and results related to a batch of tasks
+class Batch {
+  final List<Task> tasks;
+  final BatchProgressCallback? batchProgressCallback;
+  final results = <Task, TaskStatus>{};
 
-  BackgroundDownloadBatch(this.tasks, this.batchDownloadProgressCallback);
+  Batch(this.tasks, this.batchProgressCallback);
 
-  /// Returns an Iterable with successful downloads in this batch
-  Iterable<BackgroundDownloadTask> get succeeded => results.entries
-      .where((entry) => entry.value == DownloadTaskStatus.complete)
+  /// Returns an Iterable with successful tasks in this batch
+  Iterable<Task> get succeeded => results.entries
+      .where((entry) => entry.value == TaskStatus.complete)
       .map((e) => e.key);
 
-  /// Returns the number of successful downloads in this batch
-  int get numSucceeded => results.values
-      .where((result) => result == DownloadTaskStatus.complete)
-      .length;
+  /// Returns the number of successful tasks in this batch
+  int get numSucceeded =>
+      results.values.where((result) => result == TaskStatus.complete).length;
 
-  /// Returns an Iterable with failed downloads in this batch
-  Iterable<BackgroundDownloadTask> get failed => results.entries
-      .where((entry) => entry.value != DownloadTaskStatus.complete)
+  /// Returns an Iterable with failed tasks in this batch
+  Iterable<Task> get failed => results.entries
+      .where((entry) => entry.value != TaskStatus.complete)
       .map((e) => e.key);
 
   /// Returns the number of failed downloads in this batch
@@ -547,33 +567,33 @@ class BackgroundDownloadBatch {
 /// Base class for events related to [task]. Actual events are
 /// either a status update or a progress update.
 ///
-/// When receiving an event, test if the event is a
-/// [BackgroundDownloadStatusEvent] or a [BackgroundDownloadProgressEvent]
-/// and treat the event accordingly
-class BackgroundDownloadEvent {
-  final BackgroundDownloadTask task;
+/// When receiving an update, test if the update is a
+/// [TaskStatusUpdate] or a [TaskProgressUpdate]
+/// and treat the update accordingly
+class TaskUpdate {
+  final Task task;
 
-  BackgroundDownloadEvent(this.task);
+  TaskUpdate(this.task);
 }
 
 /// A status update event
-class BackgroundDownloadStatusEvent extends BackgroundDownloadEvent {
-  final DownloadTaskStatus status;
+class TaskStatusUpdate extends TaskUpdate {
+  final TaskStatus status;
 
-  BackgroundDownloadStatusEvent(super.task, this.status);
+  TaskStatusUpdate(super.task, this.status);
 }
 
 /// A progress update event
 ///
 /// A successfully downloaded task will always finish with progress 1.0
-/// [DownloadTaskStatus.failed] results in progress -1.0
-/// [DownloadTaskStatus.canceled] results in progress -2.0
-/// [DownloadTaskStatus.notFound] results in progress -3.0
-/// [DownloadTaskStatus.waitingToRetry] results in progress -4.0
-class BackgroundDownloadProgressEvent extends BackgroundDownloadEvent {
+/// [TaskStatus.failed] results in progress -1.0
+/// [TaskStatus.canceled] results in progress -2.0
+/// [TaskStatus.notFound] results in progress -3.0
+/// [TaskStatus.waitingToRetry] results in progress -4.0
+class TaskProgressUpdate extends TaskUpdate {
   final double progress;
 
-  BackgroundDownloadProgressEvent(super.task, this.progress);
+  TaskProgressUpdate(super.task, this.progress);
 }
 
 // Progress values representing a status
