@@ -153,7 +153,7 @@ Optionally, `headers` can be added to the `BackgroundDownloadTask`, which will b
 ### Retries
 
 To schedule automatic retries of failed downloads (with exponential backoff), set the `retries` field of the `BackgroundDownloadTask` to an
-integer between 0 and 10. A normal download (without the need for retries) will follow status
+integer between 1 and 10. A normal download (without the need for retries) will follow status
 updates from `enqueued` -> `running` -> `complete` (or `notFound`). If `retries` has been set and
 the task fails, the sequence will be `enqueued` -> `running` ->
 `waitingToRetry` -> `enqueued` -> `running` -> `complete` (if the second try succeeds, or more

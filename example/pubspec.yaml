@@ -1,5 +1,5 @@
-name: flutter_downloader_example
-description: Demonstrates how to use the flutter_downloader plugin.
+name: background_downloader_example
+description: Demonstrates how to use the background_downloader plugin.
 
 version: 1.0.0+1
 
@@ -22,7 +22,7 @@ dependencies:
 
   background_downloader:
     # When depending on this package from a real application you should use:
-    #   flutter_downloader: ^x.y.z
+    #   background_downloader: ^x.y.z
     # See https://dart.dev/tools/pub/dependencies#version-constraints
     # The example app is bundled with the plugin so we use a path dependency on
     # the parent directory to use the current plugin's version.

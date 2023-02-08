@@ -237,13 +237,8 @@ abstract class Task extends Request {
   /// [headers] an optional map of HTTP request headers
   /// [post] if set, uses POST instead of GET. Post must be one of the
   /// following:
-  /// - true: POST request without a body
-  /// - a String: POST request with [post] as the body, encoded in utf8 and
-  ///   content-type 'text/plain'
+  /// - a String: POST request with [post] as the body, encoded in utf8
   /// - a List of bytes: POST request with [post] as the body
-  /// - a Map: POST request with [post] as form fields, encoded in utf8 and
-  ///   content-type 'application/x-www-form-urlencoded'
-  ///
   /// [directory] optional directory name, precedes [filename]
   /// [baseDirectory] one of the base directories, precedes [directory]
   /// [group] if set allows different callbacks or processing for different
@@ -397,7 +392,7 @@ class DownloadTask extends Task {
       super.requiresWiFi,
       super.retries,
       super.metaData})
-      : super(filename: filename);
+      : super(taskId: taskId, filename: filename);
 
   /// Creates [DownloadTask] object from JsonMap
   DownloadTask.fromJsonMap(Map<String, dynamic> jsonMap)
@@ -477,7 +472,7 @@ class UploadTask extends Task {
       super.retries,
       super.metaData})
       : assert(filename.isNotEmpty, 'A filename is required'),
-        super(filename: filename, post: null);
+        super(taskId: taskId, filename: filename, post: null);
 
   /// Creates [UploadTask] object from JsonMap
   UploadTask.fromJsonMap(Map<String, dynamic> jsonMap)

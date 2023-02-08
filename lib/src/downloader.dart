@@ -475,6 +475,5 @@ Future<http.Response> doRequest(Request request) async {
         seconds: pow(2, (request.retries - request.retriesRemaining)).toInt());
     await Future.delayed(waitTime);
   }
-  throw ArgumentError('Request to ${request.url} had negative '
-      'retriesRemaining');
+  throw ArgumentError('Request to ${request.url} had no retries remaining');
 }
