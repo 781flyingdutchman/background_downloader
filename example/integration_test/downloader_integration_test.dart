@@ -46,6 +46,7 @@ var retryTask = DownloadTask(
     url: failingUrl, filename: defaultFilename, retries: 3);
 
 var uploadTask = UploadTask(url: uploadTestUrl, filename: uploadFilename);
+var uploadTaskBinary = uploadTask.copyWith(post: 'binary');
 
 void statusCallback(Task task, TaskStatus status) {
   print('statusCallback for $task with status $status');
@@ -77,6 +78,7 @@ void main() {
     retryTask = DownloadTask(
         url: failingUrl, filename: defaultFilename, retries: 3);
     uploadTask = UploadTask(url: uploadTestUrl, filename: uploadFilename);
+    uploadTaskBinary = uploadTask.copyWith(url: uploadBinaryTestUrl, post: 'binary');
     // copy the test file to upload from assets to documents directory
     Directory directory = await getApplicationDocumentsDirectory();
     var uploadFilePath = join(directory.path, uploadFilename);
@@ -988,8 +990,8 @@ void main() {
         });
   });
 
-  group('Upload', () {
-    testWidgets('Upload enqueue', (widgetTester) async {
+  group('Basic upload', () {
+    testWidgets('Enqueue', (widgetTester) async {
       FileDownloader.initialize(taskStatusCallback: statusCallback);
       expect(await FileDownloader.enqueue(uploadTask), isTrue);
       await statusCallbackCompleter.future;
@@ -997,17 +999,17 @@ void main() {
       expect(lastStatus, equals(TaskStatus.complete));
     });
 
-    testWidgets('Upload enqueue w/o file', (widgetTester) async {
+    testWidgets('Enqueue w/o file', (widgetTester) async {
       FileDownloader.initialize(taskStatusCallback: statusCallback);
       // try the binary upload to a multipart endpoint
-      final task = uploadTask.copyWith(post: 'binary');
-      expect(await FileDownloader.enqueue(task), isTrue);
+      final failingUploadTask = uploadTask.copyWith(post: 'binary');
+      expect(await FileDownloader.enqueue(failingUploadTask), isTrue);
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
       expect(lastStatus, equals(TaskStatus.notFound));
     });
 
-    testWidgets('Upload binary enqueue', (widgetTester) async {
+    testWidgets('Enqueue binary file', (widgetTester) async {
       FileDownloader.initialize(taskStatusCallback: statusCallback);
       final task = uploadTask.copyWith(url: uploadBinaryTestUrl, post: 'binary');
       expect(await FileDownloader.enqueue(task), isTrue);
@@ -1016,6 +1018,80 @@ void main() {
       expect(lastStatus, equals(TaskStatus.complete));
     });
   });
+
+  group('Convenience uploads', () {
+    testWidgets('upload with await', (widgetTester) async {
+      FileDownloader.initialize();
+      final status = await FileDownloader.upload(uploadTask);
+      expect(status, equals(TaskStatus.complete));
+    });
+
+    testWidgets('multiple upload with futures', (widgetTester) async {
+      FileDownloader.initialize();
+      final secondTask =
+      uploadTask.copyWith(taskId: 'secondTask');
+      // note that using a Future (without await) is unusual and is done here
+      // just for testing.  Normal use would be
+      // var result = await FileDownloader.upload(task);
+      final taskFuture = FileDownloader.upload(uploadTask);
+      final secondTaskFuture = FileDownloader.upload(secondTask);
+      var statuses = await Future.wait([taskFuture, secondTaskFuture]);
+      for (var status in statuses) {
+        expect(status, equals(TaskStatus.complete));
+      }
+    });
+
+    testWidgets('Batch upload', (widgetTester) async {
+      FileDownloader.initialize();
+      final failingUploadTask = uploadTask.copyWith(taskId: 'fails', post: 'binary');
+      final tasks = <UploadTask>[
+        uploadTask,
+        failingUploadTask,
+        uploadTask.copyWith(taskId: 'third')
+      ];
+      final result = await FileDownloader.uploadBatch(tasks);
+      // confirm results contain two successes and one failure
+      expect(result.numSucceeded, equals(2));
+      expect(result.numFailed, equals(1));
+      final succeeded = result.succeeded;
+      expect(succeeded.length, equals(2));
+      final succeededTaskIds = succeeded.map((e) => e.taskId);
+      expect(succeededTaskIds.contains(tasks[0].taskId), isTrue);
+      expect(succeededTaskIds.contains(tasks[1].taskId), isFalse);
+      expect(succeededTaskIds.contains(tasks[2].taskId), isTrue);
+      final failed = result.failed;
+      expect(failed.length, equals(1));
+      final failedTaskIds = failed.map((e) => e.taskId);
+      expect(failedTaskIds.contains(tasks[0].taskId), isFalse);
+      expect(failedTaskIds.contains(tasks[1].taskId), isTrue);
+      expect(failedTaskIds.contains(tasks[2].taskId), isFalse);
+      print('Finished batch upload');
+    });
+
+    testWidgets('Batch download with callback', (widgetTester) async {
+      FileDownloader.initialize();
+      final failingUploadTask = uploadTask.copyWith(taskId: 'fails', post: 'binary');
+      final tasks = <UploadTask>[
+        uploadTask,
+        failingUploadTask,
+        uploadTask.copyWith(taskId: 'third')
+      ];
+      var numSucceeded = 0;
+      var numFailed = 0;
+      var numCalled = 0;
+      await FileDownloader.uploadBatch(tasks, (succeeded, failed) {
+        print('Succeeded: $succeeded, failed: $failed');
+        numCalled++;
+        numSucceeded = succeeded;
+        numFailed = failed;
+      });
+      expect(numCalled, equals(4)); // also called with 0, 0 at start
+      expect(numSucceeded, equals(2));
+      expect(numFailed, equals(1));
+      print('Finished batch upload with callback');
+    });
+  });
+
 }
 
 /// Helper: make sure [task] is set as desired, and this will enqueue, wait for

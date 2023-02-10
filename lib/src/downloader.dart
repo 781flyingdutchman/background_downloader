@@ -11,8 +11,6 @@ import 'package:logging/logging.dart';
 
 import 'models.dart';
 
-
-
 /// Provides access to all functions of the plugin in a single place.
 class FileDownloader {
   static final _log = Logger('FileDownloader');
@@ -22,8 +20,7 @@ class FileDownloader {
       MethodChannel('com.bbflight.background_downloader.background');
   static http.Client? httpClient;
   static bool _initialized = false;
-  static final _taskCompleters =
-      <Task, Completer<TaskStatus>>{};
+  static final _taskCompleters = <Task, Completer<TaskStatus>>{};
   static final _batches = <Batch>[];
 
   static final _tasksWaitingToRetry = <Task>[];
@@ -72,19 +69,16 @@ class FileDownloader {
     // or progress
     _backgroundChannel.setMethodCallHandler((call) async {
       final args = call.arguments as List<dynamic>;
-      final task =
-          Task.createFromJsonMap(jsonDecode(args.first as String));
+      final task = Task.createFromJsonMap(jsonDecode(args.first as String));
       switch (call.method) {
         case 'statusUpdate':
           // Normal status updates are only sent here when the task is expected
           // to provide those.  The exception is a .failed status when a task
           // has retriesRemaining > 0: those are always sent here, and are
           // intercepted to hold the task and reschedule in the near future
-          final taskStatus =
-              TaskStatus.values[args.last as int];
+          final taskStatus = TaskStatus.values[args.last as int];
           // intercept failed download if task has retries left
-          if (taskStatus == TaskStatus.failed &&
-              task.retriesRemaining > 0) {
+          if (taskStatus == TaskStatus.failed && task.retriesRemaining > 0) {
             _provideStatusUpdate(task, TaskStatus.waitingToRetry);
             _provideProgressUpdate(task, progressWaitingToRetry);
             task.decreaseRetriesRemaining();
@@ -134,8 +128,7 @@ class FileDownloader {
   }
 
   /// Provide the status update for this task to its callback or listener
-  static void _provideStatusUpdate(
-      Task task, TaskStatus taskStatus) {
+  static void _provideStatusUpdate(Task task, TaskStatus taskStatus) {
     if (task.providesStatusUpdates) {
       final taskStatusCallback = taskStatusCallbacks[task.group];
       if (taskStatusCallback != null) {
@@ -220,10 +213,27 @@ class FileDownloader {
   /// awaited while the app is in the foreground.
   ///
   /// Note that [group] is ignored as it is replaced with an internal group
-  /// name '_foregroundDownload' to track status
-  static Future<TaskStatus> download(
-      DownloadTask task) async {
-    const groupName = '_foregroundDownload';
+  /// name '_enqueueAndWait' to track status
+  static Future<TaskStatus> download(DownloadTask task) =>
+      _enqueueAndAwait(task);
+
+  /// Upload a file
+  ///
+  /// Different from [enqueue], this method does not return until the file
+  /// has been uploaded, or an error has occurred.  While it uses the same
+  /// upload mechanism as [enqueue], and will execute the upload also when
+  /// the app moves to the background, it is meant for uploads that are
+  /// awaited while the app is in the foreground.
+  ///
+  /// Note that [group] is ignored as it is replaced with an internal group
+  /// name '_enqueueAndAwait' to track status
+  static Future<TaskStatus> upload(UploadTask task) => _enqueueAndAwait(task);
+
+  /// Enqueue the [task] and wait for completion
+  ///
+  /// Returns the final [TaskStatus] of the [task]
+  static Future<TaskStatus> _enqueueAndAwait(Task task) async {
+    const groupName = '_enqueueAndAwait';
 
     /// internal callback function that completes the completer associated
     /// with this task
@@ -242,16 +252,14 @@ class FileDownloader {
             }
           }
         }
-        var downloadCompleter = _taskCompleters.remove(task);
-        downloadCompleter?.complete(status);
+        var taskCompleter = _taskCompleters.remove(task);
+        taskCompleter?.complete(status);
       }
     }
 
-    registerCallbacks(
-        group: groupName, taskStatusCallback: internalCallback);
-    final internalTask = task.copyWith(
-        group: groupName,
-        updates: Updates.statusChange);
+    registerCallbacks(group: groupName, taskStatusCallback: internalCallback);
+    final internalTask =
+        task.copyWith(group: groupName, updates: Updates.statusChange);
     final taskCompleter = Completer<TaskStatus>();
     _taskCompleters[internalTask] = taskCompleter;
     final enqueueSuccess = await enqueue(internalTask);
@@ -275,13 +283,38 @@ class FileDownloader {
   ///    double percent_complete = (succeeded + failed) / tasks.length
   ///
   /// Note that to allow for special processing of tasks in a batch, the task's
-  /// [group] and [updates] value will be modified when enqueued, and
+  /// [Task.group] and [Task.updates] value will be modified when enqueued, and
   /// those modified tasks are returned as part of the [Batch]
   /// object.
-  static Future<Batch> downloadBatch(
-      final List<DownloadTask> tasks,
+  static Future<Batch> downloadBatch(final List<DownloadTask> tasks,
+          [BatchProgressCallback? batchProgressCallback]) =>
+      _enqueueAndAwaitBatch(tasks, batchProgressCallback);
+
+  /// Enqueues a list of files to upload and returns when all uploads
+  /// have finished (successfully or otherwise). The returned value is a
+  /// [Batch] object that contains the original [tasks], the
+  /// [results] and convenience getters to filter successful and failed results.
+  ///
+  /// If an optional [batchProgressCallback] function is provided, it will be
+  /// called upon completion (successfully or otherwise) of each task in the
+  /// batch, with two parameters: the number of succeeded and the number of
+  /// failed tasks. The callback can be used, for instance, to show a progress
+  /// indicator for the batch, where
+  ///    double percent_complete = (succeeded + failed) / tasks.length
+  ///
+  /// Note that to allow for special processing of tasks in a batch, the task's
+  /// [Task.group] and [Task.updates] value will be modified when enqueued, and
+  /// those modified tasks are returned as part of the [Batch]
+  /// object.
+  static Future<Batch> uploadBatch(final List<UploadTask> tasks,
+          [BatchProgressCallback? batchProgressCallback]) =>
+      _enqueueAndAwaitBatch(tasks, batchProgressCallback);
+
+  /// Enqueue a list of tasks and wait for completion
+  ///
+  /// Returns a [Batch] object
+  static Future<Batch> _enqueueAndAwaitBatch(final List<Task> tasks,
       [BatchProgressCallback? batchProgressCallback]) async {
-    //TODO move body to common function and introduce uploadBatch
     assert(tasks.isNotEmpty, 'List of tasks cannot be empty');
     if (batchProgressCallback != null) {
       batchProgressCallback(0, 0); // initial callback
@@ -291,7 +324,7 @@ class FileDownloader {
     final taskFutures = <Future<TaskStatus>>[];
     var counter = 0;
     for (final task in tasks) {
-      taskFutures.add(download(task));
+      taskFutures.add(_enqueueAndAwait(task));
       counter++;
       if (counter % 3 == 0) {
         // To prevent blocking the UI we 'yield' for a few ms after every 3
@@ -299,7 +332,7 @@ class FileDownloader {
         await Future.delayed(const Duration(milliseconds: 50));
       }
     }
-    await Future.wait(taskFutures); // wait for all downloads to complete
+    await Future.wait(taskFutures); // wait for all tasks to complete
     _batches.remove(batch);
     return batch;
   }
