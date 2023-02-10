@@ -215,8 +215,8 @@ class FileDownloader {
   /// Note that [group] is ignored as it is replaced with an internal group
   /// name '_enqueueAndWait' to track status
   static Future<TaskStatus> download(DownloadTask task,
-          {TaskStatusCallback? taskStatusCallback,
-          TaskProgressCallback? taskProgressCallback}) =>
+          {void Function(TaskStatus)? taskStatusCallback,
+          void Function(double)? taskProgressCallback}) =>
       _enqueueAndAwait(task,
           taskStatusCallback: taskStatusCallback,
           taskProgressCallback: taskProgressCallback);
@@ -232,8 +232,8 @@ class FileDownloader {
   /// Note that [group] is ignored as it is replaced with an internal group
   /// name '_enqueueAndAwait' to track status
   static Future<TaskStatus> upload(UploadTask task,
-          {TaskStatusCallback? taskStatusCallback,
-          TaskProgressCallback? taskProgressCallback}) =>
+          {void Function(TaskStatus)? taskStatusCallback,
+          void Function(double)? taskProgressCallback}) =>
       _enqueueAndAwait(task,
           taskStatusCallback: taskStatusCallback,
           taskProgressCallback: taskProgressCallback);
@@ -242,8 +242,8 @@ class FileDownloader {
   ///
   /// Returns the final [TaskStatus] of the [task]
   static Future<TaskStatus> _enqueueAndAwait(Task task,
-      {TaskStatusCallback? taskStatusCallback,
-      TaskProgressCallback? taskProgressCallback}) async {
+      {void Function(TaskStatus)? taskStatusCallback,
+      void Function(double)? taskProgressCallback}) async {
     const groupName = '_enqueueAndAwait';
 
     /// Internal callback function that passes the update on to the callback
@@ -253,7 +253,7 @@ class FileDownloader {
     internalStatusCallback(Task task, TaskStatus status) {
       if (taskStatusCallback != null) {
         // pass status update to callback passed as parameter to method call
-        taskStatusCallback(task, status);
+        taskStatusCallback(status);
       }
       if (status.isFinalState) {
         if (_batches.isNotEmpty) {
@@ -278,7 +278,7 @@ class FileDownloader {
     /// to the progress callback passed as parameter to method call
     internalProgressCallBack(Task task, double progress) {
       if (taskProgressCallback != null) {
-        taskProgressCallback(task, progress);
+        taskProgressCallback(progress);
       }
     }
 
