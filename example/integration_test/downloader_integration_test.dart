@@ -489,7 +489,7 @@ void main() {
   });
 
   group('Convenience downloads', () {
-    testWidgets('download with await', (widgetTester) async {
+    testWidgets('Download with await', (widgetTester) async {
       FileDownloader.initialize();
       var path =
       join((await getApplicationDocumentsDirectory()).path, task.filename);
@@ -504,7 +504,7 @@ void main() {
       await File(path).delete();
     });
 
-    testWidgets('multiple download with futures', (widgetTester) async {
+    testWidgets('Multiple download with futures', (widgetTester) async {
       FileDownloader.initialize();
       final secondTask =
       task.copyWith(taskId: 'secondTask', filename: 'second.html');
@@ -622,6 +622,30 @@ void main() {
         }
       }
       print('Finished batch download with callback');
+    });
+
+    testWidgets('Convenience download with status callback', (widgetTester) async {
+      FileDownloader.initialize();
+      var result = await FileDownloader.download(task, taskStatusCallback: statusCallback);
+      expect(result, equals(TaskStatus.complete));
+      expect(statusCallbackCounter, equals(3));
+      // because we have not set progressUpdates to something that provides
+      // progress updates, we should just get no updates
+      expect(progressCallbackCompleter.isCompleted, isFalse);
+      expect(progressCallbackCounter, equals(0));
+      // reset for round two
+      statusCallbackCounter = 0;
+      progressCallbackCounter = 0;
+      statusCallbackCompleter = Completer<void>();
+      progressCallbackCompleter = Completer<void>();
+      task = DownloadTask(
+      url: urlWithContentLength,
+      filename: defaultFilename);
+      result = await FileDownloader.download(task, taskStatusCallback: statusCallback, taskProgressCallback: progressCallback);
+      expect(result, equals(TaskStatus.complete));
+      expect(statusCallbackCounter, equals(3));
+      expect(progressCallbackCounter, greaterThan(1));
+      print('Finished convenience download with status callback');
     });
   });
 

@@ -214,8 +214,12 @@ class FileDownloader {
   ///
   /// Note that [group] is ignored as it is replaced with an internal group
   /// name '_enqueueAndWait' to track status
-  static Future<TaskStatus> download(DownloadTask task) =>
-      _enqueueAndAwait(task);
+  static Future<TaskStatus> download(DownloadTask task,
+          {TaskStatusCallback? taskStatusCallback,
+          TaskProgressCallback? taskProgressCallback}) =>
+      _enqueueAndAwait(task,
+          taskStatusCallback: taskStatusCallback,
+          taskProgressCallback: taskProgressCallback);
 
   /// Upload a file
   ///
@@ -227,17 +231,30 @@ class FileDownloader {
   ///
   /// Note that [group] is ignored as it is replaced with an internal group
   /// name '_enqueueAndAwait' to track status
-  static Future<TaskStatus> upload(UploadTask task) => _enqueueAndAwait(task);
+  static Future<TaskStatus> upload(UploadTask task,
+          {TaskStatusCallback? taskStatusCallback,
+          TaskProgressCallback? taskProgressCallback}) =>
+      _enqueueAndAwait(task,
+          taskStatusCallback: taskStatusCallback,
+          taskProgressCallback: taskProgressCallback);
 
   /// Enqueue the [task] and wait for completion
   ///
   /// Returns the final [TaskStatus] of the [task]
-  static Future<TaskStatus> _enqueueAndAwait(Task task) async {
+  static Future<TaskStatus> _enqueueAndAwait(Task task,
+      {TaskStatusCallback? taskStatusCallback,
+      TaskProgressCallback? taskProgressCallback}) async {
     const groupName = '_enqueueAndAwait';
 
-    /// internal callback function that completes the completer associated
+    /// Internal callback function that passes the update on to the callback
+    /// passed as parameter to method call.
+    /// If the task is in final state, also completes the completer associated
     /// with this task
-    internalCallback(Task task, TaskStatus status) {
+    internalStatusCallback(Task task, TaskStatus status) {
+      if (taskStatusCallback != null) {
+        // pass status update to callback passed as parameter to method call
+        taskStatusCallback(task, status);
+      }
       if (status.isFinalState) {
         if (_batches.isNotEmpty) {
           // check if this task is part of a batch
@@ -257,9 +274,26 @@ class FileDownloader {
       }
     }
 
-    registerCallbacks(group: groupName, taskStatusCallback: internalCallback);
-    final internalTask =
-        task.copyWith(group: groupName, updates: Updates.statusChange);
+    /// Internal callback function that only passes progress updates on
+    /// to the progress callback passed as parameter to method call
+    internalProgressCallBack(Task task, double progress) {
+      if (taskProgressCallback != null) {
+        taskProgressCallback(task, progress);
+      }
+    }
+
+    // only register progress callback and ask for progress updates if
+    // teh caller has provided a progress callback
+    registerCallbacks(
+        group: groupName,
+        taskStatusCallback: internalStatusCallback,
+        taskProgressCallback:
+            taskProgressCallback != null ? internalProgressCallBack : null);
+    final internalTask = task.copyWith(
+        group: groupName,
+        updates: taskProgressCallback != null
+            ? Updates.statusChangeAndProgressUpdates
+            : Updates.statusChange);
     final taskCompleter = Completer<TaskStatus>();
     _taskCompleters[internalTask] = taskCompleter;
     final enqueueSuccess = await enqueue(internalTask);
