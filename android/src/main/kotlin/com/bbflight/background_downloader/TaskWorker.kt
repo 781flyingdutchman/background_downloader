@@ -25,6 +25,7 @@ import kotlin.concurrent.write
 import kotlin.io.path.Path
 import kotlin.io.path.pathString
 import kotlin.random.Random
+import kotlin.streams.asSequence
 
 
 /// Base directory in which files will be stored, based on their relative
@@ -74,8 +75,7 @@ class Task(
         directory = jsonMap["directory"] as String,
         baseDirectory = BaseDirectory.values()[(jsonMap["baseDirectory"] as Double).toInt()],
         group = jsonMap["group"] as String,
-        updates =
-        Updates.values()[(jsonMap["updates"] as Double).toInt()],
+        updates = Updates.values()[(jsonMap["updates"] as Double).toInt()],
         requiresWiFi = jsonMap["requiresWiFi"] as Boolean,
         retries = (jsonMap["retries"] as Double).toInt(),
         retriesRemaining = (jsonMap["retriesRemaining"] as Double).toInt(),
@@ -275,7 +275,7 @@ class TaskWorker(
         val task = Task(
             gson.fromJson(taskJsonMapString, mapType)
         )
-        Log.i(TAG, " Starting task with taskId ${task.taskId}")
+        Log.d(TAG, "Starting task with taskId ${task.taskId}")
         processStatusUpdate(task, TaskStatus.running)
         val status = doTask(task)
         processStatusUpdate(task, status)
@@ -340,10 +340,13 @@ class TaskWorker(
                     )
                     return TaskStatus.canceled
                 }
-                else -> Log.w(
-                    TAG,
-                    "Error for url ${task.url} and $filePath: ${e.message}"
-                )
+                else -> {
+                    Log.w(
+                        TAG,
+                        "Error for url ${task.url} and $filePath: ${e.message} $e ${e.localizedMessage}"
+                    )
+                    e.printStackTrace()
+                }
             }
         }
         return TaskStatus.failed
@@ -351,7 +354,17 @@ class TaskWorker(
 
     /** Process the upload of the file
      *
-     * If Content-Type header is not set, will attempt to derive it from the file extension
+     * If the [Task.post] field is set to "binary" then the file will be uploaded as a byte stream POST
+     * and if the Content-Type header is not set, will attempt to derive it from the file extension.
+     * Content-Disposition will be set to "attachment" with filename [Task.filename].
+     *
+     * If the [Task.post] field is not "binary" then the file will be uploaded as a multipart POST
+     * with the name and filename set to [Task.filename] and the content type derived from the
+     * file extension
+     * Note that the actual Content-Type of the request will be multipart/form-data.
+     *
+     * Note that the [Task.post] field is just used to set whether this is a binary or multipart
+     * upload. The bytes that will be posted are derived from the file to be uploaded.
      *
      * Returns the [TaskStatus]
      */
@@ -367,23 +380,74 @@ class TaskWorker(
             Log.w(TAG, "File $filePath does not exist or is not a file")
             return TaskStatus.failed
         }
-        val contentLength = file.length()
-        if (contentLength <= 0) {
+        val fileLength = file.length()
+        if (fileLength <= 0) {
             Log.w(TAG, "File $filePath has 0 length")
             return TaskStatus.failed
         }
-        if (!connection.requestProperties.keys.contains("Content-Type")) {
+        if (task.post?.lowercase() == "binary") {
+            // binary file upload posts file bytes directly
+            // set Content-Type based on file extension
+            Log.d(TAG, "Binary upload for taskId ${task.taskId}")
             val mimeType =
                 MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension)
             if (mimeType != null) {
                 connection.setRequestProperty("Content-Type", mimeType)
             }
-        }
-        connection.setRequestProperty("Content-Length", contentLength.toString())
-        connection.setFixedLengthStreamingMode(contentLength)
-        FileInputStream(file).use { inputStream ->
-            DataOutputStream(connection.outputStream.buffered()).use { outputStream ->
-                transferBytes(inputStream, outputStream, connection, task)
+            connection.setRequestProperty(
+                "Content-Disposition",
+                "attachment; filename=\"" + task.filename + "\""
+            )
+            connection.setRequestProperty("Content-Length", fileLength.toString())
+            connection.setFixedLengthStreamingMode(fileLength)
+            FileInputStream(file).use { inputStream ->
+                DataOutputStream(connection.outputStream.buffered()).use { outputStream ->
+                    transferBytes(inputStream, outputStream, fileLength, task)
+                }
+            }
+        } else {
+            // multipart file upload using Content-Type multipart/form-data
+            Log.d(TAG, "Multipart upload for taskId ${task.taskId}")
+            val source = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            val boundary = "-----" + java.util.Random().ints(20, 0, source.length)
+                .asSequence()
+                .map(source::get)
+                .joinToString("")
+            // determine Content-Type based on file extension
+            val mimeType =
+                MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension)
+                    ?: "application/octet-stream"
+            val lineFeed = "\r\n"
+            val contentDispositionString =
+                "Content-Disposition: form-data; name=\"file\"; filename=\"${task.filename}\""
+            val contentTypeString = "Content-Type: $mimeType"
+            // determine the content length of the multi-part data
+            val contentLength =
+                2 * boundary.length + 6 * lineFeed.length + contentDispositionString.length +
+                        contentTypeString.length + 3 * "--".length + fileLength
+            connection.setRequestProperty("Accept-Charset", "UTF-8")
+            connection.setRequestProperty("Connection", "Keep-Alive")
+            connection.setRequestProperty("Cache-Control", "no-cache")
+            connection.setRequestProperty(
+                "Content-Type",
+                "multipart/form-data; boundary=$boundary"
+            )
+            connection.setRequestProperty("Content-Length", contentLength.toString())
+            connection.setFixedLengthStreamingMode(contentLength)
+            connection.useCaches = false
+            FileInputStream(file).use { inputStream ->
+                DataOutputStream(connection.outputStream).use { outputStream ->
+                    val writer = outputStream.writer()
+                    writer.append("--${boundary}").append(lineFeed)
+                        .append(contentDispositionString).append(lineFeed)
+                        .append(contentTypeString).append(lineFeed).append(lineFeed)
+                        .flush()
+                    transferBytes(inputStream, outputStream, fileLength, task)
+                    if (!isStopped) {
+                        writer.append(lineFeed).append("--${boundary}--").append(lineFeed)
+                    }
+                    writer.close()
+                }
             }
         }
         if (isStopped) {
@@ -393,7 +457,7 @@ class TaskWorker(
         if (connection.responseCode in 200..206) {
             Log.i(
                 TAG,
-                "Successfully uploaded taskId ${task.taskId} to $filePath"
+                "Successfully uploaded taskId ${task.taskId} from $filePath"
             )
             return TaskStatus.complete
         }
@@ -417,6 +481,7 @@ class TaskWorker(
         task: Task,
         filePath: String
     ): TaskStatus {
+        Log.d(TAG, "Download for taskId ${task.taskId}")
         if (connection.responseCode in 200..206) {
             var dir = applicationContext.cacheDir
             val tempFile = File.createTempFile(
@@ -426,7 +491,7 @@ class TaskWorker(
             )
             BufferedInputStream(connection.inputStream).use { inputStream ->
                 FileOutputStream(tempFile).use { outputStream ->
-                    transferBytes(inputStream, outputStream, connection, task)
+                    transferBytes(inputStream, outputStream, connection.contentLengthLong, task)
                 }
             }
             if (!isStopped) {
@@ -469,7 +534,7 @@ class TaskWorker(
     }
 
     /**
-     * Transfer bytes from [inputStream] to [outputStream] via the [connection] and provide
+     * Transfer [contentLength] bytes from [inputStream] to [outputStream] and provide
      * progress updates for the [task]
      *
      * Will return if during the transfer [isStopped] becomes true
@@ -477,7 +542,7 @@ class TaskWorker(
     private fun transferBytes(
         inputStream: InputStream,
         outputStream: OutputStream,
-        connection: HttpURLConnection,
+        contentLength: Long,
         task: Task
     ) {
         val dataBuffer = ByteArray(bufferSize)
@@ -495,10 +560,10 @@ class TaskWorker(
             bytesTotal += numBytes
             val progress =
                 min(
-                    bytesTotal.toDouble() / connection.contentLengthLong,
+                    bytesTotal.toDouble() / contentLength,
                     0.999
                 )
-            if (connection.contentLengthLong > 0 &&
+            if (contentLength > 0 &&
                 (bytesTotal < 10000 || (progress - lastProgressUpdate > 0.02 && currentTimeMillis() > nextProgressUpdateTime))
             ) {
                 processProgressUpdate(task, progress)
@@ -522,7 +587,6 @@ class TaskWorker(
         val path = Path(baseDirPath, task.directory)
         return Path(path.pathString, task.filename).pathString
     }
-
 }
 
 

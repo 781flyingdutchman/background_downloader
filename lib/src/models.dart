@@ -464,6 +464,7 @@ class UploadTask extends Task {
       super.urlQueryParameters,
       required String filename,
       super.headers,
+      String? post,
       super.directory,
       super.baseDirectory,
       super.group,
@@ -472,7 +473,9 @@ class UploadTask extends Task {
       super.retries,
       super.metaData})
       : assert(filename.isNotEmpty, 'A filename is required'),
-        super(taskId: taskId, filename: filename, post: null);
+        assert(post == null || post == 'binary',
+            'post field must be null, or "binary" for binary file upload'),
+        super(taskId: taskId, filename: filename, post: post);
 
   /// Creates [UploadTask] object from JsonMap
   UploadTask.fromJsonMap(Map<String, dynamic> jsonMap)
@@ -505,6 +508,7 @@ class UploadTask extends Task {
           url: url ?? this.url,
           filename: filename ?? this.filename,
           headers: headers ?? this.headers,
+          post: post as String? ?? this.post,
           directory: directory ?? this.directory,
           baseDirectory: baseDirectory ?? this.baseDirectory,
           group: group ?? this.group,
