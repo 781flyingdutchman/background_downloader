@@ -164,35 +164,18 @@ class TaskWorker(
         /**
          * Processes a change in status for the task
          *
-         * Sends status update via the background channel to Flutter, if requested, and if the task
-         * is finished, processes a final status update and remove references to persistent storage
+         * Sends status update via the background channel to Flutter, if requested
+         * If the task is finished, processes a final progressUpdate update and removes
+         * task from persistent storage
          * */
         fun processStatusUpdate(
             task: Task,
             status: TaskStatus
         ) {
-            // Post update if task expects one, or if failed and retry is needed
             val retryNeeded =
                 status == TaskStatus.failed && task.retriesRemaining > 0
-            if (task.providesStatusUpdates() || retryNeeded) {
-                Handler(Looper.getMainLooper()).post {
-                    try {
-                        val gson = Gson()
-                        val arg = listOf<Any>(
-                            gson.toJson(task.toJsonMap()),
-                            status.ordinal
-                        )
-                        BackgroundDownloaderPlugin.backgroundChannel?.invokeMethod(
-                            "statusUpdate",
-                            arg
-                        )
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Exception trying to post status update: ${e.message}")
-                    }
-                }
-            }
-            // if task is in final state, process a final progressUpdate and remove from
-            // persistent storage. A 'failed' progress update is only provided if
+            // if task is in final state, process a final progressUpdate
+            // A 'failed' progress update is only provided if
             // a retry is not needed: if it is needed, a `waitingToRetry` progress update
             // will be generated on the Dart side
             if (status.isFinalState()) {
@@ -215,6 +198,27 @@ class TaskWorker(
                     )
                     else -> {}
                 }
+            }
+            // Post update if task expects one, or if failed and retry is needed
+            if (task.providesStatusUpdates() || retryNeeded) {
+                Handler(Looper.getMainLooper()).post {
+                    try {
+                        val gson = Gson()
+                        val arg = listOf<Any>(
+                            gson.toJson(task.toJsonMap()),
+                            status.ordinal
+                        )
+                        BackgroundDownloaderPlugin.backgroundChannel?.invokeMethod(
+                            "statusUpdate",
+                            arg
+                        )
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Exception trying to post status update: ${e.message}")
+                    }
+                }
+            }
+            // if task is in final state, remove from persistent storage
+            if (status.isFinalState()) {
                 BackgroundDownloaderPlugin.prefsLock.write {
                     val jsonString =
                         BackgroundDownloaderPlugin.prefs.getString(
@@ -275,7 +279,7 @@ class TaskWorker(
         val task = Task(
             gson.fromJson(taskJsonMapString, mapType)
         )
-        Log.d(TAG, "Starting task with taskId ${task.taskId}")
+        Log.i(TAG, "Starting task with taskId ${task.taskId}")
         processStatusUpdate(task, TaskStatus.running)
         val status = doTask(task)
         processStatusUpdate(task, status)
