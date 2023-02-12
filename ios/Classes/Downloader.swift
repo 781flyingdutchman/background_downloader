@@ -2,10 +2,12 @@ import Flutter
 import UIKit
 import BackgroundTasks
 import os.log
+import MobileCoreServices
+
 
 
 /// Partial version of the Dart side DownloadTask, only used for background loading
-struct BackgroundDownloadTask : Codable {
+struct Task : Codable {
     var taskId: String
     var url: String
     var filename: String
@@ -14,21 +16,12 @@ struct BackgroundDownloadTask : Codable {
     var directory: String
     var baseDirectory: Int
     var group: String
-    var progressUpdates: Int
+    var updates: Int
     var requiresWiFi: Bool
     var retries: Int
     var retriesRemaining: Int
     var metaData: String
-}
-
-/// True if this task expects to provide progress updates
-func providesProgressUpdates(task: BackgroundDownloadTask) -> Bool {
-    return task.progressUpdates == DownloadTaskProgressUpdates.progressUpdates.rawValue || task.progressUpdates == DownloadTaskProgressUpdates.statusChangeAndProgressUpdates.rawValue
-}
-
-/// True if this task expects to provide status updates
-func providesStatusUpdates(downloadTask: BackgroundDownloadTask) -> Bool {
-    return downloadTask.progressUpdates == DownloadTaskProgressUpdates.statusChange.rawValue || downloadTask.progressUpdates == DownloadTaskProgressUpdates.statusChangeAndProgressUpdates.rawValue
+    var taskType: String
 }
 
 /// Base directory in which files will be stored, based on their relative
@@ -41,8 +34,8 @@ enum BaseDirectory: Int {
          applicationSupport // getApplicationSupportDirectory()
 }
 
-/// Type of download updates requested for a group of downloads
-enum DownloadTaskProgressUpdates: Int {
+/// Type of  updates requested for a group of downloads
+enum Updates: Int {
     case none,  // no status or progress updates
          statusChange, // only calls upon change in DownloadTaskStatus
          progressUpdates, // only calls for progress
@@ -50,7 +43,7 @@ enum DownloadTaskProgressUpdates: Int {
 }
 
 /// Defines a set of possible states which a [DownloadTask] can be in.
-enum DownloadTaskStatus: Int {
+enum TaskStatus: Int {
     case enqueued,
          running,
          complete,
@@ -60,28 +53,22 @@ enum DownloadTaskStatus: Int {
          waitingToRetry
 }
 
-private func isNotFinalState(status: DownloadTaskStatus) -> Bool {
-    return status == .enqueued || status == .running || status == .waitingToRetry
-}
+let log = OSLog.init(subsystem: "FileDownloaderPlugin", category: "Downloader")
 
-private func isFinalState(status: DownloadTaskStatus) -> Bool {
-    return !isNotFinalState(status: status)
-}
 
 public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDelegate, URLSessionDelegate, URLSessionDownloadDelegate {
 
-    let log = OSLog.init(subsystem: "FileDownloaderPlugin", category: "Downloader")
-    
     private static var resourceTimeout = 4 * 60 * 60.0 // in seconds
     public static var sessionIdentifier = "com.bbflight.background_downloader.Downloader"
     public static var flutterPluginRegistrantCallback: FlutterPluginRegistrantCallback?
-    private static var backgroundChannel: FlutterMethodChannel?
+    public static var backgroundChannel: FlutterMethodChannel?
     
-    private final var backgroundCompletionHandler: (() -> Void)?
-    private final var urlSession: URLSession?
-    private var nativeToTaskMap  = [String: BackgroundDownloadTask]()
-    private var lastProgressUpdate = [String:Double]()
-    private var nextProgressUpdateTime = [String:Date]()
+    private static var backgroundCompletionHandler: (() -> Void)?
+    private static var urlSession: URLSession?
+    static var nativeToTaskMap  = [String: Task]()
+    static var lastProgressUpdate = [String:Double]()
+    static var nextProgressUpdateTime = [String:Date]()
+    static var uploaderForUrlSessionTaskIdentifier = [Int:Uploader]() // maps from UrlSessionTask TaskIdentifier
     
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "com.bbflight.background_downloader", binaryMessenger: registrar.messenger())
@@ -124,31 +111,78 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         let args = call.arguments as! [Any]
         let jsonString = args[0] as! String
         os_log("methodEnqueue with %@", log: log, type: .info, jsonString)
-        guard let backgroundDownloadTask = downloadTaskFrom(jsonString: jsonString)
+        guard let task = taskFrom(jsonString: jsonString)
         else {
-            os_log("Could not decode %@ to downloadTask", log: log, jsonString)
+            os_log("Could not decode %@ to Task", log: log, jsonString)
             result(false)
             return
         }
-        os_log("Starting task with id %@", log: log, type: .info, backgroundDownloadTask.taskId)
-        urlSession = urlSession ?? createUrlSession()
-        var request = URLRequest(url: URL(string: backgroundDownloadTask.url)!)
-        if backgroundDownloadTask.post != nil {
+        os_log("Starting task with id %@", log: log, type: .info, task.taskId)
+        Downloader.urlSession = Downloader.urlSession ?? createUrlSession()
+        var baseRequest = URLRequest(url: URL(string: task.url)!)
+        for (key, value) in task.headers {
+            baseRequest.setValue(value, forHTTPHeaderField: key)
+        }
+        if task.requiresWiFi {
+            baseRequest.allowsCellularAccess = false
+        }
+        let success = isDownloadTask(task: task)
+            ? scheduleDownload(task: task, jsonString: jsonString, baseRequest: baseRequest)
+            : scheduleUpload(task: task, jsonString: jsonString, baseRequest: baseRequest)
+        if success {
+            processStatusUpdate(task: task, status: TaskStatus.enqueued)
+        }
+        result(success)
+    }
+    
+    /// Schedule a download task
+    private func scheduleDownload(task: Task, jsonString: String, baseRequest: URLRequest) -> Bool {
+        var request = baseRequest
+        if task.post != nil {
             request.httpMethod = "POST"
-            request.httpBody = Data((backgroundDownloadTask.post ?? "").data(using: .utf8)!)
+            request.httpBody = Data((task.post ?? "").data(using: .utf8)!)
         }
-        if backgroundDownloadTask.requiresWiFi {
-            request.allowsCellularAccess = false
-        }
-        for (key, value) in backgroundDownloadTask.headers {
-            request.setValue(value, forHTTPHeaderField: key)
-        }
-        let urlSessionDownloadTask = urlSession!.downloadTask(with: request)
+        let urlSessionDownloadTask = Downloader.urlSession!.downloadTask(with: request)
         urlSessionDownloadTask.taskDescription = jsonString
-        // now start the task
         urlSessionDownloadTask.resume()
-        processStatusUpdate(backgroundDownloadTask: backgroundDownloadTask, status: DownloadTaskStatus.enqueued)
-        result(true)
+        return true
+    }
+    
+    /// Schedule an upload task
+    private func scheduleUpload(task: Task, jsonString: String, baseRequest: URLRequest) -> Bool {
+        guard let directory = try? directoryForTask(task: task) else {
+            os_log("Could not find directory for taskId %@", log: log, type: .info, task.taskId)
+            return false
+        }
+        let filePath = directory.appendingPathComponent(task.filename)
+        if !FileManager.default.fileExists(atPath: filePath.path) {
+            os_log("Could not find file %@ for taskId %@", log: log, type: .info, filePath.absoluteString, task.taskId)
+            return false
+        }
+        var request = baseRequest
+        request.httpMethod = "POST"
+        if task.post?.lowercased() == "binary" {
+            os_log("Binary file upload", log: log)
+            // binary post can use uploadTask fromFile method
+            request.setValue("attachment; filename=\"\(task.filename)\"", forHTTPHeaderField: "Content-Disposition")
+            let urlSessionUploadTask = Downloader.urlSession!.uploadTask(with: request, fromFile: filePath)
+            urlSessionUploadTask.taskDescription = jsonString
+            urlSessionUploadTask.resume()
+        }
+        else {
+            // multi-part upload via StreamedRequest
+            os_log("Multipart file upload", log: log)
+            request.setValue("multipart/form-data; boundary=\(Uploader.boundary)", forHTTPHeaderField: "Content-Type")
+            request.setValue("UTF-8", forHTTPHeaderField: "Accept-Charset")
+            request.setValue("Keep-Alive", forHTTPHeaderField: "Connection")
+            request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+            let urlSessionUploadTask = Downloader.urlSession!.uploadTask(withStreamedRequest: request)
+            urlSessionUploadTask.taskDescription = jsonString
+            let uploader = Uploader(task: task, urlSessionTaskIdentifier: urlSessionUploadTask.taskIdentifier)
+            Downloader.uploaderForUrlSessionTaskIdentifier[urlSessionUploadTask.taskIdentifier] = uploader
+            urlSessionUploadTask.resume()
+        }
+        return true
     }
     
     /// Resets the downloadworker by cancelling all ongoing download tasks
@@ -156,18 +190,18 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     /// Returns the number of tasks canceled
     private func methodReset(call: FlutterMethodCall, result: @escaping FlutterResult) {
         let group = call.arguments as! String
-        urlSession = urlSession ?? createUrlSession()
+        Downloader.urlSession = Downloader.urlSession ?? createUrlSession()
         var counter = 0
-        urlSession?.getAllTasks(completionHandler: { tasks in
-            for task in tasks {
-                guard let backgroundDownloadTask = self.getTaskFrom(urlSessionDownloadTask: task)
+        Downloader.urlSession?.getAllTasks(completionHandler: { urlSessionTasks in
+            for urlSessionTask in urlSessionTasks {
+                guard let task = getTaskFrom(urlSessionTask: urlSessionTask)
                 else { continue }
-                if backgroundDownloadTask.group == group {
-                    task.cancel()
+                if task.group == group {
+                    urlSessionTask.cancel()
                     counter += 1
                 }
             }
-            os_log("methodReset removed %d unfinished tasks", log: self.log, type: .info, counter)
+            os_log("methodReset removed %d unfinished tasks", log: log, type: .info, counter)
             result(counter)
         })
     }
@@ -176,22 +210,22 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     private func methodAllTasks(call: FlutterMethodCall, result: @escaping FlutterResult) {
         let group = call.arguments as! String
         var tasksAsListOfJsonStrings: [String] = []
-        urlSession = urlSession ?? createUrlSession()
-        urlSession?.getAllTasks(completionHandler: { tasks in
-            for task in tasks {
-                guard let backgroundDownloadTask = self.getTaskFrom(urlSessionDownloadTask: task)
+        Downloader.urlSession = Downloader.urlSession ?? createUrlSession()
+        Downloader.urlSession?.getAllTasks(completionHandler: { urlSessionTasks in
+            for urlSessionTask in urlSessionTasks {
+                guard let task = getTaskFrom(urlSessionTask: urlSessionTask)
                 else { continue }
-                if backgroundDownloadTask.group == group {
-                    if task.state == URLSessionTask.State.running || task.state == URLSessionTask.State.suspended
+                if task.group == group {
+                    if urlSessionTask.state == URLSessionTask.State.running || urlSessionTask.state == URLSessionTask.State.suspended
                     {
-                        let taskAsJsonString = self.jsonStringFor(backgroundDownloadTask: backgroundDownloadTask)
+                        let taskAsJsonString = jsonStringFor(task: task)
                         if taskAsJsonString != nil {
                             tasksAsListOfJsonStrings.append(taskAsJsonString!)
                         }
                     }
                 }
             }
-            os_log("Returning %d unfinished tasks", log: self.log, type: .info, tasksAsListOfJsonStrings.count)
+            os_log("Returning %d unfinished tasks", log: log, type: .info, tasksAsListOfJsonStrings.count)
             result(tasksAsListOfJsonStrings)
         })
     }
@@ -203,14 +237,14 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     private func methodCancelTasksWithIds(call: FlutterMethodCall, result: @escaping FlutterResult) {
         let taskIds = call.arguments as! [String]
         os_log("Canceling taskIds %@", log: log, type: .info, taskIds)
-        urlSession = urlSession ?? createUrlSession()
-        urlSession?.getAllTasks(completionHandler: { tasks in
-            for task in tasks {
-                guard let backgroundDownloadTask = self.getTaskFrom(urlSessionDownloadTask: task)
+        Downloader.urlSession = Downloader.urlSession ?? createUrlSession()
+        Downloader.urlSession?.getAllTasks(completionHandler: { urlSessionTasks in
+            for urlSessionTask in urlSessionTasks {
+                guard let task = getTaskFrom(urlSessionTask: urlSessionTask)
                 else { continue }
-                if taskIds.contains(backgroundDownloadTask.taskId)
+                if taskIds.contains(task.taskId)
                 {
-                    task.cancel() }
+                    urlSessionTask.cancel() }
             }
             result(true)
         })
@@ -219,15 +253,15 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     /// Returns BackgroundDownloadTask for this taskId, or nil
     private func methodTaskForId(call: FlutterMethodCall, result: @escaping FlutterResult) {
         let taskId = call.arguments as! String
-        urlSession = urlSession ?? createUrlSession()
-        urlSession?.getAllTasks(completionHandler: { tasks in
-            for task in tasks {
-                guard let backgroundDownloadTask = self.getTaskFrom(urlSessionDownloadTask: task)
+        Downloader.urlSession = Downloader.urlSession ?? createUrlSession()
+        Downloader.urlSession?.getAllTasks(completionHandler: { urlSessionTasks in
+            for urlSessionTask in urlSessionTasks {
+                guard let task = getTaskFrom(urlSessionTask: urlSessionTask)
                 else { continue }
-                os_log("Found taskId %@", log: self.log, type: .info, backgroundDownloadTask.taskId)
-                if backgroundDownloadTask.taskId == taskId
+                os_log("Found taskId %@", log: log, type: .info, task.taskId)
+                if task.taskId == taskId
                 {
-                    result(self.jsonStringFor(backgroundDownloadTask: backgroundDownloadTask))
+                    result(jsonStringFor(task: task))
                     return
                 }
             }
@@ -235,91 +269,139 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         })
     }
     
-    /// Handle potential errors sent by the urlSession
+    //MARK: URLSessionTaskDelegate
+    
+    /// Handle task completion
     ///
-    /// Notre that this is called frequently with error == nil, and can then be ignored
+    /// DownloadTasks handle task completion in the :didFinishDownloadingTo function, so for download tasks
+    /// we only process status updates if there was an error.
+    /// For binary upload tasks we handle error, or send .complete
+    /// For multipart upload tasks we handle error or send complete, but only if we did not already send a 'final state' from
+    /// the Uploader object associated with that task. This is to prevent double notification of a final state
     public func urlSession(
         _ session: URLSession,
         task: URLSessionTask,
         didCompleteWithError error: Error?
     ) {
+        os_log("Completed task with urlSessionTaskIdentifier %d", log: log, type: .error, task.taskIdentifier)
+        os_log("Completed task with error %@", log: log, type: .error, error.debugDescription)
+        let multipartUploader = Downloader.uploaderForUrlSessionTaskIdentifier[task.taskIdentifier]
+        if multipartUploader != nil {
+            multipartUploader?.finish(status: nil) // finish without status update
+            multipartUploader?.cleanUp() // remove references
+        }
+        let statusCode = (task.response as! HTTPURLResponse?)?.statusCode ?? 0
+        let finalStatus = (200...206).contains(statusCode)
+            ? TaskStatus.complete
+            : statusCode == 404
+                ? TaskStatus.notFound
+                : TaskStatus.failed
+        guard let task = getTaskFrom(urlSessionTask: task) else {
+            os_log("Could not find task related to urlSessionTask %d", log: log, type: .error, task.taskIdentifier)
+            return
+        }
+        let canSendStatusUpdate = multipartUploader == nil || !multipartUploader!.haveSentFinalState
         if error != nil {
-            guard let backgroundDownloadTask = self.getTaskFrom(urlSessionDownloadTask: task) else {return}
             if error!.localizedDescription.contains("cancelled") {
-                processStatusUpdate(backgroundDownloadTask: backgroundDownloadTask, status: DownloadTaskStatus.canceled)
+                if canSendStatusUpdate
+                {
+                    processStatusUpdate(task: task, status: TaskStatus.canceled)
+                }
             }
             else {
-                os_log("Error for download with error %@", log: self.log, type: .error, error!.localizedDescription)
-                processStatusUpdate(backgroundDownloadTask: backgroundDownloadTask, status: DownloadTaskStatus.failed)
+                os_log("Error for taskId %@: %@", log: log, type: .error, task.taskId, error!.localizedDescription)
+                if canSendStatusUpdate {
+                    processStatusUpdate(task: task, status: TaskStatus.failed)
+                }
+            }
+        }
+        // no error: if this is a multipart upload task, send .complete TaskStatus
+        if  multipartUploader != nil && canSendStatusUpdate {
+            processStatusUpdate(task: multipartUploader!.task, status: finalStatus)
+        }
+        // if this is a binary upload task, send .complete TaskStatus
+        if isBinaryUploadTask(task: task) {
+            processStatusUpdate(task: task, status: finalStatus)
+        }
+    }
+    
+    //MARK: URLSessionDownloadTaskDelegate
+
+    /// Process taskdelegate progress update for download task
+    ///
+    /// If the task requires progress updates, provide these at a reasonable interval
+    /// If this is the first update for this file, also emit a 'running' status update
+    public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        guard let task = getTaskFrom(urlSessionTask: downloadTask) else {return}
+        if Downloader.lastProgressUpdate[task.taskId] == nil {
+            // send 'running' status update
+            processStatusUpdate(task: task, status: TaskStatus.running)
+            Downloader.lastProgressUpdate[task.taskId] = 0.0
+        }
+        if totalBytesExpectedToWrite != NSURLSessionTransferSizeUnknown && Date() > Downloader.nextProgressUpdateTime[task.taskId] ?? Date(timeIntervalSince1970: 0) {
+            let progress = min(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite), 0.999)
+            if progress - (Downloader.lastProgressUpdate[task.taskId] ?? 0.0) > 0.02 {
+                processProgressUpdate(task: task, progress: progress)
+                Downloader.lastProgressUpdate[task.taskId] = progress
+                Downloader.nextProgressUpdateTime[task.taskId] = Date().addingTimeInterval(0.5)
             }
         }
     }
     
-    //MARK: URLSessionDownloadTask delegate methods
-    
-    /// Process progress update
+    /// Process taskdelegate progress update for upload task
     ///
-    /// If the task requires progress updates, provide these at some reasonable interval
+    /// If the task requires progress updates, provide these at a reasonable interval
     /// If this is the first update for this file, also emit a 'running' status update
-    public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-        guard let backgroundDownloadTask = self.getTaskFrom(urlSessionDownloadTask: downloadTask) else {return}
-        if lastProgressUpdate[backgroundDownloadTask.taskId] == nil {
-            // send 'running' status update
-            processStatusUpdate(backgroundDownloadTask: backgroundDownloadTask, status: DownloadTaskStatus.running)
-            lastProgressUpdate[backgroundDownloadTask.taskId] = 0.0
+    public func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData: Int64, totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
+        os_log("didSendBodyData for %d", log: log, type: .info, task.taskIdentifier)
+        os_log("totalBytesSent %d", log: log, type: .info, totalBytesSent)
+        os_log("totalBytesExpectedToSend for %d", log: log, type: .info, totalBytesExpectedToSend)
+        let urlSessionTask = task
+        guard let task = getTaskFrom(urlSessionTask: task) else {return}
+        let taskId = task.taskId
+        let uploader = Downloader.uploaderForUrlSessionTaskIdentifier[urlSessionTask.taskIdentifier]
+        if Downloader.lastProgressUpdate[taskId] == nil {
+            // first call to this method: send 'running' status update
+            processStatusUpdate(task: task, status: TaskStatus.running)
+            Downloader.lastProgressUpdate[taskId] = 0.0
         }
-        if totalBytesExpectedToWrite != NSURLSessionTransferSizeUnknown && Date() > nextProgressUpdateTime[backgroundDownloadTask.taskId] ?? Date(timeIntervalSince1970: 0) {
-            let progress = min(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite), 0.999)
-            if progress - (lastProgressUpdate[backgroundDownloadTask.taskId] ?? 0.0) > 0.02 {
-                processProgressUpdate(backgroundDownloadTask: backgroundDownloadTask, progress: progress)
-                lastProgressUpdate[backgroundDownloadTask.taskId] = progress
-                nextProgressUpdateTime[backgroundDownloadTask.taskId] = Date().addingTimeInterval(0.5)
+        let total = uploader == nil ? totalBytesExpectedToSend : uploader!.totalBytesExpectedToSend
+        if total > 0 && Date() > Downloader.nextProgressUpdateTime[taskId] ?? Date(timeIntervalSince1970: 0) {
+            let progress = min(Double(totalBytesSent) / Double(total), 0.999)
+            if progress - (Downloader.lastProgressUpdate[taskId] ?? 0.0) > 0.02 {
+                processProgressUpdate(task: task, progress: progress)
+                Downloader.lastProgressUpdate[taskId] = progress
+                Downloader.nextProgressUpdateTime[taskId] = Date().addingTimeInterval(0.5)
             }
         }
     }
     
     /// Process end of downloadTask sent by the urlSession.
     ///
-    /// If successful, (over)write file to final destination per BackgroundDownloadTask info
+    /// If successful, (over)write file to final destination per Task info
     public func urlSession(_ session: URLSession,
                            downloadTask: URLSessionDownloadTask,
                            didFinishDownloadingTo location: URL) {
-        guard let backgroundDownloadTask = self.getTaskFrom(urlSessionDownloadTask: downloadTask),
+        guard let task = getTaskFrom(urlSessionTask: downloadTask),
               let response = downloadTask.response as? HTTPURLResponse
         else {
             os_log("Could not find task associated with native id %d, or did not get HttpResponse", log: log,  type: .info, downloadTask.taskIdentifier)
             return}
         if response.statusCode == 404 {
-            processStatusUpdate(backgroundDownloadTask: backgroundDownloadTask, status: DownloadTaskStatus.notFound)
+            processStatusUpdate(task: task, status: TaskStatus.notFound)
             return
         }
         if !(200...206).contains(response.statusCode)   {
-            os_log("TaskId %@ returned response code %d", log: log,  type: .info, backgroundDownloadTask.taskId, response.statusCode)
-            processStatusUpdate(backgroundDownloadTask: backgroundDownloadTask, status: DownloadTaskStatus.failed)
+            os_log("TaskId %@ returned response code %d", log: log,  type: .info, task.taskId, response.statusCode)
+            processStatusUpdate(task: task, status: TaskStatus.failed)
             return
         }
         do {
-            var success = DownloadTaskStatus.failed
+            var finalStatus = TaskStatus.failed
             defer {
-                processStatusUpdate(backgroundDownloadTask: backgroundDownloadTask, status: success)
+                processStatusUpdate(task: task, status: finalStatus)
             }
-            var dir: FileManager.SearchPathDirectory
-            switch backgroundDownloadTask.baseDirectory {
-            case 0:
-                dir = .documentDirectory
-            case 1:
-                dir = .cachesDirectory
-            case 2:
-                dir = .libraryDirectory
-            default:
-                dir = .documentDirectory
-            }
-            let documentsURL = try
-            FileManager.default.url(for: dir,
-                                    in: .userDomainMask,
-                                    appropriateFor: nil,
-                                    create: false)
-            let directory = documentsURL.appendingPathComponent(backgroundDownloadTask.directory)
+            let directory = try directoryForTask(task: task)
             do
             {
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories:  true)
@@ -327,7 +409,8 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
                 os_log("Failed to create directory %@", log: log, type: .error, directory.path)
                 return
             }
-            let filePath = directory.appendingPathComponent(backgroundDownloadTask.filename)
+            let filePath = directory.appendingPathComponent(task.filename)
+            os_log("Moving file to %@", log: log, type: .error, filePath.absoluteString) //TODO remove
             if FileManager.default.fileExists(atPath: filePath.path) {
                 try? FileManager.default.removeItem(at: filePath)
             }
@@ -337,14 +420,35 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
                 os_log("Failed to move file from %@ to %@: %@", log: log, type: .error, location.path, filePath.path, error.localizedDescription)
                 return
             }
-            success = DownloadTaskStatus.complete
+            finalStatus = TaskStatus.complete
         } catch {
-            os_log("File download error for taskId %@ and file %@: %@", log: log, type: .error, backgroundDownloadTask.taskId, backgroundDownloadTask.filename, error.localizedDescription)
+            os_log("File download error for taskId %@ and file %@: %@", log: log, type: .error, task.taskId, task.filename, error.localizedDescription)
         }
     }
     
-    
-    //MARK: URLSession delegate methods
+
+    //MARK: URLSessionDelegate
+
+    /// Called at start of upload task, when tasks is requesting the stream to upload (inputstream)
+    ///
+    /// Tells the Uploader for this task to start, then passes back the input stream for this upload
+    public func urlSession(_ session: URLSession, task: URLSessionTask,
+                    needNewBodyStream completionHandler: @escaping (InputStream?) -> Void) {
+        os_log("Need new body stream for task identifier %d", log: log, task.taskIdentifier) // TODO remove
+        guard let uploader = Downloader.uploaderForUrlSessionTaskIdentifier[task.taskIdentifier] else {
+            os_log("Could not find uploader associated with task identifier %d", log: log, type: .error, task.taskIdentifier)
+            completionHandler(nil) // error
+            return
+        }
+        if !uploader.start() {
+            os_log("Uploader did not start for taskId %@", log: log, type: .info, uploader.task.taskId)
+            completionHandler(nil)
+            return
+        }
+        os_log("Completing with inputstream", log: log)
+        completionHandler(uploader.boundStreams?.input)
+    }
+        
     
     /// When the app restarts, recreate the urlSession if needed, and store the completion handler
     public func application(_ application: UIApplication,
@@ -352,8 +456,8 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
                             completionHandler: @escaping () -> Void) -> Bool {
         os_log("In handleEventsForBackgroundURLSession with identifier %@", log: log, type: .debug, identifier)
         if (identifier == Downloader.sessionIdentifier) {
-            backgroundCompletionHandler = completionHandler
-            urlSession = urlSession ?? createUrlSession()
+            Downloader.backgroundCompletionHandler = completionHandler
+            Downloader.urlSession = Downloader.urlSession ?? createUrlSession()
             return true
         }
         return false
@@ -364,10 +468,10 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         os_log("In urlSessionDidFinishEvents, calling completionHandler", log: log, type: .debug)
         DispatchQueue.main.async {
             guard
-                let handler = self.backgroundCompletionHandler,
+                let handler = Downloader.backgroundCompletionHandler,
                 session.configuration.identifier == Downloader.sessionIdentifier
             else {
-                os_log("No handler or no identifier match", log: self.log, type: .info)
+                os_log("No handler or no identifier match", log: log, type: .info)
                 return
             }
             handler()
@@ -376,108 +480,40 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     
     //MARK: helper methods
     
-    /// Returns a BackgroundDownloadTask from the supplied jsonString, or nil
-    private func downloadTaskFrom(jsonString: String) -> BackgroundDownloadTask? {
-        let decoder = JSONDecoder()
-        let backgroundDownloadTasks: BackgroundDownloadTask? = try? decoder.decode(BackgroundDownloadTask.self, from: (jsonString).data(using: .utf8)!)
-        return backgroundDownloadTasks
-    }
-    
-    /// Returns a JSON string for this BackgroundDownloadTask, or nil
-    private func jsonStringFor(backgroundDownloadTask: BackgroundDownloadTask) -> String? {
-        let jsonEncoder = JSONEncoder()
-        guard let jsonResultData = try? jsonEncoder.encode(backgroundDownloadTask)
-        else {
-            return nil
-        }
-        return String(data: jsonResultData, encoding: .utf8)
-    }
-    
-    
-    /// Processes a change in status for the task
-    ///
-    /// Sends status update via the background channel to Flutter, if requested, and if the task is finished,
-    /// processes a final status update, then removes it from permanent storage
-    private func processStatusUpdate(backgroundDownloadTask: BackgroundDownloadTask, status: DownloadTaskStatus) {
-        guard let channel = Downloader.backgroundChannel else {
-            os_log("Could not find background channel", log: self.log, type: .error)
-            return
-        }
-        // Post update if task expects one, or if failed and retry is needed
-        let retryNeeded = status == DownloadTaskStatus.failed && backgroundDownloadTask.retriesRemaining > 0
-        if providesStatusUpdates(downloadTask: backgroundDownloadTask) || retryNeeded {
-            let jsonString = jsonStringFor(backgroundDownloadTask: backgroundDownloadTask)
-            if (jsonString != nil)
-            {
-                DispatchQueue.main.async {
-                    channel.invokeMethod("statusUpdate", arguments: [jsonString!, status.rawValue])
-                }
-            }
-        }
-        // if task is in final state, process a final progressUpdate and remove from
-        // persistent storage. A 'failed' progress update is only provided if
-        // a retry is not needed: if it is needed, a `waitingToRetry` progress update
-        // will be generated on the Dart side
-        if isFinalState(status: status) {
-            switch (status) {
-            case .complete:
-                processProgressUpdate(backgroundDownloadTask: backgroundDownloadTask, progress: 1.0)
-            case .failed:
-                if !retryNeeded {
-                    processProgressUpdate(backgroundDownloadTask: backgroundDownloadTask, progress: -1.0)
-                }
-            case .canceled:
-                processProgressUpdate(backgroundDownloadTask: backgroundDownloadTask, progress: -2.0)
-            case .notFound:
-                processProgressUpdate(backgroundDownloadTask: backgroundDownloadTask, progress: -3.0)
-            default:
-                break
-            }
-            nativeToTaskMap.removeValue(forKey: backgroundDownloadTask.taskId)
-            lastProgressUpdate.removeValue(forKey: backgroundDownloadTask.taskId)
-            nextProgressUpdateTime.removeValue(forKey: backgroundDownloadTask.taskId)
-        }
-    }
-    
-    /// Processes a progress update for the task
-    ///
-    /// Sends progress update via the background channel to Flutter, if requested
-    private func processProgressUpdate(backgroundDownloadTask: BackgroundDownloadTask, progress: Double) {
-        guard let channel = Downloader.backgroundChannel else {
-            os_log("Could not find background channel", log: self.log, type: .error)
-            return
-        }
-        if providesProgressUpdates(task: backgroundDownloadTask) {
-            let jsonString = jsonStringFor(backgroundDownloadTask: backgroundDownloadTask)
-            if (jsonString != nil)
-            {
-                DispatchQueue.main.async {
-                    channel.invokeMethod("progressUpdate", arguments: [jsonString!, progress])
-                }
-            }
-        }
-    }
-    
-    /// Return the task corresponding to the URLSessionTask, or nil if it cannot be matched
-    private func getTaskFrom(urlSessionDownloadTask: URLSessionTask) -> BackgroundDownloadTask? {
-        let decoder = JSONDecoder()
-        guard let jsonData = urlSessionDownloadTask.taskDescription?.data(using: .utf8)
-        else {
-            return nil
-        }
-        return try? decoder.decode(BackgroundDownloadTask.self, from: jsonData)
-    }
-    
     /// Creates a urlSession
     private func createUrlSession() -> URLSession {
         os_log("Creating URLSession", log: log, type: .info)
-        if urlSession != nil {
+        if Downloader.urlSession != nil {
             os_log("createUrlSession called with non-null urlSession", log: log, type: .info)
         }
         let config = URLSessionConfiguration.background(withIdentifier: Downloader.sessionIdentifier)
         config.timeoutIntervalForResource = Downloader.resourceTimeout
         return URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }
+
+
+}
+
+//MARK: helpers
+
+/// Return MIME type for this filename url
+func mimeType(url: URL) -> String {
+    let pathExtension = url.pathExtension
+    if let uti = UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension, pathExtension as NSString, nil)?.takeRetainedValue() {
+            if let mimetype = UTTypeCopyPreferredTagWithClass(uti, kUTTagClassMIMEType)?.takeRetainedValue() {
+                return mimetype as String
+            }
+        }
+        return "application/octet-stream"
+}
+
+/// Extension to append a String to a mutable data object
+extension NSMutableData {
+  func append(_ string: String) {
+    if let data = string.data(using: .utf8) {
+      self.append(data)
+    }
+  }
 }
 
 

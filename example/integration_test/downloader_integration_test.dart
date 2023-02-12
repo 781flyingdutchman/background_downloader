@@ -1001,12 +1001,13 @@ void main() {
   });
 
   group('Basic upload', () {
-    testWidgets('enqueue', (widgetTester) async {
+    testWidgets('enqueue multipart file', (widgetTester) async {
       FileDownloader.initialize(taskStatusCallback: statusCallback);
       expect(await FileDownloader.enqueue(uploadTask), isTrue);
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
       expect(lastStatus, equals(TaskStatus.complete));
+      print('Finished enqueue multipart file');
     });
 
     testWidgets('enqueue w/o file', (widgetTester) async {
@@ -1027,6 +1028,7 @@ void main() {
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
       expect(lastStatus, equals(TaskStatus.complete));
+      print('Finished enqueue binary file');
     });
   });
 

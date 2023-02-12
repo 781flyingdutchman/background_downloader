@@ -67,7 +67,7 @@ enum TaskStatus {
 /// path.
 ///
 /// These correspond to the directories provided by the path_provider package
-enum BaseDirectory {
+enum BaseDirectory {  //TODO add more directory options
   /// As returned by getApplicationDocumentsDirectory()
   applicationDocuments,
 

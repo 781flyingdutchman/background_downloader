@@ -384,8 +384,8 @@ class TaskWorker(
             Log.w(TAG, "File $filePath does not exist or is not a file")
             return TaskStatus.failed
         }
-        val fileLength = file.length()
-        if (fileLength <= 0) {
+        val fileSize = file.length()
+        if (fileSize <= 0) {
             Log.w(TAG, "File $filePath has 0 length")
             return TaskStatus.failed
         }
@@ -402,21 +402,18 @@ class TaskWorker(
                 "Content-Disposition",
                 "attachment; filename=\"" + task.filename + "\""
             )
-            connection.setRequestProperty("Content-Length", fileLength.toString())
-            connection.setFixedLengthStreamingMode(fileLength)
+            connection.setRequestProperty("Content-Length", fileSize.toString())
+            connection.setFixedLengthStreamingMode(fileSize)
             FileInputStream(file).use { inputStream ->
                 DataOutputStream(connection.outputStream.buffered()).use { outputStream ->
-                    transferBytes(inputStream, outputStream, fileLength, task)
+                    transferBytes(inputStream, outputStream, fileSize, task)
                 }
             }
         } else {
             // multipart file upload using Content-Type multipart/form-data
             Log.d(TAG, "Multipart upload for taskId ${task.taskId}")
             val source = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-            val boundary = "-----" + java.util.Random().ints(20, 0, source.length)
-                .asSequence()
-                .map(source::get)
-                .joinToString("")
+            val boundary = "-----background_downloader-akjhfw281onqciyhnIk"
             // determine Content-Type based on file extension
             val mimeType =
                 MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension)
@@ -428,7 +425,7 @@ class TaskWorker(
             // determine the content length of the multi-part data
             val contentLength =
                 2 * boundary.length + 6 * lineFeed.length + contentDispositionString.length +
-                        contentTypeString.length + 3 * "--".length + fileLength
+                        contentTypeString.length + 3 * "--".length + fileSize
             connection.setRequestProperty("Accept-Charset", "UTF-8")
             connection.setRequestProperty("Connection", "Keep-Alive")
             connection.setRequestProperty("Cache-Control", "no-cache")
@@ -446,7 +443,7 @@ class TaskWorker(
                         .append(contentDispositionString).append(lineFeed)
                         .append(contentTypeString).append(lineFeed).append(lineFeed)
                         .flush()
-                    transferBytes(inputStream, outputStream, fileLength, task)
+                    transferBytes(inputStream, outputStream, fileSize, task)
                     if (!isStopped) {
                         writer.append(lineFeed).append("--${boundary}--").append(lineFeed)
                     }
