@@ -172,13 +172,16 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         else {
             // multi-part upload via StreamedRequest
             os_log("Multipart file upload", log: log)
+            let uploader = Uploader(task: task)
+            if !uploader.createMultipartFile() {
+                return false
+            }
             request.setValue("multipart/form-data; boundary=\(Uploader.boundary)", forHTTPHeaderField: "Content-Type")
             request.setValue("UTF-8", forHTTPHeaderField: "Accept-Charset")
             request.setValue("Keep-Alive", forHTTPHeaderField: "Connection")
             request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
-            let urlSessionUploadTask = Downloader.urlSession!.uploadTask(withStreamedRequest: request)
+            let urlSessionUploadTask = Downloader.urlSession!.uploadTask(with: request, fromFile: uploader.outputFileUrl())
             urlSessionUploadTask.taskDescription = jsonString
-            let uploader = Uploader(task: task, urlSessionTaskIdentifier: urlSessionUploadTask.taskIdentifier)
             Downloader.uploaderForUrlSessionTaskIdentifier[urlSessionUploadTask.taskIdentifier] = uploader
             urlSessionUploadTask.resume()
         }
@@ -275,9 +278,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     ///
     /// DownloadTasks handle task completion in the :didFinishDownloadingTo function, so for download tasks
     /// we only process status updates if there was an error.
-    /// For binary upload tasks we handle error, or send .complete
-    /// For multipart upload tasks we handle error or send complete, but only if we did not already send a 'final state' from
-    /// the Uploader object associated with that task. This is to prevent double notification of a final state
+    /// For other tasks we handle error, or send .complete
     public func urlSession(
         _ session: URLSession,
         task: URLSessionTask,
@@ -287,8 +288,8 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         os_log("Completed task with error %@", log: log, type: .error, error.debugDescription)
         let multipartUploader = Downloader.uploaderForUrlSessionTaskIdentifier[task.taskIdentifier]
         if multipartUploader != nil {
-            multipartUploader?.finish(status: nil) // finish without status update
-            multipartUploader?.cleanUp() // remove references
+            try? FileManager.default.removeItem(at: multipartUploader!.outputFileUrl())
+            Downloader.uploaderForUrlSessionTaskIdentifier.removeValue(forKey: task.taskIdentifier)
         }
         let statusCode = (task.response as! HTTPURLResponse?)?.statusCode ?? 0
         let finalStatus = (200...206).contains(statusCode)
@@ -300,27 +301,18 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
             os_log("Could not find task related to urlSessionTask %d", log: log, type: .error, task.taskIdentifier)
             return
         }
-        let canSendStatusUpdate = multipartUploader == nil || !multipartUploader!.haveSentFinalState
         if error != nil {
             if error!.localizedDescription.contains("cancelled") {
-                if canSendStatusUpdate
-                {
-                    processStatusUpdate(task: task, status: TaskStatus.canceled)
-                }
+                processStatusUpdate(task: task, status: TaskStatus.canceled)
             }
             else {
                 os_log("Error for taskId %@: %@", log: log, type: .error, task.taskId, error!.localizedDescription)
-                if canSendStatusUpdate {
-                    processStatusUpdate(task: task, status: TaskStatus.failed)
-                }
+                processStatusUpdate(task: task, status: TaskStatus.failed)
             }
+            return
         }
-        // no error: if this is a multipart upload task, send .complete TaskStatus
-        if  multipartUploader != nil && canSendStatusUpdate {
-            processStatusUpdate(task: multipartUploader!.task, status: finalStatus)
-        }
-        // if this is a binary upload task, send .complete TaskStatus
-        if isBinaryUploadTask(task: task) {
+        // if this is an upload task, send final TaskStatus (based on HTTP status code
+        if isUploadTask(task: task) {
             processStatusUpdate(task: task, status: finalStatus)
         }
     }
@@ -336,6 +328,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         if Downloader.lastProgressUpdate[task.taskId] == nil {
             // send 'running' status update
             processStatusUpdate(task: task, status: TaskStatus.running)
+            processProgressUpdate(task: task, progress: 0.0)
             Downloader.lastProgressUpdate[task.taskId] = 0.0
         }
         if totalBytesExpectedToWrite != NSURLSessionTransferSizeUnknown && Date() > Downloader.nextProgressUpdateTime[task.taskId] ?? Date(timeIntervalSince1970: 0) {
@@ -353,21 +346,17 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     /// If the task requires progress updates, provide these at a reasonable interval
     /// If this is the first update for this file, also emit a 'running' status update
     public func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData: Int64, totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
-        os_log("didSendBodyData for %d", log: log, type: .info, task.taskIdentifier)
-        os_log("totalBytesSent %d", log: log, type: .info, totalBytesSent)
-        os_log("totalBytesExpectedToSend for %d", log: log, type: .info, totalBytesExpectedToSend)
         let urlSessionTask = task
         guard let task = getTaskFrom(urlSessionTask: task) else {return}
         let taskId = task.taskId
-        let uploader = Downloader.uploaderForUrlSessionTaskIdentifier[urlSessionTask.taskIdentifier]
         if Downloader.lastProgressUpdate[taskId] == nil {
             // first call to this method: send 'running' status update
             processStatusUpdate(task: task, status: TaskStatus.running)
+            processProgressUpdate(task: task, progress: 0.0)
             Downloader.lastProgressUpdate[taskId] = 0.0
         }
-        let total = uploader == nil ? totalBytesExpectedToSend : uploader!.totalBytesExpectedToSend
-        if total > 0 && Date() > Downloader.nextProgressUpdateTime[taskId] ?? Date(timeIntervalSince1970: 0) {
-            let progress = min(Double(totalBytesSent) / Double(total), 0.999)
+        if totalBytesExpectedToSend != NSURLSessionTransferSizeUnknown && Date() > Downloader.nextProgressUpdateTime[taskId] ?? Date(timeIntervalSince1970: 0) {
+            let progress = min(Double(totalBytesSent) / Double(totalBytesExpectedToSend), 0.999)
             if progress - (Downloader.lastProgressUpdate[taskId] ?? 0.0) > 0.02 {
                 processProgressUpdate(task: task, progress: progress)
                 Downloader.lastProgressUpdate[taskId] = progress
@@ -428,27 +417,6 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     
 
     //MARK: URLSessionDelegate
-
-    /// Called at start of upload task, when tasks is requesting the stream to upload (inputstream)
-    ///
-    /// Tells the Uploader for this task to start, then passes back the input stream for this upload
-    public func urlSession(_ session: URLSession, task: URLSessionTask,
-                    needNewBodyStream completionHandler: @escaping (InputStream?) -> Void) {
-        os_log("Need new body stream for task identifier %d", log: log, task.taskIdentifier) // TODO remove
-        guard let uploader = Downloader.uploaderForUrlSessionTaskIdentifier[task.taskIdentifier] else {
-            os_log("Could not find uploader associated with task identifier %d", log: log, type: .error, task.taskIdentifier)
-            completionHandler(nil) // error
-            return
-        }
-        if !uploader.start() {
-            os_log("Uploader did not start for taskId %@", log: log, type: .info, uploader.task.taskId)
-            completionHandler(nil)
-            return
-        }
-        os_log("Completing with inputstream", log: log)
-        completionHandler(uploader.boundStreams?.input)
-        RunLoop.current.run()
-    }
         
     
     /// When the app restarts, recreate the urlSession if needed, and store the completion handler

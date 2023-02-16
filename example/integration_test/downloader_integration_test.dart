@@ -38,7 +38,7 @@ const uploadBinaryTestUrl =
     'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_upload_binary_file';
 
 const defaultFilename = 'google.html';
-const uploadFilename = 'HNComments.html'; //'a_file.txt'; 'HNComments.html'
+const uploadFilename = 'a_file.txt';
 
 var task = DownloadTask(url: workingUrl, filename: defaultFilename);
 
@@ -194,8 +194,9 @@ void main() {
           updates: Updates.statusChangeAndProgressUpdates);
       expect(await FileDownloader.enqueue(task), isTrue);
       await progressCallbackCompleter.future;
-      // because google.com has no content-length, we only expect the 1.0 progress update
-      expect(progressCallbackCounter, equals(1));
+      // because google.com has no content-length, we only expect the 0.0 and
+      // 1.0 progress update
+      expect(progressCallbackCounter, equals(2));
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
       // now try a file that has content length
@@ -675,11 +676,11 @@ void main() {
       expect(await FileDownloader.enqueue(retryTaskWithProgress), isTrue);
       await Future.delayed(const Duration(seconds: 6));
       expect(lastProgress, equals(progressWaitingToRetry));
-      // iOS emits a 0.999 progress update for a 403 response with the
+      // iOS emits 0.0 & 0.999 progress updates for a 403 response with the
       // text of the response, before sharing the response code, triggering
       // the -4.0 progress response.
       // On Android, no progress is emitted other than the -4.0
-      expect(progressCallbackCounter, equals(Platform.isAndroid ? 2 : 4));
+      expect(progressCallbackCounter, equals(Platform.isAndroid ? 2 : 6));
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.failed));
       // wait a sec for the last progress update
@@ -719,11 +720,11 @@ void main() {
       expect(progressCallbackCounter, equals(0));
       await Future.delayed(const Duration(seconds: 6));
       expect(lastProgress, equals(progressWaitingToRetry));
-      // iOS emits a 0.999 progress update for a 403 response with the
+      // iOS emits 0.0 & 0.999 progress updates for a 403 response with the
       // text of the response, before sharing the response code, triggering
       // the -4.0 progress response.
       // On Android, no progress is emitted other than the -4.0
-      expect(progressCallbackCounter, equals(Platform.isAndroid ? 2 : 4));
+      expect(progressCallbackCounter, equals(Platform.isAndroid ? 2 : 6));
       final retriedTask = await FileDownloader.taskForId(retryTask.taskId);
       expect(retriedTask, equals(retryTask));
       if (retriedTask != null) {
@@ -1002,32 +1003,43 @@ void main() {
 
   group('Basic upload', () {
     testWidgets('enqueue multipart file', (widgetTester) async {
-      FileDownloader.initialize(taskStatusCallback: statusCallback);
-      expect(await FileDownloader.enqueue(uploadTask), isTrue);
+      FileDownloader.initialize(taskStatusCallback: statusCallback, taskProgressCallback: progressCallback);
+       expect(await FileDownloader.enqueue(uploadTask.copyWith(updates:
+       Updates.statusChangeAndProgressUpdates)), isTrue);
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
       expect(lastStatus, equals(TaskStatus.complete));
+      expect(progressCallbackCounter, greaterThan(1));
+      expect(lastProgress, equals(progressComplete));
       print('Finished enqueue multipart file');
     });
 
     testWidgets('enqueue w/o file', (widgetTester) async {
-      FileDownloader.initialize(taskStatusCallback: statusCallback);
+      FileDownloader.initialize(taskStatusCallback: statusCallback, taskProgressCallback: progressCallback);
       // try the binary upload to a multipart endpoint
-      final failingUploadTask = uploadTask.copyWith(post: 'binary');
+      final failingUploadTask = uploadTask.copyWith(post: 'binary', updates:
+      Updates.statusChangeAndProgressUpdates);
       expect(await FileDownloader.enqueue(failingUploadTask), isTrue);
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
       expect(lastStatus, equals(TaskStatus.notFound));
+      expect(progressCallbackCounter, greaterThan(1));
+      expect(lastProgress, equals(progressNotFound));
+      print('Finished enqueue w/o file');
     });
 
     testWidgets('enqueue binary file', (widgetTester) async {
-      FileDownloader.initialize(taskStatusCallback: statusCallback);
+      FileDownloader.initialize(taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
       final task =
-          uploadTask.copyWith(url: uploadBinaryTestUrl, post: 'binary');
+          uploadTask.copyWith(url: uploadBinaryTestUrl, post: 'binary',
+              updates: Updates.statusChangeAndProgressUpdates);
       expect(await FileDownloader.enqueue(task), isTrue);
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
       expect(lastStatus, equals(TaskStatus.complete));
+      expect(progressCallbackCounter, greaterThan(1));
+      expect(lastProgress, equals(progressComplete));
       print('Finished enqueue binary file');
     });
   });
