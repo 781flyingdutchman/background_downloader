@@ -47,7 +47,6 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
             os_log("Could not open file to upload", log: log, type: .info)
             return false
         }
-        os_log("File size = %d bytes", log: log, fileSize)
         // determine the file related components of the preamble
         contentDispositionString =
         "Content-Disposition: form-data; name=\"file\"; filename=\"\(task.filename)\""
@@ -76,7 +75,6 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
     ///
     /// Returns true if successful, false otherwise
     private func writePreamble(fileHandle: FileHandle) -> Bool {
-        os_log("Writing preamble", log: log)
         // construct the preamble
         guard let preamble = "--\(Uploader.boundary)\(lineFeed)\(contentDispositionString)\(lineFeed)\(contentTypeString)\(lineFeed)\(lineFeed)".data(using: .utf8) else {
             os_log("Could not create preamble")
@@ -104,9 +102,6 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
                 inputStream.close()
                 return false
             } else if bytesRead == 0 {
-                // end of file. Note the '.complete' status update is generated
-                // when the task ends
-                os_log("End of file", log: log, type: .info)
                 inputStream.close()
                 return true
             }
@@ -121,7 +116,6 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
     ///
     /// Retruns true if successful, false otherwise
     private func writeEpilogue(fileHandle: FileHandle) -> Bool {
-        os_log("Writing epilogue", log: log)
         guard let epilogue = "\(lineFeed)--\(Uploader.boundary)--\(lineFeed)".data(using: .utf8) else {
             os_log("Could not create epilogue")
             return false

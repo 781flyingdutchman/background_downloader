@@ -126,17 +126,19 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         if task.requiresWiFi {
             baseRequest.allowsCellularAccess = false
         }
-        let success = isDownloadTask(task: task)
-            ? scheduleDownload(task: task, jsonString: jsonString, baseRequest: baseRequest)
-            : scheduleUpload(task: task, jsonString: jsonString, baseRequest: baseRequest)
-        if success {
-            processStatusUpdate(task: task, status: TaskStatus.enqueued)
+        if isDownloadTask(task: task)
+        {
+            scheduleDownload(task: task, jsonString: jsonString, baseRequest: baseRequest, result: result)
+        } else
+        {
+            DispatchQueue.global().async {
+                self.scheduleUpload(task: task, jsonString: jsonString, baseRequest: baseRequest, result: result)
+            }
         }
-        result(success)
     }
     
     /// Schedule a download task
-    private func scheduleDownload(task: Task, jsonString: String, baseRequest: URLRequest) -> Bool {
+    private func scheduleDownload(task: Task, jsonString: String, baseRequest: URLRequest, result: @escaping FlutterResult) {
         var request = baseRequest
         if task.post != nil {
             request.httpMethod = "POST"
@@ -145,19 +147,23 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         let urlSessionDownloadTask = Downloader.urlSession!.downloadTask(with: request)
         urlSessionDownloadTask.taskDescription = jsonString
         urlSessionDownloadTask.resume()
-        return true
+        processStatusUpdate(task: task, status: TaskStatus.enqueued)
+        result(true)
+        return
     }
     
     /// Schedule an upload task
-    private func scheduleUpload(task: Task, jsonString: String, baseRequest: URLRequest) -> Bool {
+    private func scheduleUpload(task: Task, jsonString: String, baseRequest: URLRequest, result: @escaping FlutterResult) {
         guard let directory = try? directoryForTask(task: task) else {
             os_log("Could not find directory for taskId %@", log: log, type: .info, task.taskId)
-            return false
+            result(false)
+            return
         }
         let filePath = directory.appendingPathComponent(task.filename)
         if !FileManager.default.fileExists(atPath: filePath.path) {
             os_log("Could not find file %@ for taskId %@", log: log, type: .info, filePath.absoluteString, task.taskId)
-            return false
+            result(false)
+            return
         }
         var request = baseRequest
         request.httpMethod = "POST"
@@ -174,7 +180,8 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
             os_log("Multipart file upload", log: log)
             let uploader = Uploader(task: task)
             if !uploader.createMultipartFile() {
-                return false
+                result(false)
+                return
             }
             request.setValue("multipart/form-data; boundary=\(Uploader.boundary)", forHTTPHeaderField: "Content-Type")
             request.setValue("UTF-8", forHTTPHeaderField: "Accept-Charset")
@@ -185,7 +192,8 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
             Downloader.uploaderForUrlSessionTaskIdentifier[urlSessionUploadTask.taskIdentifier] = uploader
             urlSessionUploadTask.resume()
         }
-        return true
+        processStatusUpdate(task: task, status: TaskStatus.enqueued)
+        result(true)
     }
     
     /// Resets the downloadworker by cancelling all ongoing download tasks

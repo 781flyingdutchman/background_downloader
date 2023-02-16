@@ -3,7 +3,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter/services.dart';
@@ -612,8 +611,7 @@ void main() {
       print('Finished batch download with callback');
     });
 
-    testWidgets('convenience download with callbacks',
-        (widgetTester) async {
+    testWidgets('convenience download with callbacks', (widgetTester) async {
       FileDownloader.initialize();
       var result = await FileDownloader.download(task,
           taskStatusCallback: (status) => statusCallback(task, status));
@@ -637,9 +635,11 @@ void main() {
       print('Finished convenience download with callbacks');
     });
 
-    testWidgets('parallel convenience downloads with callbacks', (widgetTester) async {
+    testWidgets('parallel convenience downloads with callbacks',
+        (widgetTester) async {
       FileDownloader.initialize();
-      final failTask = DownloadTask(url: failingUrl, filename: defaultFilename, retries: 2);
+      final failTask =
+          DownloadTask(url: failingUrl, filename: defaultFilename, retries: 2);
       var successResult = await FileDownloader.download(task,
           taskStatusCallback: (status) => statusCallback(task, status));
       var failingResult = await FileDownloader.download(failTask,
@@ -1003,9 +1003,13 @@ void main() {
 
   group('Basic upload', () {
     testWidgets('enqueue multipart file', (widgetTester) async {
-      FileDownloader.initialize(taskStatusCallback: statusCallback, taskProgressCallback: progressCallback);
-       expect(await FileDownloader.enqueue(uploadTask.copyWith(updates:
-       Updates.statusChangeAndProgressUpdates)), isTrue);
+      FileDownloader.initialize(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      expect(
+          await FileDownloader.enqueue(uploadTask.copyWith(
+              updates: Updates.statusChangeAndProgressUpdates)),
+          isTrue);
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
       expect(lastStatus, equals(TaskStatus.complete));
@@ -1015,10 +1019,12 @@ void main() {
     });
 
     testWidgets('enqueue w/o file', (widgetTester) async {
-      FileDownloader.initialize(taskStatusCallback: statusCallback, taskProgressCallback: progressCallback);
+      FileDownloader.initialize(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
       // try the binary upload to a multipart endpoint
-      final failingUploadTask = uploadTask.copyWith(post: 'binary', updates:
-      Updates.statusChangeAndProgressUpdates);
+      final failingUploadTask = uploadTask.copyWith(
+          post: 'binary', updates: Updates.statusChangeAndProgressUpdates);
       expect(await FileDownloader.enqueue(failingUploadTask), isTrue);
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
@@ -1029,11 +1035,13 @@ void main() {
     });
 
     testWidgets('enqueue binary file', (widgetTester) async {
-      FileDownloader.initialize(taskStatusCallback: statusCallback,
+      FileDownloader.initialize(
+          taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
-      final task =
-          uploadTask.copyWith(url: uploadBinaryTestUrl, post: 'binary',
-              updates: Updates.statusChangeAndProgressUpdates);
+      final task = uploadTask.copyWith(
+          url: uploadBinaryTestUrl,
+          post: 'binary',
+          updates: Updates.statusChangeAndProgressUpdates);
       expect(await FileDownloader.enqueue(task), isTrue);
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
@@ -1117,30 +1125,30 @@ void main() {
       print('Finished batch upload with callback');
     });
 
-    testWidgets('convenience upload with callbacks',
-            (widgetTester) async {
-          FileDownloader.initialize();
-          var result = await FileDownloader.upload(uploadTask,
-              taskStatusCallback: (status) => statusCallback(uploadTask, status));
-          expect(result, equals(TaskStatus.complete));
-          expect(statusCallbackCounter, equals(3));
-          expect(progressCallbackCompleter.isCompleted, isFalse);
-          expect(progressCallbackCounter, equals(0));
-          // reset for round two with progress callback
-          statusCallbackCounter = 0;
-          progressCallbackCounter = 0;
-          statusCallbackCompleter = Completer<void>();
-          progressCallbackCompleter = Completer<void>();
-          final task2 = uploadTask.copyWith(taskId: 'second');
-          result = await FileDownloader.upload(task2,
-              taskStatusCallback: (status) => statusCallback(task2, status),
-              taskProgressCallback: (progress) => progressCallback(task2, progress));
-          expect(result, equals(TaskStatus.complete));
-          expect(statusCallbackCounter, equals(3));
-          expect(progressCallbackCounter, greaterThan(1));
-          expect(lastProgress, equals(1.0));
-          print('Finished convenience upload with callbacks');
-        });
+    testWidgets('convenience upload with callbacks', (widgetTester) async {
+      FileDownloader.initialize();
+      var result = await FileDownloader.upload(uploadTask,
+          taskStatusCallback: (status) => statusCallback(uploadTask, status));
+      expect(result, equals(TaskStatus.complete));
+      expect(statusCallbackCounter, equals(3));
+      expect(progressCallbackCompleter.isCompleted, isFalse);
+      expect(progressCallbackCounter, equals(0));
+      // reset for round two with progress callback
+      statusCallbackCounter = 0;
+      progressCallbackCounter = 0;
+      statusCallbackCompleter = Completer<void>();
+      progressCallbackCompleter = Completer<void>();
+      final task2 = uploadTask.copyWith(taskId: 'second');
+      result = await FileDownloader.upload(task2,
+          taskStatusCallback: (status) => statusCallback(task2, status),
+          taskProgressCallback: (progress) =>
+              progressCallback(task2, progress));
+      expect(result, equals(TaskStatus.complete));
+      expect(statusCallbackCounter, equals(3));
+      expect(progressCallbackCounter, greaterThan(1));
+      expect(lastProgress, equals(1.0));
+      print('Finished convenience upload with callbacks');
+    });
   });
 }
 
