@@ -38,7 +38,7 @@ const uploadBinaryTestUrl =
     'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_upload_binary_file';
 
 const defaultFilename = 'google.html';
-const uploadFilename = 'a_file.txt';
+const uploadFilename = 'HNComments.html'; //'a_file.txt'; 'HNComments.html'
 
 var task = DownloadTask(url: workingUrl, filename: defaultFilename);
 

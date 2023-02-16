@@ -447,6 +447,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         }
         os_log("Completing with inputstream", log: log)
         completionHandler(uploader.boundStreams?.input)
+        RunLoop.current.run()
     }
         
     
