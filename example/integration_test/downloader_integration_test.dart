@@ -679,8 +679,8 @@ void main() {
       // iOS emits 0.0 & 0.999 progress updates for a 403 response with the
       // text of the response, before sharing the response code, triggering
       // the -4.0 progress response.
-      // On Android, no progress is emitted other than the -4.0
-      expect(progressCallbackCounter, equals(Platform.isAndroid ? 2 : 6));
+      // On Android, only 0.0 & -4.0 is emitted
+      expect(progressCallbackCounter, equals(Platform.isAndroid ? 4 : 6));
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.failed));
       // wait a sec for the last progress update
@@ -723,8 +723,8 @@ void main() {
       // iOS emits 0.0 & 0.999 progress updates for a 403 response with the
       // text of the response, before sharing the response code, triggering
       // the -4.0 progress response.
-      // On Android, no progress is emitted other than the -4.0
-      expect(progressCallbackCounter, equals(Platform.isAndroid ? 2 : 6));
+      // On Android, only 0.0 & -4.0 is emitted
+      expect(progressCallbackCounter, equals(Platform.isAndroid ? 4 : 6));
       final retriedTask = await FileDownloader.taskForId(retryTask.taskId);
       expect(retriedTask, equals(retryTask));
       if (retriedTask != null) {

@@ -281,8 +281,10 @@ class TaskWorker(
         )
         Log.i(TAG, "Starting task with taskId ${task.taskId}")
         processStatusUpdate(task, TaskStatus.running)
+        processProgressUpdate(task, 0.0)
         val status = doTask(task)
         processStatusUpdate(task, status)
+
         return Result.success()
     }
 
