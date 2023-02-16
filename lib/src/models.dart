@@ -67,7 +67,7 @@ enum TaskStatus {
 /// path.
 ///
 /// These correspond to the directories provided by the path_provider package
-enum BaseDirectory {  //TODO add more directory options
+enum BaseDirectory {
   /// As returned by getApplicationDocumentsDirectory()
   applicationDocuments,
 
@@ -276,7 +276,7 @@ abstract class Task extends Request {
     }
   }
 
-  // Create a new [Task] subclass from the provided [jsonMap]
+  /// Create a new [Task] subclass from the provided [jsonMap]
   factory Task.createFromJsonMap(Map<String, dynamic> jsonMap) =>
       jsonMap['taskType'] == 'UploadTask'
           ? UploadTask.fromJsonMap(jsonMap)
@@ -299,6 +299,9 @@ abstract class Task extends Request {
       String? metaData});
 
   /// Creates [Task] object from JsonMap
+  ///
+  /// Only used by subclasses. Use [createFromJsonMap] to create a properly
+  /// subclassed [Task] from the [jsonMap]
   Task.fromJsonMap(Map<String, dynamic> jsonMap)
       : taskId = jsonMap['taskId'],
         filename = jsonMap['filename'],
@@ -346,7 +349,7 @@ abstract class Task extends Request {
 
   @override
   String toString() {
-    return 'BackgroundTask{taskId: $taskId, url: $url, filename: $filename, headers: $headers, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, updates: $updates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, metaData: $metaData}';
+    return 'Task{taskId: $taskId, url: $url, filename: $filename, headers: $headers, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, updates: $updates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, metaData: $metaData}';
   }
 }
 
@@ -434,6 +437,9 @@ class DownloadTask extends Task {
           retries: retries ?? this.retries,
           metaData: metaData ?? this.metaData)
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
+
+  @override
+  String toString() => 'Download${super.toString()}';
 }
 
 /// Information related to an upload task
@@ -517,6 +523,9 @@ class UploadTask extends Task {
           retries: retries ?? this.retries,
           metaData: metaData ?? this.metaData)
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
+
+  @override
+  String toString() => 'Upload${super.toString()}';
 }
 
 /// Return url String composed of the [url] and the

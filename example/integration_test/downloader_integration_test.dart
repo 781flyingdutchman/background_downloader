@@ -114,8 +114,6 @@ void main() {
       expect(() => FileDownloader.reset(), throwsAssertionError);
       // now initialize
       FileDownloader.initialize();
-      expect(FileDownloader.taskStatusCallbacks, isEmpty);
-      expect(FileDownloader.taskProgressCallbacks, isEmpty);
       expect(FileDownloader.initialized, isTrue);
     });
 
@@ -123,11 +121,8 @@ void main() {
       FileDownloader.initialize();
       expect(() => FileDownloader.registerCallbacks(), throwsAssertionError);
       FileDownloader.registerCallbacks(taskStatusCallback: statusCallback);
-      expect(FileDownloader.taskStatusCallbacks[def], equals(statusCallback));
       FileDownloader.registerCallbacks(
           group: 'test', taskProgressCallback: progressCallback);
-      expect(FileDownloader.taskProgressCallbacks['test'],
-          equals(progressCallback));
     });
   });
 
@@ -638,15 +633,57 @@ void main() {
     testWidgets('parallel convenience downloads with callbacks',
         (widgetTester) async {
       FileDownloader.initialize();
+      var a = 0, b = 0, c = 0;
+      var p1 = 0.0, p2 = 0.0, p3 = 0.0;
       final failTask =
           DownloadTask(url: failingUrl, filename: defaultFilename, retries: 2);
-      var successResult = await FileDownloader.download(task,
-          taskStatusCallback: (status) => statusCallback(task, status));
-      var failingResult = await FileDownloader.download(failTask,
+      var failingResult = FileDownloader.download(failTask,
+          taskStatusCallback: (status) => a++,
+          taskProgressCallback: (progress) => p1 += progress);
+      var successResult = FileDownloader.download(task,
+          taskStatusCallback: (status) => b++,
+          taskProgressCallback: (progress) => p2 += progress);
+      var successResult2 = FileDownloader.download(
+          task.copyWith(taskId: 'second'),
+          taskStatusCallback: (status) => c++,
+          taskProgressCallback: (progress) => p3 += progress);
+      await Future.wait([failingResult, successResult, successResult2]);
+      expect(a, equals(9));
+      expect(b, equals(3));
+      expect(c, equals(3)); // number of calls to the closure status update
+      if (Platform.isAndroid) {
+        // sum of calls to the closure progress update
+        expect(p1, equals(-9.0)); // retry [-4] retry [-4] failed [-1]
+        expect(p2, equals(1.0)); // complete [1]
+        expect(p3, equals(1.0)); // complete [1]
+      }
+      if (Platform.isIOS) {
+        // sum of calls to the closure progress update
+        expect(p1, equals(-9.0)); // retry [-4] retry [-4] failed [-1]
+        expect(p2, closeTo(1.999, 0.1)); // progress [0.999] then complete [1]
+        expect(p3, closeTo(1.999, 0.1)); // progress [0.999] then complete [1]
+      }
+      successResult.then((value) => expect(value, equals(TaskStatus.complete)));
+      successResult2
+          .then((value) => expect(value, equals(TaskStatus.complete)));
+      failingResult.then((value) => expect(value, equals(TaskStatus.failed)));
+      print('Finished parallel convenience downloads with callbacks');
+    });
+
+    testWidgets('simple parallel convenience downloads with callbacks',
+        (widgetTester) async {
+      FileDownloader.initialize();
+      final failTask =
+          DownloadTask(url: failingUrl, filename: defaultFilename, retries: 2);
+      var failingResult = FileDownloader.download(failTask,
           taskStatusCallback: (status) => statusCallback(failTask, status));
-      expect(successResult, equals(TaskStatus.complete));
-      expect(failingResult, equals(TaskStatus.failed));
+      var successResult = FileDownloader.download(task,
+          taskStatusCallback: (status) => statusCallback(task, status));
+      await Future.wait([successResult, failingResult]);
+      successResult.then((value) => expect(value, equals(TaskStatus.complete)));
+      failingResult.then((value) => expect(value, equals(TaskStatus.failed)));
       expect(statusCallbackCounter, equals(12));
+      print('Finished simple parallel convenience downloads with callbacks');
     });
   });
 
