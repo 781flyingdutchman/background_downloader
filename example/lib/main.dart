@@ -137,7 +137,7 @@ class _MyAppState extends State<MyApp> {
             directory: 'my/directory',
             baseDirectory: BaseDirectory.applicationDocuments,
             updates:
-                Updates.statusChangeAndProgressUpdates);
+                Updates.statusAndProgress);
         await FileDownloader.enqueue(backgroundDownloadTask!);
         break;
       case ButtonState.cancel:

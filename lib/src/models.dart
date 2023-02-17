@@ -84,13 +84,13 @@ enum Updates {
   none,
 
   /// only status changes
-  statusChange,
+  status,
 
   /// only progress updates while downloading, no status change updates
-  progressUpdates,
+  progress,
 
   /// Status change updates and progress updates while downloading
-  statusChangeAndProgressUpdates,
+  statusAndProgress,
 }
 
 /// Signature for a function you can register to be called
@@ -258,7 +258,7 @@ abstract class Task extends Request {
       this.directory = '',
       this.baseDirectory = BaseDirectory.applicationDocuments,
       this.group = 'default',
-      this.updates = Updates.statusChange,
+      this.updates = Updates.status,
       this.requiresWiFi = false,
       super.retries,
       this.metaData = ''})
@@ -329,13 +329,11 @@ abstract class Task extends Request {
 
   /// If true, task expects progress updates
   bool get providesProgressUpdates =>
-      updates == Updates.progressUpdates ||
-      updates == Updates.statusChangeAndProgressUpdates;
+      updates == Updates.progress || updates == Updates.statusAndProgress;
 
   /// If true, task expects status updates
   bool get providesStatusUpdates =>
-      updates == Updates.statusChange ||
-      updates == Updates.statusChangeAndProgressUpdates;
+      updates == Updates.status || updates == Updates.statusAndProgress;
 
   @override
   bool operator ==(Object other) =>
@@ -539,8 +537,9 @@ String _urlWithQueryParameters(
   return '$url$separator${urlQueryParameters.entries.map((e) => '${e.key}=${e.value}').join('&')}';
 }
 
-/// Signature for a function you can provide to the [downloadBatch] method
-/// that will be called upon completion of each file download in the batch.
+/// Signature for a function you can provide to the [downloadBatch] or
+/// [uploadBatch] that will be called upon completion of each task
+/// in the batch.
 ///
 /// [succeeded] will count the number of successful downloads, and
 /// [failed] counts the number of failed downloads (for any reason).

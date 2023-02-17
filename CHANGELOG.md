@@ -1,19 +1,22 @@
 ## 3.0.0
 
-Introducing `UploadTask` and `FileDownloader.upload`.
+Version 3 introduces uploads, `onProgress` and `onStatus` callbacks passed to `download` and `upload`,
+and cleans up the API to be less verbose.
+
+The class hierarchy is `Request` -> `Task` -> (`DownloadTask` | `UploadTask`), and several 
+methods and callbacks will return or expect a `Task` that may be a `DownloadTask` or `UploadTask`.
 
 To align naming convention, several class and enum names have been changed:
 - class BackgroundDownloadTask -> DownloadTask, and field progressUpdates -> updates
 - enum DownloadTaskStatus -> TaskStatus
-- enum DownloadProgressUpdates -> Updates
-- class BackgroundDownloadBatch -> DownloadBatch
+- enum DownloadProgressUpdates -> Updates (and enum value changes)
 - class BackgroundDownloadEvent -> TaskUpdate
 - class BackgroundDownloadStatusEvent -> TaskStatusUpdate
 - class BackgroundDownloadProgressEvent -> TaskProgressUpdate
 - typedef DownloadStatusCallback -> TaskStatusCallback
 - typedef DownloadProgressCallback -> TaskProgressCallback
 - class DownloadBatch -> Batch
-- class BatchDownloadProgressCallback -> BatchProgressCallback
+- typedef BatchDownloadProgressCallback -> BatchProgressCallback
 
 ## 2.1.1
 

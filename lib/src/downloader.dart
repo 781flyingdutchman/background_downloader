@@ -56,8 +56,8 @@ class FileDownloader {
   /// Note that callbacks will be called based on a task's [updates]
   /// property, which defaults to status change callbacks only. To also get
   /// progress updates make sure to register a [TaskProgressCallback] and
-  /// set the task's [updates] property to [Updates.progressUpdates] or
-  /// [Updates.statusChangeAndProgressUpdates]
+  /// set the task's [updates] property to [Updates.progress] or
+  /// [Updates.statusAndProgress]
   static void initialize(
       {String group = defaultGroup,
       TaskStatusCallback? taskStatusCallback,
@@ -183,8 +183,8 @@ class FileDownloader {
   /// Note that callbacks will be called based on a task's [updates]
   /// property, which defaults to status change callbacks only. To also get
   /// progress updates make sure to register a [TaskProgressCallback] and
-  /// set the task's [updates] property to [Updates.progressUpdates] or
-  /// [Updates.statusChangeAndProgressUpdates]
+  /// set the task's [updates] property to [Updates.progress] or
+  /// [Updates.statusAndProgress]
   static void registerCallbacks(
       {String group = defaultGroup,
       TaskStatusCallback? taskStatusCallback,
@@ -224,17 +224,15 @@ class FileDownloader {
   /// added. These function only take a [TaskStatus] or [double] argument as
   /// the task they refer to is expected to be captured in the closure for
   /// this call.
-  /// For example `Downloader.download(task, taskStatusCallback: (status) =>`
+  /// For example `Downloader.download(task, onStatus: (status) =>`
   /// `print('Status for ${task.taskId} is $status);`
   ///
   /// Note that the task's [group] is ignored and will be replaced with an
   /// internal group name '_enqueueAndWait' to track status
   static Future<TaskStatus> download(DownloadTask task,
-          {void Function(TaskStatus)? taskStatusCallback,
-          void Function(double)? taskProgressCallback}) =>
-      _enqueueAndAwait(task,
-          taskStatusCallback: taskStatusCallback,
-          taskProgressCallback: taskProgressCallback);
+          {void Function(TaskStatus)? onStatus,
+          void Function(double)? onProgress}) =>
+      _enqueueAndAwait(task, onStatus: onStatus, onProgress: onProgress);
 
   /// Upload a file and return the final [TaskStatus]
   ///
@@ -248,24 +246,22 @@ class FileDownloader {
   /// added. These function only take a [TaskStatus] or [double] argument as
   /// the task they refer to is expected to be captured in the closure for
   /// this call.
-  /// For example `Downloader.download(task, taskStatusCallback: (status) =>`
+  /// For example `Downloader.download(task, onStatus: (status) =>`
   /// `print('Status for ${task.taskId} is $status);`
   ///
   /// Note that the task's [group] is ignored and will be replaced with an
   /// internal group name '_enqueueAndWait' to track status
   static Future<TaskStatus> upload(UploadTask task,
-          {void Function(TaskStatus)? taskStatusCallback,
-          void Function(double)? taskProgressCallback}) =>
-      _enqueueAndAwait(task,
-          taskStatusCallback: taskStatusCallback,
-          taskProgressCallback: taskProgressCallback);
+          {void Function(TaskStatus)? onStatus,
+          void Function(double)? onProgress}) =>
+      _enqueueAndAwait(task, onStatus: onStatus, onProgress: onProgress);
 
   /// Enqueue the [task] and wait for completion
   ///
   /// Returns the final [TaskStatus] of the [task]
   static Future<TaskStatus> _enqueueAndAwait(Task task,
-      {void Function(TaskStatus)? taskStatusCallback,
-      void Function(double)? taskProgressCallback}) async {
+      {void Function(TaskStatus)? onStatus,
+      void Function(double)? onProgress}) async {
     const groupName = '_enqueueAndAwait';
 
     /// Internal callback function that passes the update on to different
@@ -315,14 +311,13 @@ class FileDownloader {
         taskProgressCallback: internalProgressCallBack);
     final internalTask = task.copyWith(
         group: groupName,
-        updates: taskProgressCallback != null
-            ? Updates.statusChangeAndProgressUpdates
-            : Updates.statusChange);
-    if (taskStatusCallback != null) {
-      _taskStatusCallbacks[task.taskId] = taskStatusCallback;
+        updates:
+            onProgress != null ? Updates.statusAndProgress : Updates.status);
+    if (onStatus != null) {
+      _taskStatusCallbacks[task.taskId] = onStatus;
     }
-    if (taskProgressCallback != null) {
-      _taskProgressCallbacks[task.taskId] = taskProgressCallback;
+    if (onProgress != null) {
+      _taskProgressCallbacks[task.taskId] = onProgress;
     }
     // Create taskCompleter and enqueue the task.
     // The completer will be completed in the internal status callback
@@ -403,7 +398,7 @@ class FileDownloader {
     return batch;
   }
 
-  /// Resets the downloader by cancelling all ongoing download tasks within
+  /// Resets the downloader by cancelling all ongoing tasks within
   /// the provided group
   ///
   /// Returns the number of tasks cancelled. Every canceled task wil emit a
@@ -477,7 +472,7 @@ class FileDownloader {
     return true;
   }
 
-  /// Return [DownloadTask] for the given [taskId], or null
+  /// Return [Task] for the given [taskId], or null
   /// if not found.
   ///
   /// Only running tasks are guaranteed to be returned, but returning a task

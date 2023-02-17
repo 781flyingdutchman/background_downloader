@@ -185,7 +185,7 @@ void main() {
       task = DownloadTask(
           url: workingUrl,
           filename: defaultFilename,
-          updates: Updates.statusChangeAndProgressUpdates);
+          updates: Updates.statusAndProgress);
       expect(await FileDownloader.enqueue(task), isTrue);
       await progressCallbackCompleter.future;
       // because google.com has no content-length, we only expect the 0.0 and
@@ -201,7 +201,7 @@ void main() {
       task = DownloadTask(
           url: urlWithContentLength,
           filename: defaultFilename,
-          updates: Updates.statusChangeAndProgressUpdates);
+          updates: Updates.statusAndProgress);
       expect(await FileDownloader.enqueue(task), isTrue);
       await progressCallbackCompleter.future;
       expect(progressCallbackCounter, greaterThan(1));
@@ -285,7 +285,7 @@ void main() {
           url:
               'https://storage.googleapis.com/approachcharts/test/5MB-test.ZIP',
           filename: defaultFilename,
-          updates: Updates.progressUpdates);
+          updates: Updates.progress);
       FileDownloader.initialize();
       final path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
@@ -398,7 +398,7 @@ void main() {
           directory: 'directory',
           baseDirectory: BaseDirectory.temporary,
           group: 'someGroup',
-          updates: Updates.statusChangeAndProgressUpdates,
+          updates: Updates.statusAndProgress,
           requiresWiFi: true,
           retries: 5,
           metaData: 'someMetaData');
@@ -609,7 +609,7 @@ void main() {
     testWidgets('convenience download with callbacks', (widgetTester) async {
       FileDownloader.initialize();
       var result = await FileDownloader.download(task,
-          taskStatusCallback: (status) => statusCallback(task, status));
+          onStatus: (status) => statusCallback(task, status));
       expect(result, equals(TaskStatus.complete));
       expect(statusCallbackCounter, equals(3));
       expect(progressCallbackCompleter.isCompleted, isFalse);
@@ -621,8 +621,8 @@ void main() {
       progressCallbackCompleter = Completer<void>();
       task = DownloadTask(url: urlWithContentLength, filename: defaultFilename);
       result = await FileDownloader.download(task,
-          taskStatusCallback: (status) => statusCallback(task, status),
-          taskProgressCallback: (progress) => progressCallback(task, progress));
+          onStatus: (status) => statusCallback(task, status),
+          onProgress: (progress) => progressCallback(task, progress));
       expect(result, equals(TaskStatus.complete));
       expect(statusCallbackCounter, equals(3));
       expect(progressCallbackCounter, greaterThan(1));
@@ -638,15 +638,13 @@ void main() {
       final failTask =
           DownloadTask(url: failingUrl, filename: defaultFilename, retries: 2);
       var failingResult = FileDownloader.download(failTask,
-          taskStatusCallback: (status) => a++,
-          taskProgressCallback: (progress) => p1 += progress);
+          onStatus: (status) => a++, onProgress: (progress) => p1 += progress);
       var successResult = FileDownloader.download(task,
-          taskStatusCallback: (status) => b++,
-          taskProgressCallback: (progress) => p2 += progress);
+          onStatus: (status) => b++, onProgress: (progress) => p2 += progress);
       var successResult2 = FileDownloader.download(
           task.copyWith(taskId: 'second'),
-          taskStatusCallback: (status) => c++,
-          taskProgressCallback: (progress) => p3 += progress);
+          onStatus: (status) => c++,
+          onProgress: (progress) => p3 += progress);
       await Future.wait([failingResult, successResult, successResult2]);
       expect(a, equals(9));
       expect(b, equals(3));
@@ -676,9 +674,9 @@ void main() {
       final failTask =
           DownloadTask(url: failingUrl, filename: defaultFilename, retries: 2);
       var failingResult = FileDownloader.download(failTask,
-          taskStatusCallback: (status) => statusCallback(failTask, status));
+          onStatus: (status) => statusCallback(failTask, status));
       var successResult = FileDownloader.download(task,
-          taskStatusCallback: (status) => statusCallback(task, status));
+          onStatus: (status) => statusCallback(task, status));
       await Future.wait([successResult, failingResult]);
       successResult.then((value) => expect(value, equals(TaskStatus.complete)));
       failingResult.then((value) => expect(value, equals(TaskStatus.failed)));
@@ -709,7 +707,7 @@ void main() {
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
       final retryTaskWithProgress =
-          retryTask.copyWith(updates: Updates.statusChangeAndProgressUpdates);
+          retryTask.copyWith(updates: Updates.statusAndProgress);
       expect(await FileDownloader.enqueue(retryTaskWithProgress), isTrue);
       await Future.delayed(const Duration(seconds: 6));
       expect(lastProgress, equals(progressWaitingToRetry));
@@ -752,7 +750,7 @@ void main() {
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
       final retryTaskWithProgress =
-          retryTask.copyWith(updates: Updates.statusChangeAndProgressUpdates);
+          retryTask.copyWith(updates: Updates.statusAndProgress);
       expect(await FileDownloader.enqueue(retryTaskWithProgress), isTrue);
       expect(progressCallbackCounter, equals(0));
       await Future.delayed(const Duration(seconds: 6));
@@ -1044,8 +1042,8 @@ void main() {
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
       expect(
-          await FileDownloader.enqueue(uploadTask.copyWith(
-              updates: Updates.statusChangeAndProgressUpdates)),
+          await FileDownloader.enqueue(
+              uploadTask.copyWith(updates: Updates.statusAndProgress)),
           isTrue);
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
@@ -1061,7 +1059,7 @@ void main() {
           taskProgressCallback: progressCallback);
       // try the binary upload to a multipart endpoint
       final failingUploadTask = uploadTask.copyWith(
-          post: 'binary', updates: Updates.statusChangeAndProgressUpdates);
+          post: 'binary', updates: Updates.statusAndProgress);
       expect(await FileDownloader.enqueue(failingUploadTask), isTrue);
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
@@ -1078,7 +1076,7 @@ void main() {
       final task = uploadTask.copyWith(
           url: uploadBinaryTestUrl,
           post: 'binary',
-          updates: Updates.statusChangeAndProgressUpdates);
+          updates: Updates.statusAndProgress);
       expect(await FileDownloader.enqueue(task), isTrue);
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
@@ -1165,7 +1163,7 @@ void main() {
     testWidgets('convenience upload with callbacks', (widgetTester) async {
       FileDownloader.initialize();
       var result = await FileDownloader.upload(uploadTask,
-          taskStatusCallback: (status) => statusCallback(uploadTask, status));
+          onStatus: (status) => statusCallback(uploadTask, status));
       expect(result, equals(TaskStatus.complete));
       expect(statusCallbackCounter, equals(3));
       expect(progressCallbackCompleter.isCompleted, isFalse);
@@ -1177,9 +1175,8 @@ void main() {
       progressCallbackCompleter = Completer<void>();
       final task2 = uploadTask.copyWith(taskId: 'second');
       result = await FileDownloader.upload(task2,
-          taskStatusCallback: (status) => statusCallback(task2, status),
-          taskProgressCallback: (progress) =>
-              progressCallback(task2, progress));
+          onStatus: (status) => statusCallback(task2, status),
+          onProgress: (progress) => progressCallback(task2, progress));
       expect(result, equals(TaskStatus.complete));
       expect(statusCallbackCounter, equals(3));
       expect(progressCallbackCounter, greaterThan(1));

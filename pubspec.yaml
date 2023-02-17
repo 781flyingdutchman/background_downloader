@@ -1,6 +1,6 @@
 name: background_downloader
 description: A background file downloader for iOS and Android. Define where to get your file from, where to store it, enqueue your task and monitor it
-version: 2.1.1
+version: 3.0.0
 repository: https://github.com/781flyingdutchman/background_downloader
 
 environment:
@@ -17,7 +17,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^2.0.0
-  path_provider:
+  path_provider: ^2.0.12
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
