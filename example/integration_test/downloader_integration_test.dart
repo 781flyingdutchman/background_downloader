@@ -657,9 +657,11 @@ void main() {
       }
       if (Platform.isIOS) {
         // sum of calls to the closure progress update
-        expect(p1, equals(-9.0)); // retry [-4] retry [-4] failed [-1]
-        expect(p2, closeTo(1.999, 0.1)); // progress [0.999] then complete [1]
-        expect(p3, closeTo(1.999, 0.1)); // progress [0.999] then complete [1]
+        expect(p1, closeTo(-4 - 4 - 1 + 3 * 0.999, 0.1)); // retry [-4] retry
+        // [-4] failed [-1]
+        // + 3 * 0.999
+        expect(p2, closeTo(1.0, 0.1)); // complete [1]
+        expect(p3, closeTo(1.0, 0.1)); // complete [1]
       }
       successResult.then((value) => expect(value, equals(TaskStatus.complete)));
       successResult2
