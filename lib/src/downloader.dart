@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:background_downloader/background_downloader.dart';
+import 'package:background_downloader/src/desktop_downloader.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -44,6 +46,8 @@ class FileDownloader {
   /// not have a registered callback
   static Stream<TaskUpdate> get updates => _updates.stream;
 
+  static StreamSubscription? _desktopDownloaderUpdates;
+
   /// True if [FileDownloader] was initialized
   static bool get initialized => _initialized;
 
@@ -68,6 +72,25 @@ class FileDownloader {
           'Prefer calling .destroy before re-initialization');
     }
     WidgetsFlutterBinding.ensureInitialized();
+    if (DesktopDownloader().supportsThisPlatform) {
+      DesktopDownloader().initialize();
+      // listen to updates and pass on to the processors
+      _desktopDownloaderUpdates?.cancel();
+      _desktopDownloaderUpdates = DesktopDownloader().updates.listen(
+          (update) {
+            final args = update as List;
+            final isDownloadTask = args.first as bool;
+            final task = isDownloadTask ? args[1] as DownloadTask : args[1] as
+              UploadTask;
+            final message = args.last;
+            if (message is int) {
+              _processStatusUpdate(task, TaskStatus.values[message]);
+            }
+            if (message is double) {
+              _processProgressUpdate(task, message);
+            }
+      });
+    }
     if (_updates.hasListener) {
       _log.warning('initialize called while the updates stream is still '
           'being listened to. That listener will no longer receive status updates.');
@@ -80,44 +103,13 @@ class FileDownloader {
       final task = Task.createFromJsonMap(jsonDecode(args.first as String));
       switch (call.method) {
         case 'statusUpdate':
-          // Normal status updates are only sent here when the task is expected
-          // to provide those.  The exception is a .failed status when a task
-          // has retriesRemaining > 0: those are always sent here, and are
-          // intercepted to hold the task and reschedule in the near future
           final taskStatus = TaskStatus.values[args.last as int];
-          // intercept failed download if task has retries left
-          if (taskStatus == TaskStatus.failed && task.retriesRemaining > 0) {
-            _provideStatusUpdate(task, TaskStatus.waitingToRetry);
-            _provideProgressUpdate(task, progressWaitingToRetry);
-            task.decreaseRetriesRemaining();
-            _tasksWaitingToRetry.add(task);
-            final waitTime = Duration(
-                seconds:
-                    pow(2, (task.retries - task.retriesRemaining)).toInt());
-            _log.finer(
-                'TaskId ${task.taskId} failed, waiting ${waitTime.inSeconds}'
-                ' seconds before retrying. ${task.retriesRemaining}'
-                ' retries remaining');
-            Future.delayed(waitTime, () async {
-              // after delay, enqueue task again if it's still waiting
-              if (_tasksWaitingToRetry.remove(task)) {
-                if (!await enqueue(task)) {
-                  _log.warning(
-                      'Could not enqueue task $task after retry timeout');
-                  _provideStatusUpdate(task, TaskStatus.failed);
-                  _provideProgressUpdate(task, progressFailed);
-                }
-              }
-            });
-          } else {
-            // normal status update
-            _provideStatusUpdate(task, taskStatus);
-          }
+          _processStatusUpdate(task, taskStatus);
           break;
 
         case 'progressUpdate':
           final progress = args.last as double;
-          _provideProgressUpdate(task, progress);
+          _emitProgressUpdate(task, progress);
           break;
 
         default:
@@ -135,8 +127,47 @@ class FileDownloader {
     }
   }
 
-  /// Provide the status update for this task to its callback or listener
-  static void _provideStatusUpdate(Task task, TaskStatus taskStatus) {
+  /// Process status update coming from plugin or [DesktopDownloader]
+  static void _processStatusUpdate(Task task, TaskStatus taskStatus) {
+    // Normal status updates are only sent here when the task is expected
+    // to provide those.  The exception is a .failed status when a task
+    // has retriesRemaining > 0: those are always sent here, and are
+    // intercepted to hold the task and reschedule in the near future
+    if (taskStatus == TaskStatus.failed && task.retriesRemaining > 0) {
+      _emitStatusUpdate(task, TaskStatus.waitingToRetry);
+      _emitProgressUpdate(task, progressWaitingToRetry);
+      task.decreaseRetriesRemaining();
+      _tasksWaitingToRetry.add(task);
+      final waitTime = Duration(
+          seconds:
+          pow(2, (task.retries - task.retriesRemaining)).toInt());
+      _log.finer(
+          'TaskId ${task.taskId} failed, waiting ${waitTime.inSeconds}'
+              ' seconds before retrying. ${task.retriesRemaining}'
+              ' retries remaining');
+      Future.delayed(waitTime, () async {
+        // after delay, enqueue task again if it's still waiting
+        if (_tasksWaitingToRetry.remove(task)) {
+          if (!await enqueue(task)) {
+            _log.warning(
+                'Could not enqueue task $task after retry timeout');
+            _emitStatusUpdate(task, TaskStatus.failed);
+            _emitProgressUpdate(task, progressFailed);
+          }
+        }
+      });
+    } else {
+      // normal status update
+      _emitStatusUpdate(task, taskStatus);
+    }
+  }
+
+  static void _processProgressUpdate(Task task, double progress) {
+    _emitProgressUpdate(task, progress);
+  }
+
+  /// Emits the status update for this task to its callback or listener
+  static void _emitStatusUpdate(Task task, TaskStatus taskStatus) {
     if (task.providesStatusUpdates) {
       final taskStatusCallback = _groupStatusCallbacks[task.group];
       if (taskStatusCallback != null) {
@@ -154,8 +185,8 @@ class FileDownloader {
     }
   }
 
-  /// Provide the progress update for this task to its callback or listener
-  static void _provideProgressUpdate(Task task, progress) {
+  /// Emit the progress update for this task to its callback or listener
+  static void _emitProgressUpdate(Task task, progress) {
     if (task.providesProgressUpdates) {
       final taskProgressCallback = _groupProgressCallbacks[task.group];
       if (taskProgressCallback != null) {
@@ -207,6 +238,9 @@ class FileDownloader {
   /// if requested by its [updates] property
   static Future<bool> enqueue(Task task) async {
     _ensureInitialized();
+    if (Platform.isMacOS) {
+      return DesktopDownloader().enqueue(task);
+    }
     return await _channel
             .invokeMethod<bool>('enqueue', [jsonEncode(task.toJsonMap())]) ??
         false;
@@ -457,8 +491,8 @@ class FileDownloader {
     // remove tasks waiting to retry from the list so they won't be retried
     for (final task in matchingTasksWaitingToRetry) {
       _tasksWaitingToRetry.remove(task);
-      _provideStatusUpdate(task, TaskStatus.canceled);
-      _provideProgressUpdate(task, progressCanceled);
+      _emitStatusUpdate(task, TaskStatus.canceled);
+      _emitProgressUpdate(task, progressCanceled);
     }
     // cancel remaining taskIds on the native platform
     final remainingTaskIds = taskIds
@@ -529,6 +563,8 @@ class FileDownloader {
     _groupProgressCallbacks.clear();
     _taskStatusCallbacks.clear();
     _taskProgressCallbacks.clear();
+    _desktopDownloaderUpdates?.cancel();
+    _desktopDownloaderUpdates = null;
   }
 }
 

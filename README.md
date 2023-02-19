@@ -8,7 +8,7 @@ To upload a file, create an [UploadTask](https://pub.dev/documentation/backgroun
 
 The plugin supports [headers](#headers), [retries](#retries), [requiring WiFi](#requiring-wifi) before starting the up/download, user-defined [metadata](#metadata) and GET and [POST](#post-requests) http(s) requests. You can [manage and monitor the tasks in the queue](#managing-and-monitoring-tasks-in-the-queue), and have different handlers for updates by [group](#grouping-tasks).
 
-No setup is required for Android, and only minimal [setup for iOS](#initial-setup-for-ios).
+No setup is required for Android, and only minimal [setup for iOS](#ios).
 
 ## Contents
 
@@ -255,7 +255,9 @@ If the `requiresWiFi` field of a `Task` is set to true, the task won't start unl
 `metaData` can be added to a `Task`. It is ignored by the downloader but may be helpful when receiving an update about the task.
 
 
-## Initial setup for iOS
+## Initial setup
+
+### iOS
 
 On iOS, ensure that you have the Background Fetch capability enabled:
 * Select the Runner target in XCode
@@ -266,7 +268,21 @@ On iOS, ensure that you have the Background Fetch capability enabled:
 
 Note that iOS by default requires all URLs to be https (and not http). See [here](https://developer.apple.com/documentation/security/preventing_insecure_network_connections) for more details and how to address issues.
 
+### Android
+
 No setup is required for Android.
+
+### MacOs
+
+macOS needs you to request a specific entitlement in order to access the network. To do that open macos/Runner/DebugProfile.entitlements and add the following key-value pair.
+
+```
+  <key>com.apple.security.network.client</key>
+  <true/>
+```
+Then do the same thing in macos/Runner/Release.entitlements.
+
+
 
 ## Limitations
 
