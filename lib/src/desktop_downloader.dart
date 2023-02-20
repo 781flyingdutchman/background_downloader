@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
@@ -7,6 +8,7 @@ import 'dart:math';
 import 'package:async/async.dart';
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
+import 'package:mime/mime.dart';
 import 'package:path/path.dart' as path;
 
 import 'downloader.dart';
@@ -18,6 +20,8 @@ import 'package:http/http.dart' as http;
 final desktopDownloaderSupportsThisPlatform =
     Platform.isMacOS || Platform.isLinux || Platform.isWindows;
 
+const okResponses = [200, 201, 202, 203, 204, 205, 206, 404];
+
 /// Implementation of the core download functionality for desktop platforms
 ///
 /// On desktop (MacOS, Linux, Windows) the download and upload are implemented
@@ -25,15 +29,14 @@ final desktopDownloaderSupportsThisPlatform =
 /// WorkManager as there is on iOS and Android
 class DesktopDownloader {
   final log = Logger('FileDownloader');
-
   final maxConcurrent = 5;
   static final DesktopDownloader _singleton = DesktopDownloader._internal();
   final _queue = Queue<Task>();
   final _running = Queue<Task>(); // subset that is running
   final _isolateSendPorts =
       <Task, SendPort?>{}; // isolate SendPort for running task
-
   var _updatesStreamController = StreamController();
+  static final httpClient = http.Client();
 
   factory DesktopDownloader() {
     return _singleton;
@@ -238,10 +241,16 @@ Future<void> doTask(SendPort sendPort) async {
   FileDownloader.httpClient ??= http.Client();
   processStatusUpdate(task, TaskStatus.running, sendPort);
   processProgressUpdate(task, 0.0, sendPort);
-  if (task is DownloadTask) {
-    await doDownloadTask(task, filePath, sendPort, messagesToIsolate);
+  if (task.retriesRemaining < 0) {
+    Logger('FileDownloader').warning(
+        'Task with taskId ${task.taskId} has negative retries remaining');
+    processStatusUpdate(task, TaskStatus.failed, sendPort);
   } else {
-    await doUploadTask(task, filePath, sendPort, messagesToIsolate);
+    if (task is DownloadTask) {
+      await doDownloadTask(task, filePath, sendPort, messagesToIsolate);
+    } else {
+      await doUploadTask(task, filePath, sendPort, messagesToIsolate);
+    }
   }
   sendPort.send(null); // signals end
   Isolate.exit();
@@ -250,19 +259,13 @@ Future<void> doTask(SendPort sendPort) async {
 Future<void> doDownloadTask(Task task, String filePath, SendPort sendPort,
     StreamQueue messagesToIsolate) async {
   final log = Logger('FileDownloader');
-  if (task.retriesRemaining < 0) {
-    log.warning(
-        'Task with taskId ${task.taskId} has negative retries remaining');
-    processStatusUpdate(task, TaskStatus.failed, sendPort);
-    return;
-  }
   var isCanceled = false;
   messagesToIsolate.next.then((message) {
     assert(message == 'cancel', 'Only accept "cancel" messages');
     isCanceled = true;
   });
+  final client = DesktopDownloader.httpClient;
   final tempFileName = Random().nextInt(1 << 32).toString();
-  final client = FileDownloader.httpClient!;
   var request = task.post == null
       ? http.Request('GET', Uri.parse(task.url))
       : http.Request('POST', Uri.parse(task.url));
@@ -273,8 +276,7 @@ Future<void> doDownloadTask(Task task, String filePath, SendPort sendPort,
   try {
     final response = await client.send(request);
     final contentLength = response.contentLength ?? -1;
-    if (const [200, 201, 202, 203, 204, 205, 206, 404]
-        .contains(response.statusCode)) {
+    if (okResponses.contains(response.statusCode)) {
       try {
         // do the actual download
         final outStream = File(tempFileName).openWrite();
@@ -340,7 +342,125 @@ Future<void> doDownloadTask(Task task, String filePath, SendPort sendPort,
 
 Future<void> doUploadTask(Task task, String filePath, SendPort sendPort,
     StreamQueue messagesToIsolate) async {
-  throw UnimplementedError("DoDownloadTask has not been implemented");
+  final log = Logger('FileDownloader');
+  final inFile = File(filePath);
+  if (!inFile.existsSync()) {
+    log.warning(
+        'TaskId ${task.taskId} file to upload does not exist: $filePath');
+    processStatusUpdate(task, TaskStatus.failed, sendPort);
+    return;
+  }
+  final isBinaryUpload = task.post == 'binary';
+  final fileSize = inFile.lengthSync();
+  final mimeType = lookupMimeType(filePath) ?? 'application/octet-stream';
+  const boundary = '-----background_downloader-akjhfw281onqciyhnIk';
+  const lineFeed = '\r\n';
+  final contentDispositionString =
+      'Content-Disposition: form-data; name="file"; filename="${task.filename}"';
+  final contentTypeString = 'Content-Type: $mimeType';
+  // determine the content length of the multi-part data
+  final contentLength = isBinaryUpload
+      ? fileSize
+      : 2 * boundary.length +
+          6 * lineFeed.length +
+          contentDispositionString.length +
+          contentTypeString.length +
+          3 * "--".length +
+          fileSize;
+  try {
+    final client = DesktopDownloader.httpClient;
+    final request = http.StreamedRequest('POST', Uri.parse(task.url));
+    request.headers.addAll(task.headers);
+    request.contentLength = contentLength;
+    if (isBinaryUpload) {
+      request.headers['Content-Type'] = mimeType;
+    } else {
+      // multi-part upload
+      request.headers.addAll({
+        'Content-Type': 'multipart/form-data; boundary=$boundary',
+        'Accept-Charset': 'UTF-8',
+        'Connection': 'Keep-Alive',
+        'Cache-Control': 'no-cache'
+      });
+      // write pre-amble
+      request.sink.add(utf8.encode(
+          '--$boundary$lineFeed$contentDispositionString$lineFeed$contentTypeString$lineFeed$lineFeed'));
+    }
+    // initiate the request and handle completion async
+    final requestCompleter = Completer();
+    var result = TaskStatus.failed; // set below .then statement
+    client.send(request).then((response) {
+      // request completed, so send status update and finish
+      var resultToSend = result == TaskStatus.complete &&
+          !okResponses.contains(response.statusCode)
+          ? TaskStatus.failed
+          : result;
+      if (response.statusCode == 404) {
+        resultToSend = TaskStatus.notFound;
+      }
+      processStatusUpdate(task, resultToSend, sendPort);
+      requestCompleter.complete();
+    });
+    // send the bytes to the request sink
+    final inStream = inFile.openRead();
+    result = await transferBytes(inStream, request.sink, contentLength,
+        task, sendPort, messagesToIsolate);
+    if (!isBinaryUpload && result == TaskStatus.complete) {
+      // write epilogue
+      request.sink.add(utf8.encode('$lineFeed--$boundary--$lineFeed'));
+    }
+    request.sink.close(); // triggers request completion, handled above
+    await requestCompleter.future; // wait for request to complete
+  } catch (e) {
+    processStatusUpdate(task, TaskStatus.failed, sendPort);
+  }
+}
+
+Future<TaskStatus> transferBytes(
+    Stream<List<int>> inStream,
+    EventSink<List<int>> outStream,
+    int contentLength,
+    Task task,
+    SendPort sendPort,
+    StreamQueue messagesToIsolate) async {
+  final log = Logger('FileDownloader');
+  var isCanceled = false;
+  messagesToIsolate.next.then((message) {
+    assert(message == 'cancel', 'Only accept "cancel" messages');
+    isCanceled = true;
+  });
+  final streamOutcome = Completer<TaskStatus>();
+  var bytesTotal = 0;
+  var lastProgressUpdate = 0.0;
+  var nextProgressUpdateTime = DateTime.fromMillisecondsSinceEpoch(0);
+  late StreamSubscription<List<int>> subscription;
+  subscription = inStream.listen(
+      (bytes) {
+        if (isCanceled) {
+          subscription.cancel();
+          streamOutcome.complete(TaskStatus.canceled);
+        }
+        outStream.add(bytes);
+        bytesTotal += bytes.length;
+        final progress = min(bytesTotal.toDouble() / contentLength, 0.999);
+        final now = DateTime.now();
+        if (contentLength > 0 &&
+            (bytesTotal < 10000 ||
+                (progress - lastProgressUpdate > 0.02 &&
+                    now.isAfter(nextProgressUpdateTime)))) {
+          processProgressUpdate(task, progress, sendPort);
+          lastProgressUpdate = progress;
+          nextProgressUpdateTime = now.add(const Duration(milliseconds: 500));
+        }
+      },
+      onDone: () => streamOutcome.complete(TaskStatus.complete),
+      onError: (e) {
+        log.warning('Error downloading taskId ${task.taskId}: $e');
+        streamOutcome.complete(TaskStatus.failed);
+      });
+  final success = await streamOutcome.future;
+  subscription.cancel();
+  return success;
 }
 
 /// Processes a change in status for the [task]
@@ -349,10 +469,10 @@ Future<void> doUploadTask(Task task, String filePath, SendPort sendPort,
 /// If the task is finished, processes a final progressUpdate update
 void processStatusUpdate(Task task, TaskStatus status, SendPort sendPort) {
   final retryNeeded = status == TaskStatus.failed && task.retriesRemaining > 0;
-  // if task is in final state, process a final progressUpdate
-  // A 'failed' progress update is only provided if
-  // a retry is not needed: if it is needed, a `waitingToRetry` progress update
-  // will be generated in the FileDownloader
+// if task is in final state, process a final progressUpdate
+// A 'failed' progress update is only provided if
+// a retry is not needed: if it is needed, a `waitingToRetry` progress update
+// will be generated in the FileDownloader
   if (status.isFinalState) {
     switch (status) {
       case TaskStatus.complete:
@@ -381,7 +501,7 @@ void processStatusUpdate(Task task, TaskStatus status, SendPort sendPort) {
         {}
     }
   }
-  // Post update if task expects one, or if failed and retry is needed
+// Post update if task expects one, or if failed and retry is needed
   if (task.providesStatusUpdates || retryNeeded) {
     sendPort.send(status);
   }

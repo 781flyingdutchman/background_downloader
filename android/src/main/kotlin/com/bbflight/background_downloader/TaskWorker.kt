@@ -414,7 +414,6 @@ class TaskWorker(
         } else {
             // multipart file upload using Content-Type multipart/form-data
             Log.d(TAG, "Multipart upload for taskId ${task.taskId}")
-            val source = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
             val boundary = "-----background_downloader-akjhfw281onqciyhnIk"
             // determine Content-Type based on file extension
             val mimeType =
