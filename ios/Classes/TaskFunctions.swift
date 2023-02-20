@@ -151,7 +151,7 @@ func directoryForTask(task: Task) throws ->  URL {
     case 1:
         dir = .cachesDirectory
     case 2:
-        dir = .libraryDirectory
+        dir = .applicationSupportDirectory
     default:
         dir = .documentDirectory
     }

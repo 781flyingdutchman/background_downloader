@@ -1,3 +1,8 @@
+## 3.0.1
+
+iOS BaseDirectory.applicationSupport now uses iOS applicationSupportDirectory instead of 
+libraryDirectory
+
 ## 3.0.0
 
 Version 3 introduces uploads, `onProgress` and `onStatus` callbacks passed to `download` and `upload`,

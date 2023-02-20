@@ -150,10 +150,8 @@ void main() {
           url: workingUrl,
           filename: defaultFilename,
           baseDirectory: BaseDirectory.applicationSupport);
-      if (!Platform.isAndroid) {
-        path = join((await getLibraryDirectory()).path, task.filename);
-        await enqueueAndFileExists(path);
-      }
+      path = join((await getApplicationSupportDirectory()).path, task.filename);
+      await enqueueAndFileExists(path);
       // test url with encoded parameter
       task = DownloadTask(
           url: getTestUrl,
