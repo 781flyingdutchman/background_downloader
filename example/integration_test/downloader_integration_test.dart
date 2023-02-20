@@ -311,6 +311,7 @@ void main() {
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.complete));
       final contents = await File(path).readAsString();
+      print(contents);
       expect(contents.startsWith("{'args': {'redirected': 'true'}"), isTrue);
       File(path).deleteSync();
     });
@@ -714,8 +715,8 @@ void main() {
       // iOS emits 0.0 & 0.999 progress updates for a 403 response with the
       // text of the response, before sharing the response code, triggering
       // the -4.0 progress response.
-      // On Android, only 0.0 & -4.0 is emitted
-      expect(progressCallbackCounter, equals(Platform.isAndroid ? 4 : 6));
+      // On other platforms, only 0.0 & -4.0 is emitted
+      expect(progressCallbackCounter, equals(Platform.isIOS ? 6 : 4));
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.failed));
       // wait a sec for the last progress update
@@ -758,8 +759,8 @@ void main() {
       // iOS emits 0.0 & 0.999 progress updates for a 403 response with the
       // text of the response, before sharing the response code, triggering
       // the -4.0 progress response.
-      // On Android, only 0.0 & -4.0 is emitted
-      expect(progressCallbackCounter, equals(Platform.isAndroid ? 4 : 6));
+      // On other platforms, only 0.0 & -4.0 is emitted
+      expect(progressCallbackCounter, equals(Platform.isIOS ? 6 : 4));
       final retriedTask = await FileDownloader.taskForId(retryTask.taskId);
       expect(retriedTask, equals(retryTask));
       if (retriedTask != null) {
@@ -817,7 +818,7 @@ void main() {
   });
 
   group('downloadTask with POST request', () {
-    testWidgets('post BackgroundDownloadTask with post is empty body',
+    testWidgets('post DownloadTask with post is empty body',
         (widgetTester) async {
       FileDownloader.initialize();
       final task = DownloadTask(
@@ -837,7 +838,7 @@ void main() {
       expect(result['json'], isNull);
     });
 
-    testWidgets('post BackgroundDownloadTask with post is String',
+    testWidgets('post DownloadTask with post is String',
         (widgetTester) async {
       FileDownloader.initialize();
       final task = DownloadTask(
@@ -852,12 +853,13 @@ void main() {
       final result = jsonDecode(await File(path).readAsString());
       print(result);
       expect(result['args']['request-type'], equals('post-String'));
-      expect(result['headers']['Content-Type'], equals('text/plain'));
+      // note: Content-Type may include charset= on some platforms
+      expect(result['headers']['Content-Type'], contains('text/plain'));
       expect(result['data'], equals('testPost'));
       expect(result['json'], isNull);
     });
 
-    testWidgets('post BackgroundDownloadTask with post is Uint8List',
+    testWidgets('post DownloadTask with post is Uint8List',
         (widgetTester) async {
       FileDownloader.initialize();
       final task = DownloadTask(
@@ -872,13 +874,14 @@ void main() {
       final result = jsonDecode(await File(path).readAsString());
       print(result);
       expect(result['args']['request-type'], equals('post-Uint8List'));
+      // note: Content-Type may include charset= on some platforms
       expect(result['headers']['Content-Type'],
-          equals('application/octet-stream'));
+          contains('application/octet-stream'));
       expect(result['data'], equals('testPost'));
       expect(result['json'], isNull);
     });
 
-    testWidgets('post BackgroundDownloadTask with post is JsonString',
+    testWidgets('post DownloadTask with post is JsonString',
         (widgetTester) async {
       FileDownloader.initialize();
       final task = DownloadTask(
@@ -902,7 +905,7 @@ void main() {
       expect(result['json'], equals({'field1': 1}));
     });
 
-    testWidgets('post BackgroundDownloadTask with post is invalid type',
+    testWidgets('post DownloadTask with post is invalid type',
         (widgetTester) async {
       expect(
           () => DownloadTask(

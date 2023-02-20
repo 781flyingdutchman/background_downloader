@@ -14,6 +14,10 @@ import 'models.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 
+/// True if this platform is supported by the DesktopDownloader
+final desktopDownloaderSupportsThisPlatform =
+    Platform.isMacOS || Platform.isLinux || Platform.isWindows;
+
 /// Implementation of the core download functionality for desktop platforms
 ///
 /// On desktop (MacOS, Linux, Windows) the download and upload are implemented
@@ -26,6 +30,8 @@ class DesktopDownloader {
   static final DesktopDownloader _singleton = DesktopDownloader._internal();
   final _queue = Queue<Task>();
   final _running = Queue<Task>(); // subset that is running
+  final _isolateSendPorts =
+      <Task, SendPort?>{}; // isolate SendPort for running task
 
   var _updatesStreamController = StreamController();
 
@@ -43,13 +49,15 @@ class DesktopDownloader {
   /// Call before listening to the updates stream
   void initialize() => _updatesStreamController = StreamController();
 
-  Future<bool> enqueue(Task task) {
+  /// Enqueue the task and advance the queue
+  bool enqueue(Task task) {
     _queue.add(task);
-    emitUpdate(task, TaskStatus.enqueued);
+    _emitUpdate(task, TaskStatus.enqueued);
     _advanceQueue();
-    return Future.value(true);
+    return true;
   }
 
+  /// Advance the queue if it's not empty and there is room in the run queue
   void _advanceQueue() {
     while (_running.length < maxConcurrent && _queue.isNotEmpty) {
       final task = _queue.removeFirst();
@@ -87,12 +95,11 @@ class DesktopDownloader {
     errorPort.listen((message) {
       final error = (message as List).first as String;
       log.info('Error for taskId ${task.taskId}: $error');
-      emitUpdate(task, TaskStatus.failed);
+      _emitUpdate(task, TaskStatus.failed);
       receivePort.close(); // also ends listener at then end
     });
-    final isolate = await Isolate.spawn(doTask, receivePort.sendPort,
+    await Isolate.spawn(doTask, receivePort.sendPort,
         onError: errorPort.sendPort);
-
     // Convert the ReceivePort into a StreamQueue to receive messages from the
     // spawned isolate using a pull-based interface. Events are stored in this
     // queue until they are accessed by `events.next`.
@@ -100,9 +107,12 @@ class DesktopDownloader {
     // The first message from the spawned isolate is a SendPort. This port is
     // used to communicate with the spawned isolate.
     final sendPort = await messagesFromIsolate.next;
-
-    // send three arguments: true if task is download, the task, the filePath
     sendPort.send([task, filePath]);
+    if (_isolateSendPorts.keys.contains(task)) {
+      // if already registered with null value, cancel immediately
+      sendPort.send('cancel');
+    }
+    _isolateSendPorts[task] = sendPort; // allows future cancellation
     // listen for events sent back from the isolate
     while (await messagesFromIsolate.hasNext) {
       final message = await messagesFromIsolate.next;
@@ -111,28 +121,112 @@ class DesktopDownloader {
         receivePort.close();
       } else {
         // Pass message on to FileDownloader via [updates]
-        emitUpdate(task, message);
+        _emitUpdate(task, message);
       }
     }
     errorPort.close();
-    print("end of events");
+    _isolateSendPorts.remove(task);
   }
 
-  void emitUpdate(Task task, dynamic message) =>
-      _updatesStreamController.add([task, message]);
+  /// Resets the download worker by cancelling all ongoing tasks for the group
+  ///
+  ///  Returns the number of tasks canceled
+  int reset(String group) {
+    final inQueueIds =
+        _queue.where((task) => task.group == group).map((task) => task.taskId);
+    final runningIds = _running
+        .where((task) => task.group == group)
+        .map((task) => task.taskId);
+    final taskIds = [...inQueueIds, ...runningIds];
+    if (taskIds.isNotEmpty) {
+      cancelTasksWithIds(taskIds);
+    }
+    return taskIds.length;
+  }
 
-  /// True if this platform is supported by the DesktopDownloader
-  bool get supportsThisPlatform =>
-      Platform.isMacOS || Platform.isLinux || Platform.isWindows;
+  /// Returns a list of all tasks in progress, matching [group]
+  List<Task> allTasks(String group) {
+    final inQueue = _queue.where((task) => task.group == group);
+    final running = _running.where((task) => task.group == group);
+    return [...inQueue, ...running];
+  }
+
+  /// Cancels ongoing tasks whose taskId is in the list provided with this call
+  ///
+  /// Returns true if all cancellations were successful
+  bool cancelTasksWithIds(List<String> taskIds) {
+    final inQueue = _queue.where((task) => taskIds.contains(task.taskId));
+    for (final task in inQueue) {
+      _emitUpdate(task, TaskStatus.canceled);
+      _remove(task);
+    }
+    final running = _running.where((task) => taskIds.contains(task.taskId));
+    for (final task in running) {
+      final sendPort = _isolateSendPorts[task];
+      if (sendPort != null) {
+        sendPort.send('cancel');
+        _isolateSendPorts.remove(task);
+      } else {
+        // register task for cancellation even if sendPort does not yet exist
+        _isolateSendPorts[task] = null;
+      }
+    }
+    return true;
+  }
+
+  /// Returns Task for this taskId, or nil
+  Task? taskForId(String taskId) {
+    try {
+      return _queue.where((task) => task.taskId == taskId).first;
+    } on StateError {
+      try {
+        return _running.where((task) => task.taskId == taskId).first;
+      } on StateError {
+        return null;
+      }
+    }
+  }
+
+  /// Destroy requiring re-initialization
+  ///
+  /// Clears all queues and references without sending cancellation
+  /// messages or status updates
+  void destroy() {
+    _queue.clear();
+    _running.clear();
+    _isolateSendPorts.clear();
+  }
+
+  /// Emit status or progress update to [FileDownloader] if task provides those
+  void _emitUpdate(Task task, dynamic message) {
+    if ((message is TaskStatus && task.providesStatusUpdates) ||
+        (message is double && task.providesProgressUpdates)) {
+      _updatesStreamController.add([task, message]);
+    }
+  }
+
+  /// Remove all references to [task]
+  void _remove(Task task) {
+    _queue.remove(task);
+    _running.remove(task);
+    _isolateSendPorts.remove(task);
+  }
 }
 
+/** Top-level functions that run in an Isolate */
+
+/// Do the task, sending messages back to the main isolate via [sendPort]
+///
+/// The first message sent back is a [ReceivePort] that is the command port
+/// for the isolate. The first command must be the arguments: task and filePath.
+/// Any subsequent commands will be interpreted as a cancellation request.
 Future<void> doTask(SendPort sendPort) async {
   final commandPort = ReceivePort();
   // send the command port back to the main Isolate
   sendPort.send(commandPort.sendPort);
+  final messagesToIsolate = StreamQueue<dynamic>(commandPort);
   // get the arguments list and parse
-  final args = await commandPort.first as List<dynamic>;
-  commandPort.close();
+  final args = await messagesToIsolate.next as List<dynamic>;
   final task = args.first;
   final filePath = args.last as String;
   Logger.root.level = Level.ALL;
@@ -143,100 +237,109 @@ Future<void> doTask(SendPort sendPort) async {
   });
   FileDownloader.httpClient ??= http.Client();
   processStatusUpdate(task, TaskStatus.running, sendPort);
+  processProgressUpdate(task, 0.0, sendPort);
   if (task is DownloadTask) {
-    await doDownloadTask(task, filePath, sendPort);
+    await doDownloadTask(task, filePath, sendPort, messagesToIsolate);
   } else {
-    await doUploadTask(task, filePath, sendPort);
+    await doUploadTask(task, filePath, sendPort, messagesToIsolate);
   }
   sendPort.send(null); // signals end
   Isolate.exit();
 }
 
-Future<void> doDownloadTask(
-    Task task, String filePath, SendPort sendPort) async {
+Future<void> doDownloadTask(Task task, String filePath, SendPort sendPort,
+    StreamQueue messagesToIsolate) async {
   final log = Logger('FileDownloader');
   if (task.retriesRemaining < 0) {
     log.warning(
         'Task with taskId ${task.taskId} has negative retries remaining');
+    processStatusUpdate(task, TaskStatus.failed, sendPort);
     return;
   }
+  var isCanceled = false;
+  messagesToIsolate.next.then((message) {
+    assert(message == 'cancel', 'Only accept "cancel" messages');
+    isCanceled = true;
+  });
   final tempFileName = Random().nextInt(1 << 32).toString();
   final client = FileDownloader.httpClient!;
   var request = task.post == null
       ? http.Request('GET', Uri.parse(task.url))
       : http.Request('POST', Uri.parse(task.url));
   request.headers.addAll(task.headers);
-  while (task.retriesRemaining >= 0) {
-    try {
-      final response = await client.send(request);
-      final contentLength = response.contentLength ?? -1;
-      if ([200, 201, 202, 203, 204, 205, 206, 404]
-          .contains(response.statusCode)) {
-        try {
-          // do the actual download
-          final outStream = File(tempFileName).openWrite();
-          final streamSuccess = Completer<bool>();
-          var bytesTotal = 0;
-          var lastProgressUpdate = 0.0;
-          var nextProgressUpdateTime = DateTime.fromMillisecondsSinceEpoch(0);
-          final subscription = response.stream.listen(
-              (bytes) {
-                outStream.add(bytes);
-                bytesTotal += bytes.length;
-                final progress =
-                    min(bytesTotal.toDouble() / contentLength, 0.999);
-                final now = DateTime.now();
-                if (contentLength > 0 &&
-                    (bytesTotal < 10000 ||
-                        (progress - lastProgressUpdate > 0.02 &&
-                            now.isAfter(nextProgressUpdateTime)))) {
-                  processProgressUpdate(task, progress, sendPort);
-                  lastProgressUpdate = progress;
-                  nextProgressUpdateTime =
-                      now.add(const Duration(milliseconds: 500));
-                }
-              },
-              onDone: () => streamSuccess.complete(true),
-              onError: (e) {
-                log.warning('Error downloading taskId ${task.taskId}: $e');
-                streamSuccess.complete(false);
-              });
-          final success = await streamSuccess.future;
-          subscription.cancel();
-          outStream.close();
-          if (success) {
-            // copy file to destination, creating dirs if needed
-            final dirPath = path.dirname(filePath);
-            Directory(dirPath).createSync(recursive: true);
-            File(tempFileName).copySync(filePath);
-            File(tempFileName).deleteSync();
-            processStatusUpdate(task, TaskStatus.complete, sendPort);
-            return;
-          }
-        } on FileSystemException catch (e) {
-          log.warning(e);
-        }
-      }
-    } catch (e) {
-      log.warning(e);
-    } finally {
-      try {
-        File(tempFileName).deleteSync();
-      } catch (e) {}
-    }
-    // error: retry if allowed, otherwise the task failed
-    task.decreaseRetriesRemaining();
-    if (task.retriesRemaining < 0) {
-      processStatusUpdate(task, TaskStatus.failed, sendPort);
-      return;
-    }
-    final waitTime = Duration(
-        seconds: pow(2, (task.retries - task.retriesRemaining)).toInt());
-    await Future.delayed(waitTime);
+  if (task.post is String) {
+    request.body = task.post!;
   }
+  try {
+    final response = await client.send(request);
+    final contentLength = response.contentLength ?? -1;
+    if (const [200, 201, 202, 203, 204, 205, 206, 404]
+        .contains(response.statusCode)) {
+      try {
+        // do the actual download
+        final outStream = File(tempFileName).openWrite();
+        final streamOutcome = Completer<TaskStatus>();
+        var bytesTotal = 0;
+        var lastProgressUpdate = 0.0;
+        var nextProgressUpdateTime = DateTime.fromMillisecondsSinceEpoch(0);
+        late StreamSubscription<List<int>> subscription;
+        subscription = response.stream.listen(
+            (bytes) {
+              if (isCanceled) {
+                processStatusUpdate(task, TaskStatus.canceled, sendPort);
+                outStream.close();
+                File(tempFileName).deleteSync();
+                subscription.cancel();
+                return;
+              }
+              outStream.add(bytes);
+              bytesTotal += bytes.length;
+              final progress =
+                  min(bytesTotal.toDouble() / contentLength, 0.999);
+              final now = DateTime.now();
+              if (contentLength > 0 &&
+                  (bytesTotal < 10000 ||
+                      (progress - lastProgressUpdate > 0.02 &&
+                          now.isAfter(nextProgressUpdateTime)))) {
+                processProgressUpdate(task, progress, sendPort);
+                lastProgressUpdate = progress;
+                nextProgressUpdateTime =
+                    now.add(const Duration(milliseconds: 500));
+              }
+            },
+            onDone: () => streamOutcome.complete(TaskStatus.complete),
+            onError: (e) {
+              log.warning('Error downloading taskId ${task.taskId}: $e');
+              streamOutcome.complete(TaskStatus.failed);
+            });
+        final success = await streamOutcome.future;
+        subscription.cancel();
+        outStream.close();
+        if (success == TaskStatus.complete) {
+          // copy file to destination, creating dirs if needed
+          final dirPath = path.dirname(filePath);
+          Directory(dirPath).createSync(recursive: true);
+          File(tempFileName).copySync(filePath);
+          File(tempFileName).deleteSync();
+          processStatusUpdate(task, TaskStatus.complete, sendPort);
+          return;
+        }
+      } on FileSystemException catch (e) {
+        log.warning(e);
+      }
+    }
+  } catch (e) {
+    log.warning(e);
+  } finally {
+    try {
+      File(tempFileName).deleteSync();
+    } catch (e) {}
+  }
+  processStatusUpdate(task, TaskStatus.failed, sendPort);
 }
 
-Future<void> doUploadTask(Task task, String filePath, SendPort sendPort) async {
+Future<void> doUploadTask(Task task, String filePath, SendPort sendPort,
+    StreamQueue messagesToIsolate) async {
   throw UnimplementedError("DoDownloadTask has not been implemented");
 }
 

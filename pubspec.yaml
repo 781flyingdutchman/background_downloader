@@ -34,5 +34,3 @@ flutter:
         pluginClass: BackgroundDownloaderPlugin
       ios:
         pluginClass: BackgroundDownloaderPlugin
-#      macos:
-#        dartPluginClass: DesktopDownloader

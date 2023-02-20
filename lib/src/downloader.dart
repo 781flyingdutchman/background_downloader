@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
 
 import 'package:background_downloader/background_downloader.dart';
@@ -72,24 +71,22 @@ class FileDownloader {
           'Prefer calling .destroy before re-initialization');
     }
     WidgetsFlutterBinding.ensureInitialized();
-    if (DesktopDownloader().supportsThisPlatform) {
+    if (desktopDownloaderSupportsThisPlatform) {
       DesktopDownloader().initialize();
       // listen to updates and pass on to the processors
       _desktopDownloaderUpdates?.cancel();
-      _desktopDownloaderUpdates = DesktopDownloader().updates.listen(
-          (update) {
-            final args = update as List;
-            final task = args.first;
-            final message = args.last;
-            if (message is TaskStatus) {
-              _processStatusUpdate(task, message);
-            } else if (message is double) {
-              _processProgressUpdate(task, message);
-            } else {
-              _log.warning('Received message with unknown type '
-                  '${message.runtimeType} from DesktopDownloader');
-            }
-
+      _desktopDownloaderUpdates = DesktopDownloader().updates.listen((update) {
+        final args = update as List;
+        final task = args.first;
+        final message = args.last;
+        if (message is TaskStatus) {
+          _processStatusUpdate(task, message);
+        } else if (message is double) {
+          _processProgressUpdate(task, message);
+        } else {
+          _log.warning('Received message with unknown type '
+              '${message.runtimeType} from DesktopDownloader');
+        }
       });
     }
     if (_updates.hasListener) {
@@ -140,18 +137,15 @@ class FileDownloader {
       task.decreaseRetriesRemaining();
       _tasksWaitingToRetry.add(task);
       final waitTime = Duration(
-          seconds:
-          pow(2, (task.retries - task.retriesRemaining)).toInt());
-      _log.finer(
-          'TaskId ${task.taskId} failed, waiting ${waitTime.inSeconds}'
-              ' seconds before retrying. ${task.retriesRemaining}'
-              ' retries remaining');
+          seconds: pow(2, (task.retries - task.retriesRemaining)).toInt());
+      _log.finer('TaskId ${task.taskId} failed, waiting ${waitTime.inSeconds}'
+          ' seconds before retrying. ${task.retriesRemaining}'
+          ' retries remaining');
       Future.delayed(waitTime, () async {
         // after delay, enqueue task again if it's still waiting
         if (_tasksWaitingToRetry.remove(task)) {
           if (!await enqueue(task)) {
-            _log.warning(
-                'Could not enqueue task $task after retry timeout');
+            _log.warning('Could not enqueue task $task after retry timeout');
             _emitStatusUpdate(task, TaskStatus.failed);
             _emitProgressUpdate(task, progressFailed);
           }
@@ -239,7 +233,7 @@ class FileDownloader {
   /// if requested by its [updates] property
   static Future<bool> enqueue(Task task) async {
     _ensureInitialized();
-    if (Platform.isMacOS) {
+    if (desktopDownloaderSupportsThisPlatform) {
       return DesktopDownloader().enqueue(task);
     }
     return await _channel
@@ -439,10 +433,12 @@ class FileDownloader {
   /// Returns the number of tasks cancelled. Every canceled task wil emit a
   /// [TaskStatus.canceled] update to the registered callback, if
   /// requested
-  static Future<int> reset({String? group = defaultGroup}) async {
+  static Future<int> reset({String group = defaultGroup}) async {
     _ensureInitialized();
     _tasksWaitingToRetry.clear();
-    return await _channel.invokeMethod<int>('reset', group) ?? -1;
+    return desktopDownloaderSupportsThisPlatform
+        ? DesktopDownloader().reset(group)
+        : await _channel.invokeMethod<int>('reset', group) ?? -1;
   }
 
   /// Returns a list of taskIds of all tasks currently active in this group
@@ -466,11 +462,16 @@ class FileDownloader {
       {String group = defaultGroup,
       bool includeTasksWaitingToRetry = true}) async {
     _ensureInitialized();
-    final result =
-        await _channel.invokeMethod<List<dynamic>?>('allTasks', group) ?? [];
-    final tasks = result
-        .map((e) => Task.createFromJsonMap(jsonDecode(e as String)))
-        .toList();
+    late List<Task> tasks;
+    if (desktopDownloaderSupportsThisPlatform) {
+      tasks = DesktopDownloader().allTasks(group);
+    } else {
+      final result =
+          await _channel.invokeMethod<List<dynamic>?>('allTasks', group) ?? [];
+      tasks = result
+          .map((e) => Task.createFromJsonMap(jsonDecode(e as String)))
+          .toList();
+    }
     if (includeTasksWaitingToRetry) {
       tasks.addAll(_tasksWaitingToRetry.where((task) => task.group == group));
     }
@@ -500,9 +501,11 @@ class FileDownloader {
         .where((taskId) => !matchingTaskIdsWaitingToRetry.contains(taskId))
         .toList(growable: false);
     if (remainingTaskIds.isNotEmpty) {
-      return await _channel.invokeMethod<bool>(
-              'cancelTasksWithIds', remainingTaskIds) ??
-          false;
+      return desktopDownloaderSupportsThisPlatform
+          ? DesktopDownloader().cancelTasksWithIds(remainingTaskIds)
+          : await _channel.invokeMethod<bool>(
+                  'cancelTasksWithIds', remainingTaskIds) ??
+              false;
     }
     return true;
   }
@@ -516,17 +519,21 @@ class FileDownloader {
   static Future<Task?> taskForId(String taskId) async {
     _ensureInitialized();
     // check if task with this Id is waiting to retry
-    final taskWaitingToRetry =
-        _tasksWaitingToRetry.where((task) => task.taskId == taskId);
-    if (taskWaitingToRetry.isNotEmpty) {
-      return taskWaitingToRetry.first;
+    try {
+      return _tasksWaitingToRetry.where((task) => task.taskId == taskId).first;
+    } on StateError {
+      // if not, ask the native platform for the task matching this id
+      if (desktopDownloaderSupportsThisPlatform) {
+        return DesktopDownloader().taskForId(taskId);
+      } else {
+        final jsonString =
+            await _channel.invokeMethod<String>('taskForId', taskId);
+        if (jsonString != null) {
+          return Task.createFromJsonMap(jsonDecode(jsonString));
+        }
+        return null;
+      }
     }
-    // if not, ask the native platform for the task matching this id
-    final jsonString = await _channel.invokeMethod<String>('taskForId', taskId);
-    if (jsonString != null) {
-      return Task.createFromJsonMap(jsonDecode(jsonString));
-    }
-    return null;
   }
 
   /// Perform a server request for this [request]
@@ -564,8 +571,11 @@ class FileDownloader {
     _groupProgressCallbacks.clear();
     _taskStatusCallbacks.clear();
     _taskProgressCallbacks.clear();
-    _desktopDownloaderUpdates?.cancel();
-    _desktopDownloaderUpdates = null;
+    if (desktopDownloaderSupportsThisPlatform) {
+      _desktopDownloaderUpdates?.cancel();
+      _desktopDownloaderUpdates = null;
+      DesktopDownloader().destroy();
+    }
   }
 }
 
