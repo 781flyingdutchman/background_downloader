@@ -145,7 +145,7 @@ void main() {
           baseDirectory: BaseDirectory.temporary);
       path = join((await getTemporaryDirectory()).path, task.filename);
       await enqueueAndFileExists(path);
-      // cache directory
+      // applicationSupport directory
       task = DownloadTask(
           url: workingUrl,
           filename: defaultFilename,

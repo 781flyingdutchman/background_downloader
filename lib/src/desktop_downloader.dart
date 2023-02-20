@@ -7,7 +7,7 @@ import 'dart:math';
 import 'package:async/async.dart';
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
-import 'package:path/path.dart';
+import 'package:path/path.dart' as path;
 
 import 'downloader.dart';
 import 'models.dart';
@@ -45,7 +45,7 @@ class DesktopDownloader {
 
   Future<bool> enqueue(Task task) {
     _queue.add(task);
-    emitUpdate(task, TaskStatus.enqueued.index);
+    emitUpdate(task, TaskStatus.enqueued);
     _advanceQueue();
     return Future.value(true);
   }
@@ -80,7 +80,7 @@ class DesktopDownloader {
         baseDir = await getApplicationSupportDirectory();
         break;
     }
-    final filePath = join(baseDir.path, task.directory, task.filename);
+    final filePath = path.join(baseDir.path, task.directory, task.filename);
     // spawn an isolate to do the task
     final receivePort = ReceivePort();
     final errorPort = ReceivePort();
@@ -88,7 +88,7 @@ class DesktopDownloader {
       final error = (message as List).first as String;
       log.info('Error for taskId ${task.taskId}: $error');
       emitUpdate(task, TaskStatus.failed);
-      return;
+      receivePort.close(); // also ends listener at then end
     });
     final isolate = await Isolate.spawn(doTask, receivePort.sendPort,
         onError: errorPort.sendPort);
@@ -96,30 +96,30 @@ class DesktopDownloader {
     // Convert the ReceivePort into a StreamQueue to receive messages from the
     // spawned isolate using a pull-based interface. Events are stored in this
     // queue until they are accessed by `events.next`.
-    final events = StreamQueue<dynamic>(receivePort);
+    final messagesFromIsolate = StreamQueue<dynamic>(receivePort);
     // The first message from the spawned isolate is a SendPort. This port is
     // used to communicate with the spawned isolate.
-    final sendPort = await events.next;
+    final sendPort = await messagesFromIsolate.next;
 
     // send three arguments: true if task is download, the task, the filePath
-    sendPort.send([task is DownloadTask, task, filePath]);
+    sendPort.send([task, filePath]);
     // listen for events sent back from the isolate
-    while (await events.hasNext) {
-      final message = await events.next;
+    while (await messagesFromIsolate.hasNext) {
+      final message = await messagesFromIsolate.next;
       if (message == null) {
         // sent when final state has been sent
-        break;
+        receivePort.close();
+      } else {
+        // Pass message on to FileDownloader via [updates]
+        emitUpdate(task, message);
       }
-      // Pass message on to FileDownloader via [updates]
-      emitUpdate(task, message);
     }
-    receivePort.close();
     errorPort.close();
     print("end of events");
   }
 
   void emitUpdate(Task task, dynamic message) =>
-      _updatesStreamController.add([task is DownloadTask, task, message]);
+      _updatesStreamController.add([task, message]);
 
   /// True if this platform is supported by the DesktopDownloader
   bool get supportsThisPlatform =>
@@ -133,8 +133,7 @@ Future<void> doTask(SendPort sendPort) async {
   // get the arguments list and parse
   final args = await commandPort.first as List<dynamic>;
   commandPort.close();
-  final downloadTask = args.first as bool;
-  final task = downloadTask ? args[1] as DownloadTask : args[1] as UploadTask;
+  final task = args.first;
   final filePath = args.last as String;
   Logger.root.level = Level.ALL;
   Logger.root.onRecord.listen((LogRecord rec) {
@@ -175,7 +174,7 @@ Future<void> doDownloadTask(
           .contains(response.statusCode)) {
         try {
           // do the actual download
-          final outStream = File(filePath).openWrite();
+          final outStream = File(tempFileName).openWrite();
           final streamSuccess = Completer<bool>();
           var bytesTotal = 0;
           var lastProgressUpdate = 0.0;
@@ -206,6 +205,11 @@ Future<void> doDownloadTask(
           subscription.cancel();
           outStream.close();
           if (success) {
+            // copy file to destination, creating dirs if needed
+            final dirPath = path.dirname(filePath);
+            Directory(dirPath).createSync(recursive: true);
+            File(tempFileName).copySync(filePath);
+            File(tempFileName).deleteSync();
             processStatusUpdate(task, TaskStatus.complete, sendPort);
             return;
           }
@@ -215,6 +219,10 @@ Future<void> doDownloadTask(
       }
     } catch (e) {
       log.warning(e);
+    } finally {
+      try {
+        File(tempFileName).deleteSync();
+      } catch (e) {}
     }
     // error: retry if allowed, otherwise the task failed
     task.decreaseRetriesRemaining();
@@ -272,7 +280,7 @@ void processStatusUpdate(Task task, TaskStatus status, SendPort sendPort) {
   }
   // Post update if task expects one, or if failed and retry is needed
   if (task.providesStatusUpdates || retryNeeded) {
-    sendPort.send(status.index);
+    sendPort.send(status);
   }
 }
 

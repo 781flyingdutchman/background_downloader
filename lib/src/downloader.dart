@@ -79,16 +79,17 @@ class FileDownloader {
       _desktopDownloaderUpdates = DesktopDownloader().updates.listen(
           (update) {
             final args = update as List;
-            final isDownloadTask = args.first as bool;
-            final task = isDownloadTask ? args[1] as DownloadTask : args[1] as
-              UploadTask;
+            final task = args.first;
             final message = args.last;
-            if (message is int) {
-              _processStatusUpdate(task, TaskStatus.values[message]);
-            }
-            if (message is double) {
+            if (message is TaskStatus) {
+              _processStatusUpdate(task, message);
+            } else if (message is double) {
               _processProgressUpdate(task, message);
+            } else {
+              _log.warning('Received message with unknown type '
+                  '${message.runtimeType} from DesktopDownloader');
             }
+
       });
     }
     if (_updates.hasListener) {
