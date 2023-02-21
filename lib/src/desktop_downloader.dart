@@ -20,7 +20,7 @@ import 'package:http/http.dart' as http;
 final desktopDownloaderSupportsThisPlatform =
     Platform.isMacOS || Platform.isLinux || Platform.isWindows;
 
-const okResponses = [200, 201, 202, 203, 204, 205, 206, 404];
+const okResponses = [200, 201, 202, 203, 204, 205, 206];
 
 /// Implementation of the core download functionality for desktop platforms
 ///
@@ -259,11 +259,6 @@ Future<void> doTask(SendPort sendPort) async {
 Future<void> doDownloadTask(Task task, String filePath, SendPort sendPort,
     StreamQueue messagesToIsolate) async {
   final log = Logger('FileDownloader');
-  var isCanceled = false;
-  messagesToIsolate.next.then((message) {
-    assert(message == 'cancel', 'Only accept "cancel" messages');
-    isCanceled = true;
-  });
   final client = DesktopDownloader.httpClient;
   final tempFileName = Random().nextInt(1 << 32).toString();
   var request = task.post == null
@@ -273,71 +268,44 @@ Future<void> doDownloadTask(Task task, String filePath, SendPort sendPort,
   if (task.post is String) {
     request.body = task.post!;
   }
+  var resultStatus = TaskStatus.failed;
   try {
     final response = await client.send(request);
     final contentLength = response.contentLength ?? -1;
     if (okResponses.contains(response.statusCode)) {
+      IOSink? outStream;
       try {
         // do the actual download
-        final outStream = File(tempFileName).openWrite();
-        final streamOutcome = Completer<TaskStatus>();
-        var bytesTotal = 0;
-        var lastProgressUpdate = 0.0;
-        var nextProgressUpdateTime = DateTime.fromMillisecondsSinceEpoch(0);
-        late StreamSubscription<List<int>> subscription;
-        subscription = response.stream.listen(
-            (bytes) {
-              if (isCanceled) {
-                processStatusUpdate(task, TaskStatus.canceled, sendPort);
-                outStream.close();
-                File(tempFileName).deleteSync();
-                subscription.cancel();
-                return;
-              }
-              outStream.add(bytes);
-              bytesTotal += bytes.length;
-              final progress =
-                  min(bytesTotal.toDouble() / contentLength, 0.999);
-              final now = DateTime.now();
-              if (contentLength > 0 &&
-                  (bytesTotal < 10000 ||
-                      (progress - lastProgressUpdate > 0.02 &&
-                          now.isAfter(nextProgressUpdateTime)))) {
-                processProgressUpdate(task, progress, sendPort);
-                lastProgressUpdate = progress;
-                nextProgressUpdateTime =
-                    now.add(const Duration(milliseconds: 500));
-              }
-            },
-            onDone: () => streamOutcome.complete(TaskStatus.complete),
-            onError: (e) {
-              log.warning('Error downloading taskId ${task.taskId}: $e');
-              streamOutcome.complete(TaskStatus.failed);
-            });
-        final success = await streamOutcome.future;
-        subscription.cancel();
-        outStream.close();
-        if (success == TaskStatus.complete) {
+        outStream = File(tempFileName).openWrite();
+        final transferBytesResult = await transferBytes(response.stream, outStream,
+            contentLength, task, sendPort, messagesToIsolate);
+        if (transferBytesResult == TaskStatus.complete) {
           // copy file to destination, creating dirs if needed
           final dirPath = path.dirname(filePath);
           Directory(dirPath).createSync(recursive: true);
-          File(tempFileName).copySync(filePath);
-          File(tempFileName).deleteSync();
-          processStatusUpdate(task, TaskStatus.complete, sendPort);
-          return;
+          await File(tempFileName).copy(filePath);
+        }
+        if ([TaskStatus.complete, TaskStatus.canceled].contains(transferBytesResult)) {
+          resultStatus = transferBytesResult;
         }
       } on FileSystemException catch (e) {
         log.warning(e);
+      } finally {
+        try {
+          outStream?.close();
+          File(tempFileName).deleteSync();
+        } catch (e) {}
+      }
+    } else {
+      // not an OK response
+      if (response.statusCode == 404) {
+        resultStatus = TaskStatus.notFound;
       }
     }
   } catch (e) {
     log.warning(e);
-  } finally {
-    try {
-      File(tempFileName).deleteSync();
-    } catch (e) {}
   }
-  processStatusUpdate(task, TaskStatus.failed, sendPort);
+  processStatusUpdate(task, resultStatus, sendPort);
 }
 
 Future<void> doUploadTask(Task task, String filePath, SendPort sendPort,
@@ -388,11 +356,11 @@ Future<void> doUploadTask(Task task, String filePath, SendPort sendPort,
     }
     // initiate the request and handle completion async
     final requestCompleter = Completer();
-    var result = TaskStatus.failed; // set below .then statement
+    var result = TaskStatus.failed; // additionally set below .then statement
     client.send(request).then((response) {
       // request completed, so send status update and finish
       var resultToSend = result == TaskStatus.complete &&
-          !okResponses.contains(response.statusCode)
+              !okResponses.contains(response.statusCode)
           ? TaskStatus.failed
           : result;
       if (response.statusCode == 404) {
@@ -403,8 +371,8 @@ Future<void> doUploadTask(Task task, String filePath, SendPort sendPort,
     });
     // send the bytes to the request sink
     final inStream = inFile.openRead();
-    result = await transferBytes(inStream, request.sink, contentLength,
-        task, sendPort, messagesToIsolate);
+    result = await transferBytes(inStream, request.sink, contentLength, task,
+        sendPort, messagesToIsolate);
     if (!isBinaryUpload && result == TaskStatus.complete) {
       // write epilogue
       request.sink.add(utf8.encode('$lineFeed--$boundary--$lineFeed'));
@@ -424,21 +392,24 @@ Future<TaskStatus> transferBytes(
     SendPort sendPort,
     StreamQueue messagesToIsolate) async {
   final log = Logger('FileDownloader');
+  if (contentLength == 0) {
+    contentLength = -1;
+  }
   var isCanceled = false;
   messagesToIsolate.next.then((message) {
     assert(message == 'cancel', 'Only accept "cancel" messages');
     isCanceled = true;
   });
-  final streamOutcome = Completer<TaskStatus>();
+  final streamResultStatus = Completer<TaskStatus>();
   var bytesTotal = 0;
   var lastProgressUpdate = 0.0;
   var nextProgressUpdateTime = DateTime.fromMillisecondsSinceEpoch(0);
   late StreamSubscription<List<int>> subscription;
   subscription = inStream.listen(
-      (bytes) {
+      (bytes) async {
         if (isCanceled) {
-          subscription.cancel();
-          streamOutcome.complete(TaskStatus.canceled);
+          streamResultStatus.complete(TaskStatus.canceled);
+          return;
         }
         outStream.add(bytes);
         bytesTotal += bytes.length;
@@ -453,14 +424,14 @@ Future<TaskStatus> transferBytes(
           nextProgressUpdateTime = now.add(const Duration(milliseconds: 500));
         }
       },
-      onDone: () => streamOutcome.complete(TaskStatus.complete),
+      onDone: () => streamResultStatus.complete(TaskStatus.complete),
       onError: (e) {
         log.warning('Error downloading taskId ${task.taskId}: $e');
-        streamOutcome.complete(TaskStatus.failed);
+        streamResultStatus.complete(TaskStatus.failed);
       });
-  final success = await streamOutcome.future;
-  subscription.cancel();
-  return success;
+  final resultStatus = await streamResultStatus.future;
+  await subscription.cancel();
+  return resultStatus;
 }
 
 /// Processes a change in status for the [task]

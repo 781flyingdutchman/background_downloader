@@ -37,6 +37,7 @@ const uploadBinaryTestUrl =
     'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_upload_binary_file';
 
 const defaultFilename = 'google.html';
+const postFilename = 'post.txt';
 const uploadFilename = 'a_file.txt';
 
 var task = DownloadTask(url: workingUrl, filename: defaultFilename);
@@ -364,6 +365,21 @@ void main() {
       await statusCallbackCompleter.future;
       // on iOS, the quick cancellation may not yield a 'running' state
       expect(statusCallbackCounter, lessThanOrEqualTo(3));
+      expect(lastStatus, equals(TaskStatus.canceled));
+      // now do the same for a longer running task, and cancel 0.5 seconds in
+      statusCallbackCounter = 0;
+      statusCallbackCompleter = Completer();
+      task = DownloadTask(
+          url: urlWithContentLength,
+          filename: defaultFilename);
+      expect(await FileDownloader.enqueue(task), isTrue);
+      await Future.delayed(const Duration(milliseconds: 500));
+      taskIds = await FileDownloader.allTaskIds();
+      expect(taskIds.length, equals(1));
+      expect(taskIds.first, equals(task.taskId));
+      expect(await FileDownloader.cancelTasksWithIds(taskIds), isTrue);
+      await statusCallbackCompleter.future;
+      expect(statusCallbackCounter, equals(3));
       expect(lastStatus, equals(TaskStatus.canceled));
       print('Finished cancelTasksWithIds');
     });
@@ -824,7 +840,7 @@ void main() {
       final task = DownloadTask(
           url: postTestUrl,
           urlQueryParameters: {'request-type': 'post-empty'},
-          filename: defaultFilename,
+          filename: postFilename,
           headers: {'Header1': 'headerValue1'},
           post: '');
       final path =
@@ -838,13 +854,12 @@ void main() {
       expect(result['json'], isNull);
     });
 
-    testWidgets('post DownloadTask with post is String',
-        (widgetTester) async {
+    testWidgets('post DownloadTask with post is String', (widgetTester) async {
       FileDownloader.initialize();
       final task = DownloadTask(
           url: postTestUrl,
           urlQueryParameters: {'request-type': 'post-String'},
-          filename: defaultFilename,
+          filename: postFilename,
           headers: {'content-type': 'text/plain'},
           post: 'testPost');
       final path =
@@ -865,7 +880,7 @@ void main() {
       final task = DownloadTask(
           url: postTestUrl,
           urlQueryParameters: {'request-type': 'post-Uint8List'},
-          filename: defaultFilename,
+          filename: postFilename,
           headers: {'Content-Type': 'application/octet-stream'},
           post: Uint8List.fromList('testPost'.codeUnits));
       final path =
@@ -887,7 +902,7 @@ void main() {
       final task = DownloadTask(
           url: postTestUrl,
           urlQueryParameters: {'request-type': 'post-json'},
-          filename: defaultFilename,
+          filename: postFilename,
           headers: {
             'Header1': 'headerValue1',
             'content-type': 'application/json'
@@ -911,7 +926,7 @@ void main() {
           () => DownloadTask(
               url: postTestUrl,
               urlQueryParameters: {'request-type': 'invalid'},
-              filename: defaultFilename,
+              filename: postFilename,
               headers: {'Header1': 'headerValue1'},
               post: {'invalid': 'map'}),
           throwsA(isA<TypeError>()));
