@@ -211,7 +211,7 @@ If you listen to the `updates` stream instead of using callbacks, you can test f
 
 ## Server requests
 
-To make a regular server request (e.g. to obtain a response from an API end point that you process directly in your app) use the `request` method.  It works similar to the `download` method, except you pass a `Request` object that has fewer fields than the `DownloadTask`, but is similar in structure.  You `await` the response, which will be a `Resonse` object as defined in the dart `http` package, and includes getters for the response body (as a `String` or as `UInt8List`), `statusCode` and `reasonPhrase`.
+To make a regular server request (e.g. to obtain a response from an API end point that you process directly in your app) use the `request` method.  It works similar to the `download` method, except you pass a `Request` object that has fewer fields than the `DownloadTask`, but is similar in structure.  You `await` the response, which will be a `Resonse` object as defined in the dart `http` package, and includes getters for the response body (as a `String` or as `UInt8List`), `statusCode` and `reasonPhrase`.  If the request requires a special HTTP `Client` then set the `FileDownloader.httpClient` to your desired client ahead of your first request.
 
 Because requests are meant to be immediate, they are not enqueued like a `Task` is, do not allow for status/progress monitoring, and will not execute in the background.
 
