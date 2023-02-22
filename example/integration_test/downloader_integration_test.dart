@@ -300,7 +300,7 @@ void main() {
       await progressCallbackCompleter.future;
       expect(progressCallbackCounter, greaterThan(1));
       expect(File(path).existsSync(), isTrue);
-      subscription.cancel();
+      await subscription.cancel();
     });
 
     testWidgets('enqueue with redirect', (widgetTester) async {
