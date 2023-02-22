@@ -238,7 +238,6 @@ Future<void> doTask(SendPort sendPort) async {
       print('${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
     }
   });
-  FileDownloader.httpClient ??= http.Client();
   processStatusUpdate(task, TaskStatus.running, sendPort);
   processProgressUpdate(task, 0.0, sendPort);
   if (task.retriesRemaining < 0) {
