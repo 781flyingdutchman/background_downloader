@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -194,6 +193,11 @@ class Request {
   }
 }
 
+/// RegEx to match a path separator
+final _pathSeparator = RegExp(r'[/\\]');
+final _startsWithPathSeparator = RegExp(r'^[/\\]');
+
+
 /// Information related to a [Task]
 ///
 /// A [Task] is the base class for [DownloadTask] and
@@ -267,10 +271,10 @@ abstract class Task extends Request {
     if (filename?.isEmpty == true) {
       throw ArgumentError('Filename cannot be empty');
     }
-    if (filename?.contains(Platform.pathSeparator) == true) {
+    if (_pathSeparator.hasMatch(this.filename)) {
       throw ArgumentError('Filename cannot contain path separators');
     }
-    if (directory.startsWith(Platform.pathSeparator)) {
+    if (_startsWithPathSeparator.hasMatch(directory)) {
       throw ArgumentError(
           'Directory must be relative to the baseDirectory specified in the baseDirectory argument');
     }
