@@ -20,7 +20,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     private var channel: MethodChannel? = null
 
     companion object {
-        const val TAG = "BackgroundDownloaderPlugin"
+        const val TAG = "BackgroundDownloader"
         const val keyTasksMap = "com.bbflight.background_downloader.taskMap"
         var backgroundChannel: MethodChannel? = null
         var backgroundChannelCounter = 0  // reference counter

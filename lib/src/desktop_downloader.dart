@@ -92,24 +92,20 @@ class DesktopDownloader {
         break;
     }
     final filePath = path.join(baseDir.path, task.directory, task.filename);
-    final tempFilePath = path.join((await getTemporaryDirectory()).path, Random().nextInt(1 << 32).toString());
+    final tempFilePath = path.join((await getTemporaryDirectory()).path,
+        Random().nextInt(1 << 32).toString());
     // spawn an isolate to do the task
     final receivePort = ReceivePort();
     final errorPort = ReceivePort();
     errorPort.listen((message) {
       final error = (message as List).first as String;
-      log.info('Error for taskId ${task.taskId}: $error');
+      logError(task, error);
       _emitUpdate(task, TaskStatus.failed);
       receivePort.close(); // also ends listener at then end
     });
     await Isolate.spawn(doTask, receivePort.sendPort,
         onError: errorPort.sendPort);
-    // Convert the ReceivePort into a StreamQueue to receive messages from the
-    // spawned isolate using a pull-based interface. Events are stored in this
-    // queue until they are accessed by `events.next`.
     final messagesFromIsolate = StreamQueue<dynamic>(receivePort);
-    // The first message from the spawned isolate is a SendPort. This port is
-    // used to communicate with the spawned isolate.
     final sendPort = await messagesFromIsolate.next;
     sendPort.send([task, filePath, tempFilePath]);
     if (_isolateSendPorts.keys.contains(task)) {
@@ -159,7 +155,9 @@ class DesktopDownloader {
   ///
   /// Returns true if all cancellations were successful
   bool cancelTasksWithIds(List<String> taskIds) {
-    final inQueue = _queue.where((task) => taskIds.contains(task.taskId));
+    final inQueue = _queue
+        .where((task) => taskIds.contains(task.taskId))
+        .toList(growable: false);
     for (final task in inQueue) {
       _emitUpdate(task, TaskStatus.canceled);
       _remove(task);
@@ -171,7 +169,8 @@ class DesktopDownloader {
         sendPort.send('cancel');
         _isolateSendPorts.remove(task);
       } else {
-        // register task for cancellation even if sendPort does not yet exist
+        // register task for cancellation even if sendPort does not yet exist:
+        // this will lead to immediate cancellation when the Isolate starts
         _isolateSendPorts[task] = null;
       }
     }
@@ -181,10 +180,10 @@ class DesktopDownloader {
   /// Returns Task for this taskId, or nil
   Task? taskForId(String taskId) {
     try {
-      return _queue.where((task) => task.taskId == taskId).first;
+      return _running.where((task) => task.taskId == taskId).first;
     } on StateError {
       try {
-        return _running.where((task) => task.taskId == taskId).first;
+        return _queue.where((task) => task.taskId == taskId).first;
       } on StateError {
         return null;
       }
@@ -243,12 +242,12 @@ Future<void> doTask(SendPort sendPort) async {
   processStatusUpdate(task, TaskStatus.running, sendPort);
   processProgressUpdate(task, 0.0, sendPort);
   if (task.retriesRemaining < 0) {
-    Logger('FileDownloader').warning(
-        'Task with taskId ${task.taskId} has negative retries remaining');
+    logError(task, 'task has negative retries remaining');
     processStatusUpdate(task, TaskStatus.failed, sendPort);
   } else {
     if (task is DownloadTask) {
-      await doDownloadTask(task, filePath, tempFilePath, sendPort, messagesToIsolate);
+      await doDownloadTask(
+          task, filePath, tempFilePath, sendPort, messagesToIsolate);
     } else {
       await doUploadTask(task, filePath, sendPort, messagesToIsolate);
     }
@@ -257,9 +256,8 @@ Future<void> doTask(SendPort sendPort) async {
   Isolate.exit();
 }
 
-Future<void> doDownloadTask(Task task, String filePath, String tempFilePath, SendPort sendPort,
-    StreamQueue messagesToIsolate) async {
-  final log = Logger('FileDownloader');
+Future<void> doDownloadTask(Task task, String filePath, String tempFilePath,
+    SendPort sendPort, StreamQueue messagesToIsolate) async {
   final client = DesktopDownloader.httpClient;
   var request = task.post == null
       ? http.Request('GET', Uri.parse(task.url))
@@ -277,8 +275,8 @@ Future<void> doDownloadTask(Task task, String filePath, String tempFilePath, Sen
       try {
         // do the actual download
         outStream = File(tempFilePath).openWrite();
-        final transferBytesResult = await transferBytes(response.stream, outStream,
-            contentLength, task, sendPort, messagesToIsolate);
+        final transferBytesResult = await transferBytes(response.stream,
+            outStream, contentLength, task, sendPort, messagesToIsolate);
         if (transferBytesResult == TaskStatus.complete) {
           // copy file to destination, creating dirs if needed
           await outStream.flush();
@@ -286,17 +284,18 @@ Future<void> doDownloadTask(Task task, String filePath, String tempFilePath, Sen
           Directory(dirPath).createSync(recursive: true);
           File(tempFilePath).copySync(filePath);
         }
-        if ([TaskStatus.complete, TaskStatus.canceled].contains(transferBytesResult)) {
+        if ([TaskStatus.complete, TaskStatus.canceled]
+            .contains(transferBytesResult)) {
           resultStatus = transferBytesResult;
         }
       } catch (e) {
-        log.warning(e);
+        logError(task, e.toString());
       } finally {
         try {
           await outStream?.close();
           File(tempFilePath).deleteSync();
         } catch (e) {
-          Logger('FileDownloader').finest('Could not delete temp file $tempFilePath');
+          logError(task, 'Could not delete temp file $tempFilePath');
         }
       }
     } else {
@@ -306,18 +305,16 @@ Future<void> doDownloadTask(Task task, String filePath, String tempFilePath, Sen
       }
     }
   } catch (e) {
-    log.warning(e);
+    logError(task, e.toString());
   }
   processStatusUpdate(task, resultStatus, sendPort);
 }
 
 Future<void> doUploadTask(Task task, String filePath, SendPort sendPort,
     StreamQueue messagesToIsolate) async {
-  final log = Logger('FileDownloader');
   final inFile = File(filePath);
   if (!inFile.existsSync()) {
-    log.warning(
-        'TaskId ${task.taskId} file to upload does not exist: $filePath');
+    logError(task, 'file to upload does not exist: $filePath');
     processStatusUpdate(task, TaskStatus.failed, sendPort);
     return;
   }
@@ -359,29 +356,30 @@ Future<void> doUploadTask(Task task, String filePath, SendPort sendPort,
     }
     // initiate the request and handle completion async
     final requestCompleter = Completer();
-    var result = TaskStatus.failed; // additionally set below .then statement
+    var resultStatus = TaskStatus.failed;
+    var transferBytesResult = TaskStatus.failed;
     client.send(request).then((response) {
       // request completed, so send status update and finish
-      var resultToSend = result == TaskStatus.complete &&
+      resultStatus = transferBytesResult == TaskStatus.complete &&
               !okResponses.contains(response.statusCode)
           ? TaskStatus.failed
-          : result;
+          : transferBytesResult;
       if (response.statusCode == 404) {
-        resultToSend = TaskStatus.notFound;
+        resultStatus = TaskStatus.notFound;
       }
-      processStatusUpdate(task, resultToSend, sendPort);
       requestCompleter.complete();
     });
     // send the bytes to the request sink
     final inStream = inFile.openRead();
-    result = await transferBytes(inStream, request.sink, contentLength, task,
-        sendPort, messagesToIsolate);
-    if (!isBinaryUpload && result == TaskStatus.complete) {
+    transferBytesResult = await transferBytes(inStream, request.sink,
+        contentLength, task, sendPort, messagesToIsolate);
+    if (!isBinaryUpload && transferBytesResult == TaskStatus.complete) {
       // write epilogue
       request.sink.add(utf8.encode('$lineFeed--$boundary--$lineFeed'));
     }
     request.sink.close(); // triggers request completion, handled above
     await requestCompleter.future; // wait for request to complete
+    processStatusUpdate(task, resultStatus, sendPort);
   } catch (e) {
     processStatusUpdate(task, TaskStatus.failed, sendPort);
   }
@@ -394,7 +392,6 @@ Future<TaskStatus> transferBytes(
     Task task,
     SendPort sendPort,
     StreamQueue messagesToIsolate) async {
-  final log = Logger('FileDownloader');
   if (contentLength == 0) {
     contentLength = -1;
   }
@@ -429,7 +426,7 @@ Future<TaskStatus> transferBytes(
       },
       onDone: () => streamResultStatus.complete(TaskStatus.complete),
       onError: (e) {
-        log.warning('Error downloading taskId ${task.taskId}: $e');
+        logError(task, e);
         streamResultStatus.complete(TaskStatus.failed);
       });
   final resultStatus = await streamResultStatus.future;
@@ -488,4 +485,11 @@ void processProgressUpdate(Task task, double progress, SendPort sendPort) {
   if (task.providesProgressUpdates) {
     sendPort.send(progress);
   }
+}
+
+final _log = Logger('FileDownloader');
+
+/// Log an error for this task
+void logError(Task task, String error) {
+  _log.fine('Error for taskId ${task.taskId}: $error');
 }
