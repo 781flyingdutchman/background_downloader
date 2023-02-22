@@ -92,6 +92,7 @@ class DesktopDownloader {
         break;
     }
     final filePath = path.join(baseDir.path, task.directory, task.filename);
+    final tempFilePath = path.join((await getTemporaryDirectory()).path, Random().nextInt(1 << 32).toString());
     // spawn an isolate to do the task
     final receivePort = ReceivePort();
     final errorPort = ReceivePort();
@@ -110,7 +111,7 @@ class DesktopDownloader {
     // The first message from the spawned isolate is a SendPort. This port is
     // used to communicate with the spawned isolate.
     final sendPort = await messagesFromIsolate.next;
-    sendPort.send([task, filePath]);
+    sendPort.send([task, filePath, tempFilePath]);
     if (_isolateSendPorts.keys.contains(task)) {
       // if already registered with null value, cancel immediately
       sendPort.send('cancel');
@@ -228,10 +229,11 @@ Future<void> doTask(SendPort sendPort) async {
   // send the command port back to the main Isolate
   sendPort.send(commandPort.sendPort);
   final messagesToIsolate = StreamQueue<dynamic>(commandPort);
-  // get the arguments list and parse
+  // get the arguments list and parse each argument
   final args = await messagesToIsolate.next as List<dynamic>;
   final task = args.first;
-  final filePath = args.last as String;
+  final filePath = args[1];
+  final tempFilePath = args.last;
   Logger.root.level = Level.ALL;
   Logger.root.onRecord.listen((LogRecord rec) {
     if (kDebugMode) {
@@ -246,7 +248,7 @@ Future<void> doTask(SendPort sendPort) async {
     processStatusUpdate(task, TaskStatus.failed, sendPort);
   } else {
     if (task is DownloadTask) {
-      await doDownloadTask(task, filePath, sendPort, messagesToIsolate);
+      await doDownloadTask(task, filePath, tempFilePath, sendPort, messagesToIsolate);
     } else {
       await doUploadTask(task, filePath, sendPort, messagesToIsolate);
     }
@@ -255,11 +257,10 @@ Future<void> doTask(SendPort sendPort) async {
   Isolate.exit();
 }
 
-Future<void> doDownloadTask(Task task, String filePath, SendPort sendPort,
+Future<void> doDownloadTask(Task task, String filePath, String tempFilePath, SendPort sendPort,
     StreamQueue messagesToIsolate) async {
   final log = Logger('FileDownloader');
   final client = DesktopDownloader.httpClient;
-  final tempFileName = Random().nextInt(1 << 32).toString();
   var request = task.post == null
       ? http.Request('GET', Uri.parse(task.url))
       : http.Request('POST', Uri.parse(task.url));
@@ -275,25 +276,28 @@ Future<void> doDownloadTask(Task task, String filePath, SendPort sendPort,
       IOSink? outStream;
       try {
         // do the actual download
-        outStream = File(tempFileName).openWrite();
+        outStream = File(tempFilePath).openWrite();
         final transferBytesResult = await transferBytes(response.stream, outStream,
             contentLength, task, sendPort, messagesToIsolate);
         if (transferBytesResult == TaskStatus.complete) {
           // copy file to destination, creating dirs if needed
+          await outStream.flush();
           final dirPath = path.dirname(filePath);
           Directory(dirPath).createSync(recursive: true);
-          await File(tempFileName).copy(filePath);
+          File(tempFilePath).copySync(filePath);
         }
         if ([TaskStatus.complete, TaskStatus.canceled].contains(transferBytesResult)) {
           resultStatus = transferBytesResult;
         }
-      } on FileSystemException catch (e) {
+      } catch (e) {
         log.warning(e);
       } finally {
         try {
-          outStream?.close();
-          File(tempFileName).deleteSync();
-        } catch (e) {}
+          await outStream?.close();
+          File(tempFilePath).deleteSync();
+        } catch (e) {
+          Logger('FileDownloader').finest('Could not delete temp file $tempFilePath');
+        }
       }
     } else {
       // not an OK response
