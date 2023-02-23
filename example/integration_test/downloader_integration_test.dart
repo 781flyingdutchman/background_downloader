@@ -97,7 +97,7 @@ void main() {
     final path =
         join((await getApplicationDocumentsDirectory()).path, task.filename);
     try {
-      File(path).deleteSync(recursive: true);
+      File(path).deleteSync();
     } on FileSystemException {}
   });
 
@@ -106,20 +106,7 @@ void main() {
   });
 
   group('Initialization', () {
-    test('initialize', () {
-      // confirm asserts work
-      expect(() => FileDownloader().registerCallbacks(), throwsAssertionError);
-      expect(() => FileDownloader().enqueue(task), throwsAssertionError);
-      expect(() => FileDownloader().allTaskIds(), throwsAssertionError);
-      expect(() => FileDownloader().allTasks(), throwsAssertionError);
-      expect(() => FileDownloader().reset(), throwsAssertionError);
-      // now initialize
-      FileDownloader().initialize();
-      expect(FileDownloader().initialized, isTrue);
-    });
-
     test('registerCallbacks', () {
-      FileDownloader().initialize();
       expect(() => FileDownloader().registerCallbacks(), throwsAssertionError);
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       FileDownloader().registerCallbacks(
@@ -169,7 +156,7 @@ void main() {
     });
 
     testWidgets('enqueue with progress', (widgetTester) async {
-      FileDownloader().initialize(
+      FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
       expect(await FileDownloader().enqueue(task), isTrue);
@@ -211,13 +198,13 @@ void main() {
 
     testWidgets('enqueue with non-default group callbacks',
         (widgetTester) async {
-      FileDownloader().initialize(
+      FileDownloader().registerCallbacks(
           group: 'test', taskStatusCallback: statusCallback);
       // enqueue task with 'default' group, so no status updates should come
       var path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
       try {
-        File(path).deleteSync(recursive: true);
+        File(path).deleteSync();
       } on FileSystemException {}
       expect(await FileDownloader().enqueue(task), isTrue);
       await Future.delayed(const Duration(seconds: 3)); // can't know for sure!
@@ -229,17 +216,16 @@ void main() {
 
     testWidgets('enqueue with event listener for status updates',
         (widgetTester) async {
-      FileDownloader().initialize();
       final path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
       try {
-        File(path).deleteSync(recursive: true);
+        File(path).deleteSync();
       } on FileSystemException {}
       expect(await FileDownloader().enqueue(task), isTrue);
       await Future.delayed(const Duration(seconds: 3)); // can't know for sure!
       expect(File(path).existsSync(), isTrue); // file still downloads
       try {
-        File(path).deleteSync(recursive: true);
+        File(path).deleteSync();
       } on FileSystemException {}
       print(
           'Check log output -> should have warned that there is no callback or listener');
@@ -260,7 +246,7 @@ void main() {
 
     testWidgets('enqueue with event listener and callback for status updates',
         (widgetTester) async {
-      FileDownloader().initialize(taskStatusCallback: statusCallback);
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       final path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
       // Register listener. Because we also have a callback registered, no
@@ -285,7 +271,6 @@ void main() {
               'https://storage.googleapis.com/approachcharts/test/5MB-test.ZIP',
           filename: defaultFilename,
           updates: Updates.progress);
-      FileDownloader().initialize();
       final path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
       // Register listener. For testing convenience, we simply route the event
@@ -307,7 +292,7 @@ void main() {
       task = DownloadTask(url: getRedirectTestUrl, filename: defaultFilename);
       final path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
-      FileDownloader().initialize(taskStatusCallback: statusCallback);
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(task), isTrue);
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.complete));
@@ -320,7 +305,7 @@ void main() {
 
   group('Queue and task management', () {
     testWidgets('reset', (widgetTester) async {
-      FileDownloader().initialize(taskStatusCallback: statusCallback);
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(task), isTrue);
       expect(await FileDownloader().reset(group: 'non-default'), equals(0));
       expect(await FileDownloader().reset(), equals(1));
@@ -332,7 +317,7 @@ void main() {
     });
 
     testWidgets('allTaskIds', (widgetTester) async {
-      FileDownloader().initialize(taskStatusCallback: statusCallback);
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(task), isTrue);
       expect(await FileDownloader().allTaskIds(group: 'non-default'), isEmpty);
       expect((await FileDownloader().allTaskIds()).length, equals(1));
@@ -343,7 +328,7 @@ void main() {
     });
 
     testWidgets('allTasks', (widgetTester) async {
-      FileDownloader().initialize(taskStatusCallback: statusCallback);
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(task), isTrue);
       expect(await FileDownloader().allTasks(group: 'non-default'), isEmpty);
       final tasks = await FileDownloader().allTasks();
@@ -356,7 +341,7 @@ void main() {
     });
 
     testWidgets('cancelTasksWithIds', (widgetTester) async {
-      FileDownloader().initialize(taskStatusCallback: statusCallback);
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(task), isTrue);
       var taskIds = await FileDownloader().allTaskIds();
       expect(taskIds.length, equals(1));
@@ -391,7 +376,7 @@ void main() {
           headers: {'Auth': 'Test'},
           directory: 'directory',
           metaData: 'someMetaData');
-      FileDownloader().initialize(taskStatusCallback: statusCallback);
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().taskForId('something'), isNull);
       expect(await FileDownloader().enqueue(complexTask), isTrue);
       expect(await FileDownloader().taskForId('something'), isNull);
@@ -417,7 +402,7 @@ void main() {
           requiresWiFi: true,
           retries: 5,
           metaData: 'someMetaData');
-      FileDownloader().initialize(
+      FileDownloader().registerCallbacks(
           group: complexTask.group, taskStatusCallback: statusCallback);
       expect(await FileDownloader().taskForId(complexTask.taskId), isNull);
       expect(await FileDownloader().enqueue(complexTask), isTrue);
@@ -487,7 +472,6 @@ void main() {
 
   group('Convenience downloads', () {
     testWidgets('download with await', (widgetTester) async {
-      FileDownloader().initialize();
       var path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
       var exists = await File(path).exists();
@@ -502,7 +486,6 @@ void main() {
     });
 
     testWidgets('multiple download with futures', (widgetTester) async {
-      FileDownloader().initialize();
       final secondTask =
           task.copyWith(taskId: 'secondTask', filename: 'second.html');
       var path =
@@ -537,7 +520,6 @@ void main() {
     });
 
     testWidgets('batch download', (widgetTester) async {
-      FileDownloader().initialize();
       final tasks = <DownloadTask>[];
       final docDir = (await getApplicationDocumentsDirectory()).path;
       for (int n = 0; n < 3; n++) {
@@ -583,7 +565,6 @@ void main() {
     });
 
     testWidgets('batch download with callback', (widgetTester) async {
-      FileDownloader().initialize();
       final tasks = <DownloadTask>[];
       final docDir = (await getApplicationDocumentsDirectory()).path;
       for (int n = 0; n < 3; n++) {
@@ -599,14 +580,14 @@ void main() {
       }
       var numSucceeded = 0;
       var numFailed = 0;
-      var numcalled = 0;
+      var numCalled = 0;
       await FileDownloader().downloadBatch(tasks, (succeeded, failed) {
         print('Succeeded: $succeeded, failed: $failed');
-        numcalled++;
+        numCalled++;
         numSucceeded = succeeded;
         numFailed = failed;
       });
-      expect(numcalled, equals(4)); // also called with 0, 0 at start
+      expect(numCalled, equals(4)); // also called with 0, 0 at start
       expect(numSucceeded, equals(2));
       expect(numFailed, equals(1));
 
@@ -622,7 +603,6 @@ void main() {
     });
 
     testWidgets('convenience download with callbacks', (widgetTester) async {
-      FileDownloader().initialize();
       var result = await FileDownloader().download(task,
           onStatus: (status) => statusCallback(task, status));
       expect(result, equals(TaskStatus.complete));
@@ -647,7 +627,6 @@ void main() {
 
     testWidgets('parallel convenience downloads with callbacks',
         (widgetTester) async {
-      FileDownloader().initialize();
       var a = 0, b = 0, c = 0;
       var p1 = 0.0, p2 = 0.0, p3 = 0.0;
       final failTask =
@@ -687,7 +666,6 @@ void main() {
 
     testWidgets('simple parallel convenience downloads with callbacks',
         (widgetTester) async {
-      FileDownloader().initialize();
       final failTask =
           DownloadTask(url: failingUrl, filename: defaultFilename, retries: 2);
       var failingResult = FileDownloader().download(failTask,
@@ -704,7 +682,7 @@ void main() {
 
   group('Retries', () {
     testWidgets('basic retry logic', (widgetTester) async {
-      FileDownloader().initialize(taskStatusCallback: statusCallback);
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(retryTask.retriesRemaining, equals(retryTask.retries));
       expect(await FileDownloader().enqueue(retryTask), isTrue);
       await Future.delayed(const Duration(seconds: 4));
@@ -720,7 +698,7 @@ void main() {
     });
 
     testWidgets('basic with progress updates', (widgetTester) async {
-      FileDownloader().initialize(
+      FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
       final retryTaskWithProgress =
@@ -741,7 +719,7 @@ void main() {
     });
 
     testWidgets('retry with cancellation', (widgetTester) async {
-      FileDownloader().initialize(taskStatusCallback: statusCallback);
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(retryTask), isTrue);
       await Future.delayed(const Duration(seconds: 6));
       final retriedTask = await FileDownloader().taskForId(retryTask.taskId);
@@ -763,7 +741,7 @@ void main() {
 
     testWidgets('retry progress updates with cancellation',
         (widgetTester) async {
-      FileDownloader().initialize(
+      FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
       final retryTaskWithProgress =
@@ -793,7 +771,7 @@ void main() {
 
     testWidgets('queue management: allTasks with retries',
         (widgetTester) async {
-      FileDownloader().initialize(taskStatusCallback: statusCallback);
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(retryTask), isTrue);
       expect(await FileDownloader().enqueue(task), isTrue);
       final allTasks = await FileDownloader().allTasks();
@@ -818,7 +796,7 @@ void main() {
 
     testWidgets('queue management: taskForId with retries',
         (widgetTester) async {
-      FileDownloader().initialize(taskStatusCallback: statusCallback);
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(retryTask), isTrue);
       expect(await FileDownloader().enqueue(task), isTrue); // regular task
       expect(
@@ -836,7 +814,6 @@ void main() {
   group('downloadTask with POST request', () {
     testWidgets('post DownloadTask with post is empty body',
         (widgetTester) async {
-      FileDownloader().initialize();
       final task = DownloadTask(
           url: postTestUrl,
           urlQueryParameters: {'request-type': 'post-empty'},
@@ -855,7 +832,6 @@ void main() {
     });
 
     testWidgets('post DownloadTask with post is String', (widgetTester) async {
-      FileDownloader().initialize();
       final task = DownloadTask(
           url: postTestUrl,
           urlQueryParameters: {'request-type': 'post-String'},
@@ -876,7 +852,6 @@ void main() {
 
     testWidgets('post DownloadTask with post is Uint8List',
         (widgetTester) async {
-      FileDownloader().initialize();
       final task = DownloadTask(
           url: postTestUrl,
           urlQueryParameters: {'request-type': 'post-Uint8List'},
@@ -898,7 +873,6 @@ void main() {
 
     testWidgets('post DownloadTask with post is JsonString',
         (widgetTester) async {
-      FileDownloader().initialize();
       final task = DownloadTask(
           url: postTestUrl,
           urlQueryParameters: {'request-type': 'post-json'},
@@ -1056,7 +1030,7 @@ void main() {
 
   group('Basic upload', () {
     testWidgets('enqueue multipart file', (widgetTester) async {
-      FileDownloader().initialize(
+      FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
       expect(
@@ -1072,7 +1046,7 @@ void main() {
     });
 
     testWidgets('enqueue w/o file', (widgetTester) async {
-      FileDownloader().initialize(
+      FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
       // try the binary upload to a multipart endpoint
@@ -1088,7 +1062,7 @@ void main() {
     });
 
     testWidgets('enqueue binary file', (widgetTester) async {
-      FileDownloader().initialize(
+      FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
       final task = uploadTask.copyWith(
@@ -1107,13 +1081,11 @@ void main() {
 
   group('Convenience uploads', () {
     testWidgets('upload with await', (widgetTester) async {
-      FileDownloader().initialize();
       final status = await FileDownloader().upload(uploadTask);
       expect(status, equals(TaskStatus.complete));
     });
 
     testWidgets('multiple upload with futures', (widgetTester) async {
-      FileDownloader().initialize();
       final secondTask = uploadTask.copyWith(taskId: 'secondTask');
       // note that using a Future (without await) is unusual and is done here
       // just for testing.  Normal use would be
@@ -1127,7 +1099,6 @@ void main() {
     });
 
     testWidgets('batch upload', (widgetTester) async {
-      FileDownloader().initialize();
       final failingUploadTask =
           uploadTask.copyWith(taskId: 'fails', post: 'binary');
       final tasks = <UploadTask>[
@@ -1155,7 +1126,6 @@ void main() {
     });
 
     testWidgets('batch upload with callback', (widgetTester) async {
-      FileDownloader().initialize();
       final failingUploadTask =
           uploadTask.copyWith(taskId: 'fails', post: 'binary');
       final tasks = <UploadTask>[
@@ -1179,7 +1149,6 @@ void main() {
     });
 
     testWidgets('convenience upload with callbacks', (widgetTester) async {
-      FileDownloader().initialize();
       var result = await FileDownloader().upload(uploadTask,
           onStatus: (status) => statusCallback(uploadTask, status));
       expect(result, equals(TaskStatus.complete));
@@ -1207,7 +1176,7 @@ void main() {
     testWidgets('cancel enqueued tasks', (widgetTester) async {
       var cancelCounter = 0;
       var completeCounter = 0;
-      FileDownloader().initialize(taskStatusCallback: (task, status) {
+      FileDownloader().registerCallbacks(taskStatusCallback: (task, status) {
         if (status == TaskStatus.canceled) {
           cancelCounter++;
         }
@@ -1247,16 +1216,16 @@ Future<void> enqueueAndFileExists(String path) async {
   statusCallbackCounter = 0;
   statusCallbackCompleter = Completer();
   FileDownloader().destroy();
-  FileDownloader().initialize(taskStatusCallback: statusCallback);
+  FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
   try {
-    File(path).deleteSync(recursive: true);
+    File(path).deleteSync();
   } on FileSystemException {}
   expect(await FileDownloader().enqueue(task), isTrue);
   await statusCallbackCompleter.future;
   expect(File(path).existsSync(), isTrue);
   print('Found file at $path');
   try {
-    File(path).deleteSync(recursive: true);
+    File(path).deleteSync();
   } on FileSystemException {}
   // Expect 3 status callbacks: enqueued + running + complete
   expect(statusCallbackCounter, equals(3));

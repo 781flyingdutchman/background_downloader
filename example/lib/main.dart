@@ -36,7 +36,7 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    FileDownloader().initialize(
+    FileDownloader().registerCallbacks(
         taskStatusCallback: myDownloadStatusCallback,
         taskProgressCallback: myDownloadProgressCallback);
   }

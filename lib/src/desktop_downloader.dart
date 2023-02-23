@@ -184,9 +184,13 @@ class DesktopDownloader extends BaseDownloader {
       return task;
     }
     try {
-      return _queue.where((task) => task.taskId == taskId).first;
+      return _running.where((task) => task.taskId == taskId).first;
     } on StateError {
-      return null;
+      try {
+        return _queue.where((task) => task.taskId == taskId).first;
+      } on StateError {
+        return null;
+      }
     }
   }
 

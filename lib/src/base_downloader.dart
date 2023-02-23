@@ -11,6 +11,7 @@ import 'models.dart';
 abstract class BaseDownloader {
   final log = Logger('BackgroundDownloader');
   final tasksWaitingToRetry = <Task>[];
+
   /// Registered [TaskStatusCallback] for each group
   final groupStatusCallbacks = <String, TaskStatusCallback>{};
 
@@ -22,16 +23,16 @@ abstract class BaseDownloader {
 
   BaseDownloader();
 
-  factory BaseDownloader.instance() => (Platform.isMacOS || Platform.isLinux || Platform.isWindows) ? DesktopDownloader() : NativeDownloader();
-  
-  /// Initialize
-  void initialize() {
-    if (updates.hasListener) {
-      log.warning('initialize called while the updates stream is still '
-          'being listened to. That listener will no longer receive status updates.');
-    }
-    updates = StreamController<TaskUpdate>();
+  factory BaseDownloader.instance() {
+    final instance = Platform.isMacOS || Platform.isLinux || Platform.isWindows
+        ? DesktopDownloader()
+        : NativeDownloader();
+    instance.initialize();
+    return instance;
   }
+
+  /// Initialize
+  void initialize() {}
 
   /// Enqueue the task and advance the queue
   Future<bool> enqueue(Task task);
@@ -39,16 +40,16 @@ abstract class BaseDownloader {
   /// Resets the download worker by cancelling all ongoing tasks for the group
   ///
   ///  Returns the number of tasks canceled
-  Future<int> reset(String group) {
-    //TODO select group only
-    final count = tasksWaitingToRetry.length;
-    tasksWaitingToRetry.clear();
-    return Future.value(count);
+  Future<int> reset(String group) async {
+    final count =
+        tasksWaitingToRetry.where((task) => task.group == group).length;
+    tasksWaitingToRetry.removeWhere((task) => task.group == group);
+    return count;
   }
 
   /// Returns a list of all tasks in progress, matching [group]
-  Future<List<Task>> allTasks(String group,
-      bool includeTasksWaitingToRetry) async {
+  Future<List<Task>> allTasks(
+      String group, bool includeTasksWaitingToRetry) async {
     final tasks = <Task>[];
     if (includeTasksWaitingToRetry) {
       tasks.addAll(tasksWaitingToRetry.where((task) => task.group == group));
@@ -81,7 +82,7 @@ abstract class BaseDownloader {
     }
     return cancelPlatformTasksWithIds(platformTaskIds);
   }
-  
+
   /// Cancel these tasks on the platform
   Future<bool> cancelPlatformTasksWithIds(List<String> taskIds);
 
@@ -137,7 +138,6 @@ abstract class BaseDownloader {
       _emitStatusUpdate(task, taskStatus);
     }
   }
-
 
   void processProgressUpdate(Task task, double progress) {
     _emitProgressUpdate(task, progress);

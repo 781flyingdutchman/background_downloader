@@ -15,12 +15,8 @@ class FileDownloader {
   final _log = Logger('FileDownloader');
   static final FileDownloader _singleton = FileDownloader._internal();
   static const defaultGroup = 'default';
-
-  http.Client? httpClient;
-  bool _initialized = false;
   final _taskCompleters = <Task, Completer<TaskStatus>>{};
   final _batches = <Batch>[];
-
   final _downloader = BaseDownloader.instance();
 
   /// Registered [TaskStatusCallback] for convenience down/upload tasks
@@ -36,40 +32,6 @@ class FileDownloader {
   /// Stream of [TaskUpdate] updates for downloads that do
   /// not have a registered callback
   Stream<TaskUpdate> get updates => _downloader.updates.stream;
-
-  /// True if [FileDownloader] was initialized
-  bool get initialized => _initialized;
-
-  /// Initialize the Downloader and potentially register callbacks to
-  /// handle status and progress updates
-  ///
-  /// Status callbacks are called only when the state changes, while
-  /// progress callbacks are called to inform of intermediate progress.
-  ///
-  /// Note that callbacks will be called based on a task's [updates]
-  /// property, which defaults to status change callbacks only. To also get
-  /// progress updates make sure to register a [TaskProgressCallback] and
-  /// set the task's [updates] property to [Updates.progress] or
-  /// [Updates.statusAndProgress]
-  void initialize(
-      {String group = defaultGroup,
-      TaskStatusCallback? taskStatusCallback,
-      TaskProgressCallback? taskProgressCallback}) {
-    if (_initialized) {
-      _log.warning('Calling initialize when Downloader is already initialized. '
-          'This may lead to unexpected behavior and missed status/progress updates. '
-          'Prefer calling .destroy before re-initialization');
-    }
-    _downloader.initialize();
-    // register any callbacks provided with initialization
-    _initialized = true;
-    if (taskStatusCallback != null || taskProgressCallback != null) {
-      registerCallbacks(
-          group: group,
-          taskStatusCallback: taskStatusCallback,
-          taskProgressCallback: taskProgressCallback);
-    }
-  }
 
   /// Register status or progress callbacks to monitor download progress.
   ///
@@ -89,7 +51,6 @@ class FileDownloader {
       {String group = defaultGroup,
       TaskStatusCallback? taskStatusCallback,
       TaskProgressCallback? taskProgressCallback}) {
-    _ensureInitialized();
     assert(taskStatusCallback != null || (taskProgressCallback != null),
         'Must provide a TaskStatusCallback or a TaskProgressCallback, or both');
     if (taskStatusCallback != null) {
@@ -105,10 +66,7 @@ class FileDownloader {
   /// Returns true if successfully enqueued. A new task will also generate
   /// a [TaskStatus.enqueued] update to the registered callback,
   /// if requested by its [updates] property
-  Future<bool> enqueue(Task task) async {
-    _ensureInitialized();
-    return _downloader.enqueue(task);
-  }
+  Future<bool> enqueue(Task task) => _downloader.enqueue(task);
 
   /// Download a file and return the final [TaskStatus]
   ///
@@ -302,10 +260,7 @@ class FileDownloader {
   /// Returns the number of tasks cancelled. Every canceled task wil emit a
   /// [TaskStatus.canceled] update to the registered callback, if
   /// requested
-  Future<int> reset({String group = defaultGroup}) async {
-    _ensureInitialized();
-    return _downloader.reset(group);
-  }
+  Future<int> reset({String group = defaultGroup}) => _downloader.reset(group);
 
   /// Returns a list of taskIds of all tasks currently active in this group
   ///
@@ -325,20 +280,16 @@ class FileDownloader {
   /// Active means enqueued or running, and if [includeTasksWaitingToRetry] is
   /// true also tasks that are waiting to be retried
   Future<List<Task>> allTasks(
-      {String group = defaultGroup,
-      bool includeTasksWaitingToRetry = true}) async {
-    _ensureInitialized();
-    return _downloader.allTasks(group, includeTasksWaitingToRetry);
-  }
+          {String group = defaultGroup,
+          bool includeTasksWaitingToRetry = true}) =>
+      _downloader.allTasks(group, includeTasksWaitingToRetry);
 
   /// Delete all tasks matching the taskIds in the list
   ///
   /// Every canceled task wil emit a [TaskStatus.canceled] update to
   /// the registered callback, if requested
-  Future<bool> cancelTasksWithIds(List<String> taskIds) async {
-    _ensureInitialized();
-    return _downloader.cancelTasksWithIds(taskIds);
-  }
+  Future<bool> cancelTasksWithIds(List<String> taskIds) =>
+      _downloader.cancelTasksWithIds(taskIds);
 
   /// Return [Task] for the given [taskId], or null
   /// if not found.
@@ -346,10 +297,7 @@ class FileDownloader {
   /// Only running tasks are guaranteed to be returned, but returning a task
   /// does not guarantee that the task is still running. To keep track of
   /// the status of tasks, use a [TaskStatusCallback]
-  Future<Task?> taskForId(String taskId) async {
-    _ensureInitialized();
-    return _downloader.taskForId(taskId);
-  }
+  Future<Task?> taskForId(String taskId) => _downloader.taskForId(taskId);
 
   /// Perform a server request for this [request]
   ///
@@ -368,17 +316,10 @@ class FileDownloader {
   /// the downloader. If not set, the default [http.Client] will be used.
   /// The request is executed on an Isolate, to ensure minimal interference
   /// with the main Isolate
-  Future<http.Response> request(Request request) =>
-      compute(doRequest, request);
-
-  /// Assert that the [FileDownloader] has been initialized
-  void _ensureInitialized() {
-    assert(_initialized, 'FileDownloader must be initialized before use');
-  }
+  Future<http.Response> request(Request request) => compute(doRequest, request);
 
   /// Destroy the [FileDownloader]. Subsequent use requires initialization
   void destroy() {
-    _initialized = false;
     _batches.clear();
     _taskCompleters.clear();
     _taskStatusCallbacks.clear();
@@ -399,8 +340,7 @@ Future<http.Response> doRequest(Request request) async {
     }
   });
   final log = Logger('FileDownloader.request');
-  FileDownloader().httpClient ??= http.Client();
-  final client = FileDownloader().httpClient!;
+  final client = http.Client();
   var response = http.Response('', 499,
       reasonPhrase: 'Not attempted'); // dummy to start with
   while (request.retriesRemaining >= 0) {

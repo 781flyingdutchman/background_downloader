@@ -21,6 +21,7 @@ class NativeDownloader extends BaseDownloader {
 
   @override
   void initialize() {
+    super.initialize();
     WidgetsFlutterBinding.ensureInitialized();
     // listen to the background channel, receiving updates on download status
     // or progress
