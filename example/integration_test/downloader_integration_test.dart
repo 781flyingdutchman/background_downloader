@@ -1202,6 +1202,42 @@ void main() {
       print('Finished convenience upload with callbacks');
     });
   });
+
+  group('cancellation', () {
+    testWidgets('cancel enqueued tasks', (widgetTester) async {
+      var cancelCounter = 0;
+      var completeCounter = 0;
+      FileDownloader.initialize(taskStatusCallback: (task, status) {
+        if (status == TaskStatus.canceled) {
+          cancelCounter++;
+        }
+        if (status == TaskStatus.complete) {
+          completeCounter++;
+        }
+      });
+      final tasks = <DownloadTask>[];
+      for (var n = 1; n < 20; n++) {
+        tasks.add(DownloadTask(url: urlWithContentLength));
+      }
+      for (var task in tasks) {
+        expect(await FileDownloader.enqueue(task), equals(true));
+        if (task == tasks.first) {
+          await Future.delayed(const Duration(seconds: 1));
+        }
+      }
+      await Future.delayed(const Duration(seconds: 1));
+      expect (await FileDownloader.cancelTasksWithIds(await FileDownloader.allTaskIds()), equals(true));
+      await Future.delayed(const Duration(seconds: 2));
+      expect(cancelCounter + completeCounter, equals(tasks.length));
+      final docsDir = await getApplicationDocumentsDirectory();
+      for (var task in tasks) {
+        final file = File(join(docsDir.path, task.filename));
+        if (file.existsSync()) {
+          file.deleteSync();
+        }
+      }
+    });
+  });
 }
 
 /// Helper: make sure [task] is set as desired, and this will enqueue, wait for

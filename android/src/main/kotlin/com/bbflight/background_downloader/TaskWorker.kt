@@ -177,20 +177,28 @@ class TaskWorker(
             // A 'failed' progress update is only provided if
             // a retry is not needed: if it is needed, a `waitingToRetry` progress update
             // will be generated on the Dart side
+            var canSendStatusUpdate = true  // may become false for cancellations
             if (status.isFinalState()) {
                 when (status) {
                     TaskStatus.complete -> processProgressUpdate(
                         task,
                         1.0
                     )
-                    TaskStatus.failed -> if (!retryNeeded) processProgressUpdate(
-                        task,
-                        -1.0
-                    )
-                    TaskStatus.canceled -> processProgressUpdate(
-                        task,
-                        -2.0
-                    )
+                    TaskStatus.failed ->
+                        if (!retryNeeded) processProgressUpdate(
+                            task,
+                            -1.0
+                        )
+                    TaskStatus.canceled -> {
+                        canSendStatusUpdate = canSendCancellation(task)
+                        if (canSendStatusUpdate) {
+                            BackgroundDownloaderPlugin.canceledIds[task.taskId] = currentTimeMillis()
+                            processProgressUpdate(
+                                task,
+                                -2.0
+                            )
+                        }
+                    }
                     TaskStatus.notFound -> processProgressUpdate(
                         task,
                         -3.0
@@ -199,7 +207,7 @@ class TaskWorker(
                 }
             }
             // Post update if task expects one, or if failed and retry is needed
-            if (task.providesStatusUpdates() || retryNeeded) {
+            if (canSendStatusUpdate && (task.providesStatusUpdates() || retryNeeded)) {
                 Handler(Looper.getMainLooper()).post {
                     try {
                         val gson = Gson()
@@ -219,16 +227,8 @@ class TaskWorker(
             // if task is in final state, remove from persistent storage
             if (status.isFinalState()) {
                 BackgroundDownloaderPlugin.prefsLock.write {
-                    val jsonString =
-                        BackgroundDownloaderPlugin.prefs.getString(
-                            BackgroundDownloaderPlugin.keyTasksMap,
-                            "{}"
-                        )
                     val tasksMap =
-                        BackgroundDownloaderPlugin.gson.fromJson<Map<String, Any>>(
-                            jsonString,
-                            BackgroundDownloaderPlugin.mapType
-                        ).toMutableMap()
+                        getTaskMap()
                     tasksMap.remove(task.taskId)
                     val editor = BackgroundDownloaderPlugin.prefs.edit()
                     editor.putString(
@@ -238,6 +238,26 @@ class TaskWorker(
                     editor.apply()
                 }
             }
+        }
+
+        /** Return true if we can send a cancellation for this task
+         *
+         * Cancellation can only be sent if it wasn't already sent by the [BackgroundDownloaderPlugin]
+         *  in the cancelTasksWithId method.  Side effect is to clean out older cancellation entries
+         * from the [BackgroundDownloaderPlugin.canceledIds]
+         */
+        private fun canSendCancellation(task: Task) : Boolean {
+            val idsToRemove = ArrayList<String>()
+            val now = currentTimeMillis()
+            for (entry in BackgroundDownloaderPlugin.canceledIds) {
+                if (now - entry.value > 1000) {
+                    idsToRemove.add(entry.key)
+                }
+            }
+            for (taskId in idsToRemove) {
+                BackgroundDownloaderPlugin.canceledIds.remove(taskId)
+            }
+            return BackgroundDownloaderPlugin.canceledIds[task.taskId] == null
         }
 
         /**
@@ -283,7 +303,6 @@ class TaskWorker(
         processProgressUpdate(task, 0.0)
         val status = doTask(task)
         processStatusUpdate(task, status)
-
         return Result.success()
     }
 
@@ -588,6 +607,21 @@ class TaskWorker(
         val path = Path(baseDirPath, task.directory)
         return Path(path.pathString, task.filename).pathString
     }
+}
+
+/** Return the map of tasks stored in preferences */
+fun getTaskMap(): MutableMap<String, Any> {
+    val jsonString =
+        BackgroundDownloaderPlugin.prefs.getString(
+            BackgroundDownloaderPlugin.keyTasksMap,
+            "{}"
+        )
+    val tasksMap =
+        BackgroundDownloaderPlugin.gson.fromJson<Map<String, Any>>(
+            jsonString,
+            BackgroundDownloaderPlugin.jsonMapType
+        ).toMutableMap()
+    return tasksMap
 }
 
 

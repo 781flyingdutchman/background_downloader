@@ -11,6 +11,7 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
+import java.lang.System.currentTimeMillis
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
@@ -22,13 +23,14 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     companion object {
         const val TAG = "BackgroundDownloader"
         const val keyTasksMap = "com.bbflight.background_downloader.taskMap"
+        var canceledIds = HashMap<String, Long>() // <taskId, timeMillis>
         var backgroundChannel: MethodChannel? = null
         var backgroundChannelCounter = 0  // reference counter
         val prefsLock = ReentrantReadWriteLock()
         private lateinit var workManager: WorkManager
         lateinit var prefs: SharedPreferences
         val gson = Gson()
-        val mapType = object : TypeToken<Map<String, Any>>() {}.type
+        val jsonMapType = object : TypeToken<Map<String, Any>>() {}.type
     }
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
@@ -89,7 +91,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         val args = call.arguments as List<*>
         val taskJsonMapString = args[0] as String
         val task =
-            Task(gson.fromJson(taskJsonMapString, mapType))
+            Task(gson.fromJson(taskJsonMapString, jsonMapType))
         Log.i(TAG, "Starting task with id ${task.taskId}")
         val data =
             Data.Builder().putString(TaskWorker.keyTask, taskJsonMapString)
@@ -118,7 +120,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         prefsLock.write {
             val jsonString = prefs.getString(keyTasksMap, "{}")
             val tasksMap =
-                gson.fromJson<Map<String, Any>>(jsonString, mapType).toMutableMap()
+                gson.fromJson<Map<String, Any>>(jsonString, jsonMapType).toMutableMap()
             tasksMap[task.taskId] =
                 gson.toJson(task.toJsonMap())
             val editor = prefs.edit()
@@ -153,7 +155,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         val tasksAsListOfJsonStrings = mutableListOf<String>()
         prefsLock.read {
             val jsonString = prefs.getString(keyTasksMap, "{}")
-            val tasksMap = gson.fromJson<Map<String, Any>>(jsonString, mapType)
+            val tasksMap = gson.fromJson<Map<String, Any>>(jsonString, jsonMapType)
             for (workInfo in workInfos) {
                 val tags = workInfo.tags.filter { it.contains("taskId=") }
                 if (tags.isNotEmpty()) {
@@ -174,12 +176,34 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         val taskIds = call.arguments as List<*>
         Log.v(TAG, "Canceling taskIds $taskIds")
         for (taskId in taskIds) {
+            val workInfos = workManager.getWorkInfosByTag("taskId=$taskId").get()
+            if (workInfos.isEmpty()) {
+                throw IllegalArgumentException("Not found")
+            }
+            val workInfo = workInfos.first()
+            if (workInfo.state != WorkInfo.State.SUCCEEDED) {
+                // send cancellation update for tasks that have not yet succeeded
+                prefsLock.read {
+                    val tasksMap = getTaskMap()
+                    val taskJsonMap = tasksMap[taskId] as String?
+                    if (taskJsonMap != null) {
+                        val task = Task(
+                            gson.fromJson(taskJsonMap, jsonMapType)
+                        )
+                        TaskWorker.processStatusUpdate(task, TaskStatus.canceled)
+                    }
+                    else {
+                        Log.d(TAG, "Could not find taskId $taskId to cancel")
+                    }
+                }
+            }
             val operation = workManager.cancelAllWorkByTag("taskId=$taskId")
             try {
                 operation.result.get()
             } catch (e: Throwable) {
                 Log.w(TAG, "Unable to cancel taskId $taskId in operation: $operation")
                 result.success(false)
+                return
             }
         }
         result.success(true)
@@ -192,7 +216,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         prefsLock.read {
             val jsonString = prefs.getString(keyTasksMap, "{}")
             val tasksMap =
-                gson.fromJson<Map<String, Any>>(jsonString, mapType).toMutableMap()
+                gson.fromJson<Map<String, Any>>(jsonString, jsonMapType).toMutableMap()
             result.success(tasksMap[taskId])
         }
     }
