@@ -11,7 +11,6 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
-import java.lang.System.currentTimeMillis
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
@@ -23,7 +22,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     companion object {
         const val TAG = "BackgroundDownloader"
         const val keyTasksMap = "com.bbflight.background_downloader.taskMap"
-        var canceledIds = HashMap<String, Long>() // <taskId, timeMillis>
+        var canceledTaskIds = HashMap<String, Long>() // <taskId, timeMillis>
         var backgroundChannel: MethodChannel? = null
         var backgroundChannelCounter = 0  // reference counter
         val prefsLock = ReentrantReadWriteLock()

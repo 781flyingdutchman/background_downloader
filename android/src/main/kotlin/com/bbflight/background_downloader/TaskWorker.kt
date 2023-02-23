@@ -192,7 +192,7 @@ class TaskWorker(
                     TaskStatus.canceled -> {
                         canSendStatusUpdate = canSendCancellation(task)
                         if (canSendStatusUpdate) {
-                            BackgroundDownloaderPlugin.canceledIds[task.taskId] = currentTimeMillis()
+                            BackgroundDownloaderPlugin.canceledTaskIds[task.taskId] = currentTimeMillis()
                             processProgressUpdate(
                                 task,
                                 -2.0
@@ -244,20 +244,20 @@ class TaskWorker(
          *
          * Cancellation can only be sent if it wasn't already sent by the [BackgroundDownloaderPlugin]
          *  in the cancelTasksWithId method.  Side effect is to clean out older cancellation entries
-         * from the [BackgroundDownloaderPlugin.canceledIds]
+         * from the [BackgroundDownloaderPlugin.canceledTaskIds]
          */
         private fun canSendCancellation(task: Task) : Boolean {
             val idsToRemove = ArrayList<String>()
             val now = currentTimeMillis()
-            for (entry in BackgroundDownloaderPlugin.canceledIds) {
+            for (entry in BackgroundDownloaderPlugin.canceledTaskIds) {
                 if (now - entry.value > 1000) {
                     idsToRemove.add(entry.key)
                 }
             }
             for (taskId in idsToRemove) {
-                BackgroundDownloaderPlugin.canceledIds.remove(taskId)
+                BackgroundDownloaderPlugin.canceledTaskIds.remove(taskId)
             }
-            return BackgroundDownloaderPlugin.canceledIds[task.taskId] == null
+            return BackgroundDownloaderPlugin.canceledTaskIds[task.taskId] == null
         }
 
         /**
@@ -616,12 +616,10 @@ fun getTaskMap(): MutableMap<String, Any> {
             BackgroundDownloaderPlugin.keyTasksMap,
             "{}"
         )
-    val tasksMap =
-        BackgroundDownloaderPlugin.gson.fromJson<Map<String, Any>>(
-            jsonString,
-            BackgroundDownloaderPlugin.jsonMapType
-        ).toMutableMap()
-    return tasksMap
+    return BackgroundDownloaderPlugin.gson.fromJson<Map<String, Any>>(
+        jsonString,
+        BackgroundDownloaderPlugin.jsonMapType
+    ).toMutableMap()
 }
 
 
