@@ -7,18 +7,15 @@ import 'dart:math';
 
 import 'package:async/async.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 
+import 'base_downloader.dart';
 import 'downloader.dart';
 import 'models.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:http/http.dart' as http;
-
-/// True if this platform is supported by the DesktopDownloader
-final desktopDownloaderSupportsThisPlatform =
-    Platform.isMacOS || Platform.isLinux || Platform.isWindows;
 
 const okResponses = [200, 201, 202, 203, 204, 205, 206];
 
@@ -27,35 +24,24 @@ const okResponses = [200, 201, 202, 203, 204, 205, 206];
 /// On desktop (MacOS, Linux, Windows) the download and upload are implemented
 /// in Dart, as there is no native platform equivalent of URLSession or
 /// WorkManager as there is on iOS and Android
-class DesktopDownloader {
-  final log = Logger('FileDownloader');
+class DesktopDownloader extends BaseDownloader {
   final maxConcurrent = 5;
   static final DesktopDownloader _singleton = DesktopDownloader._internal();
   final _queue = Queue<Task>();
   final _running = Queue<Task>(); // subset that is running
   final _isolateSendPorts =
       <Task, SendPort?>{}; // isolate SendPort for running task
-  var _updatesStreamController = StreamController();
   static final httpClient = http.Client();
 
-  factory DesktopDownloader() {
-    return _singleton;
-  }
+  factory DesktopDownloader() => _singleton;
 
-  /// Private constructor for singleton
   DesktopDownloader._internal();
 
-  Stream get updates => _updatesStreamController.stream;
-
-  /// Initialize the [DesktopDownloader]
-  ///
-  /// Call before listening to the updates stream
-  void initialize() => _updatesStreamController = StreamController();
-
   /// Enqueue the task and advance the queue
-  bool enqueue(Task task) {
+  @override
+  Future<bool> enqueue(Task task) async {
     _queue.add(task);
-    _emitUpdate(task, TaskStatus.enqueued);
+    processStatusUpdate(task, TaskStatus.enqueued);
     _advanceQueue();
     return true;
   }
@@ -100,7 +86,7 @@ class DesktopDownloader {
     errorPort.listen((message) {
       final error = (message as List).first as String;
       logError(task, error);
-      _emitUpdate(task, TaskStatus.failed);
+      processStatusUpdate(task, TaskStatus.failed);
       receivePort.close(); // also ends listener at then end
     });
     await Isolate.spawn(doTask, receivePort.sendPort,
@@ -120,8 +106,15 @@ class DesktopDownloader {
         // sent when final state has been sent
         receivePort.close();
       } else {
-        // Pass message on to FileDownloader via [updates]
-        _emitUpdate(task, message);
+        // Process the status or progress update
+        if (message is TaskStatus) {
+          processStatusUpdate(task, message);
+        } else if (message is double) {
+          processProgressUpdate(task, message);
+        } else {
+          _log.warning('Received message with unknown type '
+              '${message.runtimeType} from Isolate');
+        }
       }
     }
     errorPort.close();
@@ -131,7 +124,9 @@ class DesktopDownloader {
   /// Resets the download worker by cancelling all ongoing tasks for the group
   ///
   ///  Returns the number of tasks canceled
-  int reset(String group) {
+  @override
+  Future<int> reset(String group) async {
+    final retriesTaskCount = await super.reset(group);
     final inQueueIds =
         _queue.where((task) => task.group == group).map((task) => task.taskId);
     final runningIds = _running
@@ -141,25 +136,29 @@ class DesktopDownloader {
     if (taskIds.isNotEmpty) {
       cancelTasksWithIds(taskIds);
     }
-    return taskIds.length;
+    return retriesTaskCount + taskIds.length;
   }
 
   /// Returns a list of all tasks in progress, matching [group]
-  List<Task> allTasks(String group) {
+  @override
+  Future<List<Task>> allTasks(
+      String group, bool includeTasksWaitingToRetry) async {
+    final retryTasks = await super.allTasks(group, includeTasksWaitingToRetry);
     final inQueue = _queue.where((task) => task.group == group);
     final running = _running.where((task) => task.group == group);
-    return [...inQueue, ...running];
+    return [...retryTasks, ...inQueue, ...running];
   }
 
   /// Cancels ongoing tasks whose taskId is in the list provided with this call
   ///
   /// Returns true if all cancellations were successful
-  bool cancelTasksWithIds(List<String> taskIds) {
+  @override
+  Future<bool> cancelPlatformTasksWithIds(List<String> taskIds) async {
     final inQueue = _queue
         .where((task) => taskIds.contains(task.taskId))
         .toList(growable: false);
     for (final task in inQueue) {
-      _emitUpdate(task, TaskStatus.canceled);
+      processStatusUpdate(task, TaskStatus.canceled);
       _remove(task);
     }
     final running = _running.where((task) => taskIds.contains(task.taskId));
@@ -178,15 +177,16 @@ class DesktopDownloader {
   }
 
   /// Returns Task for this taskId, or nil
-  Task? taskForId(String taskId) {
+  @override
+  Future<Task?> taskForId(String taskId) async {
+    var task = await super.taskForId(taskId);
+    if (task != null) {
+      return task;
+    }
     try {
-      return _running.where((task) => task.taskId == taskId).first;
+      return _queue.where((task) => task.taskId == taskId).first;
     } on StateError {
-      try {
-        return _queue.where((task) => task.taskId == taskId).first;
-      } on StateError {
-        return null;
-      }
+      return null;
     }
   }
 
@@ -194,18 +194,12 @@ class DesktopDownloader {
   ///
   /// Clears all queues and references without sending cancellation
   /// messages or status updates
+  @override
   void destroy() {
+    super.destroy();
     _queue.clear();
     _running.clear();
     _isolateSendPorts.clear();
-  }
-
-  /// Emit status or progress update to [FileDownloader] if task provides those
-  void _emitUpdate(Task task, dynamic message) {
-    if ((message is TaskStatus && task.providesStatusUpdates) ||
-        (message is double && task.providesProgressUpdates)) {
-      _updatesStreamController.add([task, message]);
-    }
   }
 
   /// Remove all references to [task]
@@ -239,11 +233,11 @@ Future<void> doTask(SendPort sendPort) async {
       print('${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
     }
   });
-  processStatusUpdate(task, TaskStatus.running, sendPort);
-  processProgressUpdate(task, 0.0, sendPort);
+  processStatusUpdateInIsolate(task, TaskStatus.running, sendPort);
+  processProgressUpdateInIsolate(task, 0.0, sendPort);
   if (task.retriesRemaining < 0) {
     logError(task, 'task has negative retries remaining');
-    processStatusUpdate(task, TaskStatus.failed, sendPort);
+    processStatusUpdateInIsolate(task, TaskStatus.failed, sendPort);
   } else {
     if (task is DownloadTask) {
       await doDownloadTask(
@@ -307,7 +301,7 @@ Future<void> doDownloadTask(Task task, String filePath, String tempFilePath,
   } catch (e) {
     logError(task, e.toString());
   }
-  processStatusUpdate(task, resultStatus, sendPort);
+  processStatusUpdateInIsolate(task, resultStatus, sendPort);
 }
 
 Future<void> doUploadTask(Task task, String filePath, SendPort sendPort,
@@ -315,7 +309,7 @@ Future<void> doUploadTask(Task task, String filePath, SendPort sendPort,
   final inFile = File(filePath);
   if (!inFile.existsSync()) {
     logError(task, 'file to upload does not exist: $filePath');
-    processStatusUpdate(task, TaskStatus.failed, sendPort);
+    processStatusUpdateInIsolate(task, TaskStatus.failed, sendPort);
     return;
   }
   final isBinaryUpload = task.post == 'binary';
@@ -379,9 +373,9 @@ Future<void> doUploadTask(Task task, String filePath, SendPort sendPort,
     }
     request.sink.close(); // triggers request completion, handled above
     await requestCompleter.future; // wait for request to complete
-    processStatusUpdate(task, resultStatus, sendPort);
+    processStatusUpdateInIsolate(task, resultStatus, sendPort);
   } catch (e) {
-    processStatusUpdate(task, TaskStatus.failed, sendPort);
+    processStatusUpdateInIsolate(task, TaskStatus.failed, sendPort);
   }
 }
 
@@ -419,7 +413,7 @@ Future<TaskStatus> transferBytes(
             (bytesTotal < 10000 ||
                 (progress - lastProgressUpdate > 0.02 &&
                     now.isAfter(nextProgressUpdateTime)))) {
-          processProgressUpdate(task, progress, sendPort);
+          processProgressUpdateInIsolate(task, progress, sendPort);
           lastProgressUpdate = progress;
           nextProgressUpdateTime = now.add(const Duration(milliseconds: 500));
         }
@@ -438,7 +432,7 @@ Future<TaskStatus> transferBytes(
 ///
 /// Sends status update via the [sendPort], if requested
 /// If the task is finished, processes a final progressUpdate update
-void processStatusUpdate(Task task, TaskStatus status, SendPort sendPort) {
+void processStatusUpdateInIsolate(Task task, TaskStatus status, SendPort sendPort) {
   final retryNeeded = status == TaskStatus.failed && task.retriesRemaining > 0;
 // if task is in final state, process a final progressUpdate
 // A 'failed' progress update is only provided if
@@ -448,24 +442,24 @@ void processStatusUpdate(Task task, TaskStatus status, SendPort sendPort) {
     switch (status) {
       case TaskStatus.complete:
         {
-          processProgressUpdate(task, progressComplete, sendPort);
+          processProgressUpdateInIsolate(task, progressComplete, sendPort);
           break;
         }
       case TaskStatus.failed:
         {
           if (!retryNeeded) {
-            processProgressUpdate(task, progressFailed, sendPort);
+            processProgressUpdateInIsolate(task, progressFailed, sendPort);
           }
           break;
         }
       case TaskStatus.canceled:
         {
-          processProgressUpdate(task, progressCanceled, sendPort);
+          processProgressUpdateInIsolate(task, progressCanceled, sendPort);
           break;
         }
       case TaskStatus.notFound:
         {
-          processProgressUpdate(task, progressNotFound, sendPort);
+          processProgressUpdateInIsolate(task, progressNotFound, sendPort);
           break;
         }
       default:
@@ -481,7 +475,7 @@ void processStatusUpdate(Task task, TaskStatus status, SendPort sendPort) {
 /// Processes a progress update for the [task]
 ///
 /// Sends progress update via the [sendPort], if requested
-void processProgressUpdate(Task task, double progress, SendPort sendPort) {
+void processProgressUpdateInIsolate(Task task, double progress, SendPort sendPort) {
   if (task.providesProgressUpdates) {
     sendPort.send(progress);
   }

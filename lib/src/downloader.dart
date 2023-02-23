@@ -3,10 +3,8 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:background_downloader/background_downloader.dart';
-import 'package:background_downloader/src/desktop_downloader.dart';
+import 'package:background_downloader/src/base_downloader.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 
@@ -14,41 +12,33 @@ import 'models.dart';
 
 /// Provides access to all functions of the plugin in a single place.
 class FileDownloader {
-  static final _log = Logger('FileDownloader');
+  final _log = Logger('FileDownloader');
+  static final FileDownloader _singleton = FileDownloader._internal();
   static const defaultGroup = 'default';
-  static const _channel = MethodChannel('com.bbflight.background_downloader');
-  static const _backgroundChannel =
-      MethodChannel('com.bbflight.background_downloader.background');
-  static http.Client? httpClient;
-  static bool _initialized = false;
-  static final _taskCompleters = <Task, Completer<TaskStatus>>{};
-  static final _batches = <Batch>[];
 
-  static final _tasksWaitingToRetry = <Task>[];
+  http.Client? httpClient;
+  bool _initialized = false;
+  final _taskCompleters = <Task, Completer<TaskStatus>>{};
+  final _batches = <Batch>[];
 
-  /// Registered [TaskStatusCallback] for each group
-  static final _groupStatusCallbacks = <String, TaskStatusCallback>{};
-
-  /// Registered [TaskProgressCallback] for each group
-  static final _groupProgressCallbacks = <String, TaskProgressCallback>{};
+  final _downloader = BaseDownloader.instance();
 
   /// Registered [TaskStatusCallback] for convenience down/upload tasks
-  static final _taskStatusCallbacks = <String, void Function(TaskStatus)>{};
+  final _taskStatusCallbacks = <String, void Function(TaskStatus)>{};
 
   /// Registered [TaskProgressCallback] for convenience down/upload tasks
-  static final _taskProgressCallbacks = <String, void Function(double)>{};
+  final _taskProgressCallbacks = <String, void Function(double)>{};
 
-  /// StreamController for [TaskUpdate] updates
-  static var _updates = StreamController<TaskUpdate>();
+  factory FileDownloader() => _singleton;
+
+  FileDownloader._internal();
 
   /// Stream of [TaskUpdate] updates for downloads that do
   /// not have a registered callback
-  static Stream<TaskUpdate> get updates => _updates.stream;
-
-  static StreamSubscription? _desktopDownloaderUpdates;
+  Stream<TaskUpdate> get updates => _downloader.updates.stream;
 
   /// True if [FileDownloader] was initialized
-  static bool get initialized => _initialized;
+  bool get initialized => _initialized;
 
   /// Initialize the Downloader and potentially register callbacks to
   /// handle status and progress updates
@@ -61,7 +51,7 @@ class FileDownloader {
   /// progress updates make sure to register a [TaskProgressCallback] and
   /// set the task's [updates] property to [Updates.progress] or
   /// [Updates.statusAndProgress]
-  static void initialize(
+  void initialize(
       {String group = defaultGroup,
       TaskStatusCallback? taskStatusCallback,
       TaskProgressCallback? taskProgressCallback}) {
@@ -70,51 +60,7 @@ class FileDownloader {
           'This may lead to unexpected behavior and missed status/progress updates. '
           'Prefer calling .destroy before re-initialization');
     }
-    WidgetsFlutterBinding.ensureInitialized();
-    if (desktopDownloaderSupportsThisPlatform) {
-      DesktopDownloader().initialize();
-      // listen to updates and pass on to the processors
-      _desktopDownloaderUpdates?.cancel();
-      _desktopDownloaderUpdates = DesktopDownloader().updates.listen((update) {
-        final args = update as List;
-        final task = args.first;
-        final message = args.last;
-        if (message is TaskStatus) {
-          _processStatusUpdate(task, message);
-        } else if (message is double) {
-          _processProgressUpdate(task, message);
-        } else {
-          _log.warning('Received message with unknown type '
-              '${message.runtimeType} from DesktopDownloader');
-        }
-      });
-    }
-    if (_updates.hasListener) {
-      _log.warning('initialize called while the updates stream is still '
-          'being listened to. That listener will no longer receive status updates.');
-    }
-    _updates = StreamController<TaskUpdate>();
-    // listen to the background channel, receiving updates on download status
-    // or progress
-    _backgroundChannel.setMethodCallHandler((call) async {
-      final args = call.arguments as List<dynamic>;
-      final task = Task.createFromJsonMap(jsonDecode(args.first as String));
-      switch (call.method) {
-        case 'statusUpdate':
-          final taskStatus = TaskStatus.values[args.last as int];
-          _processStatusUpdate(task, taskStatus);
-          break;
-
-        case 'progressUpdate':
-          final progress = args.last as double;
-          _emitProgressUpdate(task, progress);
-          break;
-
-        default:
-          throw UnimplementedError(
-              'Background channel method call ${call.method} not supported');
-      }
-    });
+    _downloader.initialize();
     // register any callbacks provided with initialization
     _initialized = true;
     if (taskStatusCallback != null || taskProgressCallback != null) {
@@ -122,78 +68,6 @@ class FileDownloader {
           group: group,
           taskStatusCallback: taskStatusCallback,
           taskProgressCallback: taskProgressCallback);
-    }
-  }
-
-  /// Process status update coming from plugin or [DesktopDownloader]
-  static void _processStatusUpdate(Task task, TaskStatus taskStatus) {
-    // Normal status updates are only sent here when the task is expected
-    // to provide those.  The exception is a .failed status when a task
-    // has retriesRemaining > 0: those are always sent here, and are
-    // intercepted to hold the task and reschedule in the near future
-    if (taskStatus == TaskStatus.failed && task.retriesRemaining > 0) {
-      _emitStatusUpdate(task, TaskStatus.waitingToRetry);
-      _emitProgressUpdate(task, progressWaitingToRetry);
-      task.decreaseRetriesRemaining();
-      _tasksWaitingToRetry.add(task);
-      final waitTime = Duration(
-          seconds: pow(2, (task.retries - task.retriesRemaining)).toInt());
-      _log.finer('TaskId ${task.taskId} failed, waiting ${waitTime.inSeconds}'
-          ' seconds before retrying. ${task.retriesRemaining}'
-          ' retries remaining');
-      Future.delayed(waitTime, () async {
-        // after delay, enqueue task again if it's still waiting
-        if (_tasksWaitingToRetry.remove(task)) {
-          if (!await enqueue(task)) {
-            _log.warning('Could not enqueue task $task after retry timeout');
-            _emitStatusUpdate(task, TaskStatus.failed);
-            _emitProgressUpdate(task, progressFailed);
-          }
-        }
-      });
-    } else {
-      // normal status update
-      _emitStatusUpdate(task, taskStatus);
-    }
-  }
-
-  static void _processProgressUpdate(Task task, double progress) {
-    _emitProgressUpdate(task, progress);
-  }
-
-  /// Emits the status update for this task to its callback or listener
-  static void _emitStatusUpdate(Task task, TaskStatus taskStatus) {
-    if (task.providesStatusUpdates) {
-      final taskStatusCallback = _groupStatusCallbacks[task.group];
-      if (taskStatusCallback != null) {
-        taskStatusCallback(task, taskStatus);
-      } else {
-        if (_updates.hasListener) {
-          _updates.add(TaskStatusUpdate(task, taskStatus));
-        } else {
-          _log.warning('Requested status updates for task ${task.taskId} in '
-              'group ${task.group} but no TaskStatusCallback '
-              'was registered, and there is no listener to the '
-              'updates stream');
-        }
-      }
-    }
-  }
-
-  /// Emit the progress update for this task to its callback or listener
-  static void _emitProgressUpdate(Task task, progress) {
-    if (task.providesProgressUpdates) {
-      final taskProgressCallback = _groupProgressCallbacks[task.group];
-      if (taskProgressCallback != null) {
-        taskProgressCallback(task, progress);
-      } else if (_updates.hasListener) {
-        _updates.add(TaskProgressUpdate(task, progress));
-      } else {
-        _log.warning('Requested progress updates for task ${task.taskId} in '
-            'group ${task.group} but no TaskProgressCallback '
-            'was registered, and there is no listener to the '
-            'updates stream');
-      }
     }
   }
 
@@ -211,7 +85,7 @@ class FileDownloader {
   /// progress updates make sure to register a [TaskProgressCallback] and
   /// set the task's [updates] property to [Updates.progress] or
   /// [Updates.statusAndProgress]
-  static void registerCallbacks(
+  void registerCallbacks(
       {String group = defaultGroup,
       TaskStatusCallback? taskStatusCallback,
       TaskProgressCallback? taskProgressCallback}) {
@@ -219,10 +93,10 @@ class FileDownloader {
     assert(taskStatusCallback != null || (taskProgressCallback != null),
         'Must provide a TaskStatusCallback or a TaskProgressCallback, or both');
     if (taskStatusCallback != null) {
-      _groupStatusCallbacks[group] = taskStatusCallback;
+      _downloader.groupStatusCallbacks[group] = taskStatusCallback;
     }
     if (taskProgressCallback != null) {
-      _groupProgressCallbacks[group] = taskProgressCallback;
+      _downloader.groupProgressCallbacks[group] = taskProgressCallback;
     }
   }
 
@@ -231,14 +105,9 @@ class FileDownloader {
   /// Returns true if successfully enqueued. A new task will also generate
   /// a [TaskStatus.enqueued] update to the registered callback,
   /// if requested by its [updates] property
-  static Future<bool> enqueue(Task task) async {
+  Future<bool> enqueue(Task task) async {
     _ensureInitialized();
-    if (desktopDownloaderSupportsThisPlatform) {
-      return DesktopDownloader().enqueue(task);
-    }
-    return await _channel
-            .invokeMethod<bool>('enqueue', [jsonEncode(task.toJsonMap())]) ??
-        false;
+    return _downloader.enqueue(task);
   }
 
   /// Download a file and return the final [TaskStatus]
@@ -258,7 +127,7 @@ class FileDownloader {
   ///
   /// Note that the task's [group] is ignored and will be replaced with an
   /// internal group name '_enqueueAndWait' to track status
-  static Future<TaskStatus> download(DownloadTask task,
+  Future<TaskStatus> download(DownloadTask task,
           {void Function(TaskStatus)? onStatus,
           void Function(double)? onProgress}) =>
       _enqueueAndAwait(task, onStatus: onStatus, onProgress: onProgress);
@@ -280,7 +149,7 @@ class FileDownloader {
   ///
   /// Note that the task's [group] is ignored and will be replaced with an
   /// internal group name '_enqueueAndWait' to track status
-  static Future<TaskStatus> upload(UploadTask task,
+  Future<TaskStatus> upload(UploadTask task,
           {void Function(TaskStatus)? onStatus,
           void Function(double)? onProgress}) =>
       _enqueueAndAwait(task, onStatus: onStatus, onProgress: onProgress);
@@ -288,7 +157,7 @@ class FileDownloader {
   /// Enqueue the [task] and wait for completion
   ///
   /// Returns the final [TaskStatus] of the [task]
-  static Future<TaskStatus> _enqueueAndAwait(Task task,
+  Future<TaskStatus> _enqueueAndAwait(Task task,
       {void Function(TaskStatus)? onStatus,
       void Function(double)? onProgress}) async {
     const groupName = '_enqueueAndAwait';
@@ -376,7 +245,7 @@ class FileDownloader {
   /// [Task.group] and [Task.updates] value will be modified when enqueued, and
   /// those modified tasks are returned as part of the [Batch]
   /// object.
-  static Future<Batch> downloadBatch(final List<DownloadTask> tasks,
+  Future<Batch> downloadBatch(final List<DownloadTask> tasks,
           [BatchProgressCallback? batchProgressCallback]) =>
       _enqueueAndAwaitBatch(tasks, batchProgressCallback);
 
@@ -396,14 +265,14 @@ class FileDownloader {
   /// [Task.group] and [Task.updates] value will be modified when enqueued, and
   /// those modified tasks are returned as part of the [Batch]
   /// object.
-  static Future<Batch> uploadBatch(final List<UploadTask> tasks,
+  Future<Batch> uploadBatch(final List<UploadTask> tasks,
           [BatchProgressCallback? batchProgressCallback]) =>
       _enqueueAndAwaitBatch(tasks, batchProgressCallback);
 
   /// Enqueue a list of tasks and wait for completion
   ///
   /// Returns a [Batch] object
-  static Future<Batch> _enqueueAndAwaitBatch(final List<Task> tasks,
+  Future<Batch> _enqueueAndAwaitBatch(final List<Task> tasks,
       [BatchProgressCallback? batchProgressCallback]) async {
     assert(tasks.isNotEmpty, 'List of tasks cannot be empty');
     if (batchProgressCallback != null) {
@@ -433,19 +302,16 @@ class FileDownloader {
   /// Returns the number of tasks cancelled. Every canceled task wil emit a
   /// [TaskStatus.canceled] update to the registered callback, if
   /// requested
-  static Future<int> reset({String group = defaultGroup}) async {
+  Future<int> reset({String group = defaultGroup}) async {
     _ensureInitialized();
-    _tasksWaitingToRetry.clear();
-    return desktopDownloaderSupportsThisPlatform
-        ? DesktopDownloader().reset(group)
-        : await _channel.invokeMethod<int>('reset', group) ?? -1;
+    return _downloader.reset(group);
   }
 
   /// Returns a list of taskIds of all tasks currently active in this group
   ///
   /// Active means enqueued or running, and if [includeTasksWaitingToRetry] is
   /// true also tasks that are waiting to be retried
-  static Future<List<String>> allTaskIds(
+  Future<List<String>> allTaskIds(
           {String group = defaultGroup,
           bool includeTasksWaitingToRetry = true}) async =>
       (await allTasks(
@@ -458,56 +324,20 @@ class FileDownloader {
   ///
   /// Active means enqueued or running, and if [includeTasksWaitingToRetry] is
   /// true also tasks that are waiting to be retried
-  static Future<List<Task>> allTasks(
+  Future<List<Task>> allTasks(
       {String group = defaultGroup,
       bool includeTasksWaitingToRetry = true}) async {
     _ensureInitialized();
-    late List<Task> tasks;
-    if (desktopDownloaderSupportsThisPlatform) {
-      tasks = DesktopDownloader().allTasks(group);
-    } else {
-      final result =
-          await _channel.invokeMethod<List<dynamic>?>('allTasks', group) ?? [];
-      tasks = result
-          .map((e) => Task.createFromJsonMap(jsonDecode(e as String)))
-          .toList();
-    }
-    if (includeTasksWaitingToRetry) {
-      tasks.addAll(_tasksWaitingToRetry.where((task) => task.group == group));
-    }
-    return tasks;
+    return _downloader.allTasks(group, includeTasksWaitingToRetry);
   }
 
   /// Delete all tasks matching the taskIds in the list
   ///
   /// Every canceled task wil emit a [TaskStatus.canceled] update to
   /// the registered callback, if requested
-  static Future<bool> cancelTasksWithIds(List<String> taskIds) async {
+  Future<bool> cancelTasksWithIds(List<String> taskIds) async {
     _ensureInitialized();
-    final matchingTasksWaitingToRetry = _tasksWaitingToRetry
-        .where((task) => taskIds.contains(task.taskId))
-        .toList(growable: false);
-    final matchingTaskIdsWaitingToRetry = matchingTasksWaitingToRetry
-        .map((task) => task.taskId)
-        .toList(growable: false);
-    // remove tasks waiting to retry from the list so they won't be retried
-    for (final task in matchingTasksWaitingToRetry) {
-      _tasksWaitingToRetry.remove(task);
-      _emitStatusUpdate(task, TaskStatus.canceled);
-      _emitProgressUpdate(task, progressCanceled);
-    }
-    // cancel remaining taskIds on the native platform
-    final remainingTaskIds = taskIds
-        .where((taskId) => !matchingTaskIdsWaitingToRetry.contains(taskId))
-        .toList(growable: false);
-    if (remainingTaskIds.isNotEmpty) {
-      return desktopDownloaderSupportsThisPlatform
-          ? DesktopDownloader().cancelTasksWithIds(remainingTaskIds)
-          : await _channel.invokeMethod<bool>(
-                  'cancelTasksWithIds', remainingTaskIds) ??
-              false;
-    }
-    return true;
+    return _downloader.cancelTasksWithIds(taskIds);
   }
 
   /// Return [Task] for the given [taskId], or null
@@ -516,24 +346,9 @@ class FileDownloader {
   /// Only running tasks are guaranteed to be returned, but returning a task
   /// does not guarantee that the task is still running. To keep track of
   /// the status of tasks, use a [TaskStatusCallback]
-  static Future<Task?> taskForId(String taskId) async {
+  Future<Task?> taskForId(String taskId) async {
     _ensureInitialized();
-    // check if task with this Id is waiting to retry
-    try {
-      return _tasksWaitingToRetry.where((task) => task.taskId == taskId).first;
-    } on StateError {
-      // if not, ask the native platform for the task matching this id
-      if (desktopDownloaderSupportsThisPlatform) {
-        return DesktopDownloader().taskForId(taskId);
-      } else {
-        final jsonString =
-            await _channel.invokeMethod<String>('taskForId', taskId);
-        if (jsonString != null) {
-          return Task.createFromJsonMap(jsonDecode(jsonString));
-        }
-        return null;
-      }
-    }
+    return _downloader.taskForId(taskId);
   }
 
   /// Perform a server request for this [request]
@@ -553,29 +368,22 @@ class FileDownloader {
   /// the downloader. If not set, the default [http.Client] will be used.
   /// The request is executed on an Isolate, to ensure minimal interference
   /// with the main Isolate
-  static Future<http.Response> request(Request request) =>
+  Future<http.Response> request(Request request) =>
       compute(doRequest, request);
 
   /// Assert that the [FileDownloader] has been initialized
-  static void _ensureInitialized() {
+  void _ensureInitialized() {
     assert(_initialized, 'FileDownloader must be initialized before use');
   }
 
   /// Destroy the [FileDownloader]. Subsequent use requires initialization
-  static void destroy() {
+  void destroy() {
     _initialized = false;
-    _tasksWaitingToRetry.clear();
     _batches.clear();
     _taskCompleters.clear();
-    _groupStatusCallbacks.clear();
-    _groupProgressCallbacks.clear();
     _taskStatusCallbacks.clear();
     _taskProgressCallbacks.clear();
-    if (desktopDownloaderSupportsThisPlatform) {
-      _desktopDownloaderUpdates?.cancel();
-      _desktopDownloaderUpdates = null;
-      DesktopDownloader().destroy();
-    }
+    _downloader.destroy();
   }
 }
 
@@ -591,8 +399,8 @@ Future<http.Response> doRequest(Request request) async {
     }
   });
   final log = Logger('FileDownloader.request');
-  FileDownloader.httpClient ??= http.Client();
-  final client = FileDownloader.httpClient!;
+  FileDownloader().httpClient ??= http.Client();
+  final client = FileDownloader().httpClient!;
   var response = http.Response('', 499,
       reasonPhrase: 'Not attempted'); // dummy to start with
   while (request.retriesRemaining >= 0) {

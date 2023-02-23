@@ -36,7 +36,7 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    FileDownloader.initialize(
+    FileDownloader().initialize(
         taskStatusCallback: myDownloadStatusCallback,
         taskProgressCallback: myDownloadProgressCallback);
   }
@@ -138,12 +138,12 @@ class _MyAppState extends State<MyApp> {
             baseDirectory: BaseDirectory.applicationDocuments,
             updates:
                 Updates.statusAndProgress);
-        await FileDownloader.enqueue(backgroundDownloadTask!);
+        await FileDownloader().enqueue(backgroundDownloadTask!);
         break;
       case ButtonState.cancel:
         // cancel download
         if (backgroundDownloadTask != null) {
-          await FileDownloader.cancelTasksWithIds(
+          await FileDownloader().cancelTasksWithIds(
               [backgroundDownloadTask!.taskId]);
         }
         break;
