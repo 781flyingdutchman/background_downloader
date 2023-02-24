@@ -8,6 +8,16 @@ import 'package:logging/logging.dart';
 import 'desktop_downloader.dart';
 import 'models.dart';
 
+/// Common download functionality
+///
+/// Concrete subclass will implement platform-specific functionality, eg
+/// [DesktopDownloader] for dart based desktop platforms, and
+/// [NativeDownloader] for iOS and Android
+///
+/// The common functionality mostly relates to:
+/// - callback handling (for groups of tasks registered via the [FileDownloader])
+/// - tasks waiting to retry and retry handling
+/// - Task updates provided to the [FileDownloader]
 abstract class BaseDownloader {
   final log = Logger('BackgroundDownloader');
   final tasksWaitingToRetry = <Task>[];
@@ -95,7 +105,7 @@ abstract class BaseDownloader {
     }
   }
 
-  /// Destroy requiring re-initialization
+  /// Destroy - clears callbacks, updates stream and retry queue
   ///
   /// Clears all queues and references without sending cancellation
   /// messages or status updates
@@ -107,7 +117,7 @@ abstract class BaseDownloader {
     updates = StreamController();
   }
 
-  /// Process status update coming from plugin or [DesktopDownloader]
+  /// Process status update coming from Downloader to client listener
   void processStatusUpdate(Task task, TaskStatus taskStatus) {
     // Normal status updates are only sent here when the task is expected
     // to provide those.  The exception is a .failed status when a task
@@ -139,6 +149,7 @@ abstract class BaseDownloader {
     }
   }
 
+  /// Process progress update coming from Downloader to client listener
   void processProgressUpdate(Task task, double progress) {
     _emitProgressUpdate(task, progress);
   }

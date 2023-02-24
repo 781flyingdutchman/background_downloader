@@ -1,7 +1,7 @@
 name: background_downloader
-description: A background file downloader and uploader for iOS and Android. Define the task, 
-  enqueue and monitor progress
-version: 3.0.1
+description: A background file downloader and uploader. Define the task, enqueue and monitor progress
+
+version: 4.0.0
 repository: https://github.com/781flyingdutchman/background_downloader
 
 environment:
@@ -12,21 +12,17 @@ dependencies:
   flutter:
     sdk: flutter
   logging: ^1.0.2
-  http: ^0.13.5
-  path_provider: ^2.0.0
-  path: ^1.0.0
-  async: ^2.1.0
-  mime: ^1.0.0
+  http: ^0.13.0
+  path_provider: ^2.0.2
+  path: ^1.8.1
+  async: ^2.6.0
+  mime: ^1.0.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^2.0.0
 
-# For information on the generic Dart part of this file, see the
-# following page: https://dart.dev/tools/pub/pubspec
-
-# The following section is specific to Flutter packages.
 flutter:
   plugin:
     platforms:

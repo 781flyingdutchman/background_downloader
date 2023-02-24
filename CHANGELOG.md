@@ -1,3 +1,12 @@
+## 4.0.0
+
+Adds support for MacOS, Windows and Linux and refactored the backend to be more easily extensible.
+
+Changes FileDownloader usage from static to a singleton. This means that instead of calling
+`FileDownloader.downloader(...)` now call `FileDownloader().downloader(...)` etc.
+
+Calling `.initialize` is not longer required.
+
 ## 3.0.1
 
 iOS BaseDirectory.applicationSupport now uses iOS applicationSupportDirectory instead of 

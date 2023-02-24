@@ -6,6 +6,9 @@ import 'package:flutter/widgets.dart';
 
 import 'base_downloader.dart';
 
+/// Implementation of download functionality for native platforms
+///
+/// Uses [MethodChannel] to communicate with native platforms
 class NativeDownloader extends BaseDownloader {
   static final NativeDownloader _singleton = NativeDownloader._internal();
   static const _channel = MethodChannel('com.bbflight.background_downloader');
@@ -16,7 +19,6 @@ class NativeDownloader extends BaseDownloader {
     return _singleton;
   }
 
-  /// Private constructor for singleton
   NativeDownloader._internal();
 
   @override
@@ -47,6 +49,12 @@ class NativeDownloader extends BaseDownloader {
   }
 
   @override
+  Future<bool> enqueue(Task task) async =>
+      await _channel
+          .invokeMethod<bool>('enqueue', [jsonEncode(task.toJsonMap())]) ??
+      false;
+
+  @override
   Future<int> reset(String group) async {
     final retriesTaskCount = await super.reset(group);
     final nativeCount = await _channel.invokeMethod<int>('reset', group) ?? 0;
@@ -69,25 +77,16 @@ class NativeDownloader extends BaseDownloader {
   Future<bool> cancelPlatformTasksWithIds(List<String> taskIds) async =>
       await _channel.invokeMethod<bool>('cancelTasksWithIds', taskIds) ?? false;
 
-
   @override
   Future<Task?> taskForId(String taskId) async {
     var task = await super.taskForId(taskId);
     if (task != null) {
       return task;
     }
-    final jsonString =
-    await _channel.invokeMethod<String>('taskForId', taskId);
+    final jsonString = await _channel.invokeMethod<String>('taskForId', taskId);
     if (jsonString != null) {
       return Task.createFromJsonMap(jsonDecode(jsonString));
     }
     return null;
   }
-
-  @override
-  Future<bool> enqueue(Task task) async =>
-      await _channel
-          .invokeMethod<bool>('enqueue', [jsonEncode(task.toJsonMap())]) ??
-      false;
-
 }

@@ -19,7 +19,7 @@ import 'models.dart';
 
 const okResponses = [200, 201, 202, 203, 204, 205, 206];
 
-/// Implementation of the core download functionality for desktop platforms
+/// Implementation of download functionality for desktop platforms
 ///
 /// On desktop (MacOS, Linux, Windows) the download and upload are implemented
 /// in Dart, as there is no native platform equivalent of URLSession or
@@ -37,7 +37,6 @@ class DesktopDownloader extends BaseDownloader {
 
   DesktopDownloader._internal();
 
-  /// Enqueue the task and advance the queue
   @override
   Future<bool> enqueue(Task task) async {
     _queue.add(task);
@@ -121,9 +120,6 @@ class DesktopDownloader extends BaseDownloader {
     _isolateSendPorts.remove(task);
   }
 
-  /// Resets the download worker by cancelling all ongoing tasks for the group
-  ///
-  ///  Returns the number of tasks canceled
   @override
   Future<int> reset(String group) async {
     final retriesTaskCount = await super.reset(group);
@@ -139,7 +135,6 @@ class DesktopDownloader extends BaseDownloader {
     return retriesTaskCount + taskIds.length;
   }
 
-  /// Returns a list of all tasks in progress, matching [group]
   @override
   Future<List<Task>> allTasks(
       String group, bool includeTasksWaitingToRetry) async {
@@ -149,7 +144,7 @@ class DesktopDownloader extends BaseDownloader {
     return [...retryTasks, ...inQueue, ...running];
   }
 
-  /// Cancels ongoing tasks whose taskId is in the list provided with this call
+  /// Cancels ongoing platform tasks whose taskId is in the list provided
   ///
   /// Returns true if all cancellations were successful
   @override
@@ -176,7 +171,6 @@ class DesktopDownloader extends BaseDownloader {
     return true;
   }
 
-  /// Returns Task for this taskId, or nil
   @override
   Future<Task?> taskForId(String taskId) async {
     var task = await super.taskForId(taskId);
@@ -194,10 +188,6 @@ class DesktopDownloader extends BaseDownloader {
     }
   }
 
-  /// Destroy requiring re-initialization
-  ///
-  /// Clears all queues and references without sending cancellation
-  /// messages or status updates
   @override
   void destroy() {
     super.destroy();
@@ -220,7 +210,7 @@ class DesktopDownloader extends BaseDownloader {
 ///
 /// The first message sent back is a [ReceivePort] that is the command port
 /// for the isolate. The first command must be the arguments: task and filePath.
-/// Any subsequent commands will be interpreted as a cancellation request.
+/// Any subsequent commands must be 'cancel', a cancellation request.
 Future<void> doTask(SendPort sendPort) async {
   final commandPort = ReceivePort();
   // send the command port back to the main Isolate
@@ -254,6 +244,10 @@ Future<void> doTask(SendPort sendPort) async {
   Isolate.exit();
 }
 
+/// Do the POST or GET based download task
+///
+/// Sends updates via the [sendPort] and can be commanded to cancel via
+/// the [messagesToIsolate] queue
 Future<void> doDownloadTask(Task task, String filePath, String tempFilePath,
     SendPort sendPort, StreamQueue messagesToIsolate) async {
   final client = DesktopDownloader.httpClient;
@@ -308,6 +302,10 @@ Future<void> doDownloadTask(Task task, String filePath, String tempFilePath,
   processStatusUpdateInIsolate(task, resultStatus, sendPort);
 }
 
+/// Do the binary or multi-part upload task
+///
+/// Sends updates via the [sendPort] and can be commanded to cancel via
+/// the [messagesToIsolate] queue
 Future<void> doUploadTask(Task task, String filePath, SendPort sendPort,
     StreamQueue messagesToIsolate) async {
   final inFile = File(filePath);
@@ -383,6 +381,15 @@ Future<void> doUploadTask(Task task, String filePath, SendPort sendPort,
   }
 }
 
+/// Transfer all bytes from [inStream] to [outStream], expecting [contentLength]
+/// total bytes
+///
+/// Sends updates via the [sendPort] and can be commanded to cancel via
+/// the [messagesToIsolate] queue
+///
+/// Returns a [TaskStatus] and will throw any exception generated within
+///
+/// Note: does not flush or close any streams
 Future<TaskStatus> transferBytes(
     Stream<List<int>> inStream,
     EventSink<List<int>> outStream,
@@ -436,7 +443,8 @@ Future<TaskStatus> transferBytes(
 ///
 /// Sends status update via the [sendPort], if requested
 /// If the task is finished, processes a final progressUpdate update
-void processStatusUpdateInIsolate(Task task, TaskStatus status, SendPort sendPort) {
+void processStatusUpdateInIsolate(
+    Task task, TaskStatus status, SendPort sendPort) {
   final retryNeeded = status == TaskStatus.failed && task.retriesRemaining > 0;
 // if task is in final state, process a final progressUpdate
 // A 'failed' progress update is only provided if
@@ -479,7 +487,8 @@ void processStatusUpdateInIsolate(Task task, TaskStatus status, SendPort sendPor
 /// Processes a progress update for the [task]
 ///
 /// Sends progress update via the [sendPort], if requested
-void processProgressUpdateInIsolate(Task task, double progress, SendPort sendPort) {
+void processProgressUpdateInIsolate(
+    Task task, double progress, SendPort sendPort) {
   if (task.providesProgressUpdates) {
     sendPort.send(progress);
   }
