@@ -347,7 +347,9 @@ void main() {
     });
 
     testWidgets('cancelTasksWithIds', (widgetTester) async {
-      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback, taskProgressCallback: progressCallback);
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
       expect(await FileDownloader().enqueue(task), isTrue);
       var taskIds = await FileDownloader().allTaskIds();
       expect(taskIds.length, equals(1));
@@ -361,7 +363,10 @@ void main() {
       statusCallbackCounter = 0;
       statusCallbackCompleter = Completer();
       someProgressCompleter = Completer();
-      task = DownloadTask(url: urlWithContentLength, filename: defaultFilename, updates: Updates.statusAndProgress);
+      task = DownloadTask(
+          url: urlWithContentLength,
+          filename: defaultFilename,
+          updates: Updates.statusAndProgress);
       expect(await FileDownloader().enqueue(task), isTrue);
       await someProgressCompleter.future;
       taskIds = await FileDownloader().allTaskIds();
@@ -1223,10 +1228,11 @@ void main() {
   group('tracking', () {
     testWidgets('activate tracking', (widgetTester) async {
       await FileDownloader().database.deleteAllRecords();
-      await FileDownloader().registerCallbacks(
-          taskStatusCallback: statusCallback,
-          taskProgressCallback: progressCallback)
-        .trackTasks(markDownloadedComplete: false);
+      await FileDownloader()
+          .registerCallbacks(
+              taskStatusCallback: statusCallback,
+              taskProgressCallback: progressCallback)
+          .trackTasks(markDownloadedComplete: false);
       task = DownloadTask(
           url: urlWithContentLength,
           filename: defaultFilename,
@@ -1251,9 +1257,10 @@ void main() {
 
     testWidgets('markDownloadedComplete', (widgetTester) async {
       await FileDownloader().database.deleteAllRecords();
-      await FileDownloader().registerCallbacks(
-          taskStatusCallback: statusCallback,
-          taskProgressCallback: progressCallback)
+      await FileDownloader()
+          .registerCallbacks(
+              taskStatusCallback: statusCallback,
+              taskProgressCallback: progressCallback)
           .trackTasks(markDownloadedComplete: false);
       final filePath = await task.filePath();
       if (File(filePath).existsSync()) {
@@ -1288,8 +1295,6 @@ void main() {
       print('Finished markDownloadedComplete');
     });
   });
-
-
 }
 
 /// Helper: make sure [task] is set as desired, and this will enqueue, wait for

@@ -14,10 +14,10 @@ import 'models.dart';
 class FileDownloader {
   final _log = Logger('FileDownloader');
   static final FileDownloader _singleton = FileDownloader._internal();
-  
-  /// If no group is specified the default group name will be used 
+
+  /// If no group is specified the default group name will be used
   static const defaultGroup = 'default';
-  
+
   /// Calls to [download], [upload], [downloadBatch] and [uploadBatch] are
   /// monitored 'internally' in this special group
   static const awaitGroup = 'await';
@@ -134,8 +134,6 @@ class FileDownloader {
   Future<TaskStatus> _enqueueAndAwait(Task task,
       {void Function(TaskStatus)? onStatus,
       void Function(double)? onProgress}) async {
-
-
     /// Internal callback function that passes the update on to different
     /// callbacks
     ///

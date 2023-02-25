@@ -113,12 +113,11 @@ For uploads, create a `List` of `UploadTask` objects and call `uploadBatch` - ev
 Instead of monitoring in the `download` call, you may want to use a centralized task monitoring approach, and/or keeping track of tasks in a database. This is helpful for instance if:
 1. You start download in multiple locations in your app, but want to monitor those in one place, instead of defining `onStatus` and `onProgress` for every call to `download`
 2. You have different groups of tasks, and each group needs a different monitor
-3. You want to keep track of the status and progress of tasks in a persisitent database that you query
+3. You want to keep track of the status and progress of tasks in a persistent database that you query
 4. Your downloads take long, and your user may switch away from your app for a long time, which causes your app to get suspended by the operating system. The downloads continue in the background and will finish eventually, but when your app restarts from a suspended state, the result `Future` that you were awaiting when you called `download` may no longer be 'alive', and you will therefore miss the completion of the downloads that happened while suspended. This situation is uncommon, as the app will typically remain alive for several minutes even when moving to the background, but if you find this to be a problem for your use case, then you should process status and progress updates for long running background tasks centrally.
 
 Central monitoring can be done by listening to an updates stream, or by registering callbacks. In both cases you now use `enqueue` instead of `download` or `upload`. `enqueue` returns almost immediately with a `bool` to indicate if the `Task` was successfully enqueued. Monitor status changes and act when a `Task` completes via the listener or callback.  As long as you start listening to the updates (or register your callbacks) as soon as your app starts, you will get notified of status and progress update changes that happened while your app was suspended, immediately after the app awakes.
 
-Status updates may still get lost in unusual situations (e.g. if the user kills your app when it is suspended). It may therefore be helpful to check upon startup if a file you were expecting exists, even if you may not have been notified of a completed download. In addition, you can check which downloads are still active by [querying the task queue](#managing-and-monitoring-tasks-in-the-queue).
 
 ### Using an event listener
 
@@ -177,7 +176,7 @@ Note that all tasks will call the same callback, unless you register separate ca
 
 ### Using the database to track Tasks
 
-To keep track of the status and progress of all tasks, even after they have downloaded, activate tracking by calling `trackTasks()` and use the `database` field to query. For example:
+To keep track of the status and progress of all tasks, even after they have completed, activate tracking by calling `trackTasks()` and use the `database` field to query. For example:
 ```
     // at app startup, start tracking
     await FileDownloader().trackTasks();
@@ -196,7 +195,7 @@ To keep track of the status and progress of all tasks, even after they have down
         'status ${record.taskStatus} and progress ${record.progress}'
 ```
 
-You can interact with the `database` using `allRecords`, `recordForId`, `deleteAllRecords`, `deleteRecordWithId` etc. Note that only tasks that you asked to be tracked (using `trackTasks`, whch activates tracking for all tasks in a group) will be in the database. All active tasks in the queue, regardless of tracking, can be queried via the `FileDownloader.taskForId` call etc, but those will only return the task itself, not its status or progress, as those are expected to be monitored via listener or callback.  Note: tasks that are started using `download`, `upload`, `batchDownload` or `batchUpload` are assigned a special group name 'await', as callbacks for these tasks are handled within the `FileDownloader`. If you want to  track those tasks in the database, call `FileDownloader().trackTasks(FileDownloader.awaitGroup)` at the start of your app.
+You can interact with the `database` using `allRecords`, `recordForId`, `deleteAllRecords`, `deleteRecordWithId` etc. Note that only tasks that you asked to be tracked (using `trackTasks`, which activates tracking for all tasks in a group) will be in the database. All active tasks in the queue, regardless of tracking, can be queried via the `FileDownloader.taskForId` call etc, but those will only return the task itself, not its status or progress, as those are expected to be monitored via listener or callback.  Note: tasks that are started using `download`, `upload`, `batchDownload` or `batchUpload` are assigned a special group name 'await', as callbacks for these tasks are handled within the `FileDownloader`. If you want to  track those tasks in the database, call `FileDownloader().trackTasks(FileDownloader.awaitGroup)` at the start of your app.
 
 ## Uploads
 
@@ -320,3 +319,7 @@ Then do the same thing in macos/Runner/Release.entitlements.
 * On iOS, once enqueued (i.e. `TaskStatus.enqueued`), a background download must complete within 4 hours
 * Redirects will be followed
 * Background downloads and uploads are aggressively controlled by the native platform. You should therefore always assume that a task that was started may not complete, and may disappear without providing any status or progress update to indicate why. For example, if a user swipes your app up from the iOS App Switcher, all scheduled background downloads are terminated without notification
+
+## Known issue
+
+At the time of this writing, on Windows,deleting records in the persistent database does not work, due to an issue with the 'localstore' package version 1.3.4. A fix has been suggested.

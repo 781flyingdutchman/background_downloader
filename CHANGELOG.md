@@ -1,3 +1,28 @@
+## 4.1.0
+
+Adds optional tracking of task status and progress in a persistent database.
+
+To keep track of the status and progress of all tasks, even after they have completed, activate tracking by calling `trackTasks()` and use the `database` field to query. For example:
+```
+    // at app startup, start tracking
+    await FileDownloader().trackTasks();
+    
+    
+    // somewhere else: enqueue a download
+    final task = DownloadTask(
+            url: 'https://google.com',
+            filename: 'testfile.txt');
+    final successfullyEnqueued = await FileDownloader().enqueue(task);
+    
+    // somewhere else: query the task status by getting a `TaskRecord`
+    // from the database
+    final record = await FileDownloader().database.recordForId(task.taskId);
+    print('Taskid ${record.taskId} with task ${record.task} has '
+        'status ${record.taskStatus} and progress ${record.progress}'
+```
+
+You can interact with the `database` using `allRecords`, `recordForId`, `deleteAllRecords`, `deleteRecordWithId` etc. Note that only tasks that you asked to be tracked (using `trackTasks`, which activates tracking for all tasks in a group) will be in the database. All active tasks in the queue, regardless of tracking, can be queried via the `FileDownloader.taskForId` call etc, but those will only return the task itself, not its status or progress, as those are expected to be monitored via listener or callback.  Note: tasks that are started using `download`, `upload`, `batchDownload` or `batchUpload` are assigned a special group name 'await', as callbacks for these tasks are handled within the `FileDownloader`. If you want to  track those tasks in the database, call `FileDownloader().trackTasks(FileDownloader.awaitGroup)` at the start of your app.
+
 ## 4.0.0
 
 Adds support for MacOS, Windows and Linux and refactored the backend to be more easily extensible.
