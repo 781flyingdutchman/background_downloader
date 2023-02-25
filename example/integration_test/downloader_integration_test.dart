@@ -11,13 +11,13 @@ import 'package:logging/logging.dart';
 import 'package:path/path.dart' hide equals;
 import 'package:path_provider/path_provider.dart';
 
-
 const def = 'default';
 var statusCallbackCounter = 0;
 var progressCallbackCounter = 0;
 
 var statusCallbackCompleter = Completer<void>();
 var progressCallbackCompleter = Completer<void>();
+var someProgressCompleter = Completer<void>(); // completes when progress > 0.1
 var lastStatus = TaskStatus.enqueued;
 var lastProgress = -100.0;
 
@@ -62,6 +62,9 @@ void progressCallback(Task task, double progress) {
   print('progressCallback for $task with progress $progress');
   lastProgress = progress;
   progressCallbackCounter++;
+  if (!someProgressCompleter.isCompleted && progress > 0.1 && progress < 1) {
+    someProgressCompleter.complete();
+  }
   if (!progressCallbackCompleter.isCompleted &&
       (progress < 0 || progress == 1)) {
     progressCallbackCompleter.complete();
@@ -93,6 +96,7 @@ void main() {
     progressCallbackCounter = 0;
     statusCallbackCompleter = Completer<void>();
     progressCallbackCompleter = Completer<void>();
+    someProgressCompleter = Completer<void>();
     lastStatus = TaskStatus.enqueued;
     FileDownloader().destroy();
     final path =
@@ -343,7 +347,7 @@ void main() {
     });
 
     testWidgets('cancelTasksWithIds', (widgetTester) async {
-      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback, taskProgressCallback: progressCallback);
       expect(await FileDownloader().enqueue(task), isTrue);
       var taskIds = await FileDownloader().allTaskIds();
       expect(taskIds.length, equals(1));
@@ -353,12 +357,13 @@ void main() {
       // on iOS, the quick cancellation may not yield a 'running' state
       expect(statusCallbackCounter, lessThanOrEqualTo(3));
       expect(lastStatus, equals(TaskStatus.canceled));
-      // now do the same for a longer running task, and cancel 0.5 seconds in
+      // now do the same for a longer running task, cancel after some progress
       statusCallbackCounter = 0;
       statusCallbackCompleter = Completer();
-      task = DownloadTask(url: urlWithContentLength, filename: defaultFilename);
+      someProgressCompleter = Completer();
+      task = DownloadTask(url: urlWithContentLength, filename: defaultFilename, updates: Updates.statusAndProgress);
       expect(await FileDownloader().enqueue(task), isTrue);
-      await Future.delayed(const Duration(milliseconds: 500));
+      await someProgressCompleter.future;
       taskIds = await FileDownloader().allTaskIds();
       expect(taskIds.length, equals(1));
       expect(taskIds.first, equals(task.taskId));
@@ -1217,56 +1222,74 @@ void main() {
 
   group('tracking', () {
     testWidgets('activate tracking', (widgetTester) async {
-      FileDownloader().trackTasks(markDownloadedComplete: false);
-      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback, taskProgressCallback: progressCallback);
-      task = DownloadTask(url: urlWithContentLength, filename: defaultFilename, updates: Updates.statusAndProgress);
+      await FileDownloader().database.deleteAllRecords();
+      await FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback)
+        .trackTasks(markDownloadedComplete: false);
+      task = DownloadTask(
+          url: urlWithContentLength,
+          filename: defaultFilename,
+          updates: Updates.statusAndProgress);
       expect(await FileDownloader().enqueue(task), equals(true));
-      await Future.delayed(const Duration(milliseconds: 500));
-      // after 0.5 seconds, expect status running and some progress in database
-      final record = await FileDownloader().taskRecordForId(task.taskId);
+      await someProgressCompleter.future;
+      // after some progress, expect status running and some progress in database
+      final record = await FileDownloader().database.recordForId(task.taskId);
       expect(record, isNotNull);
       expect(record?.taskId, equals(task.taskId));
-      expect(record?.status, equals(TaskStatus.running));
+      expect(record?.taskStatus, equals(TaskStatus.running));
       expect(record?.progress, greaterThan(0));
+      expect(record?.progress, equals(lastProgress));
       await statusCallbackCompleter.future;
       // completed
-      final record2 = await FileDownloader().taskRecordForId(task.taskId);
+      final record2 = await FileDownloader().database.recordForId(task.taskId);
       expect(record2, isNotNull);
       expect(record2?.taskId, equals(task.taskId));
-      expect(record2?.status, equals(TaskStatus.complete));
+      expect(record2?.taskStatus, equals(TaskStatus.complete));
       expect(record2?.progress, equals(progressComplete));
     });
 
     testWidgets('markDownloadedComplete', (widgetTester) async {
-      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
-      FileDownloader().trackTasks(markDownloadedComplete: false);
+      await FileDownloader().database.deleteAllRecords();
+      await FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback)
+          .trackTasks(markDownloadedComplete: false);
+      final filePath = await task.filePath();
+      if (File(filePath).existsSync()) {
+        File(filePath).deleteSync();
+      }
       // start a download, then cancel
-      task = DownloadTask(url: urlWithContentLength, filename: defaultFilename);
+      task = DownloadTask(
+          url: urlWithContentLength,
+          filename: defaultFilename,
+          updates: Updates.statusAndProgress);
       expect(await FileDownloader().enqueue(task), equals(true));
-      await Future.delayed(const Duration(milliseconds: 100));
+      await someProgressCompleter.future;
       await FileDownloader().cancelTasksWithIds([task.taskId]);
       await Future.delayed(const Duration(milliseconds: 500));
-      final record = await FileDownloader().taskRecordForId(task.taskId);
-      expect(record?.status, equals(TaskStatus.canceled));
-      final filePath = await task.filePath();
+      final record = await FileDownloader().database.recordForId(task.taskId);
+      expect(record?.taskStatus, equals(TaskStatus.canceled));
       expect(File(filePath).existsSync(), isFalse);
       // reactivate tracking, this time with markDownloadedComplete = true
       await FileDownloader().trackTasks();
       // because no file, status does not change
-      final record2 = await FileDownloader().taskRecordForId(task.taskId);
-      expect(record2?.status, equals(TaskStatus.canceled));
+      final record2 = await FileDownloader().database.recordForId(task.taskId);
+      expect(record2?.taskStatus, equals(TaskStatus.canceled));
       expect(record2?.progress, equals(record?.progress));
       // create a 'downloaded' file (even though the task was canceled)
       await File(filePath).writeAsString('test');
       // reactivate tracking, again with markDownloadedComplete = true
       await FileDownloader().trackTasks();
       // status and progress should now reflect 'complete'
-      final record3 = await FileDownloader().taskRecordForId(task.taskId);
-      expect(record3?.status, equals(TaskStatus.complete));
+      final record3 = await FileDownloader().database.recordForId(task.taskId);
+      expect(record3?.taskStatus, equals(TaskStatus.complete));
       expect(record3?.progress, equals(progressComplete));
       print('Finished markDownloadedComplete');
     });
   });
+
+
 }
 
 /// Helper: make sure [task] is set as desired, and this will enqueue, wait for

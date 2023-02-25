@@ -14,7 +14,20 @@ import 'models.dart';
 class FileDownloader {
   final _log = Logger('FileDownloader');
   static final FileDownloader _singleton = FileDownloader._internal();
+  
+  /// If no group is specified the default group name will be used 
   static const defaultGroup = 'default';
+  
+  /// Calls to [download], [upload], [downloadBatch] and [uploadBatch] are
+  /// monitored 'internally' in this special group
+  static const awaitGroup = 'await';
+
+  /// Database where tracked tasks are stored.
+  ///
+  /// Activate tracking by calling [trackTasks], and access the records in the
+  /// database via this [database] object.
+  final database = Database();
+
   final _taskCompleters = <Task, Completer<TaskStatus>>{};
   final _batches = <Batch>[];
   final _downloader = BaseDownloader.instance();
@@ -46,8 +59,10 @@ class FileDownloader {
   /// property, which defaults to status change callbacks only. To also get
   /// progress updates make sure to register a [TaskProgressCallback] and
   /// set the task's [updates] property to [Updates.progress] or
-  /// [Updates.statusAndProgress]
-  void registerCallbacks(
+  /// [Updates.statusAndProgress].
+  ///
+  /// The call returns the [FileDownloader] to make chaining easier
+  FileDownloader registerCallbacks(
       {String group = defaultGroup,
       TaskStatusCallback? taskStatusCallback,
       TaskProgressCallback? taskProgressCallback}) {
@@ -59,6 +74,7 @@ class FileDownloader {
     if (taskProgressCallback != null) {
       _downloader.groupProgressCallbacks[group] = taskProgressCallback;
     }
+    return this; // makes chaining calls easier
   }
 
   /// Start a new task
@@ -106,7 +122,7 @@ class FileDownloader {
   /// `print('Status for ${task.taskId} is $status);`
   ///
   /// Note that the task's [group] is ignored and will be replaced with an
-  /// internal group name '_enqueueAndWait' to track status
+  /// internal group name 'await' to track status
   Future<TaskStatus> upload(UploadTask task,
           {void Function(TaskStatus)? onStatus,
           void Function(double)? onProgress}) =>
@@ -118,7 +134,7 @@ class FileDownloader {
   Future<TaskStatus> _enqueueAndAwait(Task task,
       {void Function(TaskStatus)? onStatus,
       void Function(double)? onProgress}) async {
-    const groupName = '_enqueueAndAwait';
+
 
     /// Internal callback function that passes the update on to different
     /// callbacks
@@ -162,11 +178,11 @@ class FileDownloader {
 
     // register the internal callbacks and store the task-specific ones
     registerCallbacks(
-        group: groupName,
+        group: awaitGroup,
         taskStatusCallback: internalStatusCallback,
         taskProgressCallback: internalProgressCallBack);
     final internalTask = task.copyWith(
-        group: groupName,
+        group: awaitGroup,
         updates:
             onProgress != null ? Updates.statusAndProgress : Updates.status);
     if (onStatus != null) {
@@ -255,14 +271,14 @@ class FileDownloader {
   }
 
   /// Resets the downloader by cancelling all ongoing tasks within
-  /// the provided group
+  /// the provided [group]
   ///
   /// Returns the number of tasks cancelled. Every canceled task wil emit a
   /// [TaskStatus.canceled] update to the registered callback, if
   /// requested
   Future<int> reset({String group = defaultGroup}) => _downloader.reset(group);
 
-  /// Returns a list of taskIds of all tasks currently active in this group
+  /// Returns a list of taskIds of all tasks currently active in this [group]
   ///
   /// Active means enqueued or running, and if [includeTasksWaitingToRetry] is
   /// true also tasks that are waiting to be retried
@@ -275,7 +291,7 @@ class FileDownloader {
           .map((task) => task.taskId)
           .toList();
 
-  /// Returns a list of all tasks currently active in this group
+  /// Returns a list of all tasks currently active in this [group]
   ///
   /// Active means enqueued or running, and if [includeTasksWaitingToRetry] is
   /// true also tasks that are waiting to be retried
@@ -299,38 +315,23 @@ class FileDownloader {
   /// the status of tasks, use a [TaskStatusCallback]
   Future<Task?> taskForId(String taskId) => _downloader.taskForId(taskId);
 
-  /// Activate tracking for tasks in this group
+  /// Activate tracking for tasks in this [group]
   ///
-  /// All subsequent tasks in this group will be recorded in persistent storage
-  /// and can be queried with methods that include 'tracked', e.g.
-  /// [allTrackedTasks]
+  /// All subsequent tasks in this group will be recorded in persistent storage.
+  /// Use the [FileDownloader.database] to get or remove [TaskRecord] objects,
+  /// which contain a [Task], its [TaskStatus] and a [double] for progress.
   ///
-  /// If [markDownloadedComplete] is true (default) then all tasks that are
-  /// marked as not yet [TaskStatus.complete] will be set to complete if the
-  /// target file for that task exists, and will emit [TaskStatus.complete]
-  /// and [progressComplete] to their registered listener or callback.
+  /// If [markDownloadedComplete] is true (default) then all tasks in the
+  /// database that are marked as not yet [TaskStatus.complete] will be set to
+  /// [TaskStatus.complete] if the target file for that task exists.
+  /// They will also emit [TaskStatus.complete] and [progressComplete] to
+  /// their registered listener or callback.
   /// This is a convenient way to capture downloads that have completed while
-  /// the app was suspended, provided you have registered your listeners
-  /// or callback before calling this.
+  /// the app was suspended: on app startup, immediately register your
+  /// listener or callbacks, and call [trackTasks] fro each group.
   Future<void> trackTasks(
           {String group = defaultGroup, bool markDownloadedComplete = true}) =>
       _downloader.trackTasks(group, markDownloadedComplete);
-
-  /// Return a list of all [TaskRecord] stored in persistent storage
-  Future<List<TaskRecord>> allTaskRecords({String group = defaultGroup}) =>
-      Database().allRecords(group);
-
-  /// Return the [TaskRecord] for the task with [taskId]
-  Future<TaskRecord?> taskRecordForId(String taskId) =>
-      Database().recordForId(taskId);
-
-  /// Delete  [TaskRecord] for this [taskId]
-  Future<void> deleteTaskRecordWithId(String taskId) =>
-      Database().deleteRecordWithId(taskId);
-
-  /// Delete all [TaskRecord] entries for these [taskIds]
-  Future<void> deleteTaskRecordsWithIds(List<String> taskIds) =>
-      Database().deleteRecordsWithIds(taskIds);
 
   /// Perform a server request for this [request]
   ///

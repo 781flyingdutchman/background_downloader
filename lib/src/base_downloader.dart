@@ -125,15 +125,15 @@ abstract class BaseDownloader {
   Future<void> trackTasks(String group, bool markDownloadedComplete) async {
     trackedGroups.add(group);
     if (markDownloadedComplete) {
-      final records = await Database().allRecords(group);
+      final records = await Database().allRecords(group: group);
       for (var record in records.where((record) =>
           record.task is DownloadTask &&
-          record.status != TaskStatus.complete)) {
+          record.taskStatus != TaskStatus.complete)) {
         final filePath = await record.task.filePath();
         if (await File(filePath).exists()) {
-          processStatusUpdate(record.task, record.status);
+          processStatusUpdate(record.task, record.taskStatus);
           final updatedRecord = record.copyWith(
-              status: TaskStatus.complete, progress: progressComplete);
+              taskStatus: TaskStatus.complete, progress: progressComplete);
           await Database().updateRecord(updatedRecord);
         }
       }
@@ -160,7 +160,6 @@ abstract class BaseDownloader {
     // has retriesRemaining > 0: those are always sent here, and are
     // intercepted to hold the task and reschedule in the near future
     if (taskStatus == TaskStatus.failed && task.retriesRemaining > 0) {
-      _updateTaskInDatabase(task, status: TaskStatus.waitingToRetry);
       _emitStatusUpdate(task, TaskStatus.waitingToRetry);
       _emitProgressUpdate(task, progressWaitingToRetry);
       task.decreaseRetriesRemaining();
@@ -182,19 +181,19 @@ abstract class BaseDownloader {
       });
     } else {
       // normal status update
-      _updateTaskInDatabase(task, status: taskStatus);
       _emitStatusUpdate(task, taskStatus);
     }
   }
 
   /// Process progress update coming from Downloader to client listener
   void processProgressUpdate(Task task, double progress) {
-    _updateTaskInDatabase(task, progress: progress);
     _emitProgressUpdate(task, progress);
   }
 
-  /// Emits the status update for this task to its callback or listener
+  /// Emits the status update for this task to its callback or listener, and
+  /// update the task in the database
   void _emitStatusUpdate(Task task, TaskStatus taskStatus) {
+    _updateTaskInDatabase(task, status: taskStatus);
     if (task.providesStatusUpdates) {
       final taskStatusCallback = groupStatusCallbacks[task.group];
       if (taskStatusCallback != null) {
@@ -212,8 +211,10 @@ abstract class BaseDownloader {
     }
   }
 
-  /// Emit the progress update for this task to its callback or listener
+  /// Emit the progress update for this task to its callback or listener, and
+  /// update the task in the database
   void _emitProgressUpdate(Task task, progress) {
+    _updateTaskInDatabase(task, progress: progress);
     if (task.providesProgressUpdates) {
       final taskProgressCallback = groupProgressCallbacks[task.group];
       if (taskProgressCallback != null) {
@@ -230,7 +231,8 @@ abstract class BaseDownloader {
   }
 
   /// Insert or update the [TaskRecord] in the tracking database
-  Future<void> _updateTaskInDatabase(Task task, {TaskStatus? status, double? progress}) async {
+  Future<void> _updateTaskInDatabase(Task task,
+      {TaskStatus? status, double? progress}) async {
     if (trackedGroups.contains(task.group)) {
       if (status == null && progress != null) {
         // update existing record with progress only

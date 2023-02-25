@@ -4,6 +4,8 @@ Create a [DownloadTask](https://pub.dev/documentation/background_downloader/late
 
 Monitor progress by passing an `onProgress` listener, and monitor detailed status updates by passing an `onStatus` listener to the `download` call.  Alternatively, monitor tasks centrally using an [event listener](#using-an-event-listener) or [callbacks](#using-callbacks) and call `enqueue` to start the task.
 
+Optionally, keep track of task status and progress in persistent storage.
+
 To upload a file, create an [UploadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/UploadTask-class.html) and call `upload`. To make a regular [server request](#server-requests), create a [Request](https://pub.dev/documentation/background_downloader/latest/background_downloader/Request-class.html) and call `request`.
 
 The plugin supports [headers](#headers), [retries](#retries), [requiring WiFi](#requiring-wifi) before starting the up/download, user-defined [metadata](#metadata) and GET and [POST](#post-requests) http(s) requests. You can [manage and monitor the tasks in the queue](#managing-and-monitoring-tasks-in-the-queue), and have different handlers for updates by [group](#grouping-tasks) of tasks.
@@ -17,9 +19,10 @@ No setup is required for Android, Windows and Linux, and only minimal [setup for
   - [Monitoring the task](#monitoring-the-task)
   - [Specifying the location of the file to download or upload](#specifying-the-location-of-the-file-to-download-or-upload)
   - [A batch of files](#a-batch-of-files)
-- [Central monitoring](#central-monitoring)
+- [Central monitoring and tracking in a persistent database](#central-monitoring-and-tracking-in-a-persistent-database)
   - [Using an event listener](#using-an-event-listener)
   - [Using callbacks](#using-callbacks)
+  - [Using the database to track Tasks](#using-the-database-to-track-tasks)
 - [Uploads](#uploads)
 - [Managing and monitoring tasks in the queue](#managing-and-monitoring-tasks-in-the-queue)
   - [Grouping tasks](#grouping-tasks)
@@ -30,7 +33,7 @@ No setup is required for Android, Windows and Linux, and only minimal [setup for
 
 ### Tasks and the FileDownloader
 
-A `DownloadTask` or `UploadTask` (both subclasses of `Task`) defines one download or upload. It contains the `url`, the file name and location, what updates you want to receive while the task is in progress, [etc](#optional-parameters).  The [FileDownloader](https://pub.dev/documentation/background_downloader/latest/background_downloader/FileDownloader-class.html) class is the entrypoint for all plugin calls, so to download a file call `FileDownloader().download` while passing the `DownloadTask`, then wait for the result:
+A `DownloadTask` or `UploadTask` (both subclasses of `Task`) defines one download or upload. It contains the `url`, the file name and location, what updates you want to receive while the task is in progress, [etc](#optional-parameters).  The [FileDownloader](https://pub.dev/documentation/background_downloader/latest/background_downloader/FileDownloader-class.html) class is the entrypoint for all calls. To download a file:
 ```
     final task = DownloadTask(
             url: 'https://google.com',
@@ -42,12 +45,16 @@ The `result` will be a `TaskStatus` that represents how the download ended: `.co
 
 ### Monitoring the task
 
+#### Progress
+
 If you want to monitor progress during the download itself (e.g. for a large file), then add a progress callback that takes a double as its argument:
 ```
     final result = await FileDownloader().download(task, 
         onProgress: (progress) => print('Progress update: $progress'));
 ```
 Progress updates start with 0.0 when the actual download starts (which may be in the future, e.g. if waiting for a WiFi connection), and will be sent periodically, not more than twice per second per task.  If a task completes successfully you will receive a final progress update with a `progress` value of 1.0 (`progressComplete`). Failed tasks generate `progress` of `progressFailed` (-1.0), canceled tasks `progressCanceled` (-2.0), notFound tasks `progressNotFound` (-3.0) and waitingToRetry tasks `progressWaitingToRetry` (-4.0).
+
+#### Status
 
 If you want to monitor status changes while the download is underway (i.e. not only the final state, which you will receive as the result of the `download` call) you can add a status change callback that takes the status as an argument:
 ```
@@ -101,14 +108,15 @@ The callback will be called upon completion of each task (whether successful or 
 
 For uploads, create a `List` of `UploadTask` objects and call `uploadBatch` - everything else is the same.
 
-## Central monitoring
+## Central monitoring and tracking in a persistent database
 
-Instead of monitoring where you call `download`, you may want to use a centralized task monitoring approach. This is helpful for instance if:
-1. You start download in multiple locations in your app, but want to monitor those in one place, instead of defining `onStatus` and `onProgress` for every call.
+Instead of monitoring in the `download` call, you may want to use a centralized task monitoring approach, and/or keeping track of tasks in a database. This is helpful for instance if:
+1. You start download in multiple locations in your app, but want to monitor those in one place, instead of defining `onStatus` and `onProgress` for every call to `download`
 2. You have different groups of tasks, and each group needs a different monitor
-2. Your downloads take long, and your user may switch away from your app for a long time. In that case, your app gets suspended by the operating system. The downloads continue in the background and will finish eventually, but when your app restarts from a suspended state, the result `Future` that you were awaiting when you called `download` may no longer be 'alive', and you will therefore miss the completion of the downloads that happened while suspended. This situation is uncommon, as the app will typically remain alive for several minutes even when moving to the background, but if you find this to be a problem for your use case, then you should process status and progress updates for long running background tasks centrally.
+3. You want to keep track of the status and progress of tasks in a persisitent database that you query
+4. Your downloads take long, and your user may switch away from your app for a long time, which causes your app to get suspended by the operating system. The downloads continue in the background and will finish eventually, but when your app restarts from a suspended state, the result `Future` that you were awaiting when you called `download` may no longer be 'alive', and you will therefore miss the completion of the downloads that happened while suspended. This situation is uncommon, as the app will typically remain alive for several minutes even when moving to the background, but if you find this to be a problem for your use case, then you should process status and progress updates for long running background tasks centrally.
 
-Central monitoring can be done by listening to an updates stream, or by registering callbacks. In both cases you now use `enqueue` instead of `download` or `upload` (which returns almost immediately with a `bool` to indicate if the `Task` was successfully enqueued) and monitor status changes and acting when a `Task` completes via the listener or callback.  As long as you start listening to the updates (or register your callbacks) as soon as your app starts, you will get notified of status and progress update changes that happened while your app was suspended, immediately after the app awakes.
+Central monitoring can be done by listening to an updates stream, or by registering callbacks. In both cases you now use `enqueue` instead of `download` or `upload`. `enqueue` returns almost immediately with a `bool` to indicate if the `Task` was successfully enqueued. Monitor status changes and act when a `Task` completes via the listener or callback.  As long as you start listening to the updates (or register your callbacks) as soon as your app starts, you will get notified of status and progress update changes that happened while your app was suspended, immediately after the app awakes.
 
 Status updates may still get lost in unusual situations (e.g. if the user kills your app when it is suspended). It may therefore be helpful to check upon startup if a file you were expecting exists, even if you may not have been notified of a completed download. In addition, you can check which downloads are still active by [querying the task queue](#managing-and-monitoring-tasks-in-the-queue).
 
@@ -167,6 +175,29 @@ You define what updates to receive on a task by task basis via the `Task.updates
 
 Note that all tasks will call the same callback, unless you register separate callbacks for different [groups](#grouping-tasks) and set your `Task.group` field accordingly.
 
+### Using the database to track Tasks
+
+To keep track of the status and progress of all tasks, even after they have downloaded, activate tracking by calling `trackTasks()` and use the `database` field to query. For example:
+```
+    // at app startup, start tracking
+    await FileDownloader().trackTasks();
+    
+    
+    // somewhere else: enqueue a download
+    final task = DownloadTask(
+            url: 'https://google.com',
+            filename: 'testfile.txt');
+    final successfullyEnqueued = await FileDownloader().enqueue(task);
+    
+    // somewhere else: query the task status by getting a `TaskRecord`
+    // from the database
+    final record = await FileDownloader().database.recordForId(task.taskId);
+    print('Taskid ${record.taskId} with task ${record.task} has '
+        'status ${record.taskStatus} and progress ${record.progress}'
+```
+
+You can interact with the `database` using `allRecords`, `recordForId`, `deleteAllRecords`, `deleteRecordWithId` etc. Note that only tasks that you asked to be tracked (using `trackTasks`, whch activates tracking for all tasks in a group) will be in the database. All active tasks in the queue, regardless of tracking, can be queried via the `FileDownloader.taskForId` call etc, but those will only return the task itself, not its status or progress, as those are expected to be monitored via listener or callback.  Note: tasks that are started using `download`, `upload`, `batchDownload` or `batchUpload` are assigned a special group name 'await', as callbacks for these tasks are handled within the `FileDownloader`. If you want to  track those tasks in the database, call `FileDownloader().trackTasks(FileDownloader.awaitGroup)` at the start of your app.
+
 ## Uploads
 
 Uploads are very similar to downloads, except:
@@ -204,6 +235,8 @@ Because an app may require different types of downloads, and handle those differ
 The methods `registerCallBacks`, `reset`, `allTaskIds` and `allTasks` all take an optional `group` parameter to target tasks in a specific group. Note that if tasks are enqueued with a `group` other than default, calling any of these methods without a group parameter will not affect/include those tasks - only the default tasks.
 
 If you listen to the `updates` stream instead of using callbacks, you can test for the task's `group` field in your listener, and process the update differently for different groups.
+
+Note: tasks that are started using `download`, `upload`, `batchDownload` or `batchUpload` are assigned a special group name 'await', as callbacks for these tasks are handled within the `FileDownloader`.
 
 
 
