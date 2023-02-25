@@ -1,5 +1,9 @@
+import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
+
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 
 /// Defines a set of possible states which a [Task] can be in.
 enum TaskStatus {
@@ -167,7 +171,7 @@ class Request {
         retriesRemaining = jsonMap['retriesRemaining'];
 
   /// Creates JSON map of this object
-  Map toJsonMap() => {
+  Map<String, dynamic> toJsonMap() => {
         'url': url,
         'headers': headers,
         'post': post,
@@ -285,6 +289,23 @@ abstract class Task extends Request {
           ? UploadTask.fromJsonMap(jsonMap)
           : DownloadTask.fromJsonMap(jsonMap);
 
+  /// Returns the absolute path to the file represented by this task
+  Future<String> filePath() async {
+    final Directory baseDir;
+    switch (baseDirectory) {
+      case BaseDirectory.applicationDocuments:
+        baseDir = await getApplicationDocumentsDirectory();
+        break;
+      case BaseDirectory.temporary:
+        baseDir = await getTemporaryDirectory();
+        break;
+      case BaseDirectory.applicationSupport:
+        baseDir = await getApplicationSupportDirectory();
+        break;
+    }
+    return path.join(baseDir.path, directory, filename);
+  }
+
   /// Returns a copy of the [Task] with optional changes to specific fields
   Task copyWith(
       {String? taskId,
@@ -318,7 +339,7 @@ abstract class Task extends Request {
 
   /// Creates JSON map of this object
   @override
-  Map toJsonMap() => {
+  Map<String, dynamic> toJsonMap() => {
         ...super.toJsonMap(),
         'taskId': taskId,
         'filename': filename,
@@ -408,7 +429,7 @@ class DownloadTask extends Task {
         super.fromJsonMap(jsonMap);
 
   @override
-  Map toJsonMap() => {...super.toJsonMap(), 'taskType': 'DownloadTask'};
+  Map<String, dynamic> toJsonMap() => {...super.toJsonMap(), 'taskType': 'DownloadTask'};
 
   @override
   DownloadTask copyWith(
@@ -494,7 +515,7 @@ class UploadTask extends Task {
         super.fromJsonMap(jsonMap);
 
   @override
-  Map toJsonMap() => {...super.toJsonMap(), 'taskType': 'UploadTask'};
+  Map<String, dynamic> toJsonMap() => {...super.toJsonMap(), 'taskType': 'UploadTask'};
 
   @override
   UploadTask copyWith(

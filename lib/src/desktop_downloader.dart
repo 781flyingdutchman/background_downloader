@@ -14,7 +14,7 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
 import 'base_downloader.dart';
-import 'downloader.dart';
+import 'file_downloader.dart';
 import 'models.dart';
 
 const okResponses = [200, 201, 202, 203, 204, 205, 206];
@@ -64,19 +64,7 @@ class DesktopDownloader extends BaseDownloader {
   /// 'forwarded' to the [backgroundChannel] and processed by the
   /// [FileDownloader]
   Future<void> _executeTask(Task task) async {
-    final Directory baseDir;
-    switch (task.baseDirectory) {
-      case BaseDirectory.applicationDocuments:
-        baseDir = await getApplicationDocumentsDirectory();
-        break;
-      case BaseDirectory.temporary:
-        baseDir = await getTemporaryDirectory();
-        break;
-      case BaseDirectory.applicationSupport:
-        baseDir = await getApplicationSupportDirectory();
-        break;
-    }
-    final filePath = path.join(baseDir.path, task.directory, task.filename);
+    final filePath = await task.filePath();
     final tempFilePath = path.join((await getTemporaryDirectory()).path,
         Random().nextInt(1 << 32).toString());
     // spawn an isolate to do the task

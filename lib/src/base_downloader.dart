@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:background_downloader/src/native_downloader.dart';
 import 'package:logging/logging.dart';
 
+import 'database.dart';
 import 'desktop_downloader.dart';
 import 'models.dart';
 
@@ -30,6 +31,9 @@ abstract class BaseDownloader {
 
   /// StreamController for [TaskUpdate] updates
   var updates = StreamController<TaskUpdate>();
+
+  /// Groups tracked in persistent database
+  final trackedGroups = <String>{};
 
   BaseDownloader();
 
@@ -105,6 +109,37 @@ abstract class BaseDownloader {
     }
   }
 
+  /// Activate tracking for tasks in this group
+  ///
+  /// All subsequent tasks in this group will be recorded in persistent storage
+  /// and can be queried with methods that include 'tracked', e.g.
+  /// [allTrackedTasks]
+  ///
+  /// If [markDownloadedComplete] is true (default) then all tasks that are
+  /// marked as not yet [TaskStatus.complete] will be set to complete if the
+  /// target file for that task exists, and will emit [TaskStatus.complete]
+  /// and [progressComplete] to their registered listener or callback.
+  /// This is a convenient way to capture downloads that have completed while
+  /// the app was suspended, provided you have registered your listeners
+  /// or callback before calling this.
+  Future<void> trackTasks(String group, bool markDownloadedComplete) async {
+    trackedGroups.add(group);
+    if (markDownloadedComplete) {
+      final records = await Database().allRecords(group);
+      for (var record in records.where((record) =>
+          record.task is DownloadTask &&
+          record.status != TaskStatus.complete)) {
+        final filePath = await record.task.filePath();
+        if (await File(filePath).exists()) {
+          processStatusUpdate(record.task, record.status);
+          final updatedRecord = record.copyWith(
+              status: TaskStatus.complete, progress: progressComplete);
+          await Database().updateRecord(updatedRecord);
+        }
+      }
+    }
+  }
+
   /// Destroy - clears callbacks, updates stream and retry queue
   ///
   /// Clears all queues and references without sending cancellation
@@ -113,6 +148,7 @@ abstract class BaseDownloader {
     tasksWaitingToRetry.clear();
     groupStatusCallbacks.clear();
     groupProgressCallbacks.clear();
+    trackedGroups.clear();
     updates.close();
     updates = StreamController();
   }
@@ -124,6 +160,7 @@ abstract class BaseDownloader {
     // has retriesRemaining > 0: those are always sent here, and are
     // intercepted to hold the task and reschedule in the near future
     if (taskStatus == TaskStatus.failed && task.retriesRemaining > 0) {
+      _updateTaskInDatabase(task, status: TaskStatus.waitingToRetry);
       _emitStatusUpdate(task, TaskStatus.waitingToRetry);
       _emitProgressUpdate(task, progressWaitingToRetry);
       task.decreaseRetriesRemaining();
@@ -145,12 +182,14 @@ abstract class BaseDownloader {
       });
     } else {
       // normal status update
+      _updateTaskInDatabase(task, status: taskStatus);
       _emitStatusUpdate(task, taskStatus);
     }
   }
 
   /// Process progress update coming from Downloader to client listener
   void processProgressUpdate(Task task, double progress) {
+    _updateTaskInDatabase(task, progress: progress);
     _emitProgressUpdate(task, progress);
   }
 
@@ -187,6 +226,45 @@ abstract class BaseDownloader {
             'was registered, and there is no listener to the '
             'updates stream');
       }
+    }
+  }
+
+  /// Insert or update the [TaskRecord] in the tracking database
+  Future<void> _updateTaskInDatabase(Task task, {TaskStatus? status, double? progress}) async {
+    if (trackedGroups.contains(task.group)) {
+      if (status == null && progress != null) {
+        // update existing record with progress only
+        final existingRecord = await Database().recordForId(task.taskId);
+        if (existingRecord != null) {
+          Database().updateRecord(existingRecord.copyWith(progress: progress));
+          return;
+        }
+      }
+      if (progress == null && status != null) {
+        // set progress based on status
+        switch (status) {
+          case TaskStatus.enqueued:
+          case TaskStatus.running:
+            progress = 0.0;
+            break;
+          case TaskStatus.complete:
+            progress = progressComplete;
+            break;
+          case TaskStatus.notFound:
+            progress = progressNotFound;
+            break;
+          case TaskStatus.failed:
+            progress = progressFailed;
+            break;
+          case TaskStatus.canceled:
+            progress = progressCanceled;
+            break;
+          case TaskStatus.waitingToRetry:
+            progress = progressWaitingToRetry;
+            break;
+        }
+      }
+      Database().updateRecord(TaskRecord(task, status!, progress!));
     }
   }
 }

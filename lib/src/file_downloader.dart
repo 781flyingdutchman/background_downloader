@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:background_downloader/background_downloader.dart';
 import 'package:background_downloader/src/base_downloader.dart';
+import 'package:background_downloader/src/database.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
@@ -298,6 +298,39 @@ class FileDownloader {
   /// does not guarantee that the task is still running. To keep track of
   /// the status of tasks, use a [TaskStatusCallback]
   Future<Task?> taskForId(String taskId) => _downloader.taskForId(taskId);
+
+  /// Activate tracking for tasks in this group
+  ///
+  /// All subsequent tasks in this group will be recorded in persistent storage
+  /// and can be queried with methods that include 'tracked', e.g.
+  /// [allTrackedTasks]
+  ///
+  /// If [markDownloadedComplete] is true (default) then all tasks that are
+  /// marked as not yet [TaskStatus.complete] will be set to complete if the
+  /// target file for that task exists, and will emit [TaskStatus.complete]
+  /// and [progressComplete] to their registered listener or callback.
+  /// This is a convenient way to capture downloads that have completed while
+  /// the app was suspended, provided you have registered your listeners
+  /// or callback before calling this.
+  Future<void> trackTasks(
+          {String group = defaultGroup, bool markDownloadedComplete = true}) =>
+      _downloader.trackTasks(group, markDownloadedComplete);
+
+  /// Return a list of all [TaskRecord] stored in persistent storage
+  Future<List<TaskRecord>> allTaskRecords({String group = defaultGroup}) =>
+      Database().allRecords(group);
+
+  /// Return the [TaskRecord] for the task with [taskId]
+  Future<TaskRecord?> taskRecordForId(String taskId) =>
+      Database().recordForId(taskId);
+
+  /// Delete  [TaskRecord] for this [taskId]
+  Future<void> deleteTaskRecordWithId(String taskId) =>
+      Database().deleteRecordWithId(taskId);
+
+  /// Delete all [TaskRecord] entries for these [taskIds]
+  Future<void> deleteTaskRecordsWithIds(List<String> taskIds) =>
+      Database().deleteRecordsWithIds(taskIds);
 
   /// Perform a server request for this [request]
   ///
