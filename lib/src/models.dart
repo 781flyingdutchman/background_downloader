@@ -197,7 +197,6 @@ class Request {
 final _pathSeparator = RegExp(r'[/\\]');
 final _startsWithPathSeparator = RegExp(r'^[/\\]');
 
-
 /// Information related to a [Task]
 ///
 /// A [Task] is the base class for [DownloadTask] and
@@ -355,6 +354,7 @@ abstract class Task extends Request {
   }
 }
 
+/// Information related to a download task
 class DownloadTask extends Task {
   /// Creates a [DownloadTask]
   ///

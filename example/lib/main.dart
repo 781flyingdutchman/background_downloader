@@ -44,12 +44,10 @@ class _MyAppState extends State<MyApp> {
   /// Process the status updates coming from the downloader
   ///
   /// Stores the task status
-  void myDownloadStatusCallback(
-      Task task, TaskStatus status) {
+  void myDownloadStatusCallback(Task task, TaskStatus status) {
     if (task == backgroundDownloadTask) {
-      buttonState = status == TaskStatus.running
-          ? ButtonState.cancel
-          : ButtonState.reset;
+      buttonState =
+          status == TaskStatus.running ? ButtonState.cancel : ButtonState.reset;
       setState(() {
         downloadTaskStatus = status;
       });
@@ -59,8 +57,7 @@ class _MyAppState extends State<MyApp> {
   /// Process the progress updates coming from the downloader
   ///
   /// Adds an update object to the stream that the main UI listens to
-  void myDownloadProgressCallback(
-      Task task, double progress) {
+  void myDownloadProgressCallback(Task task, double progress) {
     updateStream.add(DownloadProgressIndicatorUpdate(task.filename, progress));
   }
 
@@ -136,15 +133,14 @@ class _MyAppState extends State<MyApp> {
             filename: 'zipfile.zip',
             directory: 'my/directory',
             baseDirectory: BaseDirectory.applicationDocuments,
-            updates:
-                Updates.statusAndProgress);
+            updates: Updates.statusAndProgress);
         await FileDownloader().enqueue(backgroundDownloadTask!);
         break;
       case ButtonState.cancel:
         // cancel download
         if (backgroundDownloadTask != null) {
-          await FileDownloader().cancelTasksWithIds(
-              [backgroundDownloadTask!.taskId]);
+          await FileDownloader()
+              .cancelTasksWithIds([backgroundDownloadTask!.taskId]);
         }
         break;
       case ButtonState.reset:

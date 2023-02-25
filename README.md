@@ -30,7 +30,7 @@ No setup is required for Android, Windows and Linux, and only minimal [setup for
 
 ### Tasks and the FileDownloader
 
-A `DownloadTask` or `UploadTask` (both subclasses of `Task`) defines one download or upload. It contains the `url`, the file name and location, what updates you want to receive while the task is in progress, [etc](#optional-parameters).  The `FileDownloader` class is the entrypoint for all plugin calls, so to download a file call `FileDownloader().download` while passing the `DownloadTask`, then wait for the result:
+A `DownloadTask` or `UploadTask` (both subclasses of `Task`) defines one download or upload. It contains the `url`, the file name and location, what updates you want to receive while the task is in progress, [etc](#optional-parameters).  The [FileDownloader](https://pub.dev/documentation/background_downloader/latest/background_downloader/FileDownloader-class.html) class is the entrypoint for all plugin calls, so to download a file call `FileDownloader().download` while passing the `DownloadTask`, then wait for the result:
 ```
     final task = DownloadTask(
             url: 'https://google.com',
@@ -55,7 +55,7 @@ If you want to monitor status changes while the download is underway (i.e. not o
         onStatus: (status) => print('Status update: $status'));
 ```
 
-The status will follow a sequence of `enqueued` (waiting to execute), `running` (actively downloading) and then one of the final states mentioned before, or `.waitingToRetry` if retries are enabled and the task failed.
+The status will follow a sequence of `.enqueued` (waiting to execute), `.running` (actively downloading) and then one of the final states mentioned before, or `.waitingToRetry` if retries are enabled and the task failed.
 
 
 ### Specifying the location of the file to download or upload
@@ -139,7 +139,7 @@ You can start your subscription in a convenient place, like a widget's `initStat
 
 ### Using callbacks
 
-Instead of listening to the `updates` stream you can register a callback for status updates, and/or a callback for progress updates.  This may be the easiest way if you want different callbacks for different groups - see [below](#grouping-tasks).
+Instead of listening to the `updates` stream you can register a callback for status updates, and/or a callback for progress updates.  This may be the easiest way if you want different callbacks for different [groups](#grouping-tasks).
 
 The `TaskStatusCallback` receives the `Task` and the updated `TaskStatus`, so a simple callback function is:
 ```
@@ -182,7 +182,7 @@ To manage or monitor tasks, use the following methods:
 * `allTaskIds` to get a list of `taskId` values of all tasks currently active (i.e. not in a final state). You can exclude tasks waiting for retries by setting `includeTasksWaitingToRetry` to `false`
 * `allTasks` to get a list of all tasks currently active (i.e. not in a final state). You can exclude tasks waiting for retries by setting `includeTasksWaitingToRetry` to `false`
 * `cancelTasksWithIds` to cancel all tasks with a `taskId` in the provided list of taskIds
-* `taskForId` to get the `DownloadTask` for the given `taskId`, or `null` if not found. Only tasks that are active (ie. not in a final state) are guaranteed to be returned, but returning a task does not guarantee that it is running
+* `taskForId` to get the `DownloadTask` for the given `taskId`, or `null` if not found. Only tasks that are active (ie. not in a final state) are guaranteed to be returned, but returning a task does not guarantee that it is active
 
 ### Grouping tasks
 
@@ -209,9 +209,9 @@ If you listen to the `updates` stream instead of using callbacks, you can test f
 
 ## Server requests
 
-To make a regular server request (e.g. to obtain a response from an API end point that you process directly in your app) use the `request` method.  It works similar to the `download` method, except you pass a `Request` object that has fewer fields than the `DownloadTask`, but is similar in structure.  You `await` the response, which will be a `Resonse` object as defined in the dart `http` package, and includes getters for the response body (as a `String` or as `UInt8List`), `statusCode` and `reasonPhrase`.
+To make a regular server request (e.g. to obtain a response from an API end point that you process directly in your app) use the `request` method.  It works similar to the `download` method, except you pass a `Request` object that has fewer fields than the `DownloadTask`, but is similar in structure.  You `await` the response, which will be a [Response](https://pub.dev/documentation/http/latest/http/Response-class.html) object as defined in the dart [http package](https://pub.dev/packages/http), and includes getters for the response body (as a `String` or as `UInt8List`), `statusCode` and `reasonPhrase`.
 
-Because requests are meant to be immediate, they are not enqueued like a `Task` is, do not allow for status/progress monitoring, and will not execute in the background.
+Because requests are meant to be immediate, they are not enqueued like a `Task` is, and do not allow for status/progress monitoring.
 
 ## Optional parameters
 
