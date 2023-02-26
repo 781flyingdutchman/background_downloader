@@ -1,3 +1,10 @@
+## 4.2.0
+
+Added `creationTime` field to `Request` and `Task`.
+
+Added `allRecordsOlderThan(Duration age, {String? group}` to `Database`, making it easy to extract
+the `TaskRecord` entries that are stale.
+
 ## 4.1.0
 
 Adds optional tracking of task status and progress in a persistent database.

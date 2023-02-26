@@ -21,6 +21,7 @@ struct Task : Codable {
     var retries: Int
     var retriesRemaining: Int
     var metaData: String
+    var creationTime: Int64
     var taskType: String
 }
 

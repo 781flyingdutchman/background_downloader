@@ -413,15 +413,14 @@ void main() {
           retries: 5,
           metaData: 'someMetaData');
       final now = DateTime.now();
-      expect(now.difference(complexTask.creationTime).inMilliseconds, lessThan(100));
-      print(complexTask.creationTime.millisecondsSinceEpoch);
+      expect(now.difference(complexTask.creationTime).inMilliseconds,
+          lessThan(100));
       FileDownloader().registerCallbacks(
           group: complexTask.group, taskStatusCallback: statusCallback);
       expect(await FileDownloader().taskForId(complexTask.taskId), isNull);
       expect(await FileDownloader().enqueue(complexTask), isTrue);
       final task = await FileDownloader().taskForId(complexTask.taskId);
       expect(task, equals(complexTask));
-      print(task!.creationTime.millisecondsSinceEpoch);
       if (task != null) {
         expect(task.taskId, equals(complexTask.taskId));
         expect(task.url, equals(complexTask.url));
@@ -437,7 +436,12 @@ void main() {
         expect(task.retriesRemaining, equals(complexTask.retriesRemaining));
         expect(task.retriesRemaining, equals(task.retries));
         expect(task.metaData, equals(complexTask.metaData));
-        expect(task.creationTime.difference(complexTask.creationTime).inMilliseconds.abs(), lessThan(100));
+        expect(
+            task.creationTime
+                .difference(complexTask.creationTime)
+                .inMilliseconds
+                .abs(),
+            lessThan(100));
       }
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.complete));
@@ -458,7 +462,8 @@ void main() {
           retries: 5,
           metaData: 'someMetaData');
       final now = DateTime.now();
-      expect(now.difference(complexTask.creationTime).inMilliseconds, lessThan(100));
+      expect(now.difference(complexTask.creationTime).inMilliseconds,
+          lessThan(100));
       final task = complexTask.copyWith(); // all the same
       expect(task.taskId, equals(complexTask.taskId));
       expect(task.url, equals(complexTask.url));
