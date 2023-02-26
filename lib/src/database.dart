@@ -28,6 +28,18 @@ class Database {
         : allRecords?.where((element) => element.group == group).toList() ?? [];
   }
 
+  /// Returns all [TaskRecord] older than [age]
+  ///
+  /// Optionally, specify a [group] to filter by
+  Future<List<TaskRecord>> allRecordsOlderThan(Duration age,
+      {String? group}) async {
+    final allRecordsInGroup = await allRecords(group: group);
+    final now = DateTime.now();
+    return allRecordsInGroup
+        .where((record) => now.difference(record.task.creationTime) > age)
+        .toList();
+  }
+
   /// Return [TaskRecord] for this [taskId]
   Future<TaskRecord?> recordForId(String taskId) async {
     final jsonMap = await _db.collection(tasksPath).doc(taskId).get();

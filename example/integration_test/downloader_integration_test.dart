@@ -412,12 +412,16 @@ void main() {
           requiresWiFi: true,
           retries: 5,
           metaData: 'someMetaData');
+      final now = DateTime.now();
+      expect(now.difference(complexTask.creationTime).inMilliseconds, lessThan(100));
+      print(complexTask.creationTime.millisecondsSinceEpoch);
       FileDownloader().registerCallbacks(
           group: complexTask.group, taskStatusCallback: statusCallback);
       expect(await FileDownloader().taskForId(complexTask.taskId), isNull);
       expect(await FileDownloader().enqueue(complexTask), isTrue);
       final task = await FileDownloader().taskForId(complexTask.taskId);
       expect(task, equals(complexTask));
+      print(task!.creationTime.millisecondsSinceEpoch);
       if (task != null) {
         expect(task.taskId, equals(complexTask.taskId));
         expect(task.url, equals(complexTask.url));
@@ -433,9 +437,44 @@ void main() {
         expect(task.retriesRemaining, equals(complexTask.retriesRemaining));
         expect(task.retriesRemaining, equals(task.retries));
         expect(task.metaData, equals(complexTask.metaData));
+        expect(task.creationTime.difference(complexTask.creationTime).inMilliseconds.abs(), lessThan(100));
       }
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.complete));
+    });
+
+    testWidgets('copyWith', (widgetTester) async {
+      final complexTask = DownloadTask(
+          taskId: 'uniqueId',
+          url: postTestUrl,
+          filename: defaultFilename,
+          headers: {'Auth': 'Test'},
+          post: 'TestPost',
+          directory: 'directory',
+          baseDirectory: BaseDirectory.temporary,
+          group: 'someGroup',
+          updates: Updates.statusAndProgress,
+          requiresWiFi: true,
+          retries: 5,
+          metaData: 'someMetaData');
+      final now = DateTime.now();
+      expect(now.difference(complexTask.creationTime).inMilliseconds, lessThan(100));
+      final task = complexTask.copyWith(); // all the same
+      expect(task.taskId, equals(complexTask.taskId));
+      expect(task.url, equals(complexTask.url));
+      expect(task.filename, equals(complexTask.filename));
+      expect(task.headers, equals(complexTask.headers));
+      expect(task.post, equals(complexTask.post));
+      expect(task.directory, equals(complexTask.directory));
+      expect(task.baseDirectory, equals(complexTask.baseDirectory));
+      expect(task.group, equals(complexTask.group));
+      expect(task.updates, equals(complexTask.updates));
+      expect(task.requiresWiFi, equals(complexTask.requiresWiFi));
+      expect(task.retries, equals(complexTask.retries));
+      expect(task.retriesRemaining, equals(complexTask.retriesRemaining));
+      expect(task.retriesRemaining, equals(task.retries));
+      expect(task.metaData, equals(complexTask.metaData));
+      expect(task.creationTime, equals(complexTask.creationTime));
     });
 
     test('downloadTask url and urlQueryParameters', () {

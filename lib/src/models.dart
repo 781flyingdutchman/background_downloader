@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:background_downloader/background_downloader.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 
@@ -137,6 +138,9 @@ class Request {
   /// Number of retries remaining
   int retriesRemaining;
 
+  /// Time at which this request was first created
+  final DateTime creationTime;
+
   /// Creates a [Request]
   ///
   /// [url] must not be encoded and can include query parameters
@@ -153,10 +157,12 @@ class Request {
       Map<String, String>? urlQueryParameters,
       this.headers = const {},
       post,
-      this.retries = 0})
-      : retriesRemaining = retries,
-        url = _urlWithQueryParameters(url, urlQueryParameters),
-        post = post is Uint8List ? String.fromCharCodes(post) : post {
+      this.retries = 0,
+      DateTime? creationTime})
+      : url = _urlWithQueryParameters(url, urlQueryParameters),
+        post = post is Uint8List ? String.fromCharCodes(post) : post,
+        retriesRemaining = retries,
+        creationTime = creationTime ?? DateTime.now() {
     if (retries < 0 || retries > 10) {
       throw ArgumentError('Number of retries must be in range 1 through 10');
     }
@@ -164,11 +170,13 @@ class Request {
 
   /// Creates object from JsonMap
   Request.fromJsonMap(Map<String, dynamic> jsonMap)
-      : url = jsonMap['url'],
-        headers = Map<String, String>.from(jsonMap['headers']),
+      : url = jsonMap['url'] ?? '',
+        headers = Map<String, String>.from(jsonMap['headers'] ?? {}),
         post = jsonMap['post'],
-        retries = jsonMap['retries'],
-        retriesRemaining = jsonMap['retriesRemaining'];
+        retries = jsonMap['retries'] ?? 0,
+        retriesRemaining = jsonMap['retriesRemaining'] ?? 0,
+        creationTime =
+            DateTime.fromMillisecondsSinceEpoch(jsonMap['creationTime'] ?? 0);
 
   /// Creates JSON map of this object
   Map<String, dynamic> toJsonMap() => {
@@ -177,6 +185,7 @@ class Request {
         'post': post,
         'retries': retries,
         'retriesRemaining': retriesRemaining,
+        'creationTime': creationTime.millisecondsSinceEpoch
       };
 
   /// Decrease [retriesRemaining] by one
@@ -268,7 +277,8 @@ abstract class Task extends Request {
       this.updates = Updates.status,
       this.requiresWiFi = false,
       super.retries,
-      this.metaData = ''})
+      this.metaData = '',
+      super.creationTime})
       : taskId = taskId ?? Random().nextInt(1 << 32).toString(),
         filename = filename ?? Random().nextInt(1 << 32).toString() {
     if (filename?.isEmpty == true) {
@@ -320,21 +330,22 @@ abstract class Task extends Request {
       bool? requiresWiFi,
       int? retries,
       int? retriesRemaining,
-      String? metaData});
+      String? metaData,
+      DateTime? creationTime});
 
   /// Creates [Task] object from JsonMap
   ///
   /// Only used by subclasses. Use [createFromJsonMap] to create a properly
   /// subclassed [Task] from the [jsonMap]
   Task.fromJsonMap(Map<String, dynamic> jsonMap)
-      : taskId = jsonMap['taskId'],
-        filename = jsonMap['filename'],
-        directory = jsonMap['directory'],
-        baseDirectory = BaseDirectory.values[jsonMap['baseDirectory']],
-        group = jsonMap['group'],
-        updates = Updates.values[jsonMap['updates']],
-        requiresWiFi = jsonMap['requiresWiFi'],
-        metaData = jsonMap['metaData'],
+      : taskId = jsonMap['taskId'] ?? '',
+        filename = jsonMap['filename'] ?? '',
+        directory = jsonMap['directory'] ?? '',
+        baseDirectory = BaseDirectory.values[jsonMap['baseDirectory'] ?? 0],
+        group = jsonMap['group'] ?? FileDownloader.defaultGroup,
+        updates = Updates.values[jsonMap['updates'] ?? 0],
+        requiresWiFi = jsonMap['requiresWiFi'] ?? false,
+        metaData = jsonMap['metaData'] ?? '',
         super.fromJsonMap(jsonMap);
 
   /// Creates JSON map of this object
@@ -417,7 +428,8 @@ class DownloadTask extends Task {
       super.updates,
       super.requiresWiFi,
       super.retries,
-      super.metaData})
+      super.metaData,
+      super.creationTime})
       : super(taskId: taskId, filename: filename);
 
   /// Creates [DownloadTask] object from JsonMap
@@ -429,7 +441,8 @@ class DownloadTask extends Task {
         super.fromJsonMap(jsonMap);
 
   @override
-  Map<String, dynamic> toJsonMap() => {...super.toJsonMap(), 'taskType': 'DownloadTask'};
+  Map<String, dynamic> toJsonMap() =>
+      {...super.toJsonMap(), 'taskType': 'DownloadTask'};
 
   @override
   DownloadTask copyWith(
@@ -445,7 +458,8 @@ class DownloadTask extends Task {
           bool? requiresWiFi,
           int? retries,
           int? retriesRemaining,
-          String? metaData}) =>
+          String? metaData,
+          DateTime? creationTime}) =>
       DownloadTask(
           taskId: taskId ?? this.taskId,
           url: url ?? this.url,
@@ -458,7 +472,8 @@ class DownloadTask extends Task {
           updates: updates ?? this.updates,
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
           retries: retries ?? this.retries,
-          metaData: metaData ?? this.metaData)
+          metaData: metaData ?? this.metaData,
+          creationTime: creationTime ?? this.creationTime)
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 
   @override
@@ -500,7 +515,8 @@ class UploadTask extends Task {
       super.updates,
       super.requiresWiFi,
       super.retries,
-      super.metaData})
+      super.metaData,
+      super.creationTime})
       : assert(filename.isNotEmpty, 'A filename is required'),
         assert(post == null || post == 'binary',
             'post field must be null, or "binary" for binary file upload'),
@@ -515,7 +531,8 @@ class UploadTask extends Task {
         super.fromJsonMap(jsonMap);
 
   @override
-  Map<String, dynamic> toJsonMap() => {...super.toJsonMap(), 'taskType': 'UploadTask'};
+  Map<String, dynamic> toJsonMap() =>
+      {...super.toJsonMap(), 'taskType': 'UploadTask'};
 
   @override
   UploadTask copyWith(
@@ -531,7 +548,8 @@ class UploadTask extends Task {
           bool? requiresWiFi,
           int? retries,
           int? retriesRemaining,
-          String? metaData}) =>
+          String? metaData,
+          DateTime? creationTime}) =>
       UploadTask(
           taskId: taskId ?? this.taskId,
           url: url ?? this.url,
@@ -544,7 +562,8 @@ class UploadTask extends Task {
           updates: updates ?? this.updates,
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
           retries: retries ?? this.retries,
-          metaData: metaData ?? this.metaData)
+          metaData: metaData ?? this.metaData,
+          creationTime: creationTime ?? this.creationTime)
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 
   @override

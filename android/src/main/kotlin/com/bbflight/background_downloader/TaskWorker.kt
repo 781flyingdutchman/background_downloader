@@ -60,26 +60,28 @@ class Task(
     val retries: Int,
     val retriesRemaining: Int,
     val metaData: String,
+    val creationTime: Long, // untouched, so kept as integer on Android side
     val taskType: String // distinction between DownloadTask and UploadTask
 ) {
 
     /** Creates object from JsonMap */
     @Suppress("UNCHECKED_CAST")
     constructor(jsonMap: Map<String, Any>) : this(
-        taskId = jsonMap["taskId"] as String,
-        url = jsonMap["url"] as String,
-        filename = jsonMap["filename"] as String,
-        headers = jsonMap["headers"] as Map<String, String>,
+        taskId = jsonMap["taskId"] as String? ?: "",
+        url = jsonMap["url"] as String? ?: "",
+        filename = jsonMap["filename"] as String? ?: "",
+        headers = jsonMap["headers"] as Map<String, String>? ?: mutableMapOf<String, String>(),
         post = jsonMap["post"] as String?,
-        directory = jsonMap["directory"] as String,
-        baseDirectory = BaseDirectory.values()[(jsonMap["baseDirectory"] as Double).toInt()],
-        group = jsonMap["group"] as String,
-        updates = Updates.values()[(jsonMap["updates"] as Double).toInt()],
-        requiresWiFi = jsonMap["requiresWiFi"] as Boolean,
-        retries = (jsonMap["retries"] as Double).toInt(),
-        retriesRemaining = (jsonMap["retriesRemaining"] as Double).toInt(),
-        metaData = jsonMap["metaData"] as String,
-        taskType = jsonMap["taskType"] as String
+        directory = jsonMap["directory"] as String? ?: "",
+        baseDirectory = BaseDirectory.values()[(jsonMap["baseDirectory"] as Double? ?: 0).toInt()],
+        group = jsonMap["group"] as String? ?: "",
+        updates = Updates.values()[(jsonMap["updates"] as Double? ?: 0).toInt()],
+        requiresWiFi = jsonMap["requiresWiFi"] as Boolean? ?: false,
+        retries = (jsonMap["retries"] as Double? ?: 0).toInt(),
+        retriesRemaining = (jsonMap["retriesRemaining"] as Double? ?: 0).toInt(),
+        metaData = jsonMap["metaData"] as String? ?: "",
+        creationTime = (jsonMap["creationTime"] as Double? ?: 0).toLong(),
+        taskType = jsonMap["taskType"] as String? ?: ""
     )
 
     /** Creates JSON map of this object */
@@ -98,6 +100,7 @@ class Task(
             "retries" to retries,
             "retriesRemaining" to retriesRemaining,
             "metaData" to metaData,
+            "creationTime" to creationTime,
             "taskType" to taskType
         )
     }
@@ -192,7 +195,8 @@ class TaskWorker(
                     TaskStatus.canceled -> {
                         canSendStatusUpdate = canSendCancellation(task)
                         if (canSendStatusUpdate) {
-                            BackgroundDownloaderPlugin.canceledTaskIds[task.taskId] = currentTimeMillis()
+                            BackgroundDownloaderPlugin.canceledTaskIds[task.taskId] =
+                                currentTimeMillis()
                             processProgressUpdate(
                                 task,
                                 -2.0
@@ -246,7 +250,7 @@ class TaskWorker(
          *  in the cancelTasksWithId method.  Side effect is to clean out older cancellation entries
          * from the [BackgroundDownloaderPlugin.canceledTaskIds]
          */
-        private fun canSendCancellation(task: Task) : Boolean {
+        private fun canSendCancellation(task: Task): Boolean {
             val idsToRemove = ArrayList<String>()
             val now = currentTimeMillis()
             for (entry in BackgroundDownloaderPlugin.canceledTaskIds) {
