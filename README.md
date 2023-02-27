@@ -198,7 +198,7 @@ To keep track of the status and progress of all tasks, even after they have comp
 You can interact with the `database` using 
 `allRecords`, `allRecordsOlderThan`, `recordForId`, 
 `deleteAllRecords`, 
-`deleteRecordWithId` etc. Note that only tasks that you asked to be tracked (using `trackTasks`, which activates tracking for all tasks in a group) will be in the database. All active tasks in the queue, regardless of tracking, can be queried via the `FileDownloader.taskForId` call etc, but those will only return the task itself, not its status or progress, as those are expected to be monitored via listener or callback.  Note: tasks that are started using `download`, `upload`, `batchDownload` or `batchUpload` are assigned a special group name 'await', as callbacks for these tasks are handled within the `FileDownloader`. If you want to  track those tasks in the database, call `FileDownloader().trackTasks(FileDownloader.awaitGroup)` at the start of your app.
+`deleteRecordWithId` etc. Note that only tasks that you asked to be tracked (using `trackTasks`, which activates tracking for all tasks in a group) will be in the database. All active tasks in the queue, regardless of tracking, can be queried via the `FileDownloader().taskForId` call etc, but those will only return the task itself, not its status or progress, as those are expected to be monitored via listener or callback.  Note: tasks that are started using `download`, `upload`, `batchDownload` or `batchUpload` are assigned a special group name 'await', as callbacks for these tasks are handled within the `FileDownloader`. If you want to  track those tasks in the database, call `FileDownloader().trackTasks(FileDownloader.awaitGroup)` at the start of your app.
 
 ## Uploads
 
@@ -322,7 +322,3 @@ Then do the same thing in macos/Runner/Release.entitlements.
 * On iOS, once enqueued (i.e. `TaskStatus.enqueued`), a background download must complete within 4 hours
 * Redirects will be followed
 * Background downloads and uploads are aggressively controlled by the native platform. You should therefore always assume that a task that was started may not complete, and may disappear without providing any status or progress update to indicate why. For example, if a user swipes your app up from the iOS App Switcher, all scheduled background downloads are terminated without notification
-
-## Known issue
-
-At the time of this writing, on Windows,deleting records in the persistent database does not work, due to an issue with the 'localstore' package version 1.3.4. A fix has been suggested.

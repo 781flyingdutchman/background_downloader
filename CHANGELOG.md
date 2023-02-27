@@ -1,8 +1,12 @@
+## 4.2.1
+
+Upgraded dependency to address issue with Windows platform database performance
+
 ## 4.2.0
 
 Added `creationTime` field to `Request` and `Task`.
 
-Added `allRecordsOlderThan(Duration age, {String? group}` to `Database`, making it easy to extract
+Added `allRecordsOlderThan(Duration age, {String? group})` to `database`, making it easy to extract
 the `TaskRecord` entries that are stale.
 
 ## 4.1.0

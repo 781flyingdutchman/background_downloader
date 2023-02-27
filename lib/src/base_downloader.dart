@@ -2,12 +2,12 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:background_downloader/src/native_downloader.dart';
 import 'package:logging/logging.dart';
 
 import 'database.dart';
 import 'desktop_downloader.dart';
 import 'models.dart';
+import 'native_downloader.dart';
 
 /// Common download functionality
 ///

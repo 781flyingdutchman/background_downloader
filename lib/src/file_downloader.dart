@@ -2,12 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:background_downloader/src/base_downloader.dart';
-import 'package:background_downloader/src/database.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 
+import 'base_downloader.dart';
+import 'database.dart';
 import 'models.dart';
 
 /// Provides access to all functions of the plugin in a single place.
