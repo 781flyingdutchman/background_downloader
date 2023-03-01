@@ -1299,6 +1299,24 @@ void main() {
       expect(record2?.progress, equals(progressComplete));
     });
 
+    testWidgets('allRecords', (widgetTester) async {
+      await FileDownloader().database.deleteAllRecords();
+      await FileDownloader()
+          .registerCallbacks(taskStatusCallback: statusCallback)
+          .trackTasks();
+      task = DownloadTask(
+          taskId: workingUrl, // contains illegal characters
+          url: workingUrl,
+          filename: defaultFilename);
+      expect(await FileDownloader().enqueue(task), equals(true));
+      await statusCallbackCompleter.future;
+      final records = await FileDownloader().database.allRecords();
+      expect(records.length, equals(1));
+      expect(records.first.taskId, equals(task.taskId));
+      expect(records.first.taskStatus, equals(TaskStatus.complete));
+      expect(records.first.progress, equals(progressComplete));
+    });
+
     testWidgets('markDownloadedComplete', (widgetTester) async {
       await FileDownloader().database.deleteAllRecords();
       await FileDownloader()
