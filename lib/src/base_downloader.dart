@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/cupertino.dart';
 import 'package:logging/logging.dart';
 
 import 'database.dart';
@@ -35,6 +36,12 @@ abstract class BaseDownloader {
   /// Groups tracked in persistent database
   final trackedGroups = <String>{};
 
+  /// Map of tasks and completer to indicate whether task can be resumed
+  final canResumeTask = <Task, Completer<bool>>{};
+
+  /// Map of data needed to resume a task
+  final resumeData = <Task, List<dynamic>>{}; // [String filename, int bytes]
+
   BaseDownloader();
 
   factory BaseDownloader.instance() {
@@ -49,11 +56,18 @@ abstract class BaseDownloader {
   void initialize() {}
 
   /// Enqueue the task and advance the queue
-  Future<bool> enqueue(Task task);
+  @mustCallSuper
+  Future<bool> enqueue(Task task) async {
+    if (task.allowPause) {
+      canResumeTask[task] = Completer();
+    }
+    return true;
+  }
 
   /// Resets the download worker by cancelling all ongoing tasks for the group
   ///
   ///  Returns the number of tasks canceled
+  @mustCallSuper
   Future<int> reset(String group) async {
     final count =
         tasksWaitingToRetry.where((task) => task.group == group).length;
@@ -62,6 +76,7 @@ abstract class BaseDownloader {
   }
 
   /// Returns a list of all tasks in progress, matching [group]
+  @mustCallSuper
   Future<List<Task>> allTasks(
       String group, bool includeTasksWaitingToRetry) async {
     final tasks = <Task>[];
@@ -74,6 +89,7 @@ abstract class BaseDownloader {
   /// Cancels ongoing tasks whose taskId is in the list provided with this call
   ///
   /// Returns true if all cancellations were successful
+  @mustCallSuper
   Future<bool> cancelTasksWithIds(List<String> taskIds) async {
     final matchingTasksWaitingToRetry = tasksWaitingToRetry
         .where((task) => taskIds.contains(task.taskId))
@@ -101,6 +117,7 @@ abstract class BaseDownloader {
   Future<bool> cancelPlatformTasksWithIds(List<String> taskIds);
 
   /// Returns Task for this taskId, or nil
+  @mustCallSuper
   Future<Task?> taskForId(String taskId) async {
     try {
       return tasksWaitingToRetry.where((task) => task.taskId == taskId).first;
@@ -140,15 +157,33 @@ abstract class BaseDownloader {
     }
   }
 
+  /// Sets the 'canResumeTask' flag for this task
+  ///
+  /// Completes the completer already associated with this task
+  void setCanResume(Task task, bool canResume) =>
+      canResumeTask[task]?.complete(canResume);
+
+  /// Returns a Future that indicates whether this task can be resumed
+  Future<bool> taskCanResume(Task task) => canResumeTask[task]?.future ?? Future.value(false);
+
+  /// Stores the resume filename and start bytes position for this task
+  void setResumeData(Task task, String filename, int start) =>
+      resumeData[task] = [filename, start];
+
+  Future<bool> pause(Task task);
+
   /// Destroy - clears callbacks, updates stream and retry queue
   ///
   /// Clears all queues and references without sending cancellation
   /// messages or status updates
+  @mustCallSuper
   void destroy() {
     tasksWaitingToRetry.clear();
     groupStatusCallbacks.clear();
     groupProgressCallbacks.clear();
     trackedGroups.clear();
+    canResumeTask.clear();
+    resumeData.clear();
     updates.close();
     updates = StreamController();
   }
@@ -263,6 +298,9 @@ abstract class BaseDownloader {
             break;
           case TaskStatus.waitingToRetry:
             progress = progressWaitingToRetry;
+            break;
+          case TaskStatus.paused:
+            progress = progressPaused;
             break;
         }
       }

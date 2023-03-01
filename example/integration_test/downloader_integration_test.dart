@@ -62,7 +62,7 @@ void progressCallback(Task task, double progress) {
   print('progressCallback for $task with progress $progress');
   lastProgress = progress;
   progressCallbackCounter++;
-  if (!someProgressCompleter.isCompleted && progress > 0.1 && progress < 1) {
+  if (!someProgressCompleter.isCompleted && progress > 0.1) {
     someProgressCompleter.complete();
   }
   if (!progressCallbackCompleter.isCompleted &&
@@ -411,6 +411,7 @@ void main() {
           updates: Updates.statusAndProgress,
           requiresWiFi: true,
           retries: 5,
+          allowPause: true,
           metaData: 'someMetaData');
       final now = DateTime.now();
       expect(now.difference(complexTask.creationTime).inMilliseconds,
@@ -432,6 +433,7 @@ void main() {
         expect(task.group, equals(complexTask.group));
         expect(task.updates, equals(complexTask.updates));
         expect(task.requiresWiFi, equals(complexTask.requiresWiFi));
+        expect(task.allowPause, equals(complexTask.allowPause));
         expect(task.retries, equals(complexTask.retries));
         expect(task.retriesRemaining, equals(complexTask.retriesRemaining));
         expect(task.retriesRemaining, equals(task.retries));
@@ -1297,6 +1299,9 @@ void main() {
       expect(record2?.taskId, equals(task.taskId));
       expect(record2?.taskStatus, equals(TaskStatus.complete));
       expect(record2?.progress, equals(progressComplete));
+      final records = await FileDownloader().database.allRecords();
+      expect(records.length, equals(1));
+      expect(records.first, equals(record2));
     });
 
     testWidgets('markDownloadedComplete', (widgetTester) async {
@@ -1337,6 +1342,61 @@ void main() {
       expect(record3?.taskStatus, equals(TaskStatus.complete));
       expect(record3?.progress, equals(progressComplete));
       print('Finished markDownloadedComplete');
+    });
+  });
+
+  group('Pause and resume', () {
+    testWidgets('taskCanResume', (tester) async {
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      task = DownloadTask(
+          url: urlWithContentLength,
+          filename: defaultFilename,
+          updates: Updates.statusAndProgress,
+          allowPause: true);
+      expect(await FileDownloader().enqueue(task), equals(true));
+      await someProgressCompleter.future;
+      final canResume = await FileDownloader().taskCanResume(task);
+      expect(canResume, isTrue);
+      expect(await FileDownloader().cancelTasksWithIds([task.taskId]), isTrue);
+      // now don't set 'allowPause'
+      statusCallbackCompleter = Completer();
+      someProgressCompleter = Completer();
+      task = DownloadTask(
+          url: urlWithContentLength,
+          filename: defaultFilename,
+          updates: Updates.statusAndProgress);
+      expect(await FileDownloader().enqueue(task), equals(true));
+      await someProgressCompleter.future;
+      final canResume2 = await FileDownloader().taskCanResume(task);
+      expect(canResume2, isFalse); // task allowPause not set
+      expect(await FileDownloader().cancelTasksWithIds([task.taskId]), isTrue);
+    });
+
+    testWidgets('pause and resume task', (widgetTester) async {
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      task = DownloadTask(
+          url: urlWithContentLength,
+          filename: defaultFilename,
+          updates: Updates.statusAndProgress,
+          allowPause: true);
+      expect(await FileDownloader().enqueue(task), equals(true));
+      await someProgressCompleter.future;
+      final canResume = await FileDownloader().taskCanResume(task);
+      expect(canResume, isTrue);
+      expect(await FileDownloader().pause(task), isTrue);
+      await Future.delayed(const Duration(milliseconds: 200));
+      expect(lastStatus, equals(TaskStatus.paused));
+      // resume
+      fail('Resume not yet implemented');
+    });
+
+    testWidgets('pause task that cannot be paused', (widgetTester)
+    {
+      fail('Not yet implemented');
     });
   });
 }

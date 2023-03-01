@@ -39,6 +39,7 @@ class DesktopDownloader extends BaseDownloader {
 
   @override
   Future<bool> enqueue(Task task) async {
+    super.enqueue(task);
     _queue.add(task);
     processStatusUpdate(task, TaskStatus.enqueued);
     _advanceQueue();
@@ -174,6 +175,12 @@ class DesktopDownloader extends BaseDownloader {
         return null;
       }
     }
+  }
+
+
+  @override
+  Future<bool> pause(Task task) {
+    throw UnimplementedError('Pause not implemented');
   }
 
   @override

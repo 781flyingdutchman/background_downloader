@@ -43,7 +43,16 @@ enum TaskStatus {
   /// The task is held in this state until the exponential backoff time for
   /// this retry has passed, and will then be rescheduled on the native
   /// platform, switching state to `enqueued` and then `running`
-  waitingToRetry;
+  waitingToRetry,
+
+  /// Task is in paused state and may be able to resume
+  ///
+  /// To resume a paused Task, call [resumeTaskWithId]. If the resume is
+  /// possible, status will change to [TaskStatus.running] and continue from
+  /// there. If resume fails (e.g. because the temp file with the partial
+  /// download has been deleted by the operating system) status will switch
+  /// to [TaskStatus.failed]
+  paused;
 
   /// True if this state is one of the 'final' states, meaning no more
   /// state changes are possible
@@ -58,6 +67,7 @@ enum TaskStatus {
       case TaskStatus.enqueued:
       case TaskStatus.running:
       case TaskStatus.waitingToRetry:
+      case TaskStatus.paused:
         return false;
     }
   }
@@ -239,6 +249,13 @@ abstract class Task extends Request {
   /// If true, will not download over cellular (metered) network
   final bool requiresWiFi;
 
+  /// If true, task will pause if the task fails partly through the execution,
+  /// when some but not all bytes have transferred, provided the server supports
+  /// partial transfers. Such failures are typically temporary, eg due to
+  /// connectivity issues, and may be resumed when connectivity returns.
+  /// If false, task fails on any issue, and task cannot be paused
+  final bool allowPause;
+
   /// User-defined metadata
   final String metaData;
 
@@ -263,7 +280,13 @@ abstract class Task extends Request {
   /// [requiresWiFi] if set, will not start download until WiFi is available.
   /// If not set may start download over cellular network
   /// [retries] if >0 will retry a failed download this many times
+  /// [allowPause]
+  /// If true, task will pause if the task fails partly through the execution,
+  /// when some but not all bytes have transferred, provided the server supports
+  /// partial transfers. Such failures are typically temporary, eg due to
+  /// connectivity issues, and may be resumed when connectivity returns
   /// [metaData] user data
+  /// [creationTime] time of task creation, 'now' by default.
   Task(
       {String? taskId,
       required super.url,
@@ -278,6 +301,7 @@ abstract class Task extends Request {
       this.requiresWiFi = false,
       super.retries,
       this.metaData = '',
+      this.allowPause = false,
       super.creationTime})
       : taskId = taskId ?? Random().nextInt(1 << 32).toString(),
         filename = filename ?? Random().nextInt(1 << 32).toString() {
@@ -330,6 +354,7 @@ abstract class Task extends Request {
       bool? requiresWiFi,
       int? retries,
       int? retriesRemaining,
+      bool? allowPause,
       String? metaData,
       DateTime? creationTime});
 
@@ -345,6 +370,8 @@ abstract class Task extends Request {
         group = jsonMap['group'] ?? FileDownloader.defaultGroup,
         updates = Updates.values[jsonMap['updates'] ?? 0],
         requiresWiFi = jsonMap['requiresWiFi'] ?? false,
+        allowPause =
+            jsonMap['allowPause'] ?? false,
         metaData = jsonMap['metaData'] ?? '',
         super.fromJsonMap(jsonMap);
 
@@ -359,6 +386,7 @@ abstract class Task extends Request {
         'group': group,
         'updates': updates.index, // stored as int
         'requiresWiFi': requiresWiFi,
+        'allowPause': allowPause,
         'metaData': metaData
       };
 
@@ -428,6 +456,7 @@ class DownloadTask extends Task {
       super.updates,
       super.requiresWiFi,
       super.retries,
+      super.allowPause,
       super.metaData,
       super.creationTime})
       : super(taskId: taskId, filename: filename);
@@ -458,6 +487,7 @@ class DownloadTask extends Task {
           bool? requiresWiFi,
           int? retries,
           int? retriesRemaining,
+          bool? allowPause,
           String? metaData,
           DateTime? creationTime}) =>
       DownloadTask(
@@ -472,6 +502,8 @@ class DownloadTask extends Task {
           updates: updates ?? this.updates,
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
           retries: retries ?? this.retries,
+          allowPause: allowPause ??
+              this.allowPause,
           metaData: metaData ?? this.metaData,
           creationTime: creationTime ?? this.creationTime)
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
@@ -515,6 +547,7 @@ class UploadTask extends Task {
       super.updates,
       super.requiresWiFi,
       super.retries,
+      super.allowPause,
       super.metaData,
       super.creationTime})
       : assert(filename.isNotEmpty, 'A filename is required'),
@@ -548,6 +581,7 @@ class UploadTask extends Task {
           bool? requiresWiFi,
           int? retries,
           int? retriesRemaining,
+          bool? allowPause,
           String? metaData,
           DateTime? creationTime}) =>
       UploadTask(
@@ -562,6 +596,8 @@ class UploadTask extends Task {
           updates: updates ?? this.updates,
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
           retries: retries ?? this.retries,
+          allowPause: allowPause ??
+              this.allowPause,
           metaData: metaData ?? this.metaData,
           creationTime: creationTime ?? this.creationTime)
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
@@ -653,3 +689,4 @@ const progressFailed = -1.0;
 const progressCanceled = -2.0;
 const progressNotFound = -3.0;
 const progressWaitingToRetry = -4.0;
+const progressPaused = -5.0;

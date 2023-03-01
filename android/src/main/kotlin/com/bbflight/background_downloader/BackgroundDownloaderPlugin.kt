@@ -23,6 +23,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         const val TAG = "BackgroundDownloader"
         const val keyTasksMap = "com.bbflight.background_downloader.taskMap"
         var canceledTaskIds = HashMap<String, Long>() // <taskId, timeMillis>
+        var pausedTaskIds = HashSet<String>() // <taskId>
         var backgroundChannel: MethodChannel? = null
         var backgroundChannelCounter = 0  // reference counter
         val prefsLock = ReentrantReadWriteLock()
@@ -78,6 +79,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
             "allTasks" -> methodAllTasks(call, result)
             "cancelTasksWithIds" -> methodCancelTasksWithIds(call, result)
             "taskForId" -> methodTaskForId(call, result)
+            "pause" -> methodPause(call, result)
             else -> result.notImplemented()
         }
     }
@@ -218,6 +220,17 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
                 gson.fromJson<Map<String, Any>>(jsonString, jsonMapType).toMutableMap()
             result.success(tasksMap[taskId])
         }
+    }
+
+    /** Marks the taskId for pausing
+     *
+     * The pause action is taken in the [TaskWorker]
+     */
+    private fun methodPause(call: MethodCall, result: Result) {
+        val taskId = call.arguments as String
+        Log.v(TAG, "Marking taskId $taskId for pausing")
+        pausedTaskIds.add(taskId)
+        result.success(true)
     }
 }
 

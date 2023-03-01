@@ -331,6 +331,29 @@ class FileDownloader {
           {String group = defaultGroup, bool markDownloadedComplete = true}) =>
       _downloader.trackTasks(group, markDownloadedComplete);
 
+  /// Returns true if task can be resumed on pause
+  ///
+  /// This future only completes once the task is running and has received
+  /// information from the server to determine whether resume is possible.
+  /// If the [Task.allowPause] field is set to false (default) then
+  /// this method returns false immediately.
+  Future<bool> taskCanResume(Task task) => _downloader.taskCanResume(task);
+
+  /// Pause the task
+  ///
+  /// Returns true if the pause was attempted successfully. Test the task's
+  /// status to see if it was executed successfully [TaskStatus.paused] or if
+  /// it failed after all [TaskStatus.failed]
+  ///
+  /// If the [Task.allowPause] field is set to false (default) then
+  /// this method returns false immediately.
+  Future<bool> pause(Task task) async {
+    if (task.allowPause) {
+      return _downloader.pause(task);
+    }
+    return false;
+  }
+
   /// Perform a server request for this [request]
   ///
   /// A server request returns an [http.Response] object that includes

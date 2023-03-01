@@ -41,6 +41,18 @@ class NativeDownloader extends BaseDownloader {
           processProgressUpdate(task, progress);
           break;
 
+        case 'canResume':
+          final canResume = args.last as bool;
+          setCanResume(task, canResume);
+          break;
+
+        case 'resumeData':
+          final tempFilename = args[1] as String;
+          final bytes = args.last as int;
+          setResumeData(task, tempFilename, bytes);
+          print(resumeData[task]);
+          break;
+
         default:
           throw UnimplementedError(
               'Background channel method call ${call.method} not supported');
@@ -49,10 +61,12 @@ class NativeDownloader extends BaseDownloader {
   }
 
   @override
-  Future<bool> enqueue(Task task) async =>
-      await _channel
-          .invokeMethod<bool>('enqueue', [jsonEncode(task.toJsonMap())]) ??
-      false;
+  Future<bool> enqueue(Task task) async {
+    super.enqueue(task);
+    return await _channel
+            .invokeMethod<bool>('enqueue', [jsonEncode(task.toJsonMap())]) ??
+        false;
+  }
 
   @override
   Future<int> reset(String group) async {
@@ -89,4 +103,8 @@ class NativeDownloader extends BaseDownloader {
     }
     return null;
   }
+
+  @override
+  Future<bool> pause(Task task) async =>
+      await _channel.invokeMethod<bool>('pause', task.taskId) ?? false;
 }
