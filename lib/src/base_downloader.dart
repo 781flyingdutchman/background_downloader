@@ -274,8 +274,8 @@ abstract class BaseDownloader {
         final existingRecord = await Database().recordForId(task.taskId);
         if (existingRecord != null) {
           Database().updateRecord(existingRecord.copyWith(progress: progress));
-          return;
         }
+        return;
       }
       if (progress == null && status != null) {
         // set progress based on status

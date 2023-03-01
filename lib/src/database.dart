@@ -84,12 +84,15 @@ class Database {
     }
   }
 
+  final _illegalPathCharacters = RegExp(r'[\\/:*?\"<>|]');
+
   /// Update or insert the record in the database
   ///
   /// This is used by the [FileDownloader] to track tasks, and should not
   /// normally be used by the user of this package
   Future<void> updateRecord(TaskRecord record) async {
-    await _db.collection(tasksPath).doc(record.taskId).set(record.toJsonMap());
+    final docId = record.taskId.replaceAll(_illegalPathCharacters, '_');
+    await _db.collection(tasksPath).doc(docId).set(record.toJsonMap());
   }
 }
 
