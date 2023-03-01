@@ -1299,6 +1299,33 @@ void main() {
       expect(record2?.progress, equals(progressComplete));
     });
 
+    testWidgets('set, get and delete record', (widgetTester) async {
+      await FileDownloader().database.deleteAllRecords();
+      await FileDownloader()
+          .registerCallbacks(taskStatusCallback: statusCallback)
+          .trackTasks();
+      task = DownloadTask(url: workingUrl, filename: defaultFilename);
+      expect(await FileDownloader().enqueue(task), equals(true));
+      await statusCallbackCompleter.future;
+      final record = await FileDownloader().database.recordForId(task.taskId);
+      expect(record?.task.taskId, equals(task.taskId));
+      final firsTaskId = task.taskId;
+      // task with url as id
+      statusCallbackCompleter = Completer();
+      task = DownloadTask(
+          taskId: workingUrl, url: workingUrl, filename: defaultFilename);
+      expect(await FileDownloader().enqueue(task), equals(true));
+      await statusCallbackCompleter.future;
+      final record2 = await FileDownloader().database.recordForId(task.taskId);
+      expect(record2?.task.taskId, equals(task.taskId));
+      final records = await FileDownloader().database.allRecords();
+      expect(records.length, equals(2));
+      await FileDownloader().database.deleteRecordWithId(task.taskId);
+      final records2 = await FileDownloader().database.allRecords();
+      expect(records2.length, equals(1));
+      expect(records2.first.taskId, equals(firsTaskId));
+    });
+
     testWidgets('allRecords', (widgetTester) async {
       await FileDownloader().database.deleteAllRecords();
       await FileDownloader()
