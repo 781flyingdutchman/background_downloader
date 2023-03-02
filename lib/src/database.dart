@@ -42,7 +42,7 @@ class Database {
 
   /// Return [TaskRecord] for this [taskId]
   Future<TaskRecord?> recordForId(String taskId) async {
-    final jsonMap = await _db.collection(tasksPath).doc(taskId).get();
+    final jsonMap = await _db.collection(tasksPath).doc(_safeId(taskId)).get();
     return jsonMap != null ? TaskRecord.fromJsonMap(jsonMap) : null;
   }
 
@@ -80,20 +80,25 @@ class Database {
   /// Delete records with these [taskIds]
   Future<void> deleteRecordsWithIds(Iterable<String> taskIds) async {
     for (var taskId in taskIds) {
-      await _db.collection(tasksPath).doc(taskId).delete();
+      await _db.collection(tasksPath).doc(_safeId(taskId)).delete();
     }
   }
-
-  final _illegalPathCharacters = RegExp(r'[\\/:*?\"<>|]');
 
   /// Update or insert the record in the database
   ///
   /// This is used by the [FileDownloader] to track tasks, and should not
   /// normally be used by the user of this package
   Future<void> updateRecord(TaskRecord record) async {
-    final docId = record.taskId.replaceAll(_illegalPathCharacters, '_');
-    await _db.collection(tasksPath).doc(docId).set(record.toJsonMap());
+    await _db
+        .collection(tasksPath)
+        .doc(_safeId(record.taskId))
+        .set(record.toJsonMap());
   }
+
+  final _illegalPathCharacters = RegExp(r'[\\/:*?\"<>|]');
+
+  /// Make the id safe for storing in the localStore
+  String _safeId(String id) => id.replaceAll(_illegalPathCharacters, '_');
 }
 
 /// Record containing task, task status and task progress.

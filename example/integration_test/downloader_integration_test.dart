@@ -620,7 +620,7 @@ void main() {
       print('Finished batch download');
     });
 
-    testWidgets('batch download with callback', (widgetTester) async {
+    testWidgets('batch download with batch callback', (widgetTester) async {
       final tasks = <DownloadTask>[];
       final docDir = (await getApplicationDocumentsDirectory()).path;
       for (int n = 0; n < 3; n++) {
@@ -637,7 +637,8 @@ void main() {
       var numSucceeded = 0;
       var numFailed = 0;
       var numCalled = 0;
-      await FileDownloader().downloadBatch(tasks, (succeeded, failed) {
+      await FileDownloader().downloadBatch(tasks,
+          batchProgressCallback: (succeeded, failed) {
         print('Succeeded: $succeeded, failed: $failed');
         numCalled++;
         numSucceeded = succeeded;
@@ -656,6 +657,22 @@ void main() {
         }
       }
       print('Finished batch download with callback');
+    });
+
+    testWidgets('batch download with task callback', (widgetTester) async {
+      final failTask =
+          DownloadTask(url: failingUrl, filename: defaultFilename, retries: 2);
+      final task3 = task.copyWith(taskId: 'task3');
+      final result = await FileDownloader().downloadBatch(
+          [task, failTask, task3],
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      expect(result.numSucceeded, equals(2));
+      expect(result.numFailed, equals(1));
+      expect(result.failed.first.taskId, equals(failTask.taskId));
+      expect(statusCallbackCounter,
+          equals(15)); // 3 attempts + 2 retry attempts, each 3
+      expect(progressCallbackCounter, greaterThanOrEqualTo(10));
     });
 
     testWidgets('convenience download with callbacks', (widgetTester) async {
@@ -1196,7 +1213,8 @@ void main() {
       var numSucceeded = 0;
       var numFailed = 0;
       var numCalled = 0;
-      await FileDownloader().uploadBatch(tasks, (succeeded, failed) {
+      await FileDownloader().uploadBatch(tasks,
+          batchProgressCallback: (succeeded, failed) {
         print('Succeeded: $succeeded, failed: $failed');
         numCalled++;
         numSucceeded = succeeded;
@@ -1302,6 +1320,33 @@ void main() {
       final records = await FileDownloader().database.allRecords();
       expect(records.length, equals(1));
       expect(records.first, equals(record2));
+    });
+
+    testWidgets('set, get and delete record', (widgetTester) async {
+      await FileDownloader().database.deleteAllRecords();
+      await FileDownloader()
+          .registerCallbacks(taskStatusCallback: statusCallback)
+          .trackTasks();
+      task = DownloadTask(url: workingUrl, filename: defaultFilename);
+      expect(await FileDownloader().enqueue(task), equals(true));
+      await statusCallbackCompleter.future;
+      final record = await FileDownloader().database.recordForId(task.taskId);
+      expect(record?.task.taskId, equals(task.taskId));
+      final firsTaskId = task.taskId;
+      // task with url as id
+      statusCallbackCompleter = Completer();
+      task = DownloadTask(
+          taskId: workingUrl, url: workingUrl, filename: defaultFilename);
+      expect(await FileDownloader().enqueue(task), equals(true));
+      await statusCallbackCompleter.future;
+      final record2 = await FileDownloader().database.recordForId(task.taskId);
+      expect(record2?.task.taskId, equals(task.taskId));
+      final records = await FileDownloader().database.allRecords();
+      expect(records.length, equals(2));
+      await FileDownloader().database.deleteRecordWithId(task.taskId);
+      final records2 = await FileDownloader().database.allRecords();
+      expect(records2.length, equals(1));
+      expect(records2.first.taskId, equals(firsTaskId));
     });
 
     testWidgets('allRecords', (widgetTester) async {

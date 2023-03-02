@@ -32,11 +32,21 @@ class FileDownloader {
   final _batches = <Batch>[];
   final _downloader = BaseDownloader.instance();
 
-  /// Registered [TaskStatusCallback] for convenience down/upload tasks
-  final _taskStatusCallbacks = <String, void Function(TaskStatus)>{};
+  /// Registered short status callback for convenience down/upload tasks
+  ///
+  /// Short callbacks omit the [Task] as they are available from the closure
+  final _shortTaskStatusCallbacks = <String, void Function(TaskStatus)>{};
 
-  /// Registered [TaskProgressCallback] for convenience down/upload tasks
-  final _taskProgressCallbacks = <String, void Function(double)>{};
+  /// Registered short progress callback for convenience down/upload tasks
+  ///
+  /// Short callbacks omit the [Task] as they are available from the closure
+  final _shortTaskProgressCallbacks = <String, void Function(double)>{};
+
+  /// Registered [TaskStatusCallback] for convenience batch down/upload tasks
+  final _taskStatusCallbacks = <String, TaskStatusCallback>{};
+
+  /// Registered [TaskProgressCallback] for convenience batch down/upload tasks
+  final _taskProgressCallbacks = <String, TaskProgressCallback>{};
 
   factory FileDownloader() => _singleton;
 
@@ -130,23 +140,32 @@ class FileDownloader {
 
   /// Enqueue the [task] and wait for completion
   ///
-  /// Returns the final [TaskStatus] of the [task]
+  /// Returns the final [TaskStatus] of the [task].
+  /// This method is used to enqueue:
+  /// 1. `download` and `upload` tasks, which may have a short callback
+  ///    for status and progress (omitting Task)
+  /// 2. `downloadBatch` and `uploadBatch`, which may have a full callback
+  ///    that is used for every task in the batch
   Future<TaskStatus> _enqueueAndAwait(Task task,
       {void Function(TaskStatus)? onStatus,
-      void Function(double)? onProgress}) async {
+      void Function(double)? onProgress,
+      TaskStatusCallback? taskStatusCallback,
+      TaskProgressCallback? taskProgressCallback}) async {
     /// Internal callback function that passes the update on to different
     /// callbacks
     ///
     /// The update is passed on to:
     /// 1. Task-specific callback, passed as parameter to call
-    /// 2. Batch-related callback, if this task is part of a batch operation
+    /// 2. Short task-specific callback, passed as parameter to call
+    /// 3. Batch-related callback, if this task is part of a batch operation
     ///    and is in a final state
     ///
     /// If the task is in final state, also removes the reference to the
     /// task-specific callbacks and completes the completer associated
     /// with this task
     internalStatusCallback(Task task, TaskStatus status) {
-      _taskStatusCallbacks[task.taskId]?.call(status);
+      _shortTaskStatusCallbacks[task.taskId]?.call(status);
+      _taskStatusCallbacks[task.taskId]?.call(task, status);
       if (status.isFinalState) {
         if (_batches.isNotEmpty) {
           // check if this task is part of a batch
@@ -161,6 +180,8 @@ class FileDownloader {
             }
           }
         }
+        _shortTaskStatusCallbacks.remove(task.taskId);
+        _shortTaskProgressCallbacks.remove(task.taskId);
         _taskStatusCallbacks.remove(task.taskId);
         _taskProgressCallbacks.remove(task.taskId);
         var taskCompleter = _taskCompleters.remove(task);
@@ -171,7 +192,8 @@ class FileDownloader {
     /// Internal callback function that only passes progress updates on
     /// to the task-specific progress callback passed as parameter to call
     internalProgressCallBack(Task task, double progress) {
-      _taskProgressCallbacks[task.taskId]?.call(progress);
+      _shortTaskProgressCallbacks[task.taskId]?.call(progress);
+      _taskProgressCallbacks[task.taskId]?.call(task, progress);
     }
 
     // register the internal callbacks and store the task-specific ones
@@ -181,13 +203,20 @@ class FileDownloader {
         taskProgressCallback: internalProgressCallBack);
     final internalTask = task.copyWith(
         group: awaitGroup,
-        updates:
-            onProgress != null ? Updates.statusAndProgress : Updates.status);
+        updates: (onProgress != null || taskProgressCallback != null)
+            ? Updates.statusAndProgress
+            : Updates.status);
     if (onStatus != null) {
-      _taskStatusCallbacks[task.taskId] = onStatus;
+      _shortTaskStatusCallbacks[task.taskId] = onStatus;
     }
     if (onProgress != null) {
-      _taskProgressCallbacks[task.taskId] = onProgress;
+      _shortTaskProgressCallbacks[task.taskId] = onProgress;
+    }
+    if (taskStatusCallback != null) {
+      _taskStatusCallbacks[task.taskId] = taskStatusCallback;
+    }
+    if (taskProgressCallback != null) {
+      _taskProgressCallbacks[task.taskId] = taskProgressCallback;
     }
     // Create taskCompleter and enqueue the task.
     // The completer will be completed in the internal status callback
@@ -213,13 +242,22 @@ class FileDownloader {
   /// indicator for the batch, where
   ///    double percent_complete = (succeeded + failed) / tasks.length
   ///
+  /// To also monitor status and/or progress for each task in the batch, provide
+  /// a [taskStatusCallback] and/or [taskProgressCallback], which will be used
+  /// for each task in the batch.
+  ///
   /// Note that to allow for special processing of tasks in a batch, the task's
   /// [Task.group] and [Task.updates] value will be modified when enqueued, and
   /// those modified tasks are returned as part of the [Batch]
   /// object.
   Future<Batch> downloadBatch(final List<DownloadTask> tasks,
-          [BatchProgressCallback? batchProgressCallback]) =>
-      _enqueueAndAwaitBatch(tasks, batchProgressCallback);
+          {BatchProgressCallback? batchProgressCallback,
+          TaskStatusCallback? taskStatusCallback,
+          TaskProgressCallback? taskProgressCallback}) =>
+      _enqueueAndAwaitBatch(tasks,
+          batchProgressCallback: batchProgressCallback,
+          taskStatusCallback: taskStatusCallback,
+          taskProgressCallback: taskProgressCallback);
 
   /// Enqueues a list of files to upload and returns when all uploads
   /// have finished (successfully or otherwise). The returned value is a
@@ -233,19 +271,30 @@ class FileDownloader {
   /// indicator for the batch, where
   ///    double percent_complete = (succeeded + failed) / tasks.length
   ///
+  /// To also monitor status and/or progress for each task in the batch, provide
+  /// a [taskStatusCallback] and/or [taskProgressCallback], which will be used
+  /// for each task in the batch.
+  ///
   /// Note that to allow for special processing of tasks in a batch, the task's
   /// [Task.group] and [Task.updates] value will be modified when enqueued, and
   /// those modified tasks are returned as part of the [Batch]
   /// object.
   Future<Batch> uploadBatch(final List<UploadTask> tasks,
-          [BatchProgressCallback? batchProgressCallback]) =>
-      _enqueueAndAwaitBatch(tasks, batchProgressCallback);
+          {BatchProgressCallback? batchProgressCallback,
+          TaskStatusCallback? taskStatusCallback,
+          TaskProgressCallback? taskProgressCallback}) =>
+      _enqueueAndAwaitBatch(tasks,
+          batchProgressCallback: batchProgressCallback,
+          taskStatusCallback: taskStatusCallback,
+          taskProgressCallback: taskProgressCallback);
 
   /// Enqueue a list of tasks and wait for completion
   ///
   /// Returns a [Batch] object
   Future<Batch> _enqueueAndAwaitBatch(final List<Task> tasks,
-      [BatchProgressCallback? batchProgressCallback]) async {
+      {BatchProgressCallback? batchProgressCallback,
+      TaskStatusCallback? taskStatusCallback,
+      TaskProgressCallback? taskProgressCallback}) async {
     assert(tasks.isNotEmpty, 'List of tasks cannot be empty');
     if (batchProgressCallback != null) {
       batchProgressCallback(0, 0); // initial callback
@@ -255,7 +304,9 @@ class FileDownloader {
     final taskFutures = <Future<TaskStatus>>[];
     var counter = 0;
     for (final task in tasks) {
-      taskFutures.add(_enqueueAndAwait(task));
+      taskFutures.add(_enqueueAndAwait(task,
+          taskStatusCallback: taskStatusCallback,
+          taskProgressCallback: taskProgressCallback));
       counter++;
       if (counter % 3 == 0) {
         // To prevent blocking the UI we 'yield' for a few ms after every 3
@@ -377,8 +428,8 @@ class FileDownloader {
   void destroy() {
     _batches.clear();
     _taskCompleters.clear();
-    _taskStatusCallbacks.clear();
-    _taskProgressCallbacks.clear();
+    _shortTaskStatusCallbacks.clear();
+    _shortTaskProgressCallbacks.clear();
     _downloader.destroy();
   }
 }
