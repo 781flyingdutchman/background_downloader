@@ -1,3 +1,8 @@
+## 4.2.3
+
+Fixed another bug with `database.allRecords` if taskId contains illegal filename characters (like '/'). For
+tracking record id purposes those are now replaced with '_'
+
 ## 4.2.2
 
 Fixed bug with `database.allRecords` if taskId contains illegal filename characters (like '/'). For 
