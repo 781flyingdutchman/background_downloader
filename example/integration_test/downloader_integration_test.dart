@@ -1482,6 +1482,10 @@ void main() {
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.complete));
     });
+
+    testWidgets('cancel a paused task', (widgetTester) {
+      fail('not yet implemented');
+    });
   });
 }
 

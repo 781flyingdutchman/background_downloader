@@ -27,6 +27,7 @@ class DesktopDownloader extends BaseDownloader {
   static final DesktopDownloader _singleton = DesktopDownloader._internal();
   final _queue = Queue<Task>();
   final _running = Queue<Task>(); // subset that is running
+  final _resume = <Task>{};
   final _isolateSendPorts =
       <Task, SendPort?>{}; // isolate SendPort for running task
   static final httpClient = http.Client();
@@ -63,9 +64,13 @@ class DesktopDownloader extends BaseDownloader {
   /// 'forwarded' to the [backgroundChannel] and processed by the
   /// [FileDownloader]
   Future<void> _executeTask(Task task) async {
+    final isResume = _resume.remove(task) && resumeData[task] != null;
     final filePath = await task.filePath();
-    final tempFilePath = path.join((await getTemporaryDirectory()).path,
-        'com.bbflight.background_downloader${Random().nextInt(1 << 32).toString()}');
+    final tempFilePath = isResume
+        ? resumeData[task]?.first as String? ?? ""  // always non-null
+        : path.join((await getTemporaryDirectory()).path,
+            'com.bbflight.background_downloader${Random().nextInt(1 << 32).toString()}');
+    final start = resumeData[task]?.last as int? ?? 0;  // start for resume
     // spawn an isolate to do the task
     final receivePort = ReceivePort();
     final errorPort = ReceivePort();
@@ -79,7 +84,7 @@ class DesktopDownloader extends BaseDownloader {
         onError: errorPort.sendPort);
     final messagesFromIsolate = StreamQueue<dynamic>(receivePort);
     final sendPort = await messagesFromIsolate.next;
-    sendPort.send([task, filePath, tempFilePath, false]); //TODO isResume
+    sendPort.send([task, filePath, tempFilePath, start, isResume]);
     if (_isolateSendPorts.keys.contains(task)) {
       // if already registered with null value, cancel immediately
       sendPort.send('cancel');
@@ -104,7 +109,8 @@ class DesktopDownloader extends BaseDownloader {
           setCanResume(task, message);
         } else if (message is List) {
           // resume data
-          assert(message[0] as String == 'resumeData', 'Only recognize resume data');
+          assert(message[0] as String == 'resumeData',
+              'Only recognize resume data');
           print(message[1] as String);
           print(message[2] as int);
           setResumeData(task, message[1] as String, message[2] as int);
@@ -200,8 +206,12 @@ class DesktopDownloader extends BaseDownloader {
   }
 
   @override
-  Future<bool> resume(Task task) {
-    throw UnimplementedError('Resume not implemented');
+  Future<bool> resume(Task task) async {
+    if (await super.resume(task)) {
+      _resume.add(task);
+      return enqueue(task);
+    }
+    return false;
   }
 
   @override
@@ -219,4 +229,3 @@ class DesktopDownloader extends BaseDownloader {
     _isolateSendPorts.remove(task);
   }
 }
-
