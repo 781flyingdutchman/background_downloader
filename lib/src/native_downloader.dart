@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:background_downloader/src/models.dart';
@@ -48,8 +49,8 @@ class NativeDownloader extends BaseDownloader {
 
         case 'resumeData':
           final tempFilename = args[1] as String;
-          final bytes = args.last as int;
-          setResumeData(task, tempFilename, bytes);
+          final startByte = args.last as int;
+          setResumeData(task, tempFilename, startByte);
           print(resumeData[task]);
           break;
 
@@ -107,4 +108,20 @@ class NativeDownloader extends BaseDownloader {
   @override
   Future<bool> pause(Task task) async =>
       await _channel.invokeMethod<bool>('pause', task.taskId) ?? false;
+
+  @override
+  Future<bool> resume(Task task) async {
+    if (await super.resume(task)) {
+      final taskResumeData = resumeData[task];
+      if (taskResumeData != null) {
+        return await _channel.invokeMethod<bool>('enqueue', [
+              jsonEncode(task.toJsonMap()),
+              taskResumeData.first as String,
+              taskResumeData.last as int
+            ]) ??
+            false;
+      }
+    }
+    return false;
+  }
 }

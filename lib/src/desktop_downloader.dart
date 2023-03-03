@@ -184,6 +184,11 @@ class DesktopDownloader extends BaseDownloader {
   }
 
   @override
+  Future<bool> resume(Task task) {
+    throw UnimplementedError('Resume not implemented');
+  }
+
+  @override
   void destroy() {
     super.destroy();
     _queue.clear();

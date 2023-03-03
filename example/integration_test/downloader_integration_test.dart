@@ -37,6 +37,8 @@ const uploadTestUrl =
 const uploadBinaryTestUrl =
     'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_upload_binary_file';
 
+const urlWithContentLengthFileSize = 6207471;
+
 const defaultFilename = 'google.html';
 const postFilename = 'post.txt';
 const uploadFilename = 'a_file.txt';
@@ -884,7 +886,7 @@ void main() {
     });
   });
 
-  group('downloadTask with POST request', () {
+  group('DownloadTask with POST request', () {
     testWidgets('post DownloadTask with post is empty body',
         (widgetTester) async {
       final task = DownloadTask(
@@ -1250,7 +1252,7 @@ void main() {
     });
   });
 
-  group('cancellation', () {
+  group('Cancellation', () {
     testWidgets('cancel enqueued tasks', (widgetTester) async {
       var cancelCounter = 0;
       var completeCounter = 0;
@@ -1289,7 +1291,7 @@ void main() {
     });
   });
 
-  group('tracking', () {
+  group('Tracking', () {
     testWidgets('activate tracking', (widgetTester) async {
       await FileDownloader().database.deleteAllRecords();
       await FileDownloader()
@@ -1453,13 +1455,32 @@ void main() {
       expect(await FileDownloader().pause(task), isTrue);
       await Future.delayed(const Duration(milliseconds: 200));
       expect(lastStatus, equals(TaskStatus.paused));
+      print('Task is paused');
       // resume
-      fail('Resume not yet implemented');
+      expect(await FileDownloader().resume(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      print(await File(await task.filePath()).length());
+      expect(await File(await task.filePath()).length(),
+          equals(urlWithContentLengthFileSize));
     });
 
-    testWidgets('pause task that cannot be paused', (widgetTester)
-    {
-      fail('Not yet implemented');
+    testWidgets('pause task that cannot be paused', (widgetTester) async {
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      task = DownloadTask(
+          url: urlWithContentLength,
+          filename: defaultFilename,
+          updates: Updates.statusAndProgress,
+          allowPause: false);
+      expect(await FileDownloader().enqueue(task), equals(true));
+      await someProgressCompleter.future;
+      final canResume = await FileDownloader().taskCanResume(task);
+      expect(canResume, isFalse);
+      expect(await FileDownloader().pause(task), isFalse);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
     });
   });
 }

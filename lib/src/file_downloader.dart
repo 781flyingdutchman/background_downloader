@@ -396,11 +396,26 @@ class FileDownloader {
   /// status to see if it was executed successfully [TaskStatus.paused] or if
   /// it failed after all [TaskStatus.failed]
   ///
-  /// If the [Task.allowPause] field is set to false (default) then
-  /// this method returns false immediately.
-  Future<bool> pause(Task task) async {
-    if (task.allowPause) {
+  /// If the [Task.allowPause] field is set to false (default) or if this is
+  /// a POST request, this method returns false immediately.
+  Future<bool> pause(DownloadTask task) async {
+    if (task.allowPause && task.post == null) {
       return _downloader.pause(task);
+    }
+    return false;
+  }
+
+  /// Resume the task
+  ///
+  /// Returns true if the pause was attempted successfully. Status will change
+  /// similar to a call to [enqueue]. If the task is able to resume, it will,
+  /// otherwise it will restart the task from scratch.
+  ///
+  /// If the [Task.allowPause] field is set to false (default) or if this is
+  /// a POST request, this method returns false immediately.
+  Future<bool> resume(DownloadTask task) async {
+    if (task.allowPause && task.post == null) {
+      return _downloader.resume(task);
     }
     return false;
   }

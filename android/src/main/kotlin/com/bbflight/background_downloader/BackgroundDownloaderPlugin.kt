@@ -22,6 +22,8 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     companion object {
         const val TAG = "BackgroundDownloader"
         const val keyTasksMap = "com.bbflight.background_downloader.taskMap"
+        const val keyTempFilename = "tempFilename"
+        const val keyStartByte = "startByte"
         var canceledTaskIds = HashMap<String, Long>() // <taskId, timeMillis>
         var pausedTaskIds = HashSet<String>() // <taskId>
         var backgroundChannel: MethodChannel? = null
@@ -86,7 +88,8 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
 
     /** Starts one task, passed as map of values representing a [Task]
      *
-     *  Returns true if successful, and will emit a status update that the task is running
+     *  Returns true if successful, and will emit a status update that the task is running.
+     *  For tasks that are 'resume' tasks, adds tempFilename and startByte to the worker
      */
     private fun methodEnqueue(call: MethodCall, result: Result) {
         val args = call.arguments as List<*>
@@ -94,9 +97,15 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         val task =
             Task(gson.fromJson(taskJsonMapString, jsonMapType))
         Log.i(TAG, "Starting task with id ${task.taskId}")
-        val data =
+        val dataBuilder =
             Data.Builder().putString(TaskWorker.keyTask, taskJsonMapString)
-                .build()
+        if (args.size > 1) {
+            val startByte: Long =
+                if (args[2] is Long) args[2] as Long else (args[2] as Int).toLong()
+            dataBuilder.putString(keyTempFilename, args[1] as String)
+                .putLong(keyStartByte, startByte)
+        }
+        val data = dataBuilder.build()
         val constraints = Constraints.Builder().setRequiredNetworkType(
             if (task.requiresWiFi) NetworkType.UNMETERED else NetworkType.CONNECTED
         )
@@ -192,8 +201,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
                             gson.fromJson(taskJsonMap, jsonMapType)
                         )
                         TaskWorker.processStatusUpdate(task, TaskStatus.canceled)
-                    }
-                    else {
+                    } else {
                         Log.d(TAG, "Could not find taskId $taskId to cancel")
                     }
                 }

@@ -20,6 +20,7 @@ import 'native_downloader.dart';
 /// - callback handling (for groups of tasks registered via the [FileDownloader])
 /// - tasks waiting to retry and retry handling
 /// - Task updates provided to the [FileDownloader]
+/// - Pause/resume status and information
 abstract class BaseDownloader {
   final log = Logger('BackgroundDownloader');
   final tasksWaitingToRetry = <Task>[];
@@ -55,7 +56,7 @@ abstract class BaseDownloader {
   /// Initialize
   void initialize() {}
 
-  /// Enqueue the task and advance the queue
+  /// Enqueue the task
   @mustCallSuper
   Future<bool> enqueue(Task task) async {
     if (task.allowPause) {
@@ -160,17 +161,38 @@ abstract class BaseDownloader {
   /// Sets the 'canResumeTask' flag for this task
   ///
   /// Completes the completer already associated with this task
-  void setCanResume(Task task, bool canResume) =>
+  void setCanResume(Task task, bool canResume) {
+    if (canResumeTask[task]?.isCompleted == false) {
       canResumeTask[task]?.complete(canResume);
+    }
+  }
 
   /// Returns a Future that indicates whether this task can be resumed
   Future<bool> taskCanResume(Task task) => canResumeTask[task]?.future ?? Future.value(false);
 
-  /// Stores the resume filename and start bytes position for this task
-  void setResumeData(Task task, String filename, int start) =>
-      resumeData[task] = [filename, start];
+  /// Stores the resume tempFilename and start byte position for this task
+  void setResumeData(Task task, String tempFilename, int startByte) =>
+      resumeData[task] = [tempFilename, startByte];
+
+  /// Clear resume data associated with this task
+  void _clearResumeData(Task task) {
+    canResumeTask.remove(task);
+    resumeData.remove(task);
+  }
 
   Future<bool> pause(Task task);
+
+  /// Attempt to resume this [task]
+  ///
+  /// Returns true if successful
+  @mustCallSuper
+  Future<bool> resume(Task task) async {
+    if (resumeData[task] != null) {
+      canResumeTask[task] = Completer();
+      return true;
+    }
+    return false;
+  }
 
   /// Destroy - clears callbacks, updates stream and retry queue
   ///
@@ -209,6 +231,7 @@ abstract class BaseDownloader {
         if (tasksWaitingToRetry.remove(task)) {
           if (!await enqueue(task)) {
             log.warning('Could not enqueue task $task after retry timeout');
+            _clearResumeData(task);
             _emitStatusUpdate(task, TaskStatus.failed);
             _emitProgressUpdate(task, progressFailed);
           }
@@ -216,6 +239,9 @@ abstract class BaseDownloader {
       });
     } else {
       // normal status update
+      if (taskStatus.isFinalState) {
+        _clearResumeData(task);
+      }
       _emitStatusUpdate(task, taskStatus);
     }
   }
