@@ -315,6 +315,9 @@ abstract class Task extends Request {
       throw ArgumentError(
           'Directory must be relative to the baseDirectory specified in the baseDirectory argument');
     }
+    if (allowPause && post != null) {
+      throw ArgumentError('Tasks that can pause must be GET requests');
+    }
   }
 
   /// Create a new [Task] subclass from the provided [jsonMap]
@@ -553,7 +556,12 @@ class UploadTask extends Task {
       : assert(filename.isNotEmpty, 'A filename is required'),
         assert(post == null || post == 'binary',
             'post field must be null, or "binary" for binary file upload'),
-        super(taskId: taskId, filename: filename, post: post);
+        super(taskId: taskId, filename: filename, post: post) {
+    if (allowPause) {
+      throw ArgumentError('Uploads cannot be paused. set `allowPause` to '
+          'false');
+    }
+  }
 
   /// Creates [UploadTask] object from JsonMap
   UploadTask.fromJsonMap(Map<String, dynamic> jsonMap)
