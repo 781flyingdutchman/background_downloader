@@ -2,8 +2,9 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
+import 'package:collection/collection.dart';
 
 import 'database.dart';
 import 'desktop_downloader.dart';
@@ -42,6 +43,11 @@ abstract class BaseDownloader {
 
   /// Map of data needed to resume a task
   final resumeData = <Task, List<dynamic>>{}; // [String filename, int bytes]
+
+  /// Set of paused tasks
+  ///
+  /// May not include tasks that paused before the app was started
+  final pausedTasks = <Task>{};
 
   BaseDownloader();
 
@@ -104,9 +110,17 @@ abstract class BaseDownloader {
       _emitStatusUpdate(task, TaskStatus.canceled);
       _emitProgressUpdate(task, progressCanceled);
     }
+    final remainingTaskIds = taskIds
+        .where((taskId) => !matchingTaskIdsWaitingToRetry.contains(taskId));
+    // cancel paused tasks
+    final pausedTaskIdsToCancel = pausedTasks
+        .where((task) => remainingTaskIds.contains(task.taskId))
+        .map((e) => e.taskId)
+        .toList(growable: false);
+    cancelPausedPlatformTasksWithIds(pausedTaskIdsToCancel);
     // cancel remaining taskIds on the platform
-    final platformTaskIds = taskIds
-        .where((taskId) => !matchingTaskIdsWaitingToRetry.contains(taskId))
+    final platformTaskIds = remainingTaskIds
+        .where((taskId) => !pausedTaskIdsToCancel.contains(taskId))
         .toList(growable: false);
     if (platformTaskIds.isEmpty) {
       return true;
@@ -116,6 +130,28 @@ abstract class BaseDownloader {
 
   /// Cancel these tasks on the platform
   Future<bool> cancelPlatformTasksWithIds(List<String> taskIds);
+
+  /// Cancel paused tasks
+  ///
+  /// Deletes the associated temp file and emits [TaskStatus.cancel]
+  void cancelPausedPlatformTasksWithIds(List<String> taskIds) async {
+    for (final taskId in taskIds) {
+      final task =
+          pausedTasks.firstWhereOrNull((element) => element.taskId == taskId);
+      if (task != null) {
+        final data = resumeData[task];
+        if (data != null) {
+          final tempFilePath = data[0] as String;
+          try {
+            await File(tempFilePath).delete();
+          } on FileSystemException {
+            log.fine('Could not delete temp file $tempFilePath');
+          }
+        }
+        processStatusUpdate(task, TaskStatus.canceled);
+      }
+    }
+  }
 
   /// Returns Task for this taskId, or nil
   @mustCallSuper
@@ -168,16 +204,18 @@ abstract class BaseDownloader {
   }
 
   /// Returns a Future that indicates whether this task can be resumed
-  Future<bool> taskCanResume(Task task) => canResumeTask[task]?.future ?? Future.value(false);
+  Future<bool> taskCanResume(Task task) =>
+      canResumeTask[task]?.future ?? Future.value(false);
 
   /// Stores the resume tempFilename and start byte position for this task
   void setResumeData(Task task, String tempFilename, int startByte) =>
       resumeData[task] = [tempFilename, startByte];
 
-  /// Clear resume data associated with this task
-  void _clearResumeData(Task task) {
+  /// Clear pause and resume info associated with this task
+  void _clearPauseResumeInfo(Task task) {
     canResumeTask.remove(task);
     resumeData.remove(task);
+    pausedTasks.remove(task);
   }
 
   Future<bool> pause(Task task);
@@ -187,6 +225,7 @@ abstract class BaseDownloader {
   /// Returns true if successful
   @mustCallSuper
   Future<bool> resume(Task task) async {
+    pausedTasks.remove(task);
     if (resumeData[task] != null) {
       canResumeTask[task] = Completer();
       return true;
@@ -206,11 +245,15 @@ abstract class BaseDownloader {
     trackedGroups.clear();
     canResumeTask.clear();
     resumeData.clear();
+    pausedTasks.clear();
     updates.close();
     updates = StreamController();
   }
 
-  /// Process status update coming from Downloader to client listener
+  /// Process status update coming from Downloader and emits to listener
+  ///
+  /// Also manages retries ([tasksWaitingToRetry] and delay) and pause/resume
+  /// ([pausedTasks] and [_clearPauseResumeInfo]
   void processStatusUpdate(Task task, TaskStatus taskStatus) {
     // Normal status updates are only sent here when the task is expected
     // to provide those.  The exception is a .failed status when a task
@@ -231,7 +274,7 @@ abstract class BaseDownloader {
         if (tasksWaitingToRetry.remove(task)) {
           if (!await enqueue(task)) {
             log.warning('Could not enqueue task $task after retry timeout');
-            _clearResumeData(task);
+            _clearPauseResumeInfo(task);
             _emitStatusUpdate(task, TaskStatus.failed);
             _emitProgressUpdate(task, progressFailed);
           }
@@ -239,8 +282,11 @@ abstract class BaseDownloader {
       });
     } else {
       // normal status update
+      if (taskStatus == TaskStatus.paused) {
+        pausedTasks.add(task);
+      }
       if (taskStatus.isFinalState) {
-        _clearResumeData(task);
+        _clearPauseResumeInfo(task);
       }
       _emitStatusUpdate(task, taskStatus);
     }

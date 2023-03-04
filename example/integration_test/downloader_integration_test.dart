@@ -1483,8 +1483,33 @@ void main() {
       expect(lastStatus, equals(TaskStatus.complete));
     });
 
-    testWidgets('cancel a paused task', (widgetTester) {
-      fail('not yet implemented');
+    testWidgets('cancel a paused task', (widgetTester) async {
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      task = DownloadTask(
+          url: urlWithContentLength,
+          filename: defaultFilename,
+          updates: Updates.statusAndProgress,
+          allowPause: true);
+      expect(await FileDownloader().enqueue(task), equals(true));
+      await someProgressCompleter.future;
+      final canResume = await FileDownloader().taskCanResume(task);
+      expect(canResume, isTrue);
+      expect(await FileDownloader().pause(task), isTrue);
+      await Future.delayed(const Duration(milliseconds: 200));
+      expect(lastStatus, equals(TaskStatus.paused));
+      final downloader = FileDownloader().downloaderForTesting;
+      expect(downloader.resumeData[task], isNotNull);
+      final resumeData = downloader.resumeData[task]!;
+      final tempFilePath = resumeData.first;
+      expect(File(tempFilePath).existsSync(), isTrue);
+      expect(File(tempFilePath).lengthSync(), equals(resumeData.last));
+      expect(await FileDownloader().cancelTasksWithIds([task.taskId]), isTrue);
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      expect(lastStatus, equals(TaskStatus.canceled));
+      expect(File(tempFilePath).existsSync(), isFalse);
     });
   });
 }

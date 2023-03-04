@@ -32,6 +32,8 @@ class FileDownloader {
   final _batches = <Batch>[];
   final _downloader = BaseDownloader.instance();
 
+  BaseDownloader get downloaderForTesting => _downloader;
+
   /// Registered short status callback for convenience down/upload tasks
   ///
   /// Short callbacks omit the [Task] as they are available from the closure
@@ -349,12 +351,18 @@ class FileDownloader {
           bool includeTasksWaitingToRetry = true}) =>
       _downloader.allTasks(group, includeTasksWaitingToRetry);
 
-  /// Delete all tasks matching the taskIds in the list
+  /// Cancel all tasks matching the taskIds in the list
   ///
   /// Every canceled task wil emit a [TaskStatus.canceled] update to
   /// the registered callback, if requested
   Future<bool> cancelTasksWithIds(List<String> taskIds) =>
       _downloader.cancelTasksWithIds(taskIds);
+
+  /// Cancel this task
+  ///
+  /// The task will emit a [TaskStatus.canceled] update to
+  /// the registered callback, if requested
+  Future<bool> cancelTaskWithId(String taskId) => cancelTasksWithIds([taskId]);
 
   /// Return [Task] for the given [taskId], or null
   /// if not found.

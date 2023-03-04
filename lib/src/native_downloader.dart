@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:background_downloader/src/models.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'base_downloader.dart';
+import 'models.dart';
 
 /// Implementation of download functionality for native platforms
 ///

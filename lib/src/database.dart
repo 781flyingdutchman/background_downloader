@@ -1,6 +1,8 @@
-import 'package:background_downloader/background_downloader.dart';
-import 'package:background_downloader/src/base_downloader.dart';
+
 import 'package:localstore/localstore.dart';
+
+import 'base_downloader.dart';
+import 'models.dart';
 
 /// Persistent database used for tracking task status and progress.
 ///

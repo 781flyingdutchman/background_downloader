@@ -21,10 +21,8 @@ import java.lang.System.currentTimeMillis
 import java.net.HttpURLConnection
 import java.net.SocketException
 import java.net.URL
-import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
-import java.nio.file.StandardOpenOption
 import kotlin.concurrent.write
 import kotlin.io.path.Path
 import kotlin.io.path.pathString
@@ -46,8 +44,6 @@ class TaskWorker(
         const val TAG = "TaskWorker"
         const val keyTask = "Task"
         const val bufferSize = 8096
-
-        val contentRangeRegEx = Regex("(\\d+)-(\\d+)/(\\d+)")
 
         private var taskCanResume = false
 
@@ -193,10 +189,8 @@ class TaskWorker(
         }
     }
 
-    var bytesTotal: Long = 0 // property as it is needed for 'pause'
-    var tempFilename = ""
-    var startByte: Long = 0
-    var isResume = false
+    private var bytesTotal: Long = 0 // property as it is needed for 'pause'
+    private var startByte = 0L
 
     override suspend fun doWork(): Result {
         withContext(Dispatchers.IO) {
@@ -206,42 +200,45 @@ class TaskWorker(
             val task = Task(
                 gson.fromJson(taskJsonMapString, mapType)
             )
-            val filename = inputData.getString(BackgroundDownloaderPlugin.keyTempFilename)
-            if (filename != null) {
-                // resume request, check if possible, based on the data on our end
-                determineIfResumeIsPossible(filename)
-            }
+            // pre-process resume
+            val requiredStartByte = inputData.getLong(BackgroundDownloaderPlugin.keyStartByte, 0)
+            var isResume = requiredStartByte != 0L
+            val tempFilePath =
+                if (isResume) inputData.getString(BackgroundDownloaderPlugin.keyTempFilename) ?: ""
+                else "${applicationContext.cacheDir}/com.bbflight.background_downloader${Random.nextInt()}"
+            isResume = isResume && determineIfResumeIsPossible(tempFilePath, requiredStartByte)
             Log.i(
                 TAG,
                 "${if (isResume) "Resuming" else "Starting"} task with taskId ${task.taskId}"
             )
             processStatusUpdate(task, TaskStatus.running)
             processProgressUpdate(task, 0.0)
-            val status = doTask(task)
+            val status = doTask(task, isResume, tempFilePath, requiredStartByte)
             processStatusUpdate(task, status)
         }
         return Result.success()
     }
 
-    /** Determine if resume is possible. If so, set isResume and load resume data */
-    private fun determineIfResumeIsPossible(filename: String) {
-        if (File(filename).exists()) {
-            startByte = inputData.getLong(BackgroundDownloaderPlugin.keyStartByte, 0)
-            if (File(filename).length() == startByte) {
-                tempFilename = filename
-                isResume = true
-                Log.d(TAG, "Start byte = $startByte")
+    /** Return true if resume is possible, given [tempFilePath] and [requiredStartByte] */
+    private fun determineIfResumeIsPossible(
+        tempFilePath: String,
+        requiredStartByte: Long
+    ): Boolean {
+        if (File(tempFilePath).exists()) {
+            if (File(tempFilePath).length() == requiredStartByte) {
+                return true
             } else {
                 Log.i(TAG, "Partially downloaded file is corrupted, resume not possible")
             }
         } else {
             Log.i(TAG, "Partially downloaded file not available, resume not possible")
         }
+        return false
     }
 
     /** do the task: download or upload a file */
     private fun doTask(
-        task: Task
+        task: Task, isResume: Boolean, tempFilePath: String, requiredStartByte: Long
     ): TaskStatus {
         try {
             val urlString = task.url
@@ -252,9 +249,9 @@ class TaskWorker(
                     setRequestProperty(header.key, header.value)
                 }
                 if (isResume) {
-                    setRequestProperty("Range", "bytes=$bytesTotal-")
+                    setRequestProperty("Range", "bytes=$requiredStartByte-")
                 }
-                return connectAndProcess(this, task)
+                return connectAndProcess(this, task, isResume, tempFilePath, requiredStartByte)
             }
         } catch (e: Exception) {
             Log.w(
@@ -267,7 +264,11 @@ class TaskWorker(
 
     /** Make the request to the [connection] and process the [Task] */
     private fun connectAndProcess(
-        connection: HttpURLConnection, task: Task
+        connection: HttpURLConnection,
+        task: Task,
+        isResume: Boolean,
+        tempFilePath: String,
+        requiredStartByte: Long
     ): TaskStatus {
         val filePath = pathToFileForTask(task)
         try {
@@ -280,7 +281,14 @@ class TaskWorker(
                 } else {
                     connection.requestMethod = "GET"
                 }
-                return processDownload(connection, task, filePath)
+                return processDownload(
+                    connection,
+                    task,
+                    filePath,
+                    isResume,
+                    tempFilePath,
+                    requiredStartByte
+                )
             }
             return processUpload(connection, task, filePath)
         } catch (e: Exception) {
@@ -298,23 +306,8 @@ class TaskWorker(
                         TAG,
                         "Job cancelled for url ${task.url} and $filePath: ${e.message}"
                     )
-                    deleteTempFile()
+                    deleteTempFile(tempFilePath)
                     return TaskStatus.canceled
-                }
-                is PauseException -> {
-                    BackgroundDownloaderPlugin.pausedTaskIds.remove(task.taskId)
-                    if (taskCanResume) {
-                        Log.i(
-                            TAG,
-                            "Task ${task.taskId} paused"
-                        )
-                        postOnBackgroundChannel("resumeData", task, tempFilename, bytesTotal)
-                        return TaskStatus.paused
-                    }
-                    Log.i(
-                        TAG,
-                        "Task ${task.taskId} cannot resume, therefore pause failed"
-                    )
                 }
                 else -> {
                     Log.w(
@@ -325,7 +318,7 @@ class TaskWorker(
                 }
             }
         }
-        deleteTempFile()
+        deleteTempFile(tempFilePath)
         return TaskStatus.failed
     }
 
@@ -336,7 +329,7 @@ class TaskWorker(
     private fun processDownload(
         connection: HttpURLConnection,
         task: Task,
-        filePath: String
+        filePath: String, isResumeParam: Boolean, tempFilePath: String, requiredStartByte: Long
     ): TaskStatus {
         Log.d(TAG, "Download for taskId ${task.taskId}")
         if (connection.responseCode in 200..206) {
@@ -344,64 +337,75 @@ class TaskWorker(
             Log.d(TAG, "Content range ${connection.headerFields["Content-Range"]}")
             Log.d(TAG, "Content length ${connection.headerFields["Content-Length"]}")
 
-            isResume = isResume && connection.responseCode == 206  // confirm resume response
-            Log.d(TAG, "isResume = $isResume")
             if (task.allowPause) {
                 Log.i(TAG, "Checking canResume")
                 val acceptRangesHeader = connection.headerFields["Accept-Ranges"]
                 processCanResume(task, acceptRangesHeader?.first() == "bytes")
             }
-            var dir = applicationContext.cacheDir
-            val tempFile = if (isResume) File(tempFilename) else File.createTempFile(
-                "com.bbflight.background_downloader",
-                Random.nextInt().toString(),
-                dir
-            )
-            tempFilename = tempFile.absolutePath
-            if (isResume) {
-                if (!prepareResume(connection)) {
-                    deleteTempFile()
+            val isResume =
+                isResumeParam && connection.responseCode == 206  // confirm resume response
+            Log.d(TAG, "isResume = $isResume")
+            if (isResume && !prepareResume(connection, tempFilePath)) {
+                deleteTempFile(tempFilePath)
+                return TaskStatus.failed
+            }
+            Log.d(TAG, "bytesTotal at start of transferBytes = $bytesTotal")
+            Log.d(TAG, "startByte at start of transferBytes = $requiredStartByte")
+            val tempFile = File(tempFilePath)
+            var transferBytesResult: TaskStatus
+            BufferedInputStream(connection.inputStream).use { inputStream ->
+                FileOutputStream(tempFile, isResume).use { outputStream ->
+                    transferBytesResult =
+                        transferBytes(inputStream, outputStream, connection.contentLengthLong, task)
+                }
+            }
+            when (transferBytesResult) {
+                TaskStatus.complete -> {
+                    // move file from its temp location to the destination
+                    val destFile = File(filePath)
+                    val dir = destFile.parentFile!!
+                    if (!dir.exists()) {
+                        dir.mkdirs()
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        Files.move(
+                            tempFile.toPath(),
+                            destFile.toPath(),
+                            StandardCopyOption.REPLACE_EXISTING
+                        )
+                    } else {
+                        tempFile.copyTo(destFile, overwrite = true)
+                        deleteTempFile(tempFilePath)
+                    }
+                    Log.i(
+                        TAG,
+                        "Successfully downloaded taskId ${task.taskId} to $filePath"
+                    )
+                    return TaskStatus.complete
+                }
+
+                TaskStatus.canceled -> {
+                    deleteTempFile(tempFilePath)
+                    Log.i(TAG, "Canceled taskId ${task.taskId} for $filePath")
+                    return TaskStatus.canceled
+                }
+
+                TaskStatus.paused -> {
+                    BackgroundDownloaderPlugin.pausedTaskIds.remove(task.taskId)
+                    if (taskCanResume) {
+                        Log.i(TAG, "Task ${task.taskId} paused")
+                        postOnBackgroundChannel("resumeData", task, tempFilePath, bytesTotal)
+                        return TaskStatus.paused
+                    }
+                    Log.i(TAG, "Task ${task.taskId} cannot resume, therefore pause failed")
+                    deleteTempFile(tempFilePath)
+                    return TaskStatus.failed
+                }
+                else -> {
+                    deleteTempFile(tempFilePath)
                     return TaskStatus.failed
                 }
             }
-            if (!isResume) {
-                startByte = 0
-            }
-            Log.d(TAG, "isResume = $isResume")
-            Log.d(TAG, "bytesTotal at start of transferBytes = $bytesTotal")
-            Log.d(TAG, "startByte at start of transferBytes = $startByte")
-            BufferedInputStream(connection.inputStream).use { inputStream ->
-                FileOutputStream(tempFile, isResume).use { outputStream ->
-                    transferBytes(inputStream, outputStream, connection.contentLengthLong, task)
-                }
-            }
-            if (!isStopped) {
-                // move file from its temp location to the destination
-                val destFile = File(filePath)
-                dir = destFile.parentFile
-                if (!dir.exists()) {
-                    dir.mkdirs()
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    Files.move(
-                        tempFile.toPath(),
-                        destFile.toPath(),
-                        StandardCopyOption.REPLACE_EXISTING
-                    )
-                } else {
-                    tempFile.copyTo(destFile, overwrite = true)
-                    deleteTempFile()
-                }
-            } else {
-                deleteTempFile()
-                Log.i(TAG, "Canceled taskId ${task.taskId} for $filePath")
-                return TaskStatus.canceled
-            }
-            Log.i(
-                TAG,
-                "Successfully downloaded taskId ${task.taskId} to $filePath"
-            )
-            return TaskStatus.complete
         } else {
             Log.i(
                 TAG,
@@ -449,6 +453,7 @@ class TaskWorker(
             Log.w(TAG, "File $filePath has 0 length")
             return TaskStatus.failed
         }
+        var transferBytesResult: TaskStatus
         if (task.post?.lowercase() == "binary") {
             // binary file upload posts file bytes directly
             // set Content-Type based on file extension
@@ -466,7 +471,7 @@ class TaskWorker(
             connection.setFixedLengthStreamingMode(fileSize)
             FileInputStream(file).use { inputStream ->
                 DataOutputStream(connection.outputStream.buffered()).use { outputStream ->
-                    transferBytes(inputStream, outputStream, fileSize, task)
+                    transferBytesResult = transferBytes(inputStream, outputStream, fileSize, task)
                 }
             }
         } else {
@@ -502,33 +507,46 @@ class TaskWorker(
                         .append(contentDispositionString).append(lineFeed)
                         .append(contentTypeString).append(lineFeed).append(lineFeed)
                         .flush()
-                    transferBytes(inputStream, outputStream, fileSize, task)
-                    if (!isStopped) {
+                    transferBytesResult = transferBytes(inputStream, outputStream, fileSize, task)
+                    if (transferBytesResult == TaskStatus.complete) {
                         writer.append(lineFeed).append("--${boundary}--").append(lineFeed)
                     }
                     writer.close()
                 }
             }
         }
-        if (isStopped) {
-            Log.i(TAG, "Canceled taskId ${task.taskId} for $filePath")
-            return TaskStatus.canceled
-        }
-        if (connection.responseCode in 200..206) {
-            Log.i(
-                TAG,
-                "Successfully uploaded taskId ${task.taskId} from $filePath"
-            )
-            return TaskStatus.complete
-        }
-        Log.i(
-            TAG,
-            "Response code ${connection.responseCode} for upload of $filePath to ${task.url}"
-        )
-        return if (connection.responseCode == 404) {
-            TaskStatus.notFound
-        } else {
-            TaskStatus.failed
+        when (transferBytesResult) {
+            TaskStatus.canceled -> {
+                Log.i(TAG, "Canceled taskId ${task.taskId} for $filePath")
+                return TaskStatus.canceled
+            }
+
+            TaskStatus.failed -> {
+                return TaskStatus.failed
+            }
+
+            TaskStatus.complete -> {
+                if (connection.responseCode in 200..206) {
+                    Log.i(
+                        TAG,
+                        "Successfully uploaded taskId ${task.taskId} from $filePath"
+                    )
+                    return TaskStatus.complete
+                }
+                Log.i(
+                    TAG,
+                    "Response code ${connection.responseCode} for upload of $filePath to ${task.url}"
+                )
+                return if (connection.responseCode == 404) {
+                    TaskStatus.notFound
+                } else {
+                    TaskStatus.failed
+                }
+            }
+
+            else -> {
+                return TaskStatus.failed
+            }
         }
     }
 
@@ -537,61 +555,64 @@ class TaskWorker(
      * Transfer [contentLength] bytes from [inputStream] to [outputStream] and provide
      * progress updates for the [task]
      *
-     * Will return if during the transfer [isStopped] becomes true
+     * Will return canceled, paused, failed or complete status
      */
     private fun transferBytes(
         inputStream: InputStream,
         outputStream: OutputStream,
         contentLength: Long,
         task: Task
-    ) {
+    ): TaskStatus {
         val dataBuffer = ByteArray(bufferSize)
         var lastProgressUpdate = 0.0
         var nextProgressUpdateTime = 0L
         var numBytes: Int
-        while (inputStream.read(dataBuffer, 0, bufferSize)
-                .also { numBytes = it } != -1
-        ) {
-            if (isStopped) {
-                break
-            }
-            if (BackgroundDownloaderPlugin.pausedTaskIds.contains(task.taskId)) {
-                outputStream.flush()
-                outputStream.close()
-                throw PauseException()
-            }
-            outputStream.write(dataBuffer, 0, numBytes)
-            bytesTotal += numBytes
-            val progress =
-                min(
-                    (bytesTotal + startByte).toDouble() / (contentLength + startByte),
-                    0.999
-                )
-            if (contentLength > 0 &&
-                (bytesTotal < 10000 || (progress - lastProgressUpdate > 0.02 && currentTimeMillis() > nextProgressUpdateTime))
+        try {
+            while (inputStream.read(dataBuffer, 0, bufferSize)
+                    .also { numBytes = it } != -1
             ) {
-                processProgressUpdate(task, progress)
-                lastProgressUpdate = progress
-                nextProgressUpdateTime = currentTimeMillis() + 500
+                if (isStopped) {
+                    return TaskStatus.canceled
+                }
+                if (BackgroundDownloaderPlugin.pausedTaskIds.contains(task.taskId)) {
+                    return TaskStatus.paused
+                }
+                outputStream.write(dataBuffer, 0, numBytes)
+                bytesTotal += numBytes
+                val progress =
+                    min(
+                        (bytesTotal + startByte).toDouble() / (contentLength + startByte),
+                        0.999
+                    )
+                if (contentLength > 0 &&
+                    (bytesTotal < 10000 || (progress - lastProgressUpdate > 0.02 && currentTimeMillis() > nextProgressUpdateTime))
+                ) {
+                    processProgressUpdate(task, progress)
+                    lastProgressUpdate = progress
+                    nextProgressUpdateTime = currentTimeMillis() + 500
+                }
             }
+        } catch (e: Exception) {
+            Log.i(TAG, "Exception for ${task.taskId}: $e")
+            return TaskStatus.failed
         }
+        return TaskStatus.complete
     }
 
     /** Prepare for resume if possible
      *
      * Returns true if task can continue, false if task failed.
-     * Function has side effects including on [isResume], [startByte] and the length of
-     * the [tempFilename]
-     * Extracts and parses Range headers, sets start byte and truncates temp file
+     * Extracts and parses Range headers, and truncates temp file
      */
-    private fun prepareResume(connection: HttpURLConnection): Boolean {
+    private fun prepareResume(connection: HttpURLConnection, tempFilePath: String): Boolean {
         val contentRanges = connection.headerFields["Content-Range"]
         if (contentRanges == null || contentRanges.size > 1) {
             Log.i(TAG, "Could not process partial response Content-Range")
             return false
         }
         val range = contentRanges.first()
-        val matchResult = contentRangeRegEx.find(range);
+        val contentRangeRegEx = Regex("(\\d+)-(\\d+)/(\\d+)")
+        val matchResult = contentRangeRegEx.find(range)
         if (matchResult == null) {
             Log.i(TAG, "Could not process partial response Content-Range $range")
             return false
@@ -599,18 +620,20 @@ class TaskWorker(
         val start = matchResult.groups[1]?.value?.toLong()!!
         val end = matchResult.groups[2]?.value?.toLong()!!
         val total = matchResult.groups[3]?.value?.toLong()!!
+        val tempFile = File(tempFilePath)
+        val tempFileLength = tempFile.length()
         Log.d(TAG, "$start $end $total")
-        if (total != end + 1 || start > startByte) {
+        if (total != end + 1 || start > tempFileLength) {
             Log.i(TAG, "Offered range not feasible: $range")
             return false
         }
-        // resume possible, set start conditions
         startByte = start
+        // resume possible, set start conditions
         try {
-            RandomAccessFile(tempFilename, "rw").use { it.setLength(start) }
+            RandomAccessFile(tempFilePath, "rw").use { it.setLength(start) }
         } catch (e: IOException) {
-            Log.i(TAG, "Could not truncate temp file, reverting to full download")
-            isResume = false
+            Log.i(TAG, "Could not truncate temp file")
+            return false
         }
         return true
     }
@@ -629,13 +652,13 @@ class TaskWorker(
         return Path(path.pathString, task.filename).pathString
     }
 
-    private fun deleteTempFile() {
-        if (tempFilename.isNotEmpty()) {
+    private fun deleteTempFile(tempFilePath: String) {
+        if (tempFilePath.isNotEmpty()) {
             try {
-                val tempFile = File(tempFilename)
+                val tempFile = File(tempFilePath)
                 tempFile.delete()
             } catch (e: IOException) {
-                Log.w(TAG, "Could not delete tempfile at $tempFilename")
+                Log.w(TAG, "Could not delete temp file at $tempFilePath")
             }
         }
     }

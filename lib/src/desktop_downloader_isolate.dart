@@ -71,9 +71,7 @@ Future<void> doDownloadTask(
     bool isResume,
     SendPort sendPort,
     StreamQueue messagesToIsolate) async {
-  if (isResume) {
-    isResume = await determineIfResumeIsPossible(tempFilePath, requiredStartByte);
-  }
+  isResume = isResume && await determineIfResumeIsPossible(tempFilePath, requiredStartByte);
   final client = DesktopDownloader.httpClient;
   var request = task.post == null
       ? http.Request('GET', Uri.parse(task.url))
@@ -118,7 +116,7 @@ Future<void> doDownloadTask(
   processStatusUpdateInIsolate(task, resultStatus, sendPort);
 }
 
-/// Return true if resume is possible, given temp filename
+/// Return true if resume is possible, given temp filepath
 Future<bool> determineIfResumeIsPossible(String tempFilePath, int requiredStartByte) async {
   if (File(tempFilePath).existsSync()) {
     if (await File(tempFilePath).length() == requiredStartByte) {
@@ -167,6 +165,7 @@ Future<TaskStatus> processOkDownloadResponse(
         break;
 
       case TaskStatus.canceled:
+        deleteTempFile(tempFilePath);
         resultStatus = TaskStatus.canceled;
         break;
 
@@ -200,9 +199,7 @@ Future<TaskStatus> processOkDownloadResponse(
 /// Prepare for resume if possible
 ///
 /// Returns true if task can continue, false if task failed.
-/// Function has side effects including on [_startByte] and the length of
-/// the temp file.
-/// Extracts and parses Range headers, sets start byte and truncates temp file
+/// Extracts and parses Range headers, and truncates temp file
 Future<bool> prepareResume(http.StreamedResponse response, String tempFilePath) async {
   final range = response.headers['content-range'];
   if (range == null) {
@@ -230,7 +227,7 @@ Future<bool> prepareResume(http.StreamedResponse response, String tempFilePath) 
     await file.truncate(start);
     file.close();
   } on FileSystemException {
-    _log.fine('Could not truncate temp file, reverting to full download');
+    _log.fine('Could not truncate temp file');
     return false;
   }
   return true;
@@ -371,7 +368,7 @@ Future<TaskStatus> transferBytes(
         }
         outStream.add(bytes);
         _bytesTotal += bytes.length;
-        final progress = min(_bytesTotal.toDouble() / contentLength, 0.999);
+        final progress = min((_bytesTotal + _startByte).toDouble() / (contentLength + _startByte), 0.999);
         final now = DateTime.now();
         if (contentLength > 0 &&
             (_bytesTotal < 10000 ||
