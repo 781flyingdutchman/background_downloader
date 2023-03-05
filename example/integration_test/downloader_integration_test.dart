@@ -413,7 +413,7 @@ void main() {
           updates: Updates.statusAndProgress,
           requiresWiFi: true,
           retries: 5,
-          allowPause: true,
+          allowPause: false,  // cannot be true if post != null
           metaData: 'someMetaData');
       final now = DateTime.now();
       expect(now.difference(complexTask.creationTime).inMilliseconds,
@@ -1455,7 +1455,6 @@ void main() {
       expect(await FileDownloader().pause(task), isTrue);
       await Future.delayed(const Duration(milliseconds: 200));
       expect(lastStatus, equals(TaskStatus.paused));
-      print('Task is paused');
       // resume
       expect(await FileDownloader().resume(task), isTrue);
       await statusCallbackCompleter.future;
@@ -1503,11 +1502,13 @@ void main() {
       expect(downloader.resumeData[task], isNotNull);
       final resumeData = downloader.resumeData[task]!;
       final tempFilePath = resumeData.first;
-      expect(File(tempFilePath).existsSync(), isTrue);
-      expect(File(tempFilePath).lengthSync(), equals(resumeData.last));
+      if (!Platform.isIOS) {
+        // on iOS we don't have access to the temp file directly
+        expect(File(tempFilePath).existsSync(), isTrue);
+        expect(File(tempFilePath).lengthSync(), equals(resumeData.last));
+      }
       expect(await FileDownloader().cancelTasksWithIds([task.taskId]), isTrue);
       await Future.delayed(const Duration(milliseconds: 200));
-
       expect(lastStatus, equals(TaskStatus.canceled));
       expect(File(tempFilePath).existsSync(), isFalse);
     });

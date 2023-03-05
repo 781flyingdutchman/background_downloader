@@ -23,7 +23,7 @@ import 'native_downloader.dart';
 /// - Task updates provided to the [FileDownloader]
 /// - Pause/resume status and information
 abstract class BaseDownloader {
-  final log = Logger('BackgroundDownloader');
+  final log = Logger('BaseDownloader');
   final tasksWaitingToRetry = <Task>[];
 
   /// Registered [TaskStatusCallback] for each group
@@ -42,6 +42,11 @@ abstract class BaseDownloader {
   final canResumeTask = <Task, Completer<bool>>{};
 
   /// Map of data needed to resume a task
+  ///
+  /// On iOS, the first item, a String, is the iOS resumeData encoded
+  /// On other platforms, the first item, a String, is the path to the
+  /// temp filename where the partial download is stored
+  /// The second parameter is the startByte (0 for iOS)
   final resumeData = <Task, List<dynamic>>{}; // [String filename, int bytes]
 
   /// Set of paused tasks
@@ -140,7 +145,9 @@ abstract class BaseDownloader {
           pausedTasks.firstWhereOrNull((element) => element.taskId == taskId);
       if (task != null) {
         final data = resumeData[task];
-        if (data != null) {
+        if (!Platform.isIOS && data != null) {
+          // on non-iOS, data[0] is the tempFilePath, and that file must be
+          // deleted
           final tempFilePath = data[0] as String;
           try {
             await File(tempFilePath).delete();
@@ -207,9 +214,11 @@ abstract class BaseDownloader {
   Future<bool> taskCanResume(Task task) =>
       canResumeTask[task]?.future ?? Future.value(false);
 
-  /// Stores the resume tempFilename and start byte position for this task
-  void setResumeData(Task task, String tempFilename, int startByte) =>
-      resumeData[task] = [tempFilename, startByte];
+  /// Stores the resume data: a String, representing temp filename on all
+  /// platforms  except iOS (where it is a base64 encoded String)
+  /// and the startByte position for this task, if available
+  void setResumeData(Task task, String stringData, int startByte) =>
+      resumeData[task] = [stringData, startByte];
 
   /// Clear pause and resume info associated with this task
   void _clearPauseResumeInfo(Task task) {

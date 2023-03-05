@@ -45,7 +45,6 @@ class NativeDownloader extends BaseDownloader {
           break;
 
         case 'canResume':
-          print('task can resume');
           final canResume = args.last as bool;
           setCanResume(task, canResume);
           break;
@@ -54,7 +53,6 @@ class NativeDownloader extends BaseDownloader {
           final tempFilename = args[1] as String;
           final startByte = args.last as int;
           setResumeData(task, tempFilename, startByte);
-          print('Resume data: ${resumeData[task]}');
           break;
 
         default:

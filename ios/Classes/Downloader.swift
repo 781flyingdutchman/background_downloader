@@ -68,6 +68,9 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     private func methodEnqueue(call: FlutterMethodCall, result: @escaping FlutterResult) {
         let args = call.arguments as! [Any]
         let jsonString = args[0] as! String
+        var isResume = args.count == 3
+        let resumeDataAsBase64String = isResume ? args[1] as! String : ""
+        let resumeData = isResume ? Data(base64Encoded: resumeDataAsBase64String) : nil
         os_log("methodEnqueue with %@", log: log, type: .info, jsonString)
         guard let task = taskFrom(jsonString: jsonString)
         else {
@@ -75,7 +78,9 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
             result(false)
             return
         }
-        os_log("Starting task with id %@", log: log, type: .info, task.taskId)
+        isResume = isResume && resumeData != nil
+        let verb = isResume ? "Resuming" : "Starting"
+        os_log("%@ task with id %@", log: log, type: .info, verb, task.taskId)
         Downloader.urlSession = Downloader.urlSession ?? createUrlSession()
         var baseRequest = URLRequest(url: URL(string: task.url)!)
         for (key, value) in task.headers {
@@ -86,7 +91,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         }
         if isDownloadTask(task: task)
         {
-            scheduleDownload(task: task, jsonString: jsonString, baseRequest: baseRequest, result: result)
+            scheduleDownload(task: task, jsonString: jsonString, baseRequest: baseRequest, resumeData: resumeData, result: result)
         } else
         {
             DispatchQueue.global().async {
@@ -96,13 +101,13 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     }
     
     /// Schedule a download task
-    private func scheduleDownload(task: Task, jsonString: String, baseRequest: URLRequest, result: @escaping FlutterResult) {
+    private func scheduleDownload(task: Task, jsonString: String, baseRequest: URLRequest, resumeData: Data? , result: @escaping FlutterResult) {
         var request = baseRequest
         if task.post != nil {
             request.httpMethod = "POST"
             request.httpBody = Data((task.post ?? "").data(using: .utf8)!)
         }
-        let urlSessionDownloadTask = Downloader.urlSession!.downloadTask(with: request)
+        let urlSessionDownloadTask = resumeData == nil ? Downloader.urlSession!.downloadTask(with: request) : Downloader.urlSession!.downloadTask(withResumeData: resumeData!)
         urlSessionDownloadTask.taskDescription = jsonString
         urlSessionDownloadTask.resume()
         processStatusUpdate(task: task, status: TaskStatus.enqueued)

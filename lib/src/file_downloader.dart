@@ -32,6 +32,8 @@ class FileDownloader {
   final _batches = <Batch>[];
   final _downloader = BaseDownloader.instance();
 
+  /// Do not use: for testing only
+  @visibleForTesting
   BaseDownloader get downloaderForTesting => _downloader;
 
   /// Registered short status callback for convenience down/upload tasks

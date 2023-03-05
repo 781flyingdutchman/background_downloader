@@ -70,7 +70,7 @@ class DesktopDownloader extends BaseDownloader {
         ? resumeData[task]?.first as String? ?? ""  // always non-null
         : path.join((await getTemporaryDirectory()).path,
             'com.bbflight.background_downloader${Random().nextInt(1 << 32).toString()}');
-    final start = resumeData[task]?.last as int? ?? 0;  // start for resume
+    final requiredStartByte = resumeData[task]?.last as int? ?? 0;  // start for resume
     // spawn an isolate to do the task
     final receivePort = ReceivePort();
     final errorPort = ReceivePort();
@@ -84,7 +84,7 @@ class DesktopDownloader extends BaseDownloader {
         onError: errorPort.sendPort);
     final messagesFromIsolate = StreamQueue<dynamic>(receivePort);
     final sendPort = await messagesFromIsolate.next;
-    sendPort.send([task, filePath, tempFilePath, start, isResume]);
+    sendPort.send([task, filePath, tempFilePath, requiredStartByte, isResume]);
     if (_isolateSendPorts.keys.contains(task)) {
       // if already registered with null value, cancel immediately
       sendPort.send('cancel');
