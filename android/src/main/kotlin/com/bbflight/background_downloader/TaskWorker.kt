@@ -211,7 +211,9 @@ class TaskWorker(
                 "${if (isResume) "Resuming" else "Starting"} task with taskId ${task.taskId}"
             )
             processStatusUpdate(task, TaskStatus.running)
-            processProgressUpdate(task, 0.0)
+            if (!isResume) {
+                processProgressUpdate(task, 0.0)
+            }
             val status = doTask(task, isResume, tempFilePath, requiredStartByte)
             processStatusUpdate(task, status)
         }

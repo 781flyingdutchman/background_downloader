@@ -43,7 +43,9 @@ Future<void> doTask(SendPort sendPort) async {
     }
   });
   processStatusUpdateInIsolate(task, TaskStatus.running, sendPort);
-  processProgressUpdateInIsolate(task, 0.0, sendPort);
+  if (!isResume) {
+    processProgressUpdateInIsolate(task, 0.0, sendPort);
+  }
   if (task.retriesRemaining < 0) {
     logError(task, 'task has negative retries remaining');
     processStatusUpdateInIsolate(task, TaskStatus.failed, sendPort);
