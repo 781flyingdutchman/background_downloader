@@ -3,11 +3,13 @@
 package com.bbflight.background_downloader
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.webkit.MimeTypeMap
+import androidx.preference.PreferenceManager
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.google.gson.Gson
@@ -24,7 +26,6 @@ import java.net.URL
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.*
-import kotlin.collections.ArrayList
 import kotlin.concurrent.schedule
 import kotlin.concurrent.write
 import kotlin.io.path.Path
@@ -93,7 +94,8 @@ class TaskWorker(
          * */
         fun processStatusUpdate(
             task: Task,
-            status: TaskStatus
+            status: TaskStatus,
+            prefs: SharedPreferences
         ) {
             val retryNeeded =
                 status == TaskStatus.failed && task.retriesRemaining > 0
@@ -139,9 +141,9 @@ class TaskWorker(
             if (status.isFinalState()) {
                 BackgroundDownloaderPlugin.prefsLock.write {
                     val tasksMap =
-                        getTaskMap()
+                        getTaskMap(prefs)
                     tasksMap.remove(task.taskId)
-                    val editor = BackgroundDownloaderPlugin.prefs.edit()
+                    val editor = prefs.edit()
                     editor.putString(
                         BackgroundDownloaderPlugin.keyTasksMap,
                         BackgroundDownloaderPlugin.gson.toJson(tasksMap)
@@ -219,12 +221,13 @@ class TaskWorker(
                 TAG,
                 "${if (isResume) "Resuming" else "Starting"} task with taskId ${task.taskId}"
             )
-            processStatusUpdate(task, TaskStatus.running)
+            val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
+            processStatusUpdate(task, TaskStatus.running, prefs)
             if (!isResume) {
                 processProgressUpdate(task, 0.0)
             }
             val status = doTask(task, isResume, tempFilePath, requiredStartByte)
-            processStatusUpdate(task, status)
+            processStatusUpdate(task, status, prefs)
         }
         return Result.success()
     }
@@ -394,7 +397,12 @@ class TaskWorker(
                     BackgroundDownloaderPlugin.pausedTaskIds.remove(task.taskId)
                     if (taskCanResume) {
                         Log.i(TAG, "Task ${task.taskId} paused")
-                        postOnBackgroundChannel("resumeData", task, tempFilePath, bytesTotal + startByte)
+                        postOnBackgroundChannel(
+                            "resumeData",
+                            task,
+                            tempFilePath,
+                            bytesTotal + startByte
+                        )
                         return TaskStatus.paused
                     }
                     Log.i(TAG, "Task ${task.taskId} cannot resume, therefore pause failed")
@@ -416,6 +424,7 @@ class TaskWorker(
                         )
                         val start = bytesTotal + startByte
                         BackgroundDownloaderPlugin.doEnqueue(
+                            applicationContext,
                             taskToJsonString(task),
                             tempFilePath,
                             start,
@@ -656,7 +665,10 @@ class TaskWorker(
         val total = matchResult.groups[3]?.value?.toLong()!!
         val tempFile = File(tempFilePath)
         val tempFileLength = tempFile.length()
-        Log.d(TAG, "Resume start=$start, end=$end of total=$total bytes, tempFile = $tempFileLength bytes")
+        Log.d(
+            TAG,
+            "Resume start=$start, end=$end of total=$total bytes, tempFile = $tempFileLength bytes"
+        )
         if (total != end + 1 || start > tempFileLength) {
             Log.i(TAG, "Offered range not feasible: $range")
             return false
@@ -699,9 +711,9 @@ class TaskWorker(
 }
 
 /** Return the map of tasks stored in preferences */
-fun getTaskMap(): MutableMap<String, Any> {
+fun getTaskMap(prefs: SharedPreferences): MutableMap<String, Any> {
     val jsonString =
-        BackgroundDownloaderPlugin.prefs.getString(
+        prefs.getString(
             BackgroundDownloaderPlugin.keyTasksMap,
             "{}"
         )

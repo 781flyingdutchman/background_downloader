@@ -1,6 +1,6 @@
 package com.bbflight.background_downloader
 
-import android.content.SharedPreferences
+import android.content.Context
 import android.util.Log
 import androidx.preference.PreferenceManager
 import androidx.work.*
@@ -11,6 +11,7 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
+import java.lang.Long.min
 import java.util.*
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantReadWriteLock
@@ -28,6 +29,7 @@ import kotlin.concurrent.write
  */
 class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     private var channel: MethodChannel? = null
+    lateinit var context: Context
 
     companion object {
         const val TAG = "BackgroundDownloader"
@@ -39,15 +41,19 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         var backgroundChannel: MethodChannel? = null
         var backgroundChannelCounter = 0  // reference counter
         val prefsLock = ReentrantReadWriteLock()
-        private lateinit var workManager: WorkManager
-        lateinit var prefs: SharedPreferences
         val gson = Gson()
         val jsonMapType = object : TypeToken<Map<String, Any>>() {}.type
 
         /**
          * Enqueue a WorkManager task based on the provided parameters
          */
-        fun doEnqueue(taskJsonMapString: String, tempFilePath: String?, startByte: Long?, initialDelayMillis : Long = 0) : Boolean {
+        fun doEnqueue(
+            context: Context,
+            taskJsonMapString: String,
+            tempFilePath: String?,
+            startByte: Long?,
+            initialDelayMillis: Long = 0
+        ): Boolean {
             val task =
                 Task(gson.fromJson(taskJsonMapString, jsonMapType))
             Log.i(TAG, "Starting task with id ${task.taskId}")
@@ -69,14 +75,16 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
             if (initialDelayMillis != 0L) {
                 requestBuilder.setInitialDelay(initialDelayMillis, TimeUnit.MILLISECONDS)
             }
+            val workManager = WorkManager.getInstance(context)
             val operation = workManager.enqueue(requestBuilder.build())
             try {
                 operation.result.get()
+                val prefs = PreferenceManager.getDefaultSharedPreferences(context)
                 if (initialDelayMillis == 0L) {
-                    TaskWorker.processStatusUpdate(task, TaskStatus.enqueued)
+                    TaskWorker.processStatusUpdate(task, TaskStatus.enqueued, prefs)
                 } else {
-                    Timer().schedule(100L) {
-                        TaskWorker.processStatusUpdate(task, TaskStatus.enqueued)
+                    Timer().schedule(min(100L, initialDelayMillis)) {
+                        TaskWorker.processStatusUpdate(task, TaskStatus.enqueued, prefs)
                     }
                 }
             } catch (e: Throwable) {
@@ -88,6 +96,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
             }
             // store Task in persistent storage, as Json representation keyed by taskId
             prefsLock.write {
+                val prefs = PreferenceManager.getDefaultSharedPreferences(context)
                 val jsonString = prefs.getString(keyTasksMap, "{}")
                 val tasksMap =
                     gson.fromJson<Map<String, Any>>(jsonString, jsonMapType).toMutableMap()
@@ -120,10 +129,9 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
             "com.bbflight.background_downloader"
         )
         channel?.setMethodCallHandler(this)
-        workManager = WorkManager.getInstance(flutterPluginBinding.applicationContext)
-        prefs = PreferenceManager.getDefaultSharedPreferences(
-            flutterPluginBinding.applicationContext
-        )
+        context = flutterPluginBinding.applicationContext
+        val workManager = WorkManager.getInstance(context)
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         val allWorkInfos = workManager.getWorkInfosByTag(TAG).get()
         if (allWorkInfos.isEmpty()) {
             // remove persistent storage if no jobs found at all
@@ -152,7 +160,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
             "cancelTasksWithIds" -> methodCancelTasksWithIds(call, result)
             "taskForId" -> methodTaskForId(call, result)
             "pause" -> methodPause(call, result)
-            "getTaskTimeout" -> methodGetTaskTimeout(call, result)
+            "getTaskTimeout" -> methodGetTaskTimeout(result)
             else -> result.notImplemented()
         }
     }
@@ -175,9 +183,8 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
             tempFilePath = null
             startByte = null
         }
-        result.success(doEnqueue(taskJsonMapString, tempFilePath, startByte))
+        result.success(doEnqueue(context, taskJsonMapString, tempFilePath, startByte))
     }
-
 
 
     /**
@@ -188,6 +195,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     private fun methodReset(call: MethodCall, result: Result) {
         val group = call.arguments as String
         var counter = 0
+        val workManager = WorkManager.getInstance(context)
         val workInfos = workManager.getWorkInfosByTag(TAG).get()
             .filter { !it.state.isFinished && it.tags.contains("group=$group") }
         for (workInfo in workInfos) {
@@ -201,10 +209,12 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     /** Returns a list of tasks for all tasks in progress, as a list of JSON strings */
     private fun methodAllTasks(call: MethodCall, result: Result) {
         val group = call.arguments as String
+        val workManager = WorkManager.getInstance(context)
         val workInfos = workManager.getWorkInfosByTag(TAG).get()
             .filter { !it.state.isFinished && it.tags.contains("group=$group") }
         val tasksAsListOfJsonStrings = mutableListOf<String>()
         prefsLock.read {
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
             val jsonString = prefs.getString(keyTasksMap, "{}")
             val tasksMap = gson.fromJson<Map<String, Any>>(jsonString, jsonMapType)
             for (workInfo in workInfos) {
@@ -226,6 +236,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
      */
     private fun methodCancelTasksWithIds(call: MethodCall, result: Result) {
         val taskIds = call.arguments as List<*>
+        val workManager = WorkManager.getInstance(context)
         Log.v(TAG, "Canceling taskIds $taskIds")
         for (taskId in taskIds) {
             val workInfos = workManager.getWorkInfosByTag("taskId=$taskId").get()
@@ -236,13 +247,14 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
             if (workInfo.state != WorkInfo.State.SUCCEEDED) {
                 // send cancellation update for tasks that have not yet succeeded
                 prefsLock.read {
-                    val tasksMap = getTaskMap()
+                    val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+                    val tasksMap = getTaskMap(prefs)
                     val taskJsonMap = tasksMap[taskId] as String?
                     if (taskJsonMap != null) {
                         val task = Task(
                             gson.fromJson(taskJsonMap, jsonMapType)
                         )
-                        TaskWorker.processStatusUpdate(task, TaskStatus.canceled)
+                        TaskWorker.processStatusUpdate(task, TaskStatus.canceled, prefs)
                     } else {
                         Log.d(TAG, "Could not find taskId $taskId to cancel")
                     }
@@ -265,6 +277,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         val taskId = call.arguments as String
         Log.v(TAG, "Returning task for taskId $taskId")
         prefsLock.read {
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
             val jsonString = prefs.getString(keyTasksMap, "{}")
             val tasksMap =
                 gson.fromJson<Map<String, Any>>(jsonString, jsonMapType).toMutableMap()
@@ -284,7 +297,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         result.success(true)
     }
 
-    private fun methodGetTaskTimeout(call: MethodCall, result: Result) {
+    private fun methodGetTaskTimeout(result: Result) {
         result.success(TaskWorker.taskTimeoutMillis)
     }
 }
