@@ -45,14 +45,11 @@ func isFinalState(status: TaskStatus) -> Bool {
 
 /// Processes a change in status for the task
 ///
-/// Sends status update via the background channel to Flutter, if requested
+/// Sends status update via the background channel to Dart, if requested
 /// If the task is finished, processes a final progressUpdate update and removes
 /// task from persistent storage
 func processStatusUpdate(task: Task, status: TaskStatus) {
-   guard let channel = Downloader.backgroundChannel else {
-       os_log("Could not find background channel", log: log, type: .error)
-       return
-   }
+    guard let channel = getBackgroundChannel() else { return }
    // Post update if task expects one, or if failed and retry is needed
    let retryNeeded = status == TaskStatus.failed && task.retriesRemaining > 0
    // if task is in final state, process a final progressUpdate
@@ -95,12 +92,9 @@ func processStatusUpdate(task: Task, status: TaskStatus) {
 
 /// Processes a progress update for the task
 ///
-/// Sends progress update via the background channel to Flutter, if requested
+/// Sends progress update via the background channel to Dart, if requested
 func processProgressUpdate(task: Task, progress: Double) {
-    guard let channel = Downloader.backgroundChannel else {
-        os_log("Could not find background channel", log: log, type: .error)
-        return
-    }
+    guard let channel = getBackgroundChannel() else { return }
     if providesProgressUpdates(task: task) {
         let jsonString = jsonStringFor(task: task)
         if (jsonString != nil)
@@ -110,6 +104,38 @@ func processProgressUpdate(task: Task, progress: Double) {
             }
         }
     }
+}
+
+/// Process a 'canResume' message for the task
+///
+/// Sends the data via the background channel to Dart
+func processCanResume(task: Task, taskCanResume: Bool) {
+    guard let channel = getBackgroundChannel() else { return }
+    DispatchQueue.main.async {
+        channel.invokeMethod("canResume", arguments: [jsonStringFor(task: task) ?? "", taskCanResume])
+    }
+}
+
+/// Post resume data for this task
+///
+/// Returns true if successful.
+/// Sends the data via the background channel to Dart
+func processResumeData(task: Task, resumeData: Data) -> Bool {
+    guard let channel = getBackgroundChannel() else { return false }
+    let resumeDataAsBase64String = resumeData.base64EncodedString()
+    DispatchQueue.main.async {
+        channel.invokeMethod("resumeData", arguments: [jsonStringFor(task: task) ?? "", resumeDataAsBase64String, 0 as Int64])
+    }
+    return true
+}
+
+/// Return the background channel for cummincation to Dart side, or nil
+func getBackgroundChannel() -> FlutterMethodChannel? {
+    guard let channel = Downloader.backgroundChannel else {
+        os_log("Could not find background channel", log: log, type: .error)
+        return nil
+    }
+    return channel
 }
 
 

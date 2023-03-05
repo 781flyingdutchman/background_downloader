@@ -27,7 +27,9 @@ class NativeDownloader extends BaseDownloader {
     super.initialize();
     WidgetsFlutterBinding.ensureInitialized();
     // listen to the background channel, receiving updates on download status
-    // or progress
+    // or progress.
+    // First argument is the Task as JSON string, next argument(s) depends
+    // on the method
     _backgroundChannel.setMethodCallHandler((call) async {
       final args = call.arguments as List<dynamic>;
       final task = Task.createFromJsonMap(jsonDecode(args.first as String));
@@ -43,6 +45,7 @@ class NativeDownloader extends BaseDownloader {
           break;
 
         case 'canResume':
+          print('task can resume');
           final canResume = args.last as bool;
           setCanResume(task, canResume);
           break;
@@ -51,7 +54,7 @@ class NativeDownloader extends BaseDownloader {
           final tempFilename = args[1] as String;
           final startByte = args.last as int;
           setResumeData(task, tempFilename, startByte);
-          print(resumeData[task]);
+          print('Resume data: ${resumeData[task]}');
           break;
 
         default:

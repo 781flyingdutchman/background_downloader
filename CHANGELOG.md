@@ -1,3 +1,10 @@
+## 5.0.0
+
+Pause/Resume
+Batch download callbacks
+** longer downloads in Android
+ios min version to 13.0 from 11.0
+
 ## 4.2.3
 
 Fixed another bug with `database.allRecords` if taskId contains illegal filename characters (like '/'). For
