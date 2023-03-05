@@ -1507,9 +1507,7 @@ void main() {
       expect(await FileDownloader().resume(task), isTrue);
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.complete));
-      print(await File(await task.filePath()).length());
-      expect(await File(await task.filePath()).length(),
-          equals(urlWithContentLengthFileSize));
+      expect(await fileEqualsLargeTestFile(File(await task.filePath())), isTrue);
     });
 
     testWidgets('pause task that cannot be paused', (widgetTester) async {
@@ -1566,7 +1564,7 @@ void main() {
       // speed. If the test fails, it is likely because the task completed
       // before the initial pause command, or did not have time for two
       // pause/resume cycles -> shorten interval
-      const interval = Duration(milliseconds: 1500);
+      const interval = Duration(milliseconds: 800);
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback);
       task = DownloadTask(
