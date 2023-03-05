@@ -184,7 +184,6 @@ class TaskWorker(
         /** Send 'canResume' message via the background channel to Flutter */
         fun processCanResume(task: Task, canResume: Boolean) {
             taskCanResume = canResume
-            Log.i(TAG, "Posting canResume $canResume")
             postOnBackgroundChannel("canResume", task, canResume)
         }
     }
@@ -251,7 +250,7 @@ class TaskWorker(
                 if (isResume) {
                     setRequestProperty("Range", "bytes=$requiredStartByte-")
                 }
-                return connectAndProcess(this, task, isResume, tempFilePath, requiredStartByte)
+                return connectAndProcess(this, task, isResume, tempFilePath)
             }
         } catch (e: Exception) {
             Log.w(
@@ -267,8 +266,7 @@ class TaskWorker(
         connection: HttpURLConnection,
         task: Task,
         isResume: Boolean,
-        tempFilePath: String,
-        requiredStartByte: Long
+        tempFilePath: String
     ): TaskStatus {
         val filePath = pathToFileForTask(task)
         try {
@@ -286,8 +284,7 @@ class TaskWorker(
                     task,
                     filePath,
                     isResume,
-                    tempFilePath,
-                    requiredStartByte
+                    tempFilePath
                 )
             }
             return processUpload(connection, task, filePath)
@@ -329,28 +326,20 @@ class TaskWorker(
     private fun processDownload(
         connection: HttpURLConnection,
         task: Task,
-        filePath: String, isResumeParam: Boolean, tempFilePath: String, requiredStartByte: Long
+        filePath: String, isResumeParam: Boolean, tempFilePath: String
     ): TaskStatus {
         Log.d(TAG, "Download for taskId ${task.taskId}")
         if (connection.responseCode in 200..206) {
-            Log.d(TAG, "Response code ${connection.responseCode}")
-            Log.d(TAG, "Content range ${connection.headerFields["Content-Range"]}")
-            Log.d(TAG, "Content length ${connection.headerFields["Content-Length"]}")
-
             if (task.allowPause) {
-                Log.i(TAG, "Checking canResume")
                 val acceptRangesHeader = connection.headerFields["Accept-Ranges"]
                 processCanResume(task, acceptRangesHeader?.first() == "bytes")
             }
             val isResume =
                 isResumeParam && connection.responseCode == 206  // confirm resume response
-            Log.d(TAG, "isResume = $isResume")
             if (isResume && !prepareResume(connection, tempFilePath)) {
                 deleteTempFile(tempFilePath)
                 return TaskStatus.failed
             }
-            Log.d(TAG, "bytesTotal at start of transferBytes = $bytesTotal")
-            Log.d(TAG, "startByte at start of transferBytes = $requiredStartByte")
             val tempFile = File(tempFilePath)
             var transferBytesResult: TaskStatus
             BufferedInputStream(connection.inputStream).use { inputStream ->

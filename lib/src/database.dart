@@ -1,4 +1,3 @@
-
 import 'package:localstore/localstore.dart';
 
 import 'base_downloader.dart';

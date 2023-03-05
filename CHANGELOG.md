@@ -1,9 +1,33 @@
 ## 5.0.0
 
-Pause/Resume
-Batch download callbacks
-** longer downloads in Android
-ios min version to 13.0 from 11.0
+### Pause and resume
+
+To pause or resume a task, call:
+* `pause` to attempt to pause a task. Whether a task can be canceled or not depends primarily on the server. Soon after the task is running (`TaskStatus.running`) you can call `taskCanResume` which will return a Future that resolves to `true` if the server appears capable of pause & resume. If that returns `false`, then calling `pause` will return `false` as well, and the call is ignored
+* `resume` to resume a previously paused task, which returns true if resume appears feasible. The taskStatus will follow the same sequence as a newly enqueued task. If resuming turns out to be not feasible (e.g. the operating system deleted the temp file with the partial download) then the task will either restart as a normal download, or fail.
+
+This adds `TaskStatus.paused` which may require updating `switch` statements to remain exhaustive, though this status will never appear unless you use pause.
+
+### Individual status and progress callbacks for batch upload and download
+
+Adds status and progress callbacks for individual files in a batch. This is breaking if you used a batch progress callback earlier, as that is now a named parameter. Change:
+```
+   final result = await FileDownloader().downloadBatch(tasks, (succeeded, failed) {
+      print('$succeeded files succeeded, $failed have failed');
+      print('Progress is ${(succeeded + failed) / tasks.length} %');
+   });
+```
+to
+```
+   final result = await FileDownloader().downloadBatch(tasks, batchProgressCallback: (succeeded, failed) {
+    ...
+   });
+```
+
+To also monitor status and progress for each file in the batch, add a `taskStatusCallback` (taking `Task` and `TaskStatus` as arguments) and/or a `taskProgressCallback (taking `Task` and a double as arguments).
+
+### iOS minimum version from 11.0 to 13.0
+To improve Swift code readability and maintenance, the minimum iOS version has moved from 11.0 to 13.0
 
 ## 4.2.3
 
@@ -12,7 +36,7 @@ tracking record id purposes those are now replaced with '_'
 
 ## 4.2.2
 
-Fixed bug with `database.allRecords` if taskId contains illegal filename characters (like '/'). For 
+Fixed bug with `database.allRecords` if taskId contains illegal filename characters (like '/'). For
 tracking record id purposes those are now replaced with '_'
 
 ## 4.2.1
@@ -62,7 +86,7 @@ Calling `.initialize` is not longer required.
 
 ## 3.0.1
 
-iOS BaseDirectory.applicationSupport now uses iOS applicationSupportDirectory instead of 
+iOS BaseDirectory.applicationSupport now uses iOS applicationSupportDirectory instead of
 libraryDirectory
 
 ## 3.0.0
@@ -70,7 +94,7 @@ libraryDirectory
 Version 3 introduces uploads, `onProgress` and `onStatus` callbacks passed to `download` and `upload`,
 and cleans up the API to be less verbose.
 
-The class hierarchy is `Request` -> `Task` -> (`DownloadTask` | `UploadTask`), and several 
+The class hierarchy is `Request` -> `Task` -> (`DownloadTask` | `UploadTask`), and several
 methods and callbacks will return or expect a `Task` that may be a `DownloadTask` or `UploadTask`.
 
 To align naming convention, several class and enum names have been changed:
@@ -109,9 +133,9 @@ existing implementations no or very little change is required.
 
 The main change is the addition of `enqueued` and `waitingToRetry` status to the
 `DownloadTaskStatus` enum (and removal of `undefined`). As a result, when checking a
-`DownloadStatusUpdate` (e.g. using a `switch` statement) you need to cover these new cases (and 
-for existing implementations can typically just ignore them).  The progressUpdate equivalent of 
-`waitingToRetry` is a value of -4.0, but for existing implementations this will never be 
+`DownloadStatusUpdate` (e.g. using a `switch` statement) you need to cover these new cases (and
+for existing implementations can typically just ignore them).  The progressUpdate equivalent of
+`waitingToRetry` is a value of -4.0, but for existing implementations this will never be
 emitted, as they won't have retries.
 
 The second change is that a task now emits `enqueued` when enqueued, and `running` once the actual

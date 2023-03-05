@@ -8,7 +8,7 @@ Optionally, keep track of task status and progress in a persistent [database](#u
 
 To upload a file, create an [UploadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/UploadTask-class.html) and call `upload`. To make a regular [server request](#server-requests), create a [Request](https://pub.dev/documentation/background_downloader/latest/background_downloader/Request-class.html) and call `request`.
 
-The plugin supports [headers](#headers), [retries](#retries), [requiring WiFi](#requiring-wifi) before starting the up/download, user-defined [metadata](#metadata) and GET and [POST](#post-requests) http(s) requests. You can [manage and monitor the tasks in the queue](#managing-and-monitoring-tasks-in-the-queue), and have different handlers for updates by [group](#grouping-tasks) of tasks.
+The plugin supports [headers](#headers), [retries](#retries), [requiring WiFi](#requiring-wifi) before starting the up/download, user-defined [metadata](#metadata) and GET and [POST](#post-requests) http(s) requests. You can [manage  the tasks in the queue](#managing-tasks-and-the-queue) (e.g. cancel, pause and resume), and have different handlers for updates by [group](#grouping-tasks) of tasks.
 
 No setup is required for Android, Windows and Linux, and only minimal [setup for iOS](#ios) and [MacOS](#macos).
 
@@ -24,7 +24,8 @@ No setup is required for Android, Windows and Linux, and only minimal [setup for
   - [Using callbacks](#using-callbacks)
   - [Using the database to track Tasks](#using-the-database-to-track-tasks)
 - [Uploads](#uploads)
-- [Managing and monitoring tasks in the queue](#managing-and-monitoring-tasks-in-the-queue)
+- [Managing tasks in the queue](#managing-tasks-and-the-queue)
+  - [Canceling, pausing and resuming tasks](#canceling-pausing-and-resuming-tasks)
   - [Grouping tasks](#grouping-tasks)
 - [Server requests](#server-requests)
 - [Optional parameters](#optional-parameters)
@@ -99,12 +100,14 @@ To download a batch of files and wait for completion of all, create a `List` of 
 
 The result is a `Batch` object that contains the result for each task in `.results`. You can use `.numSucceeded` and `.numFailed` to check if all files in the batch downloaded successfully, and use `.succeeded` or `.failed` to iterate over successful or failed tasks within the batch.  If you want to get progress updates for the batch (in terms of how many files have been downloaded) then add a callback:
 ```
-   final result = await FileDownloader().downloadBatch(tasks, (succeeded, failed) {
+   final result = await FileDownloader().downloadBatch(tasks, batchProgressCallback: (succeeded, failed) {
       print('$succeeded files succeeded, $failed have failed');
       print('Progress is ${(succeeded + failed) / tasks.length} %');
    });
 ```
-The callback will be called upon completion of each task (whether successful or not), and will start with (0, 0) before any downloads start, so you can use that to start a progress indicator.  Note that it is not possible to monitor download progress of individual files within the batch.
+The callback will be called upon completion of each task (whether successful or not), and will start with (0, 0) before any downloads start, so you can use that to start a progress indicator.
+
+To also monitor status and progress for each file in the batch, add a `taskStatusCallback` (taking `Task` and `TaskStatus` as arguments) and/or a `taskProgressCallback (taking `Task` and a double as arguments).
 
 For uploads, create a `List` of `UploadTask` objects and call `uploadBatch` - everything else is the same.
 
@@ -195,9 +198,9 @@ To keep track of the status and progress of all tasks, even after they have comp
         'status ${record.taskStatus} and progress ${record.progress}'
 ```
 
-You can interact with the `database` using 
-`allRecords`, `allRecordsOlderThan`, `recordForId`, 
-`deleteAllRecords`, 
+You can interact with the `database` using
+`allRecords`, `allRecordsOlderThan`, `recordForId`,
+`deleteAllRecords`,
 `deleteRecordWithId` etc. Note that only tasks that you asked to be tracked (using `trackTasks`, which activates tracking for all tasks in a group) will be in the database. All active tasks in the queue, regardless of tracking, can be queried via the `FileDownloader().taskForId` call etc, but those will only return the task itself, not its status or progress, as those are expected to be monitored via listener or callback.  Note: tasks that are started using `download`, `upload`, `batchDownload` or `batchUpload` are assigned a special group name 'await', as callbacks for these tasks are handled within the `FileDownloader`. If you want to  track those tasks in the database, call `FileDownloader().trackTasks(FileDownloader.awaitGroup)` at the start of your app.
 
 ## Uploads
@@ -208,13 +211,24 @@ Uploads are very similar to downloads, except:
 * call `upload` instead of `download`, or `uploadBatch` instead of `downloadBatch`
 
 There are two ways to upload a file to a server: binary upload (where the file is included in the POST body) and form/multi-part upload. Which type of upload is appropriate depends on the server you are uploading to. The upload will be done using the binary upload method only if you have set the `post` field of the `UploadTask` to 'binary'.
-## Managing and monitoring tasks in the queue
 
-To manage or monitor tasks, use the following methods:
-* `reset` to reset the downloader by cancelling all ongoing download tasks
-* `allTaskIds` to get a list of `taskId` values of all tasks currently active (i.e. not in a final state). You can exclude tasks waiting for retries by setting `includeTasksWaitingToRetry` to `false`
-* `allTasks` to get a list of all tasks currently active (i.e. not in a final state). You can exclude tasks waiting for retries by setting `includeTasksWaitingToRetry` to `false`
+## Managing tasks and the queue
+
+### Canceling, pausing and resuming tasks
+
+To enable pausing, set the `allowPause` field of the `Task` to `true`. This may also cause the task to `pause` uncommanded. For example, the OS may choose to pause the task if someone walks out of WiFi coverage.
+
+To cancel, pause or resume a task, call:
+* `cancelTaskWithId` to cancel the tasks with that taskId
 * `cancelTasksWithIds` to cancel all tasks with a `taskId` in the provided list of taskIds
+* `pause` to attempt to pause a task. Pausing is only possible for download GET requests, only if the `Task.allowPause` field is true, and only if the server supports pause/resume. Soon after the task is running (`TaskStatus.running`) you can call `taskCanResume` which will return a Future that resolves to `true` if the server appears capable of pause & resume. If it is not, then `pause` will have no effect and return false
+* `resume` to resume a previously paused task, which returns true if resume appears feasible. The taskStatus will follow the same sequence as a newly enqueued task. If resuming turns out to be not feasible (e.g. the operating system deleted the temp file with the partial download) then the task will either restart as a normal download, or fail.
+
+
+To manage or query the queue of waiting or running tasks, call:
+* `reset` to reset the downloader, which cancels all ongoing download tasks
+* `allTaskIds` to get a list of `taskId` values of all tasks currently active (i.e. not in a final state). You can exclude tasks waiting for retries by setting `includeTasksWaitingToRetry` to `false`. Note that paused tasks are not included in this list
+* `allTasks` to get a list of all tasks currently active (i.e. not in a final state). You can exclude tasks waiting for retries by setting `includeTasksWaitingToRetry` to `false`. Note that paused tasks are not included in this list
 * `taskForId` to get the `DownloadTask` for the given `taskId`, or `null` if not found. Only tasks that are active (ie. not in a final state) are guaranteed to be returned, but returning a task does not guarantee that it is active
 
 ### Grouping tasks
@@ -318,7 +332,7 @@ Then do the same thing in macos/Runner/Release.entitlements.
 
 ## Limitations
 
-* On Android, once started (i.e. `TaskStatus.running`), a task must complete within 8 minutes
+* On Android, once started (i.e. `TaskStatus.running`), a task must complete within 10 minutes. Extending this time requires a foreground service, which requires a notification, which requires internationalization and permissions. We're trying to keep this simple, so will stick with this limitation
 * On iOS, once enqueued (i.e. `TaskStatus.enqueued`), a background download must complete within 4 hours
 * Redirects will be followed
 * Background downloads and uploads are aggressively controlled by the native platform. You should therefore always assume that a task that was started may not complete, and may disappear without providing any status or progress update to indicate why. For example, if a user swipes your app up from the iOS App Switcher, all scheduled background downloads are terminated without notification

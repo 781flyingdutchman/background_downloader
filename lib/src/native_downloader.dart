@@ -72,21 +72,22 @@ class NativeDownloader extends BaseDownloader {
 
   @override
   Future<int> reset(String group) async {
-    final retriesTaskCount = await super.reset(group);
+    final retryAndPausedTaskCount = await super.reset(group);
     final nativeCount = await _channel.invokeMethod<int>('reset', group) ?? 0;
-    return retriesTaskCount + nativeCount;
+    return retryAndPausedTaskCount + nativeCount;
   }
 
   @override
   Future<List<Task>> allTasks(
       String group, bool includeTasksWaitingToRetry) async {
-    final retryTasks = await super.allTasks(group, includeTasksWaitingToRetry);
+    final retryAndPausedTasks =
+        await super.allTasks(group, includeTasksWaitingToRetry);
     final result =
         await _channel.invokeMethod<List<dynamic>?>('allTasks', group) ?? [];
     final tasks = result
         .map((e) => Task.createFromJsonMap(jsonDecode(e as String)))
         .toList();
-    return [...retryTasks, ...tasks];
+    return [...retryAndPausedTasks, ...tasks];
   }
 
   @override

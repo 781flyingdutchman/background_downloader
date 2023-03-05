@@ -67,10 +67,11 @@ class DesktopDownloader extends BaseDownloader {
     final isResume = _resume.remove(task) && resumeData[task] != null;
     final filePath = await task.filePath();
     final tempFilePath = isResume
-        ? resumeData[task]?.first as String? ?? ""  // always non-null
+        ? resumeData[task]?.first as String? ?? "" // always non-null
         : path.join((await getTemporaryDirectory()).path,
             'com.bbflight.background_downloader${Random().nextInt(1 << 32).toString()}');
-    final requiredStartByte = resumeData[task]?.last as int? ?? 0;  // start for resume
+    final requiredStartByte =
+        resumeData[task]?.last as int? ?? 0; // start for resume
     // spawn an isolate to do the task
     final receivePort = ReceivePort();
     final errorPort = ReceivePort();
@@ -127,7 +128,7 @@ class DesktopDownloader extends BaseDownloader {
 
   @override
   Future<int> reset(String group) async {
-    final retriesTaskCount = await super.reset(group);
+    final retryAndPausedTaskCount = await super.reset(group);
     final inQueueIds =
         _queue.where((task) => task.group == group).map((task) => task.taskId);
     final runningIds = _running
@@ -137,16 +138,17 @@ class DesktopDownloader extends BaseDownloader {
     if (taskIds.isNotEmpty) {
       cancelTasksWithIds(taskIds);
     }
-    return retriesTaskCount + taskIds.length;
+    return retryAndPausedTaskCount + taskIds.length;
   }
 
   @override
   Future<List<Task>> allTasks(
       String group, bool includeTasksWaitingToRetry) async {
-    final retryTasks = await super.allTasks(group, includeTasksWaitingToRetry);
+    final retryAndPausedTasks =
+        await super.allTasks(group, includeTasksWaitingToRetry);
     final inQueue = _queue.where((task) => task.group == group);
     final running = _running.where((task) => task.group == group);
-    return [...retryTasks, ...inQueue, ...running];
+    return [...retryAndPausedTasks, ...inQueue, ...running];
   }
 
   /// Cancels ongoing platform tasks whose taskId is in the list provided

@@ -81,10 +81,12 @@ abstract class BaseDownloader {
   ///  Returns the number of tasks canceled
   @mustCallSuper
   Future<int> reset(String group) async {
-    final count =
+    final retryCount =
         tasksWaitingToRetry.where((task) => task.group == group).length;
     tasksWaitingToRetry.removeWhere((task) => task.group == group);
-    return count;
+    final pausedCount = pausedTasks.where((task) => task.group == group).length;
+    pausedTasks.removeWhere((task) => task.group == group);
+    return retryCount + pausedCount;
   }
 
   /// Returns a list of all tasks in progress, matching [group]
@@ -95,6 +97,7 @@ abstract class BaseDownloader {
     if (includeTasksWaitingToRetry) {
       tasks.addAll(tasksWaitingToRetry.where((task) => task.group == group));
     }
+    tasks.addAll(pausedTasks.where((task) => task.group == group));
     return tasks;
   }
 
@@ -166,7 +169,11 @@ abstract class BaseDownloader {
     try {
       return tasksWaitingToRetry.where((task) => task.taskId == taskId).first;
     } on StateError {
-      return null;
+      try {
+        return pausedTasks.where((task) => task.taskId == taskId).first;
+      } on StateError {
+        return null;
+      }
     }
   }
 

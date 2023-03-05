@@ -49,8 +49,8 @@ Future<void> doTask(SendPort sendPort) async {
     processStatusUpdateInIsolate(task, TaskStatus.failed, sendPort);
   } else {
     if (task is DownloadTask) {
-      await doDownloadTask(task, filePath, tempFilePath, requiredStartByte, isResume,
-          sendPort, messagesToIsolate);
+      await doDownloadTask(task, filePath, tempFilePath, requiredStartByte,
+          isResume, sendPort, messagesToIsolate);
     } else {
       await doUploadTask(task, filePath, sendPort, messagesToIsolate);
     }
@@ -71,7 +71,8 @@ Future<void> doDownloadTask(
     bool isResume,
     SendPort sendPort,
     StreamQueue messagesToIsolate) async {
-  isResume = isResume && await determineIfResumeIsPossible(tempFilePath, requiredStartByte);
+  isResume = isResume &&
+      await determineIfResumeIsPossible(tempFilePath, requiredStartByte);
   final client = DesktopDownloader.httpClient;
   var request = task.post == null
       ? http.Request('GET', Uri.parse(task.url))
@@ -117,7 +118,8 @@ Future<void> doDownloadTask(
 }
 
 /// Return true if resume is possible, given temp filepath
-Future<bool> determineIfResumeIsPossible(String tempFilePath, int requiredStartByte) async {
+Future<bool> determineIfResumeIsPossible(
+    String tempFilePath, int requiredStartByte) async {
   if (File(tempFilePath).existsSync()) {
     if (await File(tempFilePath).length() == requiredStartByte) {
       return true;
@@ -129,8 +131,6 @@ Future<bool> determineIfResumeIsPossible(String tempFilePath, int requiredStartB
   }
   return false;
 }
-
-
 
 Future<TaskStatus> processOkDownloadResponse(
     Task task,
@@ -151,7 +151,8 @@ Future<TaskStatus> processOkDownloadResponse(
   IOSink? outStream;
   try {
     // do the actual download
-    outStream = File(tempFilePath).openWrite(mode: isResume ? FileMode.append : FileMode.write);
+    outStream = File(tempFilePath)
+        .openWrite(mode: isResume ? FileMode.append : FileMode.write);
     final transferBytesResult = await transferBytes(response.stream, outStream,
         contentLength, task, sendPort, messagesToIsolate);
     switch (transferBytesResult) {
@@ -200,7 +201,8 @@ Future<TaskStatus> processOkDownloadResponse(
 ///
 /// Returns true if task can continue, false if task failed.
 /// Extracts and parses Range headers, and truncates temp file
-Future<bool> prepareResume(http.StreamedResponse response, String tempFilePath) async {
+Future<bool> prepareResume(
+    http.StreamedResponse response, String tempFilePath) async {
   final range = response.headers['content-range'];
   if (range == null) {
     _log.fine('Could not process partial response Content-Range');
@@ -368,7 +370,10 @@ Future<TaskStatus> transferBytes(
         }
         outStream.add(bytes);
         _bytesTotal += bytes.length;
-        final progress = min((_bytesTotal + _startByte).toDouble() / (contentLength + _startByte), 0.999);
+        final progress = min(
+            (_bytesTotal + _startByte).toDouble() /
+                (contentLength + _startByte),
+            0.999);
         final now = DateTime.now();
         if (contentLength > 0 &&
             (_bytesTotal < 10000 ||

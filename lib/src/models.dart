@@ -373,8 +373,7 @@ abstract class Task extends Request {
         group = jsonMap['group'] ?? FileDownloader.defaultGroup,
         updates = Updates.values[jsonMap['updates'] ?? 0],
         requiresWiFi = jsonMap['requiresWiFi'] ?? false,
-        allowPause =
-            jsonMap['allowPause'] ?? false,
+        allowPause = jsonMap['allowPause'] ?? false,
         metaData = jsonMap['metaData'] ?? '',
         super.fromJsonMap(jsonMap);
 
@@ -505,8 +504,7 @@ class DownloadTask extends Task {
           updates: updates ?? this.updates,
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
           retries: retries ?? this.retries,
-          allowPause: allowPause ??
-              this.allowPause,
+          allowPause: allowPause ?? this.allowPause,
           metaData: metaData ?? this.metaData,
           creationTime: creationTime ?? this.creationTime)
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
@@ -604,8 +602,7 @@ class UploadTask extends Task {
           updates: updates ?? this.updates,
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
           retries: retries ?? this.retries,
-          allowPause: allowPause ??
-              this.allowPause,
+          allowPause: allowPause ?? this.allowPause,
           metaData: metaData ?? this.metaData,
           creationTime: creationTime ?? this.creationTime)
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
