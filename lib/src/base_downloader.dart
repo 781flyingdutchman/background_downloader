@@ -249,6 +249,9 @@ abstract class BaseDownloader {
     return false;
   }
 
+  /// Get the duration for a task to timeout
+  Future<Duration> getTaskTimeout();
+
   /// Destroy - clears callbacks, updates stream and retry queue
   ///
   /// Clears all queues and references without sending cancellation

@@ -14,7 +14,7 @@ import 'package:path/path.dart' as path;
 import 'desktop_downloader.dart';
 import 'models.dart';
 
-/// Top-level functions that run in an Isolate
+/// global variables related to pause/resume functionality
 
 var _bytesTotal = 0;
 var _startByte = 0;
@@ -23,7 +23,7 @@ var _startByte = 0;
 ///
 /// The first message sent back is a [ReceivePort] that is the command port
 /// for the isolate. The first command must be the arguments: task and filePath.
-/// Any subsequent commands must be 'cancel' or 'pause'.
+/// Any subsequent commands can only be 'cancel' or 'pause'.
 Future<void> doTask(SendPort sendPort) async {
   final commandPort = ReceivePort();
   // send the command port back to the main Isolate
@@ -63,7 +63,7 @@ Future<void> doTask(SendPort sendPort) async {
 
 /// Do the POST or GET based download task
 ///
-/// Sends updates via the [sendPort] and can be commanded to cancel via
+/// Sends updates via the [sendPort] and can be commanded to cancel/pause via
 /// the [messagesToIsolate] queue
 Future<void> doDownloadTask(
     Task task,
@@ -119,7 +119,10 @@ Future<void> doDownloadTask(
   processStatusUpdateInIsolate(task, resultStatus, sendPort);
 }
 
-/// Return true if resume is possible, given temp filepath
+/// Return true if resume is possible
+///
+/// Confirms that file at [tempFilePath] exists and its length equals
+/// [requiredStartByte]
 Future<bool> determineIfResumeIsPossible(
     String tempFilePath, int requiredStartByte) async {
   if (File(tempFilePath).existsSync()) {
@@ -134,6 +137,13 @@ Future<bool> determineIfResumeIsPossible(
   return false;
 }
 
+/// Process response with valid response code
+///
+/// Performs the actual bytes transfer from response to a temp file,
+/// and handles the result of the transfer:
+/// - .complete -> copy temp to final file location
+/// - .failed -> delete temp file
+/// - .paused -> post resume information
 Future<TaskStatus> processOkDownloadResponse(
     Task task,
     String filePath,
@@ -174,7 +184,7 @@ Future<TaskStatus> processOkDownloadResponse(
 
       case TaskStatus.paused:
         if (taskCanResume) {
-          sendPort.send(['resumeData', tempFilePath, _bytesTotal]);
+          sendPort.send(['resumeData', tempFilePath, _bytesTotal + _startByte]);
           resultStatus = TaskStatus.paused;
         } else {
           resultStatus = TaskStatus.failed;

@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:background_downloader/background_downloader.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/logging.dart';
@@ -42,6 +43,7 @@ const urlWithContentLengthFileSize = 6207471;
 const defaultFilename = 'google.html';
 const postFilename = 'post.txt';
 const uploadFilename = 'a_file.txt';
+const largeFilename = '5MB-test.ZIP';
 
 var task = DownloadTask(url: workingUrl, filename: defaultFilename);
 
@@ -308,6 +310,52 @@ void main() {
       print(contents);
       expect(contents.startsWith("{'args': {'redirected': 'true'}"), isTrue);
       File(path).deleteSync();
+    });
+
+    testWidgets('enqueue and test file equality', (widgetTester) async {
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
+      task = DownloadTask(
+          url: urlWithContentLength,
+          filename: defaultFilename);
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, TaskStatus.complete);
+      expect(await fileEqualsLargeTestFile(File(await task.filePath())), isTrue);
+    });
+
+    testWidgets('enqueue long Android task that times out', (widgetTester) async {
+      // This is an Android implementation detail. Android tasks timeout
+      // after 10 minutes, so to prevent a long download from failing
+      // we pause the task and resume after a brief pause
+      // NOTE: to test this, set the taskTimeoutMillis to a low value to
+      // force an early timeout.
+      if (Platform.isAndroid) {
+        final timeOut = await FileDownloader().downloaderForTesting.getTaskTimeout();
+        if (timeOut < const Duration(minutes: 1)) {
+          FileDownloader().registerCallbacks(
+              taskStatusCallback: statusCallback,
+              taskProgressCallback: progressCallback);
+          task = DownloadTask(
+              url: urlWithContentLength,
+              filename: defaultFilename,
+              updates: Updates.statusAndProgress);
+          expect(await FileDownloader().enqueue(task), isTrue);
+          await statusCallbackCompleter.future;
+          expect(lastStatus, equals(TaskStatus.failed)); // timed out
+          expect(statusCallbackCounter, equals(3));
+          task = task.copyWith(taskId: 'autoResume', allowPause: true);
+          statusCallbackCompleter = Completer();
+          statusCallbackCounter = 0;
+          expect(await FileDownloader().enqueue(task), isTrue);
+          await statusCallbackCompleter.future;
+          expect(lastStatus, equals(TaskStatus.complete)); // now success
+          expect(statusCallbackCounter, greaterThanOrEqualTo(6)); // min 1 pause
+          expect(await fileEqualsLargeTestFile(File(await task.filePath())),
+              isTrue);
+        } else {
+          print('Skipping test because taskTimeoutMillis is too high');
+        }
+      }
     });
   });
 
@@ -1512,6 +1560,33 @@ void main() {
       expect(lastStatus, equals(TaskStatus.canceled));
       expect(File(tempFilePath).existsSync(), isFalse);
     });
+
+    testWidgets('multiple pause and resume', (widgetTester) async {
+      // Note: this test is flaky as it depends on internet connection
+      // speed. If the test fails, it is likely because the task completed
+      // before the initial pause command, or did not have time for two
+      // pause/resume cycles -> shorten interval
+      const interval = Duration(milliseconds: 1500);
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback);
+      task = DownloadTask(
+          url: urlWithContentLength,
+          filename: defaultFilename,
+          allowPause: true);
+      expect(await FileDownloader().enqueue(task), equals(true));
+      var result = TaskStatus.enqueued;
+      while (result != TaskStatus.complete) {
+        await Future.delayed(interval);
+        result = lastStatus;
+        if (result != TaskStatus.complete) {
+          expect(await FileDownloader().pause(task), isTrue);
+          await Future.delayed(const Duration(milliseconds: 500));
+          expect(await FileDownloader().resume(task), isTrue);
+        }
+      }
+      expect(await fileEqualsLargeTestFile(File(await task.filePath())), isTrue);
+      expect(statusCallbackCounter, greaterThanOrEqualTo(9)); // min 2 pause
+    });
   });
 }
 
@@ -1535,4 +1610,12 @@ Future<void> enqueueAndFileExists(String path) async {
   } on FileSystemException {}
   // Expect 3 status callbacks: enqueued + running + complete
   expect(statusCallbackCounter, equals(3));
+}
+
+/// Returns true if the supplied file equals the large test file
+Future<bool> fileEqualsLargeTestFile(File file) async {
+  ByteData data = await rootBundle.load("assets/$largeFilename");
+  final targetData = data.buffer.asUint8List();
+  final fileData = file.readAsBytesSync();
+  return listEquals(targetData, fileData);
 }

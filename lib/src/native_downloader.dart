@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -125,5 +126,15 @@ class NativeDownloader extends BaseDownloader {
       }
     }
     return false;
+  }
+
+  @override
+  Future<Duration> getTaskTimeout() async {
+    if (Platform.isAndroid) {
+      final timeoutMillis =
+          await _channel.invokeMethod<int>('getTaskTimeout') ?? 0;
+      return Duration(milliseconds: timeoutMillis);
+    }
+    return const Duration(hours: 4); // on iOS, resource timeout
   }
 }

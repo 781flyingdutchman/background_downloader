@@ -216,7 +216,7 @@ There are two ways to upload a file to a server: binary upload (where the file i
 
 ### Canceling, pausing and resuming tasks
 
-To enable pausing, set the `allowPause` field of the `Task` to `true`. This may also cause the task to `pause` uncommanded. For example, the OS may choose to pause the task if someone walks out of WiFi coverage.
+To enable pausing, set the `allowPause` field of the `Task` to `true`. This may also cause the task to `pause` un-commanded. For example, the OS may choose to pause the task if someone walks out of WiFi coverage.
 
 To cancel, pause or resume a task, call:
 * `cancelTaskWithId` to cancel the tasks with that taskId
@@ -332,7 +332,7 @@ Then do the same thing in macos/Runner/Release.entitlements.
 
 ## Limitations
 
-* On Android, once started (i.e. `TaskStatus.running`), a task must complete within 10 minutes. Extending this time requires a foreground service, which requires a notification, which requires internationalization and permissions. We're trying to keep this simple, so will stick with this limitation
+* On Android, downloads are by default limited to 9 minutes, after which the download will end with `TaskStatus.failed`. To allow for longer downloads, set the `DownloadTask.allowPause` field to true: if the task times out, it will pause and automatically resume, eventually downloading the entire file. 
 * On iOS, once enqueued (i.e. `TaskStatus.enqueued`), a background download must complete within 4 hours
 * Redirects will be followed
 * Background downloads and uploads are aggressively controlled by the native platform. You should therefore always assume that a task that was started may not complete, and may disappear without providing any status or progress update to indicate why. For example, if a user swipes your app up from the iOS App Switcher, all scheduled background downloads are terminated without notification

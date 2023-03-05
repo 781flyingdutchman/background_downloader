@@ -23,6 +23,9 @@ import java.net.SocketException
 import java.net.URL
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.util.*
+import kotlin.collections.ArrayList
+import kotlin.concurrent.schedule
 import kotlin.concurrent.write
 import kotlin.io.path.Path
 import kotlin.io.path.pathString
@@ -44,6 +47,7 @@ class TaskWorker(
         const val TAG = "TaskWorker"
         const val keyTask = "Task"
         const val bufferSize = 8096
+        const val taskTimeoutMillis = 9 * 60 * 1000L  // 9 minutes
 
         private var taskCanResume = false
 
@@ -188,11 +192,16 @@ class TaskWorker(
         }
     }
 
-    private var bytesTotal: Long = 0 // property as it is needed for 'pause'
+    // properties related to pause/resume functionality
+    private var bytesTotal: Long = 0
     private var startByte = 0L
+    private var isTimedOut = false
 
     override suspend fun doWork(): Result {
         withContext(Dispatchers.IO) {
+            Timer().schedule(taskTimeoutMillis) {
+                isTimedOut = true
+            }
             val gson = Gson()
             val taskJsonMapString = inputData.getString(keyTask)
             val mapType = object : TypeToken<Map<String, Any>>() {}.type
@@ -343,7 +352,7 @@ class TaskWorker(
                 return TaskStatus.failed
             }
             val tempFile = File(tempFilePath)
-            var transferBytesResult: TaskStatus
+            val transferBytesResult: TaskStatus
             BufferedInputStream(connection.inputStream).use { inputStream ->
                 FileOutputStream(tempFile, isResume).use { outputStream ->
                     transferBytesResult =
@@ -385,7 +394,33 @@ class TaskWorker(
                     BackgroundDownloaderPlugin.pausedTaskIds.remove(task.taskId)
                     if (taskCanResume) {
                         Log.i(TAG, "Task ${task.taskId} paused")
-                        postOnBackgroundChannel("resumeData", task, tempFilePath, bytesTotal)
+                        postOnBackgroundChannel("resumeData", task, tempFilePath, bytesTotal + startByte)
+                        return TaskStatus.paused
+                    }
+                    Log.i(TAG, "Task ${task.taskId} cannot resume, therefore pause failed")
+                    deleteTempFile(tempFilePath)
+                    return TaskStatus.failed
+                }
+
+                TaskStatus.enqueued -> {
+                    // Special status, in this context means that the task timed out
+                    // so if allowed, pause it and schedule the resume task immediately
+                    if (!task.allowPause) {
+                        Log.i(TAG, "Task ${task.taskId} timed out")
+                        return TaskStatus.failed
+                    }
+                    if (taskCanResume) {
+                        Log.i(
+                            TAG,
+                            "Task ${task.taskId} paused due to timeout, will resume in 1 second"
+                        )
+                        val start = bytesTotal + startByte
+                        BackgroundDownloaderPlugin.doEnqueue(
+                            taskToJsonString(task),
+                            tempFilePath,
+                            start,
+                            1000
+                        )
                         return TaskStatus.paused
                     }
                     Log.i(TAG, "Task ${task.taskId} cannot resume, therefore pause failed")
@@ -546,7 +581,8 @@ class TaskWorker(
      * Transfer [contentLength] bytes from [inputStream] to [outputStream] and provide
      * progress updates for the [task]
      *
-     * Will return canceled, paused, failed or complete status
+     * Will return [TaskStatus.canceled], [TaskStatus.paused], [TaskStatus.failed],
+     * [TaskStatus.complete], or special [TaskStatus.enqueued] which signals the task timed out
      */
     private fun transferBytes(
         inputStream: InputStream,
@@ -562,14 +598,21 @@ class TaskWorker(
             while (inputStream.read(dataBuffer, 0, bufferSize)
                     .also { numBytes = it } != -1
             ) {
+                // check if task is stopped (canceled), paused or timed out
                 if (isStopped) {
                     return TaskStatus.canceled
                 }
+                // 'pause' is signalled by adding the taskId to a static list
                 if (BackgroundDownloaderPlugin.pausedTaskIds.contains(task.taskId)) {
                     return TaskStatus.paused
                 }
-                outputStream.write(dataBuffer, 0, numBytes)
-                bytesTotal += numBytes
+                if (isTimedOut) {
+                    return TaskStatus.enqueued // special use of this status, see [processDownload]
+                }
+                if (numBytes > 0) {
+                    outputStream.write(dataBuffer, 0, numBytes)
+                    bytesTotal += numBytes
+                }
                 val progress =
                     min(
                         (bytesTotal + startByte).toDouble() / (contentLength + startByte),
@@ -613,7 +656,7 @@ class TaskWorker(
         val total = matchResult.groups[3]?.value?.toLong()!!
         val tempFile = File(tempFilePath)
         val tempFileLength = tempFile.length()
-        Log.d(TAG, "$start $end $total")
+        Log.d(TAG, "Resume start=$start, end=$end of total=$total bytes, tempFile = $tempFileLength bytes")
         if (total != end + 1 || start > tempFileLength) {
             Log.i(TAG, "Offered range not feasible: $range")
             return false

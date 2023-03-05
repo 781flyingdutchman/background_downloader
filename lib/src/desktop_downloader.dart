@@ -215,6 +215,9 @@ class DesktopDownloader extends BaseDownloader {
   }
 
   @override
+  Future<Duration> getTaskTimeout() => Future.value(const Duration(days: 1));
+
+  @override
   void destroy() {
     super.destroy();
     _queue.clear();
