@@ -35,7 +35,7 @@ func isBinaryUploadTask(task: Task) -> Bool {
 
 /// True if this state is not a final state (i.e. more changes may happen)
 func isNotFinalState(status: TaskStatus) -> Bool {
-    return status == .enqueued || status == .running || status == .waitingToRetry
+    return status == .enqueued || status == .running || status == .waitingToRetry || status == .paused
 }
 
 /// True if this state is a final state (i.e. no more changes will happen)
