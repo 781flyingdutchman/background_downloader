@@ -292,16 +292,17 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
             os_log("Could not find task related to urlSessionTask %d", log: log, type: .error, task.taskIdentifier)
             return
         }
-        os_log("Completed task with id %d", log: log, type: .info, task.taskId)
         guard error == nil else {
             let userInfo = (error! as NSError).userInfo
                 if let resumeData = userInfo[NSURLSessionDownloadTaskResumeData] as? Data {
                     if processResumeData(task: task, resumeData: resumeData) {
+                        os_log("Paused task with id %@", log: log, type: .info, task.taskId)
                         processStatusUpdate(task: task, status: .paused)
                         return
                     }
                 }
             if error!.localizedDescription.contains("cancelled") {
+                os_log("Canceled task with id %@", log: log, type: .info, task.taskId)
                 processStatusUpdate(task: task, status: .canceled)
             }
             else {
@@ -310,6 +311,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
             }
             return
         }
+        os_log("Fnished task with id %@", log: log, type: .info, task.taskId)
         // if this is an upload task, send final TaskStatus (based on HTTP status code
         if isUploadTask(task: task) {
             let finalStatus = (200...206).contains(statusCode)
