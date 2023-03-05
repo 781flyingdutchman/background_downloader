@@ -111,8 +111,6 @@ class DesktopDownloader extends BaseDownloader {
           // resume data
           assert(message[0] as String == 'resumeData',
               'Only recognize resume data');
-          print(message[1] as String);
-          print(message[2] as int);
           setResumeData(task, message[1] as String, message[2] as int);
         } else if (message is String) {
           // log message

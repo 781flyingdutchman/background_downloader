@@ -332,7 +332,7 @@ void main() {
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
       expect(lastStatus, equals(TaskStatus.complete));
-      print('Finished alTaskIds');
+      print('Finished allTaskIds');
     });
 
     testWidgets('allTasks', (widgetTester) async {
