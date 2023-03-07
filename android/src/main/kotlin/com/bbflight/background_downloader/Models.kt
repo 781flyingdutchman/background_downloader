@@ -18,9 +18,6 @@ enum class Updates {
     statusChangeAndProgressUpdates // calls also for progress along the way
 }
 
-/// Exception to indicate that a task has been paused
-class PauseException : Exception()
-
 /// Partial version of the Dart side DownloadTask, only used for background loading
 class Task(
     val taskId: String,
@@ -123,6 +120,17 @@ enum class TaskStatus {
 
     fun isFinalState(): Boolean {
         return !isNotFinalState()
+    }
+}
+
+/// Holds data associated with a resume
+class ResumeData(val task: Task, val data: String, val requiredStartByte: Long) {
+    fun toJsonMap(): Map<String, Any> {
+        return mapOf (
+            "task" to task.toJsonMap(),
+            "data" to data,
+            "requiredStartByte" to requiredStartByte
+        )
     }
 }
 

@@ -112,7 +112,8 @@ class DesktopDownloader extends BaseDownloader {
           // resume data
           assert(message[0] as String == 'resumeData',
               'Only recognize resume data');
-          setResumeData(task, message[1] as String, message[2] as int);
+          setResumeData(
+              ResumeData(task, message[1] as String, message[2] as int));
         } else if (message is String) {
           // log message
           _log.finest(message);
@@ -213,6 +214,10 @@ class DesktopDownloader extends BaseDownloader {
     }
     return false;
   }
+
+  @override
+  Future<Map<String, dynamic>> popUndeliveredData(Undelivered dataType) =>
+      Future.value({});
 
   @override
   Future<Duration> getTaskTimeout() => Future.value(const Duration(days: 1));

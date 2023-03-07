@@ -64,7 +64,8 @@ class TaskWorker(
             task: Task,
             arg: Any,
             arg2: Any? = null
-        ) {
+        ): Boolean {
+            var success = false
             Handler(Looper.getMainLooper()).post {
                 try {
                     val argList =
@@ -75,14 +76,23 @@ class TaskWorker(
                     if (arg2 != null) {
                         argList.add(arg2)
                     }
-                    BackgroundDownloaderPlugin.backgroundChannel?.invokeMethod(
-                        method,
-                        argList
-                    )
+                    if (BackgroundDownloaderPlugin.backgroundChannel != null) {
+                        BackgroundDownloaderPlugin.backgroundChannel?.invokeMethod(
+                            method,
+                            argList
+                        )
+                        //TODO success = true
+                    } else {
+                        Log.i(TAG, "Could not post $method to background channel")
+                    }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Exception trying to post $method: ${e.message}")
+                    Log.w(
+                        TAG,
+                        "Exception trying to post $method to background channel: ${e.message}"
+                    )
                 }
             }
+            return success
         }
 
         /**
@@ -192,6 +202,42 @@ class TaskWorker(
             taskCanResume = canResume
             postOnBackgroundChannel("canResume", task, canResume)
         }
+
+        /**
+         * Process resume information
+         *
+         * Attempts to post this to the Dart side via background channel. If that is not
+         * successful, stores the resume data in shared preferences, for later retrieval by
+         * the Dart side
+         */
+        fun processResumeData(resumeData: ResumeData, prefs: SharedPreferences) {
+            if (!postOnBackgroundChannel(  //TODO add the !
+                    "resumeData",
+                    resumeData.task,
+                    resumeData.data,
+                    resumeData.requiredStartByte
+                )
+            ) {
+                // unsuccessful post, so store in local prefs
+                Log.d(TAG, "Could not post resume data -> storing locally")
+                BackgroundDownloaderPlugin.prefsLock.write {
+                    // add the resumeData to a map keyed by taskId
+                    val jsonString =
+                        prefs.getString(BackgroundDownloaderPlugin.keyResumeDataMap, "{}")
+                    val resumeDataMap = BackgroundDownloaderPlugin.gson.fromJson<Map<String, Any>>(
+                        jsonString,
+                        BackgroundDownloaderPlugin.jsonMapType
+                    ).toMutableMap()
+                    resumeDataMap[resumeData.task.taskId] = resumeData.toJsonMap()
+                    val editor = prefs.edit()
+                    editor.putString(
+                        BackgroundDownloaderPlugin.keyResumeDataMap,
+                        BackgroundDownloaderPlugin.gson.toJson(resumeDataMap)
+                    )
+                    editor.apply()
+                }
+            }
+        }
     }
 
     // properties related to pause/resume functionality
@@ -199,7 +245,10 @@ class TaskWorker(
     private var startByte = 0L
     private var isTimedOut = false
 
+    private lateinit var prefs: SharedPreferences
+
     override suspend fun doWork(): Result {
+        prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
         withContext(Dispatchers.IO) {
             Timer().schedule(taskTimeoutMillis) {
                 isTimedOut = true
@@ -221,7 +270,6 @@ class TaskWorker(
                 TAG,
                 "${if (isResume) "Resuming" else "Starting"} task with taskId ${task.taskId}"
             )
-            val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
             processStatusUpdate(task, TaskStatus.running, prefs)
             if (!isResume) {
                 processProgressUpdate(task, 0.0)
@@ -397,12 +445,10 @@ class TaskWorker(
                     BackgroundDownloaderPlugin.pausedTaskIds.remove(task.taskId)
                     if (taskCanResume) {
                         Log.i(TAG, "Task ${task.taskId} paused")
-                        postOnBackgroundChannel(
-                            "resumeData",
-                            task,
-                            tempFilePath,
-                            bytesTotal + startByte
-                        )
+                        processResumeData(
+                            ResumeData(task,
+                                tempFilePath,
+                                bytesTotal + startByte), prefs)
                         return TaskStatus.paused
                     }
                     Log.i(TAG, "Task ${task.taskId} cannot resume, therefore pause failed")

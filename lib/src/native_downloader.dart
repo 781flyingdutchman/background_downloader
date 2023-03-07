@@ -24,7 +24,7 @@ class NativeDownloader extends BaseDownloader {
   NativeDownloader._internal();
 
   @override
-  void initialize() {
+  Future<void> initialize() async {
     super.initialize();
     WidgetsFlutterBinding.ensureInitialized();
     // listen to the background channel, receiving updates on download status
@@ -53,7 +53,7 @@ class NativeDownloader extends BaseDownloader {
         case 'resumeData':
           final tempFilename = args[1] as String;
           final startByte = args.last as int;
-          setResumeData(task, tempFilename, startByte);
+          setResumeData(ResumeData(task, tempFilename, startByte));
           break;
 
         default:
@@ -126,6 +126,31 @@ class NativeDownloader extends BaseDownloader {
       }
     }
     return false;
+  }
+
+  /// Retrieve data that was not delivered to Dart, as a Map keyed by taskId
+  /// with one map for each taskId
+  ///
+  /// Asks the native platform for locally stored data for resumeData,
+  /// status updates or progress updates.
+  /// ResumeData has a [ResumeData] json representation
+  /// StatusUpdates has a mixed Task & TaskStatus json representation 'taskStatus'
+  /// ProgressUpdates has a mixed Task & double json representation 'progress'
+  @override
+  Future<Map<String, dynamic>> popUndeliveredData(Undelivered dataType) async {
+    final String jsonMapString;
+    switch (dataType) {
+      case Undelivered.resumeData:
+        jsonMapString = await _channel.invokeMethod('popResumeData');
+        break;
+      case Undelivered.statusUpdates:
+        jsonMapString = await _channel.invokeMethod('popStatusUpdates');
+        break;
+      case Undelivered.progressUpdates:
+        jsonMapString = await _channel.invokeMethod('popProgressUpdates');
+        break;
+    }
+    return jsonDecode(jsonMapString);
   }
 
   @override

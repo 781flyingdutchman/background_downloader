@@ -1588,6 +1588,32 @@ void main() {
       expect(statusCallbackCounter, greaterThanOrEqualTo(9)); // min 2 pause
     });
   });
+
+  testWidgets('Local storage for resumeData test', (widgetTester) async {
+    FileDownloader().registerCallbacks(
+        taskStatusCallback: statusCallback,
+        taskProgressCallback: progressCallback);
+    task = DownloadTask(
+        url: urlWithContentLength,
+        filename: defaultFilename,
+        updates: Updates.statusAndProgress,
+        allowPause: true);
+    expect(await FileDownloader().enqueue(task), equals(true));
+    await someProgressCompleter.future;
+    final canResume = await FileDownloader().taskCanResume(task);
+    expect(canResume, isTrue);
+    expect(await FileDownloader().pause(task), isTrue);
+    await Future.delayed(const Duration(milliseconds: 500));
+    final downloader = FileDownloader().downloaderForTesting;
+    final resumeDataMap = await downloader.popUndeliveredData(Undelivered.resumeData);
+    expect(resumeDataMap.length, equals(1));
+    final resumeDataItemMap = resumeDataMap[task.taskId];
+    expect(resumeDataItemMap, isNotNull);
+    print(resumeDataItemMap);
+    final resumeData = ResumeData.fromJsonMap(resumeDataItemMap);
+    expect(resumeData.task, equals(task));
+    expect(await FileDownloader().cancelTaskWithId(task.taskId), isTrue);
+  });
 }
 
 /// Helper: make sure [task] is set as desired, and this will enqueue, wait for

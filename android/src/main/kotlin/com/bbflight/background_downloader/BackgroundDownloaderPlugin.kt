@@ -34,6 +34,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     companion object {
         const val TAG = "BackgroundDownloader"
         const val keyTasksMap = "com.bbflight.background_downloader.taskMap"
+        const val keyResumeDataMap = "com.bbflight.background_downloader.resumeDataMap"
         const val keyTempFilename = "tempFilename"
         const val keyStartByte = "startByte"
         var canceledTaskIds = HashMap<String, Long>() // <taskId, timeMillis>
@@ -160,6 +161,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
             "cancelTasksWithIds" -> methodCancelTasksWithIds(call, result)
             "taskForId" -> methodTaskForId(call, result)
             "pause" -> methodPause(call, result)
+            "popResumeData" -> methodPopResumeData(result)
             "getTaskTimeout" -> methodGetTaskTimeout(result)
             else -> result.notImplemented()
         }
@@ -297,6 +299,25 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         result.success(true)
     }
 
+    /**
+     * Returns a JSON String of a map of [ResumeData], keyed by taskId, that has veen stored
+     * in local shared preferences because they could not be delivered to the Dart side.
+     * Local storage of this map is then cleared
+     */
+    private fun methodPopResumeData(result: Result) {
+        prefsLock.write {
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            val jsonString = prefs.getString(keyResumeDataMap, "{}")
+            val editor = prefs.edit()
+            editor.remove(keyResumeDataMap)
+            editor.apply()
+            result.success(jsonString)
+        }
+    }
+
+    /**
+     * Returns the [TaskWorker] timeout value in milliseconds
+     */
     private fun methodGetTaskTimeout(result: Result) {
         result.success(TaskWorker.taskTimeoutMillis)
     }

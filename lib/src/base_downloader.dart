@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
@@ -54,12 +55,38 @@ abstract class BaseDownloader {
     final instance = Platform.isMacOS || Platform.isLinux || Platform.isWindows
         ? DesktopDownloader()
         : NativeDownloader();
-    instance.initialize();
+    unawaited(instance.initialize());
     return instance;
   }
 
   /// Initialize
-  void initialize() {}
+  @mustCallSuper
+  Future<void> initialize() async {
+    final resumeDataMap = await popUndeliveredData(Undelivered.resumeData);
+    for (var taskId in resumeDataMap.keys) {
+      // map is <taskId, ResumeData>
+      final resumeData = ResumeData.fromJsonMap(resumeDataMap[taskId]);
+      await setResumeData(resumeData);
+      await setPausedTask(resumeData.task);
+    }
+    return;
+    final statusUpdateMap = await popUndeliveredData(Undelivered.statusUpdates);
+    for (var taskId in statusUpdateMap.keys) {
+      // map is <taskId, Task/TaskStatus> where TaskStatus is added to Task JSON
+      final payload = statusUpdateMap[taskId];
+      final task = Task.createFromJsonMap(payload);
+      final taskStatus = TaskStatus.values[payload['taskStatus']];
+      processStatusUpdate(task, taskStatus);
+    }
+    final progressUpdateMap = await popUndeliveredData(Undelivered.progressUpdates);
+    for (var taskId in progressUpdateMap.keys) {
+      // map is <taskId, Task/progress> where progress is added to Task JSON
+      final payload = statusUpdateMap[taskId];
+      final task = Task.createFromJsonMap(payload);
+      final progress = payload['progress'];
+      processProgressUpdate(task, progress);
+    }
+  }
 
   /// Enqueue the task
   @mustCallSuper
@@ -247,9 +274,9 @@ abstract class BaseDownloader {
       canResumeTask[task]?.future ?? Future.value(false);
 
   /// Stores the resume data
-  Future<void> setResumeData(Task task, String data, int requiredStartByte) =>
-      _db.collection(resumeDataPath).doc(_safeId(task.taskId)).set(
-          ResumeData(task, data, requiredStartByte).toJsonMap());
+  Future<void> setResumeData(ResumeData resumeData) =>
+      _db.collection(resumeDataPath).doc(_safeId(resumeData.taskId)).set(
+          resumeData.toJsonMap());
 
 
   /// Retrieve the resume data for this [taskId]
@@ -294,6 +321,8 @@ abstract class BaseDownloader {
     await _db.collection(pausedTasksPath).doc(taskId).delete();
   }
 
+  /// Retrieve data that was not delivered to Dart
+  Future<Map<String, dynamic>> popUndeliveredData(Undelivered dataType);
 
   /// Clear pause and resume info associated with this task
   void _clearPauseResumeInfo(Task task) {
