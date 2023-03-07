@@ -96,7 +96,7 @@ class Database {
         .set(record.toJsonMap());
   }
 
-  final _illegalPathCharacters = RegExp(r'[\\/:*?\"<>|]');
+  final _illegalPathCharacters = RegExp(r'[\\/:*?"<>|]');
 
   /// Make the id safe for storing in the localStore
   String _safeId(String id) => id.replaceAll(_illegalPathCharacters, '_');

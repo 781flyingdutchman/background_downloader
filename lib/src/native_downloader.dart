@@ -115,12 +115,12 @@ class NativeDownloader extends BaseDownloader {
   @override
   Future<bool> resume(Task task) async {
     if (await super.resume(task)) {
-      final taskResumeData = resumeData[task];
+      final taskResumeData = await getResumeData(task.taskId);
       if (taskResumeData != null) {
         return await _channel.invokeMethod<bool>('enqueue', [
               jsonEncode(task.toJsonMap()),
-              taskResumeData.first as String,
-              taskResumeData.last as int
+              taskResumeData.data,
+              taskResumeData.requiredStartByte
             ]) ??
             false;
       }

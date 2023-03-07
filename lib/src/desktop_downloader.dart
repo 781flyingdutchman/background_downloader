@@ -64,14 +64,14 @@ class DesktopDownloader extends BaseDownloader {
   /// 'forwarded' to the [backgroundChannel] and processed by the
   /// [FileDownloader]
   Future<void> _executeTask(Task task) async {
-    final isResume = _resume.remove(task) && resumeData[task] != null;
+    final data = await getResumeData(task.taskId);
+    final isResume = _resume.remove(task) && data != null;
     final filePath = await task.filePath();
     final tempFilePath = isResume
-        ? resumeData[task]?.first as String? ?? "" // always non-null
+        ? data.data // always non-null
         : path.join((await getTemporaryDirectory()).path,
             'com.bbflight.background_downloader${Random().nextInt(1 << 32).toString()}');
-    final requiredStartByte =
-        resumeData[task]?.last as int? ?? 0; // start for resume
+    final requiredStartByte = data?.requiredStartByte ?? 0; // start for resume
     // spawn an isolate to do the task
     final receivePort = ReceivePort();
     final errorPort = ReceivePort();

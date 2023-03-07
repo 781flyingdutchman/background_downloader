@@ -1545,13 +1545,13 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 200));
       expect(lastStatus, equals(TaskStatus.paused));
       final downloader = FileDownloader().downloaderForTesting;
-      expect(downloader.resumeData[task], isNotNull);
-      final resumeData = downloader.resumeData[task]!;
-      final tempFilePath = resumeData.first;
+      expect(downloader.getResumeData(task.taskId), isNotNull);
+      final resumeData = await downloader.getResumeData(task.taskId);
+      final tempFilePath = resumeData!.data;
       if (!Platform.isIOS) {
         // on iOS we don't have access to the temp file directly
         expect(File(tempFilePath).existsSync(), isTrue);
-        expect(File(tempFilePath).lengthSync(), equals(resumeData.last));
+        expect(File(tempFilePath).lengthSync(), equals(resumeData.requiredStartByte));
       }
       expect(await FileDownloader().cancelTasksWithIds([task.taskId]), isTrue);
       await Future.delayed(const Duration(milliseconds: 200));
@@ -1578,7 +1578,9 @@ void main() {
         result = lastStatus;
         if (result != TaskStatus.complete) {
           expect(await FileDownloader().pause(task), isTrue);
-          await Future.delayed(const Duration(milliseconds: 500));
+          while (lastStatus != TaskStatus.paused) {
+            await Future.delayed(const Duration(milliseconds: 250));
+          }
           expect(await FileDownloader().resume(task), isTrue);
         }
       }
