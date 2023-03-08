@@ -392,6 +392,19 @@ class FileDownloader {
           {String group = defaultGroup, bool markDownloadedComplete = true}) =>
       _downloader.trackTasks(group, markDownloadedComplete);
 
+  /// Wakes up the FileDownloader from possible background state, triggering
+  /// a stream of updates that may have been processed while in the background,
+  /// and have not yet reached the callbacks or listener
+  ///
+  /// This method is called automatically 5 seconds after first use of the
+  /// [FileDownloader].
+  /// There is no need to call this method, unless you need to time this
+  /// activity. For example, immediately after you have
+  /// activated [trackTasks], before you check the status of tasks in the
+  /// database.
+  /// Calling this method multiple times has no effect.
+  Future<void> resumeFromBackground() => _downloader.retrieveLocallyStoredData();
+
   /// Returns true if task can be resumed on pause
   ///
   /// This future only completes once the task is running and has received

@@ -388,9 +388,8 @@ Future<TaskStatus> transferBytes(
             0.999);
         final now = DateTime.now();
         if (contentLength > 0 &&
-            (_bytesTotal < 10000 ||
-                (progress - lastProgressUpdate > 0.02 &&
-                    now.isAfter(nextProgressUpdateTime)))) {
+            (progress - lastProgressUpdate > 0.02 &&
+                now.isAfter(nextProgressUpdateTime))) {
           processProgressUpdateInIsolate(task, progress, sendPort);
           lastProgressUpdate = progress;
           nextProgressUpdateTime = now.add(const Duration(milliseconds: 500));

@@ -118,12 +118,12 @@ class TaskWorker(
                 when (status) {
                     TaskStatus.complete -> processProgressUpdate(
                         task,
-                        1.0
+                        1.0, prefs
                     )
                     TaskStatus.failed ->
                         if (!retryNeeded) processProgressUpdate(
                             task,
-                            -1.0
+                            -1.0, prefs
                         )
                     TaskStatus.canceled -> {
                         canSendStatusUpdate = canSendCancellation(task)
@@ -132,20 +132,31 @@ class TaskWorker(
                                 currentTimeMillis()
                             processProgressUpdate(
                                 task,
-                                -2.0
+                                -2.0, prefs
                             )
                         }
                     }
                     TaskStatus.notFound -> processProgressUpdate(
                         task,
-                        -3.0
+                        -3.0, prefs
                     )
                     else -> {}
                 }
             }
             // Post update if task expects one, or if failed and retry is needed
             if (canSendStatusUpdate && (task.providesStatusUpdates() || retryNeeded)) {
-                postOnBackgroundChannel("statusUpdate", task, status.ordinal)
+                if (!postOnBackgroundChannel("statusUpdate", task, status.ordinal)) {
+                    // unsuccessful post, so store in local prefs
+                    Log.d(TAG, "Could not post status update -> storing locally")
+                    val jsonMap = task.toJsonMap().toMutableMap()
+                    jsonMap["taskStatus"] = status.ordinal // merge into Task JSON
+                    storeLocally(
+                        BackgroundDownloaderPlugin.keyStatusUpdateMap,
+                        task.taskId,
+                        jsonMap,
+                        prefs
+                    )
+                }
             }
             // if task is in final state, remove from persistent storage
             if (status.isFinalState()) {
@@ -190,10 +201,22 @@ class TaskWorker(
          */
         fun processProgressUpdate(
             task: Task,
-            progress: Double
+            progress: Double,
+            prefs: SharedPreferences
         ) {
             if (task.providesProgressUpdates()) {
-                postOnBackgroundChannel("progressUpdate", task, progress)
+                if (!postOnBackgroundChannel("progressUpdate", task, progress)) {
+                    // unsuccessful post, so store in local prefs
+                    Log.d(TAG, "Could not post progress update -> storing locally")
+                    val jsonMap = task.toJsonMap().toMutableMap()
+                    jsonMap["progress"] = progress // merge into Task JSON
+                    storeLocally(
+                        BackgroundDownloaderPlugin.keyProgressUpdateMap,
+                        task.taskId,
+                        jsonMap,
+                        prefs
+                    )
+                }
             }
         }
 
@@ -211,7 +234,7 @@ class TaskWorker(
          * the Dart side
          */
         fun processResumeData(resumeData: ResumeData, prefs: SharedPreferences) {
-            if (!postOnBackgroundChannel(  //TODO add the !
+            if (!postOnBackgroundChannel(
                     "resumeData",
                     resumeData.task,
                     resumeData.data,
@@ -220,22 +243,36 @@ class TaskWorker(
             ) {
                 // unsuccessful post, so store in local prefs
                 Log.d(TAG, "Could not post resume data -> storing locally")
-                BackgroundDownloaderPlugin.prefsLock.write {
-                    // add the resumeData to a map keyed by taskId
-                    val jsonString =
-                        prefs.getString(BackgroundDownloaderPlugin.keyResumeDataMap, "{}")
-                    val resumeDataMap = BackgroundDownloaderPlugin.gson.fromJson<Map<String, Any>>(
-                        jsonString,
-                        BackgroundDownloaderPlugin.jsonMapType
-                    ).toMutableMap()
-                    resumeDataMap[resumeData.task.taskId] = resumeData.toJsonMap()
-                    val editor = prefs.edit()
-                    editor.putString(
-                        BackgroundDownloaderPlugin.keyResumeDataMap,
-                        BackgroundDownloaderPlugin.gson.toJson(resumeDataMap)
-                    )
-                    editor.apply()
-                }
+                storeLocally(
+                    BackgroundDownloaderPlugin.keyResumeDataMap,
+                    resumeData.task.taskId,
+                    resumeData.toJsonMap(),
+                    prefs
+                )
+            }
+        }
+
+        private fun storeLocally(
+            prefsKey: String,
+            taskId: String,
+            item: MutableMap<String, Any?>,
+            prefs: SharedPreferences
+        ) {
+            BackgroundDownloaderPlugin.prefsLock.write {
+                // add the resumeData to a map keyed by taskId
+                val jsonString =
+                    prefs.getString(prefsKey, "{}")
+                val mapByTaskId = BackgroundDownloaderPlugin.gson.fromJson<Map<String, Any>>(
+                    jsonString,
+                    BackgroundDownloaderPlugin.jsonMapType
+                ).toMutableMap()
+                mapByTaskId[taskId] = item
+                val editor = prefs.edit()
+                editor.putString(
+                    prefsKey,
+                    BackgroundDownloaderPlugin.gson.toJson(mapByTaskId)
+                )
+                editor.apply()
             }
         }
     }
@@ -272,7 +309,7 @@ class TaskWorker(
             )
             processStatusUpdate(task, TaskStatus.running, prefs)
             if (!isResume) {
-                processProgressUpdate(task, 0.0)
+                processProgressUpdate(task, 0.0, prefs)
             }
             val status = doTask(task, isResume, tempFilePath, requiredStartByte)
             processStatusUpdate(task, status, prefs)
@@ -446,9 +483,12 @@ class TaskWorker(
                     if (taskCanResume) {
                         Log.i(TAG, "Task ${task.taskId} paused")
                         processResumeData(
-                            ResumeData(task,
+                            ResumeData(
+                                task,
                                 tempFilePath,
-                                bytesTotal + startByte), prefs)
+                                bytesTotal + startByte
+                            ), prefs
+                        )
                         return TaskStatus.paused
                     }
                     Log.i(TAG, "Task ${task.taskId} cannot resume, therefore pause failed")
@@ -676,7 +716,7 @@ class TaskWorker(
                 if (contentLength > 0 &&
                     (bytesTotal < 10000 || (progress - lastProgressUpdate > 0.02 && currentTimeMillis() > nextProgressUpdateTime))
                 ) {
-                    processProgressUpdate(task, progress)
+                    processProgressUpdate(task, progress, prefs)
                     lastProgressUpdate = progress
                     nextProgressUpdateTime = currentTimeMillis() + 500
                 }

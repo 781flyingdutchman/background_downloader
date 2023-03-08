@@ -15,8 +15,6 @@ import java.lang.Long.min
 import java.util.*
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import kotlin.collections.HashMap
-import kotlin.collections.HashSet
 import kotlin.concurrent.read
 import kotlin.concurrent.schedule
 import kotlin.concurrent.write
@@ -35,6 +33,8 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         const val TAG = "BackgroundDownloader"
         const val keyTasksMap = "com.bbflight.background_downloader.taskMap"
         const val keyResumeDataMap = "com.bbflight.background_downloader.resumeDataMap"
+        const val keyStatusUpdateMap = "com.bbflight.background_downloader.statusUpdateMap"
+        const val keyProgressUpdateMap = "com.bbflight.background_downloader.progressUpdateMap"
         const val keyTempFilename = "tempFilename"
         const val keyStartByte = "startByte"
         var canceledTaskIds = HashMap<String, Long>() // <taskId, timeMillis>
@@ -162,6 +162,8 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
             "taskForId" -> methodTaskForId(call, result)
             "pause" -> methodPause(call, result)
             "popResumeData" -> methodPopResumeData(result)
+            "popStatusUpdates" -> methodPopStatusUpdates(result)
+            "popProgressUpdates" -> methodPopProgressUpdates(result)
             "getTaskTimeout" -> methodGetTaskTimeout(result)
             else -> result.notImplemented()
         }
@@ -300,16 +302,41 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     }
 
     /**
-     * Returns a JSON String of a map of [ResumeData], keyed by taskId, that has veen stored
+     * Returns a JSON String of a map of [ResumeData], keyed by taskId, that has been stored
      * in local shared preferences because they could not be delivered to the Dart side.
      * Local storage of this map is then cleared
      */
     private fun methodPopResumeData(result: Result) {
+        popLocalStorage(keyResumeDataMap, result)
+    }
+
+    /**
+     * Returns a JSON String of a map of [Task] and [TaskStatus], keyed by taskId, stored
+     * in local shared preferences because they could not be delivered to the Dart side.
+     * Local storage of this map is then cleared
+     */
+    private fun methodPopStatusUpdates(result: Result) {
+        popLocalStorage(keyStatusUpdateMap, result)
+    }
+
+    /**
+     * Returns a JSON String of a map of [ResumeData], keyed by taskId, that has veen stored
+     * in local shared preferences because they could not be delivered to the Dart side.
+     * Local storage of this map is then cleared
+     */
+    private fun methodPopProgressUpdates(result: Result) {
+        popLocalStorage(keyProgressUpdateMap, result)
+    }
+
+    /**
+     * Pops and return locally stored map for this key
+     */
+    private fun popLocalStorage(prefsKey: String, result: Result) {
         prefsLock.write {
             val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-            val jsonString = prefs.getString(keyResumeDataMap, "{}")
+            val jsonString = prefs.getString(prefsKey, "{}")
             val editor = prefs.edit()
-            editor.remove(keyResumeDataMap)
+            editor.remove(prefsKey)
             editor.apply()
             result.success(jsonString)
         }

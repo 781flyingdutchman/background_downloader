@@ -48,6 +48,9 @@ abstract class BaseDownloader {
 
   /// Map of tasks and completer to indicate whether task can be resumed
   final canResumeTask = <Task, Completer<bool>>{};
+  
+  /// Flag indicating we have retrieved missed data
+  var _retrievedLocallyStoredData = false;
 
   BaseDownloader();
 
@@ -62,30 +65,39 @@ abstract class BaseDownloader {
   /// Initialize
   @mustCallSuper
   Future<void> initialize() async {
-    final resumeDataMap = await popUndeliveredData(Undelivered.resumeData);
-    for (var taskId in resumeDataMap.keys) {
-      // map is <taskId, ResumeData>
-      final resumeData = ResumeData.fromJsonMap(resumeDataMap[taskId]);
-      await setResumeData(resumeData);
-      await setPausedTask(resumeData.task);
+    //TODO decide if we want this: Future.delayed(const Duration(seconds: 5), retrieveLocallyStoredData);
+  }
+
+  /// Retrieve data that was stored locally because it could not be
+  /// delivered to the downloader
+  Future<void> retrieveLocallyStoredData() async {
+    if (!_retrievedLocallyStoredData) {
+      final resumeDataMap = await popUndeliveredData(Undelivered.resumeData);
+      for (var taskId in resumeDataMap.keys) {
+        // map is <taskId, ResumeData>
+        final resumeData = ResumeData.fromJsonMap(resumeDataMap[taskId]);
+        await setResumeData(resumeData);
+        await setPausedTask(resumeData.task);
+      }
+      final statusUpdateMap = await popUndeliveredData(Undelivered.statusUpdates);
+      for (var taskId in statusUpdateMap.keys) {
+        // map is <taskId, Task/TaskStatus> where TaskStatus is added to Task JSON
+        final payload = statusUpdateMap[taskId];
+        final task = Task.createFromJsonMap(payload);
+        final taskStatus = TaskStatus.values[payload['taskStatus']];
+        processStatusUpdate(task, taskStatus);
+      }
+      final progressUpdateMap = await popUndeliveredData(Undelivered.progressUpdates);
+      for (var taskId in progressUpdateMap.keys) {
+        // map is <taskId, Task/progress> where progress is added to Task JSON
+        final payload = progressUpdateMap[taskId];
+        final task = Task.createFromJsonMap(payload);
+        final progress = payload['progress'];
+        processProgressUpdate(task, progress);
+      }
+      _retrievedLocallyStoredData = true;
     }
-    return;
-    final statusUpdateMap = await popUndeliveredData(Undelivered.statusUpdates);
-    for (var taskId in statusUpdateMap.keys) {
-      // map is <taskId, Task/TaskStatus> where TaskStatus is added to Task JSON
-      final payload = statusUpdateMap[taskId];
-      final task = Task.createFromJsonMap(payload);
-      final taskStatus = TaskStatus.values[payload['taskStatus']];
-      processStatusUpdate(task, taskStatus);
-    }
-    final progressUpdateMap = await popUndeliveredData(Undelivered.progressUpdates);
-    for (var taskId in progressUpdateMap.keys) {
-      // map is <taskId, Task/progress> where progress is added to Task JSON
-      final payload = statusUpdateMap[taskId];
-      final task = Task.createFromJsonMap(payload);
-      final progress = payload['progress'];
-      processProgressUpdate(task, progress);
-    }
+
   }
 
   /// Enqueue the task
@@ -332,9 +344,10 @@ abstract class BaseDownloader {
   }
 
 
-  /// Get the duration for a task to timeout
+  /// Get the duration for a task to timeout - Android only, for testing
+  @visibleForTesting
   Future<Duration> getTaskTimeout();
-
+  
   /// Destroy - clears callbacks, updates stream and retry queue
   ///
   /// Clears all queues and references without sending cancellation

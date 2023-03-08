@@ -314,23 +314,24 @@ void main() {
 
     testWidgets('enqueue and test file equality', (widgetTester) async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
-      task = DownloadTask(
-          url: urlWithContentLength,
-          filename: defaultFilename);
+      task = DownloadTask(url: urlWithContentLength, filename: defaultFilename);
       expect(await FileDownloader().enqueue(task), isTrue);
       await statusCallbackCompleter.future;
       expect(lastStatus, TaskStatus.complete);
-      expect(await fileEqualsLargeTestFile(File(await task.filePath())), isTrue);
+      expect(
+          await fileEqualsLargeTestFile(File(await task.filePath())), isTrue);
     });
 
-    testWidgets('enqueue long Android task that times out', (widgetTester) async {
+    testWidgets('enqueue long Android task that times out',
+        (widgetTester) async {
       // This is an Android implementation detail. Android tasks timeout
       // after 10 minutes, so to prevent a long download from failing
       // we pause the task and resume after a brief pause
       // NOTE: to test this, set the taskTimeoutMillis to a low value to
       // force an early timeout.
       if (Platform.isAndroid) {
-        final timeOut = await FileDownloader().downloaderForTesting.getTaskTimeout();
+        final timeOut =
+            await FileDownloader().downloaderForTesting.getTaskTimeout();
         if (timeOut < const Duration(minutes: 1)) {
           FileDownloader().registerCallbacks(
               taskStatusCallback: statusCallback,
@@ -461,7 +462,8 @@ void main() {
           updates: Updates.statusAndProgress,
           requiresWiFi: true,
           retries: 5,
-          allowPause: false,  // cannot be true if post != null
+          allowPause: false,
+          // cannot be true if post != null
           metaData: 'someMetaData');
       final now = DateTime.now();
       expect(now.difference(complexTask.creationTime).inMilliseconds,
@@ -1507,7 +1509,8 @@ void main() {
       expect(await FileDownloader().resume(task), isTrue);
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.complete));
-      expect(await fileEqualsLargeTestFile(File(await task.filePath())), isTrue);
+      expect(
+          await fileEqualsLargeTestFile(File(await task.filePath())), isTrue);
     });
 
     testWidgets('pause task that cannot be paused', (widgetTester) async {
@@ -1551,7 +1554,8 @@ void main() {
       if (!Platform.isIOS) {
         // on iOS we don't have access to the temp file directly
         expect(File(tempFilePath).existsSync(), isTrue);
-        expect(File(tempFilePath).lengthSync(), equals(resumeData.requiredStartByte));
+        expect(File(tempFilePath).lengthSync(),
+            equals(resumeData.requiredStartByte));
       }
       expect(await FileDownloader().cancelTasksWithIds([task.taskId]), isTrue);
       await Future.delayed(const Duration(milliseconds: 200));
@@ -1565,8 +1569,7 @@ void main() {
       // before the initial pause command, or did not have time for two
       // pause/resume cycles -> shorten interval
       const interval = Duration(milliseconds: 800);
-      FileDownloader().registerCallbacks(
-          taskStatusCallback: statusCallback);
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       task = DownloadTask(
           url: urlWithContentLength,
           filename: defaultFilename,
@@ -1584,35 +1587,66 @@ void main() {
           expect(await FileDownloader().resume(task), isTrue);
         }
       }
-      expect(await fileEqualsLargeTestFile(File(await task.filePath())), isTrue);
+      expect(
+          await fileEqualsLargeTestFile(File(await task.filePath())), isTrue);
       expect(statusCallbackCounter, greaterThanOrEqualTo(9)); // min 2 pause
     });
   });
 
-  testWidgets('Local storage for resumeData test', (widgetTester) async {
-    FileDownloader().registerCallbacks(
-        taskStatusCallback: statusCallback,
-        taskProgressCallback: progressCallback);
-    task = DownloadTask(
-        url: urlWithContentLength,
-        filename: defaultFilename,
-        updates: Updates.statusAndProgress,
-        allowPause: true);
-    expect(await FileDownloader().enqueue(task), equals(true));
-    await someProgressCompleter.future;
-    final canResume = await FileDownloader().taskCanResume(task);
-    expect(canResume, isTrue);
-    expect(await FileDownloader().pause(task), isTrue);
-    await Future.delayed(const Duration(milliseconds: 500));
-    final downloader = FileDownloader().downloaderForTesting;
-    final resumeDataMap = await downloader.popUndeliveredData(Undelivered.resumeData);
-    expect(resumeDataMap.length, equals(1));
-    final resumeDataItemMap = resumeDataMap[task.taskId];
-    expect(resumeDataItemMap, isNotNull);
-    print(resumeDataItemMap);
-    final resumeData = ResumeData.fromJsonMap(resumeDataItemMap);
-    expect(resumeData.task, equals(task));
-    expect(await FileDownloader().cancelTaskWithId(task.taskId), isTrue);
+  group('Persistence', () {
+    testWidgets(
+        'Local storage for resumeData, statusUpdates and progressUpdates',
+        (widgetTester) async {
+      if (Platform.isAndroid) {
+        print('This test requires a code change in Kotlin to force '
+            'postOnBackgroundChannel to be false. If that is not done, this '
+            'test will fail.');
+      }
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      task = DownloadTask(
+          url: urlWithContentLength,
+          filename: defaultFilename,
+          updates: Updates.statusAndProgress,
+          allowPause: true);
+      expect(await FileDownloader().enqueue(task), equals(true));
+      await someProgressCompleter.future;
+      final canResume = await FileDownloader().taskCanResume(task);
+      expect(canResume, isTrue);
+      expect(await FileDownloader().pause(task), isTrue);
+      await Future.delayed(const Duration(milliseconds: 500));
+      // clear the stored data
+      final downloader = FileDownloader().downloaderForTesting;
+      await downloader.removeResumeData(task.taskId);
+      await downloader.removePausedTask(task.taskId);
+      await Future.delayed(const Duration(milliseconds: 200));
+      expect((await downloader.getResumeData(task.taskId)), isNull);
+      expect((await downloader.getPausedTask(task.taskId)), isNull);
+      // reset last status and progress, then retrieve 'missing' data
+      lastStatus = TaskStatus.enqueued; // must change to paused
+      final oldLastProgress = lastProgress;
+      lastProgress = -1; // must change to a real value
+      await downloader
+          .retrieveLocallyStoredData(); // triggers status & prog update
+      await Future.delayed(const Duration(milliseconds: 500));
+      expect(lastStatus, equals(TaskStatus.paused));
+      expect(lastProgress, equals(oldLastProgress));
+      expect((await downloader.getResumeData(task.taskId))?.taskId,
+          equals(task.taskId));
+      expect((await downloader.getPausedTask(task.taskId)), equals(task));
+      // confirm all popped data is gone
+      final resumeDataMap =
+          await downloader.popUndeliveredData(Undelivered.resumeData);
+      expect(resumeDataMap.length, equals(0));
+      final statusUpdateMap =
+          await downloader.popUndeliveredData(Undelivered.statusUpdates);
+      expect(statusUpdateMap.length, equals(0));
+      final progressUpdateMap =
+          await downloader.popUndeliveredData(Undelivered.progressUpdates);
+      expect(progressUpdateMap.length, equals(0));
+      expect(await FileDownloader().cancelTaskWithId(task.taskId), isTrue);
+    });
   });
 }
 
