@@ -7,6 +7,7 @@ import android.content.SharedPreferences
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.provider.Contacts.Intents.UI
 import android.util.Log
 import android.webkit.MimeTypeMap
 import androidx.preference.PreferenceManager
@@ -14,9 +15,8 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.Flow
 import java.io.*
 import java.lang.Double.min
 import java.lang.System.currentTimeMillis
@@ -59,40 +59,46 @@ class TaskWorker(
         }
 
         /** Post method message on backgroundChannel with arguments */
-        private fun postOnBackgroundChannel(
+        private suspend fun postOnBackgroundChannel(
             method: String,
             task: Task,
             arg: Any,
             arg2: Any? = null
         ): Boolean {
-            var success = false
-            Handler(Looper.getMainLooper()).post {
-                try {
-                    val argList =
-                        mutableListOf(
-                            taskToJsonString(task),
-                            arg
+            return coroutineScope {
+                val success = CompletableDeferred<Boolean>()
+                Handler(Looper.getMainLooper()).post {
+                    try {
+                        val argList =
+                            mutableListOf(
+                                taskToJsonString(task),
+                                arg
+                            )
+                        if (arg2 != null) {
+                            argList.add(arg2)
+                        }
+                        if (BackgroundDownloaderPlugin.backgroundChannel != null) {
+                            BackgroundDownloaderPlugin.backgroundChannel?.invokeMethod(
+                                method,
+                                argList
+                            )
+                            success.complete(true)
+                        } else {
+                            Log.i(TAG, "Could not post $method to background channel")
+                        }
+                    } catch (e: Exception) {
+                        Log.w(
+                            TAG,
+                            "Exception trying to post $method to background channel: ${e.message}"
                         )
-                    if (arg2 != null) {
-                        argList.add(arg2)
                     }
-                    if (BackgroundDownloaderPlugin.backgroundChannel != null) {
-                        BackgroundDownloaderPlugin.backgroundChannel?.invokeMethod(
-                            method,
-                            argList
-                        )
-                        //TODO success = true
-                    } else {
-                        Log.i(TAG, "Could not post $method to background channel")
+                    if (!success.isCompleted) {
+                        success.complete(false)
                     }
-                } catch (e: Exception) {
-                    Log.w(
-                        TAG,
-                        "Exception trying to post $method to background channel: ${e.message}"
-                    )
                 }
+                return@coroutineScope success.await()
             }
-            return success
+
         }
 
         /**
@@ -102,7 +108,7 @@ class TaskWorker(
          * If the task is finished, processes a final progressUpdate update and removes
          * task from persistent storage
          * */
-        fun processStatusUpdate(
+        suspend fun processStatusUpdate(
             task: Task,
             status: TaskStatus,
             prefs: SharedPreferences
@@ -199,7 +205,7 @@ class TaskWorker(
          *
          * Sends progress update via the background channel to Flutter, if requested
          */
-        fun processProgressUpdate(
+        suspend fun processProgressUpdate(
             task: Task,
             progress: Double,
             prefs: SharedPreferences
@@ -221,7 +227,7 @@ class TaskWorker(
         }
 
         /** Send 'canResume' message via the background channel to Flutter */
-        fun processCanResume(task: Task, canResume: Boolean) {
+        suspend fun processCanResume(task: Task, canResume: Boolean) {
             taskCanResume = canResume
             postOnBackgroundChannel("canResume", task, canResume)
         }
@@ -233,7 +239,7 @@ class TaskWorker(
          * successful, stores the resume data in shared preferences, for later retrieval by
          * the Dart side
          */
-        fun processResumeData(resumeData: ResumeData, prefs: SharedPreferences) {
+        suspend fun processResumeData(resumeData: ResumeData, prefs: SharedPreferences) {
             if (!postOnBackgroundChannel(
                     "resumeData",
                     resumeData.task,
@@ -335,7 +341,7 @@ class TaskWorker(
     }
 
     /** do the task: download or upload a file */
-    private fun doTask(
+    private suspend fun doTask(
         task: Task, isResume: Boolean, tempFilePath: String, requiredStartByte: Long
     ): TaskStatus {
         try {
@@ -361,7 +367,7 @@ class TaskWorker(
     }
 
     /** Make the request to the [connection] and process the [Task] */
-    private fun connectAndProcess(
+    private suspend fun connectAndProcess(
         connection: HttpURLConnection,
         task: Task,
         isResume: Boolean,
@@ -422,7 +428,7 @@ class TaskWorker(
      *
      * Returns the [TaskStatus]
      */
-    private fun processDownload(
+    private suspend fun processDownload(
         connection: HttpURLConnection,
         task: Task,
         filePath: String, isResumeParam: Boolean, tempFilePath: String
@@ -557,7 +563,7 @@ class TaskWorker(
      *
      * Returns the [TaskStatus]
      */
-    private fun processUpload(
+    private suspend fun processUpload(
         connection: HttpURLConnection,
         task: Task,
         filePath: String
@@ -679,7 +685,7 @@ class TaskWorker(
      * Will return [TaskStatus.canceled], [TaskStatus.paused], [TaskStatus.failed],
      * [TaskStatus.complete], or special [TaskStatus.enqueued] which signals the task timed out
      */
-    private fun transferBytes(
+    private suspend fun transferBytes(
         inputStream: InputStream,
         outputStream: OutputStream,
         contentLength: Long,

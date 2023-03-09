@@ -11,6 +11,8 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import java.lang.Long.min
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -48,7 +50,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         /**
          * Enqueue a WorkManager task based on the provided parameters
          */
-        fun doEnqueue(
+        suspend fun doEnqueue(
             context: Context,
             taskJsonMapString: String,
             tempFilePath: String?,
@@ -84,9 +86,8 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
                 if (initialDelayMillis == 0L) {
                     TaskWorker.processStatusUpdate(task, TaskStatus.enqueued, prefs)
                 } else {
-                    Timer().schedule(min(100L, initialDelayMillis)) {
-                        TaskWorker.processStatusUpdate(task, TaskStatus.enqueued, prefs)
-                    }
+                    delay(min(100L, initialDelayMillis))
+                    TaskWorker.processStatusUpdate(task, TaskStatus.enqueued, prefs)
                 }
             } catch (e: Throwable) {
                 Log.w(
@@ -154,18 +155,20 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
 
     /** Processes the methodCall coming from Dart */
     override fun onMethodCall(call: MethodCall, result: Result) {
-        when (call.method) {
-            "enqueue" -> methodEnqueue(call, result)
-            "reset" -> methodReset(call, result)
-            "allTasks" -> methodAllTasks(call, result)
-            "cancelTasksWithIds" -> methodCancelTasksWithIds(call, result)
-            "taskForId" -> methodTaskForId(call, result)
-            "pause" -> methodPause(call, result)
-            "popResumeData" -> methodPopResumeData(result)
-            "popStatusUpdates" -> methodPopStatusUpdates(result)
-            "popProgressUpdates" -> methodPopProgressUpdates(result)
-            "getTaskTimeout" -> methodGetTaskTimeout(result)
-            else -> result.notImplemented()
+        runBlocking {
+            when (call.method) {
+                "enqueue" -> methodEnqueue(call, result)
+                "reset" -> methodReset(call, result)
+                "allTasks" -> methodAllTasks(call, result)
+                "cancelTasksWithIds" -> methodCancelTasksWithIds(call, result)
+                "taskForId" -> methodTaskForId(call, result)
+                "pause" -> methodPause(call, result)
+                "popResumeData" -> methodPopResumeData(result)
+                "popStatusUpdates" -> methodPopStatusUpdates(result)
+                "popProgressUpdates" -> methodPopProgressUpdates(result)
+                "getTaskTimeout" -> methodGetTaskTimeout(result)
+                else -> result.notImplemented()
+            }
         }
     }
 
@@ -174,7 +177,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
      *
      * Returns true if successful, and will emit a status update that the task is running.
      */
-    private fun methodEnqueue(call: MethodCall, result: Result) {
+    private suspend fun methodEnqueue(call: MethodCall, result: Result) {
         val args = call.arguments as List<*>
         val taskJsonMapString = args[0] as String
         val isResume = args.size > 1
@@ -238,7 +241,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
      *
      * Returns true if all cancellations were successful
      */
-    private fun methodCancelTasksWithIds(call: MethodCall, result: Result) {
+    private suspend fun methodCancelTasksWithIds(call: MethodCall, result: Result) {
         val taskIds = call.arguments as List<*>
         val workManager = WorkManager.getInstance(context)
         Log.v(TAG, "Canceling taskIds $taskIds")
