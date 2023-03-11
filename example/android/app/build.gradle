@@ -61,6 +61,7 @@ android {
         }
     }
     buildToolsVersion '33.0.0'
+    namespace 'com.bbflight.background_downloader_example'
 }
 
 flutter {
