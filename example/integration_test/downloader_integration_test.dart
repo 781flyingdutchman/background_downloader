@@ -66,7 +66,7 @@ void progressCallback(Task task, double progress) {
   print('progressCallback for $task with progress $progress');
   lastProgress = progress;
   progressCallbackCounter++;
-  if (!someProgressCompleter.isCompleted && progress > 0.1) {
+  if (!someProgressCompleter.isCompleted && progress > 0) {
     someProgressCompleter.complete();
   }
   if (!progressCallbackCompleter.isCompleted &&
@@ -1568,7 +1568,7 @@ void main() {
       // speed. If the test fails, it is likely because the task completed
       // before the initial pause command, or did not have time for two
       // pause/resume cycles -> shorten interval
-      const interval = Duration(milliseconds: 800);
+      const interval = Duration(milliseconds: 300);
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       task = DownloadTask(
           url: urlWithContentLength,

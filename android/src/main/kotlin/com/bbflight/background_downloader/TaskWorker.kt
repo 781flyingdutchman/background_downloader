@@ -7,7 +7,6 @@ import android.content.SharedPreferences
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.provider.Contacts.Intents.UI
 import android.util.Log
 import android.webkit.MimeTypeMap
 import androidx.preference.PreferenceManager
@@ -16,7 +15,6 @@ import androidx.work.WorkerParameters
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.Flow
 import java.io.*
 import java.lang.Double.min
 import java.lang.System.currentTimeMillis
@@ -58,29 +56,33 @@ class TaskWorker(
             return gson.toJson(task.toJsonMap())
         }
 
-        /** Post method message on backgroundChannel with arguments */
+        /**
+         * Post method message on backgroundChannel with arguments and return true if this was
+         * successful
+         */
         private suspend fun postOnBackgroundChannel(
             method: String,
             task: Task,
             arg: Any,
             arg2: Any? = null
         ): Boolean {
-            return coroutineScope {
+            val runningOnUIThread = Looper.myLooper() == Looper.getMainLooper()
+            return  coroutineScope {
                 val success = CompletableDeferred<Boolean>()
                 Handler(Looper.getMainLooper()).post {
                     try {
                         val argList =
-                            mutableListOf(
-                                taskToJsonString(task),
-                                arg
-                            )
+                                mutableListOf(
+                                        taskToJsonString(task),
+                                        arg
+                                )
                         if (arg2 != null) {
                             argList.add(arg2)
                         }
                         if (BackgroundDownloaderPlugin.backgroundChannel != null) {
                             BackgroundDownloaderPlugin.backgroundChannel?.invokeMethod(
-                                method,
-                                argList
+                                    method,
+                                    argList
                             )
                             success.complete(true)
                         } else {
@@ -88,17 +90,18 @@ class TaskWorker(
                         }
                     } catch (e: Exception) {
                         Log.w(
-                            TAG,
-                            "Exception trying to post $method to background channel: ${e.message}"
+                                TAG,
+                                "Exception trying to post $method to background channel: ${e.message}"
                         )
-                    }
-                    if (!success.isCompleted) {
-                        success.complete(false)
+                    } finally {
+                        if (!success.isCompleted) {
+                            success.complete(false)
+                        }
                     }
                 }
-                return@coroutineScope success.await()
+                // don't wait for result of post if running on UI thread -> true
+                return@coroutineScope if (runningOnUIThread) true else success.await()
             }
-
         }
 
         /**
@@ -112,6 +115,7 @@ class TaskWorker(
             task: Task,
             status: TaskStatus,
             prefs: SharedPreferences
+
         ) {
             val retryNeeded =
                 status == TaskStatus.failed && task.retriesRemaining > 0
@@ -720,7 +724,7 @@ class TaskWorker(
                         0.999
                     )
                 if (contentLength > 0 &&
-                    (bytesTotal < 10000 || (progress - lastProgressUpdate > 0.02 && currentTimeMillis() > nextProgressUpdateTime))
+                    progress - lastProgressUpdate > 0.02 && currentTimeMillis() > nextProgressUpdateTime
                 ) {
                     processProgressUpdate(task, progress, prefs)
                     lastProgressUpdate = progress
