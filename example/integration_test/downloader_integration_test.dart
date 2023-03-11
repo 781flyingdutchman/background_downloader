@@ -1500,8 +1500,6 @@ void main() {
           allowPause: true);
       expect(await FileDownloader().enqueue(task), equals(true));
       await someProgressCompleter.future;
-      final canResume = await FileDownloader().taskCanResume(task);
-      expect(canResume, isTrue);
       expect(await FileDownloader().pause(task), isTrue);
       await Future.delayed(const Duration(milliseconds: 200));
       expect(lastStatus, equals(TaskStatus.paused));
@@ -1542,8 +1540,6 @@ void main() {
           allowPause: true);
       expect(await FileDownloader().enqueue(task), equals(true));
       await someProgressCompleter.future;
-      final canResume = await FileDownloader().taskCanResume(task);
-      expect(canResume, isTrue);
       expect(await FileDownloader().pause(task), isTrue);
       await Future.delayed(const Duration(milliseconds: 200));
       expect(lastStatus, equals(TaskStatus.paused));

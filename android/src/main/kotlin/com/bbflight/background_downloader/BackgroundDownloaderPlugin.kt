@@ -11,13 +11,14 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import java.lang.Long.min
-import java.util.*
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
-import kotlin.concurrent.schedule
 import kotlin.concurrent.write
 
 /**
@@ -80,7 +81,9 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
             val workManager = WorkManager.getInstance(context)
             val operation = workManager.enqueue(requestBuilder.build())
             try {
-                operation.result.get()
+                withContext(Dispatchers.IO) {
+                    operation.result.get()
+                }
                 val prefs = PreferenceManager.getDefaultSharedPreferences(context)
                 if (initialDelayMillis == 0L) {
                     TaskWorker.processStatusUpdate(task, TaskStatus
@@ -249,7 +252,9 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         val workManager = WorkManager.getInstance(context)
         Log.v(TAG, "Canceling taskIds $taskIds")
         for (taskId in taskIds) {
-            val workInfos = workManager.getWorkInfosByTag("taskId=$taskId").get()
+            val workInfos = withContext(Dispatchers.IO) {
+                workManager.getWorkInfosByTag("taskId=$taskId").get()
+            }
             if (workInfos.isEmpty()) {
                 throw IllegalArgumentException("Not found")
             }
@@ -272,7 +277,9 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
             }
             val operation = workManager.cancelAllWorkByTag("taskId=$taskId")
             try {
-                operation.result.get()
+                withContext(Dispatchers.IO) {
+                    operation.result.get()
+                }
             } catch (e: Throwable) {
                 Log.w(TAG, "Unable to cancel taskId $taskId in operation: $operation")
                 result.success(false)
