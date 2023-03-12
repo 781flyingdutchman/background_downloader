@@ -262,6 +262,9 @@ class TaskWorker(
             }
         }
 
+        /**
+         * Store the [item] in preferences under [prefsKey], keyed by [taskId]
+         */
         private fun storeLocally(
                 prefsKey: String,
                 taskId: String,
@@ -269,7 +272,7 @@ class TaskWorker(
                 prefs: SharedPreferences
         ) {
             BackgroundDownloaderPlugin.prefsLock.write {
-                // add the resumeData to a map keyed by taskId
+                // add the data to a map keyed by taskId
                 val jsonString =
                         prefs.getString(prefsKey, "{}")
                 val mapByTaskId = BackgroundDownloaderPlugin.gson.fromJson<Map<String, Any>>(

@@ -8,6 +8,8 @@
 import Foundation
 import os.log
 
+let updatesQueue = DispatchQueue(label: "updatesProcessingQueue")
+
 /// True if this task expects to provide progress updates
 func providesProgressUpdates(task: Task) -> Bool {
     return task.updates == Updates.progressUpdates.rawValue || task.updates == Updates.statusChangeAndProgressUpdates.rawValue
@@ -49,44 +51,43 @@ func isFinalState(status: TaskStatus) -> Bool {
 /// If the task is finished, processes a final progressUpdate update and removes
 /// task from persistent storage
 func processStatusUpdate(task: Task, status: TaskStatus) {
-    guard let channel = getBackgroundChannel() else { return }
-   // Post update if task expects one, or if failed and retry is needed
-   let retryNeeded = status == TaskStatus.failed && task.retriesRemaining > 0
-   // if task is in final state, process a final progressUpdate
-   // A 'failed' progress update is only provided if
-   // a retry is not needed: if it is needed, a `waitingToRetry` progress update
-   // will be generated on the Dart side
-   if isFinalState(status: status) {
-       switch (status) {
-       case .complete:
-           processProgressUpdate(task: task, progress: 1.0)
-       case .failed:
-           if !retryNeeded {
-               processProgressUpdate(task: task, progress: -1.0)
-           }
-       case .canceled:
-           processProgressUpdate(task: task, progress: -2.0)
-       case .notFound:
-           processProgressUpdate(task: task, progress: -3.0)
-       default:
-           break
-       }
-   }
-   if providesStatusUpdates(downloadTask: task) || retryNeeded {
-       let jsonString = jsonStringFor(task: task)
-       if (jsonString != nil)
-       {
-           DispatchQueue.main.async {
-               channel.invokeMethod("statusUpdate", arguments: [jsonString!, status.rawValue])
-           }
-       }
-   }
-   // if task is in final state, remove from persistent storage
-   if isFinalState(status: status) {
-       Downloader.nativeToTaskMap.removeValue(forKey: task.taskId)
-       Downloader.lastProgressUpdate.removeValue(forKey: task.taskId)
-       Downloader.nextProgressUpdateTime.removeValue(forKey: task.taskId)
-   }
+    // Post update if task expects one, or if failed and retry is needed
+    let retryNeeded = status == TaskStatus.failed && task.retriesRemaining > 0
+    // if task is in final state, process a final progressUpdate
+    // A 'failed' progress update is only provided if
+    // a retry is not needed: if it is needed, a `waitingToRetry` progress update
+    // will be generated on the Dart side
+    if isFinalState(status: status) {
+        switch (status) {
+        case .complete:
+            processProgressUpdate(task: task, progress: 1.0)
+        case .failed:
+            if !retryNeeded {
+                processProgressUpdate(task: task, progress: -1.0)
+            }
+        case .canceled:
+            processProgressUpdate(task: task, progress: -2.0)
+        case .notFound:
+            processProgressUpdate(task: task, progress: -3.0)
+        default:
+            break
+        }
+        // remove from persistent storage
+        Downloader.lastProgressUpdate.removeValue(forKey: task.taskId)
+        Downloader.nextProgressUpdateTime.removeValue(forKey: task.taskId)
+    }
+    if providesStatusUpdates(downloadTask: task) || retryNeeded {
+        if !postOnBackgroundChannel(method: "statusUpdate", task: task, arg: status.rawValue) {
+            // store update locally as a merged task/status JSON string
+            guard let jsonData = try? JSONEncoder().encode(task),
+                  var jsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
+            else { return }
+            jsonObject["statusUpdate"] = status.rawValue
+            guard let newJsonData = try? JSONSerialization.data(withJSONObject: jsonObject),
+                  let jsonString = String(data: newJsonData, encoding: .utf8) else { return }
+            storeLocally(prefsKey: Downloader.keyStatusUpdateMap, taskId: task.taskId, item: jsonString)
+        }
+    }
 }
 
 
@@ -94,14 +95,16 @@ func processStatusUpdate(task: Task, status: TaskStatus) {
 ///
 /// Sends progress update via the background channel to Dart, if requested
 func processProgressUpdate(task: Task, progress: Double) {
-    guard let channel = getBackgroundChannel() else { return }
     if providesProgressUpdates(task: task) {
-        let jsonString = jsonStringFor(task: task)
-        if (jsonString != nil)
-        {
-            DispatchQueue.main.async {
-                channel.invokeMethod("progressUpdate", arguments: [jsonString!, progress])
-            }
+        if (!postOnBackgroundChannel(method: "progressUpdate", task: task, arg: progress)) {
+            // store update locally as a merged task/progress JSON string
+            guard let jsonData = try? JSONEncoder().encode(task),
+                  var jsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
+            else { return }
+            jsonObject["progressUpdate"] = progress
+            guard let newJsonData = try? JSONSerialization.data(withJSONObject: jsonObject),
+                  let jsonString = String(data: newJsonData, encoding: .utf8) else { return }
+            storeLocally(prefsKey: Downloader.keyStatusUpdateMap, taskId: task.taskId, item: jsonString)
         }
     }
 }
@@ -137,6 +140,58 @@ func getBackgroundChannel() -> FlutterMethodChannel? {
     }
     return channel
 }
+
+/// Post method message on backgroundChannel with arguments and return true if this was successful
+func postOnBackgroundChannel(method: String, task:Task, arg: Any, arg2: Any? = nil) -> Bool {
+    guard let channel = Downloader.backgroundChannel else {
+        os_log("Could not find background channel", log: log, type: .error)
+        return false
+    }
+    guard let jsonString = jsonStringFor(task: task) else {
+        os_log("Could not convert task to JSON", log: log, type: .error)
+        return false
+    }
+    var argsList = [jsonString, arg]
+    if (arg2 != nil) {
+        argsList.append(arg2!)
+    }
+    if Thread.isMainThread {
+        DispatchQueue.main.async {
+            channel.invokeMethod(method, arguments: argsList)
+        }
+        return true
+    }
+    var success = false
+    updatesQueue.sync {
+        os_log("Starting postOnBG", log: log, type: .error)
+        let dispatchGroup = DispatchGroup()
+        dispatchGroup.enter()
+        os_log("Before post async", log: log, type: .error)
+        DispatchQueue.main.async {
+            channel.invokeMethod(method, arguments: argsList, result: {(r: Any?) -> () in
+                os_log("result async", log: log, type: .error)
+                success = !(r is FlutterError)
+                os_log("Set success not in  main thread: %d", log: log, type: .info, success)
+                dispatchGroup.leave()
+            })
+        }
+        os_log("Before wait", log: log, type: .error)
+        dispatchGroup.wait()
+    }
+    os_log("Returning success: %d", log: log, type: .info, success)
+    return success
+}
+
+/// Store the [item] in preferences under [prefsKey], keyed by [taskId]
+func storeLocally(prefsKey: String, taskId: String,
+                  item: String) {
+    os_log("Storing locally: %@", log: log, type: .info, item)
+    let defaults = UserDefaults.standard
+    var map: [String:Any] = defaults.dictionary(forKey: prefsKey) ?? [:]
+    map[taskId] = item
+    defaults.set(map, forKey: prefsKey)
+}
+
 
 
 /// Returns a JSON string for this Task, or nil

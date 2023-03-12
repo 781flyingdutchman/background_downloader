@@ -16,10 +16,13 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     public static var sessionIdentifier = "com.bbflight.background_downloader.Downloader"
     public static var flutterPluginRegistrantCallback: FlutterPluginRegistrantCallback?
     public static var backgroundChannel: FlutterMethodChannel?
+    public static var keyResumeDataMap = "com.bbflight.background_downloader.resumeDataMap"
+    public static var keyStatusUpdateMap = "com.bbflight.background_downloader.statusUpdateMap"
+    public static var keyProgressUpdateMap = "com.bbflight.background_downloader.progressUpdateMap"
+
     
     private static var backgroundCompletionHandler: (() -> Void)?
     private static var urlSession: URLSession?
-    static var nativeToTaskMap  = [String: Task]()
     static var lastProgressUpdate = [String:Double]()
     static var nextProgressUpdateTime = [String:Date]()
     static var uploaderForUrlSessionTaskIdentifier = [Int:Uploader]() // maps from UrlSessionTask TaskIdentifier
