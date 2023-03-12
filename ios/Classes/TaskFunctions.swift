@@ -81,7 +81,9 @@ func processStatusUpdate(task: Task, status: TaskStatus) {
             // store update locally as a merged task/status JSON string
             guard let jsonData = try? JSONEncoder().encode(task),
                   var jsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
-            else { return }
+            else {
+                os_log("Could not store status update locally", log: log, type: .debug)
+                return }
             jsonObject["statusUpdate"] = status.rawValue
             guard let newJsonData = try? JSONSerialization.data(withJSONObject: jsonObject),
                   let jsonString = String(data: newJsonData, encoding: .utf8) else { return }
@@ -100,11 +102,13 @@ func processProgressUpdate(task: Task, progress: Double) {
             // store update locally as a merged task/progress JSON string
             guard let jsonData = try? JSONEncoder().encode(task),
                   var jsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
-            else { return }
+            else {
+                os_log("Could not store progress update locally", log: log, type: .info)
+                return }
             jsonObject["progressUpdate"] = progress
             guard let newJsonData = try? JSONSerialization.data(withJSONObject: jsonObject),
                   let jsonString = String(data: newJsonData, encoding: .utf8) else { return }
-            storeLocally(prefsKey: Downloader.keyStatusUpdateMap, taskId: task.taskId, item: jsonString)
+            storeLocally(prefsKey: Downloader.keyProgressUpdateMap, taskId: task.taskId, item: jsonString)
         }
     }
 }
@@ -113,9 +117,8 @@ func processProgressUpdate(task: Task, progress: Double) {
 ///
 /// Sends the data via the background channel to Dart
 func processCanResume(task: Task, taskCanResume: Bool) {
-    guard let channel = getBackgroundChannel() else { return }
-    DispatchQueue.main.async {
-        channel.invokeMethod("canResume", arguments: [jsonStringFor(task: task) ?? "", taskCanResume])
+    if !postOnBackgroundChannel(method: "canResume", task: task, arg: taskCanResume) {
+        os_log("Could not post CanResume", log: log, type: .info)
     }
 }
 
@@ -124,10 +127,25 @@ func processCanResume(task: Task, taskCanResume: Bool) {
 /// Returns true if successful.
 /// Sends the data via the background channel to Dart
 func processResumeData(task: Task, resumeData: Data) -> Bool {
-    guard let channel = getBackgroundChannel() else { return false }
     let resumeDataAsBase64String = resumeData.base64EncodedString()
-    DispatchQueue.main.async {
-        channel.invokeMethod("resumeData", arguments: [jsonStringFor(task: task) ?? "", resumeDataAsBase64String, 0 as Int64])
+    os_log("resume data", log: log, type: .info)
+    if !postOnBackgroundChannel(method: "resumeData", task: task, arg: resumeDataAsBase64String, arg2: 0 as Int64) {
+        // store resume data locally
+        guard let jsonData = try? JSONEncoder().encode(task),
+              var taskJsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
+        else {
+            os_log("Could not store resume data locally", log: log, type: .info)
+            return false}
+        let resumeDataMap = [
+            "task": taskJsonObject,
+            "data": resumeDataAsBase64String,
+            "requiredStartByte": 0
+        ] as [String : Any]
+        guard let newJsonData = try? JSONSerialization.data(withJSONObject: resumeDataMap),
+              let jsonString = String(data: newJsonData, encoding: .utf8) else {
+            os_log("Could not store resume data locally b/c encoding", log: log, type: .info)
+            return false }
+        storeLocally(prefsKey: Downloader.keyResumeDataMap, taskId: task.taskId, item: jsonString)
     }
     return true
 }
@@ -143,6 +161,7 @@ func getBackgroundChannel() -> FlutterMethodChannel? {
 
 /// Post method message on backgroundChannel with arguments and return true if this was successful
 func postOnBackgroundChannel(method: String, task:Task, arg: Any, arg2: Any? = nil) -> Bool {
+    return false //TODO remove
     guard let channel = Downloader.backgroundChannel else {
         os_log("Could not find background channel", log: log, type: .error)
         return false
@@ -191,6 +210,7 @@ func storeLocally(prefsKey: String, taskId: String,
     map[taskId] = item
     defaults.set(map, forKey: prefsKey)
 }
+
 
 
 

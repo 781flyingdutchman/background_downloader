@@ -218,7 +218,9 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         result(jsonStringFor(task: task))
     }
 
-    /// Pauses Task for this taskId, or nil
+    /// Pauses Task for this taskId. Returns true of pause likely successful, false otherwise
+    ///
+    /// If pause is not successful, task will be canceled (attempted)
     private func methodPause(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let taskId = call.arguments as! String
         Downloader.urlSession = Downloader.urlSession ?? createUrlSession()
@@ -226,7 +228,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
               let task = await getTaskWithId(taskId: taskId),
               let resumeData = await urlSessionTask.cancelByProducingResumeData()
         else {
-            os_log("Something is nil", log: log, type: .info)
+            os_log("Could not pause task - likely not enqueued yet", log: log, type: .info)
             result(false)
             return
         }
