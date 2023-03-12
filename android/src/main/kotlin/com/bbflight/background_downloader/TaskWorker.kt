@@ -84,7 +84,9 @@ class TaskWorker(
                                     method,
                                     argList
                             )
-                            success.complete(true)
+                            if (!BackgroundDownloaderPlugin.forceFailPostOnBackgroundChannel) {
+                                success.complete(true)
+                            }
                         } else {
                             Log.i(TAG, "Could not post $method to background channel")
                         }

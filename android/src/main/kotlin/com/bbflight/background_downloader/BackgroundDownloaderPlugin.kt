@@ -43,6 +43,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         var pausedTaskIds = HashSet<String>() // <taskId>
         var backgroundChannel: MethodChannel? = null
         var backgroundChannelCounter = 0  // reference counter
+        var forceFailPostOnBackgroundChannel = false
         val prefsLock = ReentrantReadWriteLock()
         val gson = Gson()
         val jsonMapType = object : TypeToken<Map<String, Any>>() {}.type
@@ -171,6 +172,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
                 "popStatusUpdates" -> methodPopStatusUpdates(result)
                 "popProgressUpdates" -> methodPopProgressUpdates(result)
                 "getTaskTimeout" -> methodGetTaskTimeout(result)
+                "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(call, result)
                 else -> result.notImplemented()
             }
         }
@@ -342,7 +344,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     }
 
     /**
-     * Pops and return locally stored map for this key
+     * Pops and returns locally stored map for this key as a JSON String, via the FlutterResult
      */
     private fun popLocalStorage(prefsKey: String, result: Result) {
         prefsLock.write {
@@ -357,9 +359,21 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
 
     /**
      * Returns the [TaskWorker] timeout value in milliseconds
+     *
+     * For testing only
      */
     private fun methodGetTaskTimeout(result: Result) {
         result.success(TaskWorker.taskTimeoutMillis)
+    }
+
+    /**
+     * Sets or resets flag to force failing posting on background channel
+     *
+     * For testing only
+     */
+    private fun methodForceFailPostOnBackgroundChannel(call: MethodCall, result: Result) {
+        forceFailPostOnBackgroundChannel = call.arguments as Boolean
+        result.success(null)
     }
 }
 
