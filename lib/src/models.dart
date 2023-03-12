@@ -722,3 +722,6 @@ class ResumeData {
 
 /// Types of undelivered data that can be requested
 enum Undelivered { resumeData, statusUpdates, progressUpdates }
+
+/// SCoped storage destinations for Android
+enum ScopedStorage { files, downloads, images, video, audio, external }

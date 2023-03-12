@@ -457,6 +457,11 @@ class FileDownloader {
   /// with the main Isolate
   Future<http.Response> request(Request request) => compute(doRequest, request);
 
+  /// Android only: move downloaded file represented by [task] to scoped
+  /// storage [destination]
+  Future<bool> moveToScopedStorage(Task task, ScopedStorage destination) =>
+  _downloader.moveToScopedStorage(task, destination);
+
   /// Destroy the [FileDownloader]. Subsequent use requires initialization
   void destroy() {
     _batches.clear();

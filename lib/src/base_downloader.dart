@@ -329,6 +329,14 @@ abstract class BaseDownloader {
   /// Retrieve data that was not delivered to Dart
   Future<Map<String, dynamic>> popUndeliveredData(Undelivered dataType);
 
+  /// Android only: move downloaded file represented by [task] to scoped
+  /// storage [destination]
+  Future<bool> moveToScopedStorage(Task task, ScopedStorage destination) async {
+    assert(Platform.isAndroid,
+        'moveToScopedStorage should only be called on Android');
+    return false;
+  }
+
   /// Clear pause and resume info associated with this task
   void _clearPauseResumeInfo(Task task) {
     canResumeTask.remove(task);

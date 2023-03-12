@@ -26,8 +26,6 @@ import java.nio.file.StandardCopyOption
 import java.util.*
 import kotlin.concurrent.schedule
 import kotlin.concurrent.write
-import kotlin.io.path.Path
-import kotlin.io.path.pathString
 import kotlin.random.Random
 
 
@@ -385,7 +383,7 @@ class TaskWorker(
             isResume: Boolean,
             tempFilePath: String
     ): TaskStatus {
-        val filePath = pathToFileForTask(task)
+        val filePath = task.pathToFile(applicationContext)
         try {
             if (task.isDownloadTask()) {
                 if (task.post != null) {
@@ -797,20 +795,6 @@ class TaskWorker(
             return false
         }
         return true
-    }
-
-    /** Returns full path (String) to the file to be downloaded */
-    private fun pathToFileForTask(task: Task): String {
-        val baseDirPath = when (task.baseDirectory) {
-            BaseDirectory.applicationDocuments -> Path(
-                    applicationContext.dataDir.path,
-                    "app_flutter"
-            ).pathString
-            BaseDirectory.temporary -> applicationContext.cacheDir.path
-            BaseDirectory.applicationSupport -> applicationContext.filesDir.path
-        }
-        val path = Path(baseDirPath, task.directory)
-        return Path(path.pathString, task.filename).pathString
     }
 
     private fun deleteTempFile(tempFilePath: String) {

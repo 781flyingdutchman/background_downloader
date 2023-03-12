@@ -153,6 +153,17 @@ class NativeDownloader extends BaseDownloader {
   }
 
   @override
+  Future<bool> moveToScopedStorage(Task task, ScopedStorage destination) async {
+    assert(Platform.isAndroid,
+        'moveToScopedStorage should only be called on Android');
+    if (Platform.isAndroid) {
+      return await _channel.invokeMethod(
+          'moveToScopedStorage', [jsonEncode(task.toJsonMap()), destination.index]);
+    }
+    return false;
+  }
+
+  @override
   Future<Duration> getTaskTimeout() async {
     if (Platform.isAndroid) {
       final timeoutMillis =
