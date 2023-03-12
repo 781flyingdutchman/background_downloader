@@ -162,4 +162,9 @@ class NativeDownloader extends BaseDownloader {
     }
     return const Duration(hours: 4); // on iOS, resource timeout
   }
+
+  @override
+  Future<void> setForceFailPostOnBackgroundChannel(bool value) async {
+    await _channel.invokeMethod('forceFailPostOnBackgroundChannel', value);
+  }
 }

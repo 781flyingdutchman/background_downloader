@@ -222,6 +222,12 @@ class DesktopDownloader extends BaseDownloader {
   @override
   Future<Duration> getTaskTimeout() => Future.value(const Duration(days: 1));
 
+
+  @override
+  Future<void> setForceFailPostOnBackgroundChannel(bool value) {
+    throw UnimplementedError();
+  }
+
   @override
   void destroy() {
     super.destroy();

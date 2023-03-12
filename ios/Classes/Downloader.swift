@@ -20,7 +20,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     public static var keyStatusUpdateMap = "com.bbflight.background_downloader.statusUpdateMap"
     public static var keyProgressUpdateMap = "com.bbflight.background_downloader.progressUpdateMap"
 
-    
+    public static var forceFailPostOnBackgroundChannel = false
     private static var backgroundCompletionHandler: (() -> Void)?
     private static var urlSession: URLSession?
     static var lastProgressUpdate = [String:Double]()
@@ -65,6 +65,14 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
             _Concurrency.Task {
                 await methodPause(call: call, result: result)
             }
+        case "popResumeData":
+            methodPopResumeData(result: result)
+        case "popStatusUpdates":
+            methodPopStatusUpdates(result: result)
+        case "popProgressUpdates":
+            methodPopProgressUpdates(result: result)
+        case "forceFailPostOnBackgroundChannel":
+            methodForceFailPostOnBackgroundChannel(call: call, result: result)
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -234,6 +242,52 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         }
         result(processResumeData(task: task, resumeData: resumeData))
     }
+    
+    
+    /// Returns a JSON String of a map of [ResumeData], keyed by taskId, that has been stored
+    /// in local shared preferences because they could not be delivered to the Dart side.
+    /// Local storage of this map is then cleared
+    private func methodPopResumeData(result: @escaping FlutterResult) {
+        popLocalStorage(key: Downloader.keyResumeDataMap, result: result)
+    }
+    
+    /// Returns a JSON String of a map of status updates, keyed by taskId, that has been stored
+    /// in local shared preferences because they could not be delivered to the Dart side.
+    /// Local storage of this map is then cleared
+    private func methodPopStatusUpdates(result: @escaping FlutterResult) {
+        popLocalStorage(key: Downloader.keyStatusUpdateMap, result: result)
+    }
+
+    /// Returns a JSON String of a map of progress updates, keyed by taskId, that has been stored
+    /// in local shared preferences because they could not be delivered to the Dart side.
+    /// Local storage of this map is then cleared
+    private func methodPopProgressUpdates(result: @escaping FlutterResult) {
+        popLocalStorage(key: Downloader.keyProgressUpdateMap, result: result)
+    }
+
+    /// Pops and returns locally stored map for this key as a JSON String, via the FlutterResult
+    private func popLocalStorage(key: String, result: @escaping FlutterResult) {
+        let defaults = UserDefaults.standard
+        guard let map = defaults.dictionary(forKey: key),
+              let jsonData = try? JSONSerialization.data(withJSONObject: map),
+              let jsonString = String(data: jsonData, encoding: .utf8) else {
+            os_log("Could not pop local storage for key %@", log: log, type: .info, key)
+            result("{}")
+            return
+        }
+        defaults.removeObject(forKey: key)
+        result(jsonString)
+        return
+    }
+    
+    /// Sets or resets flag to force failing posting on background channel
+    ///
+    /// For testing only
+    private func methodForceFailPostOnBackgroundChannel(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        Downloader.forceFailPostOnBackgroundChannel = call.arguments as! Bool
+        result(nil)
+    }
+
     
     //MARK: Helpers for Task and urlSessionTask
     

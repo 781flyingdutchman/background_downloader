@@ -346,6 +346,10 @@ abstract class BaseDownloader {
   /// Get the duration for a task to timeout - Android only, for testing
   @visibleForTesting
   Future<Duration> getTaskTimeout();
+
+  /// Set forceFailPostOnBackgroundChannel for native downloader
+  @visibleForTesting
+  Future<void> setForceFailPostOnBackgroundChannel(bool value);
   
   /// Destroy - clears callbacks, updates stream and retry queue
   ///

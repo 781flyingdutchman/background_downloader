@@ -84,10 +84,8 @@ func processStatusUpdate(task: Task, status: TaskStatus) {
             else {
                 os_log("Could not store status update locally", log: log, type: .debug)
                 return }
-            jsonObject["statusUpdate"] = status.rawValue
-            guard let newJsonData = try? JSONSerialization.data(withJSONObject: jsonObject),
-                  let jsonString = String(data: newJsonData, encoding: .utf8) else { return }
-            storeLocally(prefsKey: Downloader.keyStatusUpdateMap, taskId: task.taskId, item: jsonString)
+            jsonObject["taskStatus"] = status.rawValue
+            storeLocally(prefsKey: Downloader.keyStatusUpdateMap, taskId: task.taskId, item: jsonObject)
         }
     }
 }
@@ -105,10 +103,8 @@ func processProgressUpdate(task: Task, progress: Double) {
             else {
                 os_log("Could not store progress update locally", log: log, type: .info)
                 return }
-            jsonObject["progressUpdate"] = progress
-            guard let newJsonData = try? JSONSerialization.data(withJSONObject: jsonObject),
-                  let jsonString = String(data: newJsonData, encoding: .utf8) else { return }
-            storeLocally(prefsKey: Downloader.keyProgressUpdateMap, taskId: task.taskId, item: jsonString)
+            jsonObject["progress"] = progress
+            storeLocally(prefsKey: Downloader.keyProgressUpdateMap, taskId: task.taskId, item: jsonObject)
         }
     }
 }
@@ -128,7 +124,6 @@ func processCanResume(task: Task, taskCanResume: Bool) {
 /// Sends the data via the background channel to Dart
 func processResumeData(task: Task, resumeData: Data) -> Bool {
     let resumeDataAsBase64String = resumeData.base64EncodedString()
-    os_log("resume data", log: log, type: .info)
     if !postOnBackgroundChannel(method: "resumeData", task: task, arg: resumeDataAsBase64String, arg2: 0 as Int64) {
         // store resume data locally
         guard let jsonData = try? JSONEncoder().encode(task),
@@ -141,11 +136,7 @@ func processResumeData(task: Task, resumeData: Data) -> Bool {
             "data": resumeDataAsBase64String,
             "requiredStartByte": 0
         ] as [String : Any]
-        guard let newJsonData = try? JSONSerialization.data(withJSONObject: resumeDataMap),
-              let jsonString = String(data: newJsonData, encoding: .utf8) else {
-            os_log("Could not store resume data locally b/c encoding", log: log, type: .info)
-            return false }
-        storeLocally(prefsKey: Downloader.keyResumeDataMap, taskId: task.taskId, item: jsonString)
+        storeLocally(prefsKey: Downloader.keyResumeDataMap, taskId: task.taskId, item: resumeDataMap)
     }
     return true
 }
@@ -161,7 +152,6 @@ func getBackgroundChannel() -> FlutterMethodChannel? {
 
 /// Post method message on backgroundChannel with arguments and return true if this was successful
 func postOnBackgroundChannel(method: String, task:Task, arg: Any, arg2: Any? = nil) -> Bool {
-    return false //TODO remove
     guard let channel = Downloader.backgroundChannel else {
         os_log("Could not find background channel", log: log, type: .error)
         return false
@@ -182,29 +172,25 @@ func postOnBackgroundChannel(method: String, task:Task, arg: Any, arg2: Any? = n
     }
     var success = false
     updatesQueue.sync {
-        os_log("Starting postOnBG", log: log, type: .error)
         let dispatchGroup = DispatchGroup()
         dispatchGroup.enter()
-        os_log("Before post async", log: log, type: .error)
         DispatchQueue.main.async {
             channel.invokeMethod(method, arguments: argsList, result: {(r: Any?) -> () in
-                os_log("result async", log: log, type: .error)
                 success = !(r is FlutterError)
-                os_log("Set success not in  main thread: %d", log: log, type: .info, success)
+                if Downloader.forceFailPostOnBackgroundChannel{
+                    success = false
+                }
                 dispatchGroup.leave()
             })
         }
-        os_log("Before wait", log: log, type: .error)
         dispatchGroup.wait()
     }
-    os_log("Returning success: %d", log: log, type: .info, success)
     return success
 }
 
 /// Store the [item] in preferences under [prefsKey], keyed by [taskId]
 func storeLocally(prefsKey: String, taskId: String,
-                  item: String) {
-    os_log("Storing locally: %@", log: log, type: .info, item)
+                  item: [String:Any]) {
     let defaults = UserDefaults.standard
     var map: [String:Any] = defaults.dictionary(forKey: prefsKey) ?? [:]
     map[taskId] = item

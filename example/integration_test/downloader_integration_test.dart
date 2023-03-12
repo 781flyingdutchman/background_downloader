@@ -112,6 +112,9 @@ void main() {
 
   tearDown(() async {
     FileDownloader().destroy();
+    await FileDownloader()
+        .downloaderForTesting
+        .setForceFailPostOnBackgroundChannel(false);
   });
 
   group('Initialization', () {
@@ -1593,55 +1596,53 @@ void main() {
     testWidgets(
         'Local storage for resumeData, statusUpdates and progressUpdates',
         (widgetTester) async {
-      if (Platform.isAndroid) {
-        print('This test requires a code change in Kotlin to force '
-            'postOnBackgroundChannel to be false. If that is not done, this '
-            'test will fail.');
+      if (Platform.isAndroid || Platform.isIOS) {
+        final downloader = FileDownloader().downloaderForTesting;
+        await downloader.setForceFailPostOnBackgroundChannel(true);
+        FileDownloader().registerCallbacks(
+            taskStatusCallback: statusCallback,
+            taskProgressCallback: progressCallback);
+        task = DownloadTask(
+            url: urlWithContentLength,
+            filename: defaultFilename,
+            updates: Updates.statusAndProgress,
+            allowPause: true);
+        expect(await FileDownloader().enqueue(task), equals(true));
+        await someProgressCompleter.future;
+        final canResume = await FileDownloader().taskCanResume(task);
+        expect(canResume, isTrue);
+        expect(await FileDownloader().pause(task), isTrue);
+        await Future.delayed(const Duration(milliseconds: 500));
+        // clear the stored data
+        await downloader.removeResumeData(task.taskId);
+        await downloader.removePausedTask(task.taskId);
+        await Future.delayed(const Duration(milliseconds: 200));
+        expect((await downloader.getResumeData(task.taskId)), isNull);
+        expect((await downloader.getPausedTask(task.taskId)), isNull);
+        // reset last status and progress, then retrieve 'missing' data
+        lastStatus = TaskStatus.enqueued; // must change to paused
+        final oldLastProgress = lastProgress;
+        lastProgress = -1; // must change to a real value
+        await downloader
+            .retrieveLocallyStoredData(); // triggers status & prog update
+        await Future.delayed(const Duration(milliseconds: 500));
+        expect(lastStatus, equals(TaskStatus.paused));
+        expect(lastProgress, equals(oldLastProgress));
+        expect((await downloader.getResumeData(task.taskId))?.taskId,
+            equals(task.taskId));
+        expect((await downloader.getPausedTask(task.taskId)), equals(task));
+        // confirm all popped data is gone
+        final resumeDataMap =
+            await downloader.popUndeliveredData(Undelivered.resumeData);
+        expect(resumeDataMap.length, equals(0));
+        final statusUpdateMap =
+            await downloader.popUndeliveredData(Undelivered.statusUpdates);
+        expect(statusUpdateMap.length, equals(0));
+        final progressUpdateMap =
+            await downloader.popUndeliveredData(Undelivered.progressUpdates);
+        expect(progressUpdateMap.length, equals(0));
+        expect(await FileDownloader().cancelTaskWithId(task.taskId), isTrue);
       }
-      FileDownloader().registerCallbacks(
-          taskStatusCallback: statusCallback,
-          taskProgressCallback: progressCallback);
-      task = DownloadTask(
-          url: urlWithContentLength,
-          filename: defaultFilename,
-          updates: Updates.statusAndProgress,
-          allowPause: true);
-      expect(await FileDownloader().enqueue(task), equals(true));
-      await someProgressCompleter.future;
-      final canResume = await FileDownloader().taskCanResume(task);
-      expect(canResume, isTrue);
-      expect(await FileDownloader().pause(task), isTrue);
-      await Future.delayed(const Duration(milliseconds: 500));
-      // clear the stored data
-      final downloader = FileDownloader().downloaderForTesting;
-      await downloader.removeResumeData(task.taskId);
-      await downloader.removePausedTask(task.taskId);
-      await Future.delayed(const Duration(milliseconds: 200));
-      expect((await downloader.getResumeData(task.taskId)), isNull);
-      expect((await downloader.getPausedTask(task.taskId)), isNull);
-      // reset last status and progress, then retrieve 'missing' data
-      lastStatus = TaskStatus.enqueued; // must change to paused
-      final oldLastProgress = lastProgress;
-      lastProgress = -1; // must change to a real value
-      await downloader
-          .retrieveLocallyStoredData(); // triggers status & prog update
-      await Future.delayed(const Duration(milliseconds: 500));
-      expect(lastStatus, equals(TaskStatus.paused));
-      expect(lastProgress, equals(oldLastProgress));
-      expect((await downloader.getResumeData(task.taskId))?.taskId,
-          equals(task.taskId));
-      expect((await downloader.getPausedTask(task.taskId)), equals(task));
-      // confirm all popped data is gone
-      final resumeDataMap =
-          await downloader.popUndeliveredData(Undelivered.resumeData);
-      expect(resumeDataMap.length, equals(0));
-      final statusUpdateMap =
-          await downloader.popUndeliveredData(Undelivered.statusUpdates);
-      expect(statusUpdateMap.length, equals(0));
-      final progressUpdateMap =
-          await downloader.popUndeliveredData(Undelivered.progressUpdates);
-      expect(progressUpdateMap.length, equals(0));
-      expect(await FileDownloader().cancelTaskWithId(task.taskId), isTrue);
     });
   });
 }
