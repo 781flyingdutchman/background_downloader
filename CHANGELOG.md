@@ -1,3 +1,10 @@
+## 5.2.0
+
+Better persistence for tasks that execute while the app is suspended by the operating system.  
+To ensure your callbacks or listener capture events that may have happened when your app was 
+suspended in the background, call `FileDownloader().resumeFromBackground()` right after registering 
+your callbacks or listener.
+
 ## 5.1.0
 
 Previously, Android file downloads were limited to 8 minutes. Now, long downloads are possible provided the `DownloadTask.allowPause` field is set to true. Just before the download times out, the downloader will pause and then resume the task in a new worker, effectively resetting the 9 minute clock.  As a result, the download will eventually complete

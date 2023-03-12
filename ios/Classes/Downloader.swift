@@ -4,14 +4,10 @@ import BackgroundTasks
 import os.log
 import MobileCoreServices
 
-
-
-
 let log = OSLog.init(subsystem: "FileDownloaderPlugin", category: "Downloader")
 
-
 public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDelegate, URLSessionDelegate, URLSessionDownloadDelegate {
-
+    
     private static var resourceTimeout = 4 * 60 * 60.0 // in seconds
     public static var sessionIdentifier = "com.bbflight.background_downloader.Downloader"
     public static var flutterPluginRegistrantCallback: FlutterPluginRegistrantCallback?
@@ -19,7 +15,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     public static var keyResumeDataMap = "com.bbflight.background_downloader.resumeDataMap"
     public static var keyStatusUpdateMap = "com.bbflight.background_downloader.statusUpdateMap"
     public static var keyProgressUpdateMap = "com.bbflight.background_downloader.progressUpdateMap"
-
+    
     public static var forceFailPostOnBackgroundChannel = false
     private static var backgroundCompletionHandler: (() -> Void)?
     private static var urlSession: URLSession?
@@ -77,8 +73,6 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
             result(FlutterMethodNotImplemented)
         }
     }
-    
-    
     
     /// Starts the download for one task, passed as map of values representing a Task
     ///
@@ -197,10 +191,9 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
             return
         }
         let tasksAsListOfJsonStrings = urlSessionTasks.filter({ $0.state == .running || $0.state == .suspended }).map({ getTaskFrom(urlSessionTask: $0)}).filter({ $0?.group == group }).map({ jsonStringFor(task: $0!) }).filter({ $0 != nil }) as! [String]
-            os_log("Returning %d unfinished tasks", log: log, type: .info, tasksAsListOfJsonStrings.count)
-            result(tasksAsListOfJsonStrings)
+        os_log("Returning %d unfinished tasks", log: log, type: .info, tasksAsListOfJsonStrings.count)
+        result(tasksAsListOfJsonStrings)
     }
-    
     
     /// Cancels ongoing tasks whose taskId is in the list provided with this call
     ///
@@ -225,7 +218,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         }
         result(jsonStringFor(task: task))
     }
-
+    
     /// Pauses Task for this taskId. Returns true of pause likely successful, false otherwise
     ///
     /// If pause is not successful, task will be canceled (attempted)
@@ -243,7 +236,6 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         result(processResumeData(task: task, resumeData: resumeData))
     }
     
-    
     /// Returns a JSON String of a map of [ResumeData], keyed by taskId, that has been stored
     /// in local shared preferences because they could not be delivered to the Dart side.
     /// Local storage of this map is then cleared
@@ -257,14 +249,14 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
     private func methodPopStatusUpdates(result: @escaping FlutterResult) {
         popLocalStorage(key: Downloader.keyStatusUpdateMap, result: result)
     }
-
+    
     /// Returns a JSON String of a map of progress updates, keyed by taskId, that has been stored
     /// in local shared preferences because they could not be delivered to the Dart side.
     /// Local storage of this map is then cleared
     private func methodPopProgressUpdates(result: @escaping FlutterResult) {
         popLocalStorage(key: Downloader.keyProgressUpdateMap, result: result)
     }
-
+    
     /// Pops and returns locally stored map for this key as a JSON String, via the FlutterResult
     private func popLocalStorage(key: String, result: @escaping FlutterResult) {
         let defaults = UserDefaults.standard
@@ -287,7 +279,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         Downloader.forceFailPostOnBackgroundChannel = call.arguments as! Bool
         result(nil)
     }
-
+    
     
     //MARK: Helpers for Task and urlSessionTask
     
@@ -327,7 +319,7 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         }) else { return nil }
         return urlSessionTask
     }
-
+    
     
     //MARK: URLSessionTaskDelegate
     
@@ -353,13 +345,13 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         }
         guard error == nil else {
             let userInfo = (error! as NSError).userInfo
-                if let resumeData = userInfo[NSURLSessionDownloadTaskResumeData] as? Data {
-                    if processResumeData(task: task, resumeData: resumeData) {
-                        os_log("Paused task with id %@", log: log, type: .info, task.taskId)
-                        processStatusUpdate(task: task, status: .paused)
-                        return
-                    }
+            if let resumeData = userInfo[NSURLSessionDownloadTaskResumeData] as? Data {
+                if processResumeData(task: task, resumeData: resumeData) {
+                    os_log("Paused task with id %@", log: log, type: .info, task.taskId)
+                    processStatusUpdate(task: task, status: .paused)
+                    return
                 }
+            }
             if error!.localizedDescription.contains("cancelled") {
                 os_log("Canceled task with id %@", log: log, type: .info, task.taskId)
                 processStatusUpdate(task: task, status: .canceled)
@@ -374,16 +366,16 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         // if this is an upload task, send final TaskStatus (based on HTTP status code
         if isUploadTask(task: task) {
             let finalStatus = (200...206).contains(statusCode)
-                ? TaskStatus.complete
-                : statusCode == 404
-                    ? TaskStatus.notFound
-                    : TaskStatus.failed
+            ? TaskStatus.complete
+            : statusCode == 404
+            ? TaskStatus.notFound
+            : TaskStatus.failed
             processStatusUpdate(task: task, status: finalStatus)
         }
     }
     
     //MARK: URLSessionDownloadTaskDelegate
-
+    
     /// Process taskdelegate progress update for download task
     ///
     /// If the task requires progress updates, provide these at a reasonable interval
@@ -485,9 +477,9 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         }
     }
     
-
+    
     //MARK: URLSessionDelegate
-        
+    
     
     /// When the app restarts, recreate the urlSession if needed, and store the completion handler
     public func application(_ application: UIApplication,
@@ -526,8 +518,6 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
         config.timeoutIntervalForResource = Downloader.resourceTimeout
         return URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }
-
-
 }
 
 //MARK: helpers
@@ -536,20 +526,20 @@ public class Downloader: NSObject, FlutterPlugin, FlutterApplicationLifeCycleDel
 func mimeType(url: URL) -> String {
     let pathExtension = url.pathExtension
     if let uti = UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension, pathExtension as NSString, nil)?.takeRetainedValue() {
-            if let mimetype = UTTypeCopyPreferredTagWithClass(uti, kUTTagClassMIMEType)?.takeRetainedValue() {
-                return mimetype as String
-            }
+        if let mimetype = UTTypeCopyPreferredTagWithClass(uti, kUTTagClassMIMEType)?.takeRetainedValue() {
+            return mimetype as String
         }
-        return "application/octet-stream"
+    }
+    return "application/octet-stream"
 }
 
 /// Extension to append a String to a mutable data object
 extension NSMutableData {
-  func append(_ string: String) {
-    if let data = string.data(using: .utf8) {
-      self.append(data)
+    func append(_ string: String) {
+        if let data = string.data(using: .utf8) {
+            self.append(data)
+        }
     }
-  }
 }
 
 

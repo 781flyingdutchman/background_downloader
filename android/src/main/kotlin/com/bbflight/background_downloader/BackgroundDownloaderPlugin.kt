@@ -172,7 +172,8 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
                 "popStatusUpdates" -> methodPopStatusUpdates(result)
                 "popProgressUpdates" -> methodPopProgressUpdates(result)
                 "getTaskTimeout" -> methodGetTaskTimeout(result)
-                "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(call, result)
+                "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(call,
+                        result)
                 else -> result.notImplemented()
             }
         }

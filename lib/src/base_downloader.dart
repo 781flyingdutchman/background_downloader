@@ -47,7 +47,7 @@ abstract class BaseDownloader {
 
   /// Map of tasks and completer to indicate whether task can be resumed
   final canResumeTask = <Task, Completer<bool>>{};
-  
+
   /// Flag indicating we have retrieved missed data
   var _retrievedLocallyStoredData = false;
 
@@ -62,10 +62,7 @@ abstract class BaseDownloader {
   }
 
   /// Initialize
-  @mustCallSuper
-  Future<void> initialize() async {
-    //TODO decide if we want this: Future.delayed(const Duration(seconds: 5), retrieveLocallyStoredData);
-  }
+  Future<void> initialize();
 
   /// Retrieve data that was stored locally because it could not be
   /// delivered to the downloader
@@ -78,7 +75,8 @@ abstract class BaseDownloader {
         await setResumeData(resumeData);
         await setPausedTask(resumeData.task);
       }
-      final statusUpdateMap = await popUndeliveredData(Undelivered.statusUpdates);
+      final statusUpdateMap =
+          await popUndeliveredData(Undelivered.statusUpdates);
       for (var taskId in statusUpdateMap.keys) {
         // map is <taskId, Task/TaskStatus> where TaskStatus is added to Task JSON
         final payload = statusUpdateMap[taskId];
@@ -86,7 +84,8 @@ abstract class BaseDownloader {
         final taskStatus = TaskStatus.values[payload['taskStatus']];
         processStatusUpdate(task, taskStatus);
       }
-      final progressUpdateMap = await popUndeliveredData(Undelivered.progressUpdates);
+      final progressUpdateMap =
+          await popUndeliveredData(Undelivered.progressUpdates);
       for (var taskId in progressUpdateMap.keys) {
         // map is <taskId, Task/progress> where progress is added to Task JSON
         final payload = progressUpdateMap[taskId];
@@ -96,7 +95,6 @@ abstract class BaseDownloader {
       }
       _retrievedLocallyStoredData = true;
     }
-
   }
 
   /// Enqueue the task
@@ -114,9 +112,7 @@ abstract class BaseDownloader {
   @mustCallSuper
   Future<int> reset(String group) async {
     final retryCount =
-        tasksWaitingToRetry
-            .where((task) => task.group == group)
-            .length;
+        tasksWaitingToRetry.where((task) => task.group == group).length;
     tasksWaitingToRetry.removeWhere((task) => task.group == group);
     final pausedTasks = await getPausedTasks();
     var pausedCount = 0;
@@ -131,8 +127,8 @@ abstract class BaseDownloader {
 
   /// Returns a list of all tasks in progress, matching [group]
   @mustCallSuper
-  Future<List<Task>> allTasks(String group,
-      bool includeTasksWaitingToRetry) async {
+  Future<List<Task>> allTasks(
+      String group, bool includeTasksWaitingToRetry) async {
     final tasks = <Task>[];
     if (includeTasksWaitingToRetry) {
       tasks.addAll(tasksWaitingToRetry.where((task) => task.group == group));
@@ -184,10 +180,11 @@ abstract class BaseDownloader {
   /// Cancel paused tasks
   ///
   /// Deletes the associated temp file and emits [TaskStatus.cancel]
-  void cancelPausedPlatformTasksWithIds(List<Task> pausedTasks, List<String> taskIds) async {
+  void cancelPausedPlatformTasksWithIds(
+      List<Task> pausedTasks, List<String> taskIds) async {
     for (final taskId in taskIds) {
       final task =
-      pausedTasks.firstWhereOrNull((element) => element.taskId == taskId);
+          pausedTasks.firstWhereOrNull((element) => element.taskId == taskId);
       if (task != null) {
         final resumeData = await getResumeData(task.taskId);
         if (!Platform.isIOS && resumeData != null) {
@@ -209,15 +206,11 @@ abstract class BaseDownloader {
   @mustCallSuper
   Future<Task?> taskForId(String taskId) async {
     try {
-      return tasksWaitingToRetry
-          .where((task) => task.taskId == taskId)
-          .first;
+      return tasksWaitingToRetry.where((task) => task.taskId == taskId).first;
     } on StateError {
       try {
         final pausedTasks = await getPausedTasks();
-        return pausedTasks
-            .where((task) => task.taskId == taskId)
-            .first;
+        return pausedTasks.where((task) => task.taskId == taskId).first;
       } on StateError {
         return null;
       }
@@ -242,7 +235,7 @@ abstract class BaseDownloader {
     if (markDownloadedComplete) {
       final records = await Database().allRecords(group: group);
       for (var record in records.where((record) =>
-      record.task is DownloadTask &&
+          record.task is DownloadTask &&
           record.taskStatus != TaskStatus.complete)) {
         final filePath = await record.task.filePath();
         if (await File(filePath).exists()) {
@@ -270,7 +263,6 @@ abstract class BaseDownloader {
     return false;
   }
 
-
   /// Sets the 'canResumeTask' flag for this task
   ///
   /// Completes the completer already associated with this task
@@ -285,15 +277,15 @@ abstract class BaseDownloader {
       canResumeTask[task]?.future ?? Future.value(false);
 
   /// Stores the resume data
-  Future<void> setResumeData(ResumeData resumeData) =>
-      _db.collection(resumeDataPath).doc(_safeId(resumeData.taskId)).set(
-          resumeData.toJsonMap());
-
+  Future<void> setResumeData(ResumeData resumeData) => _db
+      .collection(resumeDataPath)
+      .doc(_safeId(resumeData.taskId))
+      .set(resumeData.toJsonMap());
 
   /// Retrieve the resume data for this [taskId]
   Future<ResumeData?> getResumeData(String taskId) async {
-    final jsonMap = await _db.collection(resumeDataPath).doc(
-        _safeId(taskId)).get();
+    final jsonMap =
+        await _db.collection(resumeDataPath).doc(_safeId(taskId)).get();
     return jsonMap == null ? null : ResumeData.fromJsonMap(jsonMap);
   }
 
@@ -306,13 +298,15 @@ abstract class BaseDownloader {
   }
 
   /// Store the paused task
-  Future<void> setPausedTask(Task task) =>
-    _db.collection(pausedTasksPath).doc(_safeId(task.taskId)).set(task.toJsonMap());
+  Future<void> setPausedTask(Task task) => _db
+      .collection(pausedTasksPath)
+      .doc(_safeId(task.taskId))
+      .set(task.toJsonMap());
 
   /// Return a stored paused task, or null if not found
   Future<Task?> getPausedTask(String taskId) async {
-    final jsonMap = await _db.collection(pausedTasksPath).doc(
-        _safeId(taskId)).get();
+    final jsonMap =
+        await _db.collection(pausedTasksPath).doc(_safeId(taskId)).get();
     return jsonMap == null ? null : Task.createFromJsonMap(jsonMap);
   }
 
@@ -342,7 +336,6 @@ abstract class BaseDownloader {
     removePausedTask(task.taskId);
   }
 
-
   /// Get the duration for a task to timeout - Android only, for testing
   @visibleForTesting
   Future<Duration> getTaskTimeout();
@@ -350,7 +343,7 @@ abstract class BaseDownloader {
   /// Set forceFailPostOnBackgroundChannel for native downloader
   @visibleForTesting
   Future<void> setForceFailPostOnBackgroundChannel(bool value);
-  
+
   /// Destroy - clears callbacks, updates stream and retry queue
   ///
   /// Clears all queues and references without sending cancellation

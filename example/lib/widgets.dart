@@ -25,8 +25,7 @@ class DownloadProgressIndicator extends StatefulWidget {
       _DownloadProgressIndicatorState();
 }
 
-class _DownloadProgressIndicatorState
-    extends State<DownloadProgressIndicator> {
+class _DownloadProgressIndicatorState extends State<DownloadProgressIndicator> {
   late StreamSubscription<ConnectivityResult>? connectivityStatusSubscription;
   ValueNotifier<bool> haveConnection = ValueNotifier(false);
   bool showProgress = false;
@@ -36,50 +35,53 @@ class _DownloadProgressIndicatorState
     super.initState();
     // monitor data connection
     Connectivity().checkConnectivity().then(
-            (result) => haveConnection.value = result != ConnectivityResult.none);
+        (result) => haveConnection.value = result != ConnectivityResult.none);
     connectivityStatusSubscription = Connectivity()
         .onConnectivityChanged
         .listen((result) =>
-    haveConnection.value = result != ConnectivityResult.none);
+            haveConnection.value = result != ConnectivityResult.none);
   }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<DownloadProgressIndicatorUpdate>(
         builder: (context, update, _) {
-          showProgress = update.busy;
-          return ValueListenableBuilder(
-              valueListenable: haveConnection,
-              builder: (context, bool connected, _) {
-                if (connected) {
-                  return AnimatedContainer(
-                      height: showProgress ? 35 : 0,
-                      duration: const Duration(milliseconds: 200),
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 8.0, right: 8.0),
-                        child: Row(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: Text(
-                                'Downloading ${update.filename}',
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                            ),
-                            Expanded(
-                              child: LinearProgressIndicator(
-                                value: update.progress,
-                              ),
-                            ),
-                            Padding(padding: const EdgeInsets.only(left: 8),child: Text('${(update.progress * 100).round()}%'),)
-                          ],
+      showProgress = update.busy;
+      return ValueListenableBuilder(
+          valueListenable: haveConnection,
+          builder: (context, bool connected, _) {
+            if (connected) {
+              return AnimatedContainer(
+                  height: showProgress ? 35 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 8.0, right: 8.0),
+                    child: Row(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Text(
+                            'Downloading ${update.filename}',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
                         ),
-                      ));
-                } else {
-                  // no connection, show earning if progress indicator would
-                  // otherwise be visible
-                  return showProgress
-                      ? Padding(
+                        Expanded(
+                          child: LinearProgressIndicator(
+                            value: update.progress,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: Text('${(update.progress * 100).round()}%'),
+                        )
+                      ],
+                    ),
+                  ));
+            } else {
+              // no connection, show earning if progress indicator would
+              // otherwise be visible
+              return showProgress
+                  ? Padding(
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
                       child: Container(
                         decoration: BoxDecoration(
@@ -94,10 +96,10 @@ class _DownloadProgressIndicatorState
                           ),
                         ),
                       ))
-                      : Container();
-                }
-              });
-        });
+                  : Container();
+            }
+          });
+    });
   }
 
   @override

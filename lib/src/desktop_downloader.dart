@@ -37,6 +37,9 @@ class DesktopDownloader extends BaseDownloader {
   DesktopDownloader._internal();
 
   @override
+  Future<void> initialize() async {}
+
+  @override
   Future<bool> enqueue(Task task) async {
     super.enqueue(task);
     _queue.add(task);
@@ -221,7 +224,6 @@ class DesktopDownloader extends BaseDownloader {
 
   @override
   Future<Duration> getTaskTimeout() => Future.value(const Duration(days: 1));
-
 
   @override
   Future<void> setForceFailPostOnBackgroundChannel(bool value) {

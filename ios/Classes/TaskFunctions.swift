@@ -197,9 +197,6 @@ func storeLocally(prefsKey: String, taskId: String,
     defaults.set(map, forKey: prefsKey)
 }
 
-
-
-
 /// Returns a JSON string for this Task, or nil
 func jsonStringFor(task: Task) -> String? {
     let jsonEncoder = JSONEncoder()
@@ -244,10 +241,10 @@ func directoryForTask(task: Task) throws ->  URL {
     }
     let documentsURL =
     try FileManager.default.url(for: dir,
-                            in: .userDomainMask,
-                            appropriateFor: nil,
-                            create: false)
+                                in: .userDomainMask,
+                                appropriateFor: nil,
+                                create: false)
     return task.directory.isEmpty
-        ? documentsURL
-        : documentsURL.appendingPathComponent(task.directory)
+    ? documentsURL
+    : documentsURL.appendingPathComponent(task.directory)
 }

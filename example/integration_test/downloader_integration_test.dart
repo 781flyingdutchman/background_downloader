@@ -112,9 +112,11 @@ void main() {
 
   tearDown(() async {
     FileDownloader().destroy();
-    await FileDownloader()
-        .downloaderForTesting
-        .setForceFailPostOnBackgroundChannel(false);
+    if (Platform.isAndroid || Platform.isIOS) {
+      await FileDownloader()
+          .downloaderForTesting
+          .setForceFailPostOnBackgroundChannel(false);
+    }
   });
 
   group('Initialization', () {
@@ -1567,7 +1569,7 @@ void main() {
       // speed. If the test fails, it is likely because the task completed
       // before the initial pause command, or did not have time for two
       // pause/resume cycles -> shorten interval
-      const interval = Duration(milliseconds: 300);
+      const interval = Duration(milliseconds: 500);
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       task = DownloadTask(
           url: urlWithContentLength,

@@ -15,8 +15,6 @@ enum StreamError: Error {
 /// Uploader associated with one URLSessionUploadTask
 public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
     
-//    let log = OSLog.init(subsystem: "FileDownloaderPlugin", category: "Uploader")
-    
     var task: Task
     let outputFilename: String
     var contentDispositionString: String = ""
@@ -24,7 +22,7 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
     var totalBytesWritten: Int64 = 0
     static let boundary = "-----background_downloader-akjhfw281onqciyhnIk"
     let lineFeed = "\r\n"
-
+    
     let bufferSize = 8192
     
     
@@ -67,7 +65,6 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
     func outputFileUrl() -> URL {
         return FileManager.default.temporaryDirectory.appendingPathComponent(outputFilename)
     }
-    
     
     /// Write the preamble for the multipart form to the fileHandle
     ///
@@ -124,5 +121,4 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
         totalBytesWritten += Int64(epilogue.count)
         return true
     }
-    
 }
