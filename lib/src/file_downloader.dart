@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
@@ -52,6 +53,9 @@ class FileDownloader {
   /// Registered [TaskProgressCallback] for convenience batch down/upload tasks
   final _taskProgressCallbacks = <String, TaskProgressCallback>{};
 
+  /// List of notification configurations
+  final _notificationConfigs = <NotificationConfig>[];
+
   factory FileDownloader() => _singleton;
 
   FileDownloader._internal();
@@ -96,7 +100,8 @@ class FileDownloader {
   /// Returns true if successfully enqueued. A new task will also generate
   /// a [TaskStatus.enqueued] update to the registered callback,
   /// if requested by its [updates] property
-  Future<bool> enqueue(Task task) => _downloader.enqueue(task);
+  Future<bool> enqueue(Task task) =>
+      _downloader.enqueue(task, _notificationConfigForTask(task));
 
   /// Download a file and return the final [TaskStatus]
   ///
@@ -436,6 +441,31 @@ class FileDownloader {
       return _downloader.resume(task);
     }
     return false;
+  }
+
+  /// Configure notification for a single task or group of tasks
+  void configureNotification(dynamic taskOrGroup,
+      {Notification? activeNotification,
+      Notification? completeNotification,
+      Notification? errorNotification}) {
+    assert(taskOrGroup is Task || taskOrGroup is String,
+        'taskOrGroup must be a [Task] or a [String]');
+    if (taskOrGroup is Task) {
+      _notificationConfigs.add(NotificationConfig(taskOrGroup, null,
+          activeNotification, completeNotification, errorNotification));
+    } else {
+      _notificationConfigs.add(NotificationConfig(null, taskOrGroup,
+          activeNotification, completeNotification, errorNotification));
+    }
+  }
+
+  /// Returns the [NotificationConfig] for this [task] or null
+  NotificationConfig? _notificationConfigForTask(Task task) {
+    final taskConfig =
+        _notificationConfigs.firstWhereOrNull((config) => config.task == task);
+    return taskConfig ??
+        _notificationConfigs
+            .firstWhereOrNull((element) => element.group == task.group);
   }
 
   /// Perform a server request for this [request]

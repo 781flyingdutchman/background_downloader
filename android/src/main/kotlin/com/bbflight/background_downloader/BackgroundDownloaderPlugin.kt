@@ -37,6 +37,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         const val keyResumeDataMap = "com.bbflight.background_downloader.resumeDataMap"
         const val keyStatusUpdateMap = "com.bbflight.background_downloader.statusUpdateMap"
         const val keyProgressUpdateMap = "com.bbflight.background_downloader.progressUpdateMap"
+        const val keyNotificationConfig = "notificationConfig"
         const val keyTempFilename = "tempFilename"
         const val keyStartByte = "startByte"
         var canceledTaskIds = HashMap<String, Long>() // <taskId, timeMillis>
@@ -54,6 +55,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
         suspend fun doEnqueue(
                 context: Context,
                 taskJsonMapString: String,
+                notificationConfigJsonString: String?,
                 tempFilePath: String?,
                 startByte: Long?,
                 initialDelayMillis: Long = 0
@@ -63,6 +65,9 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
             Log.i(TAG, "Enqueuing task with id ${task.taskId}")
             val dataBuilder =
                     Data.Builder().putString(TaskWorker.keyTask, taskJsonMapString)
+            if (notificationConfigJsonString != null) {
+                dataBuilder.putString(keyNotificationConfig, notificationConfigJsonString)
+            }
             if (tempFilePath != null && startByte != null) {
                 dataBuilder.putString(keyTempFilename, tempFilePath)
                         .putLong(keyStartByte, startByte)
@@ -187,17 +192,20 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     private suspend fun methodEnqueue(call: MethodCall, result: Result) {
         val args = call.arguments as List<*>
         val taskJsonMapString = args[0] as String
-        val isResume = args.size > 1
+        val notificationConfigJsonString = args[1] as String?
+        Log.d(TAG, "Notification: $notificationConfigJsonString")
+        val isResume = args.size == 4
         val startByte: Long?
         val tempFilePath: String?
         if (isResume) {
-            tempFilePath = args[1] as String
-            startByte = if (args[2] is Long) args[2] as Long else (args[2] as Int).toLong()
+            tempFilePath = args[2] as String
+            startByte = if (args[3] is Long) args[3] as Long else (args[3] as Int).toLong()
         } else {
             tempFilePath = null
             startByte = null
         }
-        result.success(doEnqueue(context, taskJsonMapString, tempFilePath, startByte))
+        result.success(doEnqueue(context, taskJsonMapString, notificationConfigJsonString, tempFilePath,
+                startByte))
     }
 
 

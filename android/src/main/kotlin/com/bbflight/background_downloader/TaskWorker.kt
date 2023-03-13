@@ -297,6 +297,9 @@ class TaskWorker(
     private var startByte = 0L
     private var isTimedOut = false
 
+    private var notificationConfigJsonString: String? = null
+    private var notificationConfig: NotificationConfig? = null
+
     private lateinit var prefs: SharedPreferences
 
     override suspend fun doWork(): Result {
@@ -311,6 +314,14 @@ class TaskWorker(
             val task = Task(
                     gson.fromJson(taskJsonMapString, mapType)
             )
+            notificationConfigJsonString =
+                    inputData.getString(BackgroundDownloaderPlugin.keyNotificationConfig)
+            Log.d(TAG, "Before GSON decode")
+            notificationConfig = if (notificationConfigJsonString != null)
+                BackgroundDownloaderPlugin.gson.fromJson(notificationConfigJsonString,
+                        NotificationConfig::class.java) else
+                null
+            Log.d(TAG, "config=$notificationConfig")
             // pre-process resume
             val requiredStartByte = inputData.getLong(BackgroundDownloaderPlugin.keyStartByte, 0)
             var isResume = requiredStartByte != 0L
@@ -533,6 +544,7 @@ class TaskWorker(
                         BackgroundDownloaderPlugin.doEnqueue(
                                 applicationContext,
                                 taskToJsonString(task),
+                                notificationConfigJsonString,
                                 tempFilePath,
                                 start,
                                 1000

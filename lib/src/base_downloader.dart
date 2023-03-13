@@ -99,7 +99,8 @@ abstract class BaseDownloader {
 
   /// Enqueue the task
   @mustCallSuper
-  Future<bool> enqueue(Task task) async {
+  Future<bool> enqueue(Task task, [NotificationConfig? notificationConfig])
+  async {
     if (task.allowPause) {
       canResumeTask[task] = Completer();
     }
