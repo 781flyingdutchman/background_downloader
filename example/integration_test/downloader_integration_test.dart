@@ -1650,7 +1650,7 @@ void main() {
 
   group('Notifications', () {
     testWidgets('NotificationConfig', (widgetTester) async {
-      FileDownloader().configureNotification(FileDownloader.defaultGroup, activeNotification: Notification('', 'Title', 'Body'));
+      FileDownloader().configureNotification(FileDownloader.defaultGroup, activeNotification: TaskNotification('', 'Title', 'Body'));
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);

@@ -1,2 +1,5 @@
-<manifest package="com.bbflight.background_downloader">
+<manifest package="com.bbflight.background_downloader"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

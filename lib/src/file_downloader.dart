@@ -54,7 +54,7 @@ class FileDownloader {
   final _taskProgressCallbacks = <String, TaskProgressCallback>{};
 
   /// List of notification configurations
-  final _notificationConfigs = <NotificationConfig>[];
+  final _notificationConfigs = <TaskNotificationConfig>[];
 
   factory FileDownloader() => _singleton;
 
@@ -445,22 +445,23 @@ class FileDownloader {
 
   /// Configure notification for a single task or group of tasks
   void configureNotification(dynamic taskOrGroup,
-      {Notification? activeNotification,
-      Notification? completeNotification,
-      Notification? errorNotification}) {
+      {TaskNotification? activeNotification,
+      TaskNotification? completeNotification,
+      TaskNotification? errorNotification}) {
+    taskOrGroup ??= defaultGroup;
     assert(taskOrGroup is Task || taskOrGroup is String,
         'taskOrGroup must be a [Task] or a [String]');
     if (taskOrGroup is Task) {
-      _notificationConfigs.add(NotificationConfig(taskOrGroup, null,
+      _notificationConfigs.add(TaskNotificationConfig(taskOrGroup, null,
           activeNotification, completeNotification, errorNotification));
     } else {
-      _notificationConfigs.add(NotificationConfig(null, taskOrGroup,
+      _notificationConfigs.add(TaskNotificationConfig(null, taskOrGroup,
           activeNotification, completeNotification, errorNotification));
     }
   }
 
-  /// Returns the [NotificationConfig] for this [task] or null
-  NotificationConfig? _notificationConfigForTask(Task task) {
+  /// Returns the [TaskNotificationConfig] for this [task] or null
+  TaskNotificationConfig? _notificationConfigForTask(Task task) {
     final taskConfig =
         _notificationConfigs.firstWhereOrNull((config) => config.task == task);
     return taskConfig ??

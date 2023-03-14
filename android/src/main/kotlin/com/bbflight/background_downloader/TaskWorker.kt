@@ -2,13 +2,21 @@
 
 package com.bbflight.background_downloader
 
+import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.content.Context.*
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.webkit.MimeTypeMap
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.preference.PreferenceManager
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -28,6 +36,7 @@ import kotlin.concurrent.schedule
 import kotlin.concurrent.write
 import kotlin.io.path.Path
 import kotlin.io.path.pathString
+import kotlin.math.roundToInt
 import kotlin.random.Random
 
 
@@ -48,7 +57,12 @@ class TaskWorker(
         const val bufferSize = 8096
         const val taskTimeoutMillis = 9 * 60 * 1000L  // 9 minutes
 
+        private val fileNameRegEx = Regex("""\{filename\}""", RegexOption.IGNORE_CASE)
+        private val progressBarRegEx = Regex("""\{progressBar\}""", RegexOption.IGNORE_CASE)
+
         private var taskCanResume = false
+        private var createdNotificationChannel = false
+
 
         /** Converts [Task] to JSON string representation */
         private fun taskToJsonString(task: Task): String {
@@ -297,8 +311,10 @@ class TaskWorker(
     private var startByte = 0L
     private var isTimedOut = false
 
+    // properties related to notifications
     private var notificationConfigJsonString: String? = null
     private var notificationConfig: NotificationConfig? = null
+    private var notificationId = 0
 
     private lateinit var prefs: SharedPreferences
 
@@ -316,12 +332,11 @@ class TaskWorker(
             )
             notificationConfigJsonString =
                     inputData.getString(BackgroundDownloaderPlugin.keyNotificationConfig)
-            Log.d(TAG, "Before GSON decode")
             notificationConfig = if (notificationConfigJsonString != null)
                 BackgroundDownloaderPlugin.gson.fromJson(notificationConfigJsonString,
                         NotificationConfig::class.java) else
                 null
-            Log.d(TAG, "config=$notificationConfig")
+            Log.d(TAG, "NotificationConfig = $notificationConfig")
             // pre-process resume
             val requiredStartByte = inputData.getLong(BackgroundDownloaderPlugin.keyStartByte, 0)
             var isResume = requiredStartByte != 0L
@@ -340,6 +355,7 @@ class TaskWorker(
             }
             val status = doTask(task, isResume, tempFilePath, requiredStartByte)
             processStatusUpdate(task, status, prefs)
+            updateNotification(task, status);
         }
         return Result.success()
     }
@@ -757,6 +773,7 @@ class TaskWorker(
                             progress - lastProgressUpdate > 0.02 && currentTimeMillis() > nextProgressUpdateTime
                     ) {
                         processProgressUpdate(task, progress, prefs)
+                        updateNotification(task, TaskStatus.running, progress)
                         lastProgressUpdate = progress
                         nextProgressUpdateTime = currentTimeMillis() + 500
                     }
@@ -809,6 +826,104 @@ class TaskWorker(
             return false
         }
         return true
+    }
+
+    /**
+     * Create the notification channel to use for download notifications
+     */
+    private fun createNotificationChannel() {
+        // Create the NotificationChannel, but only on API 26+ because
+        // the NotificationChannel class is new and not in the support library
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = "Downloads"
+            val descriptionText = "Download notifications"
+            val importance = NotificationManager.IMPORTANCE_LOW
+            val channel =
+                    NotificationChannel(BackgroundDownloaderPlugin.notificationChannel, name,
+                            importance).apply {
+                        description = descriptionText
+                    }
+            // Register the channel with the system
+            val notificationManager: NotificationManager =
+                    applicationContext.getSystemService(
+                            NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+        createdNotificationChannel = true
+    }
+
+    /**
+     * Create or update the notification for this [task], associated with this [status]
+     * and [progress]
+     *
+     * The [status] field is interpreted differently:
+     * - [TaskStatus.running] triggers the activeNotification
+     * - [TaskStatus.complete] triggers the completeNotification
+     * - [TaskStatus.canceled] triggers removal of the notification
+     * - Any other status triggers the errorNotification
+     * If the [status] is [TaskStatus.complete] and no notification is given, will cancel the notification
+     * The [progress] field is only relevant for [TaskStatus.running]
+     */
+    private fun updateNotification(task: Task, status: TaskStatus, progress: Double = 1.0) {
+        val notification = when (status) {
+            TaskStatus.running -> notificationConfig?.activeNotification
+            TaskStatus.complete -> notificationConfig?.completeNotification
+            else -> notificationConfig?.errorNotification
+        }
+        if ((status == TaskStatus.complete && notification == null) || status == TaskStatus.canceled) {
+            // remove notification and return
+            if (notificationId != 0) {
+                with(NotificationManagerCompat.from(applicationContext)) {
+                    cancel(notificationId)
+                }
+            }
+            return
+        }
+        if (notification == null) { return } // no notification
+        // need to show a notification
+        if (!createdNotificationChannel) {
+            createNotificationChannel()
+        }
+        if (notificationId == 0) {
+            notificationId = Random.nextInt()
+        }
+        val builder = NotificationCompat.Builder(applicationContext, BackgroundDownloaderPlugin
+                .notificationChannel)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setSmallIcon(R.drawable.baseline_downloading_24)
+        if (notification.title.isNotEmpty()) {
+            builder.setContentTitle(notification.title)
+        }
+        var body = fileNameRegEx.replace(notification.body, task.filename)
+        val progressString = if (progress >= 0) (progress * 100).roundToInt().toString() + "%"
+        else "..."
+        body = body.replace("{progress}", progressString)
+        val progressBar = progressBarRegEx.containsMatchIn(body)
+        if (progressBar) {
+            body = progressBarRegEx.replace(body, "")
+        }
+        if (body.isNotEmpty()) {
+            builder.setContentText(body)
+        }
+        // TODO set contentIntent to deal with tap
+        // TODO set cancel button and action
+        // TODO something with progressBar
+        with(NotificationManagerCompat.from(applicationContext)) {
+            if (!BackgroundDownloaderPlugin.haveNotificationPermission && Build.VERSION.SDK_INT
+                    >= Build.VERSION_CODES
+                            .TIRAMISU) {
+                // On Android 33+, ask for permission
+                if (ActivityCompat.checkSelfPermission(applicationContext,
+                                Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    BackgroundDownloaderPlugin.activity?.requestPermissions(
+                            arrayOf(Manifest.permission
+                                    .POST_NOTIFICATIONS),
+                            BackgroundDownloaderPlugin.notificationPermissionRequestCode)
+                    return
+                }
+            }
+            notify(notificationId, builder.build())
+        }
     }
 
     /** Returns full path (String) to the file to be downloaded */

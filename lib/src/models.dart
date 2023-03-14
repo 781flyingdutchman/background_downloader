@@ -723,7 +723,7 @@ class ResumeData {
 /// Types of undelivered data that can be requested
 enum Undelivered { resumeData, statusUpdates, progressUpdates }
 
-/// Notification specification
+/// Notification specification for a [Task]
 ///
 /// [iconAsset] is of form 'assets/my_icon.png'
 /// [body] may contain special string {filename] to insert the filename
@@ -733,12 +733,12 @@ enum Undelivered { resumeData, statusUpdates, progressUpdates }
 ///
 /// Actual appearance of notification is dependent on the platform, e.g.
 /// on iOS {progress} and {progressBar} are not available and ignored
-class Notification {
+class TaskNotification {
   final String iconAsset;
   final String title;
   final String body;
 
-  Notification(this.iconAsset, this.title, this.body);
+  TaskNotification(this.iconAsset, this.title, this.body);
 
   /// Return JSON Map representing object
   Map<String, dynamic> toJsonMap() =>
@@ -753,14 +753,14 @@ class Notification {
 /// [completeNotification] is the notification used when the task completed
 /// [errorNotification] is the notification used when something went wrong,
 /// including pause, failed and notFound status
-class NotificationConfig {
+class TaskNotificationConfig {
   final Task? task;
   final String? group;
-  final Notification? activeNotification;
-  final Notification? completeNotification;
-  final Notification? errorNotification;
+  final TaskNotification? activeNotification;
+  final TaskNotification? completeNotification;
+  final TaskNotification? errorNotification;
 
-  NotificationConfig(this.task, this.group, this.activeNotification,
+  TaskNotificationConfig(this.task, this.group, this.activeNotification,
       this.completeNotification, this.errorNotification) {
     assert((task != null || group != null) && !(task != null && group != null),
         'Either task or group must be set');

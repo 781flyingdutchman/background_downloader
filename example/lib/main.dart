@@ -36,9 +36,18 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    FileDownloader().registerCallbacks(
-        taskStatusCallback: myDownloadStatusCallback,
-        taskProgressCallback: myDownloadProgressCallback);
+    FileDownloader()
+        .registerCallbacks(
+            taskStatusCallback: myDownloadStatusCallback,
+            taskProgressCallback: myDownloadProgressCallback)
+        .configureNotification(FileDownloader.defaultGroup,
+            activeNotification:
+                TaskNotification('', 'Download', 'File: {filename}'),
+            completeNotification: TaskNotification(
+                '', 'Download', 'Download of {filename} complete at '
+                '{progress}'),
+            errorNotification: TaskNotification(
+                '', 'Download', 'Download of {filename} failed'));
   }
 
   /// Process the status updates coming from the downloader
