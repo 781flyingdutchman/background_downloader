@@ -58,7 +58,7 @@ class TaskWorker(
         const val taskTimeoutMillis = 9 * 60 * 1000L  // 9 minutes
 
         private val fileNameRegEx = Regex("""\{filename\}""", RegexOption.IGNORE_CASE)
-        private val progressBarRegEx = Regex("""\{progressBar\}""", RegexOption.IGNORE_CASE)
+        private val progressRegEx = Regex("""\{progress\}""", RegexOption.IGNORE_CASE)
 
         private var taskCanResume = false
         private var createdNotificationChannel = false
@@ -353,9 +353,10 @@ class TaskWorker(
             if (!isResume) {
                 processProgressUpdate(task, 0.0, prefs)
             }
+            updateNotification(task, notificationTypeForTaskStatus(TaskStatus.running))
             val status = doTask(task, isResume, tempFilePath, requiredStartByte)
             processStatusUpdate(task, status, prefs)
-            updateNotification(task, status);
+            updateNotification(task, notificationTypeForTaskStatus(status))
         }
         return Result.success()
     }
@@ -773,7 +774,8 @@ class TaskWorker(
                             progress - lastProgressUpdate > 0.02 && currentTimeMillis() > nextProgressUpdateTime
                     ) {
                         processProgressUpdate(task, progress, prefs)
-                        updateNotification(task, TaskStatus.running, progress)
+                        updateNotification(task, notificationTypeForTaskStatus(TaskStatus.running),
+                                progress)
                         lastProgressUpdate = progress
                         nextProgressUpdateTime = currentTimeMillis() + 500
                     }
@@ -853,25 +855,28 @@ class TaskWorker(
     }
 
     /**
-     * Create or update the notification for this [task], associated with this [status]
+     * Create or update the notification for this [task], associated with this [notificationType]
      * and [progress]
      *
-     * The [status] field is interpreted differently:
-     * - [TaskStatus.running] triggers the activeNotification
-     * - [TaskStatus.complete] triggers the completeNotification
-     * - [TaskStatus.canceled] triggers removal of the notification
-     * - Any other status triggers the errorNotification
-     * If the [status] is [TaskStatus.complete] and no notification is given, will cancel the notification
-     * The [progress] field is only relevant for [TaskStatus.running]
+     * [notificationType] determines the type of notification, and whether absence of one will
+     * cancel the notification
+     * The [progress] field is only relevant for [NotificationType.running]. If progress is
+     * negative no progress bar will be shown. If progress > 1 an indeterminate progress bar
+     * will be shown
      */
-    private fun updateNotification(task: Task, status: TaskStatus, progress: Double = 1.0) {
-        val notification = when (status) {
-            TaskStatus.running -> notificationConfig?.activeNotification
-            TaskStatus.complete -> notificationConfig?.completeNotification
-            else -> notificationConfig?.errorNotification
+    private fun updateNotification(task: Task, notificationType: NotificationType, progress:
+    Double = 2.0) {
+        val notification = when (notificationType) {
+            NotificationType.running -> notificationConfig?.runningNotification
+            NotificationType.complete -> notificationConfig?.completeNotification
+            NotificationType.error -> notificationConfig?.errorNotification
+            NotificationType.paused -> notificationConfig?.pausedNotification
         }
-        if ((status == TaskStatus.complete && notification == null) || status == TaskStatus.canceled) {
-            // remove notification and return
+        val removeNotification = when (notificationType) {
+            NotificationType.running -> false
+            else -> notification == null
+        }
+        if (removeNotification) {
             if (notificationId != 0) {
                 with(NotificationManagerCompat.from(applicationContext)) {
                     cancel(notificationId)
@@ -879,7 +884,9 @@ class TaskWorker(
             }
             return
         }
-        if (notification == null) { return } // no notification
+        if (notification == null) {
+            return
+        } // no notification
         // need to show a notification
         if (!createdNotificationChannel) {
             createNotificationChannel()
@@ -887,27 +894,36 @@ class TaskWorker(
         if (notificationId == 0) {
             notificationId = Random.nextInt()
         }
+        val iconDrawable = when (notificationType) {
+            NotificationType.running -> if (task.isDownloadTask()) R.drawable
+                    .outline_file_download_24 else R.drawable.outline_file_upload_24
+            NotificationType.complete -> R.drawable.outline_download_done_24
+            NotificationType.error -> R.drawable.outline_error_outline_24
+            NotificationType.paused -> R.drawable.outline_pause_24
+        }
         val builder = NotificationCompat.Builder(applicationContext, BackgroundDownloaderPlugin
                 .notificationChannel)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
-                .setSmallIcon(R.drawable.baseline_downloading_24)
-        if (notification.title.isNotEmpty()) {
-            builder.setContentTitle(notification.title)
+                .setSmallIcon(iconDrawable)
+        val title = replaceTokens(notification.title, task, progress)
+        if (title.isNotEmpty()) {
+            builder.setContentTitle(title)
         }
-        var body = fileNameRegEx.replace(notification.body, task.filename)
-        val progressString = if (progress >= 0) (progress * 100).roundToInt().toString() + "%"
-        else "..."
-        body = body.replace("{progress}", progressString)
-        val progressBar = progressBarRegEx.containsMatchIn(body)
-        if (progressBar) {
-            body = progressBarRegEx.replace(body, "")
-        }
+        val body = replaceTokens(notification.body, task, progress)
         if (body.isNotEmpty()) {
             builder.setContentText(body)
         }
+        val progressBar = notificationType == NotificationType.running && notificationConfig
+                ?.progressBar ?: false
+        if (progressBar && progress >= 0) {
+            if (progress <= 1) {
+                builder.setProgress(100, (progress * 100).roundToInt(), false)
+            } else { // > 1 means indeterminate
+                builder.setProgress(100, 0, true)
+            }
+        }
         // TODO set contentIntent to deal with tap
         // TODO set cancel button and action
-        // TODO something with progressBar
         with(NotificationManagerCompat.from(applicationContext)) {
             if (!BackgroundDownloaderPlugin.haveNotificationPermission && Build.VERSION.SDK_INT
                     >= Build.VERSION_CODES
@@ -923,6 +939,27 @@ class TaskWorker(
                 }
             }
             notify(notificationId, builder.build())
+        }
+    }
+
+    private fun replaceTokens(input: String, task: Task, progress: Double): String {
+        val output = fileNameRegEx.replace(input, task.filename)
+        val progressString = if (progress in 0.0..1.0) (progress * 100).roundToInt()
+                .toString() +
+                "%"
+        else ""
+        return progressRegEx.replace(output, progressString)
+    }
+
+    /**
+     * Returns the notificationType related to this [status]
+     */
+    private fun notificationTypeForTaskStatus(status: TaskStatus): NotificationType {
+        return when (status) {
+            TaskStatus.enqueued, TaskStatus.running -> NotificationType.running
+            TaskStatus.complete -> NotificationType.complete
+            TaskStatus.paused -> NotificationType.paused
+            else -> NotificationType.error
         }
     }
 

@@ -3,18 +3,15 @@ package com.bbflight.background_downloader
 /**
  * Notification specification
  *
- * [iconAsset] is of form 'assets/my_icon.png'
  * [body] may contain special string {filename] to insert the filename
  *   and/or special string {progress} to insert progress in %
- *   and/or special trailing string {progressBar} to add a progress bar under
- *   the body text in the notification
  *
  * Actual appearance of notification is dependent on the platform, e.g.
- * on iOS {progress} and {progressBar} are not available and ignored
+ * on iOS {progress} and progressBar are not available and ignored
  */
-class Notification (val iconAsset: String, val title: String, val body: String) {
+class Notification (val title: String, val body: String) {
     override fun toString(): String {
-        return "Notification(iconAsset='$iconAsset', title='$title', body='$body')"
+        return "Notification(title='$title', body='$body')"
     }
 }
 
@@ -23,7 +20,7 @@ class Notification (val iconAsset: String, val title: String, val body: String) 
  *
  * Determines how a [task] or [group] of tasks needs to be notified
  *
- * [activeNotification] is the notification used while the task is in progress
+ * [runningNotification] is the notification used while the task is in progress
  * [completeNotification] is the notification used when the task completed
  * [errorNotification] is the notification used when something went wrong,
  * including pause, failed and notFound status
@@ -31,12 +28,16 @@ class Notification (val iconAsset: String, val title: String, val body: String) 
 class NotificationConfig(
         val task: Task?,
         val group: String?,
-        val activeNotification: Notification?,
+        val runningNotification: Notification?,
         val completeNotification: Notification?,
-        val errorNotification: Notification?
+        val errorNotification: Notification?,
+        val pausedNotification: Notification?,
+        val progressBar: Boolean
         ) {
     override fun toString(): String {
-        return "NotificationConfig(task=$task, group=$group, activeNotification=$activeNotification, completeNotification=$completeNotification, errorNotification=$errorNotification)"
+        return "NotificationConfig(task=$task, group=$group, runningNotification=$runningNotification, completeNotification=$completeNotification, errorNotification=$errorNotification, pausedNotification=$pausedNotification, progressBar=$progressBar)"
     }
 }
+
+enum class NotificationType {running, complete, error, paused}
 

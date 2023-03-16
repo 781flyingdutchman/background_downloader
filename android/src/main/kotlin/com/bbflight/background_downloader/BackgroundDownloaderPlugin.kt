@@ -1,5 +1,6 @@
 package com.bbflight.background_downloader
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -50,6 +51,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         const val keyStartByte = "startByte"
         const val notificationChannel = "background_downloader"
         const val notificationPermissionRequestCode = 373921
+        @SuppressLint("StaticFieldLeak")
         var activity: Activity? = null
         var canceledTaskIds = HashMap<String, Long>() // <taskId, timeMillis>
         var pausedTaskIds = HashSet<String>() // <taskId>

@@ -725,7 +725,6 @@ enum Undelivered { resumeData, statusUpdates, progressUpdates }
 
 /// Notification specification for a [Task]
 ///
-/// [iconAsset] is of form 'assets/my_icon.png'
 /// [body] may contain special string {filename] to insert the filename
 ///   and/or special string {progress} to insert progress in %
 ///   and/or special trailing string {progressBar} to add a progress bar under
@@ -734,40 +733,49 @@ enum Undelivered { resumeData, statusUpdates, progressUpdates }
 /// Actual appearance of notification is dependent on the platform, e.g.
 /// on iOS {progress} and {progressBar} are not available and ignored
 class TaskNotification {
-  final String iconAsset;
   final String title;
   final String body;
 
-  TaskNotification(this.iconAsset, this.title, this.body);
+  TaskNotification(this.title, this.body);
 
   /// Return JSON Map representing object
   Map<String, dynamic> toJsonMap() =>
-      {"iconAsset": iconAsset, "title": title, "body": body};
+      {"title": title, "body": body};
 }
 
 /// Notification configuration object
 ///
 /// Determines how a [task] or [group] of tasks needs to be notified
 ///
-/// [activeNotification] is the notification used while the task is in progress
+/// [runningNotification] is the notification used while the task is in progress
 /// [completeNotification] is the notification used when the task completed
 /// [errorNotification] is the notification used when something went wrong,
 /// including pause, failed and notFound status
 class TaskNotificationConfig {
   final Task? task;
   final String? group;
-  final TaskNotification? activeNotification;
+  final TaskNotification? runningNotification;
   final TaskNotification? completeNotification;
   final TaskNotification? errorNotification;
+  final TaskNotification? pausedNotification;
+  final bool progressBar;
 
-  TaskNotificationConfig(this.task, this.group, this.activeNotification,
-      this.completeNotification, this.errorNotification) {
+  TaskNotificationConfig(
+      {this.task,
+      group,
+      this.runningNotification,
+      this.completeNotification,
+      this.errorNotification,
+      this.pausedNotification,
+      this.progressBar = false})
+      : group = group ?? (task == null ? FileDownloader.defaultGroup : null) {
     assert((task != null || group != null) && !(task != null && group != null),
         'Either task or group must be set');
     assert(
-        activeNotification != null ||
+        runningNotification != null ||
             completeNotification != null ||
-            errorNotification != null,
+            errorNotification != null ||
+            pausedNotification != null,
         'At least one notification must be set');
   }
 
@@ -775,8 +783,10 @@ class TaskNotificationConfig {
   Map<String, dynamic> toJsonMap() => {
         "task": task,
         "group": group,
-        "activeNotification": activeNotification?.toJsonMap(),
+        "runningNotification": runningNotification?.toJsonMap(),
         "completeNotification": completeNotification?.toJsonMap(),
-        "errorNotification": errorNotification?.toJsonMap()
+        "errorNotification": errorNotification?.toJsonMap(),
+        "pausedNotification": pausedNotification?.toJsonMap(),
+        "progressBar": progressBar
       };
 }

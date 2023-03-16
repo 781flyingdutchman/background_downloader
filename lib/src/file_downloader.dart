@@ -445,18 +445,28 @@ class FileDownloader {
 
   /// Configure notification for a single task or group of tasks
   void configureNotification(dynamic taskOrGroup,
-      {TaskNotification? activeNotification,
+      {TaskNotification? runningNotification,
       TaskNotification? completeNotification,
-      TaskNotification? errorNotification}) {
+      TaskNotification? errorNotification,
+        TaskNotification? pausedNotification,
+      progressBar = false}) {
     taskOrGroup ??= defaultGroup;
     assert(taskOrGroup is Task || taskOrGroup is String,
         'taskOrGroup must be a [Task] or a [String]');
     if (taskOrGroup is Task) {
-      _notificationConfigs.add(TaskNotificationConfig(taskOrGroup, null,
-          activeNotification, completeNotification, errorNotification));
+      _notificationConfigs.add(TaskNotificationConfig(task: taskOrGroup,
+          group: null,
+          runningNotification: runningNotification,
+          completeNotification: completeNotification,
+          errorNotification: errorNotification, pausedNotification:
+        pausedNotification, progressBar: progressBar));
     } else {
-      _notificationConfigs.add(TaskNotificationConfig(null, taskOrGroup,
-          activeNotification, completeNotification, errorNotification));
+      _notificationConfigs.add(TaskNotificationConfig(task: null,
+          group: taskOrGroup,
+          runningNotification: runningNotification,
+          completeNotification: completeNotification,
+          errorNotification: errorNotification, pausedNotification:
+          pausedNotification, progressBar: progressBar));
     }
   }
 

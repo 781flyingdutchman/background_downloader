@@ -41,13 +41,14 @@ class _MyAppState extends State<MyApp> {
             taskStatusCallback: myDownloadStatusCallback,
             taskProgressCallback: myDownloadProgressCallback)
         .configureNotification(FileDownloader.defaultGroup,
-            activeNotification:
-                TaskNotification('', 'Download', 'File: {filename}'),
-            completeNotification: TaskNotification(
-                '', 'Download', 'Download of {filename} complete at '
-                '{progress}'),
-            errorNotification: TaskNotification(
-                '', 'Download', 'Download of {filename} failed'));
+            runningNotification: TaskNotification(
+                'Download {filename}',
+                'File: {filename} - {progress}'),
+            completeNotification:
+                TaskNotification('Download {filename}', 'Download complete'),
+            errorNotification:
+                TaskNotification('Download', 'Download of {filename} failed'),
+            progressBar: true);
   }
 
   /// Process the status updates coming from the downloader
