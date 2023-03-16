@@ -331,7 +331,13 @@ abstract class BaseDownloader {
 
   /// Android only: move downloaded file represented by [task] to scoped
   /// storage [destination]
-  Future<bool> moveToScopedStorage(Task task, ScopedStorage destination) async {
+  Future<bool> moveToScopedStorage({
+    required Task task,
+    required ScopedStorage destination,
+    required String destinationFolder,
+    bool markPending = true,
+    bool deleteTemporaryFile = true,
+  }) async {
     assert(Platform.isAndroid,
         'moveToScopedStorage should only be called on Android');
     return false;

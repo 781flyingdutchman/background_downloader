@@ -362,13 +362,30 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler {
     /**
      * Move the file represented by the task to scoped storage and return true if successful
      */
-    private fun methodMoveToScopedStorage(call: MethodCall, result: Result) {
+    private suspend fun methodMoveToScopedStorage(call: MethodCall, result: Result) {
         val args = call.arguments as List<*>
         val taskJsonMapString = args[0] as String
         val task = Task(gson.fromJson(taskJsonMapString, jsonMapType))
         val filePath = task.pathToFile(context)
         val destination = ScopedStorage.values()[args[1] as Int]
-        result.success(moveToScopedStorage(filePath, destination))
+        val destinationFolder = args[2] as String
+        val markFilePending = args[3] as Boolean
+        val deleteTemporaryFile = args[4] as Boolean
+
+        try {
+            val fileMoved = withContext(Dispatchers.IO) {
+                moveToScopedStorage(context, filePath, destination, destinationFolder,
+                        markFilePending, deleteTemporaryFile)
+            }
+
+            if (channel != null) {
+                result.success(fileMoved)
+            }
+        } catch (e: Exception) {
+            if (channel != null) {
+                result.success(false)
+            }
+        }
     }
 
     /**
