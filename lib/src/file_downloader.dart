@@ -443,40 +443,70 @@ class FileDownloader {
     return false;
   }
 
-  /// Configure notification for a single task or group of tasks
-  void configureNotification(dynamic taskOrGroup,
+  /// Configure notification for a single task
+  FileDownloader configureNotificationForTask(Task task,
       {TaskNotification? runningNotification,
       TaskNotification? completeNotification,
       TaskNotification? errorNotification,
-        TaskNotification? pausedNotification,
+      TaskNotification? pausedNotification,
       progressBar = false}) {
-    taskOrGroup ??= defaultGroup;
-    assert(taskOrGroup is Task || taskOrGroup is String,
-        'taskOrGroup must be a [Task] or a [String]');
-    if (taskOrGroup is Task) {
-      _notificationConfigs.add(TaskNotificationConfig(task: taskOrGroup,
-          group: null,
-          runningNotification: runningNotification,
-          completeNotification: completeNotification,
-          errorNotification: errorNotification, pausedNotification:
-        pausedNotification, progressBar: progressBar));
-    } else {
-      _notificationConfigs.add(TaskNotificationConfig(task: null,
-          group: taskOrGroup,
-          runningNotification: runningNotification,
-          completeNotification: completeNotification,
-          errorNotification: errorNotification, pausedNotification:
-          pausedNotification, progressBar: progressBar));
-    }
+    _notificationConfigs.add(TaskNotificationConfig(
+        taskOrGroup: task,
+        runningNotification: runningNotification,
+        completeNotification: completeNotification,
+        errorNotification: errorNotification,
+        pausedNotification: pausedNotification,
+        progressBar: progressBar));
+    return this;
+  }
+
+  /// Configure notification for a group of tasks
+  FileDownloader configureNotificationForGroup(String group,
+      {TaskNotification? runningNotification,
+      TaskNotification? completeNotification,
+      TaskNotification? errorNotification,
+      TaskNotification? pausedNotification,
+      progressBar = false}) {
+    _notificationConfigs.add(TaskNotificationConfig(
+        taskOrGroup: group,
+        runningNotification: runningNotification,
+        completeNotification: completeNotification,
+        errorNotification: errorNotification,
+        pausedNotification: pausedNotification,
+        progressBar: progressBar));
+    return this;
+  }
+
+  /// Configure default task notification
+  ///
+  /// This is the notification configuration used for tasks that do not
+  /// match a task-specific or group-specific notification configuration
+  FileDownloader configureNotification(
+      {TaskNotification? runningNotification,
+      TaskNotification? completeNotification,
+      TaskNotification? errorNotification,
+      TaskNotification? pausedNotification,
+      progressBar = false}) {
+    _notificationConfigs.add(TaskNotificationConfig(
+        taskOrGroup: null,
+        runningNotification: runningNotification,
+        completeNotification: completeNotification,
+        errorNotification: errorNotification,
+        pausedNotification: pausedNotification,
+        progressBar: progressBar));
+    return this;
   }
 
   /// Returns the [TaskNotificationConfig] for this [task] or null
+  ///
+  /// Matches on task, then on group, then on default
   TaskNotificationConfig? _notificationConfigForTask(Task task) {
-    final taskConfig =
-        _notificationConfigs.firstWhereOrNull((config) => config.task == task);
-    return taskConfig ??
+    return _notificationConfigs
+            .firstWhereOrNull((config) => config.taskOrGroup == task) ??
         _notificationConfigs
-            .firstWhereOrNull((element) => element.group == task.group);
+            .firstWhereOrNull((config) => config.taskOrGroup == task.group) ??
+        _notificationConfigs
+            .firstWhereOrNull((config) => config.taskOrGroup == null);
   }
 
   /// Perform a server request for this [request]

@@ -1,5 +1,13 @@
 package com.bbflight.background_downloader
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.util.Log
+import androidx.work.WorkManager
+import com.bbflight.background_downloader.BackgroundDownloaderPlugin.Companion.TAG
+import kotlinx.coroutines.runBlocking
+
 /**
  * Notification specification
  *
@@ -9,7 +17,7 @@ package com.bbflight.background_downloader
  * Actual appearance of notification is dependent on the platform, e.g.
  * on iOS {progress} and progressBar are not available and ignored
  */
-class Notification (val title: String, val body: String) {
+class Notification(val title: String, val body: String) {
     override fun toString(): String {
         return "Notification(title='$title', body='$body')"
     }
@@ -18,26 +26,49 @@ class Notification (val title: String, val body: String) {
 /**
  * Notification configuration object
  *
- * Determines how a [task] or [group] of tasks needs to be notified
- *
  * [runningNotification] is the notification used while the task is in progress
  * [completeNotification] is the notification used when the task completed
  * [errorNotification] is the notification used when something went wrong,
  * including pause, failed and notFound status
  */
 class NotificationConfig(
-        val task: Task?,
-        val group: String?,
         val runningNotification: Notification?,
         val completeNotification: Notification?,
         val errorNotification: Notification?,
         val pausedNotification: Notification?,
         val progressBar: Boolean
-        ) {
+) {
     override fun toString(): String {
-        return "NotificationConfig(task=$task, group=$group, runningNotification=$runningNotification, completeNotification=$completeNotification, errorNotification=$errorNotification, pausedNotification=$pausedNotification, progressBar=$progressBar)"
+        return "NotificationConfig(runningNotification=$runningNotification, completeNotification=$completeNotification, errorNotification=$errorNotification, pausedNotification=$pausedNotification, progressBar=$progressBar)"
     }
 }
 
-enum class NotificationType {running, complete, error, paused}
+enum class NotificationType { running, complete, error, paused }
+
+/**
+ * Receiver for messages from notification, sent via intent
+ */
+class NotificationBroadcastReceiver : BroadcastReceiver() {
+
+    companion object {
+        val actionCancel = "com.bbflight.background_downloader.cancel"
+        val actionPause = "com.bbflight.background_downloader.pause"
+        val extraTaskId = "com.bbflight.background_downloader.taskId"
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        Log.d(TAG, "Receiving ${intent.action}")
+        runBlocking {
+            when (intent.action) {
+                actionCancel -> {
+                    val taskId = intent.getStringExtra(extraTaskId)
+                    if (taskId != null) {
+                        BackgroundDownloaderPlugin.cancelTaskWithId(context, taskId, WorkManager
+                                .getInstance(context))
+                    }
+                }
+            }
+        }
+    }
+}
 

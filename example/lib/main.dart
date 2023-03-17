@@ -40,10 +40,9 @@ class _MyAppState extends State<MyApp> {
         .registerCallbacks(
             taskStatusCallback: myDownloadStatusCallback,
             taskProgressCallback: myDownloadProgressCallback)
-        .configureNotification(FileDownloader.defaultGroup,
+        .configureNotification(
             runningNotification: TaskNotification(
-                'Download {filename}',
-                'File: {filename} - {progress}'),
+                'Download {filename}', 'File: {filename} - {progress}'),
             completeNotification:
                 TaskNotification('Download {filename}', 'Download complete'),
             errorNotification:

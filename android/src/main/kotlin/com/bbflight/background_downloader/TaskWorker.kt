@@ -5,8 +5,10 @@ package com.bbflight.background_downloader
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Context.*
+import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
@@ -16,6 +18,7 @@ import android.util.Log
 import android.webkit.MimeTypeMap
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationCompat.EXTRA_NOTIFICATION_ID
 import androidx.core.app.NotificationManagerCompat
 import androidx.preference.PreferenceManager
 import androidx.work.CoroutineWorker
@@ -750,6 +753,7 @@ class TaskWorker(
                 while (inputStream.read(dataBuffer, 0, bufferSize)
                                 .also { numBytes = it } != -1
                 ) {
+                    delay(20) //TODO CRITICAL remove
                     // check if task is stopped (canceled), paused or timed out
                     if (isStopped) {
                         return@withContext TaskStatus.canceled
@@ -905,6 +909,7 @@ class TaskWorker(
                 .notificationChannel)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setSmallIcon(iconDrawable)
+        // title and body interpolation of {filename} and {progress}
         val title = replaceTokens(notification.title, task, progress)
         if (title.isNotEmpty()) {
             builder.setContentTitle(title)
@@ -913,6 +918,7 @@ class TaskWorker(
         if (body.isNotEmpty()) {
             builder.setContentText(body)
         }
+        // progress bar
         val progressBar = notificationType == NotificationType.running && notificationConfig
                 ?.progressBar ?: false
         if (progressBar && progress >= 0) {
@@ -921,6 +927,20 @@ class TaskWorker(
             } else { // > 1 means indeterminate
                 builder.setProgress(100, 0, true)
             }
+        }
+        // action buttons
+        val activity = BackgroundDownloaderPlugin.activity;
+        if (activity != null && notificationType == NotificationType.running) {
+            val cancelIntent =
+                    Intent(applicationContext, NotificationBroadcastReceiver::class.java).apply {
+                        action = NotificationBroadcastReceiver.actionCancel
+                        putExtra(NotificationBroadcastReceiver.extraTaskId, task.taskId)
+                    }
+            val cancelPendingIntent: PendingIntent =
+                    PendingIntent.getBroadcast(applicationContext, notificationId, cancelIntent, PendingIntent
+                            .FLAG_IMMUTABLE)
+            builder.addAction(R.drawable.outline_cancel_24,
+                    activity.getString(R.string.bg_downloader_cancel), cancelPendingIntent)
         }
         // TODO set contentIntent to deal with tap
         // TODO set cancel button and action

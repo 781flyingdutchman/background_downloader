@@ -745,15 +745,14 @@ class TaskNotification {
 
 /// Notification configuration object
 ///
-/// Determines how a [task] or [group] of tasks needs to be notified
+/// Determines how a [taskOrGroup] or [group] of tasks needs to be notified
 ///
 /// [runningNotification] is the notification used while the task is in progress
 /// [completeNotification] is the notification used when the task completed
 /// [errorNotification] is the notification used when something went wrong,
 /// including pause, failed and notFound status
 class TaskNotificationConfig {
-  final Task? task;
-  final String? group;
+  final dynamic taskOrGroup;
   final TaskNotification? runningNotification;
   final TaskNotification? completeNotification;
   final TaskNotification? errorNotification;
@@ -761,16 +760,12 @@ class TaskNotificationConfig {
   final bool progressBar;
 
   TaskNotificationConfig(
-      {this.task,
-      group,
+      {this.taskOrGroup,
       this.runningNotification,
       this.completeNotification,
       this.errorNotification,
       this.pausedNotification,
-      this.progressBar = false})
-      : group = group ?? (task == null ? FileDownloader.defaultGroup : null) {
-    assert((task != null || group != null) && !(task != null && group != null),
-        'Either task or group must be set');
+      this.progressBar = false}) {
     assert(
         runningNotification != null ||
             completeNotification != null ||
@@ -779,10 +774,9 @@ class TaskNotificationConfig {
         'At least one notification must be set');
   }
 
-  /// Return JSON Map representing object
+  /// Return JSON Map representing object, excluding the [taskOrGroup] field,
+  /// as the JSON map is only required to pass along the config with a task
   Map<String, dynamic> toJsonMap() => {
-        "task": task,
-        "group": group,
         "runningNotification": runningNotification?.toJsonMap(),
         "completeNotification": completeNotification?.toJsonMap(),
         "errorNotification": errorNotification?.toJsonMap(),
