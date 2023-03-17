@@ -18,7 +18,6 @@ import android.util.Log
 import android.webkit.MimeTypeMap
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationCompat.EXTRA_NOTIFICATION_ID
 import androidx.core.app.NotificationManagerCompat
 import androidx.preference.PreferenceManager
 import androidx.work.CoroutineWorker
@@ -841,8 +840,9 @@ class TaskWorker(
         // Create the NotificationChannel, but only on API 26+ because
         // the NotificationChannel class is new and not in the support library
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "Downloads"
-            val descriptionText = "Download notifications"
+            val name = applicationContext.getString(R.string.bg_downloader_notification_channel_name)
+            val descriptionText = applicationContext.getString(R.string
+                    .bg_downloader_notification_channel_description)
             val importance = NotificationManager.IMPORTANCE_LOW
             val channel =
                     NotificationChannel(BackgroundDownloaderPlugin.notificationChannel, name,
@@ -941,6 +941,19 @@ class TaskWorker(
                             .FLAG_IMMUTABLE)
             builder.addAction(R.drawable.outline_cancel_24,
                     activity.getString(R.string.bg_downloader_cancel), cancelPendingIntent)
+            if (taskCanResume) {
+                Log.d(TAG, "Pause")
+                val pauseIntent =
+                        Intent(applicationContext, NotificationBroadcastReceiver::class.java).apply {
+                            action = NotificationBroadcastReceiver.actionPause
+                            putExtra(NotificationBroadcastReceiver.extraTaskId, task.taskId)
+                        }
+                val pausePendingIntent: PendingIntent =
+                        PendingIntent.getBroadcast(applicationContext, notificationId, pauseIntent, PendingIntent
+                                .FLAG_IMMUTABLE)
+                builder.addAction(R.drawable.outline_pause_24,
+                        activity.getString(R.string.bg_downloader_pause), pausePendingIntent)
+            }
         }
         // TODO set contentIntent to deal with tap
         // TODO set cancel button and action

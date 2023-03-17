@@ -58,14 +58,19 @@ class NotificationBroadcastReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         Log.d(TAG, "Receiving ${intent.action}")
-        runBlocking {
-            when (intent.action) {
-                actionCancel -> {
-                    val taskId = intent.getStringExtra(extraTaskId)
-                    if (taskId != null) {
+        val taskId = intent.getStringExtra(extraTaskId)
+        if (taskId != null) {
+            runBlocking {
+                when (intent.action) {
+                    actionCancel -> {
                         BackgroundDownloaderPlugin.cancelTaskWithId(context, taskId, WorkManager
                                 .getInstance(context))
                     }
+                    actionPause -> {
+
+                        //TODO cancel
+                    }
+                    else -> {}
                 }
             }
         }

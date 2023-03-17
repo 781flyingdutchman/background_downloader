@@ -142,7 +142,8 @@ class _MyAppState extends State<MyApp> {
             filename: 'zipfile.zip',
             directory: 'my/directory',
             baseDirectory: BaseDirectory.applicationDocuments,
-            updates: Updates.statusAndProgress);
+            updates: Updates.statusAndProgress,
+        allowPause: true);
         await FileDownloader().enqueue(backgroundDownloadTask!);
         break;
       case ButtonState.cancel:

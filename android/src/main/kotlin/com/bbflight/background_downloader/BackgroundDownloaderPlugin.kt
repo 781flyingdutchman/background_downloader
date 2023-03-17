@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.preference.PreferenceManager
@@ -181,6 +180,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
     private var channel: MethodChannel? = null
     lateinit var applicationContext: Context
     var cancelReceiver: NotificationBroadcastReceiver? = null
+    var pauseReceiver: NotificationBroadcastReceiver? = null
 
     /**
      * Attaches the plugin to the Flutter engine and performs initialization
@@ -202,12 +202,17 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 "com.bbflight.background_downloader"
         )
         channel?.setMethodCallHandler(this)
-        // set context and register notification broadcast receiver
+        // set context and register notification broadcast receivers
         applicationContext = flutterPluginBinding.applicationContext
         cancelReceiver = NotificationBroadcastReceiver()
-        val filter = IntentFilter(NotificationBroadcastReceiver
+        val cancelFilter = IntentFilter(NotificationBroadcastReceiver
                 .actionCancel)
-        ContextCompat.registerReceiver(applicationContext, cancelReceiver, filter,
+        ContextCompat.registerReceiver(applicationContext, cancelReceiver, cancelFilter,
+                ContextCompat.RECEIVER_NOT_EXPORTED)
+        pauseReceiver = NotificationBroadcastReceiver()
+        val pauseFilter = IntentFilter(NotificationBroadcastReceiver
+                .actionPause)
+        ContextCompat.registerReceiver(applicationContext, pauseReceiver, pauseFilter,
                 ContextCompat.RECEIVER_NOT_EXPORTED)
         // clear expired items
         val workManager = WorkManager.getInstance(applicationContext)
@@ -237,6 +242,10 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         if (cancelReceiver != null) {
             applicationContext.unregisterReceiver(cancelReceiver)
             cancelReceiver = null;
+        }
+        if (pauseReceiver != null) {
+            applicationContext.unregisterReceiver(pauseReceiver)
+            pauseReceiver = null;
         }
     }
 
