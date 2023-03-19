@@ -459,8 +459,20 @@ class FileDownloader {
 
   /// Android only: move downloaded file represented by [task] to scoped
   /// storage [destination]
-  Future<bool> moveToScopedStorage(Task task, ScopedStorage destination) =>
-  _downloader.moveToScopedStorage(task, destination);
+  Future<bool> moveToScopedStorage({
+    required Task task,
+    required ScopedStorage destination,
+    required String destinationFolder,
+    bool markPending = true,
+    bool deleteTemporaryFile = true,
+  }) =>
+      _downloader.moveToScopedStorage(
+        task: task,
+        destination: destination,
+        destinationFolder: destinationFolder,
+        markPending: markPending,
+        deleteTemporaryFile: deleteTemporaryFile,
+      );
 
   /// Destroy the [FileDownloader]. Subsequent use requires initialization
   void destroy() {
