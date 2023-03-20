@@ -255,7 +255,8 @@ abstract class BaseDownloader {
   ///
   /// Returns true if successful
   @mustCallSuper
-  Future<bool> resume(Task task) async {
+  Future<bool> resume(Task task, [TaskNotificationConfig? notificationConfig])
+  async {
     await removePausedTask(task.taskId);
     if (await getResumeData(task.taskId) != null) {
       canResumeTask[task] = Completer();

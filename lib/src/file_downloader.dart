@@ -438,7 +438,7 @@ class FileDownloader {
   /// a POST request, this method returns false immediately.
   Future<bool> resume(DownloadTask task) async {
     if (task.allowPause && task.post == null) {
-      return _downloader.resume(task);
+      return _downloader.resume(task, _notificationConfigForTask(task));
     }
     return false;
   }
@@ -452,10 +452,10 @@ class FileDownloader {
       progressBar = false}) {
     _notificationConfigs.add(TaskNotificationConfig(
         taskOrGroup: task,
-        runningNotification: runningNotification,
-        completeNotification: completeNotification,
-        errorNotification: errorNotification,
-        pausedNotification: pausedNotification,
+        running: runningNotification,
+        complete: completeNotification,
+        error: errorNotification,
+        paused: pausedNotification,
         progressBar: progressBar));
     return this;
   }
@@ -469,10 +469,10 @@ class FileDownloader {
       progressBar = false}) {
     _notificationConfigs.add(TaskNotificationConfig(
         taskOrGroup: group,
-        runningNotification: runningNotification,
-        completeNotification: completeNotification,
-        errorNotification: errorNotification,
-        pausedNotification: pausedNotification,
+        running: runningNotification,
+        complete: completeNotification,
+        error: errorNotification,
+        paused: pausedNotification,
         progressBar: progressBar));
     return this;
   }
@@ -482,17 +482,17 @@ class FileDownloader {
   /// This is the notification configuration used for tasks that do not
   /// match a task-specific or group-specific notification configuration
   FileDownloader configureNotification(
-      {TaskNotification? runningNotification,
-      TaskNotification? completeNotification,
-      TaskNotification? errorNotification,
-      TaskNotification? pausedNotification,
+      {TaskNotification? running,
+      TaskNotification? complete,
+      TaskNotification? error,
+      TaskNotification? paused,
       progressBar = false}) {
     _notificationConfigs.add(TaskNotificationConfig(
         taskOrGroup: null,
-        runningNotification: runningNotification,
-        completeNotification: completeNotification,
-        errorNotification: errorNotification,
-        pausedNotification: pausedNotification,
+        running: running,
+        complete: complete,
+        error: error,
+        paused: paused,
         progressBar: progressBar));
     return this;
   }

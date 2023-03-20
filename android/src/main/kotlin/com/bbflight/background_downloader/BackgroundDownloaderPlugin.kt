@@ -10,6 +10,9 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.preference.PreferenceManager
 import androidx.work.*
+import com.bbflight.background_downloader.TaskWorker.Companion.keyNotificationConfig
+import com.bbflight.background_downloader.TaskWorker.Companion.keyStartByte
+import com.bbflight.background_downloader.TaskWorker.Companion.keyTempFilename
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -45,9 +48,6 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         const val keyResumeDataMap = "com.bbflight.background_downloader.resumeDataMap"
         const val keyStatusUpdateMap = "com.bbflight.background_downloader.statusUpdateMap"
         const val keyProgressUpdateMap = "com.bbflight.background_downloader.progressUpdateMap"
-        const val keyNotificationConfig = "notificationConfig"
-        const val keyTempFilename = "tempFilename"
-        const val keyStartByte = "startByte"
         const val notificationChannel = "background_downloader"
         const val notificationPermissionRequestCode = 373921
 
@@ -62,6 +62,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         val gson = Gson()
         val jsonMapType = object : TypeToken<Map<String, Any>>() {}.type
         var haveNotificationPermission = false
+        var localResumeData = HashMap<String, ResumeData>()
 
 
         /**
@@ -78,6 +79,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
             val task =
                     Task(gson.fromJson(taskJsonMapString, jsonMapType))
             Log.i(TAG, "Enqueuing task with id ${task.taskId}")
+            canceledTaskIds.remove(task.taskId)
             val dataBuilder =
                     Data.Builder().putString(TaskWorker.keyTask, taskJsonMapString)
             if (notificationConfigJsonString != null) {
@@ -138,29 +140,35 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
 
         /**
          * Cancel task with [taskId] and return true if successful
+         *
+         * The [taskId] must be managed by the [workManager]
          */
-        suspend fun cancelTaskWithId(context: Context, taskId: String, workManager: WorkManager):
+        suspend fun cancelActiveTaskWithId(context: Context, taskId: String,
+                                           workManager: WorkManager):
                 Boolean {
             val workInfos = withContext(Dispatchers.IO) {
                 workManager.getWorkInfosByTag("taskId=$taskId").get()
             }
             if (workInfos.isEmpty()) {
-                throw IllegalArgumentException("Not found")
+                Log.d(TAG, "Could not find tasks to cancel")
+                return false
             }
-            val workInfo = workInfos.first()
-            if (workInfo.state != WorkInfo.State.SUCCEEDED) {
-                // send cancellation update for tasks that have not yet succeeded
-                prefsLock.read {
-                    val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-                    val tasksMap = getTaskMap(prefs)
-                    val taskJsonMap = tasksMap[taskId] as String?
-                    if (taskJsonMap != null) {
-                        val task = Task(
-                                gson.fromJson(taskJsonMap, jsonMapType)
-                        )
-                        TaskWorker.processStatusUpdate(task, TaskStatus.canceled, prefs)
-                    } else {
-                        Log.d(TAG, "Could not find taskId $taskId to cancel")
+            for (workInfo in workInfos) {
+                if (workInfo.state != WorkInfo.State.SUCCEEDED) {
+                    // send cancellation update for tasks that have not yet succeeded
+                    Log.d(TAG, "Canceling active task and sending status update")
+                    prefsLock.write {
+                        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+                        val tasksMap = getTaskMap(prefs)
+                        val taskJsonMap = tasksMap[taskId] as String?
+                        if (taskJsonMap != null) {
+                            val task = Task(
+                                    gson.fromJson(taskJsonMap, jsonMapType)
+                            )
+                            TaskWorker.processStatusUpdate(task, TaskStatus.canceled, prefs)
+                        } else {
+                            Log.d(TAG, "Could not find taskId $taskId to cancel")
+                        }
                     }
                 }
             }
@@ -175,12 +183,41 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
             }
             return true
         }
+
+        /**
+         * Cancel [task] that is not active
+         *
+         * Because this [task] is not managed by a [WorkManager] it is cancelled directly. This
+         * is normally called from a notification when the task is paused (which is why it is
+         * inactive), and therefore the caller must remove the notification that triggered the
+         * cancellation. See [NotificationRcvr]
+         */
+        suspend fun cancelInactiveTask(context: Context, task: Task) {
+            prefsLock.write {
+                Log.d(TAG, "Canceling inactive task")
+                val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+                TaskWorker.processStatusUpdate(task, TaskStatus.canceled, prefs)
+            }
+        }
+
+        /**
+         * Pause the task with this [taskId]
+         *
+         * Marks the task for pausing, actual pausing happens in [TaskWorker]
+         */
+        fun pauseTaskWithId(taskId: String): Boolean {
+            Log.v(TAG, "Marking taskId $taskId for pausing")
+            pausedTaskIds.add(taskId)
+            return true
+        }
     }
+
 
     private var channel: MethodChannel? = null
     lateinit var applicationContext: Context
-    var cancelReceiver: NotificationBroadcastReceiver? = null
-    var pauseReceiver: NotificationBroadcastReceiver? = null
+    var cancelReceiver: NotificationRcvr? = null
+    var pauseReceiver: NotificationRcvr? = null
+    var resumeReceiver: NotificationRcvr? = null
 
     /**
      * Attaches the plugin to the Flutter engine and performs initialization
@@ -204,15 +241,20 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         channel?.setMethodCallHandler(this)
         // set context and register notification broadcast receivers
         applicationContext = flutterPluginBinding.applicationContext
-        cancelReceiver = NotificationBroadcastReceiver()
-        val cancelFilter = IntentFilter(NotificationBroadcastReceiver
-                .actionCancel)
-        ContextCompat.registerReceiver(applicationContext, cancelReceiver, cancelFilter,
+        cancelReceiver = NotificationRcvr()
+        ContextCompat.registerReceiver(applicationContext, cancelReceiver,
+                IntentFilter(NotificationRcvr
+                        .actionCancelActive),
                 ContextCompat.RECEIVER_NOT_EXPORTED)
-        pauseReceiver = NotificationBroadcastReceiver()
-        val pauseFilter = IntentFilter(NotificationBroadcastReceiver
-                .actionPause)
-        ContextCompat.registerReceiver(applicationContext, pauseReceiver, pauseFilter,
+        pauseReceiver = NotificationRcvr()
+        ContextCompat.registerReceiver(applicationContext, pauseReceiver,
+                IntentFilter(NotificationRcvr
+                        .actionPause),
+                ContextCompat.RECEIVER_NOT_EXPORTED)
+        resumeReceiver = NotificationRcvr()
+        ContextCompat.registerReceiver(applicationContext, resumeReceiver,
+                IntentFilter(NotificationRcvr
+                        .actionResume),
                 ContextCompat.RECEIVER_NOT_EXPORTED)
         // clear expired items
         val workManager = WorkManager.getInstance(applicationContext)
@@ -241,11 +283,15 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         }
         if (cancelReceiver != null) {
             applicationContext.unregisterReceiver(cancelReceiver)
-            cancelReceiver = null;
+            cancelReceiver = null
         }
         if (pauseReceiver != null) {
             applicationContext.unregisterReceiver(pauseReceiver)
-            pauseReceiver = null;
+            pauseReceiver = null
+        }
+        if (resumeReceiver != null) {
+            applicationContext.unregisterReceiver(resumeReceiver)
+            resumeReceiver = null
         }
     }
 
@@ -353,7 +399,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         Log.v(TAG, "Canceling taskIds $taskIds")
         var success = true
         for (taskId in taskIds) {
-            success = success && cancelTaskWithId(applicationContext, taskId, workManager)
+            success = success && cancelActiveTaskWithId(applicationContext, taskId, workManager)
         }
         result.success(success)
     }
@@ -378,9 +424,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
      */
     private fun methodPause(call: MethodCall, result: Result) {
         val taskId = call.arguments as String
-        Log.v(TAG, "Marking taskId $taskId for pausing")
-        pausedTaskIds.add(taskId)
-        result.success(true)
+        result.success(pauseTaskWithId(taskId))
     }
 
     /**

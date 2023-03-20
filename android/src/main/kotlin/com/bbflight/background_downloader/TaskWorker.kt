@@ -12,6 +12,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -53,14 +54,19 @@ class TaskWorker(
 ) :
         CoroutineWorker(applicationContext, workerParams) {
 
+    @Suppress("RegExpRedundantEscape")
     companion object {
         const val TAG = "TaskWorker"
         const val keyTask = "Task"
+        const val keyNotificationConfig = "notificationConfig"
+        const val keyTempFilename = "tempFilename"
+        const val keyStartByte = "startByte"
         const val bufferSize = 8096
         const val taskTimeoutMillis = 9 * 60 * 1000L  // 9 minutes
 
         private val fileNameRegEx = Regex("""\{filename\}""", RegexOption.IGNORE_CASE)
         private val progressRegEx = Regex("""\{progress\}""", RegexOption.IGNORE_CASE)
+        private val metaDataRegEx = Regex("""\{metadata\}""", RegexOption.IGNORE_CASE)
 
         private var taskCanResume = false
         private var createdNotificationChannel = false
@@ -186,7 +192,8 @@ class TaskWorker(
                     )
                 }
             }
-            // if task is in final state, remove from persistent storage
+            // if task is in final state, remove from persistent storage and remove
+            // resume data from local memory
             if (status.isFinalState()) {
                 BackgroundDownloaderPlugin.prefsLock.write {
                     val tasksMap =
@@ -199,6 +206,7 @@ class TaskWorker(
                     )
                     editor.apply()
                 }
+                BackgroundDownloaderPlugin.localResumeData.remove(task.taskId)
             }
         }
 
@@ -209,6 +217,8 @@ class TaskWorker(
          * from the [BackgroundDownloaderPlugin.canceledTaskIds]
          */
         private fun canSendCancellation(task: Task): Boolean {
+            Log.d(TAG,
+                    "In canSendCancellation with ${BackgroundDownloaderPlugin.canceledTaskIds[task.taskId]}")
             val idsToRemove = ArrayList<String>()
             val now = currentTimeMillis()
             for (entry in BackgroundDownloaderPlugin.canceledTaskIds) {
@@ -259,9 +269,12 @@ class TaskWorker(
          *
          * Attempts to post this to the Dart side via background channel. If that is not
          * successful, stores the resume data in shared preferences, for later retrieval by
-         * the Dart side
+         * the Dart side.
+         *
+         * Also stores a copy in memory locally, to allow notifications to resume a task
          */
         suspend fun processResumeData(resumeData: ResumeData, prefs: SharedPreferences) {
+            BackgroundDownloaderPlugin.localResumeData[resumeData.task.taskId] = resumeData
             if (!postOnBackgroundChannel(
                             "resumeData",
                             resumeData.task,
@@ -317,6 +330,7 @@ class TaskWorker(
     private var notificationConfigJsonString: String? = null
     private var notificationConfig: NotificationConfig? = null
     private var notificationId = 0
+    private var notificationProgress = 2.0 // indeterminate
 
     private lateinit var prefs: SharedPreferences
 
@@ -333,17 +347,16 @@ class TaskWorker(
                     gson.fromJson(taskJsonMapString, mapType)
             )
             notificationConfigJsonString =
-                    inputData.getString(BackgroundDownloaderPlugin.keyNotificationConfig)
+                    inputData.getString(keyNotificationConfig)
             notificationConfig = if (notificationConfigJsonString != null)
                 BackgroundDownloaderPlugin.gson.fromJson(notificationConfigJsonString,
                         NotificationConfig::class.java) else
                 null
-            Log.d(TAG, "NotificationConfig = $notificationConfig")
             // pre-process resume
-            val requiredStartByte = inputData.getLong(BackgroundDownloaderPlugin.keyStartByte, 0)
+            val requiredStartByte = inputData.getLong(keyStartByte, 0)
             var isResume = requiredStartByte != 0L
             val tempFilePath =
-                    if (isResume) inputData.getString(BackgroundDownloaderPlugin.keyTempFilename)
+                    if (isResume) inputData.getString(keyTempFilename)
                             ?: ""
                     else "${applicationContext.cacheDir}/com.bbflight.background_downloader${Random.nextInt()}"
             isResume = isResume && determineIfResumeIsPossible(tempFilePath, requiredStartByte)
@@ -752,7 +765,6 @@ class TaskWorker(
                 while (inputStream.read(dataBuffer, 0, bufferSize)
                                 .also { numBytes = it } != -1
                 ) {
-                    delay(20) //TODO CRITICAL remove
                     // check if task is stopped (canceled), paused or timed out
                     if (isStopped) {
                         return@withContext TaskStatus.canceled
@@ -840,7 +852,8 @@ class TaskWorker(
         // Create the NotificationChannel, but only on API 26+ because
         // the NotificationChannel class is new and not in the support library
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = applicationContext.getString(R.string.bg_downloader_notification_channel_name)
+            val name =
+                    applicationContext.getString(R.string.bg_downloader_notification_channel_name)
             val descriptionText = applicationContext.getString(R.string
                     .bg_downloader_notification_channel_description)
             val importance = NotificationManager.IMPORTANCE_LOW
@@ -871,10 +884,10 @@ class TaskWorker(
     private fun updateNotification(task: Task, notificationType: NotificationType, progress:
     Double = 2.0) {
         val notification = when (notificationType) {
-            NotificationType.running -> notificationConfig?.runningNotification
-            NotificationType.complete -> notificationConfig?.completeNotification
-            NotificationType.error -> notificationConfig?.errorNotification
-            NotificationType.paused -> notificationConfig?.pausedNotification
+            NotificationType.running -> notificationConfig?.running
+            NotificationType.complete -> notificationConfig?.complete
+            NotificationType.error -> notificationConfig?.error
+            NotificationType.paused -> notificationConfig?.paused
         }
         val removeNotification = when (notificationType) {
             NotificationType.running -> false
@@ -890,13 +903,13 @@ class TaskWorker(
         }
         if (notification == null) {
             return
-        } // no notification
+        }
         // need to show a notification
         if (!createdNotificationChannel) {
             createNotificationChannel()
         }
         if (notificationId == 0) {
-            notificationId = Random.nextInt()
+            notificationId = task.taskId.hashCode()
         }
         val iconDrawable = when (notificationType) {
             NotificationType.running -> if (task.isDownloadTask()) R.drawable
@@ -909,54 +922,31 @@ class TaskWorker(
                 .notificationChannel)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setSmallIcon(iconDrawable)
-        // title and body interpolation of {filename} and {progress}
-        val title = replaceTokens(notification.title, task, progress)
+        // use stored progress if notificationType is .paused
+        notificationProgress = if (notificationType == NotificationType.paused)
+            notificationProgress else progress
+        // title and body interpolation of {filename}, {progress} and {metadata}
+        val title = replaceTokens(notification.title, task, notificationProgress)
         if (title.isNotEmpty()) {
             builder.setContentTitle(title)
         }
-        val body = replaceTokens(notification.body, task, progress)
+        val body = replaceTokens(notification.body, task, notificationProgress)
         if (body.isNotEmpty()) {
             builder.setContentText(body)
         }
         // progress bar
-        val progressBar = notificationType == NotificationType.running && notificationConfig
-                ?.progressBar ?: false
-        if (progressBar && progress >= 0) {
-            if (progress <= 1) {
-                builder.setProgress(100, (progress * 100).roundToInt(), false)
+        val progressBar = notificationConfig
+                ?.progressBar ?: false && (notificationType == NotificationType.running ||
+                notificationType == NotificationType.paused)
+        if (progressBar && notificationProgress >= 0) {
+            if (notificationProgress <= 1) {
+                builder.setProgress(100, (notificationProgress * 100).roundToInt(), false)
             } else { // > 1 means indeterminate
                 builder.setProgress(100, 0, true)
             }
         }
         // action buttons
-        val activity = BackgroundDownloaderPlugin.activity;
-        if (activity != null && notificationType == NotificationType.running) {
-            val cancelIntent =
-                    Intent(applicationContext, NotificationBroadcastReceiver::class.java).apply {
-                        action = NotificationBroadcastReceiver.actionCancel
-                        putExtra(NotificationBroadcastReceiver.extraTaskId, task.taskId)
-                    }
-            val cancelPendingIntent: PendingIntent =
-                    PendingIntent.getBroadcast(applicationContext, notificationId, cancelIntent, PendingIntent
-                            .FLAG_IMMUTABLE)
-            builder.addAction(R.drawable.outline_cancel_24,
-                    activity.getString(R.string.bg_downloader_cancel), cancelPendingIntent)
-            if (taskCanResume) {
-                Log.d(TAG, "Pause")
-                val pauseIntent =
-                        Intent(applicationContext, NotificationBroadcastReceiver::class.java).apply {
-                            action = NotificationBroadcastReceiver.actionPause
-                            putExtra(NotificationBroadcastReceiver.extraTaskId, task.taskId)
-                        }
-                val pausePendingIntent: PendingIntent =
-                        PendingIntent.getBroadcast(applicationContext, notificationId, pauseIntent, PendingIntent
-                                .FLAG_IMMUTABLE)
-                builder.addAction(R.drawable.outline_pause_24,
-                        activity.getString(R.string.bg_downloader_pause), pausePendingIntent)
-            }
-        }
-        // TODO set contentIntent to deal with tap
-        // TODO set cancel button and action
+        addActionButtons(notificationType, task, builder)
         with(NotificationManagerCompat.from(applicationContext)) {
             if (!BackgroundDownloaderPlugin.haveNotificationPermission && Build.VERSION.SDK_INT
                     >= Build.VERSION_CODES
@@ -975,8 +965,106 @@ class TaskWorker(
         }
     }
 
+
+
+    /**
+     * Add action buttons to notification
+     *
+     * Which button(s) depends on the [notificationType], and the actions require
+     * access to [task] and the [builder]
+     */
+    private fun addActionButtons(notificationType: NotificationType,
+                                 task: Task,
+                                 builder: NotificationCompat.Builder) {
+        val activity = BackgroundDownloaderPlugin.activity
+        if (activity != null) {
+            when (notificationType) {
+                NotificationType.running -> {
+                    // cancel button when running
+                    val cancelOrPauseBundle = Bundle().apply {
+                        putString(NotificationRcvr.bundleTaskId, task.taskId)
+                    }
+                    val cancelIntent =
+                            Intent(applicationContext, NotificationRcvr::class.java).apply {
+                                action = NotificationRcvr.actionCancelActive
+                                putExtra(NotificationRcvr.extraBundle, cancelOrPauseBundle)
+                            }
+                    val cancelPendingIntent: PendingIntent =
+                            PendingIntent.getBroadcast(applicationContext, notificationId,
+                                    cancelIntent,
+                                    PendingIntent.FLAG_IMMUTABLE)
+                    builder.addAction(R.drawable.outline_cancel_24,
+                            activity.getString(R.string.bg_downloader_cancel), cancelPendingIntent)
+                    if (taskCanResume && (notificationConfig?.paused != null)) {
+                        // pause button when running and paused notification configured
+                        val pauseIntent =
+                                Intent(applicationContext,
+                                        NotificationRcvr::class.java).apply {
+                                    action = NotificationRcvr.actionPause
+                                    putExtra(NotificationRcvr.extraBundle, cancelOrPauseBundle)
+                                }
+                        val pausePendingIntent: PendingIntent =
+                                PendingIntent.getBroadcast(applicationContext, notificationId,
+                                        pauseIntent,
+                                        PendingIntent.FLAG_IMMUTABLE)
+                        builder.addAction(R.drawable.outline_pause_24,
+                                activity.getString(R.string.bg_downloader_pause),
+                                pausePendingIntent)
+                    }
+                }
+                NotificationType.paused -> {
+                    // cancel button
+                    val cancelBundle = Bundle().apply {
+                        putString(NotificationRcvr.bundleTaskId, task.taskId)
+                        putString(NotificationRcvr.bundleTask,
+                                BackgroundDownloaderPlugin.gson.toJson(
+                                        task.toJsonMap()))
+                    }
+                    val cancelIntent =
+                            Intent(applicationContext,
+                                    NotificationRcvr::class.java).apply {
+                                action = NotificationRcvr.actionCancelInactive
+                                putExtra(NotificationRcvr.extraBundle, cancelBundle)
+                            }
+                    val cancelPendingIntent: PendingIntent =
+                            PendingIntent.getBroadcast(applicationContext, notificationId,
+                                    cancelIntent,
+                                    PendingIntent.FLAG_IMMUTABLE)
+                    builder.addAction(R.drawable.outline_cancel_24,
+                            activity.getString(R.string.bg_downloader_cancel),
+                            cancelPendingIntent)
+                    // resume button
+                    val resumeBundle = Bundle().apply {
+                        putString(NotificationRcvr.bundleTaskId, task.taskId)
+                        putString(NotificationRcvr.bundleTask,
+                                BackgroundDownloaderPlugin.gson.toJson(
+                                        task.toJsonMap()))
+                        putString(NotificationRcvr.bundleNotificationConfig,
+                                notificationConfigJsonString)
+                    }
+                    val resumeIntent =
+                            Intent(applicationContext,
+                                    NotificationRcvr::class.java).apply {
+                                action = NotificationRcvr.actionResume
+                                putExtra(NotificationRcvr.extraBundle, resumeBundle)
+                            }
+                    val resumePendingIntent: PendingIntent =
+                            PendingIntent.getBroadcast(applicationContext, notificationId,
+                                    resumeIntent,
+                                    PendingIntent.FLAG_IMMUTABLE)
+                    builder.addAction(R.drawable.outline_play_arrow_24,
+                            activity.getString(R.string.bg_downloader_resume),
+                            resumePendingIntent)
+                }
+                NotificationType.complete -> {}
+                NotificationType.error -> {}
+            }
+        }
+    }
+
     private fun replaceTokens(input: String, task: Task, progress: Double): String {
-        val output = fileNameRegEx.replace(input, task.filename)
+        val output =
+                fileNameRegEx.replace(metaDataRegEx.replace(input, task.metaData), task.filename)
         val progressString = if (progress in 0.0..1.0) (progress * 100).roundToInt()
                 .toString() +
                 "%"

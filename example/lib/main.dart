@@ -24,7 +24,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  final buttonTexts = ['Download', 'Cancel', 'Reset'];
+  final buttonTexts = ['Download', 'Cancel', 'Pause', 'Resume','Reset'];
 
   ButtonState buttonState = ButtonState.download;
   bool downloadWithError = false;
@@ -41,12 +41,14 @@ class _MyAppState extends State<MyApp> {
             taskStatusCallback: myDownloadStatusCallback,
             taskProgressCallback: myDownloadProgressCallback)
         .configureNotification(
-            runningNotification: TaskNotification(
+            running: TaskNotification(
                 'Download {filename}', 'File: {filename} - {progress}'),
-            completeNotification:
+            complete:
                 TaskNotification('Download {filename}', 'Download complete'),
-            errorNotification:
+            error:
                 TaskNotification('Download', 'Download of {filename} failed'),
+            paused: TaskNotification('Download', 'Paused with metadata '
+                '{metadata}'),
             progressBar: true);
   }
 
@@ -55,8 +57,25 @@ class _MyAppState extends State<MyApp> {
   /// Stores the task status
   void myDownloadStatusCallback(Task task, TaskStatus status) {
     if (task == backgroundDownloadTask) {
-      buttonState =
-          status == TaskStatus.running ? ButtonState.cancel : ButtonState.reset;
+      switch(status) {
+
+        case TaskStatus.enqueued:
+        case TaskStatus.notFound:
+        case TaskStatus.failed:
+        case TaskStatus.canceled:
+        case TaskStatus.waitingToRetry:
+          buttonState = ButtonState.reset;
+          break;
+        case TaskStatus.running:
+          buttonState = ButtonState.pause;
+          break;
+        case TaskStatus.complete:
+          buttonState = ButtonState.reset;
+          break;
+        case TaskStatus.paused:
+          buttonState = ButtonState.resume;
+          break;
+      }
       setState(() {
         downloadTaskStatus = status;
       });
@@ -143,7 +162,8 @@ class _MyAppState extends State<MyApp> {
             directory: 'my/directory',
             baseDirectory: BaseDirectory.applicationDocuments,
             updates: Updates.statusAndProgress,
-        allowPause: true);
+            allowPause: true,
+            metaData: 'Your data');
         await FileDownloader().enqueue(backgroundDownloadTask!);
         break;
       case ButtonState.cancel:
@@ -157,6 +177,18 @@ class _MyAppState extends State<MyApp> {
         downloadTaskStatus = null;
         buttonState = ButtonState.download;
         break;
+      case ButtonState.pause:
+        if (backgroundDownloadTask != null) {
+          await FileDownloader()
+              .pause(backgroundDownloadTask!);
+        }
+        break;
+      case ButtonState.resume:
+        if (backgroundDownloadTask != null) {
+          await FileDownloader()
+              .resume(backgroundDownloadTask!);
+        }
+        break;
     }
     if (mounted) {
       setState(() {});
@@ -164,4 +196,4 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
-enum ButtonState { download, cancel, reset }
+enum ButtonState { download, cancel, pause, resume, reset }

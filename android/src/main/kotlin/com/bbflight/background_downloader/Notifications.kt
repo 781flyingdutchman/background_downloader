@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import androidx.core.app.NotificationManagerCompat
 import androidx.work.WorkManager
 import com.bbflight.background_downloader.BackgroundDownloaderPlugin.Companion.TAG
 import kotlinx.coroutines.runBlocking
@@ -26,49 +27,100 @@ class Notification(val title: String, val body: String) {
 /**
  * Notification configuration object
  *
- * [runningNotification] is the notification used while the task is in progress
- * [completeNotification] is the notification used when the task completed
- * [errorNotification] is the notification used when something went wrong,
+ * [running] is the notification used while the task is in progress
+ * [complete] is the notification used when the task completed
+ * [error] is the notification used when something went wrong,
  * including pause, failed and notFound status
  */
 class NotificationConfig(
-        val runningNotification: Notification?,
-        val completeNotification: Notification?,
-        val errorNotification: Notification?,
-        val pausedNotification: Notification?,
+        val running: Notification?,
+        val complete: Notification?,
+        val error: Notification?,
+        val paused: Notification?,
         val progressBar: Boolean
 ) {
     override fun toString(): String {
-        return "NotificationConfig(runningNotification=$runningNotification, completeNotification=$completeNotification, errorNotification=$errorNotification, pausedNotification=$pausedNotification, progressBar=$progressBar)"
+        return "NotificationConfig(running=$running, complete=$complete, errorn=$error, paused=$paused, progressBar=$progressBar)"
     }
 }
 
+@Suppress("EnumEntryName")
 enum class NotificationType { running, complete, error, paused }
 
 /**
  * Receiver for messages from notification, sent via intent
+ *
+ * Note the two cancellation actions: one for active tasks (running and managed by a
+ * [WorkManager] and one for inactive (paused) tasks. Because the latter is not running in a
+ * [WorkManager] job, cancellation is simpler, but the [NotificationRcvr] must remove the
+ * notification that asked for cancellation directly from here. If an 'error' notification
+ * was configured for the task, then it will NOT be shown (as it would when cancelling an active
+ * task)
  */
-class NotificationBroadcastReceiver : BroadcastReceiver() {
+class NotificationRcvr : BroadcastReceiver() {
 
     companion object {
-        val actionCancel = "com.bbflight.background_downloader.cancel"
-        val actionPause = "com.bbflight.background_downloader.pause"
-        val extraTaskId = "com.bbflight.background_downloader.taskId"
+        const val actionCancelActive = "com.bbflight.background_downloader.cancelActive"
+        const val actionCancelInactive = "com.bbflight.background_downloader.cancelInactive"
+        const val actionPause = "com.bbflight.background_downloader.pause"
+        const val actionResume = "com.bbflight.background_downloader.resume"
+        const val extraBundle = "com.bbflight.background_downloader.bundle"
+        const val bundleTaskId = "taskId"
+        const val bundleTask = "task"
+        const val bundleNotificationConfig = "notificationConfig"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        Log.d(TAG, "Receiving ${intent.action}")
-        val taskId = intent.getStringExtra(extraTaskId)
+        val bundle = intent.getBundleExtra(extraBundle)
+        val taskId = bundle?.getString(bundleTaskId)
         if (taskId != null) {
             runBlocking {
                 when (intent.action) {
-                    actionCancel -> {
-                        BackgroundDownloaderPlugin.cancelTaskWithId(context, taskId, WorkManager
-                                .getInstance(context))
+                    actionCancelActive -> {
+                        Log.d(TAG, "active task")
+                        BackgroundDownloaderPlugin
+                                .cancelActiveTaskWithId(context, taskId,
+                                        WorkManager
+                                                .getInstance(context))
+                    }
+                    actionCancelInactive -> {
+                        val taskJsonString = bundle.getString(bundleTask)
+                        if (taskJsonString != null) {
+                            Log.d(TAG, "inactive task")
+                            val task = Task(
+                                    BackgroundDownloaderPlugin.gson.fromJson(taskJsonString,
+                                            BackgroundDownloaderPlugin.jsonMapType))
+                            BackgroundDownloaderPlugin.cancelInactiveTask(context, task)
+                            with(NotificationManagerCompat.from(context)) {
+                                cancel(task.taskId.hashCode())
+                            }
+                        } else {
+                            Log.d(TAG, "task was null")
+                        }
                     }
                     actionPause -> {
-
-                        //TODO cancel
+                        BackgroundDownloaderPlugin.pauseTaskWithId(taskId)
+                    }
+                    actionResume -> {
+                        val resumeData = BackgroundDownloaderPlugin.localResumeData[taskId]
+                        if (resumeData != null) {
+                            val taskJsonString = bundle.getString(bundleTask)
+                            val notificationConfigJsonString = bundle.getString(
+                                    bundleNotificationConfig)
+                            if (notificationConfigJsonString != null && taskJsonString != null) {
+                                BackgroundDownloaderPlugin.doEnqueue(context, taskJsonString,
+                                        notificationConfigJsonString, resumeData.data,
+                                        resumeData.requiredStartByte)
+                            } else {
+                                BackgroundDownloaderPlugin.cancelActiveTaskWithId(context, taskId,
+                                        WorkManager
+                                                .getInstance(context))
+                            }
+                        } else {
+                            BackgroundDownloaderPlugin.cancelActiveTaskWithId(context, taskId,
+                                    WorkManager
+                                            .getInstance(context))
+                        }
                     }
                     else -> {}
                 }
