@@ -3,6 +3,7 @@
 package com.bbflight.background_downloader
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -881,6 +882,7 @@ class TaskWorker(
      * negative no progress bar will be shown. If progress > 1 an indeterminate progress bar
      * will be shown
      */
+    @SuppressLint("MissingPermission")
     private fun updateNotification(task: Task, notificationType: NotificationType, progress:
     Double = 2.0) {
         val notification = when (notificationType) {
@@ -1062,6 +1064,9 @@ class TaskWorker(
         }
     }
 
+    /**
+     * Replace special tokens {filename}, {metadata} and {progress} with their respective values
+     */
     private fun replaceTokens(input: String, task: Task, progress: Double): String {
         val output =
                 fileNameRegEx.replace(metaDataRegEx.replace(input, task.metaData), task.filename)
