@@ -8,6 +8,8 @@ let log = OSLog.init(subsystem: "FileDownloaderPlugin", category: "Downloader")
 
 public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSessionDownloadDelegate, UNUserNotificationCenterDelegate {
     
+    static let instance = Downloader()
+    
     private static var resourceTimeout = 4 * 60 * 60.0 // in seconds
     public static var sessionIdentifier = "com.bbflight.background_downloader.Downloader"
     public static var flutterPluginRegistrantCallback: FlutterPluginRegistrantCallback?
@@ -23,13 +25,19 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     static var nextProgressUpdateTime = [String:Date]()
     static var uploaderForUrlSessionTaskIdentifier = [Int:Uploader]() // maps from UrlSessionTask TaskIdentifier
     static var haveNotificationPermission: Bool?
+    static var taskIdsThatCanResume = Set<String>() // taskIds that can resume
+    static var localResumeData = [String : String]() // locally stored to enable notification resume
+    
+    private override init() {
+        super.init()
+    }
     
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "com.bbflight.background_downloader", binaryMessenger: registrar.messenger())
         backgroundChannel = FlutterMethodChannel(name: "com.bbflight.background_downloader.background", binaryMessenger: registrar.messenger())
-        let instance = Downloader()
         registrar.addMethodCallDelegate(instance, channel: channel)
         registrar.addApplicationDelegate(instance)
+        registerNotificationCategories()
     }
     
     @objc
@@ -93,14 +101,19 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                 Downloader.haveNotificationPermission = granted
             }
         }
+        let isResume = args.count == 4
+        let resumeDataAsBase64String = isResume ? args[2] as! String : ""
+        doEnqueue(taskJsonString: taskJsonString, notificationConfigJsonString: notificationConfigJsonString, resumeDataAsBase64String: resumeDataAsBase64String, result: result)
+    }
+    
+    public func doEnqueue(taskJsonString: String, notificationConfigJsonString: String?, resumeDataAsBase64String: String, result: FlutterResult?) {
         let taskDescription = notificationConfigJsonString == nil ? taskJsonString : taskJsonString + separatorString + notificationConfigJsonString!
-        var isResume = args.count == 4
-        let resumeDataAsBase64String = isResume ? args[1] as! String : ""
+        var isResume = !resumeDataAsBase64String.isEmpty
         let resumeData = isResume ? Data(base64Encoded: resumeDataAsBase64String) : nil
         guard let task = taskFrom(jsonString: taskJsonString)
         else {
             os_log("Could not decode %@ to Task", log: log, taskJsonString)
-            result(false)
+            postResult(result: result, value: false)
             return
         }
         isResume = isResume && resumeData != nil
@@ -126,7 +139,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     }
     
     /// Schedule a download task
-    private func scheduleDownload(task: Task, taskDescription: String, baseRequest: URLRequest, resumeData: Data? , result: @escaping FlutterResult) {
+    private func scheduleDownload(task: Task, taskDescription: String, baseRequest: URLRequest, resumeData: Data? , result: FlutterResult?) {
         var request = baseRequest
         if task.post != nil {
             request.httpMethod = "POST"
@@ -136,21 +149,20 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         urlSessionDownloadTask.taskDescription = taskDescription
         urlSessionDownloadTask.resume()
         processStatusUpdate(task: task, status: TaskStatus.enqueued)
-        result(true)
-        return
+        postResult(result: result, value: true)
     }
     
     /// Schedule an upload task
-    private func scheduleUpload(task: Task, taskDescription: String, baseRequest: URLRequest, result: @escaping FlutterResult) {
+    private func scheduleUpload(task: Task, taskDescription: String, baseRequest: URLRequest, result: FlutterResult?) {
         guard let directory = try? directoryForTask(task: task) else {
             os_log("Could not find directory for taskId %@", log: log, type: .info, task.taskId)
-            result(false)
+            postResult(result: result, value: false)
             return
         }
         let filePath = directory.appendingPathComponent(task.filename)
         if !FileManager.default.fileExists(atPath: filePath.path) {
             os_log("Could not find file %@ for taskId %@", log: log, type: .info, filePath.absoluteString, task.taskId)
-            result(false)
+            postResult(result: result, value: false)
             return
         }
         var request = baseRequest
@@ -168,7 +180,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             os_log("Multipart file upload", log: log, type: .debug)
             let uploader = Uploader(task: task)
             if !uploader.createMultipartFile() {
-                result(false)
+                postResult(result: result, value: false)
                 return
             }
             request.setValue("multipart/form-data; boundary=\(Uploader.boundary)", forHTTPHeaderField: "Content-Type")
@@ -181,7 +193,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             urlSessionUploadTask.resume()
         }
         processStatusUpdate(task: task, status: TaskStatus.enqueued)
-        result(true)
+        postResult(result: result, value: true)
     }
     
     /// Resets the downloadworker by cancelling all ongoing download tasks
@@ -358,6 +370,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             os_log("Could not find task related to urlSessionTask %d", log: log, type: .error, task.taskIdentifier)
             return
         }
+        Downloader.taskIdsThatCanResume.remove(task.taskId)
         guard error == nil else {
             let userInfo = (error! as NSError).userInfo
             if let resumeData = userInfo[NSURLSessionDownloadTaskResumeData] as? Data {
@@ -367,10 +380,11 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                     if isDownloadTask(task: task) {
                         updateNotification(task: task, notificationType: .paused, notificationConfig: notificationConfig)
                     }
+                    Downloader.lastProgressUpdate.removeValue(forKey: task.taskId) // ensure .running update on resume
                     return
                 }
             }
-            if error!.localizedDescription.contains("cancelled") {
+            if error!.localizedDescription.contains("cancelled") {  //TODO this is locale dependent
                 os_log("Canceled task with id %@", log: log, type: .info, task.taskId)
                 processStatusUpdate(task: task, status: .canceled)
             }
@@ -393,9 +407,6 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             : TaskStatus.failed
             processStatusUpdate(task: task, status: finalStatus)
         }
-        if isDownloadTask(task: task) {
-            updateNotification(task: task, notificationType: .complete, notificationConfig: notificationConfig)
-        }
     }
     
     //MARK: URLSessionDownloadTaskDelegate
@@ -416,6 +427,14 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                 let acceptRangesHeader = (downloadTask.response as! HTTPURLResponse?)?.allHeaderFields["Accept-Ranges"]
                 let taskCanResume = acceptRangesHeader as? String == "bytes"
                 processCanResume(task: task, taskCanResume: taskCanResume)
+                if taskCanResume {
+                    Downloader.taskIdsThatCanResume.insert(task.taskId)
+                }
+            }
+            // notify if needed
+            let notificationCongfig = getNotificationConfigFrom(urlSessionTask: downloadTask)
+            if (notificationCongfig != nil) {
+                updateNotification(task: task, notificationType: .running, notificationConfig: notificationCongfig)
             }
         }
         if totalBytesExpectedToWrite != NSURLSessionTransferSizeUnknown && Date() > Downloader.nextProgressUpdateTime[task.taskId] ?? Date(timeIntervalSince1970: 0) {
@@ -463,19 +482,23 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         else {
             os_log("Could not find task associated urlSessionTask %d, or did not get HttpResponse", log: log,  type: .info, downloadTask.taskIdentifier)
             return}
+        let notificationConfig = getNotificationConfigFrom(urlSessionTask: downloadTask)
         if response.statusCode == 404 {
             processStatusUpdate(task: task, status: TaskStatus.notFound)
+            updateNotification(task: task, notificationType: .error, notificationConfig: notificationConfig)
             return
         }
         if !(200...206).contains(response.statusCode)   {
             os_log("TaskId %@ returned response code %d", log: log,  type: .info, task.taskId, response.statusCode)
             processStatusUpdate(task: task, status: TaskStatus.failed)
+            updateNotification(task: task, notificationType: .error, notificationConfig: notificationConfig)
             return
         }
         do {
             var finalStatus = TaskStatus.failed
             defer {
                 processStatusUpdate(task: task, status: finalStatus)
+                updateNotification(task: task, notificationType: notificationTypeForTaskStatus(status: finalStatus), notificationConfig: notificationConfig)
             }
             let directory = try directoryForTask(task: task)
             do
@@ -530,19 +553,6 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             handler()
         }
     }
-    
-    //MARK: helper methods
-    
-    /// Creates a urlSession
-    private func createUrlSession() -> URLSession {
-        if Downloader.urlSession != nil {
-            os_log("createUrlSession called with non-null urlSession", log: log, type: .info)
-        }
-        let config = URLSessionConfiguration.background(withIdentifier: Downloader.sessionIdentifier)
-        config.timeoutIntervalForResource = Downloader.resourceTimeout
-        return URLSession(configuration: config, delegate: self, delegateQueue: nil)
-    }
-        
 
     //MARK: UNUserNotificationCenterDelegate
 
@@ -555,7 +565,74 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         os_log("Notify", log: log, type: .info)
         completionHandler(UNNotificationPresentationOptions.alert)
     }
-
+    
+    @MainActor
+    public func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async
+    {
+        os_log("Action", log: log, type: .info)
+        if ourCategories.contains(response.notification.request.content.categoryIdentifier) {
+            os_log("Our Action %@", log: log, type: .info, response.actionIdentifier)
+            // only handle "our" categories, in case another plugin is a notification center delegate
+            let userInfo = response.notification.request.content.userInfo
+            guard let task = taskFrom(jsonString: userInfo["task"] as! String),
+                  let notificationConfig = notificationConfigFrom(jsonString: userInfo["notificationConfig"] as! String)
+            else {
+                os_log("Guard", log: log, type: .info)
+                return
+            }
+            switch response.actionIdentifier {
+            case "pause_action":
+                guard let urlSessionTask = await getUrlSessionTaskWithId(taskId: task.taskId) as? URLSessionDownloadTask,
+                      let resumeData = await urlSessionTask.cancelByProducingResumeData()
+                else {
+                    os_log("Could not pause task in response to notification action", log: log, type: .info)
+                    return
+                }
+                os_log("Pause before processResume", log: log, type: .info)
+                _ = processResumeData(task: task, resumeData: resumeData)
+            case "cancel_action":
+                let urlSessionTaskToCancel = await getAllUrlSessionTasks().first(where: {
+                    guard let taskInUrlSessionTask = getTaskFrom(urlSessionTask: $0) else { return false }
+                    return taskInUrlSessionTask.taskId == task.taskId
+                })
+                os_log("Cancel before cancel()", log: log, type: .info)
+                urlSessionTaskToCancel?.cancel()
+                os_log("Cancel after cancel()", log: log, type: .info)
+            case "cancel_inactive_action":
+                processStatusUpdate(task: task, status: .canceled)
+            case "resume_action":
+                let resumeDataAsBase64String = Downloader.localResumeData[task.taskId] ?? ""
+                if resumeDataAsBase64String.isEmpty {
+                    os_log("Resume data for taskId %@ no longer available: restarting", log: log, type: .info)
+                }
+                doEnqueue(taskJsonString: userInfo["task"] as! String, notificationConfigJsonString: userInfo["notificationConfig"] as! String, resumeDataAsBase64String: resumeDataAsBase64String, result: nil)
+                
+            default:
+                do {}
+            }
+            os_log("End of action", log: log, type: .info)
+        }
+    }
+    
+    
+    //MARK: helper methods
+    
+    /// Creates a urlSession
+    private func createUrlSession() -> URLSession {
+        if Downloader.urlSession != nil {
+            os_log("createUrlSession called with non-null urlSession", log: log, type: .info)
+        }
+        let config = URLSessionConfiguration.background(withIdentifier: Downloader.sessionIdentifier)
+        config.timeoutIntervalForResource = Downloader.resourceTimeout
+        return URLSession(configuration: config, delegate: Downloader.instance, delegateQueue: nil)
+    }
+    
+    /// Post result [value] on FlutterResult completer
+    private func postResult(result: FlutterResult?, value: Any) {
+        if result != nil {
+            result!(value)
+        }
+    }
 }
 
 //MARK: helpers
@@ -579,5 +656,3 @@ extension NSMutableData {
         }
     }
 }
-
-

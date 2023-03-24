@@ -76,6 +76,7 @@ func processStatusUpdate(task: Task, status: TaskStatus) {
         // remove from persistent storage
         Downloader.lastProgressUpdate.removeValue(forKey: task.taskId)
         Downloader.nextProgressUpdateTime.removeValue(forKey: task.taskId)
+        Downloader.localResumeData.removeValue(forKey: task.taskId)
     }
     if providesStatusUpdates(downloadTask: task) || retryNeeded {
         if !postOnBackgroundChannel(method: "statusUpdate", task: task, arg: status.rawValue) {
@@ -125,6 +126,7 @@ func processCanResume(task: Task, taskCanResume: Bool) {
 /// Sends the data via the background channel to Dart
 func processResumeData(task: Task, resumeData: Data) -> Bool {
     let resumeDataAsBase64String = resumeData.base64EncodedString()
+    Downloader.localResumeData[task.taskId] = resumeDataAsBase64String
     if !postOnBackgroundChannel(method: "resumeData", task: task, arg: resumeDataAsBase64String, arg2: 0 as Int64) {
         // store resume data locally
         guard let jsonData = try? JSONEncoder().encode(task),
