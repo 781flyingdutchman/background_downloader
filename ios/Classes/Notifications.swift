@@ -30,9 +30,9 @@ struct NotificationConfig : Codable {
 
 enum NotificationType : Int {
     case running,
-        complete,
-        error,
-        paused
+         complete,
+         error,
+         paused
 }
 
 enum NotificationCategory : String, CaseIterable {
@@ -48,7 +48,6 @@ func updateNotification(task: Task, notificationType: NotificationType, notifica
     let center = UNUserNotificationCenter.current()
     center.getNotificationSettings { settings in
         guard (settings.authorizationStatus == .authorized) else { return }
-        os_log("Have permission", log: log, type: .info)
         var notification: NotificationContents?
         switch notificationType {
         case .running:
@@ -71,14 +70,13 @@ func updateNotification(task: Task, notificationType: NotificationType, notifica
             "notificationConfig": jsonStringFor(notificationConfig: notificationConfig!) ?? ""
         ]
         addActionButtons(task: task, notificationType: notificationType, content: content, notificationConfig: notificationConfig!)
-        os_log("Category %@", log: log, type: .info, content.categoryIdentifier)
         let request = UNNotificationRequest(identifier: task.taskId,
-                    content: content, trigger: nil)
+                                            content: content, trigger: nil)
         let notificationCenter = UNUserNotificationCenter.current()
         notificationCenter.add(request) { (error) in
-           if error != nil {
-               os_log("Notification error %@", log: log, type: .info, error!.localizedDescription)
-           }
+            if error != nil {
+                os_log("Notification error %@", log: log, type: .info, error!.localizedDescription)
+            }
         }
     }
 }
@@ -125,36 +123,36 @@ func replaceTokens(input: String, task: Task) -> String {
 func registerNotificationCategories() {
     // define the actions
     let cancelAction = UNNotificationAction(identifier: "cancel_action",
-          title: "Cancel",
-          options: [])
+                                            title: "Cancel",
+                                            options: [])
     let cancelInactiveAction = UNNotificationAction(identifier: "cancel_inactive_action",
-          title: "Cancel",
-          options: [])
+                                                    title: "Cancel",
+                                                    options: [])
     let pauseAction = UNNotificationAction(identifier: "pause_action",
-          title: "Pause",
-          options: [])
+                                           title: "Pause",
+                                           options: [])
     let resumeAction = UNNotificationAction(identifier: "resume_action",
-          title: "Resume",
-          options: [])
+                                            title: "Resume",
+                                            options: [])
     // Define the notification categories using these actions
     let runningWithPauseCategory =
-          UNNotificationCategory(identifier: NotificationCategory.runningWithPause.rawValue,
-          actions: [cancelAction, pauseAction],
-          intentIdentifiers: [],
-          hiddenPreviewsBodyPlaceholder: "",
-          options: .customDismissAction)
+    UNNotificationCategory(identifier: NotificationCategory.runningWithPause.rawValue,
+                           actions: [cancelAction, pauseAction],
+                           intentIdentifiers: [],
+                           hiddenPreviewsBodyPlaceholder: "",
+                           options: .customDismissAction)
     let runningWithoutPauseCategory =
-          UNNotificationCategory(identifier: NotificationCategory.runningWithoutPause.rawValue,
-          actions: [cancelAction],
-          intentIdentifiers: [],
-          hiddenPreviewsBodyPlaceholder: "",
-          options: .customDismissAction)
+    UNNotificationCategory(identifier: NotificationCategory.runningWithoutPause.rawValue,
+                           actions: [cancelAction],
+                           intentIdentifiers: [],
+                           hiddenPreviewsBodyPlaceholder: "",
+                           options: .customDismissAction)
     let pausedCategory =
-          UNNotificationCategory(identifier: NotificationCategory.paused.rawValue,
-          actions: [cancelInactiveAction, resumeAction],
-          intentIdentifiers: [],
-          hiddenPreviewsBodyPlaceholder: "",
-          options: .customDismissAction)
+    UNNotificationCategory(identifier: NotificationCategory.paused.rawValue,
+                           actions: [cancelInactiveAction, resumeAction],
+                           intentIdentifiers: [],
+                           hiddenPreviewsBodyPlaceholder: "",
+                           options: .customDismissAction)
     // Register the notification type.
     let notificationCenter = UNUserNotificationCenter.current()
     notificationCenter.setNotificationCategories([runningWithPauseCategory, runningWithoutPauseCategory, pausedCategory])
@@ -169,7 +167,7 @@ func jsonStringFor(notificationConfig: NotificationConfig) -> String? {
         return nil
     }
     return String(data: jsonResultData, encoding: .utf8)
-
+    
 }
 
 /// Returns a NotificationConfig from the supplied jsonString, or nil

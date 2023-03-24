@@ -553,31 +553,31 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             handler()
         }
     }
-
+    
     //MARK: UNUserNotificationCenterDelegate
-
-    public func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification,
-        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
-    )
-     {
-        os_log("Notify", log: log, type: .info)
-        completionHandler(UNNotificationPresentationOptions.alert)
+    
+    public func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions
+    {
+        if ourCategories.contains(notification.request.content.categoryIdentifier) {
+            if #available(iOS 14.0, *) {
+                return UNNotificationPresentationOptions.list
+            } else {
+                return UNNotificationPresentationOptions.alert
+            }
+        }
+        return []
     }
+    
     
     @MainActor
     public func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async
     {
-        os_log("Action", log: log, type: .info)
         if ourCategories.contains(response.notification.request.content.categoryIdentifier) {
-            os_log("Our Action %@", log: log, type: .info, response.actionIdentifier)
             // only handle "our" categories, in case another plugin is a notification center delegate
             let userInfo = response.notification.request.content.userInfo
-            guard let task = taskFrom(jsonString: userInfo["task"] as! String),
-                  let notificationConfig = notificationConfigFrom(jsonString: userInfo["notificationConfig"] as! String)
+            guard let task = taskFrom(jsonString: userInfo["task"] as! String)
             else {
-                os_log("Guard", log: log, type: .info)
+                os_log("No task", log: log, type: .error)
                 return
             }
             switch response.actionIdentifier {
@@ -588,16 +588,13 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                     os_log("Could not pause task in response to notification action", log: log, type: .info)
                     return
                 }
-                os_log("Pause before processResume", log: log, type: .info)
                 _ = processResumeData(task: task, resumeData: resumeData)
             case "cancel_action":
                 let urlSessionTaskToCancel = await getAllUrlSessionTasks().first(where: {
                     guard let taskInUrlSessionTask = getTaskFrom(urlSessionTask: $0) else { return false }
                     return taskInUrlSessionTask.taskId == task.taskId
                 })
-                os_log("Cancel before cancel()", log: log, type: .info)
                 urlSessionTaskToCancel?.cancel()
-                os_log("Cancel after cancel()", log: log, type: .info)
             case "cancel_inactive_action":
                 processStatusUpdate(task: task, status: .canceled)
             case "resume_action":
@@ -605,12 +602,11 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                 if resumeDataAsBase64String.isEmpty {
                     os_log("Resume data for taskId %@ no longer available: restarting", log: log, type: .info)
                 }
-                doEnqueue(taskJsonString: userInfo["task"] as! String, notificationConfigJsonString: userInfo["notificationConfig"] as! String, resumeDataAsBase64String: resumeDataAsBase64String, result: nil)
+                doEnqueue(taskJsonString: userInfo["task"] as! String, notificationConfigJsonString: userInfo["notificationConfig"] as? String, resumeDataAsBase64String: resumeDataAsBase64String, result: nil)
                 
             default:
                 do {}
             }
-            os_log("End of action", log: log, type: .info)
         }
     }
     
