@@ -722,3 +722,61 @@ class ResumeData {
 
 /// Types of undelivered data that can be requested
 enum Undelivered { resumeData, statusUpdates, progressUpdates }
+
+/// Notification specification for a [Task]
+///
+/// [body] may contain special string {filename] to insert the filename
+///   and/or special string {progress} to insert progress in %
+///   and/or special trailing string {progressBar} to add a progress bar under
+///   the body text in the notification
+///
+/// Actual appearance of notification is dependent on the platform, e.g.
+/// on iOS {progress} and {progressBar} are not available and ignored
+class TaskNotification {
+  final String title;
+  final String body;
+
+  TaskNotification(this.title, this.body);
+
+  /// Return JSON Map representing object
+  Map<String, dynamic> toJsonMap() => {"title": title, "body": body};
+}
+
+/// Notification configuration object
+///
+/// Determines how a [taskOrGroup] or [group] of tasks needs to be notified
+///
+/// [running] is the notification used while the task is in progress
+/// [complete] is the notification used when the task completed
+/// [error] is the notification used when something went wrong,
+/// including pause, failed and notFound status
+class TaskNotificationConfig {
+  final dynamic taskOrGroup;
+  final TaskNotification? running;
+  final TaskNotification? complete;
+  final TaskNotification? error;
+  final TaskNotification? paused;
+  final bool progressBar;
+
+  TaskNotificationConfig(
+      {this.taskOrGroup,
+      this.running,
+      this.complete,
+      this.error,
+      this.paused,
+      this.progressBar = false}) {
+    assert(
+        running != null || complete != null || error != null || paused != null,
+        'At least one notification must be set');
+  }
+
+  /// Return JSON Map representing object, excluding the [taskOrGroup] field,
+  /// as the JSON map is only required to pass along the config with a task
+  Map<String, dynamic> toJsonMap() => {
+        "running": running?.toJsonMap(),
+        "complete": complete?.toJsonMap(),
+        "error": error?.toJsonMap(),
+        "paused": paused?.toJsonMap(),
+        "progressBar": progressBar
+      };
+}

@@ -1,3 +1,5 @@
+@file:Suppress("EnumEntryName")
+
 package com.bbflight.background_downloader
 
 /// Base directory in which files will be stored, based on their relative

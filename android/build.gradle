@@ -2,7 +2,7 @@ group 'com.bbflight.background_downloader'
 version '1.0-SNAPSHOT'
 
 buildscript {
-    ext.kotlin_version = '1.7.20'
+    ext.kotlin_version = '1.8.0'
     repositories {
         google()
         mavenCentral()
@@ -46,7 +46,7 @@ android {
 }
 
 dependencies {
-    implementation "androidx.work:work-runtime-ktx:2.7.1"
+    implementation "androidx.work:work-runtime-ktx:2.8.0"
     implementation "androidx.concurrent:concurrent-futures-ktx:1.1.0"
     implementation "androidx.preference:preference-ktx:1.2.0"
     implementation 'com.google.code.gson:gson:2.8.9'

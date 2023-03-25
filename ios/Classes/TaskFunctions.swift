@@ -9,6 +9,7 @@ import Foundation
 import os.log
 
 let updatesQueue = DispatchQueue(label: "updatesProcessingQueue")
+let separatorString = "***<<<|>>>***"
 
 /// True if this task expects to provide progress updates
 func providesProgressUpdates(task: Task) -> Bool {
@@ -75,6 +76,7 @@ func processStatusUpdate(task: Task, status: TaskStatus) {
         // remove from persistent storage
         Downloader.lastProgressUpdate.removeValue(forKey: task.taskId)
         Downloader.nextProgressUpdateTime.removeValue(forKey: task.taskId)
+        Downloader.localResumeData.removeValue(forKey: task.taskId)
     }
     if providesStatusUpdates(downloadTask: task) || retryNeeded {
         if !postOnBackgroundChannel(method: "statusUpdate", task: task, arg: status.rawValue) {
@@ -124,6 +126,7 @@ func processCanResume(task: Task, taskCanResume: Bool) {
 /// Sends the data via the background channel to Dart
 func processResumeData(task: Task, resumeData: Data) -> Bool {
     let resumeDataAsBase64String = resumeData.base64EncodedString()
+    Downloader.localResumeData[task.taskId] = resumeDataAsBase64String
     if !postOnBackgroundChannel(method: "resumeData", task: task, arg: resumeDataAsBase64String, arg2: 0 as Int64) {
         // store resume data locally
         guard let jsonData = try? JSONEncoder().encode(task),
@@ -216,12 +219,45 @@ func taskFrom(jsonString: String) -> Task? {
 
 /// Return the task corresponding to the URLSessionTask, or nil if it cannot be matched
 func getTaskFrom(urlSessionTask: URLSessionTask) -> Task? {
-    let decoder = JSONDecoder()
-    guard let jsonData = urlSessionTask.taskDescription?.data(using: .utf8)
+    guard let jsonData = getTaskJsonStringFrom(urlSessionTask: urlSessionTask)?.data(using: .utf8)
     else {
         return nil
     }
+    let decoder = JSONDecoder()
     return try? decoder.decode(Task.self, from: jsonData)
+}
+
+/// Returns the taskJsonString contained in the urlSessionTask
+func getTaskJsonStringFrom(urlSessionTask: URLSessionTask) -> String? {
+    guard let taskDescription = urlSessionTask.taskDescription else {
+        return nil
+    }
+    if taskDescription.contains(separatorString) {
+        return taskDescription.components(separatedBy: separatorString)[0]
+    }
+    return taskDescription
+}
+
+/// Return the notificationConfig corresponding to the URLSessionTask, or nil if it cannot be matched
+func getNotificationConfigFrom(urlSessionTask: URLSessionTask) -> NotificationConfig? {
+    guard let jsonData = getNotificationConfigJsonStringFrom(urlSessionTask: urlSessionTask)?.data(using: .utf8)
+    else {
+        return nil
+    }
+    let decoder = JSONDecoder()
+    return try? decoder.decode(NotificationConfig.self, from: jsonData)
+}
+
+
+/// Returns the notificationConfigJsonString contained in the urlSessionTask
+func getNotificationConfigJsonStringFrom(urlSessionTask: URLSessionTask) -> String? {
+    guard let taskDescription = urlSessionTask.taskDescription else {
+        return nil
+    }
+    if taskDescription.contains(separatorString) {
+        return taskDescription.components(separatedBy: separatorString)[1]
+    }
+    return nil
 }
 
 /// Returns the URL of the directory where the file for this task is stored

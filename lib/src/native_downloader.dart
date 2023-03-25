@@ -63,10 +63,13 @@ class NativeDownloader extends BaseDownloader {
   }
 
   @override
-  Future<bool> enqueue(Task task) async {
+  Future<bool> enqueue(Task task,
+      [TaskNotificationConfig? notificationConfig]) async {
     super.enqueue(task);
-    return await _channel
-            .invokeMethod<bool>('enqueue', [jsonEncode(task.toJsonMap())]) ??
+    return await _channel.invokeMethod<bool>('enqueue', [
+          jsonEncode(task.toJsonMap()),
+          jsonEncode(notificationConfig?.toJsonMap())
+        ]) ??
         false;
   }
 
@@ -112,12 +115,14 @@ class NativeDownloader extends BaseDownloader {
       await _channel.invokeMethod<bool>('pause', task.taskId) ?? false;
 
   @override
-  Future<bool> resume(Task task) async {
+  Future<bool> resume(Task task,
+      [TaskNotificationConfig? notificationConfig]) async {
     if (await super.resume(task)) {
       final taskResumeData = await getResumeData(task.taskId);
       if (taskResumeData != null) {
         return await _channel.invokeMethod<bool>('enqueue', [
               jsonEncode(task.toJsonMap()),
+              jsonEncode(notificationConfig?.toJsonMap()),
               taskResumeData.data,
               taskResumeData.requiredStartByte
             ]) ??

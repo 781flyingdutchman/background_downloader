@@ -1647,6 +1647,23 @@ void main() {
       }
     });
   });
+
+  group('Notifications', () {
+    testWidgets('NotificationConfig', (widgetTester) async {
+      FileDownloader()
+          .configureNotification(running: TaskNotification('Title', 'Body'));
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      task = DownloadTask(
+          url: urlWithContentLength,
+          filename: defaultFilename,
+          updates: Updates.statusAndProgress,
+          allowPause: true);
+      expect(await FileDownloader().enqueue(task), equals(true));
+      await statusCallbackCompleter.future;
+    });
+  });
 }
 
 /// Helper: make sure [task] is set as desired, and this will enqueue, wait for

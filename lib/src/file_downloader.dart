@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
@@ -52,6 +53,9 @@ class FileDownloader {
   /// Registered [TaskProgressCallback] for convenience batch down/upload tasks
   final _taskProgressCallbacks = <String, TaskProgressCallback>{};
 
+  /// List of notification configurations
+  final _notificationConfigs = <TaskNotificationConfig>[];
+
   factory FileDownloader() => _singleton;
 
   FileDownloader._internal();
@@ -96,7 +100,8 @@ class FileDownloader {
   /// Returns true if successfully enqueued. A new task will also generate
   /// a [TaskStatus.enqueued] update to the registered callback,
   /// if requested by its [updates] property
-  Future<bool> enqueue(Task task) => _downloader.enqueue(task);
+  Future<bool> enqueue(Task task) =>
+      _downloader.enqueue(task, _notificationConfigForTask(task));
 
   /// Download a file and return the final [TaskStatus]
   ///
@@ -433,9 +438,75 @@ class FileDownloader {
   /// a POST request, this method returns false immediately.
   Future<bool> resume(DownloadTask task) async {
     if (task.allowPause && task.post == null) {
-      return _downloader.resume(task);
+      return _downloader.resume(task, _notificationConfigForTask(task));
     }
     return false;
+  }
+
+  /// Configure notification for a single task
+  FileDownloader configureNotificationForTask(Task task,
+      {TaskNotification? runningNotification,
+      TaskNotification? completeNotification,
+      TaskNotification? errorNotification,
+      TaskNotification? pausedNotification,
+      progressBar = false}) {
+    _notificationConfigs.add(TaskNotificationConfig(
+        taskOrGroup: task,
+        running: runningNotification,
+        complete: completeNotification,
+        error: errorNotification,
+        paused: pausedNotification,
+        progressBar: progressBar));
+    return this;
+  }
+
+  /// Configure notification for a group of tasks
+  FileDownloader configureNotificationForGroup(String group,
+      {TaskNotification? runningNotification,
+      TaskNotification? completeNotification,
+      TaskNotification? errorNotification,
+      TaskNotification? pausedNotification,
+      progressBar = false}) {
+    _notificationConfigs.add(TaskNotificationConfig(
+        taskOrGroup: group,
+        running: runningNotification,
+        complete: completeNotification,
+        error: errorNotification,
+        paused: pausedNotification,
+        progressBar: progressBar));
+    return this;
+  }
+
+  /// Configure default task notification
+  ///
+  /// This is the notification configuration used for tasks that do not
+  /// match a task-specific or group-specific notification configuration
+  FileDownloader configureNotification(
+      {TaskNotification? running,
+      TaskNotification? complete,
+      TaskNotification? error,
+      TaskNotification? paused,
+      progressBar = false}) {
+    _notificationConfigs.add(TaskNotificationConfig(
+        taskOrGroup: null,
+        running: running,
+        complete: complete,
+        error: error,
+        paused: paused,
+        progressBar: progressBar));
+    return this;
+  }
+
+  /// Returns the [TaskNotificationConfig] for this [task] or null
+  ///
+  /// Matches on task, then on group, then on default
+  TaskNotificationConfig? _notificationConfigForTask(Task task) {
+    return _notificationConfigs
+            .firstWhereOrNull((config) => config.taskOrGroup == task) ??
+        _notificationConfigs
+            .firstWhereOrNull((config) => config.taskOrGroup == task.group) ??
+        _notificationConfigs
+            .firstWhereOrNull((config) => config.taskOrGroup == null);
   }
 
   /// Perform a server request for this [request]

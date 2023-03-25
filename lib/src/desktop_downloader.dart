@@ -40,7 +40,8 @@ class DesktopDownloader extends BaseDownloader {
   Future<void> initialize() async {}
 
   @override
-  Future<bool> enqueue(Task task) async {
+  Future<bool> enqueue(Task task,
+      [TaskNotificationConfig? notificationConfig]) async {
     super.enqueue(task);
     _queue.add(task);
     processStatusUpdate(task, TaskStatus.enqueued);
@@ -210,7 +211,8 @@ class DesktopDownloader extends BaseDownloader {
   }
 
   @override
-  Future<bool> resume(Task task) async {
+  Future<bool> resume(Task task,
+      [TaskNotificationConfig? notificationConfig]) async {
     if (await super.resume(task)) {
       _resume.add(task);
       return enqueue(task);
