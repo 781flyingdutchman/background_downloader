@@ -850,8 +850,6 @@ class TaskWorker(
      * Create the notification channel to use for download notifications
      */
     private fun createNotificationChannel() {
-        // Create the NotificationChannel, but only on API 26+ because
-        // the NotificationChannel class is new and not in the support library
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val name =
                     applicationContext.getString(R.string.bg_downloader_notification_channel_name)

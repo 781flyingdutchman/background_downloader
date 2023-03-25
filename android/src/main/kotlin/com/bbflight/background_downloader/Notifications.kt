@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import androidx.annotation.Keep
 import androidx.core.app.NotificationManagerCompat
 import androidx.work.WorkManager
 import com.bbflight.background_downloader.BackgroundDownloaderPlugin.Companion.TAG
@@ -18,7 +19,8 @@ import kotlinx.coroutines.runBlocking
  * Actual appearance of notification is dependent on the platform, e.g.
  * on iOS {progress} and progressBar are not available and ignored
  */
-class Notification(val title: String, val body: String) {
+@Keep
+class TaskNotification(val title: String, val body: String) {
     override fun toString(): String {
         return "Notification(title='$title', body='$body')"
     }
@@ -32,15 +34,16 @@ class Notification(val title: String, val body: String) {
  * [error] is the notification used when something went wrong,
  * including pause, failed and notFound status
  */
+@Keep
 class NotificationConfig(
-        val running: Notification?,
-        val complete: Notification?,
-        val error: Notification?,
-        val paused: Notification?,
-        val progressBar: Boolean
+    val running: TaskNotification?,
+    val complete: TaskNotification?,
+    val error: TaskNotification?,
+    val paused: TaskNotification?,
+    val progressBar: Boolean
 ) {
     override fun toString(): String {
-        return "NotificationConfig(running=$running, complete=$complete, errorn=$error, paused=$paused, progressBar=$progressBar)"
+        return "NotificationConfig(running=$running, complete=$complete, error=$error, paused=$paused, progressBar=$progressBar)"
     }
 }
 
@@ -57,6 +60,7 @@ enum class NotificationType { running, complete, error, paused }
  * was configured for the task, then it will NOT be shown (as it would when cancelling an active
  * task)
  */
+@Keep
 class NotificationRcvr : BroadcastReceiver() {
 
     companion object {
