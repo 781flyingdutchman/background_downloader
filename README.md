@@ -4,7 +4,7 @@ Create a [DownloadTask](https://pub.dev/documentation/background_downloader/late
 
 Monitor progress by passing an `onProgress` listener, and monitor detailed status updates by passing an `onStatus` listener to the `download` call.  Alternatively, monitor tasks centrally using an [event listener](#using-an-event-listener) or [callbacks](#using-callbacks) and call `enqueue` to start the task.
 
-Optionally, keep track of task status and progress in a persistent [database](#using-the-database-to-track-tasks).
+Optionally, keep track of task status and progress in a persistent [database](#using-the-database-to-track-tasks), and show mobile [notifications](#notifications) to keep the user informed and in control when your app is in the background.
 
 To upload a file, create an [UploadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/UploadTask-class.html) and call `upload`. To make a regular [server request](#server-requests), create a [Request](https://pub.dev/documentation/background_downloader/latest/background_downloader/Request-class.html) and call `request`.
 
@@ -23,6 +23,7 @@ No setup is required for Android, Windows and Linux, and only minimal [setup for
   - [Using an event listener](#using-an-event-listener)
   - [Using callbacks](#using-callbacks)
   - [Using the database to track Tasks](#using-the-database-to-track-tasks)
+- [Notifications](#notifications)
 - [Uploads](#uploads)
 - [Managing tasks in the queue](#managing-tasks-and-the-queue)
   - [Canceling, pausing and resuming tasks](#canceling-pausing-and-resuming-tasks)
@@ -53,7 +54,7 @@ If you want to monitor progress during the download itself (e.g. for a large fil
     final result = await FileDownloader().download(task, 
         onProgress: (progress) => print('Progress update: $progress'));
 ```
-Progress updates start with 0.0 when the actual download starts (which may be in the future, e.g. if waiting for a WiFi connection), and will be sent periodically, not more than twice per second per task.  If a task completes successfully you will receive a final progress update with a `progress` value of 1.0 (`progressComplete`). Failed tasks generate `progress` of `progressFailed` (-1.0), canceled tasks `progressCanceled` (-2.0), notFound tasks `progressNotFound` (-3.0) and waitingToRetry tasks `progressWaitingToRetry` (-4.0).
+Progress updates start with 0.0 when the actual download starts (which may be in the future, e.g. if waiting for a WiFi connection), and will be sent periodically, not more than twice per second per task.  If a task completes successfully you will receive a final progress update with a `progress` value of 1.0 (`progressComplete`). Failed tasks generate `progress` of `progressFailed` (-1.0), canceled tasks `progressCanceled` (-2.0), notFound tasks `progressNotFound` (-3.0), waitingToRetry tasks `progressWaitingToRetry` (-4.0) and paused tasks `progressPaused` (-5.0).
 
 #### Status
 
@@ -210,6 +211,44 @@ You can interact with the `database` using
 `deleteAllRecords`,
 `deleteRecordWithId` etc. Note that only tasks that you asked to be tracked (using `trackTasks`, which activates tracking for all tasks in a [group](#grouping-tasks)) will be in the database. All active tasks in the queue, regardless of tracking, can be queried via the `FileDownloader().taskForId` call etc, but those will only return the task itself, not its status or progress, as those are expected to be monitored via listener or callback.  Note: tasks that are started using `download`, `upload`, `batchDownload` or `batchUpload` are assigned a special group name 'await', as callbacks for these tasks are handled within the `FileDownloader`. If you want to  track those tasks in the database, call `FileDownloader().trackTasks(FileDownloader.awaitGroup)` at the start of your app.
 
+## Notifications
+
+On iOS and Android, for downloads only, the downloader can generate notifications to keep the user informed of progress also when the app is in the background, and allow pause/resume and cancelation of an ongoing download from those notifications.
+
+Configure notifications by calling `FileDownloader().configureNotification` and supply a `TaskNotification` object for different states. For example, the following configures notifications to show only when actively runing (i.e. download in progress), disappearing when the download completes or ends with an error. It will also show a progress bar and a 'cancel' button, and will substitute {filename} with the actual filename of the file being downloaded.
+```
+    FileDownloader().configureNotification(
+        running: TaskNotification('Downloading', 'file: {filename}'),
+        progressBar: true)
+```
+
+To also show a notifications for other states, add a `TaskNotification` for `complete`, `error` and/or `paused`. If `paused` is configured and the task can be paused, a 'Pause' button will show for the `running` notification, next to the 'Cancel' button.
+
+There are three possible substitutions of the text in the `title` or `body` of a `TaskNotification`:
+* {filename} is replaced with the filename as defined in the `Task`
+* {progress} is substituted by a progress percentage, or '--%' if progress is unknown
+* {metadata} is substituted by the `Task.metaData` field
+
+Notifications on iOS follow Apple's [guidelines](https://developer.apple.com/design/human-interface-guidelines/components/system-experiences/notifications/), notably:
+* No progress bar is shown, and the {progress} substitution always substitutes to an empty string. In other words: only a single `running` notification is shown and it is not updated until the download state changes
+* When the app is in the foreground, on iOS 14 and above the notification will not be shown but will appear in the NotificationCenter. On older iOS versions the notification will be shown also in the foreground. Apple suggests showing progress and download controls within the app when it is in the foreground
+
+While notifications are possible on desktop platforms, there is no true background mode, and progress updates and indicators can be shown within the app. Notifications are therefore ignored on desktop platforms.
+
+The `configureNotification` call configures notification behavior for all download tasks. You can specify a separate configuration for a `group` of tasks by calling `configureNotificationForGroup` and for a single task by calling `configureNotificationForTask`. A `Task` configuration overrides a `group` configuration, which overrides the default configuration.
+
+When attempting to show its first notification, the downloader will ask the user for permission to show notifications (platform version dependent) and abide by the user choice. For Android, starting with API 33, you need to add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />` to your app's `AndroidManifest.xml`. Also on Android you can localize the button text by overriding string resources `bg_downloader_cancel`, `bg_downloader_pause`, `bg_downloader_resume` and descriptions `bg_downloader_notification_channel_name`, `bg_downloader_notification_channel_description`. Localization on iOS is not currently supported.
+
+On iOS, add the following to your `AppDelegate.swift`:
+```
+   UNUserNotificationCenter.current().delegate = self as UNUserNotificationCenterDelegate
+```
+or if using Objective C, add to `AppDelegate.m`:
+```
+   [UNUserNotificationCenter currentNotificationCenter].delegate = (id<UNUserNotificationCenterDelegate>) self;
+```
+
+
 ## Uploads
 
 Uploads are very similar to downloads, except:
@@ -311,7 +350,13 @@ If the `requiresWiFi` field of a `Task` is set to true, the task won't start unl
 
 ## Initial setup
 
-No setup is required for Android, Windows or Linux.
+No setup is required for Windows or Linux.
+
+### Android
+
+No setup is required if you don't use notifications. If you do:
+* Starting with API 33, you need to add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />` to your app's `AndroidManifest.xml`
+* If needed, localize the button text by overriding string resources `bg_downloader_cancel`, `bg_downloader_pause`, `bg_downloader_resume` and descriptions `bg_downloader_notification_channel_name`, `bg_downloader_notification_channel_description`.
 
 ### iOS
 
@@ -323,6 +368,15 @@ On iOS, ensure that you have the Background Fetch capability enabled:
 * Tick the 'Background Fetch' mode
 
 Note that iOS by default requires all URLs to be https (and not http). See [here](https://developer.apple.com/documentation/security/preventing_insecure_network_connections) for more details and how to address issues.
+
+If using notifications, add the following to your `AppDelegate.swift`:
+```
+   UNUserNotificationCenter.current().delegate = self as UNUserNotificationCenterDelegate
+```
+or if using Objective C, add to `AppDelegate.m`:
+```
+   [UNUserNotificationCenter currentNotificationCenter].delegate = (id<UNUserNotificationCenterDelegate>) self;
+```
 
 
 ### MacOS

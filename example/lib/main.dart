@@ -24,7 +24,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  final buttonTexts = ['Download', 'Cancel', 'Pause', 'Resume','Reset'];
+  final buttonTexts = ['Download', 'Cancel', 'Pause', 'Resume', 'Reset'];
 
   ButtonState buttonState = ButtonState.download;
   bool downloadWithError = false;
@@ -45,10 +45,9 @@ class _MyAppState extends State<MyApp> {
                 'Download {filename}', 'File: {filename} - {progress}'),
             complete:
                 TaskNotification('Download {filename}', 'Download complete'),
-            error:
-                TaskNotification('Download', 'Download of {filename} failed'),
-            paused: TaskNotification('Download', 'Paused with metadata '
-                '{metadata}'),
+            error: TaskNotification('Download {filename}', 'Download failed'),
+            paused: TaskNotification(
+                'Download {filename}', 'Paused with metadata {metadata}'),
             progressBar: true);
   }
 
@@ -57,8 +56,7 @@ class _MyAppState extends State<MyApp> {
   /// Stores the task status
   void myDownloadStatusCallback(Task task, TaskStatus status) {
     if (task == backgroundDownloadTask) {
-      switch(status) {
-
+      switch (status) {
         case TaskStatus.enqueued:
         case TaskStatus.notFound:
         case TaskStatus.failed:
@@ -163,7 +161,7 @@ class _MyAppState extends State<MyApp> {
             baseDirectory: BaseDirectory.applicationDocuments,
             updates: Updates.statusAndProgress,
             allowPause: true,
-            metaData: 'Your data');
+            metaData: '<example metaData>');
         await FileDownloader().enqueue(backgroundDownloadTask!);
         break;
       case ButtonState.cancel:
@@ -179,14 +177,12 @@ class _MyAppState extends State<MyApp> {
         break;
       case ButtonState.pause:
         if (backgroundDownloadTask != null) {
-          await FileDownloader()
-              .pause(backgroundDownloadTask!);
+          await FileDownloader().pause(backgroundDownloadTask!);
         }
         break;
       case ButtonState.resume:
         if (backgroundDownloadTask != null) {
-          await FileDownloader()
-              .resume(backgroundDownloadTask!);
+          await FileDownloader().resume(backgroundDownloadTask!);
         }
         break;
     }

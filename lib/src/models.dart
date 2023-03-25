@@ -739,8 +739,7 @@ class TaskNotification {
   TaskNotification(this.title, this.body);
 
   /// Return JSON Map representing object
-  Map<String, dynamic> toJsonMap() =>
-      {"title": title, "body": body};
+  Map<String, dynamic> toJsonMap() => {"title": title, "body": body};
 }
 
 /// Notification configuration object
@@ -767,10 +766,7 @@ class TaskNotificationConfig {
       this.paused,
       this.progressBar = false}) {
     assert(
-        running != null ||
-            complete != null ||
-            error != null ||
-            paused != null,
+        running != null || complete != null || error != null || paused != null,
         'At least one notification must be set');
   }
 
