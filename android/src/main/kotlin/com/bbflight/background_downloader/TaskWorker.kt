@@ -218,8 +218,6 @@ class TaskWorker(
          * from the [BackgroundDownloaderPlugin.canceledTaskIds]
          */
         private fun canSendCancellation(task: Task): Boolean {
-            Log.d(TAG,
-                    "In canSendCancellation with ${BackgroundDownloaderPlugin.canceledTaskIds[task.taskId]}")
             val idsToRemove = ArrayList<String>()
             val now = currentTimeMillis()
             for (entry in BackgroundDownloaderPlugin.canceledTaskIds) {

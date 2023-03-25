@@ -780,3 +780,6 @@ class TaskNotificationConfig {
         "progressBar": progressBar
       };
 }
+
+/// SCoped storage destinations for Android
+enum ScopedStorage { files, downloads, images, video, audio, external }
