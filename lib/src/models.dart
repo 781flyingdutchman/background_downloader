@@ -88,8 +88,13 @@ enum BaseDirectory {
   /// As returned by getTemporaryDirectory()
   temporary,
 
-  /// As returned by getApplicationSupportDirectory() - iOS only
-  applicationSupport
+  /// As returned by getApplicationSupportDirectory()
+  applicationSupport,
+
+  /// As returned by getApplicationLibrary() on iOS. For other platforms
+  /// this resolves to the subdirectory 'Library' created in the directory
+  /// returned by getApplicationSupportDirectory()
+  applicationLibrary
 }
 
 /// Type of updates requested for a task or group of tasks
@@ -339,6 +344,11 @@ abstract class Task extends Request {
       case BaseDirectory.applicationSupport:
         baseDir = await getApplicationSupportDirectory();
         break;
+      case BaseDirectory.applicationLibrary:
+        baseDir = Platform.isMacOS || Platform.isIOS
+            ? await getLibraryDirectory()
+            : Directory(path.join(
+                (await getApplicationSupportDirectory()).path, 'Library'));
     }
     return path.join(baseDir.path, directory, filename);
   }

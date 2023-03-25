@@ -154,6 +154,14 @@ void main() {
           baseDirectory: BaseDirectory.applicationSupport);
       path = join((await getApplicationSupportDirectory()).path, task.filename);
       await enqueueAndFileExists(path);
+      // applicationLibrary directory
+      task = DownloadTask(
+          url: workingUrl,
+          filename: defaultFilename,
+          baseDirectory: BaseDirectory.applicationLibrary);
+      path = join((await getApplicationSupportDirectory()).path, 'Library', task.filename);
+      await enqueueAndFileExists(path);
+
       // test url with encoded parameter
       task = DownloadTask(
           url: getTestUrl,

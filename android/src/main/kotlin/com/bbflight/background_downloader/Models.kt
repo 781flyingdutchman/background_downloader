@@ -2,10 +2,6 @@
 
 package com.bbflight.background_downloader
 
-import android.content.Context
-import kotlin.io.path.Path
-import kotlin.io.path.pathString
-
 /// Base directory in which files will be stored, based on their relative
 /// path.
 ///
@@ -13,7 +9,8 @@ import kotlin.io.path.pathString
 enum class BaseDirectory {
     applicationDocuments,  // getApplicationDocumentsDirectory()
     temporary,  // getTemporaryDirectory()
-    applicationSupport // getApplicationSupportDirectory()
+    applicationSupport, // getApplicationSupportDirectory()
+    applicationLibrary // getApplicationSupportDirectory() subdir "Library"
 }
 
 /// Type of updates requested for a group of tasks
@@ -103,22 +100,6 @@ class Task(
     /** True if this task is a DownloadTask, otherwise it is an UploadTask */
     fun isDownloadTask(): Boolean {
         return taskType != "UploadTask"
-    }
-
-    /**
-     * Returns full path (String) to the file represented by this task
-     */
-    fun pathToFile(context: Context): String {
-        val baseDirPath = when (baseDirectory) {
-            BaseDirectory.applicationDocuments -> Path(
-                    context.dataDir.path,
-                    "app_flutter"
-            ).pathString
-            BaseDirectory.temporary -> context.cacheDir.path
-            BaseDirectory.applicationSupport -> context.filesDir.path
-        }
-        val path = Path(baseDirPath, directory)
-        return Path(path.pathString, filename).pathString
     }
 }
 

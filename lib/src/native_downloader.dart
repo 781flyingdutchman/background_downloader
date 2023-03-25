@@ -158,33 +158,6 @@ class NativeDownloader extends BaseDownloader {
   }
 
   @override
-  Future<bool> moveToScopedStorage({
-    required Task task,
-    required ScopedStorage destination,
-    required String destinationFolder,
-    bool markPending = true,
-    bool deleteTemporaryFile = true,
-  }) async {
-    assert(Platform.isAndroid,
-        'moveToScopedStorage should only be called on Android');
-
-    if (!destinationFolder.startsWith('/')) {
-      throw StateError('Destination folder must start with "/"');
-    }
-
-    if (Platform.isAndroid) {
-      return await _channel.invokeMethod('moveToScopedStorage', [
-        jsonEncode(task.toJsonMap()),
-        destination.index,
-        destinationFolder,
-        markPending,
-        deleteTemporaryFile,
-      ]);
-    }
-    return false;
-  }
-
-  @override
   Future<Duration> getTaskTimeout() async {
     if (Platform.isAndroid) {
       final timeoutMillis =

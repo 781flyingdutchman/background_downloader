@@ -1094,6 +1094,10 @@ class TaskWorker(
             ).pathString
             BaseDirectory.temporary -> applicationContext.cacheDir.path
             BaseDirectory.applicationSupport -> applicationContext.filesDir.path
+            BaseDirectory.applicationLibrary -> Path(
+                applicationContext.filesDir.path,
+                "Library"
+            ).pathString
         }
         val path = Path(baseDirPath, task.directory)
         return Path(path.pathString, task.filename).pathString
