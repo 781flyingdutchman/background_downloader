@@ -791,5 +791,5 @@ class TaskNotificationConfig {
       };
 }
 
-/// SCoped storage destinations for Android
-enum ScopedStorage { files, downloads, images, video, audio, external }
+/// Shared storage destinations
+enum SharedStorage { downloads, images, video, audio, files, external }

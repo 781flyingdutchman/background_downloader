@@ -346,6 +346,15 @@ abstract class BaseDownloader {
   @visibleForTesting
   Future<void> setForceFailPostOnBackgroundChannel(bool value);
 
+  /// Android-only: Move the file at [filePath] to the shared storage
+  /// [destination] and potential subdirectory [directory]
+  ///
+  /// Returns the path to the file in shared storage, or null
+  Future<String?> moveToSharedStorage(
+      String filePath, SharedStorage destination, String directory) {
+    return Future.value(null);
+  }
+
   /// Destroy - clears callbacks, updates stream and retry queue
   ///
   /// Clears all queues and references without sending cancellation
@@ -497,4 +506,5 @@ abstract class BaseDownloader {
 
   /// Make the id safe for storing in the localStore
   String _safeId(String id) => id.replaceAll(_illegalPathCharacters, '_');
+
 }

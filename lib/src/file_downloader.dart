@@ -528,6 +528,23 @@ class FileDownloader {
   /// with the main Isolate
   Future<http.Response> request(Request request) => compute(doRequest, request);
 
+  /// Android only: move the file represented by the [task] to a shared storage
+  /// [destination] and potentially a [directory] within that destination
+  ///
+  /// Returns the path to the stored file, or null if not successful
+  Future<String?> moveToSharedStorage(Task task, SharedStorage destination,
+          {String directory = ''}) async =>
+      moveFileToSharedStorage(await task.filePath(), destination,
+          directory: directory);
+
+  /// Android only: move the file represented by [filePath] to a shared storage
+  /// [destination] and potentially a [directory] within that destination
+  ///
+  /// Returns the path to the stored file, or null if not successful
+  Future<String?> moveFileToSharedStorage(
+          String filePath, SharedStorage destination,
+          {String directory = ''}) async =>
+      _downloader.moveToSharedStorage(filePath, destination, directory);
 
   /// Destroy the [FileDownloader]. Subsequent use requires initialization
   void destroy() {

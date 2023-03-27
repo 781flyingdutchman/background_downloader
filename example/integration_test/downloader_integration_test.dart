@@ -1657,6 +1657,9 @@ void main() {
   });
 
   group('Notifications', () {
+    // NOTE: notifications are difficult to test in an integration test, so
+    // passing tests in this group is not sufficient evidence that they
+    // are working properly
     testWidgets('NotificationConfig', (widgetTester) async {
       FileDownloader()
           .configureNotification(running: TaskNotification('Title', 'Body'));
@@ -1670,6 +1673,88 @@ void main() {
           allowPause: true);
       expect(await FileDownloader().enqueue(task), equals(true));
       await statusCallbackCompleter.future;
+    });
+  });
+
+  group('Shared storage', () {
+    test('move task to shared storage', () async {
+      if (Platform.isAndroid) {
+        var filePath = await task.filePath();
+        await FileDownloader().download(task);
+        final path = await FileDownloader()
+            .moveToSharedStorage(task, SharedStorage.downloads);
+        print('Path in downloads is $path');
+        expect(path, isNotNull);
+        expect(File(filePath).existsSync(), isFalse);
+        expect(File(path!).existsSync(), isTrue);
+        File(path).deleteSync();
+      }
+    });
+
+    test('move task to shared storage with directory', () async {
+      if (Platform.isAndroid) {
+        var filePath = await task.filePath();
+        await FileDownloader().download(task);
+        final path = await FileDownloader().moveToSharedStorage(
+            task, SharedStorage.files,
+            directory: 'subdirectory');
+        print('Path in downloads is $path');
+        expect(path, isNotNull);
+        expect(File(filePath).existsSync(), isFalse);
+        expect(File(path!).existsSync(), isTrue);
+        File(path).deleteSync();
+        expect(dirname(path).endsWith('subdirectory'), isTrue);
+        Directory(dirname(path)).deleteSync();
+      }
+    });
+
+    test('try to move text file to images -> error', () async {
+      if (Platform.isAndroid) {
+        var filePath = await task.filePath();
+        await FileDownloader().download(task);
+        final path = await FileDownloader()
+            .moveToSharedStorage(task, SharedStorage.images);
+        expect(path, isNull);
+        expect(File(filePath).existsSync(), isTrue);
+      }
+    });
+
+    test('move file to shared storage - all types', () async {
+      if (Platform.isAndroid) {
+        for (var destination in SharedStorage.values) {
+          await FileDownloader().download(task);
+          var filePath = await task.filePath();
+          expect(File(filePath).existsSync(), isTrue);
+          // rename the file extension to accommodate requirement for shared
+          // storage (e.g. an .html file cannot be stored in 'images')
+          switch (destination) {
+            case SharedStorage.images:
+              final newFilePath = filePath.replaceFirst('.html', '.jpg');
+              await File(filePath).rename(newFilePath);
+              filePath = newFilePath;
+              break;
+            case SharedStorage.video:
+              final newFilePath = filePath.replaceFirst('.html', '.mp4');
+              await File(filePath).rename(newFilePath);
+              filePath = newFilePath;
+              break;
+            case SharedStorage.audio:
+              final newFilePath = filePath.replaceFirst('.html', '.mp3');
+              await File(filePath).rename(newFilePath);
+              filePath = newFilePath;
+              break;
+            default:
+              break;
+          }
+          final path = await FileDownloader()
+              .moveFileToSharedStorage(filePath, destination);
+          print('Path in shared storage for $destination is $path');
+          expect(path, isNotNull);
+          expect(File(filePath).existsSync(), isFalse);
+          expect(File(path!).existsSync(), isTrue);
+          File(path).deleteSync();
+        }
+      }
     });
   });
 }
