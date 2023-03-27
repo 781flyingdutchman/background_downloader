@@ -159,7 +159,8 @@ void main() {
           url: workingUrl,
           filename: defaultFilename,
           baseDirectory: BaseDirectory.applicationLibrary);
-      path = join((await getApplicationSupportDirectory()).path, 'Library', task.filename);
+      path = join((await getApplicationSupportDirectory()).path, 'Library',
+          task.filename);
       await enqueueAndFileExists(path);
 
       // test url with encoded parameter
@@ -1678,34 +1679,30 @@ void main() {
 
   group('Shared storage', () {
     test('move task to shared storage', () async {
-      if (Platform.isAndroid) {
-        var filePath = await task.filePath();
-        await FileDownloader().download(task);
-        final path = await FileDownloader()
-            .moveToSharedStorage(task, SharedStorage.downloads);
-        print('Path in downloads is $path');
-        expect(path, isNotNull);
-        expect(File(filePath).existsSync(), isFalse);
-        expect(File(path!).existsSync(), isTrue);
-        File(path).deleteSync();
-      }
+      var filePath = await task.filePath();
+      await FileDownloader().download(task);
+      final path = await FileDownloader()
+          .moveToSharedStorage(task, SharedStorage.downloads);
+      print('Path in downloads is $path');
+      expect(path, isNotNull);
+      expect(File(filePath).existsSync(), isFalse);
+      expect(File(path!).existsSync(), isTrue);
+      File(path).deleteSync();
     });
 
     test('move task to shared storage with directory', () async {
-      if (Platform.isAndroid) {
-        var filePath = await task.filePath();
-        await FileDownloader().download(task);
-        final path = await FileDownloader().moveToSharedStorage(
-            task, SharedStorage.files,
-            directory: 'subdirectory');
-        print('Path in downloads is $path');
-        expect(path, isNotNull);
-        expect(File(filePath).existsSync(), isFalse);
-        expect(File(path!).existsSync(), isTrue);
-        File(path).deleteSync();
-        expect(dirname(path).endsWith('subdirectory'), isTrue);
-        Directory(dirname(path)).deleteSync();
-      }
+      var filePath = await task.filePath();
+      await FileDownloader().download(task);
+      final path = await FileDownloader().moveToSharedStorage(
+          task, SharedStorage.downloads,
+          directory: 'subdirectory');
+      print('Path in downloads is $path');
+      expect(path, isNotNull);
+      expect(File(filePath).existsSync(), isFalse);
+      expect(File(path!).existsSync(), isTrue);
+      File(path).deleteSync();
+      expect(dirname(path).endsWith('subdirectory'), isTrue);
+      Directory(dirname(path)).deleteSync();
     });
 
     test('try to move text file to images -> error', () async {
@@ -1720,39 +1717,43 @@ void main() {
     });
 
     test('move file to shared storage - all types', () async {
-      if (Platform.isAndroid) {
-        for (var destination in SharedStorage.values) {
-          await FileDownloader().download(task);
-          var filePath = await task.filePath();
-          expect(File(filePath).existsSync(), isTrue);
-          // rename the file extension to accommodate requirement for shared
-          // storage (e.g. an .html file cannot be stored in 'images')
-          switch (destination) {
-            case SharedStorage.images:
-              final newFilePath = filePath.replaceFirst('.html', '.jpg');
-              await File(filePath).rename(newFilePath);
-              filePath = newFilePath;
-              break;
-            case SharedStorage.video:
-              final newFilePath = filePath.replaceFirst('.html', '.mp4');
-              await File(filePath).rename(newFilePath);
-              filePath = newFilePath;
-              break;
-            case SharedStorage.audio:
-              final newFilePath = filePath.replaceFirst('.html', '.mp3');
-              await File(filePath).rename(newFilePath);
-              filePath = newFilePath;
-              break;
-            default:
-              break;
-          }
-          final path = await FileDownloader()
-              .moveFileToSharedStorage(filePath, destination);
-          print('Path in shared storage for $destination is $path');
+      for (var destination in SharedStorage.values) {
+        await FileDownloader().download(task);
+        var filePath = await task.filePath();
+        expect(File(filePath).existsSync(), isTrue);
+        // rename the file extension to accommodate requirement for shared
+        // storage (e.g. an .html file cannot be stored in 'images')
+        switch (destination) {
+          case SharedStorage.images:
+            final newFilePath = filePath.replaceFirst('.html', '.jpg');
+            await File(filePath).rename(newFilePath);
+            filePath = newFilePath;
+            break;
+          case SharedStorage.video:
+            final newFilePath = filePath.replaceFirst('.html', '.mp4');
+            await File(filePath).rename(newFilePath);
+            filePath = newFilePath;
+            break;
+          case SharedStorage.audio:
+            final newFilePath = filePath.replaceFirst('.html', '.mp3');
+            await File(filePath).rename(newFilePath);
+            filePath = newFilePath;
+            break;
+          default:
+            break;
+        }
+        final path = await FileDownloader()
+            .moveFileToSharedStorage(filePath, destination);
+        print('Path in shared storage for $destination is $path');
+        if (Platform.isAndroid || destination == SharedStorage.downloads) {
           expect(path, isNotNull);
           expect(File(filePath).existsSync(), isFalse);
           expect(File(path!).existsSync(), isTrue);
           File(path).deleteSync();
+        } else {
+          // if not Android and not .downloads destination, expect null
+          expect(path, isNull);
+          File(filePath).deleteSync();
         }
       }
     });

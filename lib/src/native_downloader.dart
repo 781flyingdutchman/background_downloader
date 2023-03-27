@@ -173,9 +173,8 @@ class NativeDownloader extends BaseDownloader {
   }
 
   @override
-  Future<String?> moveToSharedStorage(
-      String filePath, SharedStorage destination, String directory) async {
-      return await _channel.invokeMethod<String?>('moveToSharedStorage',
-              [filePath, destination.index, directory]);
-  }
+  Future<String?> moveToSharedStorage( //TODO implement in iOS
+          String filePath, SharedStorage destination, String directory) =>
+      _channel.invokeMethod<String?>(
+          'moveToSharedStorage', [filePath, destination.index, directory]);
 }
