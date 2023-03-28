@@ -159,8 +159,7 @@ void main() {
           url: workingUrl,
           filename: defaultFilename,
           baseDirectory: BaseDirectory.applicationLibrary);
-      path = join((await getApplicationSupportDirectory()).path, 'Library',
-          task.filename);
+      path = await task.filePath();
       await enqueueAndFileExists(path);
 
       // test url with encoded parameter
@@ -1745,13 +1744,15 @@ void main() {
         final path = await FileDownloader()
             .moveFileToSharedStorage(filePath, destination);
         print('Path in shared storage for $destination is $path');
-        if (Platform.isAndroid || destination == SharedStorage.downloads) {
+        if (Platform.isAndroid || destination == SharedStorage.downloads ||
+            (Platform.isIOS && destination != SharedStorage.files &&
+                destination != SharedStorage.external)) {
           expect(path, isNotNull);
           expect(File(filePath).existsSync(), isFalse);
           expect(File(path!).existsSync(), isTrue);
           File(path).deleteSync();
         } else {
-          // if not Android and not .downloads destination, expect null
+          // otherwise expect null
           expect(path, isNull);
           File(filePath).deleteSync();
         }

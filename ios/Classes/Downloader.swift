@@ -76,6 +76,8 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             methodPopStatusUpdates(result: result)
         case "popProgressUpdates":
             methodPopProgressUpdates(result: result)
+        case "moveToSharedStorage":
+            methodMoveToSharedStorage(call: call, result: result)
         case "forceFailPostOnBackgroundChannel":
             methodForceFailPostOnBackgroundChannel(call: call, result: result)
         default:
@@ -296,6 +298,19 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         defaults.removeObject(forKey: key)
         result(jsonString)
         return
+    }
+    
+    private func methodMoveToSharedStorage(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        let args = call.arguments as! [Any]
+        let filePath = args[0] as! String
+        guard
+            let destination = SharedStorage.init(rawValue: args[1] as! Int)
+        else {
+            result(nil)
+            return
+        }
+        let directory = args[2] as! String
+        result(moveToSharedStorage(filePath: filePath, destination: destination, directory: directory))
     }
     
     /// Sets or resets flag to force failing posting on background channel
