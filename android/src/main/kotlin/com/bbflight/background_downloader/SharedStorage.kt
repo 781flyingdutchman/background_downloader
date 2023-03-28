@@ -34,8 +34,7 @@ fun moveToSharedStorage(
     directory: String
 ): String? {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-        Log.i(BackgroundDownloaderPlugin.TAG, "Android version does not support move to shared storage")
-        return null
+        return moveToPublicDirectory(filePath, destination, directory)
     }
     val file = File(filePath)
     if (!file.exists()) {
@@ -70,7 +69,6 @@ fun moveToSharedStorage(
                         input.copyTo(output)
                     }
                 }
-                os.close()
                 success = true
             }
         } catch (e: Exception) {
@@ -88,6 +86,55 @@ fun moveToSharedStorage(
     return if (success) pathFromUri(context, uri!!) else null
 }
 
+private fun moveToPublicDirectory(
+    filePath: String,
+    destination: SharedStorage,
+    directory: String
+): String? {
+    try {
+        val file = File(filePath)
+        if (!file.exists()) {
+            Log.i(BackgroundDownloaderPlugin.TAG, "File $filePath does not exist -> cannot move to public directory")
+            return null
+        }
+
+        val destinationMediaPath = getMediaStorePathBelowQ(destination)
+        val rootDir = Environment.getExternalStoragePublicDirectory(destinationMediaPath)
+        val destDir = File(rootDir, directory)
+
+        if (!destDir.exists()) {
+            destDir.mkdirs()
+        }
+
+        // try to get a new file name if already exist
+        val maxCheck = 100
+        var currentCheck = 1
+        var destinationFile = File(destDir, file.name)
+        val fileName = file.nameWithoutExtension
+        val fileHasExtension = file.name.contains(".")
+        val fileExtension = if (fileHasExtension) ".${file.extension}" else ""
+        while (destinationFile.exists() && currentCheck < maxCheck) {
+            destinationFile = File(destDir, "${fileName}_$currentCheck$fileExtension")
+            currentCheck++
+        }
+        if (destinationFile.exists()) throw Exception("Destination file exist!")
+
+        // copy file
+        destinationFile.outputStream().use { output ->
+            FileInputStream(file).use { input ->
+                input.copyTo(output)
+            }
+        }
+        file.delete()
+
+        return destinationFile.absolutePath
+    } catch (e: Exception) {
+        Log.i(BackgroundDownloaderPlugin.TAG, "Unable to move file $filePath to public directory: $e")
+        return null
+    }
+}
+
+
 @RequiresApi(Build.VERSION_CODES.Q)
 private fun getMediaStoreUri(destination: SharedStorage): Uri {
     return when (destination) {
@@ -99,6 +146,18 @@ private fun getMediaStoreUri(destination: SharedStorage): Uri {
         SharedStorage.external -> MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
     }
 }
+
+private fun getMediaStorePathBelowQ(destination: SharedStorage): String {
+    return when (destination) {
+        SharedStorage.files -> Environment.DIRECTORY_DOCUMENTS
+        SharedStorage.downloads -> Environment.DIRECTORY_DOWNLOADS
+        SharedStorage.images -> Environment.DIRECTORY_PICTURES
+        SharedStorage.video -> Environment.DIRECTORY_MOVIES
+        SharedStorage.audio -> Environment.DIRECTORY_MUSIC
+        SharedStorage.external -> ""
+    }
+}
+
 
 /**
  * Returns file path to ScopedStorage [destination] and subdirectory [directory]
