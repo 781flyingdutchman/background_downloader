@@ -1,3 +1,7 @@
+## 5.4.1
+
+Minor fixes
+
 ## 5.4.0
 
 ### Shared and scoped storage

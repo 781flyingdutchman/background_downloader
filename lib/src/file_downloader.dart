@@ -449,7 +449,7 @@ class FileDownloader {
       TaskNotification? completeNotification,
       TaskNotification? errorNotification,
       TaskNotification? pausedNotification,
-      progressBar = false}) {
+      bool progressBar = false}) {
     _notificationConfigs.add(TaskNotificationConfig(
         taskOrGroup: task,
         running: runningNotification,
@@ -466,7 +466,7 @@ class FileDownloader {
       TaskNotification? completeNotification,
       TaskNotification? errorNotification,
       TaskNotification? pausedNotification,
-      progressBar = false}) {
+      bool progressBar = false}) {
     _notificationConfigs.add(TaskNotificationConfig(
         taskOrGroup: group,
         running: runningNotification,
@@ -486,7 +486,7 @@ class FileDownloader {
       TaskNotification? complete,
       TaskNotification? error,
       TaskNotification? paused,
-      progressBar = false}) {
+      bool progressBar = false}) {
     _notificationConfigs.add(TaskNotificationConfig(
         taskOrGroup: null,
         running: running,
@@ -528,20 +528,24 @@ class FileDownloader {
   /// with the main Isolate
   Future<http.Response> request(Request request) => compute(doRequest, request);
 
-  /// Android only: move the file represented by the [task] to a shared storage
+  /// Move the file represented by the [task] to a shared storage
   /// [destination] and potentially a [directory] within that destination
   ///
   /// Returns the path to the stored file, or null if not successful
+  ///
+  /// Platform-dependent, not consistent across all platforms
   Future<String?> moveToSharedStorage(
           DownloadTask task, SharedStorage destination,
           {String directory = ''}) async =>
       moveFileToSharedStorage(await task.filePath(), destination,
           directory: directory);
 
-  /// Android only: move the file represented by [filePath] to a shared storage
+  /// Move the file represented by [filePath] to a shared storage
   /// [destination] and potentially a [directory] within that destination
   ///
   /// Returns the path to the stored file, or null if not successful
+  ///
+  /// Platform-dependent, not consistent across all platforms
   Future<String?> moveFileToSharedStorage(
           String filePath, SharedStorage destination,
           {String directory = ''}) async =>
@@ -553,6 +557,9 @@ class FileDownloader {
     _taskCompleters.clear();
     _shortTaskStatusCallbacks.clear();
     _shortTaskProgressCallbacks.clear();
+    _taskStatusCallbacks.clear();
+    _taskProgressCallbacks.clear();
+    _notificationConfigs.clear();
     _downloader.destroy();
   }
 }
