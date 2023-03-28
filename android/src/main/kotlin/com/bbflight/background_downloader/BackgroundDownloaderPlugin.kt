@@ -457,6 +457,20 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
     }
 
     /**
+     * Pops and returns locally stored map for this key as a JSON String, via the FlutterResult
+     */
+    private fun popLocalStorage(prefsKey: String, result: Result) {
+        prefsLock.write {
+            val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
+            val jsonString = prefs.getString(prefsKey, "{}")
+            val editor = prefs.edit()
+            editor.remove(prefsKey)
+            editor.apply()
+            result.success(jsonString)
+        }
+    }
+
+    /**
      * Move a file to Android scoped/shared storage and return the path to that file, or null
      *
      * Call arguments:
@@ -470,21 +484,6 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         val destination = SharedStorage.values()[args[1] as Int]
         val directory = args[2] as String
         result.success(moveToSharedStorage(applicationContext, filePath, destination, directory))
-    }
-
-
-    /**
-     * Pops and returns locally stored map for this key as a JSON String, via the FlutterResult
-     */
-    private fun popLocalStorage(prefsKey: String, result: Result) {
-        prefsLock.write {
-            val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
-            val jsonString = prefs.getString(prefsKey, "{}")
-            val editor = prefs.edit()
-            editor.remove(prefsKey)
-            editor.apply()
-            result.success(jsonString)
-        }
     }
 
     /**

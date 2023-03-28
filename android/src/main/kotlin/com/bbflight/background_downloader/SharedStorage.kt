@@ -34,12 +34,12 @@ fun moveToSharedStorage(
     directory: String
 ): String? {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-        Log.i(BackgroundDownloaderPlugin.TAG, "Android version does not support move to scoped storage")
+        Log.i(BackgroundDownloaderPlugin.TAG, "Android version does not support move to shared storage")
         return null
     }
     val file = File(filePath)
     if (!file.exists()) {
-        Log.i(BackgroundDownloaderPlugin.TAG, "File $filePath does not exist -> cannot move to scoped storage")
+        Log.i(BackgroundDownloaderPlugin.TAG, "File $filePath does not exist -> cannot move to shared storage")
         return null
     }
     var cleanDirectory = leadingPathSeparatorRegEx.replace(directory, "")

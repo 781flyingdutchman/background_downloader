@@ -532,7 +532,8 @@ class FileDownloader {
   /// [destination] and potentially a [directory] within that destination
   ///
   /// Returns the path to the stored file, or null if not successful
-  Future<String?> moveToSharedStorage(Task task, SharedStorage destination,
+  Future<String?> moveToSharedStorage(
+          DownloadTask task, SharedStorage destination,
           {String directory = ''}) async =>
       moveFileToSharedStorage(await task.filePath(), destination,
           directory: directory);

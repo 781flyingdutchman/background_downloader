@@ -1744,8 +1744,10 @@ void main() {
         final path = await FileDownloader()
             .moveFileToSharedStorage(filePath, destination);
         print('Path in shared storage for $destination is $path');
-        if (Platform.isAndroid || destination == SharedStorage.downloads ||
-            (Platform.isIOS && destination != SharedStorage.files &&
+        if (Platform.isAndroid ||
+            destination == SharedStorage.downloads ||
+            (Platform.isIOS &&
+                destination != SharedStorage.files &&
                 destination != SharedStorage.external)) {
           expect(path, isNotNull);
           expect(File(filePath).existsSync(), isFalse);

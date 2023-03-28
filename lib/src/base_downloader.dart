@@ -506,5 +506,4 @@ abstract class BaseDownloader {
 
   /// Make the id safe for storing in the localStore
   String _safeId(String id) => id.replaceAll(_illegalPathCharacters, '_');
-
 }
