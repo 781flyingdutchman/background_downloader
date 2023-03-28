@@ -8,9 +8,9 @@ Optionally, keep track of task status and progress in a persistent [database](#u
 
 To upload a file, create an [UploadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/UploadTask-class.html) and call `upload`. To make a regular [server request](#server-requests), create a [Request](https://pub.dev/documentation/background_downloader/latest/background_downloader/Request-class.html) and call `request`.
 
-The plugin supports [headers](#headers), [retries](#retries), [requiring WiFi](#requiring-wifi) before starting the up/download, user-defined [metadata](#metadata) and GET and [POST](#post-requests) http(s) requests. You can [manage  the tasks in the queue](#managing-tasks-and-the-queue) (e.g. cancel, pause and resume), and have different handlers for updates by [group](#grouping-tasks) of tasks.
+The plugin supports [headers](#headers), [retries](#retries), [requiring WiFi](#requiring-wifi) before starting the up/download, user-defined [metadata](#metadata) and GET and [POST](#post-requests) http(s) requests. You can [manage  the tasks in the queue](#managing-tasks-and-the-queue) (e.g. cancel, pause and resume), and have different handlers for updates by [group](#grouping-tasks) of tasks. Downloaded files can be moved to [shared storage](#shared-and-scoped-storage) to make them available outside the app.
 
-No setup is required for Android, Windows and Linux, and only minimal [setup for iOS](#ios) and [MacOS](#macos).
+No setup is required for [Android](#android) (except when using notifications), Windows and Linux, and only minimal [setup for iOS](#ios) and [MacOS](#macos).
 
 ## Contents
 
@@ -24,6 +24,7 @@ No setup is required for Android, Windows and Linux, and only minimal [setup for
   - [Using callbacks](#using-callbacks)
   - [Using the database to track Tasks](#using-the-database-to-track-tasks)
 - [Notifications](#notifications)
+- [Shared and scoped storage](#shared-and-scoped-storage)
 - [Uploads](#uploads)
 - [Managing tasks in the queue](#managing-tasks-and-the-queue)
   - [Canceling, pausing and resuming tasks](#canceling-pausing-and-resuming-tasks)
@@ -69,7 +70,7 @@ The status will follow a sequence of `.enqueued` (waiting to execute), `.running
 
 ### Specifying the location of the file to download or upload
 
-In the `DownloadTask` and `UploadTask` objects, the `filename` of the task refers to the filename without directory. To store the task in a specific directory, add the `directory` parameter to the task. That directory is relative to the base directory, so cannot start with a `/`. By default, the base directory is the directory returned by the call to `getApplicationDocumentsDirectory()`, but this can be changed by also passing a `baseDirectory` parameter (`BaseDirectory.temporary` for the directory returned by `getTemporaryDirectory()` and `BaseDirectory.applicationSupport` for the directory returned by `getApplicationSupportDirectory()`).
+In the `DownloadTask` and `UploadTask` objects, the `filename` of the task refers to the filename without directory. To store the task in a specific directory, add the `directory` parameter to the task. That directory is relative to the base directory, so cannot start with a `/`. By default, the base directory is the directory returned by the call to `getApplicationDocumentsDirectory()` of the [path_provider](https://pub.dev/packages/path_provider) package, but this can be changed by also passing a `baseDirectory` parameter (`BaseDirectory.temporary` for the directory returned by `getTemporaryDirectory()`, `BaseDirectory.applicationSupport` for the directory returned by `getApplicationSupportDirectory()` and `BaseDirectory.applicationLibrary` for the directory returned by `getLibraryDirectory()` on iOS and MacOS, or subdir 'Library' of the directory returned by `getApplicationSupportDirectory()` on other platforms).
 
 So, to store a file named 'testfile.txt' in the documents directory, subdirectory 'my/subdir', define the task as follows:
 ```
@@ -213,9 +214,9 @@ You can interact with the `database` using
 
 ## Notifications
 
-On iOS and Android, for downloads only, the downloader can generate notifications to keep the user informed of progress also when the app is in the background, and allow pause/resume and cancelation of an ongoing download from those notifications.
+On iOS and Android, for downloads only, the downloader can generate notifications to keep the user informed of progress also when the app is in the background, and allow pause/resume and cancellation of an ongoing download from those notifications.
 
-Configure notifications by calling `FileDownloader().configureNotification` and supply a `TaskNotification` object for different states. For example, the following configures notifications to show only when actively runing (i.e. download in progress), disappearing when the download completes or ends with an error. It will also show a progress bar and a 'cancel' button, and will substitute {filename} with the actual filename of the file being downloaded.
+Configure notifications by calling `FileDownloader().configureNotification` and supply a `TaskNotification` object for different states. For example, the following configures notifications to show only when actively running (i.e. download in progress), disappearing when the download completes or ends with an error. It will also show a progress bar and a 'cancel' button, and will substitute {filename} with the actual filename of the file being downloaded.
 ```
     FileDownloader().configureNotification(
         running: TaskNotification('Downloading', 'file: {filename}'),
@@ -248,6 +249,30 @@ or if using Objective C, add to `AppDelegate.m`:
    [UNUserNotificationCenter currentNotificationCenter].delegate = (id<UNUserNotificationCenterDelegate>) self;
 ```
 
+## Shared and scoped storage
+
+The download directories specified in the `BaseDirectory` enum are all local to the app. To make downloaded files available to the user outside of the app, or to other apps, they need to be moved to shared or scoped storage, and this is platform dependent behavior. For example, to move the downloaded file associated with a `DownloadTask` to a shared 'Downloads' storage destination, execute the following _after_ the download has completed:
+```
+    final newFilepath = await FileDownloader().moveToSharedStorage(task, SharedStorage.downloads);
+    if (newFilePath == null) {
+        ... // handle error
+    } else {
+        ... // do something with the newFilePath
+    }
+```
+
+Because the behavior is very platform-specific, not all `SharedStorage` destinations have the same result. The options are:
+* `.downloads` - implemented on all platforms, but on iOS files in this directory are not accessible to other users
+* `.images` - implemented on Android and iOS only. On iOS files in this directory are not accessible to other users
+* `.video` - implemented on Android and iOS only. On iOS files in this directory are not accessible to other users
+* `.audio` - implemented on Android and iOS only. On iOS files in this directory are not accessible to other users
+* `.files` - implemented on Android only
+* `.external` - implemented on Android only
+
+On MacOS, for the `.downloads` to work you need to enable App Sandbox entitlements and set the key `com.apple.security.files.downloads.read-write` to true.
+On Android, depending on what `SharedStorage` destination you move a file to, and depending on the OS version your app runs on, you _may_ require extra permissions `WRITE_EXTERNAL_STORAGE` and/or `READ_EXTERNAL_STORAGE` . See [here](https://medium.com/androiddevelopers/android-11-storage-faq-78cefea52b7c) for details on the new scoped storage rules starting with Android API version 30, which is what the plugin is using.
+
+Methods `moveToSharedStorage` and the similar `moveFileToSharedStorage` also take an optional `directory` argument for a subdirectory in the `SharedStorage` destination.
 
 ## Uploads
 

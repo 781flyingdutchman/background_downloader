@@ -309,12 +309,14 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 "popStatusUpdates" -> methodPopStatusUpdates(result)
                 "popProgressUpdates" -> methodPopProgressUpdates(result)
                 "getTaskTimeout" -> methodGetTaskTimeout(result)
+                "moveToSharedStorage" -> methodMoveToSharedStorage(call, result)
                 "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(call,
                         result)
                 else -> result.notImplemented()
             }
         }
     }
+
 
     /**
      * Starts one task, passed as map of values representing a [Task]
@@ -466,6 +468,22 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
             editor.apply()
             result.success(jsonString)
         }
+    }
+
+    /**
+     * Move a file to Android scoped/shared storage and return the path to that file, or null
+     *
+     * Call arguments:
+     * - filePath (String): full path to file to be moved
+     * - destination (Int as index into [SharedStorage] enum)
+     * - directory (String): subdirectory within scoped storage
+     */
+    private fun methodMoveToSharedStorage(call: MethodCall, result: Result) {
+        val args = call.arguments as List<*>
+        val filePath = args[0] as String
+        val destination = SharedStorage.values()[args[1] as Int]
+        val directory = args[2] as String
+        result.success(moveToSharedStorage(applicationContext, filePath, destination, directory))
     }
 
     /**

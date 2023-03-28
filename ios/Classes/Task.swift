@@ -35,7 +35,8 @@ struct Task : Codable {
 enum BaseDirectory: Int {
     case applicationDocuments, // getApplicationDocumentsDirectory()
          temporary, // getTemporaryDirectory()
-         applicationSupport // getApplicationSupportDirectory()
+         applicationSupport, // getApplicationSupportDirectory()
+         applicationLibrary // getLibraryDirectory()
 }
 
 /// Type of  updates requested for a group of downloads

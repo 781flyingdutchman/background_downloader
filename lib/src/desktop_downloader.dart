@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
 
@@ -22,7 +23,7 @@ const okResponses = [200, 201, 202, 203, 204, 205, 206];
 /// in Dart, as there is no native platform equivalent of URLSession or
 /// WorkManager as there is on iOS and Android
 class DesktopDownloader extends BaseDownloader {
-  final _log = Logger('FileDownloader');
+  final _log = Logger('DesktopDownloader');
   final maxConcurrent = 5;
   static final DesktopDownloader _singleton = DesktopDownloader._internal();
   final _queue = Queue<Task>();
@@ -230,6 +231,39 @@ class DesktopDownloader extends BaseDownloader {
   @override
   Future<void> setForceFailPostOnBackgroundChannel(bool value) {
     throw UnimplementedError();
+  }
+
+  @override
+  Future<String?> moveToSharedStorage(
+      String filePath, SharedStorage destination, String directory) async {
+    if (destination != SharedStorage.downloads) {
+      _log.finer(
+          'moveToSharedStorage on desktop only supports .downloads destination');
+      return null;
+    }
+    final downloadsDirectory = await getDownloadsDirectory();
+    if (downloadsDirectory == null) {
+      _log.warning('Could not obtain downloads directory');
+      return null;
+    }
+    // remove leading and trailing slashes from [directory]
+    var cleanDirectory = directory.replaceAll(RegExp(r'^/+'), '');
+    cleanDirectory = cleanDirectory.replaceAll(RegExp(r'/$'), '');
+    final destDirectory = cleanDirectory.isEmpty
+        ? downloadsDirectory.path
+        : path.join(downloadsDirectory.path, cleanDirectory);
+    if (!await Directory(destDirectory).exists()) {
+      await Directory(destDirectory).create(recursive: true);
+    }
+    final fileName = path.basename(filePath);
+    final destFilePath = path.join(destDirectory, fileName);
+    try {
+      await File(filePath).rename(destFilePath);
+    } on FileSystemException catch (e) {
+      _log.warning('Error moving $filePath to shared storage: $e');
+      return null;
+    }
+    return destFilePath;
   }
 
   @override

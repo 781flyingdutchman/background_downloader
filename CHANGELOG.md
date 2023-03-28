@@ -1,3 +1,40 @@
+## 5.4.0
+
+### Shared and scoped storage
+
+The download directories specified in the `BaseDirectory` enum are all local to the app. To make downloaded files available to the user outside of the app, or to other apps, they need to be moved to shared or scoped storage, and this is platform dependent behavior. For example, to move the downloaded file associated with a `DownloadTask` to a shared 'Downloads' storage destination, execute the following _after_ the download has completed:
+```
+    final newFilepath = await FileDownloader().moveToSharedStorage(task, SharedStorage.downloads);
+    if (newFilePath == null) {
+        ... // handle error
+    } else {
+        ... // do something with the newFilePath
+    }
+```
+
+Because the behavior is very platform-specific, not all `SharedStorage` destinations have the same result. The options are:
+* `.downloads` - implemented on all platforms, but on iOS files in this directory are not accessible to other users
+* `.images` - implemented on Android and iOS only. On iOS files in this directory are not accessible to other users
+* `.video` - implemented on Android and iOS only. On iOS files in this directory are not accessible to other users
+* `.audio` - implemented on Android and iOS only. On iOS files in this directory are not accessible to other users
+* `.files` - implemented on Android only
+* `.external` - implemented on Android only
+
+On MacOS, for the `.downloads` to work you need to enable App Sandbox entitlements and set the key `com.apple.security.files.downloads.read-write` to true.
+On Android, depending on what `SharedStorage` destination you move a file to, and depending on the OS version your app runs on, you _may_ require extra permissions `WRITE_EXTERNAL_STORAGE` and/or `READ_EXTERNAL_STORAGE` . See [here](https://medium.com/androiddevelopers/android-11-storage-faq-78cefea52b7c) for details on the new scoped storage rules starting with Android API version 30, which is what the plugin is using.
+
+Methods `moveToSharedStorage` and the similar `moveFileToSharedStorage` also take an optional `directory` argument for a subdirectory in the `SharedStorage` destination.
+
+Thanks to @rebaz94 for implementing scoped storage on Android.
+
+### Library base directory
+
+The `BaseDirectory` enum now also supports `.applicationLibrary`. On iOS and MacOS this is the directory provided by the `path_provider` package's `getLibraryDirectory()` call. On Other platforms, for consistency, this is the subdirectory 'Library' of the directory returned byn the `getApplicationSupportDirectory()` call.
+
+### Bug fix
+
+Fixed a bug with iOS cancellation in non-US locales.
+
 ## 5.3.0
 
 ### Notifications
@@ -31,8 +68,8 @@ When attempting to show its first notification, the downloader will ask the user
 ## 5.2.0
 
 Better persistence for tasks that execute while the app is suspended by the operating system.  
-To ensure your callbacks or listener capture events that may have happened when your app was 
-suspended in the background, call `FileDownloader().resumeFromBackground()` right after registering 
+To ensure your callbacks or listener capture events that may have happened when your app was
+suspended in the background, call `FileDownloader().resumeFromBackground()` right after registering
 your callbacks or listener.
 
 ## 5.1.0

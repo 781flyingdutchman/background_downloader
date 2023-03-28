@@ -9,7 +9,8 @@ package com.bbflight.background_downloader
 enum class BaseDirectory {
     applicationDocuments,  // getApplicationDocumentsDirectory()
     temporary,  // getTemporaryDirectory()
-    applicationSupport // getApplicationSupportDirectory()
+    applicationSupport, // getApplicationSupportDirectory()
+    applicationLibrary // getApplicationSupportDirectory() subdir "Library"
 }
 
 /// Type of updates requested for a group of tasks
@@ -100,7 +101,6 @@ class Task(
     fun isDownloadTask(): Boolean {
         return taskType != "UploadTask"
     }
-
 }
 
 /** Defines a set of possible states which a [Task] can be in.
@@ -136,4 +136,3 @@ class ResumeData(val task: Task, val data: String, val requiredStartByte: Long) 
         )
     }
 }
-

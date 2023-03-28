@@ -171,4 +171,12 @@ class NativeDownloader extends BaseDownloader {
   Future<void> setForceFailPostOnBackgroundChannel(bool value) async {
     await _channel.invokeMethod('forceFailPostOnBackgroundChannel', value);
   }
+
+  @override
+  Future<String?> moveToSharedStorage(
+          String filePath,
+          SharedStorage destination,
+          String directory) =>
+      _channel.invokeMethod<String?>(
+          'moveToSharedStorage', [filePath, destination.index, directory]);
 }

@@ -218,8 +218,6 @@ class TaskWorker(
          * from the [BackgroundDownloaderPlugin.canceledTaskIds]
          */
         private fun canSendCancellation(task: Task): Boolean {
-            Log.d(TAG,
-                    "In canSendCancellation with ${BackgroundDownloaderPlugin.canceledTaskIds[task.taskId]}")
             val idsToRemove = ArrayList<String>()
             val now = currentTimeMillis()
             for (entry in BackgroundDownloaderPlugin.canceledTaskIds) {
@@ -1096,6 +1094,10 @@ class TaskWorker(
             ).pathString
             BaseDirectory.temporary -> applicationContext.cacheDir.path
             BaseDirectory.applicationSupport -> applicationContext.filesDir.path
+            BaseDirectory.applicationLibrary -> Path(
+                applicationContext.filesDir.path,
+                "Library"
+            ).pathString
         }
         val path = Path(baseDirPath, task.directory)
         return Path(path.pathString, task.filename).pathString

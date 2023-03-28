@@ -76,6 +76,8 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             methodPopStatusUpdates(result: result)
         case "popProgressUpdates":
             methodPopProgressUpdates(result: result)
+        case "moveToSharedStorage":
+            methodMoveToSharedStorage(call: call, result: result)
         case "forceFailPostOnBackgroundChannel":
             methodForceFailPostOnBackgroundChannel(call: call, result: result)
         default:
@@ -298,6 +300,19 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         return
     }
     
+    private func methodMoveToSharedStorage(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        let args = call.arguments as! [Any]
+        let filePath = args[0] as! String
+        guard
+            let destination = SharedStorage.init(rawValue: args[1] as! Int)
+        else {
+            result(nil)
+            return
+        }
+        let directory = args[2] as! String
+        result(moveToSharedStorage(filePath: filePath, destination: destination, directory: directory))
+    }
+    
     /// Sets or resets flag to force failing posting on background channel
     ///
     /// For testing only
@@ -384,7 +399,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                     return
                 }
             }
-            if error!.localizedDescription.contains("cancelled") {  //TODO this is locale dependent
+            if (error! as NSError).code == NSURLErrorCancelled {
                 os_log("Canceled task with id %@", log: log, type: .info, task.taskId)
                 processStatusUpdate(task: task, status: .canceled)
             }
