@@ -399,7 +399,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                     return
                 }
             }
-            if error!.localizedDescription.contains("cancelled") {  //TODO this is locale dependent
+            if (error! as NSError).code == NSURLErrorCancelled {
                 os_log("Canceled task with id %@", log: log, type: .info, task.taskId)
                 processStatusUpdate(task: task, status: .canceled)
             }
