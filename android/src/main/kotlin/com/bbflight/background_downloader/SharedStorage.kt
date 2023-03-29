@@ -28,17 +28,17 @@ val trailingPathSeparatorRegEx = Regex("""/$""")
  * If successful, the original file will have been deleted
  */
 fun moveToSharedStorage(
-    context: Context,
-    filePath: String,
-    destination: SharedStorage,
-    directory: String
+    context: Context, filePath: String, destination: SharedStorage, directory: String
 ): String? {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
         return moveToPublicDirectory(filePath, destination, directory)
     }
     val file = File(filePath)
     if (!file.exists()) {
-        Log.i(BackgroundDownloaderPlugin.TAG, "File $filePath does not exist -> cannot move to shared storage")
+        Log.i(
+            BackgroundDownloaderPlugin.TAG,
+            "File $filePath does not exist -> cannot move to shared storage"
+        )
         return null
     }
     var cleanDirectory = leadingPathSeparatorRegEx.replace(directory, "")
@@ -72,7 +72,9 @@ fun moveToSharedStorage(
                 success = true
             }
         } catch (e: Exception) {
-            Log.i(BackgroundDownloaderPlugin.TAG, "Error moving file $filePath to shared storage: $e")
+            Log.i(
+                BackgroundDownloaderPlugin.TAG, "Error moving file $filePath to shared storage: $e"
+            )
         } finally {
             contentValues.clear()
             contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
@@ -86,26 +88,34 @@ fun moveToSharedStorage(
     return if (success) pathFromUri(context, uri!!) else null
 }
 
+/**
+ * Moves the file from filePath to the shared storage destination and returns the path to
+ * that file if successful, or null if not
+ *
+ * If successful, the original file will have been deleted
+ *
+ * This implementation is for Android versions before Q and requires app permissions
+ * READ_EXTERNAL_STORAGE and WRITE_EXTERNAL_STORAGE
+ */
 private fun moveToPublicDirectory(
-    filePath: String,
-    destination: SharedStorage,
-    directory: String
+    filePath: String, destination: SharedStorage, directory: String
 ): String? {
     try {
         val file = File(filePath)
         if (!file.exists()) {
-            Log.i(BackgroundDownloaderPlugin.TAG, "File $filePath does not exist -> cannot move to public directory")
+            Log.i(
+                BackgroundDownloaderPlugin.TAG,
+                "File $filePath does not exist -> cannot move to public directory"
+            )
             return null
         }
 
         val destinationMediaPath = getMediaStorePathBelowQ(destination)
         val rootDir = Environment.getExternalStoragePublicDirectory(destinationMediaPath)
         val destDir = File(rootDir, directory)
-
         if (!destDir.exists()) {
             destDir.mkdirs()
         }
-
         // try to get a new file name if already exist
         val maxCheck = 100
         var currentCheck = 1
@@ -126,15 +136,18 @@ private fun moveToPublicDirectory(
             }
         }
         file.delete()
-
         return destinationFile.absolutePath
     } catch (e: Exception) {
-        Log.i(BackgroundDownloaderPlugin.TAG, "Unable to move file $filePath to public directory: $e")
+        Log.i(
+            BackgroundDownloaderPlugin.TAG, "Unable to move file $filePath to public directory: $e"
+        )
         return null
     }
 }
 
-
+/**
+ * Returns path to media store [destination] for Android versions at or above Q
+ */
 @RequiresApi(Build.VERSION_CODES.Q)
 private fun getMediaStoreUri(destination: SharedStorage): Uri {
     return when (destination) {
@@ -147,6 +160,9 @@ private fun getMediaStoreUri(destination: SharedStorage): Uri {
     }
 }
 
+/**
+ * Returns path to media store [destination] for Android versions below Q
+ */
 private fun getMediaStorePathBelowQ(destination: SharedStorage): String {
     return when (destination) {
         SharedStorage.files -> Environment.DIRECTORY_DOCUMENTS
@@ -157,7 +173,6 @@ private fun getMediaStorePathBelowQ(destination: SharedStorage): String {
         SharedStorage.external -> ""
     }
 }
-
 
 /**
  * Returns file path to ScopedStorage [destination] and subdirectory [directory]
@@ -182,7 +197,7 @@ private fun getRelativePath(destination: SharedStorage, directory: String): Stri
 private fun getMimeType(fileName: String): String {
     val extension = MimeTypeMap.getFileExtensionFromUrl(fileName)
     return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
-            ?: "application/octet-stream"
+        ?: "application/octet-stream"
 }
 
 /**
