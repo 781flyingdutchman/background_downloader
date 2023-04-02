@@ -272,7 +272,9 @@ Because the behavior is very platform-specific, not all `SharedStorage` destinat
 On MacOS, for the `.downloads` to work you need to enable App Sandbox entitlements and set the key `com.apple.security.files.downloads.read-write` to true.
 On Android, depending on what `SharedStorage` destination you move a file to, and depending on the OS version your app runs on, you _may_ require extra permissions `WRITE_EXTERNAL_STORAGE` and/or `READ_EXTERNAL_STORAGE` . See [here](https://medium.com/androiddevelopers/android-11-storage-faq-78cefea52b7c) for details on the new scoped storage rules starting with Android API version 30, which is what the plugin is using.
 
-Methods `moveToSharedStorage` and the similar `moveFileToSharedStorage` also take an optional `directory` argument for a subdirectory in the `SharedStorage` destination.
+Methods `moveToSharedStorage` and the similar `moveFileToSharedStorage` also take an optional 
+`directory` argument for a subdirectory in the `SharedStorage` destination. They also take an 
+optional `mimeType` parameter that overrides the mimeType derived from the filePath extension.
 
 ## Uploads
 

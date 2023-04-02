@@ -529,7 +529,9 @@ class FileDownloader {
   Future<http.Response> request(Request request) => compute(doRequest, request);
 
   /// Move the file represented by the [task] to a shared storage
-  /// [destination] and potentially a [directory] within that destination
+  /// [destination] and potentially a [directory] within that destination. If
+  /// the [mimeType] is not provided we will attempt to derive it from the
+  /// [filePath] extension
   ///
   /// Returns the path to the stored file, or null if not successful
   ///
@@ -544,7 +546,9 @@ class FileDownloader {
           directory: directory, mimeType: mimeType);
 
   /// Move the file represented by [filePath] to a shared storage
-  /// [destination] and potentially a [directory] within that destination
+  /// [destination] and potentially a [directory] within that destination. If
+  /// the [mimeType] is not provided we will attempt to derive it from the
+  /// [filePath] extension
   ///
   /// Returns the path to the stored file, or null if not successful
   ///

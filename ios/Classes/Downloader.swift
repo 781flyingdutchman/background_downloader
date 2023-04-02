@@ -99,7 +99,6 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                 if let error = error {
                     os_log("Error obtaining notification authorization: %@", log: log, type: .error, error.localizedDescription)
                 }
-                os_log("Granted = %d", log: log, type: .info, granted)
                 Downloader.haveNotificationPermission = granted
             }
         }

@@ -1,3 +1,12 @@
+## 5.4.3
+
+Added optional `mimeType` parameter for calls to `moveToSharedStorage` and 
+`moveFileToSharedStorage`. This sets the mimeType
+directly, instead of relying on the system to determine the mime type based on the file extension.
+Note that this may change the filename - for example, when moving the test file `google.html` to
+`SharedStorage.images` while setting `mimeType` to 'images/jpeg', the path to the file in shared
+storage becomes `/storage/emulated/0/Pictures/google.html.jpg` (note the added .jpg).
+
 ## 5.4.2
 
 Better permissions management, implementation of moveToSharedStorage for Android versions below Q

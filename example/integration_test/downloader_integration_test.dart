@@ -1717,6 +1717,21 @@ void main() {
       }
     });
 
+    test('move while overriding mime type', () async {
+      if (Platform.isAndroid) {
+        var filePath = await task.filePath();
+        await FileDownloader().download(task);
+        final path = await FileDownloader()
+            .moveToSharedStorage(task, SharedStorage.images,
+            mimeType: 'image/jpeg');
+        print('Path in downloads is $path');
+        expect(path, isNotNull);
+        expect(File(filePath).existsSync(), isFalse);
+        expect(File(path!).existsSync(), isTrue);
+        File(path).deleteSync();
+      }
+    });
+
     test('move file to shared storage - all types', () async {
       for (var destination in SharedStorage.values) {
         await FileDownloader().download(task);
