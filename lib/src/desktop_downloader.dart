@@ -234,8 +234,8 @@ class DesktopDownloader extends BaseDownloader {
   }
 
   @override
-  Future<String?> moveToSharedStorage(
-      String filePath, SharedStorage destination, String directory) async {
+  Future<String?> moveToSharedStorage(String filePath,
+      SharedStorage destination, String directory, String? mimeType) async {
     if (destination != SharedStorage.downloads) {
       _log.finer(
           'moveToSharedStorage on desktop only supports .downloads destination');
