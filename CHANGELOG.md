@@ -1,3 +1,7 @@
+## 5.4.2
+
+Better permissions management, implementation of moveToSharedStorage for Android versions below Q
+
 ## 5.4.1
 
 Minor fixes
@@ -43,9 +47,9 @@ Fixed a bug with iOS cancellation in non-US locales.
 
 ### Notifications
 
-On iOS and Android, for downloads only, the downloader can generate notifications to keep the user informed of progress also when the app is in the background, and allow pause/resume and cancelation of an ongoing download from those notifications.
+On iOS and Android, for downloads only, the downloader can generate notifications to keep the user informed of progress also when the app is in the background, and allow pause/resume and cancellation of an ongoing download from those notifications.
 
-Configure notifications by calling `FileDownloader().configureNotification` and supply a `TaskNotification` object for different states. For example, the following configures notifications to show only when actively runing (i.e. download in progress), disappearing when the download completes or ends with an error. It will also show a progress bar and a 'cancel' button, and will substitute {filename} with the actual filename of the file being downloaded.
+Configure notifications by calling `FileDownloader().configureNotification` and supply a `TaskNotification` object for different states. For example, the following configures notifications to show only when actively running (i.e. download in progress), disappearing when the download completes or ends with an error. It will also show a progress bar and a 'cancel' button, and will substitute {filename} with the actual filename of the file being downloaded.
 ```
     FileDownloader().configureNotification(
         running: TaskNotification('Downloading', 'file: {filename}'),

@@ -464,7 +464,7 @@ void main() {
 
     testWidgets('Task to and from Json', (widgetTester) async {
       final complexTask = DownloadTask(
-          taskId: 'uniqueId',
+          // taskId: 'uniqueId',
           url: postTestUrl,
           filename: defaultFilename,
           headers: {'Auth': 'Test'},
@@ -1705,6 +1705,8 @@ void main() {
     });
 
     test('try to move text file to images -> error', () async {
+      // Note: this test will fail on Android API below 30, as that API
+      // does not have a problem storing a text file in images
       if (Platform.isAndroid) {
         var filePath = await task.filePath();
         await FileDownloader().download(task);

@@ -1,12 +1,14 @@
 package com.bbflight.background_downloader
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
-import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.os.Build
 import android.util.Log
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.preference.PreferenceManager
 import androidx.work.*
@@ -16,22 +18,23 @@ import com.bbflight.background_downloader.TaskWorker.Companion.keyTempFilename
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import io.flutter.embedding.engine.plugins.FlutterPlugin
+import io.flutter.embedding.engine.plugins.activity.ActivityAware
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
+import io.flutter.plugin.common.PluginRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.lang.Long.min
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
-import io.flutter.embedding.engine.plugins.activity.ActivityAware
-import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
-import io.flutter.plugin.common.PluginRegistry.ActivityResultListener
 
 
 /**
@@ -41,7 +44,7 @@ import io.flutter.plugin.common.PluginRegistry.ActivityResultListener
  * [TaskWorker]
  */
 class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
-        ActivityResultListener {
+    PluginRegistry.RequestPermissionsResultListener {
     companion object {
         const val TAG = "BackgroundDownloader"
         const val keyTasksMap = "com.bbflight.background_downloader.taskMap"
@@ -50,6 +53,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         const val keyProgressUpdateMap = "com.bbflight.background_downloader.progressUpdateMap"
         const val notificationChannel = "background_downloader"
         const val notificationPermissionRequestCode = 373921
+        const val externalStoragePermissionRequestCode = 373922
 
         @SuppressLint("StaticFieldLeak")
         var activity: Activity? = null
@@ -61,43 +65,39 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         val prefsLock = ReentrantReadWriteLock()
         val gson = Gson()
         val jsonMapType = object : TypeToken<Map<String, Any>>() {}.type
-        var haveNotificationPermission = false
+        var requestingNotificationPermission = false
+        var externalStoragePermissionCompleter = CompletableFuture<Boolean>()
         var localResumeData = HashMap<String, ResumeData>()
-
 
         /**
          * Enqueue a WorkManager task based on the provided parameters
          */
         suspend fun doEnqueue(
-                context: Context,
-                taskJsonMapString: String,
-                notificationConfigJsonString: String?,
-                tempFilePath: String?,
-                startByte: Long?,
-                initialDelayMillis: Long = 0
+            context: Context,
+            taskJsonMapString: String,
+            notificationConfigJsonString: String?,
+            tempFilePath: String?,
+            startByte: Long?,
+            initialDelayMillis: Long = 0
         ): Boolean {
-            val task =
-                    Task(gson.fromJson(taskJsonMapString, jsonMapType))
+            val task = Task(gson.fromJson(taskJsonMapString, jsonMapType))
             Log.i(TAG, "Enqueuing task with id ${task.taskId}")
             canceledTaskIds.remove(task.taskId)
-            val dataBuilder =
-                    Data.Builder().putString(TaskWorker.keyTask, taskJsonMapString)
+            val dataBuilder = Data.Builder().putString(TaskWorker.keyTask, taskJsonMapString)
             if (notificationConfigJsonString != null) {
                 dataBuilder.putString(keyNotificationConfig, notificationConfigJsonString)
             }
             if (tempFilePath != null && startByte != null) {
                 dataBuilder.putString(keyTempFilename, tempFilePath)
-                        .putLong(keyStartByte, startByte)
+                    .putLong(keyStartByte, startByte)
             }
             val data = dataBuilder.build()
             val constraints = Constraints.Builder().setRequiredNetworkType(
-                    if (task.requiresWiFi) NetworkType.UNMETERED else NetworkType.CONNECTED
-            )
-                    .build()
+                if (task.requiresWiFi) NetworkType.UNMETERED else NetworkType.CONNECTED
+            ).build()
             val requestBuilder = OneTimeWorkRequestBuilder<TaskWorker>().setInputData(data)
-                    .setConstraints(constraints).addTag(TAG)
-                    .addTag("taskId=${task.taskId}")
-                    .addTag("group=${task.group}")
+                .setConstraints(constraints).addTag(TAG).addTag("taskId=${task.taskId}")
+                .addTag("group=${task.group}")
             if (initialDelayMillis != 0L) {
                 requestBuilder.setInitialDelay(initialDelayMillis, TimeUnit.MILLISECONDS)
             }
@@ -109,17 +109,17 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 }
                 val prefs = PreferenceManager.getDefaultSharedPreferences(context)
                 if (initialDelayMillis == 0L) {
-                    TaskWorker.processStatusUpdate(task, TaskStatus
-                            .enqueued,
-                            prefs)
+                    TaskWorker.processStatusUpdate(
+                        task, TaskStatus.enqueued, prefs
+                    )
                 } else {
                     delay(min(100L, initialDelayMillis))
                     TaskWorker.processStatusUpdate(task, TaskStatus.enqueued, prefs)
                 }
             } catch (e: Throwable) {
                 Log.w(
-                        TAG,
-                        "Unable to start background request for taskId ${task.taskId} in operation: $operation"
+                    TAG,
+                    "Unable to start background request for taskId ${task.taskId} in operation: $operation"
                 )
                 return false
             }
@@ -128,9 +128,8 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 val prefs = PreferenceManager.getDefaultSharedPreferences(context)
                 val jsonString = prefs.getString(keyTasksMap, "{}")
                 val tasksMap =
-                        gson.fromJson<Map<String, Any>>(jsonString, jsonMapType).toMutableMap()
-                tasksMap[task.taskId] =
-                        gson.toJson(task.toJsonMap())
+                    gson.fromJson<Map<String, Any>>(jsonString, jsonMapType).toMutableMap()
+                tasksMap[task.taskId] = gson.toJson(task.toJsonMap())
                 val editor = prefs.edit()
                 editor.putString(keyTasksMap, gson.toJson(tasksMap))
                 editor.apply()
@@ -143,9 +142,9 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
          *
          * The [taskId] must be managed by the [workManager]
          */
-        suspend fun cancelActiveTaskWithId(context: Context, taskId: String,
-                                           workManager: WorkManager):
-                Boolean {
+        suspend fun cancelActiveTaskWithId(
+            context: Context, taskId: String, workManager: WorkManager
+        ): Boolean {
             val workInfos = withContext(Dispatchers.IO) {
                 workManager.getWorkInfosByTag("taskId=$taskId").get()
             }
@@ -163,7 +162,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                         val taskJsonMap = tasksMap[taskId] as String?
                         if (taskJsonMap != null) {
                             val task = Task(
-                                    gson.fromJson(taskJsonMap, jsonMapType)
+                                gson.fromJson(taskJsonMap, jsonMapType)
                             )
                             TaskWorker.processStatusUpdate(task, TaskStatus.canceled, prefs)
                         } else {
@@ -212,7 +211,6 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         }
     }
 
-
     private var channel: MethodChannel? = null
     lateinit var applicationContext: Context
     var cancelReceiver: NotificationRcvr? = null
@@ -230,32 +228,34 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
             // and per https://github.com/firebase/flutterfire/issues/9689 other
             // plugins can create multiple instances of the plugin
             backgroundChannel = MethodChannel(
-                    flutterPluginBinding.binaryMessenger,
-                    "com.bbflight.background_downloader.background"
+                flutterPluginBinding.binaryMessenger,
+                "com.bbflight.background_downloader.background"
             )
         }
         channel = MethodChannel(
-                flutterPluginBinding.binaryMessenger,
-                "com.bbflight.background_downloader"
+            flutterPluginBinding.binaryMessenger, "com.bbflight.background_downloader"
         )
         channel?.setMethodCallHandler(this)
         // set context and register notification broadcast receivers
         applicationContext = flutterPluginBinding.applicationContext
         cancelReceiver = NotificationRcvr()
-        ContextCompat.registerReceiver(applicationContext, cancelReceiver,
-                IntentFilter(NotificationRcvr
-                        .actionCancelActive),
-                ContextCompat.RECEIVER_NOT_EXPORTED)
+        ContextCompat.registerReceiver(
+            applicationContext, cancelReceiver, IntentFilter(
+                NotificationRcvr.actionCancelActive
+            ), ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         pauseReceiver = NotificationRcvr()
-        ContextCompat.registerReceiver(applicationContext, pauseReceiver,
-                IntentFilter(NotificationRcvr
-                        .actionPause),
-                ContextCompat.RECEIVER_NOT_EXPORTED)
+        ContextCompat.registerReceiver(
+            applicationContext, pauseReceiver, IntentFilter(
+                NotificationRcvr.actionPause
+            ), ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         resumeReceiver = NotificationRcvr()
-        ContextCompat.registerReceiver(applicationContext, resumeReceiver,
-                IntentFilter(NotificationRcvr
-                        .actionResume),
-                ContextCompat.RECEIVER_NOT_EXPORTED)
+        ContextCompat.registerReceiver(
+            applicationContext, resumeReceiver, IntentFilter(
+                NotificationRcvr.actionResume
+            ), ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         // clear expired items
         val workManager = WorkManager.getInstance(applicationContext)
         val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
@@ -310,8 +310,9 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 "popProgressUpdates" -> methodPopProgressUpdates(result)
                 "getTaskTimeout" -> methodGetTaskTimeout(result)
                 "moveToSharedStorage" -> methodMoveToSharedStorage(call, result)
-                "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(call,
-                        result)
+                "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
+                    call, result
+                )
                 else -> result.notImplemented()
             }
         }
@@ -340,9 +341,14 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
             startByte = null
         }
         result.success(
-                doEnqueue(applicationContext, taskJsonMapString, notificationConfigJsonString,
-                        tempFilePath,
-                        startByte))
+            doEnqueue(
+                applicationContext,
+                taskJsonMapString,
+                notificationConfigJsonString,
+                tempFilePath,
+                startByte
+            )
+        )
     }
 
 
@@ -356,7 +362,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         var counter = 0
         val workManager = WorkManager.getInstance(applicationContext)
         val workInfos = workManager.getWorkInfosByTag(TAG).get()
-                .filter { !it.state.isFinished && it.tags.contains("group=$group") }
+            .filter { !it.state.isFinished && it.tags.contains("group=$group") }
         for (workInfo in workInfos) {
             workManager.cancelWorkById(workInfo.id)
             counter++
@@ -372,7 +378,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         val group = call.arguments as String
         val workManager = WorkManager.getInstance(applicationContext)
         val workInfos = workManager.getWorkInfosByTag(TAG).get()
-                .filter { !it.state.isFinished && it.tags.contains("group=$group") }
+            .filter { !it.state.isFinished && it.tags.contains("group=$group") }
         val tasksAsListOfJsonStrings = mutableListOf<String>()
         prefsLock.read {
             val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
@@ -413,8 +419,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         prefsLock.read {
             val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
             val jsonString = prefs.getString(keyTasksMap, "{}")
-            val tasksMap =
-                    gson.fromJson<Map<String, Any>>(jsonString, jsonMapType).toMutableMap()
+            val tasksMap = gson.fromJson<Map<String, Any>>(jsonString, jsonMapType).toMutableMap()
             result.success(tasksMap[taskId])
         }
     }
@@ -477,15 +482,33 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
      * - filePath (String): full path to file to be moved
      * - destination (Int as index into [SharedStorage] enum)
      * - directory (String): subdirectory within scoped storage
-     * - mimeType (String): mime type of the file
      */
     private fun methodMoveToSharedStorage(call: MethodCall, result: Result) {
         val args = call.arguments as List<*>
         val filePath = args[0] as String
         val destination = SharedStorage.values()[args[1] as Int]
         val directory = args[2] as String
-        val mimeType = args[3] as String?
-        result.success(moveToSharedStorage(applicationContext, filePath, destination, directory, mimeType))
+        // first check and potentially ask for permissions
+        if (Build.VERSION.SDK_INT < 30 && ActivityCompat.checkSelfPermission(
+                applicationContext, Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            if (activity != null) {
+                activity?.requestPermissions(
+                    arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                    externalStoragePermissionRequestCode
+                )
+                externalStoragePermissionCompleter.thenApplyAsync {
+                    result.success(
+                        moveToSharedStorage(
+                            applicationContext, filePath, destination, directory
+                        )
+                    )
+                }
+                return
+            }
+        }
+        result.success(moveToSharedStorage(applicationContext, filePath, destination, directory))
     }
 
     /**
@@ -511,6 +534,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
+        binding.addRequestPermissionsResultListener(this)
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
@@ -519,19 +543,30 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
         activity = binding.activity
+        binding.addRequestPermissionsResultListener(this)
     }
 
     override fun onDetachedFromActivity() {
         activity = null
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
-        if (requestCode == notificationPermissionRequestCode) {
-            haveNotificationPermission = resultCode == PackageManager.PERMISSION_GRANTED
-            return true
+    override fun onRequestPermissionsResult(
+        requestCode: Int, permissions: Array<out String>, grantResults: IntArray
+    ): Boolean {
+        val granted =
+            (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+        return when (requestCode) {
+            notificationPermissionRequestCode -> {
+                requestingNotificationPermission = false
+                true
+            }
+            externalStoragePermissionRequestCode -> {
+                externalStoragePermissionCompleter.complete(granted)
+                true
+            }
+            else -> {
+                false
+            }
         }
-        return false
     }
 }
-
-
