@@ -488,7 +488,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         val filePath = args[0] as String
         val destination = SharedStorage.values()[args[1] as Int]
         val directory = args[2] as String
-        val mimeType = args[3] as String
+        val mimeType = args[3] as String?
         // first check and potentially ask for permissions
         if (Build.VERSION.SDK_INT < 30 && ActivityCompat.checkSelfPermission(
                 applicationContext, Manifest.permission.WRITE_EXTERNAL_STORAGE
