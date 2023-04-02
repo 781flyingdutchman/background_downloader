@@ -28,7 +28,7 @@ val trailingPathSeparatorRegEx = Regex("""/$""")
  * If successful, the original file will have been deleted
  */
 fun moveToSharedStorage(
-    context: Context, filePath: String, destination: SharedStorage, directory: String
+    context: Context, filePath: String, destination: SharedStorage, directory: String, mimeType: String?
 ): String? {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
         return moveToPublicDirectory(filePath, destination, directory)
@@ -46,7 +46,7 @@ fun moveToSharedStorage(
     // Set up the content values for the new file
     val contentValues = ContentValues().apply {
         put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
-        put(MediaStore.MediaColumns.MIME_TYPE, getMimeType(file.name))
+        put(MediaStore.MediaColumns.MIME_TYPE, mimeType ?: getMimeType(file.name))
         put(MediaStore.MediaColumns.RELATIVE_PATH, getRelativePath(destination, cleanDirectory))
         put(MediaStore.MediaColumns.IS_PENDING, 1)
     }
@@ -195,9 +195,9 @@ private fun getRelativePath(destination: SharedStorage, directory: String): Stri
  * Defaults to application/octet-stream
  */
 private fun getMimeType(fileName: String): String {
-    val extension = MimeTypeMap.getFileExtensionFromUrl(fileName)
+    val extension = fileName.substringAfterLast(".", "")
     return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
-        ?: "application/octet-stream"
+            ?: "application/octet-stream"
 }
 
 /**
