@@ -535,10 +535,13 @@ class FileDownloader {
   ///
   /// Platform-dependent, not consistent across all platforms
   Future<String?> moveToSharedStorage(
-          DownloadTask task, SharedStorage destination,
-          {String directory = ''}) async =>
+    DownloadTask task,
+    SharedStorage destination, {
+    String directory = '',
+    String? mimeType,
+  }) async =>
       moveFileToSharedStorage(await task.filePath(), destination,
-          directory: directory);
+          directory: directory, mimeType: mimeType);
 
   /// Move the file represented by [filePath] to a shared storage
   /// [destination] and potentially a [directory] within that destination
@@ -547,9 +550,13 @@ class FileDownloader {
   ///
   /// Platform-dependent, not consistent across all platforms
   Future<String?> moveFileToSharedStorage(
-          String filePath, SharedStorage destination,
-          {String directory = ''}) async =>
-      _downloader.moveToSharedStorage(filePath, destination, directory);
+    String filePath,
+    SharedStorage destination, {
+    String directory = '',
+    String? mimeType,
+  }) async =>
+      _downloader.moveToSharedStorage(
+          filePath, destination, directory, mimeType);
 
   /// Destroy the [FileDownloader]. Subsequent use requires initialization
   void destroy() {

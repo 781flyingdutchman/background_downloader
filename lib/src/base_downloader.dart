@@ -350,8 +350,8 @@ abstract class BaseDownloader {
   /// [destination] and potential subdirectory [directory]
   ///
   /// Returns the path to the file in shared storage, or null
-  Future<String?> moveToSharedStorage(
-      String filePath, SharedStorage destination, String directory) {
+  Future<String?> moveToSharedStorage(String filePath,
+      SharedStorage destination, String directory, String? mimeType) {
     return Future.value(null);
   }
 

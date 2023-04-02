@@ -477,13 +477,15 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
      * - filePath (String): full path to file to be moved
      * - destination (Int as index into [SharedStorage] enum)
      * - directory (String): subdirectory within scoped storage
+     * - mimeType (String): mime type of the file
      */
     private fun methodMoveToSharedStorage(call: MethodCall, result: Result) {
         val args = call.arguments as List<*>
         val filePath = args[0] as String
         val destination = SharedStorage.values()[args[1] as Int]
         val directory = args[2] as String
-        result.success(moveToSharedStorage(applicationContext, filePath, destination, directory))
+        val mimeType = args[3] as String?
+        result.success(moveToSharedStorage(applicationContext, filePath, destination, directory, mimeType))
     }
 
     /**

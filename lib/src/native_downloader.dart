@@ -173,8 +173,8 @@ class NativeDownloader extends BaseDownloader {
   }
 
   @override
-  Future<String?> moveToSharedStorage(
-          String filePath, SharedStorage destination, String directory) =>
-      _channel.invokeMethod<String?>(
-          'moveToSharedStorage', [filePath, destination.index, directory]);
+  Future<String?> moveToSharedStorage(String filePath,
+          SharedStorage destination, String directory, String? mimeType) =>
+      _channel.invokeMethod<String?>('moveToSharedStorage',
+          [filePath, destination.index, directory, mimeType]);
 }
