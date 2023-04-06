@@ -66,6 +66,12 @@ class TaskWorker(
         private val fileNameRegEx = Regex("""\{filename\}""", RegexOption.IGNORE_CASE)
         private val progressRegEx = Regex("""\{progress\}""", RegexOption.IGNORE_CASE)
         private val metaDataRegEx = Regex("""\{metadata\}""", RegexOption.IGNORE_CASE)
+        private val _asciiOnly = Regex("^[\\x00-\\x7F]+$")
+        private val _newlineRegExp = Regex("\r\n|\r|\n")
+
+        const val boundary = "-----background_downloader-akjhfw281onqciyhnIk"
+        const val lineFeed = "\r\n"
+
 
         private var taskCanResume = false
         private var createdNotificationChannel = false
@@ -287,6 +293,47 @@ class TaskWorker(
                 editor.apply()
             }
         }
+
+        /**
+         * Returns the multipart entry for one field name/value pair
+         */
+        private fun fieldEntry(name: String, value: String): String {
+            return "--$boundary$lineFeed${headerForField(name, value)}$value$lineFeed"
+        }
+
+        /**
+         * Returns the header string for a field
+         *
+         * The return value is guaranteed to contain only ASCII characters
+         */
+        private fun headerForField(name: String, value: String): String {
+            var header = "content-disposition: form-data; name=\"${_browserEncode(name)}\""
+            if (!isPlainAscii(value)) {
+                header = "$header\r\n" +
+                        "content-type: text/plain; charset=utf-8\r\n" +
+                        "content-transfer-encoding: binary"
+            }
+            return "$header\r\n\r\n"
+        }
+
+        /**
+         * Returns whether [string] is composed entirely of ASCII-compatible characters
+         */
+        private fun isPlainAscii(string: String): Boolean {
+            return _asciiOnly.matches(string)
+        }
+
+        /**
+         * Encode [value] in the same way browsers do
+         */
+        fun _browserEncode(value: String): String {
+            // http://tools.ietf.org/html/rfc2388 mandates some complex encodings for
+            // field names and file names, but in practice user agents seem not to
+            // follow this at all. Instead, they URL-encode `\r`, `\n`, and `\r\n` as
+            // `\r\n`; URL-encode `"`; and do nothing else (even for `%` or non-ASCII
+            // characters). We follow their behavior.
+            return value.replace(_newlineRegExp, "%0D%0A").replace("\"", "%22")
+        }
     }
 
     // properties related to pause/resume functionality
@@ -326,7 +373,8 @@ class TaskWorker(
             else "${applicationContext.cacheDir}/com.bbflight.background_downloader${Random.nextInt()}"
             isResume = isResume && determineIfResumeIsPossible(tempFilePath, requiredStartByte)
             Log.i(
-                TAG, "${if (isResume) "Resuming" else "Starting"} task with taskId ${task.taskId}"
+                TAG,
+                "${if (isResume) "Resuming" else "Starting"} task with taskId ${task.taskId}"
             )
             processStatusUpdate(task, TaskStatus.running, prefs)
             if (!isResume) {
@@ -613,17 +661,21 @@ class TaskWorker(
         } else {
             // multipart file upload using Content-Type multipart/form-data
             Log.d(TAG, "Multipart upload for taskId ${task.taskId}")
-            val boundary = "-----background_downloader-akjhfw281onqciyhnIk"
-            // determine Content-Type based on file extension
+            // field portion of the multipart
+            var fieldString = ""
+            for (entry in task.fields.entries) {
+                fieldString += fieldEntry(entry.key, entry.value)
+            }
+            // file portion of the multipart
             val mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension)
                 ?: "application/octet-stream"
-            val lineFeed = "\r\n"
             val contentDispositionString =
                 "Content-Disposition: form-data; name=\"file\"; filename=\"${task.filename}\""
             val contentTypeString = "Content-Type: $mimeType"
             // determine the content length of the multi-part data
-            val contentLength =
-                2 * boundary.length + 6 * lineFeed.length + contentDispositionString.length + contentTypeString.length + 3 * "--".length + fileSize
+            val contentLength = fieldString.length + 2 * boundary.length + 6 * lineFeed.length +
+                    contentDispositionString.length + contentTypeString.length +
+                    3 * "--".length + fileSize
             connection.setRequestProperty("Accept-Charset", "UTF-8")
             connection.setRequestProperty("Connection", "Keep-Alive")
             connection.setRequestProperty("Cache-Control", "no-cache")
@@ -637,7 +689,7 @@ class TaskWorker(
                 FileInputStream(file).use { inputStream ->
                     DataOutputStream(connection.outputStream).use { outputStream ->
                         val writer = outputStream.writer()
-                        writer.append("--${boundary}").append(lineFeed)
+                        writer.append(fieldString).append("--${boundary}").append(lineFeed)
                             .append(contentDispositionString).append(lineFeed)
                             .append(contentTypeString).append(lineFeed).append(lineFeed).flush()
                         transferBytesResult =
@@ -701,7 +753,9 @@ class TaskWorker(
         var numBytes: Int
         return withContext(Dispatchers.IO) {
             try {
-                while (inputStream.read(dataBuffer, 0, bufferSize).also { numBytes = it } != -1) {
+                while (inputStream.read(dataBuffer, 0, bufferSize)
+                        .also { numBytes = it } != -1
+                ) {
                     // check if task is stopped (canceled), paused or timed out
                     if (isStopped) {
                         return@withContext TaskStatus.canceled
@@ -993,7 +1047,8 @@ class TaskWorker(
                             )
                         )
                         putString(
-                            NotificationRcvr.bundleNotificationConfig, notificationConfigJsonString
+                            NotificationRcvr.bundleNotificationConfig,
+                            notificationConfigJsonString
                         )
                     }
                     val resumeIntent = Intent(

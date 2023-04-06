@@ -540,28 +540,28 @@ void main() {
       expect(task is UploadTask, isTrue);
       expect(task, equals(complexTask));
       if (task != null && task is UploadTask) {
-      expect(task.taskId, equals(complexTask.taskId));
-      expect(task.url, equals(complexTask.url));
-      expect(task.filename, equals(complexTask.filename));
-      expect(task.headers, equals(complexTask.headers));
-      expect(task.post, equals(complexTask.post));
-      expect(task.fields, equals(complexTask.fields));
-      expect(task.directory, equals(complexTask.directory));
-      expect(task.baseDirectory, equals(complexTask.baseDirectory));
-      expect(task.group, equals(complexTask.group));
-      expect(task.updates, equals(complexTask.updates));
-      expect(task.requiresWiFi, equals(complexTask.requiresWiFi));
-      expect(task.allowPause, equals(complexTask.allowPause));
-      expect(task.retries, equals(complexTask.retries));
-      expect(task.retriesRemaining, equals(complexTask.retriesRemaining));
-      expect(task.retriesRemaining, equals(task.retries));
-      expect(task.metaData, equals(complexTask.metaData));
-      expect(
-      task.creationTime
-          .difference(complexTask.creationTime)
-          .inMilliseconds
-          .abs(),
-      lessThan(100));
+        expect(task.taskId, equals(complexTask.taskId));
+        expect(task.url, equals(complexTask.url));
+        expect(task.filename, equals(complexTask.filename));
+        expect(task.headers, equals(complexTask.headers));
+        expect(task.post, equals(complexTask.post));
+        expect(task.fields, equals(complexTask.fields));
+        expect(task.directory, equals(complexTask.directory));
+        expect(task.baseDirectory, equals(complexTask.baseDirectory));
+        expect(task.group, equals(complexTask.group));
+        expect(task.updates, equals(complexTask.updates));
+        expect(task.requiresWiFi, equals(complexTask.requiresWiFi));
+        expect(task.allowPause, equals(complexTask.allowPause));
+        expect(task.retries, equals(complexTask.retries));
+        expect(task.retriesRemaining, equals(complexTask.retriesRemaining));
+        expect(task.retriesRemaining, equals(task.retries));
+        expect(task.metaData, equals(complexTask.metaData));
+        expect(
+            task.creationTime
+                .difference(complexTask.creationTime)
+                .inMilliseconds
+                .abs(),
+            lessThan(100));
       }
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.failed));
@@ -1291,9 +1291,14 @@ void main() {
     });
 
     testWidgets('upload task creation with errors', (widgetTester) async {
-      expect(UploadTask(url: uploadTestUrl, filename: defaultFilename, fields: {'name': 'value'}, post: 'binary'), throwsAssertionError);
+      expect(
+          () => UploadTask(
+              url: uploadTestUrl,
+              filename: defaultFilename,
+              fields: {'name': 'value'},
+              post: 'binary'),
+          throwsAssertionError);
     });
-
   });
 
   group('Convenience uploads', () {

@@ -28,6 +28,7 @@ class Task(
         val filename: String,
         val headers: Map<String, String>,
         val post: String?,
+        val fields: Map<String, String>,
         val directory: String,
         val baseDirectory: BaseDirectory,
         val group: String,
@@ -49,6 +50,7 @@ class Task(
             filename = jsonMap["filename"] as String? ?: "",
             headers = jsonMap["headers"] as Map<String, String>? ?: mutableMapOf<String, String>(),
             post = jsonMap["post"] as String?,
+        fields = jsonMap["fields"] as Map<String, String>? ?: mutableMapOf<String, String>(),
             directory = jsonMap["directory"] as String? ?: "",
             baseDirectory = BaseDirectory.values()[(jsonMap["baseDirectory"] as Double?
                     ?: 0).toInt()],
@@ -71,6 +73,7 @@ class Task(
                 "filename" to filename,
                 "headers" to headers,
                 "post" to post,
+            "fields" to fields,
                 "directory" to directory,
                 "baseDirectory" to baseDirectory.ordinal, // stored as int
                 "group" to group,

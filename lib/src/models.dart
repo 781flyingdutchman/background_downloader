@@ -587,7 +587,7 @@ class UploadTask extends Task {
             jsonMap['taskType'] == 'UploadTask',
             'The provided JSON map is not'
             ' an UploadTask, because key "taskType" is not "UploadTask".'),
-        fields = jsonMap['fields'] ?? {},
+        fields = Map<String, String>.from(jsonMap['fields'] ?? {}),
         super.fromJsonMap(jsonMap);
 
   @override
