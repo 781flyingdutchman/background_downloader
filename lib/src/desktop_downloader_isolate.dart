@@ -286,10 +286,10 @@ Future<void> doUploadTask(UploadTask task, String filePath, SendPort sendPort,
   // determine the content length of the multi-part data
   final contentLength = isBinaryUpload
       ? fileSize
-      : fieldsString.length +
+      : lengthInBytes(fieldsString) +
           2 * boundary.length +
           6 * lineFeed.length +
-          contentDispositionString.length +
+          lengthInBytes(contentDispositionString) +
           contentTypeString.length +
           3 * "--".length +
           fileSize;
@@ -503,6 +503,9 @@ String _browserEncode(String value) =>
 // `\r\n`; URL-encode `"`; and do nothing else (even for `%` or non-ASCII
 // characters). We follow their behavior.
     value.replaceAll(_newlineRegExp, '%0D%0A').replaceAll('"', '%22');
+
+/// Returns the length of the [string] in bytes when utf-8 encoded
+int lengthInBytes(String string) => utf8.encode(string).length;
 
 final _log = Logger('FileDownloader');
 

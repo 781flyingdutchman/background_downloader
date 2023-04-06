@@ -66,8 +66,8 @@ class TaskWorker(
         private val fileNameRegEx = Regex("""\{filename\}""", RegexOption.IGNORE_CASE)
         private val progressRegEx = Regex("""\{progress\}""", RegexOption.IGNORE_CASE)
         private val metaDataRegEx = Regex("""\{metadata\}""", RegexOption.IGNORE_CASE)
-        private val _asciiOnly = Regex("^[\\x00-\\x7F]+$")
-        private val _newlineRegExp = Regex("\r\n|\r|\n")
+        private val asciiOnly = Regex("^[\\x00-\\x7F]+$")
+        private val newlineRegExp = Regex("\r\n|\r|\n")
 
         const val boundary = "-----background_downloader-akjhfw281onqciyhnIk"
         const val lineFeed = "\r\n"
@@ -307,7 +307,7 @@ class TaskWorker(
          * The return value is guaranteed to contain only ASCII characters
          */
         private fun headerForField(name: String, value: String): String {
-            var header = "content-disposition: form-data; name=\"${_browserEncode(name)}\""
+            var header = "content-disposition: form-data; name=\"${browserEncode(name)}\""
             if (!isPlainAscii(value)) {
                 header = "$header\r\n" +
                         "content-type: text/plain; charset=utf-8\r\n" +
@@ -320,19 +320,26 @@ class TaskWorker(
          * Returns whether [string] is composed entirely of ASCII-compatible characters
          */
         private fun isPlainAscii(string: String): Boolean {
-            return _asciiOnly.matches(string)
+            return asciiOnly.matches(string)
         }
 
         /**
          * Encode [value] in the same way browsers do
          */
-        fun _browserEncode(value: String): String {
+        private fun browserEncode(value: String): String {
             // http://tools.ietf.org/html/rfc2388 mandates some complex encodings for
             // field names and file names, but in practice user agents seem not to
             // follow this at all. Instead, they URL-encode `\r`, `\n`, and `\r\n` as
             // `\r\n`; URL-encode `"`; and do nothing else (even for `%` or non-ASCII
             // characters). We follow their behavior.
-            return value.replace(_newlineRegExp, "%0D%0A").replace("\"", "%22")
+            return value.replace(newlineRegExp, "%0D%0A").replace("\"", "%22")
+        }
+
+        /**
+         * Returns the length of the [string] in bytes when utf-8 encoded
+         */
+        private fun lengthInBytes(string: String) : Int {
+            return string.toByteArray().size
         }
     }
 
@@ -673,8 +680,8 @@ class TaskWorker(
                 "Content-Disposition: form-data; name=\"file\"; filename=\"${task.filename}\""
             val contentTypeString = "Content-Type: $mimeType"
             // determine the content length of the multi-part data
-            val contentLength = fieldString.length + 2 * boundary.length + 6 * lineFeed.length +
-                    contentDispositionString.length + contentTypeString.length +
+            val contentLength = lengthInBytes(fieldString) + 2 * boundary.length + 6 * lineFeed.length +
+                    lengthInBytes(contentDispositionString) + contentTypeString.length +
                     3 * "--".length + fileSize
             connection.setRequestProperty("Accept-Charset", "UTF-8")
             connection.setRequestProperty("Connection", "Keep-Alive")
