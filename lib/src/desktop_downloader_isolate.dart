@@ -66,7 +66,7 @@ Future<void> doTask(SendPort sendPort) async {
 /// Sends updates via the [sendPort] and can be commanded to cancel/pause via
 /// the [messagesToIsolate] queue
 Future<void> doDownloadTask(
-    Task task,
+    DownloadTask task,
     String filePath,
     String tempFilePath,
     int requiredStartByte,
@@ -256,11 +256,14 @@ void deleteTempFile(String tempFilePath) async {
   }
 }
 
+const boundary = '-----background_downloader-akjhfw281onqciyhnIk';
+const lineFeed = '\r\n';
+
 /// Do the binary or multi-part upload task
 ///
 /// Sends updates via the [sendPort] and can be commanded to cancel via
 /// the [messagesToIsolate] queue
-Future<void> doUploadTask(Task task, String filePath, SendPort sendPort,
+Future<void> doUploadTask(UploadTask task, String filePath, SendPort sendPort,
     StreamQueue messagesToIsolate) async {
   final inFile = File(filePath);
   if (!inFile.existsSync()) {
@@ -268,18 +271,23 @@ Future<void> doUploadTask(Task task, String filePath, SendPort sendPort,
     processStatusUpdateInIsolate(task, TaskStatus.failed, sendPort);
     return;
   }
+  // field portion of the multipart, all in one string
+  var fieldsString = '';
+  for (var entry in task.fields.entries) {
+    fieldsString += fieldEntry(entry.key, entry.value);
+  }
+  // file portion of the multipart
   final isBinaryUpload = task.post == 'binary';
   final fileSize = inFile.lengthSync();
   final mimeType = lookupMimeType(filePath) ?? 'application/octet-stream';
-  const boundary = '-----background_downloader-akjhfw281onqciyhnIk';
-  const lineFeed = '\r\n';
   final contentDispositionString =
       'Content-Disposition: form-data; name="file"; filename="${task.filename}"';
   final contentTypeString = 'Content-Type: $mimeType';
   // determine the content length of the multi-part data
   final contentLength = isBinaryUpload
       ? fileSize
-      : 2 * boundary.length +
+      : fieldsString.length +
+          2 * boundary.length +
           6 * lineFeed.length +
           contentDispositionString.length +
           contentTypeString.length +
@@ -300,9 +308,9 @@ Future<void> doUploadTask(Task task, String filePath, SendPort sendPort,
         'Connection': 'Keep-Alive',
         'Cache-Control': 'no-cache'
       });
-      // write pre-amble
+      // write pre-amble, including all fields multi-parts
       request.sink.add(utf8.encode(
-          '--$boundary$lineFeed$contentDispositionString$lineFeed$contentTypeString$lineFeed$lineFeed'));
+          '$fieldsString--$boundary$lineFeed$contentDispositionString$lineFeed$contentTypeString$lineFeed$lineFeed'));
     }
     // initiate the request and handle completion async
     final requestCompleter = Completer();
@@ -459,6 +467,42 @@ void processProgressUpdateInIsolate(
     sendPort.send(progress);
   }
 }
+
+/// Returns the multipart entry for one field name/value pair
+String fieldEntry(String name, String value) =>
+    '--$boundary$lineFeed${headerForField(name, value)}$value$lineFeed';
+
+/// Returns the header string for a field.
+///
+/// The return value is guaranteed to contain only ASCII characters.
+String headerForField(String name, String value) {
+  var header = 'content-disposition: form-data; name="${_browserEncode(name)}"';
+  if (!isPlainAscii(value)) {
+    header = '$header\r\n'
+        'content-type: text/plain; charset=utf-8\r\n'
+        'content-transfer-encoding: binary';
+  }
+  return '$header\r\n\r\n';
+}
+
+/// A regular expression that matches strings that are composed entirely of
+/// ASCII-compatible characters.
+final _asciiOnly = RegExp(r'^[\x00-\x7F]+$');
+
+final _newlineRegExp = RegExp(r'\r\n|\r|\n');
+
+/// Returns whether [string] is composed entirely of ASCII-compatible
+/// characters.
+bool isPlainAscii(String string) => _asciiOnly.hasMatch(string);
+
+/// Encode [value] in the same way browsers do.
+String _browserEncode(String value) =>
+    // http://tools.ietf.org/html/rfc2388 mandates some complex encodings for
+// field names and file names, but in practice user agents seem not to
+// follow this at all. Instead, they URL-encode `\r`, `\n`, and `\r\n` as
+// `\r\n`; URL-encode `"`; and do nothing else (even for `%` or non-ASCII
+// characters). We follow their behavior.
+    value.replaceAll(_newlineRegExp, '%0D%0A').replaceAll('"', '%22');
 
 final _log = Logger('FileDownloader');
 

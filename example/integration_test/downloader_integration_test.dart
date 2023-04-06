@@ -462,9 +462,8 @@ void main() {
       print('Finished taskForId');
     });
 
-    testWidgets('Task to and from Json', (widgetTester) async {
+    testWidgets('DownloadTask to and from Json', (widgetTester) async {
       final complexTask = DownloadTask(
-          // taskId: 'uniqueId',
           url: postTestUrl,
           filename: defaultFilename,
           headers: {'Auth': 'Test'},
@@ -512,6 +511,60 @@ void main() {
       }
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.complete));
+    });
+
+    testWidgets('UploadTask to and from Json', (widgetTester) async {
+      final complexTask = UploadTask(
+          url: postTestUrl,
+          filename: defaultFilename,
+          headers: {'Auth': 'Test'},
+          post: null,
+          fields: {'name': 'value'},
+          directory: 'directory',
+          baseDirectory: BaseDirectory.temporary,
+          group: 'someGroup',
+          updates: Updates.statusAndProgress,
+          requiresWiFi: true,
+          retries: 1,
+          allowPause: false,
+          // cannot be true if post != null
+          metaData: 'someMetaData');
+      final now = DateTime.now();
+      expect(now.difference(complexTask.creationTime).inMilliseconds,
+          lessThan(100));
+      FileDownloader().registerCallbacks(
+          group: complexTask.group, taskStatusCallback: statusCallback);
+      expect(await FileDownloader().taskForId(complexTask.taskId), isNull);
+      expect(await FileDownloader().enqueue(complexTask), isTrue);
+      final task = await FileDownloader().taskForId(complexTask.taskId);
+      expect(task is UploadTask, isTrue);
+      expect(task, equals(complexTask));
+      if (task != null && task is UploadTask) {
+      expect(task.taskId, equals(complexTask.taskId));
+      expect(task.url, equals(complexTask.url));
+      expect(task.filename, equals(complexTask.filename));
+      expect(task.headers, equals(complexTask.headers));
+      expect(task.post, equals(complexTask.post));
+      expect(task.fields, equals(complexTask.fields));
+      expect(task.directory, equals(complexTask.directory));
+      expect(task.baseDirectory, equals(complexTask.baseDirectory));
+      expect(task.group, equals(complexTask.group));
+      expect(task.updates, equals(complexTask.updates));
+      expect(task.requiresWiFi, equals(complexTask.requiresWiFi));
+      expect(task.allowPause, equals(complexTask.allowPause));
+      expect(task.retries, equals(complexTask.retries));
+      expect(task.retriesRemaining, equals(complexTask.retriesRemaining));
+      expect(task.retriesRemaining, equals(task.retries));
+      expect(task.metaData, equals(complexTask.metaData));
+      expect(
+      task.creationTime
+          .difference(complexTask.creationTime)
+          .inMilliseconds
+          .abs(),
+      lessThan(100));
+      }
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.failed));
     });
 
     testWidgets('copyWith', (widgetTester) async {
@@ -1219,6 +1272,28 @@ void main() {
       expect(lastProgress, equals(progressComplete));
       print('Finished enqueue binary file');
     });
+
+    testWidgets('enqueue multipart with fields', (widgetTester) async {
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      expect(
+          await FileDownloader().enqueue(uploadTask.copyWith(
+              fields: {'field1': 'value1', 'field2': 'value2'},
+              updates: Updates.statusAndProgress)),
+          isTrue);
+      await statusCallbackCompleter.future;
+      expect(statusCallbackCounter, equals(3));
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(progressCallbackCounter, greaterThan(1));
+      expect(lastProgress, equals(progressComplete));
+      print('Finished enqueue multipart with fields');
+    });
+
+    testWidgets('upload task creation with errors', (widgetTester) async {
+      expect(UploadTask(url: uploadTestUrl, filename: defaultFilename, fields: {'name': 'value'}, post: 'binary'), throwsAssertionError);
+    });
+
   });
 
   group('Convenience uploads', () {
@@ -1721,8 +1796,8 @@ void main() {
       if (Platform.isAndroid) {
         var filePath = await task.filePath();
         await FileDownloader().download(task);
-        final path = await FileDownloader()
-            .moveToSharedStorage(task, SharedStorage.images,
+        final path = await FileDownloader().moveToSharedStorage(
+            task, SharedStorage.images,
             mimeType: 'image/jpeg');
         print('Path in downloads is $path');
         expect(path, isNotNull);

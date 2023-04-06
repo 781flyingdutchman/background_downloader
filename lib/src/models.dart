@@ -528,6 +528,9 @@ class DownloadTask extends Task {
 /// An equality test on a [UploadTask] is a test on the [taskId]
 /// only - all other fields are ignored in that test
 class UploadTask extends Task {
+  /// Map of name/value pairs to encode as form fields in a multi-part upload
+  final Map<String, String> fields;
+
   /// Creates [UploadTask]
   ///
   /// [taskId] must be unique. A unique id will be generated if omitted
@@ -536,6 +539,9 @@ class UploadTask extends Task {
   ///   be properly encoded if necessary
   /// [filename] of the file to upload
   /// [headers] an optional map of HTTP request headers
+  /// [post] if set to 'binary' will upload as binary file, otherwise multi-part
+  /// [fields] for multi-part uploads, optional map of name/value pairs to upload
+  ///   along with the file as form fields
   /// [directory] optional directory name, precedes [filename]
   /// [baseDirectory] one of the base directories, precedes [directory]
   /// [group] if set allows different callbacks or processing for different
@@ -552,6 +558,7 @@ class UploadTask extends Task {
       required String filename,
       super.headers,
       String? post,
+      Map<String, String>? fields,
       super.directory,
       super.baseDirectory,
       super.group,
@@ -564,6 +571,9 @@ class UploadTask extends Task {
       : assert(filename.isNotEmpty, 'A filename is required'),
         assert(post == null || post == 'binary',
             'post field must be null, or "binary" for binary file upload'),
+        assert(fields == null || fields.isEmpty || post != 'binary',
+            'fields only allowed for multi-part uploads'),
+        fields = fields ?? {},
         super(taskId: taskId, filename: filename, post: post) {
     if (allowPause) {
       throw ArgumentError('Uploads cannot be paused. set `allowPause` to '
@@ -577,11 +587,12 @@ class UploadTask extends Task {
             jsonMap['taskType'] == 'UploadTask',
             'The provided JSON map is not'
             ' an UploadTask, because key "taskType" is not "UploadTask".'),
+        fields = jsonMap['fields'] ?? {},
         super.fromJsonMap(jsonMap);
 
   @override
   Map<String, dynamic> toJsonMap() =>
-      {...super.toJsonMap(), 'taskType': 'UploadTask'};
+      {...super.toJsonMap(), 'fields': fields, 'taskType': 'UploadTask'};
 
   @override
   UploadTask copyWith(
@@ -590,6 +601,7 @@ class UploadTask extends Task {
           String? filename,
           Map<String, String>? headers,
           Object? post,
+          Map<String, String>? fields,
           String? directory,
           BaseDirectory? baseDirectory,
           String? group,
@@ -606,6 +618,7 @@ class UploadTask extends Task {
           filename: filename ?? this.filename,
           headers: headers ?? this.headers,
           post: post as String? ?? this.post,
+          fields: fields ?? this.fields,
           directory: directory ?? this.directory,
           baseDirectory: baseDirectory ?? this.baseDirectory,
           group: group ?? this.group,
@@ -618,7 +631,7 @@ class UploadTask extends Task {
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 
   @override
-  String toString() => 'Upload${super.toString()}';
+  String toString() => 'Upload${super.toString()} and fields $fields';
 }
 
 /// Return url String composed of the [url] and the
