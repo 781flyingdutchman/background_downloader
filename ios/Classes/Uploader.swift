@@ -12,16 +12,23 @@ enum StreamError: Error {
     case Closed
 }
 
+
+
 /// Uploader associated with one URLSessionUploadTask
 public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
     
     var task: Task
     let outputFilename: String
-    var contentDispositionString: String = ""
-    var contentTypeString: String = ""
+    var contentDispositionString = ""
+    var contentTypeString = ""
+    var fieldsString = ""
     var totalBytesWritten: Int64 = 0
     static let boundary = "-----background_downloader-akjhfw281onqciyhnIk"
     let lineFeed = "\r\n"
+    
+    let asciiOnly = try! NSRegularExpression(pattern: "^[\\x00-\\x7F]+$")
+    let newlineRegExp = try! NSRegularExpression(pattern: "\r\n|\r|\n")
+    
     
     let bufferSize = 8192
     
@@ -44,6 +51,10 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
         guard let inputStream = InputStream(url: fileUrl) else {
             os_log("Could not open file to upload", log: log, type: .info)
             return false
+        }
+        // field portion of the multipart
+        for entry in task.fields ?? [:] {
+            fieldsString += fieldEntry(name: entry.key, value: entry.value)
         }
         // determine the file related components of the preamble
         contentDispositionString =
@@ -73,7 +84,7 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
     /// Returns true if successful, false otherwise
     private func writePreamble(fileHandle: FileHandle) -> Bool {
         // construct the preamble
-        guard let preamble = "--\(Uploader.boundary)\(lineFeed)\(contentDispositionString)\(lineFeed)\(contentTypeString)\(lineFeed)\(lineFeed)".data(using: .utf8) else {
+        guard let preamble = "\(fieldsString)--\(Uploader.boundary)\(lineFeed)\(contentDispositionString)\(lineFeed)\(contentTypeString)\(lineFeed)\(lineFeed)".data(using: .utf8) else {
             os_log("Could not create preamble")
             return false
         }
@@ -121,4 +132,47 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
         totalBytesWritten += Int64(epilogue.count)
         return true
     }
+    
+    /// Returns the multipart entry for one field name/value pair
+    private func fieldEntry(name: String, value: String) -> String {
+        return "--\(Uploader.boundary)\(lineFeed)\(headerForField(name: name, value: value))\(value)\(lineFeed)"
+    }
+    
+    /// Returns the header string for a field
+    ///
+    /// The return value is guaranteed to contain only ASCII characters
+    private func headerForField(name: String, value: String) -> String {
+        var header = "content-disposition: form-data; name=\"\(browserEncode(name))\""
+        if (!isPlainAscii(value)) {
+            header = "\(header)\r\n" +
+            "content-type: text/plain; charset=utf-8\r\n" +
+            "content-transfer-encoding: binary"
+        }
+        return "\(header)\r\n\r\n"
+    }
+    
+    
+    /// Returns whether [string] is composed entirely of ASCII-compatible characters
+    private func isPlainAscii(_ string: String)-> Bool {
+        let result = asciiOnly.matches(in: string,
+                                         range: NSMakeRange(0, (string as NSString).length))
+        return !result.isEmpty
+    }
+    
+    /// Encode [value] in the same way browsers do
+    private func browserEncode(_ value: String)-> String {
+        // http://tools.ietf.org/html/rfc2388 mandates some complex encodings for
+        // field names and file names, but in practice user agents seem not to
+        // follow this at all. Instead, they URL-encode `\r`, `\n`, and `\r\n` as
+        // `\r\n`; URL-encode `"`; and do nothing else (even for `%` or non-ASCII
+        // characters). We follow their behavior.
+        let newlinesReplaced = newlineRegExp.stringByReplacingMatches(
+                                in: value,
+                                options: [],
+                                range: NSMakeRange(0, (value as NSString).length), withTemplate: "%0D%0A")
+        return newlinesReplaced.replacingOccurrences(of: "\"", with: "%22")
+    }
+    
 }
+
+

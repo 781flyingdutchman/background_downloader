@@ -15,6 +15,7 @@ struct Task : Codable {
     var filename: String
     var headers: [String:String]
     var post: String?
+    var fields: [String:String]?
     var directory: String
     var baseDirectory: Int
     var group: String

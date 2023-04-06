@@ -515,13 +515,11 @@ void main() {
 
     testWidgets('UploadTask to and from Json', (widgetTester) async {
       final complexTask = UploadTask(
-          url: postTestUrl,
-          filename: defaultFilename,
+          url: uploadTestUrl,
+          filename: uploadFilename,
           headers: {'Auth': 'Test'},
           post: null,
           fields: {'name': 'value'},
-          directory: 'directory',
-          baseDirectory: BaseDirectory.temporary,
           group: 'someGroup',
           updates: Updates.statusAndProgress,
           requiresWiFi: true,
@@ -564,7 +562,7 @@ void main() {
             lessThan(100));
       }
       await statusCallbackCompleter.future;
-      expect(lastStatus, equals(TaskStatus.failed));
+      expect(lastStatus, equals(TaskStatus.complete));
     });
 
     testWidgets('copyWith', (widgetTester) async {
@@ -1279,7 +1277,7 @@ void main() {
           taskProgressCallback: progressCallback);
       expect(
           await FileDownloader().enqueue(uploadTask.copyWith(
-              fields: {'field1': 'value1', 'field2': 'value2'},
+              fields: {'field1': 'value1', 'field2': 'check\u2713'},
               updates: Updates.statusAndProgress)),
           isTrue);
       await statusCallbackCompleter.future;

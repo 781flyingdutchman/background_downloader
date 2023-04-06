@@ -156,7 +156,6 @@ func registerNotificationCategories() {
     // Register the notification type.
     let notificationCenter = UNUserNotificationCenter.current()
     notificationCenter.setNotificationCategories([runningWithPauseCategory, runningWithoutPauseCategory, pausedCategory])
-    os_log("Registered categories", log: log, type: .info)
 }
 
 /// Returns a JSON string for this NotificationConfig, or nil
