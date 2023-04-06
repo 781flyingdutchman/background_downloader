@@ -272,8 +272,8 @@ Because the behavior is very platform-specific, not all `SharedStorage` destinat
 On MacOS, for the `.downloads` to work you need to enable App Sandbox entitlements and set the key `com.apple.security.files.downloads.read-write` to true.
 On Android, depending on what `SharedStorage` destination you move a file to, and depending on the OS version your app runs on, you _may_ require extra permissions `WRITE_EXTERNAL_STORAGE` and/or `READ_EXTERNAL_STORAGE` . See [here](https://medium.com/androiddevelopers/android-11-storage-faq-78cefea52b7c) for details on the new scoped storage rules starting with Android API version 30, which is what the plugin is using.
 
-Methods `moveToSharedStorage` and the similar `moveFileToSharedStorage` also take an optional 
-`directory` argument for a subdirectory in the `SharedStorage` destination. They also take an 
+Methods `moveToSharedStorage` and the similar `moveFileToSharedStorage` also take an optional
+`directory` argument for a subdirectory in the `SharedStorage` destination. They also take an
 optional `mimeType` parameter that overrides the mimeType derived from the filePath extension.
 
 ## Uploads
@@ -284,6 +284,8 @@ Uploads are very similar to downloads, except:
 * call `upload` instead of `download`, or `uploadBatch` instead of `downloadBatch`
 
 There are two ways to upload a file to a server: binary upload (where the file is included in the POST body) and form/multi-part upload. Which type of upload is appropriate depends on the server you are uploading to. The upload will be done using the binary upload method only if you have set the `post` field of the `UploadTask` to 'binary'.
+
+For multi-part uploads you can specify name/value pairs in the `fields` field of the `UploadTask` as a `Map<String, String>`. These will be uploaded as form fields along with the file.
 
 ## Managing tasks and the queue
 
@@ -374,6 +376,11 @@ If the `requiresWiFi` field of a `Task` is set to true, the task won't start unl
 
 `metaData` can be added to a `Task`. It is ignored by the downloader but may be helpful when receiving an update about the task.
 
+### UploadTask
+
+#### Form fields
+
+Set `fields` to a `Map<String, String>` of name/value pairs to upload as "form fields" along with the file.
 
 ## Initial setup
 

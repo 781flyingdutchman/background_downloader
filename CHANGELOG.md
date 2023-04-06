@@ -1,3 +1,8 @@
+## 5.4.4
+
+Added optional `fields` property to `UploadTask` that is a `Map<String, String>` containing
+form field name/value pairs that will be uploaded along with the file in a multi-part upload.
+
 ## 5.4.3
 
 Added optional `mimeType` parameter for calls to `moveToSharedStorage` and 
