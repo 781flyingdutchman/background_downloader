@@ -8,7 +8,6 @@ import 'package:async/async.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
-import 'package:mime/mime.dart';
 import 'package:path/path.dart' as path;
 
 import 'desktop_downloader.dart';
@@ -279,10 +278,10 @@ Future<void> doUploadTask(UploadTask task, String filePath, SendPort sendPort,
   // file portion of the multipart
   final isBinaryUpload = task.post == 'binary';
   final fileSize = inFile.lengthSync();
-  final mimeType = lookupMimeType(filePath) ?? 'application/octet-stream';
   final contentDispositionString =
-      'Content-Disposition: form-data; name="file"; filename="${task.filename}"';
-  final contentTypeString = 'Content-Type: $mimeType';
+      'Content-Disposition: form-data; name="${_browserEncode(task.fileField)}"; '
+      'filename="${_browserEncode(task.filename)}"';
+  final contentTypeString = 'Content-Type: ${task.mimeType}';
   // determine the content length of the multi-part data
   final contentLength = isBinaryUpload
       ? fileSize
@@ -299,7 +298,7 @@ Future<void> doUploadTask(UploadTask task, String filePath, SendPort sendPort,
     request.headers.addAll(task.headers);
     request.contentLength = contentLength;
     if (isBinaryUpload) {
-      request.headers['Content-Type'] = mimeType;
+      request.headers['Content-Type'] = task.mimeType;
     } else {
       // multi-part upload
       request.headers.addAll({
@@ -379,7 +378,7 @@ Future<TaskStatus> transferBytes(
   var nextProgressUpdateTime = DateTime.fromMillisecondsSinceEpoch(0);
   late StreamSubscription<List<int>> subscription;
   subscription = inStream.listen(
-      (bytes) async {
+      (bytes) {
         if (isCanceled) {
           streamResultStatus.complete(TaskStatus.canceled);
           return;

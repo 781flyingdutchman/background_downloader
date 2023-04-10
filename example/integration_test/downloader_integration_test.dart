@@ -126,6 +126,19 @@ void main() {
       FileDownloader().registerCallbacks(
           group: 'test', taskProgressCallback: progressCallback);
     });
+
+    test('uploadTask', () {
+      var task = UploadTask(url: uploadTestUrl, filename: uploadFilename);
+      expect(task.fileField, equals('file'));
+      expect(task.mimeType, equals('text/plain'));
+      task = UploadTask(
+          url: uploadTestUrl,
+          filename: uploadFilename,
+          fileField: 'fileField',
+          mimeType: 'someThing');
+      expect(task.fileField, equals('fileField'));
+      expect(task.mimeType, equals('someThing'));
+    });
   });
 
   group('Enqueuing tasks', () {
@@ -519,6 +532,8 @@ void main() {
           filename: uploadFilename,
           headers: {'Auth': 'Test'},
           post: null,
+          fileField: 'fileField',
+          mimeType: 'text/html',
           fields: {'name': 'value'},
           group: 'someGroup',
           updates: Updates.statusAndProgress,
@@ -543,6 +558,8 @@ void main() {
         expect(task.filename, equals(complexTask.filename));
         expect(task.headers, equals(complexTask.headers));
         expect(task.post, equals(complexTask.post));
+        expect(task.fileField, equals(complexTask.fileField));
+        expect(task.mimeType, equals(complexTask.mimeType));
         expect(task.fields, equals(complexTask.fields));
         expect(task.directory, equals(complexTask.directory));
         expect(task.baseDirectory, equals(complexTask.baseDirectory));
@@ -562,7 +579,10 @@ void main() {
             lessThan(100));
       }
       await statusCallbackCompleter.future;
-      expect(lastStatus, equals(TaskStatus.complete));
+
+      /// Should trigger 'notFound' because the fileField is not set to 'file
+      /// which is what the server expects
+      expect(lastStatus, equals(TaskStatus.notFound));
     });
 
     testWidgets('copyWith', (widgetTester) async {

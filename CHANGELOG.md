@@ -1,7 +1,9 @@
 ## 5.4.4
 
-Added optional `fields` property to `UploadTask` that is a `Map<String, String>` containing
-form field name/value pairs that will be uploaded along with the file in a multi-part upload.
+Added optional properties to `UploadTask` related to multi-part uploads:
+* `fileField` is the field name used to indicate the file (default to "file")
+* `mimeType` overrides the mimeType derived from the filename extension
+* `fields` is a `Map<String, String>` containing form field name/value pairs that will be uploaded along with the file in a multi-part upload
 
 ## 5.4.3
 

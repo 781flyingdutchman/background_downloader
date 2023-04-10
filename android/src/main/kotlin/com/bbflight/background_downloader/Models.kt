@@ -21,13 +21,21 @@ enum class Updates {
     statusChangeAndProgressUpdates // calls also for progress along the way
 }
 
-/// Partial version of the Dart side DownloadTask, only used for background loading
+/**
+ * The Dart side Task
+ *
+ * A blend of UploadTask and DownloadTask, with [taskType] indicating what kind
+ * of task this is
+ */
+
 class Task(
         val taskId: String,
         val url: String,
         val filename: String,
         val headers: Map<String, String>,
         val post: String?,
+        val fileField: String,
+        val mimeType: String,
         val fields: Map<String, String>,
         val directory: String,
         val baseDirectory: BaseDirectory,
@@ -50,7 +58,9 @@ class Task(
             filename = jsonMap["filename"] as String? ?: "",
             headers = jsonMap["headers"] as Map<String, String>? ?: mutableMapOf<String, String>(),
             post = jsonMap["post"] as String?,
-        fields = jsonMap["fields"] as Map<String, String>? ?: mutableMapOf<String, String>(),
+            fileField = jsonMap["fileField"] as String? ?: "",
+            mimeType = jsonMap["mimeType"] as String? ?: "",
+            fields = jsonMap["fields"] as Map<String, String>? ?: mutableMapOf<String, String>(),
             directory = jsonMap["directory"] as String? ?: "",
             baseDirectory = BaseDirectory.values()[(jsonMap["baseDirectory"] as Double?
                     ?: 0).toInt()],
@@ -73,7 +83,9 @@ class Task(
                 "filename" to filename,
                 "headers" to headers,
                 "post" to post,
-            "fields" to fields,
+                "fileField" to fileField,
+                "mimeType" to mimeType,
+                "fields" to fields,
                 "directory" to directory,
                 "baseDirectory" to baseDirectory.ordinal, // stored as int
                 "group" to group,

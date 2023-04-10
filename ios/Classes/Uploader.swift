@@ -58,9 +58,8 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
         }
         // determine the file related components of the preamble
         contentDispositionString =
-        "Content-Disposition: form-data; name=\"file\"; filename=\"\(task.filename)\""
-        let mimeType = mimeType(url: fileUrl)
-        contentTypeString = "Content-Type: \(mimeType.isEmpty ? "application/octet-stream" : mimeType)"
+        "Content-Disposition: form-data; name=\"\(browserEncode(task.fileField!))\"; filename=\"\(browserEncode(task.filename))\""
+        contentTypeString = "Content-Type: \(task.mimeType!)"
         // create the output file and write preamble, file bytes and epilogue
         FileManager.default.createFile(atPath: outputFileUrl().path,  contents:Data(" ".utf8), attributes: nil)
         guard let fileHandle = try? FileHandle(forWritingTo: outputFileUrl()) else {

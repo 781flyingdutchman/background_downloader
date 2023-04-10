@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:background_downloader/background_downloader.dart';
+import 'package:mime/mime.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 
@@ -528,6 +529,12 @@ class DownloadTask extends Task {
 /// An equality test on a [UploadTask] is a test on the [taskId]
 /// only - all other fields are ignored in that test
 class UploadTask extends Task {
+  /// Name of the field used for multi-part file upload
+  final String fileField;
+
+  /// mimeType of the file to upload
+  final String mimeType;
+
   /// Map of name/value pairs to encode as form fields in a multi-part upload
   final Map<String, String> fields;
 
@@ -540,6 +547,10 @@ class UploadTask extends Task {
   /// [filename] of the file to upload
   /// [headers] an optional map of HTTP request headers
   /// [post] if set to 'binary' will upload as binary file, otherwise multi-part
+  /// [fileField] for multi-part uploads, name of the file field or 'file' by
+  /// default
+  /// [mimeType] the mimeType of the file, or derived from filename extension
+  /// by default
   /// [fields] for multi-part uploads, optional map of name/value pairs to upload
   ///   along with the file as form fields
   /// [directory] optional directory name, precedes [filename]
@@ -558,6 +569,8 @@ class UploadTask extends Task {
       required String filename,
       super.headers,
       String? post,
+      this.fileField = 'file',
+      String? mimeType,
       Map<String, String>? fields,
       super.directory,
       super.baseDirectory,
@@ -574,9 +587,11 @@ class UploadTask extends Task {
         assert(fields == null || fields.isEmpty || post != 'binary',
             'fields only allowed for multi-part uploads'),
         fields = fields ?? {},
+        mimeType =
+            mimeType ?? lookupMimeType(filename) ?? 'application/octet-stream',
         super(taskId: taskId, filename: filename, post: post) {
     if (allowPause) {
-      throw ArgumentError('Uploads cannot be paused. set `allowPause` to '
+      throw ArgumentError('Uploads cannot be paused-> Set `allowPause` to '
           'false');
     }
   }
@@ -587,12 +602,19 @@ class UploadTask extends Task {
             jsonMap['taskType'] == 'UploadTask',
             'The provided JSON map is not'
             ' an UploadTask, because key "taskType" is not "UploadTask".'),
+        fileField = jsonMap['fileField'] ?? 'file',
+        mimeType = jsonMap['mimeType'] ?? 'application/octet-stream',
         fields = Map<String, String>.from(jsonMap['fields'] ?? {}),
         super.fromJsonMap(jsonMap);
 
   @override
-  Map<String, dynamic> toJsonMap() =>
-      {...super.toJsonMap(), 'fields': fields, 'taskType': 'UploadTask'};
+  Map<String, dynamic> toJsonMap() => {
+        ...super.toJsonMap(),
+        'fileField': fileField,
+        'mimeType': mimeType,
+        'fields': fields,
+        'taskType': 'UploadTask'
+      };
 
   @override
   UploadTask copyWith(
@@ -601,6 +623,8 @@ class UploadTask extends Task {
           String? filename,
           Map<String, String>? headers,
           Object? post,
+          String? fileField,
+          String? mimeType,
           Map<String, String>? fields,
           String? directory,
           BaseDirectory? baseDirectory,
@@ -618,6 +642,8 @@ class UploadTask extends Task {
           filename: filename ?? this.filename,
           headers: headers ?? this.headers,
           post: post as String? ?? this.post,
+          fileField: fileField ?? this.fileField,
+          mimeType: mimeType ?? this.mimeType,
           fields: fields ?? this.fields,
           directory: directory ?? this.directory,
           baseDirectory: baseDirectory ?? this.baseDirectory,
@@ -631,7 +657,8 @@ class UploadTask extends Task {
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 
   @override
-  String toString() => 'Upload${super.toString()} and fields $fields';
+  String toString() => 'Upload${super.toString()} and fileField $fileField, '
+      'mimeType $mimeType and fields $fields';
 }
 
 /// Return url String composed of the [url] and the
