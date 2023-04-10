@@ -378,6 +378,14 @@ If the `requiresWiFi` field of a `Task` is set to true, the task won't start unl
 
 ### UploadTask
 
+#### File field
+
+Set `fileField` to the field name the server expects for the file portion of a multi-part upload. Defaults to "file".
+
+#### Mime type
+
+Set `mimeType` to the MIME type of the file to be uploaded. By default the MIME type is derived from the filename extension, e.g. a .txt file has MIME type `text/plain`.
+
 #### Form fields
 
 Set `fields` to a `Map<String, String>` of name/value pairs to upload as "form fields" along with the file.
