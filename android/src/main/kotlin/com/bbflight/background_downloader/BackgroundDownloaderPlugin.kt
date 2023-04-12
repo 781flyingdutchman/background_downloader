@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
+import android.util.Patterns
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.preference.PreferenceManager
@@ -82,6 +83,10 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         ): Boolean {
             val task = Task(gson.fromJson(taskJsonMapString, jsonMapType))
             Log.i(TAG, "Enqueuing task with id ${task.taskId}")
+            if (!Patterns.WEB_URL.matcher(task.url).matches()) {
+                Log.i(TAG, "Invalid url: ${task.url}")
+                return false
+            }
             canceledTaskIds.remove(task.taskId)
             val dataBuilder = Data.Builder().putString(TaskWorker.keyTask, taskJsonMapString)
             if (notificationConfigJsonString != null) {

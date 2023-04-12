@@ -121,7 +121,12 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         let verb = isResume ? "Resuming" : "Starting"
         os_log("%@ task with id %@", log: log, type: .info, verb, task.taskId)
         Downloader.urlSession = Downloader.urlSession ?? createUrlSession()
-        var baseRequest = URLRequest(url: URL(string: task.url)!)
+        guard let url = URL(string: task.url) else {
+            os_log("Invalid url: %@", log: log, type: .info, task.url)
+            postResult(result: result, value: false)
+            return
+        }
+        var baseRequest = URLRequest(url: url)
         for (key, value) in task.headers {
             baseRequest.setValue(value, forHTTPHeaderField: key)
         }

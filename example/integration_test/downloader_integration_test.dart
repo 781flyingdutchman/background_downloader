@@ -384,6 +384,19 @@ void main() {
         }
       }
     });
+
+    testWidgets('enqueue with invalid (malformed) url', (widgetTester) async {
+      var task = DownloadTask(url: 'invalid%url.com', filename: 'test.html');
+      expect(await FileDownloader().enqueue(task), isFalse);
+      task = DownloadTask(
+          url: 'http://google.com?query=5&some%other=true',
+          filename: 'test.html');
+      expect(await FileDownloader().enqueue(task), isFalse);
+      task = DownloadTask(
+          url: 'http://google.com?query=5&some%20other=true',
+          filename: 'test.html');
+      expect(await FileDownloader().enqueue(task), isTrue);
+    });
   });
 
   group('Queue and task management', () {

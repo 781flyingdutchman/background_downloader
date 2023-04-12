@@ -43,6 +43,12 @@ class DesktopDownloader extends BaseDownloader {
   @override
   Future<bool> enqueue(Task task,
       [TaskNotificationConfig? notificationConfig]) async {
+    try {
+      Uri.decodeFull(task.url);
+    } catch (e) {
+      _log.fine('Invalid url: ${task.url} error: $e');
+      return false;
+    }
     super.enqueue(task);
     _queue.add(task);
     processStatusUpdate(task, TaskStatus.enqueued);

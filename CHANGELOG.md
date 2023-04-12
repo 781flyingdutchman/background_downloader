@@ -1,3 +1,8 @@
+## 5.4.5
+
+An invalid url in the `Task` now results in `false` being returned from the `enqueue` call on 
+all platforms. Previously, the behavior was inconsistent.
+
 ## 5.4.4
 
 Added optional properties to `UploadTask` related to multi-part uploads:
