@@ -13,10 +13,13 @@ import 'package:path/path.dart' as path;
 import 'desktop_downloader.dart';
 import 'models.dart';
 
-/// global variables related to pause/resume functionality
+/// global variables related to pause/resume and cancel functionality
 
 var _bytesTotal = 0;
 var _startByte = 0;
+var isPaused = false;
+var isCanceled = false;
+
 
 /// Do the task, sending messages back to the main isolate via [sendPort]
 ///
@@ -41,6 +44,17 @@ Future<void> doTask(SendPort sendPort) async {
       print('${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
     }
   });
+  messagesToIsolate.next.then((message) {
+    // pause and cancel messages set global variables
+    assert(message == 'cancel' || message == 'pause',
+    'Only accept "cancel" and "pause" messages');
+    if (message == 'cancel') {
+      isCanceled = true;
+    }
+    if (message == 'pause') {
+      isPaused = true;
+    }
+  });
   processStatusUpdateInIsolate(task, TaskStatus.running, sendPort);
   if (!isResume) {
     processProgressUpdateInIsolate(task, 0.0, sendPort);
@@ -49,11 +63,13 @@ Future<void> doTask(SendPort sendPort) async {
     logError(task, 'task has negative retries remaining');
     processStatusUpdateInIsolate(task, TaskStatus.failed, sendPort);
   } else {
+    // allow immediate cancel message to come through
+    await Future.delayed(const Duration(milliseconds: 0));
     if (task is DownloadTask) {
       await doDownloadTask(task, filePath, tempFilePath, requiredStartByte,
-          isResume, sendPort, messagesToIsolate);
+          isResume, sendPort);
     } else {
-      await doUploadTask(task, filePath, sendPort, messagesToIsolate);
+      await doUploadTask(task, filePath, sendPort);
     }
   }
   sendPort.send(null); // signals end
@@ -70,8 +86,7 @@ Future<void> doDownloadTask(
     String tempFilePath,
     int requiredStartByte,
     bool isResume,
-    SendPort sendPort,
-    StreamQueue messagesToIsolate) async {
+    SendPort sendPort) async {
   isResume = isResume &&
       await determineIfResumeIsPossible(tempFilePath, requiredStartByte);
   final client = DesktopDownloader.httpClient;
@@ -88,32 +103,37 @@ Future<void> doDownloadTask(
   var resultStatus = TaskStatus.failed;
   try {
     final response = await client.send(request);
-    var taskCanResume = false;
-    if (task.allowPause) {
-      // determine if this task can be paused
-      final acceptRangesHeader = response.headers['accept-ranges'];
-      taskCanResume = acceptRangesHeader == 'bytes';
-      sendPort.send(taskCanResume);
-    }
-    if (okResponses.contains(response.statusCode)) {
-      resultStatus = await processOkDownloadResponse(
-        task,
-        filePath,
-        tempFilePath,
-        taskCanResume,
-        isResume,
-        response,
-        sendPort,
-        messagesToIsolate,
-      );
-    } else {
-      // not an OK response
-      if (response.statusCode == 404) {
-        resultStatus = TaskStatus.notFound;
+    if (!isCanceled) {
+      var taskCanResume = false;
+      if (task.allowPause) {
+        // determine if this task can be paused
+        final acceptRangesHeader = response.headers['accept-ranges'];
+        taskCanResume = acceptRangesHeader == 'bytes';
+        sendPort.send(taskCanResume);
+      }
+      if (okResponses.contains(response.statusCode)) {
+        resultStatus = await processOkDownloadResponse(
+          task,
+          filePath,
+          tempFilePath,
+          taskCanResume,
+          isResume,
+          response,
+          sendPort
+        );
+      } else {
+        // not an OK response
+        if (response.statusCode == 404) {
+          resultStatus = TaskStatus.notFound;
+        }
       }
     }
   } catch (e) {
     logError(task, e.toString());
+  }
+  if (isCanceled) {
+    // cancellation overrides other results
+    resultStatus = TaskStatus.canceled;
   }
   processStatusUpdateInIsolate(task, resultStatus, sendPort);
 }
@@ -150,8 +170,7 @@ Future<TaskStatus> processOkDownloadResponse(
     bool taskCanResume,
     bool isResume,
     http.StreamedResponse response,
-    SendPort sendPort,
-    StreamQueue<dynamic> messagesToIsolate) async {
+    SendPort sendPort) async {
   final contentLength = response.contentLength ?? -1;
   isResume = isResume && response.statusCode == 206;
   if (isResume && !await prepareResume(response, tempFilePath)) {
@@ -165,7 +184,7 @@ Future<TaskStatus> processOkDownloadResponse(
     outStream = File(tempFilePath)
         .openWrite(mode: isResume ? FileMode.append : FileMode.write);
     final transferBytesResult = await transferBytes(response.stream, outStream,
-        contentLength, task, sendPort, messagesToIsolate);
+        contentLength, task, sendPort);
     switch (transferBytesResult) {
       case TaskStatus.complete:
         // copy file to destination, creating dirs if needed
@@ -262,8 +281,7 @@ const lineFeed = '\r\n';
 ///
 /// Sends updates via the [sendPort] and can be commanded to cancel via
 /// the [messagesToIsolate] queue
-Future<void> doUploadTask(UploadTask task, String filePath, SendPort sendPort,
-    StreamQueue messagesToIsolate) async {
+Future<void> doUploadTask(UploadTask task, String filePath, SendPort sendPort) async {
   final inFile = File(filePath);
   if (!inFile.existsSync()) {
     logError(task, 'file to upload does not exist: $filePath');
@@ -292,6 +310,7 @@ Future<void> doUploadTask(UploadTask task, String filePath, SendPort sendPort,
           contentTypeString.length +
           3 * "--".length +
           fileSize;
+  var resultStatus = TaskStatus.failed;
   try {
     final client = DesktopDownloader.httpClient;
     final request = http.StreamedRequest('POST', Uri.parse(task.url));
@@ -313,7 +332,6 @@ Future<void> doUploadTask(UploadTask task, String filePath, SendPort sendPort,
     }
     // initiate the request and handle completion async
     final requestCompleter = Completer();
-    var resultStatus = TaskStatus.failed;
     var transferBytesResult = TaskStatus.failed;
     client.send(request).then((response) {
       // request completed, so send status update and finish
@@ -329,17 +347,21 @@ Future<void> doUploadTask(UploadTask task, String filePath, SendPort sendPort,
     // send the bytes to the request sink
     final inStream = inFile.openRead();
     transferBytesResult = await transferBytes(inStream, request.sink,
-        contentLength, task, sendPort, messagesToIsolate);
+        contentLength, task, sendPort);
     if (!isBinaryUpload && transferBytesResult == TaskStatus.complete) {
       // write epilogue
       request.sink.add(utf8.encode('$lineFeed--$boundary--$lineFeed'));
     }
     request.sink.close(); // triggers request completion, handled above
     await requestCompleter.future; // wait for request to complete
-    processStatusUpdateInIsolate(task, resultStatus, sendPort);
   } catch (e) {
-    processStatusUpdateInIsolate(task, TaskStatus.failed, sendPort);
+    resultStatus = TaskStatus.failed;
   }
+  if (isCanceled) {
+    // cancellation overrides other results
+    resultStatus = TaskStatus.canceled;
+  }
+  processStatusUpdateInIsolate(task, resultStatus, sendPort);
 }
 
 /// Transfer all bytes from [inStream] to [outStream], expecting [contentLength]
@@ -356,23 +378,10 @@ Future<TaskStatus> transferBytes(
     EventSink<List<int>> outStream,
     int contentLength,
     Task task,
-    SendPort sendPort,
-    StreamQueue messagesToIsolate) async {
+    SendPort sendPort) async {
   if (contentLength == 0) {
     contentLength = -1;
   }
-  var isCanceled = false;
-  var isPaused = false;
-  messagesToIsolate.next.then((message) {
-    assert(message == 'cancel' || message == 'pause',
-        'Only accept "cancel" and "pause" messages');
-    if (message == 'cancel') {
-      isCanceled = true;
-    }
-    if (message == 'pause') {
-      isPaused = true;
-    }
-  });
   final streamResultStatus = Completer<TaskStatus>();
   var lastProgressUpdate = 0.0;
   var nextProgressUpdateTime = DateTime.fromMillisecondsSinceEpoch(0);
