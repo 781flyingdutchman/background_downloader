@@ -295,8 +295,9 @@ abstract class BaseDownloader {
   Future<void> removeResumeData([String? taskId]) async {
     if (taskId == null) {
       await _db.collection(resumeDataPath).delete();
+      return;
     }
-    await _db.collection(resumeDataPath).doc(taskId).delete();
+    await _db.collection(resumeDataPath).doc(_safeId(taskId)).delete();
   }
 
   /// Store the paused task
@@ -324,8 +325,9 @@ abstract class BaseDownloader {
   Future<void> removePausedTask([String? taskId]) async {
     if (taskId == null) {
       await _db.collection(pausedTasksPath).delete();
+      return;
     }
-    await _db.collection(pausedTasksPath).doc(taskId).delete();
+    await _db.collection(pausedTasksPath).doc(_safeId(taskId)).delete();
   }
 
   /// Retrieve data that was not delivered to Dart
