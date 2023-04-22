@@ -1,3 +1,7 @@
+## 5.4.6
+
+Fix issue #34 with `moveToSharedStorage` on iOS
+
 ## 5.4.5
 
 An invalid url in the `Task` now results in `false` being returned from the `enqueue` call on 

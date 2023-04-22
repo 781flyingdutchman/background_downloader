@@ -29,14 +29,19 @@ public func moveToSharedStorage(filePath: String, destination: SharedStorage, di
         os_log("Cannot move to shared storage: no permission for directory %@", log: log, type: .info, directory)
         return nil
     }
-    do
-    {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories:  true)
-    } catch {
-        os_log("Failed to create directory %@: %@", log: log, type: .error, directory.path, error.localizedDescription)
-        return nil
+    if !FileManager.default.fileExists(atPath: directory.path) {
+        do
+        {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories:  true)
+        } catch {
+            os_log("Failed to create directory %@: %@", log: log, type: .error, directory.path, error.localizedDescription)
+            return nil
+        }
     }
     let destUrl = directory.appendingPathComponent((filePath as NSString).lastPathComponent)
+    if FileManager.default.fileExists(atPath: destUrl.path) {
+        try? FileManager.default.removeItem(at: destUrl)
+    }
     do {
         try FileManager.default.moveItem(at: fileUrl as URL, to: destUrl)
     } catch {
