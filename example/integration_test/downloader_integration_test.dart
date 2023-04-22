@@ -247,6 +247,7 @@ void main() {
       expect(File(path).existsSync(), isTrue); // file still downloads
       expect(statusCallbackCompleter.isCompleted, isFalse);
       expect(statusCallbackCounter, equals(0));
+      await FileDownloader().cancelTaskWithId(task.taskId);
       print('Finished enqueue with non-default group callbacks');
     });
 
@@ -396,6 +397,7 @@ void main() {
           url: 'http://google.com?query=5&some%20other=true',
           filename: 'test.html');
       expect(await FileDownloader().enqueue(task), isTrue);
+      await FileDownloader().cancelTaskWithId(task.taskId);
     });
   });
 
@@ -1462,6 +1464,20 @@ void main() {
           file.deleteSync();
         }
       }
+    });
+
+    /// If a task fails immediately, eg due to a malformed url, it
+    /// must still be cancellable. This test cancels a failing task
+    /// immediately after enqueueing it, and should succeed in doing so
+    testWidgets('immediately cancel a task that fails immediately',
+        (widgetTester) async {
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
+      final task = DownloadTask(url: 'file://doesNotExist', filename: 'test');
+      expect(await FileDownloader().enqueue(task), equals(true));
+      expect(
+          await FileDownloader().cancelTaskWithId(task.taskId), equals(true));
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.canceled));
     });
   });
 
