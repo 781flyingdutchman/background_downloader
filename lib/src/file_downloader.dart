@@ -83,11 +83,16 @@ class FileDownloader {
   FileDownloader registerCallbacks(
       {String group = defaultGroup,
       TaskStatusCallback? taskStatusCallback,
+      TaskStatusCallbackWithError? taskStatusCallbackWithError,
       TaskProgressCallback? taskProgressCallback}) {
-    assert(taskStatusCallback != null || (taskProgressCallback != null),
-        'Must provide a TaskStatusCallback or a TaskProgressCallback, or both');
-    if (taskStatusCallback != null) {
-      _downloader.groupStatusCallbacks[group] = taskStatusCallback;
+    assert(taskStatusCallback != null || taskProgressCallback != null ||
+        taskStatusCallbackWithError != null,
+        'Must provide at least one callback');
+    assert(taskStatusCallback == null || taskStatusCallbackWithError == null,
+    'Must provide either taskStatusCallback or taskStatusCallbackWithError - '
+        'not both');
+    if (taskStatusCallback != null || taskStatusCallbackWithError != null) {
+      _downloader.groupStatusCallbacks[group] = taskStatusCallback ?? taskStatusCallbackWithError;
     }
     if (taskProgressCallback != null) {
       _downloader.groupProgressCallbacks[group] = taskProgressCallback;

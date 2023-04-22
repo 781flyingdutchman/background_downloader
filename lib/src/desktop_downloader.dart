@@ -89,7 +89,8 @@ class DesktopDownloader extends BaseDownloader {
     errorPort.listen((message) {
       final error = (message as List).first as String;
       logError(task, error);
-      processStatusUpdate(task, TaskStatus.failed);
+      processStatusUpdate(task, TaskStatus.failed,
+          TaskError(ErrorType.general, description: error));
       receivePort.close(); // also ends listener at then end
     });
     await Isolate.spawn(doTask, receivePort.sendPort,
@@ -109,22 +110,30 @@ class DesktopDownloader extends BaseDownloader {
         // sent when final state has been sent
         receivePort.close();
       } else {
-        // Process the status or progress update, or canResume flag
-        if (message is TaskStatus) {
-          // status
-          processStatusUpdate(task, message);
-        } else if (message is double) {
+        // Process the message
+        if (message is double) {
           // progress
           processProgressUpdate(task, message);
         } else if (message is bool) {
           // canResume flag
           setCanResume(task, message);
         } else if (message is List) {
-          // resume data
-          assert(message[0] as String == 'resumeData',
-              'Only recognize resume data');
-          setResumeData(
-              ResumeData(task, message[1] as String, message[2] as int));
+          switch (message[0] as String) {
+            case 'statusUpdate':
+              final status = message[1] as TaskStatus;
+              processStatusUpdate(task, status, status == TaskStatus.failed ?
+              message[1] as TaskError : null);
+              break;
+
+            case 'resumeData':
+              setResumeData(
+                  ResumeData(task, message[1] as String, message[2] as int));
+              break;
+
+            default:
+              throw ArgumentError('Did not recognize message: ${message[0] as
+               String}');
+          }
         } else if (message is String) {
           // log message
           _log.finest(message);

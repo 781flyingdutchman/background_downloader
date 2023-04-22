@@ -61,3 +61,39 @@ enum TaskStatus: Int {
          waitingToRetry,
          paused
 }
+
+enum ErrorType: Int {
+    case
+    // Invalid HTTP response
+    httpResponse,
+
+    // Could not save or find file, or create directory
+    fileSystem,
+
+    // URL incorrect
+    url,
+
+    // Connection problem, eg host not found, timeout
+    connection,
+
+    // Could not resume or pause task
+    resume,
+
+    // General error
+    general
+}
+
+/**
+* Contains error information associated with a failed [Task]
+*
+* The [type] categorizes the error
+* The [httpResponseCode] is only valid if >0 and may offer details about the
+* nature of the error
+* The [description] is typically taken from the platform-generated
+* error message, or from the plugin. The localization is undefined
+*/
+struct TaskError {
+    var type: ErrorType
+    var httpResponseCode: Int
+    var description: String
+}

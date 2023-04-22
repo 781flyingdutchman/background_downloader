@@ -34,7 +34,7 @@ abstract class BaseDownloader {
   final tasksWaitingToRetry = <Task>[];
 
   /// Registered [TaskStatusCallback] for each group
-  final groupStatusCallbacks = <String, TaskStatusCallback>{};
+  final groupStatusCallbacks = <String, dynamic>{};
 
   /// Registered [TaskProgressCallback] for each group
   final groupProgressCallbacks = <String, TaskProgressCallback>{};
@@ -153,8 +153,8 @@ abstract class BaseDownloader {
     // remove tasks waiting to retry from the list so they won't be retried
     for (final task in matchingTasksWaitingToRetry) {
       tasksWaitingToRetry.remove(task);
-      _emitStatusUpdate(task, TaskStatus.canceled);
-      _emitProgressUpdate(task, progressCanceled);
+      processStatusUpdate(task, TaskStatus.canceled);
+      processProgressUpdate(task, progressCanceled); //TODO check if needed
     }
     final remainingTaskIds = taskIds
         .where((taskId) => !matchingTaskIdsWaitingToRetry.contains(taskId));
@@ -240,7 +240,7 @@ abstract class BaseDownloader {
           record.taskStatus != TaskStatus.complete)) {
         final filePath = await record.task.filePath();
         if (await File(filePath).exists()) {
-          processStatusUpdate(record.task, record.taskStatus);
+          processStatusUpdate(record.task, TaskStatus.complete);
           final updatedRecord = record.copyWith(
               taskStatus: TaskStatus.complete, progress: progressComplete);
           await Database().updateRecord(updatedRecord);
@@ -376,13 +376,13 @@ abstract class BaseDownloader {
   ///
   /// Also manages retries ([tasksWaitingToRetry] and delay) and pause/resume
   /// ([pausedTasks] and [_clearPauseResumeInfo]
-  void processStatusUpdate(Task task, TaskStatus taskStatus) {
+  void processStatusUpdate(Task task, TaskStatus taskStatus, [TaskError? taskError]) {
     // Normal status updates are only sent here when the task is expected
     // to provide those.  The exception is a .failed status when a task
     // has retriesRemaining > 0: those are always sent here, and are
     // intercepted to hold the task and reschedule in the near future
     if (taskStatus == TaskStatus.failed && task.retriesRemaining > 0) {
-      _emitStatusUpdate(task, TaskStatus.waitingToRetry);
+      _emitStatusUpdate(task, TaskStatus.waitingToRetry, null);
       _emitProgressUpdate(task, progressWaitingToRetry);
       task.decreaseRetriesRemaining();
       tasksWaitingToRetry.add(task);
@@ -397,7 +397,8 @@ abstract class BaseDownloader {
           if (!await enqueue(task)) {
             log.warning('Could not enqueue task $task after retry timeout');
             _clearPauseResumeInfo(task);
-            _emitStatusUpdate(task, TaskStatus.failed);
+            _emitStatusUpdate(task, TaskStatus.failed, TaskError(ErrorType.general,
+            description: 'Could not enqueue task $task after retry timeout'));
             _emitProgressUpdate(task, progressFailed);
           }
         }
@@ -410,7 +411,7 @@ abstract class BaseDownloader {
       if (taskStatus.isFinalState) {
         _clearPauseResumeInfo(task);
       }
-      _emitStatusUpdate(task, taskStatus);
+      _emitStatusUpdate(task, taskStatus, taskError);
     }
   }
 
@@ -421,12 +422,18 @@ abstract class BaseDownloader {
 
   /// Emits the status update for this task to its callback or listener, and
   /// update the task in the database
-  void _emitStatusUpdate(Task task, TaskStatus taskStatus) {
+  void _emitStatusUpdate(Task task, TaskStatus taskStatus,
+      TaskError? taskError) {
     _updateTaskInDatabase(task, status: taskStatus);
     if (task.providesStatusUpdates) {
       final taskStatusCallback = groupStatusCallbacks[task.group];
       if (taskStatusCallback != null) {
-        taskStatusCallback(task, taskStatus);
+        if (taskStatusCallback is TaskStatusCallback) {
+          taskStatusCallback(task, taskStatus);
+        }
+        if (taskStatusCallback is TaskStatusCallbackWithError) {
+          taskStatusCallback(task, taskStatus, taskError);
+        }
       } else {
         if (updates.hasListener) {
           updates.add(TaskStatusUpdate(task, taskStatus));

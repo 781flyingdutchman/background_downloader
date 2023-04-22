@@ -51,7 +51,7 @@ func isFinalState(status: TaskStatus) -> Bool {
 /// Sends status update via the background channel to Dart, if requested
 /// If the task is finished, processes a final progressUpdate update and removes
 /// task from persistent storage
-func processStatusUpdate(task: Task, status: TaskStatus) {
+func processStatusUpdate(task: Task, status: TaskStatus, taskError: TaskError? = nil) {
     // Post update if task expects one, or if failed and retry is needed
     let retryNeeded = status == TaskStatus.failed && task.retriesRemaining > 0
     // if task is in final state, process a final progressUpdate
@@ -79,8 +79,11 @@ func processStatusUpdate(task: Task, status: TaskStatus) {
         Downloader.localResumeData.removeValue(forKey: task.taskId)
     }
     if providesStatusUpdates(downloadTask: task) || retryNeeded {
-        if !postOnBackgroundChannel(method: "statusUpdate", task: task, arg: status.rawValue) {
-            // store update locally as a merged task/status JSON string
+        let finalTaskError = taskError == nil ? TaskError(type: .general,
+                                                           httpResponseCode: -1, description: "") : taskError
+        let arg: Any = status == .failed ? [status.rawValue, finalTaskError!.type.rawValue, finalTaskError!.httpResponseCode, finalTaskError!.description] : status.rawValue
+        if !postOnBackgroundChannel(method: "statusUpdate", task: task, arg: arg) {
+            // store update locally as a merged task/status JSON string, without error info
             guard let jsonData = try? JSONEncoder().encode(task),
                   var jsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
             else {
@@ -127,7 +130,7 @@ func processCanResume(task: Task, taskCanResume: Bool) {
 func processResumeData(task: Task, resumeData: Data) -> Bool {
     let resumeDataAsBase64String = resumeData.base64EncodedString()
     Downloader.localResumeData[task.taskId] = resumeDataAsBase64String
-    if !postOnBackgroundChannel(method: "resumeData", task: task, arg: resumeDataAsBase64String, arg2: 0 as Int64) {
+    if !postOnBackgroundChannel(method: "resumeData", task: task, arg: [resumeDataAsBase64String, 0 as Int64]) {
         // store resume data locally
         guard let jsonData = try? JSONEncoder().encode(task),
               var taskJsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
@@ -154,7 +157,9 @@ func getBackgroundChannel() -> FlutterMethodChannel? {
 }
 
 /// Post method message on backgroundChannel with arguments and return true if this was successful
-func postOnBackgroundChannel(method: String, task:Task, arg: Any, arg2: Any? = nil) -> Bool {
+///
+/// [arg] can be a list or a single variable
+func postOnBackgroundChannel(method: String, task:Task, arg: Any) -> Bool {
     guard let channel = Downloader.backgroundChannel else {
         os_log("Could not find background channel", log: log, type: .error)
         return false
@@ -163,9 +168,11 @@ func postOnBackgroundChannel(method: String, task:Task, arg: Any, arg2: Any? = n
         os_log("Could not convert task to JSON", log: log, type: .error)
         return false
     }
-    var argsList = [jsonString, arg]
-    if (arg2 != nil) {
-        argsList.append(arg2!)
+    var argsList: [Any] = [jsonString]
+    if arg is [Any] {
+        argsList.append(contentsOf: arg as! [Any])
+    } else {
+        argsList.append(arg)
     }
     if Thread.isMainThread {
         DispatchQueue.main.async {

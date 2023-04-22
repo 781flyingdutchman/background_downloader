@@ -18,6 +18,9 @@ import 'models.dart';
 var _bytesTotal = 0;
 var _startByte = 0;
 
+/// global variables related to error
+TaskError? taskError;
+
 /// Do the task, sending messages back to the main isolate via [sendPort]
 ///
 /// The first message sent back is a [ReceivePort] that is the command port
@@ -47,6 +50,9 @@ Future<void> doTask(SendPort sendPort) async {
   }
   if (task.retriesRemaining < 0) {
     logError(task, 'task has negative retries remaining');
+    taskError = TaskError(ErrorType.general,
+        description: 'Task has negative'
+            ' retries remaining');
     processStatusUpdateInIsolate(task, TaskStatus.failed, sendPort);
   } else {
     if (task is DownloadTask) {
@@ -110,10 +116,15 @@ Future<void> doDownloadTask(
       // not an OK response
       if (response.statusCode == 404) {
         resultStatus = TaskStatus.notFound;
+      } else {
+        taskError = TaskError(ErrorType.httpResponse,
+            httpResponseCode: response.statusCode,
+            description: response.reasonPhrase ?? 'Invalid HTTP response');
       }
     }
   } catch (e) {
     logError(task, e.toString());
+    setTaskError(e);
   }
   processStatusUpdateInIsolate(task, resultStatus, sendPort);
 }
@@ -186,6 +197,8 @@ Future<TaskStatus> processOkDownloadResponse(
           sendPort.send(['resumeData', tempFilePath, _bytesTotal + _startByte]);
           resultStatus = TaskStatus.paused;
         } else {
+          taskError = TaskError(ErrorType.resume,
+              description: 'Task was paused but cannot resume');
           resultStatus = TaskStatus.failed;
         }
         break;
@@ -195,6 +208,7 @@ Future<TaskStatus> processOkDownloadResponse(
     }
   } catch (e) {
     logError(task, e.toString());
+    setTaskError(e);
   } finally {
     try {
       await outStream?.close();
@@ -217,12 +231,17 @@ Future<bool> prepareResume(
   final range = response.headers['content-range'];
   if (range == null) {
     _log.fine('Could not process partial response Content-Range');
+    taskError = TaskError(ErrorType.resume,
+        description: 'Could not process partial response Content-Range');
     return false;
   }
   final contentRangeRegEx = RegExp(r"(\d+)-(\d+)/(\d+)");
   final matchResult = contentRangeRegEx.firstMatch(range);
   if (matchResult == null) {
     _log.fine('Could not process partial response Content-Range $range');
+    taskError = TaskError(ErrorType.resume,
+        description: 'Could not process '
+            'partial response Content-Range $range');
     return false;
   }
   final start = int.parse(matchResult.group(1) ?? '0');
@@ -232,6 +251,8 @@ Future<bool> prepareResume(
   final tempFileLength = await tempFile.length();
   if (total != end + 1 || start > tempFileLength) {
     _log.fine('Offered range not feasible: $range');
+    taskError = TaskError(ErrorType.resume,
+        description: 'Offered range not feasible: $range');
     return false;
   }
   _startByte = start;
@@ -241,6 +262,8 @@ Future<bool> prepareResume(
     file.close();
   } on FileSystemException {
     _log.fine('Could not truncate temp file');
+    taskError = TaskError(ErrorType.resume,
+        description: 'Could not truncate temp file');
     return false;
   }
   return true;
@@ -267,6 +290,8 @@ Future<void> doUploadTask(UploadTask task, String filePath, SendPort sendPort,
   final inFile = File(filePath);
   if (!inFile.existsSync()) {
     logError(task, 'file to upload does not exist: $filePath');
+    taskError = TaskError(ErrorType.fileSystem,
+        description: 'File to upload does not exist: $filePath');
     processStatusUpdateInIsolate(task, TaskStatus.failed, sendPort);
     return;
   }
@@ -321,6 +346,9 @@ Future<void> doUploadTask(UploadTask task, String filePath, SendPort sendPort,
               !okResponses.contains(response.statusCode)
           ? TaskStatus.failed
           : transferBytesResult;
+      taskError ??= TaskError(ErrorType.httpResponse,
+          httpResponseCode: response.statusCode,
+          description: response.reasonPhrase ?? 'Invalid HTP response');
       if (response.statusCode == 404) {
         resultStatus = TaskStatus.notFound;
       }
@@ -338,6 +366,7 @@ Future<void> doUploadTask(UploadTask task, String filePath, SendPort sendPort,
     await requestCompleter.future; // wait for request to complete
     processStatusUpdateInIsolate(task, resultStatus, sendPort);
   } catch (e) {
+    setTaskError(e);
     processStatusUpdateInIsolate(task, TaskStatus.failed, sendPort);
   }
 }
@@ -405,6 +434,7 @@ Future<TaskStatus> transferBytes(
       onDone: () => streamResultStatus.complete(TaskStatus.complete),
       onError: (e) {
         logError(task, e);
+        setTaskError(e);
         streamResultStatus.complete(TaskStatus.failed);
       });
   final resultStatus = await streamResultStatus.future;
@@ -453,7 +483,12 @@ void processStatusUpdateInIsolate(
   }
 // Post update if task expects one, or if failed and retry is needed
   if (task.providesStatusUpdates || retryNeeded) {
-    sendPort.send(status);
+    if (status != TaskStatus.failed) {
+      sendPort.send(['statusUpdate', status]);
+    } else {
+      sendPort.send(
+          ['statusUpdate', status, taskError ?? TaskError(ErrorType.general)]);
+    }
   }
 }
 
@@ -466,6 +501,10 @@ void processProgressUpdateInIsolate(
     sendPort.send(progress);
   }
 }
+
+// The following functions are related to multipart uploads and are
+// by and large copied from the http package. Similar implementations
+// in Kotlin and Swift are translations of the same code
 
 /// Returns the multipart entry for one field name/value pair
 String fieldEntry(String name, String value) =>
@@ -511,4 +550,16 @@ final _log = Logger('FileDownloader');
 /// Log an error for this task
 void logError(Task task, String error) {
   _log.fine('Error for taskId ${task.taskId}: $error');
+}
+
+/// Set the [taskError] variable based on error e
+void setTaskError(dynamic e) {
+  var errorType = ErrorType.general;
+  if (e is FileSystemException) {
+    errorType = ErrorType.fileSystem;
+  }
+  if (e is HttpException || e is TimeoutException) {
+    errorType = ErrorType.connection;
+  }
+  taskError = TaskError(errorType, description: e.toString());
 }

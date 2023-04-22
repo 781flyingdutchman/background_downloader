@@ -118,6 +118,12 @@ enum Updates {
 typedef TaskStatusCallback = void Function(Task task, TaskStatus status);
 
 /// Signature for a function you can register to be called
+/// when the state of a [task] changes, and are interested in detailed
+/// error information for failed tasks.
+typedef TaskStatusCallbackWithError = void Function(Task task, TaskStatus
+status, TaskError? taskError);
+
+/// Signature for a function you can register to be called
 /// for every progress change of a [task].
 ///
 /// A successfully completed task will always finish with progress 1.0
@@ -850,4 +856,40 @@ enum SharedStorage {
 
   /// Android-only: the 'external storage' directory
   external
+}
+
+enum ErrorType {
+  /// Invalid HTTP response
+  httpResponse,
+
+  /// Could not save or find file, or create directory
+  fileSystem,
+
+  /// URL incorrect
+  url,
+
+  /// Connection problem, eg host not found, timeout
+  connection,
+
+  /// Could not resume or pause task
+  resume,
+
+  /// General error
+  general
+}
+
+/// Contains error information associated with a failed [Task]
+///
+/// The [type] categorizes the error
+/// The [httpResponseCode] is only valid if >0 and may offer details about the
+/// nature of the error
+/// The [description] is typically taken from the platform-generated
+/// error message, or from the plugin. The localization is undefined
+class TaskError {
+  final ErrorType type;
+  final int httpResponseCode;
+  final String description;
+
+  TaskError(this.type, {this.httpResponseCode = -1,
+    this.description = ''});
 }

@@ -151,3 +151,34 @@ class ResumeData(val task: Task, val data: String, val requiredStartByte: Long) 
         )
     }
 }
+
+enum class ErrorType {
+    /// Invalid HTTP response
+    httpResponse,
+
+    /// Could not save or find file, or create directory
+    fileSystem,
+
+    /// URL incorrect
+    url,
+
+    /// Connection problem, eg host not found, timeout
+    connection,
+
+    /// Could not resume or pause task
+    resume,
+
+    /// General error
+    general
+}
+
+/**
+* Contains error information associated with a failed [Task]
+*
+* The [type] categorizes the error
+* The [httpResponseCode] is only valid if >0 and may offer details about the
+* nature of the error
+* The [description] is typically taken from the platform-generated
+* error message, or from the plugin. The localization is undefined
+*/
+class TaskError(val type: ErrorType, val httpResponseCode: Int = -1, val description: String = "")
