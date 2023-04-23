@@ -35,6 +35,7 @@ import java.net.URL
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.*
+import kotlin.collections.ArrayList
 import kotlin.concurrent.schedule
 import kotlin.concurrent.write
 import kotlin.io.path.Path
@@ -87,7 +88,7 @@ class TaskWorker(
          * Post method message on backgroundChannel with arguments and return true if this was
          * successful
          *
-         * [arg] can be a list or single variable
+         * [arg] can be single variable or a MutableList
          */
         private suspend fun postOnBackgroundChannel(
                 method: String, task: Task, arg: Any
@@ -100,8 +101,8 @@ class TaskWorker(
                         val argList = mutableListOf<Any>(
                                 taskToJsonString(task)
                         )
-                        if (arg is List<*>) {
-                            argList.addAll(listOf(arg))
+                        if (arg is ArrayList<*>) {
+                            argList.addAll(arg)
                         } else {
                             argList.add(arg)
                         }
@@ -178,7 +179,7 @@ class TaskWorker(
             if (canSendStatusUpdate && (task.providesStatusUpdates() || retryNeeded)) {
                 val finalTaskError = taskError ?: TaskError(ErrorType.general)
                 // send error data only for .failed task, otherwise just the status
-                val arg: Any = if (status == TaskStatus.failed) listOf(status.ordinal,
+                val arg: Any = if (status == TaskStatus.failed) mutableListOf(status.ordinal,
                         finalTaskError.type.ordinal, finalTaskError.httpResponseCode,
                         finalTaskError.description) else status.ordinal
                 if (!postOnBackgroundChannel("statusUpdate", task, arg)) {
@@ -269,7 +270,7 @@ class TaskWorker(
         suspend fun processResumeData(resumeData: ResumeData, prefs: SharedPreferences) {
             BackgroundDownloaderPlugin.localResumeData[resumeData.task.taskId] = resumeData
             if (!postOnBackgroundChannel(
-                            "resumeData", resumeData.task, listOf(resumeData.data,
+                            "resumeData", resumeData.task, mutableListOf(resumeData.data,
                             resumeData.requiredStartByte)
                     )
             ) {

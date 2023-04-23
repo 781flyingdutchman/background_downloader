@@ -1905,6 +1905,12 @@ void main() {
       }
     });
   });
+
+  group('Error details', () {
+    testWidgets('register callback with error', (widgetTester) async {
+
+    });
+  });
 }
 
 /// Helper: make sure [task] is set as desired, and this will enqueue, wait for

@@ -20,7 +20,6 @@ var _startByte = 0;
 var isPaused = false;
 var isCanceled = false;
 
-
 /// global variables related to error
 TaskError? taskError;
 
@@ -50,7 +49,7 @@ Future<void> doTask(SendPort sendPort) async {
   messagesToIsolate.next.then((message) {
     // pause and cancel messages set global variables
     assert(message == 'cancel' || message == 'pause',
-    'Only accept "cancel" and "pause" messages');
+        'Only accept "cancel" and "pause" messages');
     if (message == 'cancel') {
       isCanceled = true;
     }
@@ -72,8 +71,8 @@ Future<void> doTask(SendPort sendPort) async {
     // allow immediate cancel message to come through
     await Future.delayed(const Duration(milliseconds: 0));
     if (task is DownloadTask) {
-      await doDownloadTask(task, filePath, tempFilePath, requiredStartByte,
-          isResume, sendPort);
+      await doDownloadTask(
+          task, filePath, tempFilePath, requiredStartByte, isResume, sendPort);
     } else {
       await doUploadTask(task, filePath, sendPort);
     }
@@ -118,19 +117,16 @@ Future<void> doDownloadTask(
         sendPort.send(taskCanResume);
       }
       if (okResponses.contains(response.statusCode)) {
-        resultStatus = await processOkDownloadResponse(
-          task,
-          filePath,
-          tempFilePath,
-          taskCanResume,
-          isResume,
-          response,
-          sendPort
-        );
+        resultStatus = await processOkDownloadResponse(task, filePath,
+            tempFilePath, taskCanResume, isResume, response, sendPort);
       } else {
         // not an OK response
         if (response.statusCode == 404) {
           resultStatus = TaskStatus.notFound;
+        } else {
+          taskError = TaskError(ErrorType.httpResponse,
+              httpResponseCode: response.statusCode,
+              description: response.reasonPhrase ?? 'Invalid HTTP Request');
         }
       }
     }
@@ -190,8 +186,8 @@ Future<TaskStatus> processOkDownloadResponse(
     // do the actual download
     outStream = File(tempFilePath)
         .openWrite(mode: isResume ? FileMode.append : FileMode.write);
-    final transferBytesResult = await transferBytes(response.stream, outStream,
-        contentLength, task, sendPort);
+    final transferBytesResult = await transferBytes(
+        response.stream, outStream, contentLength, task, sendPort);
     switch (transferBytesResult) {
       case TaskStatus.complete:
         // copy file to destination, creating dirs if needed
@@ -300,7 +296,8 @@ const lineFeed = '\r\n';
 ///
 /// Sends updates via the [sendPort] and can be commanded to cancel via
 /// the [messagesToIsolate] queue
-Future<void> doUploadTask(UploadTask task, String filePath, SendPort sendPort) async {
+Future<void> doUploadTask(
+    UploadTask task, String filePath, SendPort sendPort) async {
   final inFile = File(filePath);
   if (!inFile.existsSync()) {
     logError(task, 'file to upload does not exist: $filePath');
@@ -370,8 +367,8 @@ Future<void> doUploadTask(UploadTask task, String filePath, SendPort sendPort) a
     });
     // send the bytes to the request sink
     final inStream = inFile.openRead();
-    transferBytesResult = await transferBytes(inStream, request.sink,
-        contentLength, task, sendPort);
+    transferBytesResult = await transferBytes(
+        inStream, request.sink, contentLength, task, sendPort);
     if (!isBinaryUpload && transferBytesResult == TaskStatus.complete) {
       // write epilogue
       request.sink.add(utf8.encode('$lineFeed--$boundary--$lineFeed'));
@@ -381,7 +378,6 @@ Future<void> doUploadTask(UploadTask task, String filePath, SendPort sendPort) a
   } catch (e) {
     resultStatus = TaskStatus.failed;
     setTaskError(e);
-    processStatusUpdateInIsolate(task, TaskStatus.failed, sendPort);
   }
   if (isCanceled) {
     // cancellation overrides other results
