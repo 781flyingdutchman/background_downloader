@@ -1,3 +1,7 @@
+## 5.4.7
+
+Fix issue #35, making it possible to pause/resume a convenience download without losing status and progress updates
+
 ## 5.4.6
 
 Fix issue #34 with `moveToSharedStorage` on iOS

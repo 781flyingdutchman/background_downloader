@@ -27,6 +27,7 @@ abstract class BaseDownloader {
   final log = Logger('BaseDownloader');
   static const resumeDataPath = 'backgroundDownloaderResumeData';
   static const pausedTasksPath = 'backgroundDownloaderPausedTasks';
+  static const modifiedTasksPath = 'backgroundDownloaderModifiedTasks';
 
   /// Persistent storage
   final _db = Localstore.instance;
@@ -249,6 +250,9 @@ abstract class BaseDownloader {
     }
   }
 
+  /// Attempt to pause this [task]
+  ///
+  /// Returns true if successful
   Future<bool> pause(Task task);
 
   /// Attempt to resume this [task]
@@ -291,27 +295,29 @@ abstract class BaseDownloader {
     return jsonMap == null ? null : ResumeData.fromJsonMap(jsonMap);
   }
 
-  /// Remove resumeData for this taskId, or all if null
+  /// Remove resumeData for this [taskId], or all if null
   Future<void> removeResumeData([String? taskId]) async {
     if (taskId == null) {
       await _db.collection(resumeDataPath).delete();
+      return;
     }
     await _db.collection(resumeDataPath).doc(taskId).delete();
   }
 
-  /// Store the paused task
+  /// Store the paused [task]
   Future<void> setPausedTask(Task task) => _db
       .collection(pausedTasksPath)
       .doc(_safeId(task.taskId))
       .set(task.toJsonMap());
 
-  /// Return a stored paused task, or null if not found
+  /// Return a stored paused task with this [taskId], or null if not found
   Future<Task?> getPausedTask(String taskId) async {
     final jsonMap =
         await _db.collection(pausedTasksPath).doc(_safeId(taskId)).get();
     return jsonMap == null ? null : Task.createFromJsonMap(jsonMap);
   }
 
+  /// Return a list of paused [Task] objects
   Future<List<Task>> getPausedTasks() async {
     final jsonMap = await _db.collection(pausedTasksPath).get();
     if (jsonMap == null) {
@@ -324,6 +330,7 @@ abstract class BaseDownloader {
   Future<void> removePausedTask([String? taskId]) async {
     if (taskId == null) {
       await _db.collection(pausedTasksPath).delete();
+      return;
     }
     await _db.collection(pausedTasksPath).doc(taskId).delete();
   }
@@ -331,7 +338,7 @@ abstract class BaseDownloader {
   /// Retrieve data that was not delivered to Dart
   Future<Map<String, dynamic>> popUndeliveredData(Undelivered dataType);
 
-  /// Clear pause and resume info associated with this task
+  /// Clear pause and resume info associated with this [task]
   void _clearPauseResumeInfo(Task task) {
     canResumeTask.remove(task);
     removeResumeData(task.taskId);
@@ -355,6 +362,47 @@ abstract class BaseDownloader {
     return Future.value(null);
   }
 
+  /// Stores modified [modifiedTask] in local storage if [Task.group]
+  /// or [Task.updates] fields differ from [originalTask]
+  ///
+  /// Modification happens in convenience functions, and storing the modified
+  /// version allows us to replace the original when used in pause/resume
+  /// functionality. Without this, a convenience download may not be
+  /// resumable using the original [modifiedTask] object (as the [Task.group]
+  /// and [Task.updates] fields may have been modified)
+  Future<void> setModifiedTask(Task modifiedTask, Task originalTask) async {
+    if (modifiedTask.group != originalTask.group ||
+        modifiedTask.updates != originalTask.updates) {
+      await _db
+          .collection(modifiedTasksPath)
+          .doc(_safeId(originalTask.taskId))
+          .set(modifiedTask.toJsonMap());
+    }
+  }
+
+  /// Retrieves modified version of the [originalTask] or null
+  ///
+  /// See [setModifiedTask]
+  Future<Task?> getModifiedTask(Task originalTask) async {
+    final jsonMap = await _db
+        .collection(modifiedTasksPath)
+        .doc(_safeId(originalTask.taskId))
+        .get();
+    if (jsonMap == null) {
+      return null;
+    }
+    return Task.createFromJsonMap(jsonMap);
+  }
+
+  /// Remove modified [task], or all if null
+  Future<void> removeModifiedTask([Task? task]) async {
+    if (task == null) {
+      await _db.collection(modifiedTasksPath).delete();
+      return;
+    }
+    await _db.collection(modifiedTasksPath).doc(task.taskId).delete();
+  }
+
   /// Destroy - clears callbacks, updates stream and retry queue
   ///
   /// Clears all queues and references without sending cancellation
@@ -368,6 +416,7 @@ abstract class BaseDownloader {
     canResumeTask.clear();
     removeResumeData(); // removes all
     removePausedTask(); // removes all
+    removeModifiedTask(); // removes all
     updates.close();
     updates = StreamController();
   }
@@ -396,6 +445,7 @@ abstract class BaseDownloader {
         if (tasksWaitingToRetry.remove(task)) {
           if (!await enqueue(task)) {
             log.warning('Could not enqueue task $task after retry timeout');
+            removeModifiedTask(task);
             _clearPauseResumeInfo(task);
             _emitStatusUpdate(task, TaskStatus.failed);
             _emitProgressUpdate(task, progressFailed);
@@ -408,6 +458,7 @@ abstract class BaseDownloader {
         setPausedTask(task);
       }
       if (taskStatus.isFinalState) {
+        removeModifiedTask(task);
         _clearPauseResumeInfo(task);
       }
       _emitStatusUpdate(task, taskStatus);

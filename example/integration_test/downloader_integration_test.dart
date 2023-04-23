@@ -117,6 +117,7 @@ void main() {
           .downloaderForTesting
           .setForceFailPostOnBackgroundChannel(false);
     }
+    Future.delayed(const Duration(milliseconds: 250));
   });
 
   group('Initialization', () {
@@ -1688,7 +1689,7 @@ void main() {
       // speed. If the test fails, it is likely because the task completed
       // before the initial pause command, or did not have time for two
       // pause/resume cycles -> shorten interval
-      const interval = Duration(milliseconds: 500);
+      const interval = Duration(milliseconds: 1000);
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       task = DownloadTask(
           url: urlWithContentLength,
@@ -1710,6 +1711,26 @@ void main() {
       expect(
           await fileEqualsLargeTestFile(File(await task.filePath())), isTrue);
       expect(statusCallbackCounter, greaterThanOrEqualTo(9)); // min 2 pause
+    });
+
+    testWidgets('Pause and resume a convenience download',
+        (widgetTester) async {
+      task = DownloadTask(
+          url: urlWithContentLength,
+          filename: defaultFilename,
+          allowPause: true);
+      // kick off convenience download but do not wait for the result
+      unawaited(FileDownloader().download(task,
+          onStatus: (status) => statusCallback(task, status),
+          onProgress: (progress) => progressCallback(task, progress)));
+      await someProgressCompleter.future;
+      expect(await FileDownloader().pause(task), equals(true));
+      await Future.delayed(const Duration(milliseconds: 250));
+      expect(lastStatus, equals(TaskStatus.paused));
+      expect(await FileDownloader().resume(task), equals(true));
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(lastProgress, equals(progressComplete));
     });
   });
 
