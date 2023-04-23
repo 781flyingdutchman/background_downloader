@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 import 'package:collection/collection.dart';
 import 'package:localstore/localstore.dart';
+import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'database.dart';
 import 'desktop_downloader.dart';
@@ -27,6 +29,7 @@ abstract class BaseDownloader {
   final log = Logger('BaseDownloader');
   static const resumeDataPath = 'backgroundDownloaderResumeData';
   static const pausedTasksPath = 'backgroundDownloaderPausedTasks';
+  static const databaseVersion = 1;
 
   /// Persistent storage
   final _db = Localstore.instance;
@@ -62,7 +65,52 @@ abstract class BaseDownloader {
   }
 
   /// Initialize
-  Future<void> initialize();
+  ///
+  /// Initializes the Localstore instance and if necessary perform database
+  /// migration, then initializes the subclassed implementation for
+  /// desktop or native
+  @mustCallSuper
+  Future<void> initialize() async {
+    const metaDataCollection = 'backgroundDownloaderDatabase';
+    var supportDir = await getApplicationSupportDirectory();
+    _db.setDatabaseDirectory(supportDir);
+    final metaData =
+        await _db.collection(metaDataCollection).doc('metaData').get();
+    final version = metaData?['version'] ?? 0;
+    if (version == 0) {
+      // move files from docDir to supportDir
+      var docDir = await getApplicationDocumentsDirectory();
+      for (String path in [
+        resumeDataPath,
+        pausedTasksPath,
+        Database.tasksPath
+      ]) {
+        try {
+          final fromPath = join(docDir.path, path);
+          if (await Directory(fromPath).exists()) {
+            log.finest('Moving $path to support directory');
+            final toPath = join(supportDir.path, path);
+            await Directory(toPath).create(recursive: true);
+            await Directory(fromPath).list().forEach((entity) {
+              if (entity is File) {
+                entity.copySync(join(toPath, basename(entity.path)));
+              }
+            });
+            await Directory(fromPath).delete(recursive: true);
+          }
+        } catch (e) {
+          log.fine('Error migrating database for path $path: $e');
+        }
+      }
+    }
+    if (version != databaseVersion) {
+      // perform other migration as necessary, then store database version
+      await _db
+          .collection(metaDataCollection)
+          .doc('metaData')
+          .set({'version': databaseVersion});
+    }
+  }
 
   /// Retrieve data that was stored locally because it could not be
   /// delivered to the downloader
