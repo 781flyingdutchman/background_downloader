@@ -239,7 +239,9 @@ class TaskWorker(
             }
         }
 
-        /** Send 'canResume' message via the background channel to Flutter */
+        /**
+         * Send 'canResume' message via the background channel to Flutter
+         */
         suspend fun processCanResume(task: Task, canResume: Boolean) {
             taskCanResume = canResume
             postOnBackgroundChannel("canResume", task, canResume)
@@ -503,7 +505,8 @@ class TaskWorker(
         if (connection.responseCode in 200..206) {
             if (task.allowPause) {
                 val acceptRangesHeader = connection.headerFields["Accept-Ranges"]
-                processCanResume(task, acceptRangesHeader?.first() == "bytes")
+                Log.d(TAG, "Accept ranges header = $acceptRangesHeader") //TODO remove
+                processCanResume(task, isResumeParam || acceptRangesHeader?.first() == "bytes")
             }
             val isResume =
                     isResumeParam && connection.responseCode == 206  // confirm resume response
