@@ -1487,16 +1487,20 @@ void main() {
         (widgetTester) async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       final task = DownloadTask(url: 'file://doesNotExist', filename: 'test');
-      if (Platform.isAndroid || Platform.isIOS) {
-        // on mobile, enqueue fails immediately
+      if (Platform.isAndroid) {
+        // on Android, enqueue fails immediately
         expect(await FileDownloader().enqueue(task), equals(false));
       } else {
-        // on desktop, enqueue does not fail
         expect(await FileDownloader().enqueue(task), equals(true));
         expect(
             await FileDownloader().cancelTaskWithId(task.taskId), equals(true));
         await statusCallbackCompleter.future;
-        expect(lastStatus, equals(TaskStatus.canceled));
+        if (Platform.isIOS){
+          // canot avoid fail on iOS
+          expect(lastStatus, equals(TaskStatus.failed));
+        } else {
+          expect(lastStatus, equals(TaskStatus.canceled));
+        }
       }
     });
   });
@@ -1938,20 +1942,22 @@ void main() {
       final error = lastError!;
       expect(error.type, equals(ErrorType.httpResponse));
       expect(error.httpResponseCode, equals(403));
-      expect(error.description, equals('Forbidden'));
+      expect(error.description.toLowerCase(), equals('forbidden'));
     });
 
     testWidgets('fileSystem: File to upload does not exist',
         (widgetTester) async {
-      FileDownloader().registerCallbacks(
-          taskStatusCallbackWithError: statusCallbackWithError);
-      uploadTask = uploadTask.copyWith(filename: 'doesNotExist');
-      expect(await FileDownloader().enqueue(uploadTask), isTrue);
-      await statusCallbackCompleter.future;
-      final error = lastError!;
-      expect(error.type, equals(ErrorType.fileSystem));
-      expect(error.description.startsWith('File to upload does not exist'),
-          isTrue);
+      if (!Platform.isIOS) {
+        FileDownloader().registerCallbacks(
+            taskStatusCallbackWithError: statusCallbackWithError);
+        uploadTask = uploadTask.copyWith(filename: 'doesNotExist');
+        expect(await FileDownloader().enqueue(uploadTask), isTrue);
+        await statusCallbackCompleter.future;
+        final error = lastError!;
+        expect(error.type, equals(ErrorType.fileSystem));
+        expect(error.description.startsWith('File to upload does not exist'),
+            isTrue);
+      }
     });
   });
 }

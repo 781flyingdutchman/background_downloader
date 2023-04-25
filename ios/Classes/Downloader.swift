@@ -384,7 +384,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             Downloader.uploaderForUrlSessionTaskIdentifier.removeValue(forKey: task.taskIdentifier)
         }
         let responseStatusCode = (task.response as! HTTPURLResponse?)?.statusCode ?? 0
-        let responseStatusDescription = (task.response as! HTTPURLResponse?)?.description ?? ""
+        let responseStatusDescription = HTTPURLResponse.localizedString(forStatusCode: responseStatusCode)
         let notificationConfig = getNotificationConfigFrom(urlSessionTask: task)
         guard let task = getTaskFrom(urlSessionTask: task) else {
             os_log("Could not find task related to urlSessionTask %d", log: log, type: .error, task.taskIdentifier)
@@ -511,7 +511,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         }
         if !(200...206).contains(response.statusCode)   {
             os_log("TaskId %@ returned response code %d", log: log,  type: .info, task.taskId, response.statusCode)
-            processStatusUpdate(task: task, status: TaskStatus.failed, taskError: TaskError(type: .httpResponse, httpResponseCode: response.statusCode, description: response.description))
+            processStatusUpdate(task: task, status: TaskStatus.failed, taskError: TaskError(type: .httpResponse, httpResponseCode: response.statusCode, description: HTTPURLResponse.localizedString(forStatusCode: response.statusCode)))
             updateNotification(task: task, notificationType: .error, notificationConfig: notificationConfig)
             return
         }
