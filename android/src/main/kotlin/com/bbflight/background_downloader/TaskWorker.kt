@@ -495,11 +495,11 @@ class TaskWorker(
                 else -> {
                     Log.w(
                             TAG,
-                            "Error for url ${task.url} and $filePath: ${e.message} $e ${e.localizedMessage}"
+                            "Error for url ${task.url} and $filePath: ${e.message}"
                     )
                     e.printStackTrace()
                     taskError = TaskError(ErrorType.general, description =
-                    "Error for url ${task.url} and $filePath: ${e.message} $e ${e.localizedMessage}")
+                    "Error for url ${task.url} and $filePath: ${e.message}")
                 }
             }
         }

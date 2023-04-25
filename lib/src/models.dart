@@ -892,4 +892,9 @@ class TaskError {
 
   TaskError(this.type, {this.httpResponseCode = -1,
     this.description = ''});
+
+  @override
+  String toString() {
+    return 'TaskError{type: $type, httpResponseCode: $httpResponseCode, description: $description}';
+  }
 }

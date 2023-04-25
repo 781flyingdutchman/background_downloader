@@ -35,18 +35,13 @@ class NativeDownloader extends BaseDownloader {
       final task = Task.createFromJsonMap(jsonDecode(args.first as String));
       switch (call.method) {
         case 'statusUpdate':
-          // either simple int, or list with error data
-          final taskStatus = args.last is int
-              ? TaskStatus.values[args.last]
-              : TaskStatus.values[(args.last as List).first as int];
+          // int followed optionally followed by error data
+          final taskStatus = TaskStatus.values[args[1]];
           TaskError? taskError;
           if (taskStatus == TaskStatus.failed) {
-            // list is: [TaskStatus ordinal, errorType ordinal, http
-            // response code, description]
-            final argList = args.last as List;
-            taskError = TaskError(ErrorType.values[argList[1] as int],
-                httpResponseCode: argList[2],
-                description: argList[3]);
+            taskError = TaskError(ErrorType.values[args[2]],
+                httpResponseCode: args[3],
+                description: args[4]);
           }
           processStatusUpdate(task, taskStatus, taskError);
           break;

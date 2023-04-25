@@ -122,7 +122,7 @@ class DesktopDownloader extends BaseDownloader {
             case 'statusUpdate':
               final status = message[1] as TaskStatus;
               processStatusUpdate(task, status, status == TaskStatus.failed ?
-              message[1] as TaskError : null);
+              message[2] as TaskError : null);
               break;
 
             case 'resumeData':

@@ -21,6 +21,7 @@ var progressCallbackCompleter = Completer<void>();
 var someProgressCompleter = Completer<void>(); // completes when progress > 0.1
 var lastStatus = TaskStatus.enqueued;
 var lastProgress = -100.0;
+TaskError? lastError;
 
 const workingUrl = 'https://google.com';
 const failingUrl = 'https://avmaps-dot-bbflightserver-hrd.appspot'
@@ -57,6 +58,18 @@ void statusCallback(Task task, TaskStatus status) {
   print('statusCallback for $task with status $status');
   lastStatus = status;
   statusCallbackCounter++;
+  if (!statusCallbackCompleter.isCompleted && status.isFinalState) {
+    statusCallbackCompleter.complete();
+  }
+}
+
+void statusCallbackWithError(
+    Task task, TaskStatus status, TaskError? taskError) {
+  print(
+      'statusCallbackWithError for $task with status $status and error $taskError');
+  lastStatus = status;
+  statusCallbackCounter++;
+  lastError = taskError;
   if (!statusCallbackCompleter.isCompleted && status.isFinalState) {
     statusCallbackCompleter.complete();
   }
@@ -102,6 +115,7 @@ void main() {
     progressCallbackCompleter = Completer<void>();
     someProgressCompleter = Completer<void>();
     lastStatus = TaskStatus.enqueued;
+    lastError = null;
     FileDownloader().destroy();
     final path =
         join((await getApplicationDocumentsDirectory()).path, task.filename);
@@ -1473,11 +1487,17 @@ void main() {
         (widgetTester) async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       final task = DownloadTask(url: 'file://doesNotExist', filename: 'test');
-      expect(await FileDownloader().enqueue(task), equals(true));
-      expect(
-          await FileDownloader().cancelTaskWithId(task.taskId), equals(true));
-      await statusCallbackCompleter.future;
-      expect(lastStatus, equals(TaskStatus.canceled));
+      if (Platform.isAndroid || Platform.isIOS) {
+        // on mobile, enqueue fails immediately
+        expect(await FileDownloader().enqueue(task), equals(false));
+      } else {
+        // on desktop, enqueue does not fail
+        expect(await FileDownloader().enqueue(task), equals(true));
+        expect(
+            await FileDownloader().cancelTaskWithId(task.taskId), equals(true));
+        await statusCallbackCompleter.future;
+        expect(lastStatus, equals(TaskStatus.canceled));
+      }
     });
   });
 
@@ -1704,7 +1724,9 @@ void main() {
       // speed. If the test fails, it is likely because the task completed
       // before the initial pause command, or did not have time for two
       // pause/resume cycles -> shorten interval
-      const interval = Duration(milliseconds: 500);
+      var interval = Platform.isAndroid || Platform.isIOS
+          ? const Duration(milliseconds: 1000)
+          : const Duration(milliseconds: 2000);
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       task = DownloadTask(
           url: urlWithContentLength,
@@ -1907,8 +1929,29 @@ void main() {
   });
 
   group('Error details', () {
-    testWidgets('register callback with error', (widgetTester) async {
+    testWidgets('httpResponse: 403', (widgetTester) async {
+      FileDownloader().registerCallbacks(
+          taskStatusCallbackWithError: statusCallbackWithError);
+      task = DownloadTask(url: failingUrl, filename: 'test');
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await statusCallbackCompleter.future;
+      final error = lastError!;
+      expect(error.type, equals(ErrorType.httpResponse));
+      expect(error.httpResponseCode, equals(403));
+      expect(error.description, equals('Forbidden'));
+    });
 
+    testWidgets('fileSystem: File to upload does not exist',
+        (widgetTester) async {
+      FileDownloader().registerCallbacks(
+          taskStatusCallbackWithError: statusCallbackWithError);
+      uploadTask = uploadTask.copyWith(filename: 'doesNotExist');
+      expect(await FileDownloader().enqueue(uploadTask), isTrue);
+      await statusCallbackCompleter.future;
+      final error = lastError!;
+      expect(error.type, equals(ErrorType.fileSystem));
+      expect(error.description.startsWith('File to upload does not exist'),
+          isTrue);
     });
   });
 }

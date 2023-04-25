@@ -260,6 +260,7 @@ Future<bool> prepareResume(
   final total = int.parse(matchResult.group(3) ?? '0');
   final tempFile = File(tempFilePath);
   final tempFileLength = await tempFile.length();
+  _log.finest('Resume start=$start, end=$end of total=$total bytes, tempFile = $tempFileLength bytes');
   if (total != end + 1 || start > tempFileLength) {
     _log.fine('Offered range not feasible: $range');
     taskError = TaskError(ErrorType.resume,
