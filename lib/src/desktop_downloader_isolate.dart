@@ -92,9 +92,12 @@ Future<void> doDownloadTask(
     if (task.allowPause) {
       // determine if this task can be paused
       final acceptRangesHeader = response.headers['accept-ranges'];
-      taskCanResume = acceptRangesHeader == 'bytes';
+      taskCanResume =
+          acceptRangesHeader == 'bytes' || response.statusCode == 206;
       sendPort.send(taskCanResume);
     }
+    isResume =
+        isResume && response.statusCode == 206; // confirm resume response
     if (okResponses.contains(response.statusCode)) {
       resultStatus = await processOkDownloadResponse(
         task,
