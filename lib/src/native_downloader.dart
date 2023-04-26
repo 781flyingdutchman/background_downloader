@@ -68,7 +68,9 @@ class NativeDownloader extends BaseDownloader {
     super.enqueue(task);
     return await _channel.invokeMethod<bool>('enqueue', [
           jsonEncode(task.toJsonMap()),
-          jsonEncode(notificationConfig?.toJsonMap())
+          notificationConfig != null
+              ? jsonEncode(notificationConfig.toJsonMap())
+              : null,
         ]) ??
         false;
   }
@@ -122,7 +124,9 @@ class NativeDownloader extends BaseDownloader {
       if (taskResumeData != null) {
         return await _channel.invokeMethod<bool>('enqueue', [
               jsonEncode(task.toJsonMap()),
-              jsonEncode(notificationConfig?.toJsonMap()),
+              notificationConfig != null
+                  ? jsonEncode(notificationConfig.toJsonMap())
+                  : null,
               taskResumeData.data,
               taskResumeData.requiredStartByte
             ]) ??
