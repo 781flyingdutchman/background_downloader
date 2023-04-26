@@ -1,6 +1,16 @@
-## 5.4.7
+## 5.5.0
 
-Fix issue #35, making it possible to pause/resume a convenience download without losing status and progress updates
+Adds `withSuggestedFilename` for `DownloadTask`. Use:
+```
+   final task = await DownloadTask(url: 'https://google.com')
+       .withSuggestedFilename(unique: true);
+```
+
+The method `withSuggestedFilename` returns a copy of the task it is called on, with the `filename` field modified based on the filename suggested by the server, or the last path segment of the URL, or unchanged if neither is feasible. If `unique` is true, the filename will be modified such that it does not conflict with an existing filename by adding a sequence. For example "file.txt" would become "file (1).txt".
+
+Bug fixes:
+* Fix for issue #35 for pausing convenience download and a specific issue with nginx related to pause/resume
+* Fix for issue #38 related to notification permissions on iOS
 
 ## 5.4.6
 
