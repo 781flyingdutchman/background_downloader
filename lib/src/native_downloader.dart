@@ -15,7 +15,7 @@ class NativeDownloader extends BaseDownloader {
   static final NativeDownloader _singleton = NativeDownloader._internal();
   static const _channel = MethodChannel('com.bbflight.background_downloader');
   static const _backgroundChannel =
-  MethodChannel('com.bbflight.background_downloader.background');
+      MethodChannel('com.bbflight.background_downloader.background');
 
   factory NativeDownloader() {
     return _singleton;
@@ -74,9 +74,11 @@ class NativeDownloader extends BaseDownloader {
       [TaskNotificationConfig? notificationConfig]) async {
     super.enqueue(task);
     return await _channel.invokeMethod<bool>('enqueue', [
-      jsonEncode(task.toJsonMap()),
-      jsonEncode(notificationConfig?.toJsonMap())
-    ]) ??
+          jsonEncode(task.toJsonMap()),
+          notificationConfig != null
+              ? jsonEncode(notificationConfig.toJsonMap())
+              : null,
+        ]) ??
         false;
   }
 
@@ -88,10 +90,10 @@ class NativeDownloader extends BaseDownloader {
   }
 
   @override
-  Future<List<Task>> allTasks(String group,
-      bool includeTasksWaitingToRetry) async {
+  Future<List<Task>> allTasks(
+      String group, bool includeTasksWaitingToRetry) async {
     final retryAndPausedTasks =
-    await super.allTasks(group, includeTasksWaitingToRetry);
+        await super.allTasks(group, includeTasksWaitingToRetry);
     final result =
         await _channel.invokeMethod<List<dynamic>?>('allTasks', group) ?? [];
     final tasks = result
@@ -128,11 +130,13 @@ class NativeDownloader extends BaseDownloader {
       final taskResumeData = await getResumeData(task.taskId);
       if (taskResumeData != null) {
         return await _channel.invokeMethod<bool>('enqueue', [
-          jsonEncode(task.toJsonMap()),
-          jsonEncode(notificationConfig?.toJsonMap()),
-          taskResumeData.data,
-          taskResumeData.requiredStartByte
-        ]) ??
+              jsonEncode(task.toJsonMap()),
+              notificationConfig != null
+                  ? jsonEncode(notificationConfig.toJsonMap())
+                  : null,
+              taskResumeData.data,
+              taskResumeData.requiredStartByte
+            ]) ??
             false;
       }
     }
@@ -181,7 +185,7 @@ class NativeDownloader extends BaseDownloader {
 
   @override
   Future<String?> moveToSharedStorage(String filePath,
-      SharedStorage destination, String directory, String? mimeType) =>
+          SharedStorage destination, String directory, String? mimeType) =>
       _channel.invokeMethod<String?>('moveToSharedStorage',
           [filePath, destination.index, directory, mimeType]);
 }

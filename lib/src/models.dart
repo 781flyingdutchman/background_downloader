@@ -3,9 +3,13 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:background_downloader/background_downloader.dart';
+import 'package:background_downloader/src/desktop_downloader.dart';
+import 'package:logging/logging.dart';
 import 'package:mime/mime.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
+
+final _log = Logger('FileDownloader');
 
 /// Defines a set of possible states which a [Task] can be in.
 enum TaskStatus {
@@ -525,6 +529,92 @@ class DownloadTask extends Task {
           metaData: metaData ?? this.metaData,
           creationTime: creationTime ?? this.creationTime)
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
+
+  /// Returns a copy of the task with the [Task.filename] property changed
+  /// to the filename suggested by the server, or derived from the url, or
+  /// unchanged.
+  ///
+  /// If [unique] is true, the filename is guaranteed not to already exist. This
+  /// is accomplished by adding a suffix to the suggested filename with a number,
+  /// e.g. "data (2).txt"
+  Future<DownloadTask> withSuggestedFilename({unique = false}) async {
+    /// Returns [DownloadTask] with a filename similar to the one
+    /// supplied, but unused.
+    ///
+    /// If [unique], filename will sequence up in "filename (8).txt" format,
+    /// otherwise returns the [task]
+    Future<DownloadTask> uniqueFilename(DownloadTask task, bool unique) async {
+      if (!unique) {
+        return task;
+      }
+      final sequenceRegEx = RegExp(r'\((\d+)\)\.?[^.]*$');
+      final extensionRegEx = RegExp(r'\.[^.]*$');
+      var newTask = task;
+      var filePath = await newTask.filePath();
+      var exists = await File(filePath).exists();
+      while (exists) {
+        final extension =
+            extensionRegEx.firstMatch(newTask.filename)?.group(0) ?? '';
+        final match = sequenceRegEx.firstMatch(newTask.filename);
+        final newSequence = int.parse(match?.group(1) ?? "0") + 1;
+        final newFilename = match == null
+            ? '${path.basenameWithoutExtension(newTask.filename)} ($newSequence)$extension'
+            : '${newTask.filename.substring(0, match.start - 1)} ($newSequence)$extension';
+        newTask = newTask.copyWith(filename: newFilename);
+        filePath = await newTask.filePath();
+        exists = await File(filePath).exists();
+      }
+      return newTask;
+    }
+
+    try {
+      final response = await DesktopDownloader.httpClient
+          .head(Uri.parse(url), headers: headers);
+      if ([200, 201, 202, 203, 204, 205, 206].contains(response.statusCode)) {
+        final disposition = response.headers['Content-Disposition'];
+        if (disposition != null) {
+          // Try filename="filename"
+          final plainFilenameRegEx =
+              RegExp(r'filename="?([^"]+)"?.*$', caseSensitive: false);
+          var match = plainFilenameRegEx.firstMatch(disposition);
+          if (match != null && match.group(1)?.isNotEmpty == true) {
+            return uniqueFilename(copyWith(filename: match.group(1)), unique);
+          }
+          // Try filename*=UTF-8'language'"encodedFilename"
+          final encodedFilenameRegEx = RegExp(
+              'filename\\*=([^\']+)\'([^\']*)\'"?([^"]+)"?',
+              caseSensitive: false);
+          match = encodedFilenameRegEx.firstMatch(disposition);
+          if (match != null &&
+              match.group(1)?.isNotEmpty == true &&
+              match.group(3)?.isNotEmpty == true) {
+            try {
+              final suggestedFilename = match.group(1) == 'UTF-8'
+                  ? Uri.decodeComponent(match.group(3)!)
+                  : match.group(3)!;
+              return uniqueFilename(
+                  copyWith(filename: suggestedFilename), true);
+            } on ArgumentError {
+              _log.finer(
+                  'Could not interpret suggested filename (UTF-8 url encoded) ${match.group(3)}');
+            }
+          }
+        }
+      }
+    } catch (e) {
+      _log.finer('Could not determine suggested filename from server');
+    }
+    // Try filename derived from last path segment of the url
+    try {
+      final suggestedFilename = Uri.parse(url).pathSegments.last;
+      return uniqueFilename(copyWith(filename: suggestedFilename), unique);
+    } catch (e) {
+      _log.finer('Could not parse URL pathSegment for suggested filename: $e');
+    }
+    // if everything fails, return the task with unchanged filename
+    // except for possibly making it unique
+    return uniqueFilename(this, unique);
+  }
 
   @override
   String toString() => 'Download${super.toString()}';

@@ -131,6 +131,7 @@ void main() {
           .downloaderForTesting
           .setForceFailPostOnBackgroundChannel(false);
     }
+    Future.delayed(const Duration(milliseconds: 250));
   });
 
   group('Initialization', () {
@@ -688,6 +689,46 @@ void main() {
       expect(task1.directory, equals('testDir'));
       expect(() => DownloadTask(url: workingUrl, directory: '/testDir'),
           throwsArgumentError);
+    });
+
+    testWidgets('suggestedFilename', (widgetTester) async {
+      // delete old downloads
+      task = DownloadTask(url: urlWithContentLength, filename: '5MB-test.ZIP');
+      try {
+        File(await task.filePath()).deleteSync();
+      } catch (e) {}
+      task =
+          DownloadTask(url: urlWithContentLength, filename: '5MB-test (1).ZIP');
+      try {
+        File(await task.filePath()).deleteSync();
+      } catch (e) {}
+      task =
+          DownloadTask(url: urlWithContentLength, filename: '5MB-test (2).ZIP');
+      try {
+        File(await task.filePath()).deleteSync();
+      } catch (e) {}
+      task = DownloadTask(url: urlWithContentLength);
+      final startingFileName = task.filename;
+      final task2 = await task.withSuggestedFilename();
+      expect(task2.filename, isNot(equals(startingFileName)));
+      expect(task2.filename, equals('5MB-test.ZIP'));
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
+      expect(await FileDownloader().enqueue(task2), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      // again, should yield same filename
+      final task3 = await task.withSuggestedFilename();
+      expect(task3.filename, equals('5MB-test.ZIP'));
+      // again with 'unique' should yield (1) filename
+      final task4 = await task.withSuggestedFilename(unique: true);
+      expect(task4.filename, equals('5MB-test (1).ZIP'));
+      statusCallbackCompleter = Completer(); // reset
+      expect(await FileDownloader().enqueue(task4), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      // again with 'unique' should yield (2) filename
+      final task5 = await task.withSuggestedFilename(unique: true);
+      expect(task5.filename, equals('5MB-test (2).ZIP'));
     });
   });
 
@@ -1752,6 +1793,26 @@ void main() {
       expect(
           await fileEqualsLargeTestFile(File(await task.filePath())), isTrue);
       expect(statusCallbackCounter, greaterThanOrEqualTo(9)); // min 2 pause
+    });
+
+    testWidgets('Pause and resume a convenience download',
+        (widgetTester) async {
+      task = DownloadTask(
+          url: urlWithContentLength,
+          filename: defaultFilename,
+          allowPause: true);
+      // kick off convenience download but do not wait for the result
+      unawaited(FileDownloader().download(task,
+          onStatus: (status) => statusCallback(task, status),
+          onProgress: (progress) => progressCallback(task, progress)));
+      await someProgressCompleter.future;
+      expect(await FileDownloader().pause(task), equals(true));
+      await Future.delayed(const Duration(milliseconds: 250));
+      expect(lastStatus, equals(TaskStatus.paused));
+      expect(await FileDownloader().resume(task), equals(true));
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(lastProgress, equals(progressComplete));
     });
   });
 

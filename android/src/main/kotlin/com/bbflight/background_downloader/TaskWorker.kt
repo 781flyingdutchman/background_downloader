@@ -50,7 +50,7 @@ import kotlin.random.Random
  * It will block the background thread until a value of either true or false is received back from Flutter code.
  */
 class TaskWorker(
-        applicationContext: Context, workerParams: WorkerParameters
+    applicationContext: Context, workerParams: WorkerParameters
 ) : CoroutineWorker(applicationContext, workerParams) {
 
     @Suppress("RegExpRedundantEscape")
@@ -108,7 +108,7 @@ class TaskWorker(
                         }
                         if (BackgroundDownloaderPlugin.backgroundChannel != null) {
                             BackgroundDownloaderPlugin.backgroundChannel?.invokeMethod(
-                                    method, argList
+                                method, argList
                             )
                             if (!BackgroundDownloaderPlugin.forceFailPostOnBackgroundChannel) {
                                 success.complete(true)
@@ -118,8 +118,8 @@ class TaskWorker(
                         }
                     } catch (e: Exception) {
                         Log.w(
-                                TAG,
-                                "Exception trying to post $method to background channel: ${e.message}"
+                            TAG,
+                            "Exception trying to post $method to background channel: ${e.message}"
                         )
                     } finally {
                         if (!success.isCompleted) {
@@ -154,24 +154,28 @@ class TaskWorker(
             if (status.isFinalState()) {
                 when (status) {
                     TaskStatus.complete -> processProgressUpdate(
-                            task, 1.0, prefs
+                        task, 1.0, prefs
                     )
+
                     TaskStatus.failed -> if (!retryNeeded) processProgressUpdate(
-                            task, -1.0, prefs
+                        task, -1.0, prefs
                     )
+
                     TaskStatus.canceled -> {
                         canSendStatusUpdate = canSendCancellation(task)
                         if (canSendStatusUpdate) {
                             BackgroundDownloaderPlugin.canceledTaskIds[task.taskId] =
-                                    currentTimeMillis()
+                                currentTimeMillis()
                             processProgressUpdate(
-                                    task, -2.0, prefs
+                                task, -2.0, prefs
                             )
                         }
                     }
+
                     TaskStatus.notFound -> processProgressUpdate(
-                            task, -3.0, prefs
+                        task, -3.0, prefs
                     )
+
                     else -> {}
                 }
             }
@@ -188,8 +192,8 @@ class TaskWorker(
                     val jsonMap = task.toJsonMap().toMutableMap()
                     jsonMap["taskStatus"] = status.ordinal // merge into Task JSON
                     storeLocally(
-                            BackgroundDownloaderPlugin.keyStatusUpdateMap, task.taskId, jsonMap,
-                            prefs
+                        BackgroundDownloaderPlugin.keyStatusUpdateMap, task.taskId, jsonMap,
+                        prefs
                     )
                 }
             }
@@ -201,8 +205,8 @@ class TaskWorker(
                     tasksMap.remove(task.taskId)
                     val editor = prefs.edit()
                     editor.putString(
-                            BackgroundDownloaderPlugin.keyTasksMap,
-                            BackgroundDownloaderPlugin.gson.toJson(tasksMap)
+                        BackgroundDownloaderPlugin.keyTasksMap,
+                        BackgroundDownloaderPlugin.gson.toJson(tasksMap)
                     )
                     editor.apply()
                 }
@@ -236,7 +240,7 @@ class TaskWorker(
          * Sends progress update via the background channel to Flutter, if requested
          */
         suspend fun processProgressUpdate(
-                task: Task, progress: Double, prefs: SharedPreferences
+            task: Task, progress: Double, prefs: SharedPreferences
         ) {
             if (task.providesProgressUpdates()) {
                 if (!postOnBackgroundChannel("progressUpdate", task, progress)) {
@@ -245,14 +249,16 @@ class TaskWorker(
                     val jsonMap = task.toJsonMap().toMutableMap()
                     jsonMap["progress"] = progress // merge into Task JSON
                     storeLocally(
-                            BackgroundDownloaderPlugin.keyProgressUpdateMap, task.taskId, jsonMap,
-                            prefs
+                        BackgroundDownloaderPlugin.keyProgressUpdateMap, task.taskId, jsonMap,
+                        prefs
                     )
                 }
             }
         }
 
-        /** Send 'canResume' message via the background channel to Flutter */
+        /**
+         * Send 'canResume' message via the background channel to Flutter
+         */
         suspend fun processCanResume(task: Task, canResume: Boolean) {
             taskCanResume = canResume
             postOnBackgroundChannel("canResume", task, canResume)
@@ -277,10 +283,10 @@ class TaskWorker(
                 // unsuccessful post, so store in local prefs
                 Log.d(TAG, "Could not post resume data -> storing locally")
                 storeLocally(
-                        BackgroundDownloaderPlugin.keyResumeDataMap,
-                        resumeData.task.taskId,
-                        resumeData.toJsonMap(),
-                        prefs
+                    BackgroundDownloaderPlugin.keyResumeDataMap,
+                    resumeData.task.taskId,
+                    resumeData.toJsonMap(),
+                    prefs
                 )
             }
         }
@@ -289,21 +295,21 @@ class TaskWorker(
          * Store the [item] in preferences under [prefsKey], keyed by [taskId]
          */
         private fun storeLocally(
-                prefsKey: String,
-                taskId: String,
-                item: MutableMap<String, Any?>,
-                prefs: SharedPreferences
+            prefsKey: String,
+            taskId: String,
+            item: MutableMap<String, Any?>,
+            prefs: SharedPreferences
         ) {
             BackgroundDownloaderPlugin.prefsLock.write {
                 // add the data to a map keyed by taskId
                 val jsonString = prefs.getString(prefsKey, "{}")
                 val mapByTaskId = BackgroundDownloaderPlugin.gson.fromJson<Map<String, Any>>(
-                        jsonString, BackgroundDownloaderPlugin.jsonMapType
+                    jsonString, BackgroundDownloaderPlugin.jsonMapType
                 ).toMutableMap()
                 mapByTaskId[taskId] = item
                 val editor = prefs.edit()
                 editor.putString(
-                        prefsKey, BackgroundDownloaderPlugin.gson.toJson(mapByTaskId)
+                    prefsKey, BackgroundDownloaderPlugin.gson.toJson(mapByTaskId)
                 )
                 editor.apply()
             }
@@ -381,13 +387,13 @@ class TaskWorker(
             val taskJsonMapString = inputData.getString(keyTask)
             val mapType = object : TypeToken<Map<String, Any>>() {}.type
             val task = Task(
-                    gson.fromJson(taskJsonMapString, mapType)
+                gson.fromJson(taskJsonMapString, mapType)
             )
             notificationConfigJsonString = inputData.getString(keyNotificationConfig)
             notificationConfig =
-                    if (notificationConfigJsonString != null) BackgroundDownloaderPlugin.gson.fromJson(
-                            notificationConfigJsonString, NotificationConfig::class.java
-                    ) else null
+                if (notificationConfigJsonString != null) BackgroundDownloaderPlugin.gson.fromJson(
+                    notificationConfigJsonString, NotificationConfig::class.java
+                ) else null
             // pre-process resume
             val requiredStartByte = inputData.getLong(keyStartByte, 0)
             var isResume = requiredStartByte != 0L
@@ -395,8 +401,8 @@ class TaskWorker(
             else "${applicationContext.cacheDir}/com.bbflight.background_downloader${Random.nextInt()}"
             isResume = isResume && determineIfResumeIsPossible(tempFilePath, requiredStartByte)
             Log.i(
-                    TAG,
-                    "${if (isResume) "Resuming" else "Starting"} task with taskId ${task.taskId}"
+                TAG,
+                "${if (isResume) "Resuming" else "Starting"} task with taskId ${task.taskId}"
             )
             processStatusUpdate(task, TaskStatus.running, prefs)
             if (!isResume) {
@@ -412,7 +418,7 @@ class TaskWorker(
 
     /** Return true if resume is possible, given [tempFilePath] and [requiredStartByte] */
     private fun determineIfResumeIsPossible(
-            tempFilePath: String, requiredStartByte: Long
+        tempFilePath: String, requiredStartByte: Long
     ): Boolean {
         if (File(tempFilePath).exists()) {
             if (File(tempFilePath).length() == requiredStartByte) {
@@ -430,7 +436,7 @@ class TaskWorker(
      * do the task: download or upload a file
      */
     private suspend fun doTask(
-            task: Task, isResume: Boolean, tempFilePath: String, requiredStartByte: Long
+        task: Task, isResume: Boolean, tempFilePath: String, requiredStartByte: Long
     ): TaskStatus {
         try {
             val urlString = task.url
@@ -449,7 +455,7 @@ class TaskWorker(
             }
         } catch (e: Exception) {
             Log.w(
-                    TAG, "Error downloading from ${task.url} to ${task.filename}: $e"
+                TAG, "Error downloading from ${task.url} to ${task.filename}: $e"
             )
             setTaskError(e)
         }
@@ -458,7 +464,7 @@ class TaskWorker(
 
     /** Make the request to the [connection] and process the [Task] */
     private suspend fun connectAndProcess(
-            connection: HttpURLConnection, task: Task, isResume: Boolean, tempFilePath: String
+        connection: HttpURLConnection, task: Task, isResume: Boolean, tempFilePath: String
     ): TaskStatus {
         val filePath = pathToFileForTask(task)
         try {
@@ -472,7 +478,7 @@ class TaskWorker(
                     connection.requestMethod = "GET"
                 }
                 return processDownload(
-                        connection, task, filePath, isResume, tempFilePath
+                    connection, task, filePath, isResume, tempFilePath
                 )
             }
             return processUpload(connection, task, filePath)
@@ -480,18 +486,21 @@ class TaskWorker(
             setTaskError(e)
             when (e) {
                 is FileSystemException -> Log.w(
-                        TAG, "Filesystem exception for url ${task.url} and $filePath: ${e.message}"
+                    TAG, "Filesystem exception for url ${task.url} and $filePath: ${e.message}"
                 )
+
                 is SocketException -> Log.i(
-                        TAG, "Socket exception for url ${task.url} and $filePath: ${e.message}"
+                    TAG, "Socket exception for url ${task.url} and $filePath: ${e.message}"
                 )
+
                 is CancellationException -> {
                     Log.i(
-                            TAG, "Job cancelled for url ${task.url} and $filePath: ${e.message}"
+                        TAG, "Job cancelled for url ${task.url} and $filePath: ${e.message}"
                     )
                     deleteTempFile(tempFilePath)
                     return TaskStatus.canceled
                 }
+
                 else -> {
                     Log.w(
                             TAG,
@@ -512,20 +521,23 @@ class TaskWorker(
      * Returns the [TaskStatus]
      */
     private suspend fun processDownload(
-            connection: HttpURLConnection,
-            task: Task,
-            filePath: String,
-            isResumeParam: Boolean,
-            tempFilePath: String
+        connection: HttpURLConnection,
+        task: Task,
+        filePath: String,
+        isResumeParam: Boolean,
+        tempFilePath: String
     ): TaskStatus {
         Log.d(TAG, "Download for taskId ${task.taskId}")
         if (connection.responseCode in 200..206) {
             if (task.allowPause) {
                 val acceptRangesHeader = connection.headerFields["Accept-Ranges"]
-                processCanResume(task, acceptRangesHeader?.first() == "bytes")
+                processCanResume(
+                    task,
+                    acceptRangesHeader?.first() == "bytes" || connection.responseCode == 206
+                )
             }
             val isResume =
-                    isResumeParam && connection.responseCode == 206  // confirm resume response
+                isResumeParam && connection.responseCode == 206  // confirm resume response
             if (isResume && !prepareResume(connection, tempFilePath)) {
                 deleteTempFile(tempFilePath)
                 return TaskStatus.failed
@@ -535,7 +547,7 @@ class TaskWorker(
             BufferedInputStream(connection.inputStream).use { inputStream ->
                 FileOutputStream(tempFile, isResume).use { outputStream ->
                     transferBytesResult = transferBytes(
-                            inputStream, outputStream, connection.contentLengthLong, task
+                        inputStream, outputStream, connection.contentLengthLong, task
                     )
                 }
             }
@@ -550,9 +562,9 @@ class TaskWorker(
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         withContext(Dispatchers.IO) {
                             Files.move(
-                                    tempFile.toPath(),
-                                    destFile.toPath(),
-                                    StandardCopyOption.REPLACE_EXISTING
+                                tempFile.toPath(),
+                                destFile.toPath(),
+                                StandardCopyOption.REPLACE_EXISTING
                             )
                         }
                     } else {
@@ -560,7 +572,7 @@ class TaskWorker(
                         deleteTempFile(tempFilePath)
                     }
                     Log.i(
-                            TAG, "Successfully downloaded taskId ${task.taskId} to $filePath"
+                        TAG, "Successfully downloaded taskId ${task.taskId} to $filePath"
                     )
                     return TaskStatus.complete
                 }
@@ -576,9 +588,9 @@ class TaskWorker(
                     if (taskCanResume) {
                         Log.i(TAG, "Task ${task.taskId} paused")
                         processResumeData(
-                                ResumeData(
-                                        task, tempFilePath, bytesTotal + startByte
-                                ), prefs
+                            ResumeData(
+                                task, tempFilePath, bytesTotal + startByte
+                            ), prefs
                         )
                         return TaskStatus.paused
                     }
@@ -599,17 +611,17 @@ class TaskWorker(
                     }
                     if (taskCanResume) {
                         Log.i(
-                                TAG,
-                                "Task ${task.taskId} paused due to timeout, will resume in 1 second"
+                            TAG,
+                            "Task ${task.taskId} paused due to timeout, will resume in 1 second"
                         )
                         val start = bytesTotal + startByte
                         BackgroundDownloaderPlugin.doEnqueue(
-                                applicationContext,
-                                taskToJsonString(task),
-                                notificationConfigJsonString,
-                                tempFilePath,
-                                start,
-                                1000
+                            applicationContext,
+                            taskToJsonString(task),
+                            notificationConfigJsonString,
+                            tempFilePath,
+                            start,
+                            1000
                         )
                         return TaskStatus.paused
                     }
@@ -618,6 +630,7 @@ class TaskWorker(
                     deleteTempFile(tempFilePath)
                     return TaskStatus.failed
                 }
+
                 else -> {
                     taskError = TaskError(ErrorType.general)
                     deleteTempFile(tempFilePath)
@@ -626,8 +639,8 @@ class TaskWorker(
             }
         } else {
             Log.i(
-                    TAG,
-                    "Response code ${connection.responseCode} for download from  ${task.url} to $filePath"
+                TAG,
+                "Response code ${connection.responseCode} for download from  ${task.url} to $filePath"
             )
             taskError = TaskError(ErrorType.httpResponse, httpResponseCode = connection.responseCode,
                     description = connection.responseMessage)
@@ -657,7 +670,7 @@ class TaskWorker(
      * Returns the [TaskStatus]
      */
     private suspend fun processUpload(
-            connection: HttpURLConnection, task: Task, filePath: String
+        connection: HttpURLConnection, task: Task, filePath: String
     ): TaskStatus {
         connection.requestMethod = "POST"
         connection.doOutput = true
@@ -682,7 +695,7 @@ class TaskWorker(
             Log.d(TAG, "Binary upload for taskId ${task.taskId}")
             connection.setRequestProperty("Content-Type", task.mimeType)
             connection.setRequestProperty(
-                    "Content-Disposition", "attachment; filename=\"" + task.filename + "\""
+                "Content-Disposition", "attachment; filename=\"" + task.filename + "\""
             )
             connection.setRequestProperty("Content-Length", fileSize.toString())
             connection.setFixedLengthStreamingMode(fileSize)
@@ -690,7 +703,7 @@ class TaskWorker(
                 FileInputStream(file).use { inputStream ->
                     DataOutputStream(connection.outputStream.buffered()).use { outputStream ->
                         transferBytesResult =
-                                transferBytes(inputStream, outputStream, fileSize, task)
+                            transferBytes(inputStream, outputStream, fileSize, task)
                     }
                 }
             }
@@ -704,19 +717,19 @@ class TaskWorker(
             }
             // file portion of the multipart
             val contentDispositionString =
-                    "Content-Disposition: form-data; name=\"${browserEncode(task.fileField)}\"; " +
-                            "filename=\"${browserEncode(task.filename)}\""
+                "Content-Disposition: form-data; name=\"${browserEncode(task.fileField)}\"; " +
+                        "filename=\"${browserEncode(task.filename)}\""
             val contentTypeString = "Content-Type: ${task.mimeType}"
             // determine the content length of the multi-part data
             val contentLength =
-                    lengthInBytes(fieldString) + 2 * boundary.length + 6 * lineFeed.length +
-                            lengthInBytes(contentDispositionString) + contentTypeString.length +
-                            3 * "--".length + fileSize
+                lengthInBytes(fieldString) + 2 * boundary.length + 6 * lineFeed.length +
+                        lengthInBytes(contentDispositionString) + contentTypeString.length +
+                        3 * "--".length + fileSize
             connection.setRequestProperty("Accept-Charset", "UTF-8")
             connection.setRequestProperty("Connection", "Keep-Alive")
             connection.setRequestProperty("Cache-Control", "no-cache")
             connection.setRequestProperty(
-                    "Content-Type", "multipart/form-data; boundary=$boundary"
+                "Content-Type", "multipart/form-data; boundary=$boundary"
             )
             connection.setRequestProperty("Content-Length", contentLength.toString())
             connection.setFixedLengthStreamingMode(contentLength)
@@ -726,10 +739,10 @@ class TaskWorker(
                     DataOutputStream(connection.outputStream).use { outputStream ->
                         val writer = outputStream.writer()
                         writer.append(fieldString).append("--${boundary}").append(lineFeed)
-                                .append(contentDispositionString).append(lineFeed)
-                                .append(contentTypeString).append(lineFeed).append(lineFeed).flush()
+                            .append(contentDispositionString).append(lineFeed)
+                            .append(contentTypeString).append(lineFeed).append(lineFeed).flush()
                         transferBytesResult =
-                                transferBytes(inputStream, outputStream, fileSize, task)
+                            transferBytes(inputStream, outputStream, fileSize, task)
                         if (transferBytesResult == TaskStatus.complete) {
                             writer.append(lineFeed).append("--${boundary}--").append(lineFeed)
                         }
@@ -751,13 +764,13 @@ class TaskWorker(
             TaskStatus.complete -> {
                 if (connection.responseCode in 200..206) {
                     Log.i(
-                            TAG, "Successfully uploaded taskId ${task.taskId} from $filePath"
+                        TAG, "Successfully uploaded taskId ${task.taskId} from $filePath"
                     )
                     return TaskStatus.complete
                 }
                 Log.i(
-                        TAG,
-                        "Response code ${connection.responseCode} for upload of $filePath to ${task.url}"
+                    TAG,
+                    "Response code ${connection.responseCode} for upload of $filePath to ${task.url}"
                 )
                 taskError = TaskError(ErrorType.httpResponse, httpResponseCode = connection.responseCode,
                         description = connection.responseMessage)
@@ -783,7 +796,7 @@ class TaskWorker(
      * [TaskStatus.complete], or special [TaskStatus.enqueued] which signals the task timed out
      */
     private suspend fun transferBytes(
-            inputStream: InputStream, outputStream: OutputStream, contentLength: Long, task: Task
+        inputStream: InputStream, outputStream: OutputStream, contentLength: Long, task: Task
     ): TaskStatus {
         val dataBuffer = ByteArray(bufferSize)
         var lastProgressUpdate = 0.0
@@ -792,7 +805,7 @@ class TaskWorker(
         return withContext(Dispatchers.IO) {
             try {
                 while (inputStream.read(dataBuffer, 0, bufferSize)
-                                .also { numBytes = it } != -1
+                        .also { numBytes = it } != -1
                 ) {
                     // check if task is stopped (canceled), paused or timed out
                     if (isStopped) {
@@ -810,12 +823,12 @@ class TaskWorker(
                         bytesTotal += numBytes
                     }
                     val progress = min(
-                            (bytesTotal + startByte).toDouble() / (contentLength + startByte), 0.999
+                        (bytesTotal + startByte).toDouble() / (contentLength + startByte), 0.999
                     )
                     if (contentLength > 0 && progress - lastProgressUpdate > 0.02 && currentTimeMillis() > nextProgressUpdateTime) {
                         processProgressUpdate(task, progress, prefs)
                         updateNotification(
-                                task, notificationTypeForTaskStatus(TaskStatus.running), progress
+                            task, notificationTypeForTaskStatus(TaskStatus.running), progress
                         )
                         lastProgressUpdate = progress
                         nextProgressUpdateTime = currentTimeMillis() + 500
@@ -856,8 +869,8 @@ class TaskWorker(
         val tempFile = File(tempFilePath)
         val tempFileLength = tempFile.length()
         Log.d(
-                TAG,
-                "Resume start=$start, end=$end of total=$total bytes, tempFile = $tempFileLength bytes"
+            TAG,
+            "Resume start=$start, end=$end of total=$total bytes, tempFile = $tempFileLength bytes"
         )
         if (total != end + 1 || start > tempFileLength) {
             Log.i(TAG, "Offered range not feasible: $range")
@@ -884,19 +897,19 @@ class TaskWorker(
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val name =
-                    applicationContext.getString(R.string.bg_downloader_notification_channel_name)
+                applicationContext.getString(R.string.bg_downloader_notification_channel_name)
             val descriptionText = applicationContext.getString(
-                    R.string.bg_downloader_notification_channel_description
+                R.string.bg_downloader_notification_channel_description
             )
             val importance = NotificationManager.IMPORTANCE_LOW
             val channel = NotificationChannel(
-                    BackgroundDownloaderPlugin.notificationChannel, name, importance
+                BackgroundDownloaderPlugin.notificationChannel, name, importance
             ).apply {
                 description = descriptionText
             }
             // Register the channel with the system
             val notificationManager: NotificationManager = applicationContext.getSystemService(
-                    NOTIFICATION_SERVICE
+                NOTIFICATION_SERVICE
             ) as NotificationManager
             notificationManager.createNotificationChannel(channel)
         }
@@ -915,7 +928,7 @@ class TaskWorker(
      */
     @SuppressLint("MissingPermission")
     private fun updateNotification(
-            task: Task, notificationType: NotificationType, progress: Double = 2.0
+        task: Task, notificationType: NotificationType, progress: Double = 2.0
     ) {
         val notification = when (notificationType) {
             NotificationType.running -> notificationConfig?.running
@@ -952,11 +965,11 @@ class TaskWorker(
             NotificationType.paused -> R.drawable.outline_pause_24
         }
         val builder = NotificationCompat.Builder(
-                applicationContext, BackgroundDownloaderPlugin.notificationChannel
+            applicationContext, BackgroundDownloaderPlugin.notificationChannel
         ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
         // use stored progress if notificationType is .paused
         notificationProgress =
-                if (notificationType == NotificationType.paused) notificationProgress else progress
+            if (notificationType == NotificationType.paused) notificationProgress else progress
         // title and body interpolation of {filename}, {progress} and {metadata}
         val title = replaceTokens(notification.title, task, notificationProgress)
         if (title.isNotEmpty()) {
@@ -968,7 +981,7 @@ class TaskWorker(
         }
         // progress bar
         val progressBar =
-                notificationConfig?.progressBar ?: false && (notificationType == NotificationType.running || notificationType == NotificationType.paused)
+            notificationConfig?.progressBar ?: false && (notificationType == NotificationType.running || notificationType == NotificationType.paused)
         if (progressBar && notificationProgress >= 0) {
             if (notificationProgress <= 1) {
                 builder.setProgress(100, (notificationProgress * 100).roundToInt(), false)
@@ -982,17 +995,17 @@ class TaskWorker(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 // On Android 33+, check/ask for permission
                 if (ActivityCompat.checkSelfPermission(
-                                applicationContext, Manifest.permission.POST_NOTIFICATIONS
-                        ) != PackageManager.PERMISSION_GRANTED
+                        applicationContext, Manifest.permission.POST_NOTIFICATIONS
+                    ) != PackageManager.PERMISSION_GRANTED
                 ) {
                     if (BackgroundDownloaderPlugin.requestingNotificationPermission) {
                         return  // don't ask twice
                     }
                     BackgroundDownloaderPlugin.requestingNotificationPermission = true
                     BackgroundDownloaderPlugin.activity?.requestPermissions(
-                            arrayOf(
-                                    Manifest.permission.POST_NOTIFICATIONS
-                            ), BackgroundDownloaderPlugin.notificationPermissionRequestCode
+                        arrayOf(
+                            Manifest.permission.POST_NOTIFICATIONS
+                        ), BackgroundDownloaderPlugin.notificationPermissionRequestCode
                     )
                     return
                 }
@@ -1009,7 +1022,7 @@ class TaskWorker(
      * access to [task] and the [builder]
      */
     private fun addActionButtons(
-            notificationType: NotificationType, task: Task, builder: NotificationCompat.Builder
+        notificationType: NotificationType, task: Task, builder: NotificationCompat.Builder
     ) {
         val activity = BackgroundDownloaderPlugin.activity
         if (activity != null) {
@@ -1020,100 +1033,102 @@ class TaskWorker(
                         putString(NotificationRcvr.bundleTaskId, task.taskId)
                     }
                     val cancelIntent =
-                            Intent(applicationContext, NotificationRcvr::class.java).apply {
-                                action = NotificationRcvr.actionCancelActive
-                                putExtra(NotificationRcvr.extraBundle, cancelOrPauseBundle)
-                            }
+                        Intent(applicationContext, NotificationRcvr::class.java).apply {
+                            action = NotificationRcvr.actionCancelActive
+                            putExtra(NotificationRcvr.extraBundle, cancelOrPauseBundle)
+                        }
                     val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
-                            applicationContext,
-                            notificationId,
-                            cancelIntent,
-                            PendingIntent.FLAG_IMMUTABLE
+                        applicationContext,
+                        notificationId,
+                        cancelIntent,
+                        PendingIntent.FLAG_IMMUTABLE
                     )
                     builder.addAction(
-                            R.drawable.outline_cancel_24,
-                            activity.getString(R.string.bg_downloader_cancel),
-                            cancelPendingIntent
+                        R.drawable.outline_cancel_24,
+                        activity.getString(R.string.bg_downloader_cancel),
+                        cancelPendingIntent
                     )
                     if (taskCanResume && (notificationConfig?.paused != null)) {
                         // pause button when running and paused notification configured
                         val pauseIntent = Intent(
-                                applicationContext, NotificationRcvr::class.java
+                            applicationContext, NotificationRcvr::class.java
                         ).apply {
                             action = NotificationRcvr.actionPause
                             putExtra(NotificationRcvr.extraBundle, cancelOrPauseBundle)
                         }
                         val pausePendingIntent: PendingIntent = PendingIntent.getBroadcast(
-                                applicationContext,
-                                notificationId,
-                                pauseIntent,
-                                PendingIntent.FLAG_IMMUTABLE
+                            applicationContext,
+                            notificationId,
+                            pauseIntent,
+                            PendingIntent.FLAG_IMMUTABLE
                         )
                         builder.addAction(
-                                R.drawable.outline_pause_24,
-                                activity.getString(R.string.bg_downloader_pause),
-                                pausePendingIntent
+                            R.drawable.outline_pause_24,
+                            activity.getString(R.string.bg_downloader_pause),
+                            pausePendingIntent
                         )
                     }
                 }
+
                 NotificationType.paused -> {
                     // cancel button
                     val cancelBundle = Bundle().apply {
                         putString(NotificationRcvr.bundleTaskId, task.taskId)
                         putString(
-                                NotificationRcvr.bundleTask, BackgroundDownloaderPlugin.gson.toJson(
+                            NotificationRcvr.bundleTask, BackgroundDownloaderPlugin.gson.toJson(
                                 task.toJsonMap()
-                        )
+                            )
                         )
                     }
                     val cancelIntent = Intent(
-                            applicationContext, NotificationRcvr::class.java
+                        applicationContext, NotificationRcvr::class.java
                     ).apply {
                         action = NotificationRcvr.actionCancelInactive
                         putExtra(NotificationRcvr.extraBundle, cancelBundle)
                     }
                     val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
-                            applicationContext,
-                            notificationId,
-                            cancelIntent,
-                            PendingIntent.FLAG_IMMUTABLE
+                        applicationContext,
+                        notificationId,
+                        cancelIntent,
+                        PendingIntent.FLAG_IMMUTABLE
                     )
                     builder.addAction(
-                            R.drawable.outline_cancel_24,
-                            activity.getString(R.string.bg_downloader_cancel),
-                            cancelPendingIntent
+                        R.drawable.outline_cancel_24,
+                        activity.getString(R.string.bg_downloader_cancel),
+                        cancelPendingIntent
                     )
                     // resume button
                     val resumeBundle = Bundle().apply {
                         putString(NotificationRcvr.bundleTaskId, task.taskId)
                         putString(
-                                NotificationRcvr.bundleTask, BackgroundDownloaderPlugin.gson.toJson(
+                            NotificationRcvr.bundleTask, BackgroundDownloaderPlugin.gson.toJson(
                                 task.toJsonMap()
-                        )
+                            )
                         )
                         putString(
-                                NotificationRcvr.bundleNotificationConfig,
-                                notificationConfigJsonString
+                            NotificationRcvr.bundleNotificationConfig,
+                            notificationConfigJsonString
                         )
                     }
                     val resumeIntent = Intent(
-                            applicationContext, NotificationRcvr::class.java
+                        applicationContext, NotificationRcvr::class.java
                     ).apply {
                         action = NotificationRcvr.actionResume
                         putExtra(NotificationRcvr.extraBundle, resumeBundle)
                     }
                     val resumePendingIntent: PendingIntent = PendingIntent.getBroadcast(
-                            applicationContext,
-                            notificationId,
-                            resumeIntent,
-                            PendingIntent.FLAG_IMMUTABLE
+                        applicationContext,
+                        notificationId,
+                        resumeIntent,
+                        PendingIntent.FLAG_IMMUTABLE
                     )
                     builder.addAction(
-                            R.drawable.outline_play_arrow_24,
-                            activity.getString(R.string.bg_downloader_resume),
-                            resumePendingIntent
+                        R.drawable.outline_play_arrow_24,
+                        activity.getString(R.string.bg_downloader_resume),
+                        resumePendingIntent
                     )
                 }
+
                 NotificationType.complete -> {}
                 NotificationType.error -> {}
             }
@@ -1125,10 +1140,10 @@ class TaskWorker(
      */
     private fun replaceTokens(input: String, task: Task, progress: Double): String {
         val output =
-                fileNameRegEx.replace(metaDataRegEx.replace(input, task.metaData), task.filename)
+            fileNameRegEx.replace(metaDataRegEx.replace(input, task.metaData), task.filename)
         val progressString =
-                if (progress in 0.0..1.0) (progress * 100).roundToInt().toString() + "%"
-                else ""
+            if (progress in 0.0..1.0) (progress * 100).roundToInt().toString() + "%"
+            else ""
         return progressRegEx.replace(output, progressString)
     }
 
@@ -1151,12 +1166,13 @@ class TaskWorker(
         if (Build.VERSION.SDK_INT >= 26) {
             val baseDirPath = when (task.baseDirectory) {
                 BaseDirectory.applicationDocuments -> Path(
-                        applicationContext.dataDir.path, "app_flutter"
+                    applicationContext.dataDir.path, "app_flutter"
                 ).pathString
+
                 BaseDirectory.temporary -> applicationContext.cacheDir.path
                 BaseDirectory.applicationSupport -> applicationContext.filesDir.path
                 BaseDirectory.applicationLibrary -> Path(
-                        applicationContext.filesDir.path, "Library"
+                    applicationContext.filesDir.path, "Library"
                 ).pathString
             }
             val path = Path(baseDirPath, task.directory)
@@ -1201,10 +1217,10 @@ class TaskWorker(
 /** Return the map of tasks stored in preferences */
 fun getTaskMap(prefs: SharedPreferences): MutableMap<String, Any> {
     val jsonString = prefs.getString(
-            BackgroundDownloaderPlugin.keyTasksMap, "{}"
+        BackgroundDownloaderPlugin.keyTasksMap, "{}"
     )
     return BackgroundDownloaderPlugin.gson.fromJson<Map<String, Any>>(
-            jsonString, BackgroundDownloaderPlugin.jsonMapType
+        jsonString, BackgroundDownloaderPlugin.jsonMapType
     ).toMutableMap()
 }
 

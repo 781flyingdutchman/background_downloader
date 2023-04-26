@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:background_downloader/src/desktop_downloader.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -220,6 +221,7 @@ class FileDownloader {
         updates: (onProgress != null || taskProgressCallback != null)
             ? Updates.statusAndProgress
             : Updates.status);
+    await _downloader.setModifiedTask(internalTask, task);
     if (onStatus != null) {
       _shortTaskStatusCallbacks[task.taskId] = onStatus;
     }
@@ -443,7 +445,8 @@ class FileDownloader {
   /// a POST request, this method returns false immediately.
   Future<bool> resume(DownloadTask task) async {
     if (task.allowPause && task.post == null) {
-      return _downloader.resume(task, _notificationConfigForTask(task));
+      final resumeTask = await _downloader.getModifiedTask(task) ?? task;
+      return _downloader.resume(resumeTask, _notificationConfigForTask(task));
     }
     return false;
   }
@@ -592,7 +595,7 @@ Future<http.Response> doRequest(Request request) async {
     }
   });
   final log = Logger('FileDownloader.request');
-  final client = http.Client();
+  final client = DesktopDownloader.httpClient;
   var response = http.Response('', 499,
       reasonPhrase: 'Not attempted'); // dummy to start with
   while (request.retriesRemaining >= 0) {

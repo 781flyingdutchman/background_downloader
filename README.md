@@ -93,6 +93,15 @@ The downloader will only store the file upon success (so there will be no partia
 
 Note: the reason you cannot simply pass a full absolute directory path to the downloader is that the location of the app's documents directory may change between application starts (on iOS), and may therefore fail for downloads that complete while the app is suspended.  You should therefore never store permanently, or hard-code, an absolute path.
 
+If you want the filename to be provided by the server (instead of assigning a value to `filename` yourself), use the following:
+```
+   final task = await DownloadTask(url: 'https://google.com')
+       .withSuggestedFilename(unique: true);
+```
+
+The method `withSuggestedFilename` returns a copy of the task it is called on, with the `filename` field modified based on the filename suggested by the server, or the last path segment of the URL, or unchanged if neither is feasible. If `unique` is true, the filename will be modified such that it does not conflict with an existing filename by adding a sequence. For example "file.txt" would become "file (1).txt".
+
+
 ### A batch of files
 
 To download a batch of files and wait for completion of all, create a `List` of `DownloadTask` objects and call `downloadBatch`:
