@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:background_downloader/src/desktop_downloader.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -589,7 +590,7 @@ Future<http.Response> doRequest(Request request) async {
     }
   });
   final log = Logger('FileDownloader.request');
-  final client = http.Client();
+  final client = DesktopDownloader.httpClient;
   var response = http.Response('', 499,
       reasonPhrase: 'Not attempted'); // dummy to start with
   while (request.retriesRemaining >= 0) {

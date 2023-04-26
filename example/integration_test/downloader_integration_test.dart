@@ -674,6 +674,46 @@ void main() {
       expect(() => DownloadTask(url: workingUrl, directory: '/testDir'),
           throwsArgumentError);
     });
+
+    testWidgets('suggestedFilename', (widgetTester) async {
+      // delete old downloads
+      task = DownloadTask(url: urlWithContentLength, filename: '5MB-test.ZIP');
+      try {
+        File(await task.filePath()).deleteSync();
+      } catch (e) {}
+      task =
+          DownloadTask(url: urlWithContentLength, filename: '5MB-test (1).ZIP');
+      try {
+        File(await task.filePath()).deleteSync();
+      } catch (e) {}
+      task =
+          DownloadTask(url: urlWithContentLength, filename: '5MB-test (2).ZIP');
+      try {
+        File(await task.filePath()).deleteSync();
+      } catch (e) {}
+      task = DownloadTask(url: urlWithContentLength);
+      final startingFileName = task.filename;
+      final task2 = await task.withSuggestedFilename();
+      expect(task2.filename, isNot(equals(startingFileName)));
+      expect(task2.filename, equals('5MB-test.ZIP'));
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
+      expect(await FileDownloader().enqueue(task2), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      // again, should yield same filename
+      final task3 = await task.withSuggestedFilename();
+      expect(task3.filename, equals('5MB-test.ZIP'));
+      // again with 'unique' should yield (1) filename
+      final task4 = await task.withSuggestedFilename(unique: true);
+      expect(task4.filename, equals('5MB-test (1).ZIP'));
+      statusCallbackCompleter = Completer(); // reset
+      expect(await FileDownloader().enqueue(task4), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      // again with 'unique' should yield (2) filename
+      final task5 = await task.withSuggestedFilename(unique: true);
+      expect(task5.filename, equals('5MB-test (2).ZIP'));
+    });
   });
 
   group('Convenience downloads', () {
