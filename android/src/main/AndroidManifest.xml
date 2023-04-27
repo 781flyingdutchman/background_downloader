@@ -1,7 +1,22 @@
-<manifest package="com.bbflight.background_downloader"
+<manifest xmlns:tools="http://schemas.android.com/tools"
+    package="com.bbflight.background_downloader"
     xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <application>
-        <receiver android:name="NotificationRcvr"/>
+    <application
+        android:enableOnBackInvokedCallback="true"
+        tools:targetApi="tiramisu"
+        >
+
+        <receiver android:name="NotificationRcvr" android:exported="false">
+            <intent-filter>
+                <action android:name="com.bbflight.background_downloader.cancelActive" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.bbflight.background_downloader.pause" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.bbflight.background_downloader.resume" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

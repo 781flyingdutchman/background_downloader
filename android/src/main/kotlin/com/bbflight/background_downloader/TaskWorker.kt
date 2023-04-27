@@ -8,7 +8,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
-import android.content.Context.*
+import android.content.Context.NOTIFICATION_SERVICE
+
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
@@ -987,6 +988,27 @@ class TaskWorker(
     ) {
         val activity = BackgroundDownloaderPlugin.activity
         if (activity != null) {
+            val taskJsonString = BackgroundDownloaderPlugin.gson.toJson(
+                task.toJsonMap()
+            )
+            // add tap action for all notifications
+            val tapIntent =
+                applicationContext.packageManager.getLaunchIntentForPackage(applicationContext.packageName)
+            if (tapIntent != null) {
+                tapIntent.apply {
+                    action = NotificationRcvr.actionTap
+                    putExtra(NotificationRcvr.bundleTask, taskJsonString)
+                    putExtra(NotificationRcvr.bundleNotificationType, notificationType.ordinal)
+                }
+                val tapPendingIntent: PendingIntent = PendingIntent.getActivity(
+                    applicationContext,
+                    72382,
+                    tapIntent,
+                    PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                builder.setContentIntent(tapPendingIntent)
+            }
+            // add buttons depending on notificationType
             when (notificationType) {
                 NotificationType.running -> {
                     // cancel button when running
@@ -1036,9 +1058,7 @@ class TaskWorker(
                     val cancelBundle = Bundle().apply {
                         putString(NotificationRcvr.bundleTaskId, task.taskId)
                         putString(
-                            NotificationRcvr.bundleTask, BackgroundDownloaderPlugin.gson.toJson(
-                                task.toJsonMap()
-                            )
+                            NotificationRcvr.bundleTask, taskJsonString
                         )
                     }
                     val cancelIntent = Intent(
@@ -1062,9 +1082,7 @@ class TaskWorker(
                     val resumeBundle = Bundle().apply {
                         putString(NotificationRcvr.bundleTaskId, task.taskId)
                         putString(
-                            NotificationRcvr.bundleTask, BackgroundDownloaderPlugin.gson.toJson(
-                                task.toJsonMap()
-                            )
+                            NotificationRcvr.bundleTask, taskJsonString
                         )
                         putString(
                             NotificationRcvr.bundleNotificationConfig,

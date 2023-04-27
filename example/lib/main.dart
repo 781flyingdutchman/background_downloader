@@ -9,8 +9,7 @@ import 'widgets.dart';
 
 void main() {
   Logger.root.onRecord.listen((LogRecord rec) {
-    // ignore: avoid_print
-    print('${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
+    debugPrint('${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
   });
 
   runApp(const MyApp());
@@ -24,6 +23,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  final log = Logger('ExampleApp');
   final buttonTexts = ['Download', 'Cancel', 'Pause', 'Resume', 'Reset'];
 
   ButtonState buttonState = ButtonState.download;
@@ -39,7 +39,8 @@ class _MyAppState extends State<MyApp> {
     FileDownloader()
         .registerCallbacks(
             taskStatusCallback: myDownloadStatusCallback,
-            taskProgressCallback: myDownloadProgressCallback)
+            taskProgressCallback: myDownloadProgressCallback,
+            taskNotificationTapCallback: myNotificationTapCallback)
         .configureNotification(
             running: TaskNotification(
                 'Download {filename}', 'File: {filename} - {progress}'),
@@ -85,6 +86,11 @@ class _MyAppState extends State<MyApp> {
   /// Adds an update object to the stream that the main UI listens to
   void myDownloadProgressCallback(Task task, double progress) {
     updateStream.add(DownloadProgressIndicatorUpdate(task.filename, progress));
+  }
+
+  /// Process the user tapping on a notification by printing a message
+  void myNotificationTapCallback(Task task, NotificationType notificationType) {
+    debugPrint('Tapped notification $notificationType}');
   }
 
   @override

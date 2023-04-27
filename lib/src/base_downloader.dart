@@ -40,6 +40,9 @@ abstract class BaseDownloader {
   /// Registered [TaskProgressCallback] for each group
   final groupProgressCallbacks = <String, TaskProgressCallback>{};
 
+  /// Registered [TaskNotificationTapCallback] for each group
+  final groupNotificationTapCallbacks = <String, TaskNotificationTapCallback>{};
+
   /// StreamController for [TaskUpdate] updates
   var updates = StreamController<TaskUpdate>();
 
@@ -468,6 +471,27 @@ abstract class BaseDownloader {
   /// Process progress update coming from Downloader to client listener
   void processProgressUpdate(Task task, double progress) {
     _emitProgressUpdate(task, progress);
+  }
+
+  /// Process user tapping on a notification
+  ///
+  /// Because a notification tap may cause the app to start from scratch, we
+  /// allow a few retries with backoff to let the app register a callback
+  Future<void> processNotificationTap(
+      Task task, NotificationType notificationType) async {
+    var retries = 0;
+    var success = false;
+    while (retries < 5 && !success) {
+      final notificationTapCallback = groupNotificationTapCallbacks[task.group];
+      if (notificationTapCallback != null) {
+        notificationTapCallback(task, notificationType);
+        success = true;
+      } else {
+        await Future.delayed(
+            Duration(milliseconds: 100 * pow(2, retries).round()));
+        retries++;
+      }
+    }
   }
 
   /// Emits the status update for this task to its callback or listener, and

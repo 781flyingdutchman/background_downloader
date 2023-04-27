@@ -132,6 +132,11 @@ typedef TaskStatusCallback = void Function(Task task, TaskStatus status);
 /// These constants are available as [progressFailed] etc
 typedef TaskProgressCallback = void Function(Task task, double progress);
 
+/// Signature for function you can register to be called when a notification
+/// is tapped by the user
+typedef TaskNotificationTapCallback = void Function(
+    Task task, NotificationType notificationType);
+
 /// A server Request
 ///
 /// An equality test on a [Request] is an equality test on the [url]
@@ -862,6 +867,10 @@ class ResumeData {
 
 /// Types of undelivered data that can be requested
 enum Undelivered { resumeData, statusUpdates, progressUpdates }
+
+/// Notification types, as configured in [TaskNotificationConfig] and passed
+/// on to [TaskNotificationTapCallback]
+enum NotificationType { running, complete, error, paused }
 
 /// Notification specification for a [Task]
 ///

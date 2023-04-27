@@ -65,14 +65,11 @@ class FileDownloader {
   /// not have a registered callback
   Stream<TaskUpdate> get updates => _downloader.updates.stream;
 
-  /// Register status or progress callbacks to monitor download progress.
+  /// Register status or progress callbacks to monitor download progress, and
+  /// TaskNotificationTapCallback to respond to user tapping a notification.
   ///
   /// Status callbacks are called only when the state changes, while
   /// progress callbacks are called to inform of intermediate progress.
-  ///
-  /// Different callbacks can be set for different groups, and the group
-  /// can be passed on with the [DownloadTask] to ensure the
-  /// appropriate callbacks are called for that group.
   ///
   /// Note that callbacks will be called based on a task's [updates]
   /// property, which defaults to status change callbacks only. To also get
@@ -80,11 +77,20 @@ class FileDownloader {
   /// set the task's [updates] property to [Updates.progress] or
   /// [Updates.statusAndProgress].
   ///
+  /// For notification callbacks, make sure your AndroidManifest includes
+  /// android:launchMode="singleTask" to ensure proper behavior when a
+  /// notification is tapped.
+  ///
+  /// Different callbacks can be set for different groups, and the group
+  /// can be passed on with the [DownloadTask] to ensure the
+  /// appropriate callbacks are called for that group.
+  ///
   /// The call returns the [FileDownloader] to make chaining easier
   FileDownloader registerCallbacks(
       {String group = defaultGroup,
       TaskStatusCallback? taskStatusCallback,
-      TaskProgressCallback? taskProgressCallback}) {
+      TaskProgressCallback? taskProgressCallback,
+      TaskNotificationTapCallback? taskNotificationTapCallback}) {
     assert(taskStatusCallback != null || (taskProgressCallback != null),
         'Must provide a TaskStatusCallback or a TaskProgressCallback, or both');
     if (taskStatusCallback != null) {
@@ -92,6 +98,10 @@ class FileDownloader {
     }
     if (taskProgressCallback != null) {
       _downloader.groupProgressCallbacks[group] = taskProgressCallback;
+    }
+    if (taskNotificationTapCallback != null) {
+      _downloader.groupNotificationTapCallbacks[group] =
+          taskNotificationTapCallback;
     }
     return this; // makes chaining calls easier
   }

@@ -29,74 +29,74 @@ enum class Updates {
  */
 
 class Task(
-        val taskId: String,
-        val url: String,
-        val filename: String,
-        val headers: Map<String, String>,
-        val post: String?,
-        val fileField: String,
-        val mimeType: String,
-        val fields: Map<String, String>,
-        val directory: String,
-        val baseDirectory: BaseDirectory,
-        val group: String,
-        val updates: Updates,
-        val requiresWiFi: Boolean,
-        val retries: Int,
-        val retriesRemaining: Int,
-        val allowPause: Boolean,
-        val metaData: String,
-        val creationTime: Long, // untouched, so kept as integer on Android side
-        val taskType: String // distinction between DownloadTask and UploadTask
+    val taskId: String,
+    val url: String,
+    val filename: String,
+    val headers: Map<String, String>,
+    val post: String?,
+    val fileField: String,
+    val mimeType: String,
+    val fields: Map<String, String>,
+    val directory: String,
+    val baseDirectory: BaseDirectory,
+    val group: String,
+    val updates: Updates,
+    val requiresWiFi: Boolean,
+    val retries: Int,
+    val retriesRemaining: Int,
+    val allowPause: Boolean,
+    val metaData: String,
+    val creationTime: Long, // untouched, so kept as integer on Android side
+    val taskType: String // distinction between DownloadTask and UploadTask
 ) {
 
     /** Creates object from JsonMap */
     @Suppress("UNCHECKED_CAST")
     constructor(jsonMap: Map<String, Any>) : this(
-            taskId = jsonMap["taskId"] as String? ?: "",
-            url = jsonMap["url"] as String? ?: "",
-            filename = jsonMap["filename"] as String? ?: "",
-            headers = jsonMap["headers"] as Map<String, String>? ?: mutableMapOf<String, String>(),
-            post = jsonMap["post"] as String?,
-            fileField = jsonMap["fileField"] as String? ?: "",
-            mimeType = jsonMap["mimeType"] as String? ?: "",
-            fields = jsonMap["fields"] as Map<String, String>? ?: mutableMapOf<String, String>(),
-            directory = jsonMap["directory"] as String? ?: "",
-            baseDirectory = BaseDirectory.values()[(jsonMap["baseDirectory"] as Double?
-                    ?: 0).toInt()],
-            group = jsonMap["group"] as String? ?: "",
-            updates = Updates.values()[(jsonMap["updates"] as Double? ?: 0).toInt()],
-            requiresWiFi = jsonMap["requiresWiFi"] as Boolean? ?: false,
-            retries = (jsonMap["retries"] as Double? ?: 0).toInt(),
-            retriesRemaining = (jsonMap["retriesRemaining"] as Double? ?: 0).toInt(),
-            allowPause = (jsonMap["allowPause"] as Boolean? ?: false),
-            metaData = jsonMap["metaData"] as String? ?: "",
-            creationTime = (jsonMap["creationTime"] as Double? ?: 0).toLong(),
-            taskType = jsonMap["taskType"] as String? ?: ""
+        taskId = jsonMap["taskId"] as String? ?: "",
+        url = jsonMap["url"] as String? ?: "",
+        filename = jsonMap["filename"] as String? ?: "",
+        headers = jsonMap["headers"] as Map<String, String>? ?: mutableMapOf<String, String>(),
+        post = jsonMap["post"] as String?,
+        fileField = jsonMap["fileField"] as String? ?: "",
+        mimeType = jsonMap["mimeType"] as String? ?: "",
+        fields = jsonMap["fields"] as Map<String, String>? ?: mutableMapOf<String, String>(),
+        directory = jsonMap["directory"] as String? ?: "",
+        baseDirectory = BaseDirectory.values()[(jsonMap["baseDirectory"] as Double?
+            ?: 0).toInt()],
+        group = jsonMap["group"] as String? ?: "",
+        updates = Updates.values()[(jsonMap["updates"] as Double? ?: 0).toInt()],
+        requiresWiFi = jsonMap["requiresWiFi"] as Boolean? ?: false,
+        retries = (jsonMap["retries"] as Double? ?: 0).toInt(),
+        retriesRemaining = (jsonMap["retriesRemaining"] as Double? ?: 0).toInt(),
+        allowPause = (jsonMap["allowPause"] as Boolean? ?: false),
+        metaData = jsonMap["metaData"] as String? ?: "",
+        creationTime = (jsonMap["creationTime"] as Double? ?: 0).toLong(),
+        taskType = jsonMap["taskType"] as String? ?: ""
     )
 
     /** Creates JSON map of this object */
     fun toJsonMap(): Map<String, Any?> {
         return mapOf(
-                "taskId" to taskId,
-                "url" to url,
-                "filename" to filename,
-                "headers" to headers,
-                "post" to post,
-                "fileField" to fileField,
-                "mimeType" to mimeType,
-                "fields" to fields,
-                "directory" to directory,
-                "baseDirectory" to baseDirectory.ordinal, // stored as int
-                "group" to group,
-                "updates" to updates.ordinal,
-                "requiresWiFi" to requiresWiFi,
-                "retries" to retries,
-                "retriesRemaining" to retriesRemaining,
-                "allowPause" to allowPause,
-                "metaData" to metaData,
-                "creationTime" to creationTime,
-                "taskType" to taskType
+            "taskId" to taskId,
+            "url" to url,
+            "filename" to filename,
+            "headers" to headers,
+            "post" to post,
+            "fileField" to fileField,
+            "mimeType" to mimeType,
+            "fields" to fields,
+            "directory" to directory,
+            "baseDirectory" to baseDirectory.ordinal, // stored as int
+            "group" to group,
+            "updates" to updates.ordinal,
+            "requiresWiFi" to requiresWiFi,
+            "retries" to retries,
+            "retriesRemaining" to retriesRemaining,
+            "allowPause" to allowPause,
+            "metaData" to metaData,
+            "creationTime" to creationTime,
+            "taskType" to taskType
         )
     }
 
@@ -145,9 +145,9 @@ enum class TaskStatus {
 class ResumeData(val task: Task, val data: String, val requiredStartByte: Long) {
     fun toJsonMap(): MutableMap<String, Any?> {
         return mutableMapOf(
-                "task" to task.toJsonMap(),
-                "data" to data,
-                "requiredStartByte" to requiredStartByte
+            "task" to task.toJsonMap(),
+            "data" to data,
+            "requiredStartByte" to requiredStartByte
         )
     }
 }

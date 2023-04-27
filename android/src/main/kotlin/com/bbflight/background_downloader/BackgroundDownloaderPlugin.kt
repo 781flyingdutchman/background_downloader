@@ -4,13 +4,12 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
-import android.content.IntentFilter
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import android.util.Patterns
 import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import androidx.preference.PreferenceManager
 import androidx.work.*
 import com.bbflight.background_downloader.TaskWorker.Companion.keyNotificationConfig
@@ -26,8 +25,12 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.plugin.common.PluginRegistry
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.lang.Long.min
@@ -36,6 +39,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
+import kotlin.math.pow
 
 
 /**
@@ -218,9 +222,9 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
 
     private var channel: MethodChannel? = null
     lateinit var applicationContext: Context
-    var cancelReceiver: NotificationRcvr? = null
     var pauseReceiver: NotificationRcvr? = null
     var resumeReceiver: NotificationRcvr? = null
+    private var scope: CoroutineScope? = null
 
     /**
      * Attaches the plugin to the Flutter engine and performs initialization
@@ -243,24 +247,6 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         channel?.setMethodCallHandler(this)
         // set context and register notification broadcast receivers
         applicationContext = flutterPluginBinding.applicationContext
-        cancelReceiver = NotificationRcvr()
-        ContextCompat.registerReceiver(
-            applicationContext, cancelReceiver, IntentFilter(
-                NotificationRcvr.actionCancelActive
-            ), ContextCompat.RECEIVER_NOT_EXPORTED
-        )
-        pauseReceiver = NotificationRcvr()
-        ContextCompat.registerReceiver(
-            applicationContext, pauseReceiver, IntentFilter(
-                NotificationRcvr.actionPause
-            ), ContextCompat.RECEIVER_NOT_EXPORTED
-        )
-        resumeReceiver = NotificationRcvr()
-        ContextCompat.registerReceiver(
-            applicationContext, resumeReceiver, IntentFilter(
-                NotificationRcvr.actionResume
-            ), ContextCompat.RECEIVER_NOT_EXPORTED
-        )
         // clear expired items
         val workManager = WorkManager.getInstance(applicationContext)
         val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
@@ -285,10 +271,6 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         backgroundChannelCounter--
         if (backgroundChannelCounter == 0) {
             backgroundChannel = null
-        }
-        if (cancelReceiver != null) {
-            applicationContext.unregisterReceiver(cancelReceiver)
-            cancelReceiver = null
         }
         if (pauseReceiver != null) {
             applicationContext.unregisterReceiver(pauseReceiver)
@@ -318,6 +300,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
                     call, result
                 )
+
                 else -> result.notImplemented()
             }
         }
@@ -514,7 +497,15 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 return
             }
         }
-        result.success(moveToSharedStorage(applicationContext, filePath, destination, directory, mimeType))
+        result.success(
+            moveToSharedStorage(
+                applicationContext,
+                filePath,
+                destination,
+                directory,
+                mimeType
+            )
+        )
     }
 
     /**
@@ -536,11 +527,53 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         result.success(null)
     }
 
-    // ActivityAware implementation to capture Activity context needed for permissions
+    // ActivityAware implementation to capture Activity context needed for permissions and intents
+
+    /**
+     * Handle intent if received from tapping a notification
+     *
+     * This may be called on statup of the application and at that time the [backgroundChannel] and
+     * its listener may not have been initialized yet. This function therefore includes retry logic.
+     */
+    private fun handleIntent(intent: Intent?): Boolean {
+        if (intent != null && intent.action == NotificationRcvr.actionTap) {
+            scope?.launch {
+                var retries = 0
+                var success = false
+                while (retries < 5 && !success) {
+                    try {
+                        if (backgroundChannel != null) {
+                            val taskJsonString =
+                                intent.extras?.getString(NotificationRcvr.bundleTask)
+                            val notificationTypeOrdinal =
+                                intent.getIntExtra(NotificationRcvr.bundleNotificationType, 0)
+                            backgroundChannel?.invokeMethod(
+                                "notificationTap",
+                                listOf(taskJsonString, notificationTypeOrdinal)
+                            )
+                            success = true
+                        }
+                    } catch (_: Exception) {
+                    }
+                    if (retries < 4 && !success) {
+                        delay(timeMillis = 100 * 2.0.pow(retries).toLong())
+                        retries++
+                    }
+                }
+            }
+            return true
+        }
+        return false
+    }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
+        scope = MainScope()
         binding.addRequestPermissionsResultListener(this)
+        binding.addOnNewIntentListener(fun(intent: Intent?): Boolean {
+            return handleIntent(intent)
+        })
+        handleIntent(binding.activity.intent)
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
@@ -554,6 +587,8 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
 
     override fun onDetachedFromActivity() {
         activity = null
+        scope?.cancel()
+        scope = null
     }
 
     override fun onRequestPermissionsResult(
@@ -566,10 +601,12 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 requestingNotificationPermission = false
                 true
             }
+
             externalStoragePermissionRequestCode -> {
                 externalStoragePermissionCompleter.complete(granted)
                 true
             }
+
             else -> {
                 false
             }

@@ -68,10 +68,14 @@ class NotificationRcvr : BroadcastReceiver() {
         const val actionCancelInactive = "com.bbflight.background_downloader.cancelInactive"
         const val actionPause = "com.bbflight.background_downloader.pause"
         const val actionResume = "com.bbflight.background_downloader.resume"
+        const val actionTap = "com.bbflight.background_downloader.tap"
         const val extraBundle = "com.bbflight.background_downloader.bundle"
-        const val bundleTaskId = "taskId"
-        const val bundleTask = "task"
-        const val bundleNotificationConfig = "notificationConfig"
+        const val bundleTaskId = "com.bbflight.background_downloader.taskId"
+        const val bundleTask = "com.bbflight.background_downloader.task" // as JSON string
+        const val bundleNotificationConfig =
+            "com.bbflight.background_downloader.notificationConfig" // as JSON string
+        const val bundleNotificationType =
+            "com.bbflight.background_downloader.notificationType" // ordinal of enum
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -81,15 +85,14 @@ class NotificationRcvr : BroadcastReceiver() {
             runBlocking {
                 when (intent.action) {
                     actionCancelActive -> {
-                        Log.d(TAG, "active task")
                         BackgroundDownloaderPlugin.cancelActiveTaskWithId(
-                                context, taskId, WorkManager.getInstance(context)
-                            )
+                            context, taskId, WorkManager.getInstance(context)
+                        )
                     }
+
                     actionCancelInactive -> {
                         val taskJsonString = bundle.getString(bundleTask)
                         if (taskJsonString != null) {
-                            Log.d(TAG, "inactive task")
                             val task = Task(
                                 BackgroundDownloaderPlugin.gson.fromJson(
                                     taskJsonString, BackgroundDownloaderPlugin.jsonMapType
@@ -103,9 +106,11 @@ class NotificationRcvr : BroadcastReceiver() {
                             Log.d(TAG, "task was null")
                         }
                     }
+
                     actionPause -> {
                         BackgroundDownloaderPlugin.pauseTaskWithId(taskId)
                     }
+
                     actionResume -> {
                         val resumeData = BackgroundDownloaderPlugin.localResumeData[taskId]
                         if (resumeData != null) {
@@ -132,6 +137,7 @@ class NotificationRcvr : BroadcastReceiver() {
                             )
                         }
                     }
+
                     else -> {}
                 }
             }

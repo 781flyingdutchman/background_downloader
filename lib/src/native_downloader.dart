@@ -55,6 +55,11 @@ class NativeDownloader extends BaseDownloader {
           setResumeData(ResumeData(task, tempFilename, startByte));
           break;
 
+        case 'notificationTap':
+          final notificationType = NotificationType.values[args.last as int];
+          processNotificationTap(task, notificationType);
+          break;
+
         default:
           throw UnimplementedError(
               'Background channel method call ${call.method} not supported');
