@@ -18,5 +18,16 @@
                 <action android:name="com.bbflight.background_downloader.resume" />
             </intent-filter>
         </receiver>
+
+        <provider
+            android:name="com.bbflight.background_downloader.OpenFileProvider"
+            android:authorities="com.bbflight.background_downloader.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
     </application>
 </manifest>

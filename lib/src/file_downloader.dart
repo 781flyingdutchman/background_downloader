@@ -575,6 +575,20 @@ class FileDownloader {
       _downloader.moveToSharedStorage(
           filePath, destination, directory, mimeType);
 
+  /// Open the file represented by [task] or [filePath] using the application
+  /// available on the platform.
+  ///
+  /// [mimeType] may override the mimetype derived from the file extension,
+  /// though implementation depends on the platform and may not always work.
+  ///
+  /// Returns true if an application was launched successfully
+  Future<bool> openFile({Task? task, String? filePath, String? mimeType}) {
+    assert(task != null || filePath != null, 'Task or filePath must be set');
+    assert(!(task != null && filePath != null),
+        'Either task or filePath must be set, not both');
+    return _downloader.openFile(task, filePath, mimeType);
+  }
+
   /// Destroy the [FileDownloader]. Subsequent use requires initialization
   void destroy() {
     _batches.clear();

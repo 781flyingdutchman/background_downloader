@@ -129,7 +129,7 @@ class _MyAppState extends State<MyApp> {
                     ),
                     Center(
                         child: ElevatedButton(
-                      onPressed: processButtonPress,
+                      onPressed: processFileOpen,
                       child: Text(
                         buttonTexts[buttonState.index],
                         style: Theme.of(context)
@@ -195,6 +195,16 @@ class _MyAppState extends State<MyApp> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  Future<void> processFileOpen() async {
+    var task = DownloadTask(url: 'https://google.com', baseDirectory: BaseDirectory.applicationDocuments, filename: 'google.txt');
+    final result = await FileDownloader().download(task);
+    print(result);
+    final filename = await FileDownloader().moveToSharedStorage(task, SharedStorage.external);
+    print(filename);
+    var success = await FileDownloader().openFile(filePath: filename);
+    print(success);
   }
 }
 

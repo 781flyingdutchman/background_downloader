@@ -194,7 +194,7 @@ private fun getRelativePath(destination: SharedStorage, directory: String): Stri
  *
  * Defaults to application/octet-stream
  */
-private fun getMimeType(fileName: String): String {
+fun getMimeType(fileName: String): String {
     val extension = fileName.substringAfterLast(".", "")
     return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
             ?: "application/octet-stream"

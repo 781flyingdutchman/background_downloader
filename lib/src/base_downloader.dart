@@ -365,6 +365,17 @@ abstract class BaseDownloader {
     return Future.value(null);
   }
 
+  /// Open the file represented by [task] or [filePath] using the application
+  /// available on the platform.
+  ///
+  /// [mimeType] may override the mimetype derived from the file extension,
+  /// though implementation depends on the platform and may not always work.
+  ///
+  /// Returns true if an application was launched successfully
+  ///
+  /// Precondition: either task or filename is not null
+  Future<bool> openFile(Task? task, String? filePath, String? mimeType);
+
   /// Stores modified [modifiedTask] in local storage if [Task.group]
   /// or [Task.updates] fields differ from [originalTask]
   ///

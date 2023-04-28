@@ -6,10 +6,12 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.util.Log
 import android.util.Patterns
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat.startActivity
 import androidx.preference.PreferenceManager
 import androidx.work.*
 import com.bbflight.background_downloader.TaskWorker.Companion.keyNotificationConfig
@@ -33,6 +35,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.lang.Long.min
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
@@ -297,6 +300,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 "popProgressUpdates" -> methodPopProgressUpdates(result)
                 "getTaskTimeout" -> methodGetTaskTimeout(result)
                 "moveToSharedStorage" -> methodMoveToSharedStorage(call, result)
+                "openFile" -> methodOpenFile(call, result)
                 "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
                     call, result
                 )
@@ -506,6 +510,23 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 mimeType
             )
         )
+    }
+
+    /**
+     * Open the file represented by the task, with optional mimeType
+     *
+     * Call arguments are [taskJsonMapString, filename, mimeType] with precondition that either
+     * task or filename is not null
+     */
+    private fun methodOpenFile(call: MethodCall, result: Result) {
+        val args = call.arguments as List<*>
+        val taskJsonMapString = args[0] as String?
+        val task = if (taskJsonMapString != null) Task(
+            Gson().fromJson(taskJsonMapString, jsonMapType)
+        ) else null
+        val filePath = args[1] as String? ?: task!!.filePath(applicationContext)
+        val mimeType = args[2] as String? ?: getMimeType(filePath)
+        result.success(if (activity != null) doOpenFile(activity!!, filePath, mimeType) else false)
     }
 
     /**
