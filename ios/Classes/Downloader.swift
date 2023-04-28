@@ -78,6 +78,8 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             methodPopProgressUpdates(result: result)
         case "moveToSharedStorage":
             methodMoveToSharedStorage(call: call, result: result)
+        case "openFile":
+            methodOpenFile(call: call, result: result)
         case "forceFailPostOnBackgroundChannel":
             methodForceFailPostOnBackgroundChannel(call: call, result: result)
         default:
@@ -304,6 +306,9 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         return
     }
     
+    /// Moves a file represented by the first argument to a SharedStorage destination
+    ///
+    /// Results in the new filePath if successful, or nil
     private func methodMoveToSharedStorage(call: FlutterMethodCall, result: @escaping FlutterResult) {
         let args = call.arguments as! [Any]
         let filePath = args[0] as! String
@@ -316,6 +321,34 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         let directory = args[2] as! String
         result(moveToSharedStorage(filePath: filePath, destination: destination, directory: directory))
     }
+
+    /// Opens to file represented by the Task or filePath using iOS standard
+    ///
+    /// Results in true if successful
+    private func methodOpenFile(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        var success = false
+        defer {
+            result(success)
+        }
+        let args = call.arguments as! [Any]
+        let taskJsonMapString = args[0] as? String
+        var filePath = args[1] as? String
+        if filePath == nil {
+            guard let task = taskFrom(jsonString: taskJsonMapString!),
+                  let directory = try? directoryForTask(task: task)
+            else {
+                return
+            }
+            filePath = directory.appendingPathComponent(task.filename).path
+        }
+        if !FileManager.default.fileExists(atPath: filePath!) {
+            os_log("File does not exist: %@", log: log, type: .info, filePath!)
+            return
+        }
+        success = doOpenFile(filePath: filePath!)
+    }
+    
+    
     
     /// Sets or resets flag to force failing posting on background channel
     ///
@@ -608,21 +641,26 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                     return
                 }
                 _ = processResumeData(task: task, resumeData: resumeData)
+                
             case "cancel_action":
                 let urlSessionTaskToCancel = await getAllUrlSessionTasks().first(where: {
                     guard let taskInUrlSessionTask = getTaskFrom(urlSessionTask: $0) else { return false }
                     return taskInUrlSessionTask.taskId == task.taskId
                 })
                 urlSessionTaskToCancel?.cancel()
+                
             case "cancel_inactive_action":
                 processStatusUpdate(task: task, status: .canceled)
+                
             case "resume_action":
                 let resumeDataAsBase64String = Downloader.localResumeData[task.taskId] ?? ""
                 if resumeDataAsBase64String.isEmpty {
                     os_log("Resume data for taskId %@ no longer available: restarting", log: log, type: .info)
                 }
                 doEnqueue(taskJsonString: userInfo["task"] as! String, notificationConfigJsonString: userInfo["notificationConfig"] as? String, resumeDataAsBase64String: resumeDataAsBase64String, result: nil)
-                
+            case UNNotificationDefaultActionIdentifier:
+                _ = postOnBackgroundChannel(method: "notificationTap", task: task, arg: userInfo["notificationType"] as! Int)
+            
             default:
                 do {}
             }

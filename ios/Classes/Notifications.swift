@@ -39,6 +39,8 @@ enum NotificationCategory : String, CaseIterable {
     case runningWithPause = "running_with_pause";
     case runningWithoutPause = "running_without_pause";
     case paused = "paused"
+    case complete = "complete"
+    case error = "error"
 }
 
 /// List of all category identifiers
@@ -67,7 +69,8 @@ func updateNotification(task: Task, notificationType: NotificationType, notifica
         content.body = replaceTokens(input: notification!.body, task: task)
         content.userInfo = [
             "task": jsonStringFor(task: task) ?? "",
-            "notificationConfig": jsonStringFor(notificationConfig: notificationConfig!) ?? ""
+            "notificationConfig": jsonStringFor(notificationConfig: notificationConfig!) ?? "",
+            "notificationType": notificationType.rawValue
         ]
         addActionButtons(task: task, notificationType: notificationType, content: content, notificationConfig: notificationConfig!)
         let request = UNNotificationRequest(identifier: task.taskId,
@@ -83,15 +86,17 @@ func updateNotification(task: Task, notificationType: NotificationType, notifica
 
 /// Add action buttons to the notification
 ///
-/// Which button(s) depends on the [notificationType]
+/// Which button(s) depends on the [notificationType]. Action buttons are defined when defining the notification categories
 func addActionButtons(task: Task, notificationType: NotificationType, content: UNMutableNotificationContent, notificationConfig: NotificationConfig) {
     switch notificationType {
     case .running:
         content.categoryIdentifier = Downloader.taskIdsThatCanResume.contains(task.taskId) && notificationConfig.paused != nil ? NotificationCategory.runningWithPause.rawValue : NotificationCategory.runningWithoutPause.rawValue
     case .paused:
         content.categoryIdentifier = NotificationCategory.paused.rawValue
-    default:
-        break
+    case .complete:
+        content.categoryIdentifier = NotificationCategory.complete.rawValue
+    case .error:
+        content.categoryIdentifier = NotificationCategory.error.rawValue
     }
 }
 
@@ -153,9 +158,21 @@ func registerNotificationCategories() {
                            intentIdentifiers: [],
                            hiddenPreviewsBodyPlaceholder: "",
                            options: .customDismissAction)
+    let completeCategory =
+    UNNotificationCategory(identifier: NotificationCategory.complete.rawValue,
+                           actions: [],
+                           intentIdentifiers: [],
+                           hiddenPreviewsBodyPlaceholder: "",
+                           options: .customDismissAction)
+    let errorCategory =
+    UNNotificationCategory(identifier: NotificationCategory.error.rawValue,
+                           actions: [],
+                           intentIdentifiers: [],
+                           hiddenPreviewsBodyPlaceholder: "",
+                           options: .customDismissAction)
     // Register the notification type.
     let notificationCenter = UNUserNotificationCenter.current()
-    notificationCenter.setNotificationCategories([runningWithPauseCategory, runningWithoutPauseCategory, pausedCategory])
+    notificationCenter.setNotificationCategories([runningWithPauseCategory, runningWithoutPauseCategory, pausedCategory, completeCategory, errorCategory])
 }
 
 /// Returns a JSON string for this NotificationConfig, or nil

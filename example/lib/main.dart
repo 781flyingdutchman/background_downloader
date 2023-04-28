@@ -9,7 +9,8 @@ import 'widgets.dart';
 
 void main() {
   Logger.root.onRecord.listen((LogRecord rec) {
-    debugPrint('${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
+    debugPrint(
+        '${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
   });
 
   runApp(const MyApp());
@@ -32,6 +33,9 @@ class _MyAppState extends State<MyApp> {
   DownloadTask? backgroundDownloadTask;
   StreamController<DownloadProgressIndicatorUpdate> updateStream =
       StreamController();
+
+  // for the 'Load & Open' button
+  bool loadAndOpenInProgress = false;
 
   @override
   void initState() {
@@ -90,7 +94,8 @@ class _MyAppState extends State<MyApp> {
 
   /// Process the user tapping on a notification by printing a message
   void myNotificationTapCallback(Task task, NotificationType notificationType) {
-    debugPrint('Tapped notification $notificationType}');
+    debugPrint(
+        'Tapped notification $notificationType for taskId ${task.taskId}');
   }
 
   @override
@@ -129,7 +134,7 @@ class _MyAppState extends State<MyApp> {
                     ),
                     Center(
                         child: ElevatedButton(
-                      onPressed: processFileOpen,
+                      onPressed: processButtonPress,
                       child: Text(
                         buttonTexts[buttonState.index],
                         style: Theme.of(context)
@@ -146,7 +151,24 @@ class _MyAppState extends State<MyApp> {
                           Text('${downloadTaskStatus ?? "undefined"}')
                         ],
                       ),
-                    )
+                    ),
+                    Center(
+                        child: ElevatedButton(
+                            onPressed: loadAndOpenInProgress
+                                ? null
+                                : processLoadAndOpen,
+                            child: Text(
+                              'Load & Open',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headlineMedium
+                                  ?.copyWith(color: Colors.white),
+                            ))),
+                    Center(
+                        child: Text(
+                      loadAndOpenInProgress ? 'Loading' : '',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ))
                   ],
                 ),
               )),
@@ -154,6 +176,8 @@ class _MyAppState extends State<MyApp> {
         ));
   }
 
+  /// Process center button press (initially 'Download' but the text changes
+  /// based on state)
   Future<void> processButtonPress() async {
     switch (buttonState) {
       case ButtonState.download:
@@ -197,14 +221,25 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  Future<void> processFileOpen() async {
-    var task = DownloadTask(url: 'https://google.com', baseDirectory: BaseDirectory.applicationDocuments, filename: 'google.txt');
-    final result = await FileDownloader().download(task);
-    print(result);
-    final filename = await FileDownloader().moveToSharedStorage(task, SharedStorage.external);
-    print(filename);
-    var success = await FileDownloader().openFile(filePath: filename);
-    print(success);
+  /// Process 'Load & Open' button
+  ///
+  /// Loads a JPG of a dog and launches viewer using [openFile]
+  Future<void> processLoadAndOpen() async {
+    if (!loadAndOpenInProgress) {
+      var task = DownloadTask(
+          url:
+              'https://i2.wp.com/www.skiptomylou.org/wp-content/uploads/2019/06/dog-drawing.jpg',
+          baseDirectory: BaseDirectory.applicationSupport,
+          filename: 'dog.jpg');
+      setState(() {
+        loadAndOpenInProgress = true;
+      });
+      await FileDownloader().download(task);
+      await FileDownloader().openFile(task: task);
+      setState(() {
+        loadAndOpenInProgress = false;
+      });
+    }
   }
 }
 
