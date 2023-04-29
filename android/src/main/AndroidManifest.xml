@@ -21,12 +21,13 @@
 
         <provider
             android:name="com.bbflight.background_downloader.OpenFileProvider"
-            android:authorities="com.bbflight.background_downloader.fileprovider"
+            android:authorities="${applicationId}.com.bbflight.background_downloader.fileprovider"
             android:exported="false"
-            android:grantUriPermissions="true">
+            android:grantUriPermissions="true"
+            tools:replace="android:authorities">
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
+                android:resource="@xml/bgd_file_paths" />
         </provider>
 
     </application>

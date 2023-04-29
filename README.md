@@ -249,6 +249,16 @@ The `configureNotification` call configures notification behavior for all downlo
 
 When attempting to show its first notification, the downloader will ask the user for permission to show notifications (platform version dependent) and abide by the user choice. For Android, starting with API 33, you need to add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />` to your app's `AndroidManifest.xml`. Also on Android you can localize the button text by overriding string resources `bg_downloader_cancel`, `bg_downloader_pause`, `bg_downloader_resume` and descriptions `bg_downloader_notification_channel_name`, `bg_downloader_notification_channel_description`. Localization on iOS is not currently supported.
 
+### Opening a downloaded file
+
+To open a file (e.g. in response to the user tapping a notification), call `FileDownloader().openFile` and supply either a `Task` or a full `filePath` (but not both) and optionally a `mimeType` to assist the Platform in choosing the right application to use to open the file.
+The file opening behavior is platform dependent, and while you should check the return value of the call to `openFile`, error checking is not fully consistent.
+
+Note that on Android, files stored in the `BaseDirectory.applicationDocuments` cannot be opened. You need to download to a different base directory (e.g. `.applicationSupport`) or move the file to shared storage before attempting to open it.
+
+
+### Setup for notifications
+
 On iOS, add the following to your `AppDelegate.swift`:
 ```
    UNUserNotificationCenter.current().delegate = self as UNUserNotificationCenterDelegate
@@ -257,6 +267,18 @@ or if using Objective C, add to `AppDelegate.m`:
 ```
    [UNUserNotificationCenter currentNotificationCenter].delegate = (id<UNUserNotificationCenterDelegate>) self;
 ```
+
+To respond to the user tapping a notification, register a callback that takes `Task` and `NotificationType` as parameters:
+
+```
+FileDownloader().registerCallbacks(
+            taskNotificationTapCallback: myNotificationTapCallback);
+            
+void myNotificationTapCallback(Task task, NotificationType notificationType) {
+    print('Tapped notification $notificationType for taskId ${task.taskId}');
+  }
+```
+
 
 ## Shared and scoped storage
 

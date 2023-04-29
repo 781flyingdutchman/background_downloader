@@ -280,10 +280,14 @@ class DesktopDownloader extends BaseDownloader {
             ? 'open'
             : 'start';
     filePath ??= await task!.filePath();
-    final result =
-        await Process.run(executable, [filePath], runInShell: true);
+    if (!await File(filePath).exists()) {
+      _log.fine('File to open does not exist: $filePath');
+      return false;
+    }
+    final result = await Process.run(executable, [filePath], runInShell: true);
     if (result.exitCode != 0) {
-      _log.fine('openFile command $executable returned exit code ${result.exitCode}');
+      _log.fine(
+          'openFile command $executable returned exit code ${result.exitCode}');
     }
     return result.exitCode == 0;
   }

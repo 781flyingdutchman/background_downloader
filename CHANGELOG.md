@@ -1,3 +1,23 @@
+## 5.6.0
+
+Adds handler for when the user taps a notification, and an `openFile` method to open a file using the platform-specific convention.
+
+To handle notification taps, register a callback that takes `Task` and `NotificationType` as parameters:
+
+```
+FileDownloader().registerCallbacks(
+            taskNotificationTapCallback: myNotificationTapCallback);
+            
+void myNotificationTapCallback(Task task, NotificationType notificationType) {
+    print('Tapped notification $notificationType for taskId ${task.taskId}');
+  }
+```
+
+To open a file, call `FileDownloader().openFile` and supply either a `Task` or a full `filePath` (but not both) and optionally a `mimeType` to assist the Platform in choosing the right application to use to open the file.
+The file opening behavior is platform dependent, and while you should check the return value of the call to `openFile`, error checking is not fully consistent.
+
+Note that on Android, files stored in the `BaseDirectory.applicationDocuments` cannot be opened. You need to download to a different base directory (e.g. `.applicationSupport`) or move the file to shared storage before attempting to open it.
+
 ## 5.5.0
 
 Adds `withSuggestedFilename` for `DownloadTask`. Use:
@@ -18,7 +38,7 @@ Fix issue #34 with `moveToSharedStorage` on iOS
 
 ## 5.4.5
 
-An invalid url in the `Task` now results in `false` being returned from the `enqueue` call on 
+An invalid url in the `Task` now results in `false` being returned from the `enqueue` call on
 all platforms. Previously, the behavior was inconsistent.
 
 ## 5.4.4
@@ -30,7 +50,7 @@ Added optional properties to `UploadTask` related to multi-part uploads:
 
 ## 5.4.3
 
-Added optional `mimeType` parameter for calls to `moveToSharedStorage` and 
+Added optional `mimeType` parameter for calls to `moveToSharedStorage` and
 `moveFileToSharedStorage`. This sets the mimeType
 directly, instead of relying on the system to determine the mime type based on the file extension.
 Note that this may change the filename - for example, when moving the test file `google.html` to

@@ -948,7 +948,7 @@ class TaskWorker(
             }
         }
         // action buttons
-        addActionButtons(notificationType, task, builder)
+        addNotificationActions(notificationType, task, builder)
         with(NotificationManagerCompat.from(applicationContext)) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 // On Android 33+, check/ask for permission
@@ -974,12 +974,12 @@ class TaskWorker(
 
 
     /**
-     * Add action buttons to notification
+     * Add action to notification via buttons or tap
      *
      * Which button(s) depends on the [notificationType], and the actions require
      * access to [task] and the [builder]
      */
-    private fun addActionButtons(
+    private fun addNotificationActions(
         notificationType: NotificationType, task: Task, builder: NotificationCompat.Builder
     ) {
         val activity = BackgroundDownloaderPlugin.activity
@@ -998,7 +998,7 @@ class TaskWorker(
                 }
                 val tapPendingIntent: PendingIntent = PendingIntent.getActivity(
                     applicationContext,
-                    72382,
+                    notificationId,
                     tapIntent,
                     PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
@@ -1133,7 +1133,6 @@ class TaskWorker(
             else -> NotificationType.error
         }
     }
-
 
 
     private fun deleteTempFile(tempFilePath: String) {
