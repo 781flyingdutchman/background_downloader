@@ -1,10 +1,13 @@
 package com.bbflight.background_downloader
 
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.util.Log
 import androidx.annotation.Keep
+import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.work.WorkManager
 import com.bbflight.background_downloader.BackgroundDownloaderPlugin.Companion.TAG
@@ -40,10 +43,12 @@ class NotificationConfig(
     val complete: TaskNotification?,
     val error: TaskNotification?,
     val paused: TaskNotification?,
-    val progressBar: Boolean
+    val progressBar: Boolean,
+    val tapOpensFile: Boolean
 ) {
     override fun toString(): String {
-        return "NotificationConfig(running=$running, complete=$complete, error=$error, paused=$paused, progressBar=$progressBar)"
+        return "NotificationConfig(running=$running, complete=$complete, error=$error, " +
+                "paused=$paused, progressBar=$progressBar, tapOpensFile=$tapOpensFile)"
     }
 }
 

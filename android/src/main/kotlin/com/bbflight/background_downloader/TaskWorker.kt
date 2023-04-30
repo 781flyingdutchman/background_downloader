@@ -995,6 +995,7 @@ class TaskWorker(
                     action = NotificationRcvr.actionTap
                     putExtra(NotificationRcvr.bundleTask, taskJsonString)
                     putExtra(NotificationRcvr.bundleNotificationType, notificationType.ordinal)
+                    putExtra(NotificationRcvr.bundleNotificationConfig, notificationConfigJsonString)
                 }
                 val tapPendingIntent: PendingIntent = PendingIntent.getActivity(
                     applicationContext,

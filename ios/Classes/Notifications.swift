@@ -73,7 +73,7 @@ func updateNotification(task: Task, notificationType: NotificationType, notifica
             "notificationConfig": jsonStringFor(notificationConfig: notificationConfig!) ?? "",
             "notificationType": notificationType.rawValue
         ]
-        addActionButtons(task: task, notificationType: notificationType, content: content, notificationConfig: notificationConfig!)
+        addNotificationActions(task: task, notificationType: notificationType, content: content, notificationConfig: notificationConfig!)
         let request = UNNotificationRequest(identifier: task.taskId,
                                             content: content, trigger: nil)
         let notificationCenter = UNUserNotificationCenter.current()
@@ -88,7 +88,7 @@ func updateNotification(task: Task, notificationType: NotificationType, notifica
 /// Add action buttons to the notification
 ///
 /// Which button(s) depends on the [notificationType]. Action buttons are defined when defining the notification categories
-func addActionButtons(task: Task, notificationType: NotificationType, content: UNMutableNotificationContent, notificationConfig: NotificationConfig) {
+func addNotificationActions(task: Task, notificationType: NotificationType, content: UNMutableNotificationContent, notificationConfig: NotificationConfig) {
     switch notificationType {
     case .running:
         content.categoryIdentifier = Downloader.taskIdsThatCanResume.contains(task.taskId) && notificationConfig.paused != nil ? NotificationCategory.runningWithPause.rawValue : NotificationCategory.runningWithoutPause.rawValue
