@@ -620,7 +620,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         return []
     }
     
-    
+    /// Respond to notification actions (general tap and button taps)
     @MainActor
     public func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async
     {
@@ -658,9 +658,25 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                     os_log("Resume data for taskId %@ no longer available: restarting", log: log, type: .info)
                 }
                 doEnqueue(taskJsonString: userInfo["task"] as! String, notificationConfigJsonString: userInfo["notificationConfig"] as? String, resumeDataAsBase64String: resumeDataAsBase64String, result: nil)
+                
             case UNNotificationDefaultActionIdentifier:
                 _ = postOnBackgroundChannel(method: "notificationTap", task: task, arg: userInfo["notificationType"] as! Int)
-            
+                if userInfo["notificationType"] as? Int == NotificationType.complete.rawValue
+                {
+                guard let notificationConfigString = userInfo["notificationConfig"] as? String,
+                      let notificationConfigData = notificationConfigString.data(using: .utf8),
+                      let notificationConfig = try? JSONDecoder().decode(NotificationConfig.self, from: notificationConfigData),
+                      let filePath = filePath(for: task)
+                else {
+                    return
+                }
+                if notificationConfig.tapOpensFile {
+                    if !doOpenFile(filePath: filePath)
+                    {
+                        os_log("Filed to open file on notification tap", log: log, type: .info)
+                    }
+                }}
+                
             default:
                 do {}
             }

@@ -45,7 +45,9 @@ class _MyAppState extends State<MyApp> {
             taskStatusCallback: myDownloadStatusCallback,
             taskProgressCallback: myDownloadProgressCallback,
             taskNotificationTapCallback: myNotificationTapCallback)
-        .configureNotification(
+        .configureNotificationForGroup(FileDownloader.defaultGroup,
+            // For the main download button
+            // which uses 'enqueue' and a default group
             running: TaskNotification(
                 'Download {filename}', 'File: {filename} - {progress}'),
             complete:
@@ -53,7 +55,14 @@ class _MyAppState extends State<MyApp> {
             error: TaskNotification('Download {filename}', 'Download failed'),
             paused: TaskNotification(
                 'Download {filename}', 'Paused with metadata {metadata}'),
-            progressBar: true);
+            progressBar: true)
+        .configureNotification(
+            // for the 'Download & Open' dog picture
+            // which uses 'download' which is not the .defaultGroup
+            // but the .await group so won't use the above config
+            complete:
+                TaskNotification('Download {filename}', 'Download complete'),
+            tapOpensFile: true); // dog can also open directly from tap
   }
 
   /// Process the status updates coming from the downloader
@@ -94,8 +103,7 @@ class _MyAppState extends State<MyApp> {
 
   /// Process the user tapping on a notification by printing a message
   void myNotificationTapCallback(Task task, NotificationType notificationType) {
-    debugPrint(
-        'Tapped notification $notificationType for taskId ${task.taskId}');
+    print('Tapped notification $notificationType for taskId ${task.taskId}');
   }
 
   @override

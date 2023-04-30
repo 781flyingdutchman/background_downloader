@@ -458,35 +458,39 @@ class FileDownloader {
 
   /// Configure notification for a single task
   FileDownloader configureNotificationForTask(Task task,
-      {TaskNotification? runningNotification,
-      TaskNotification? completeNotification,
-      TaskNotification? errorNotification,
-      TaskNotification? pausedNotification,
-      bool progressBar = false}) {
+      {TaskNotification? running,
+      TaskNotification? complete,
+      TaskNotification? error,
+      TaskNotification? paused,
+      bool progressBar = false,
+      bool tapOpensFile = false}) {
     _notificationConfigs.add(TaskNotificationConfig(
         taskOrGroup: task,
-        running: runningNotification,
-        complete: completeNotification,
-        error: errorNotification,
-        paused: pausedNotification,
-        progressBar: progressBar));
+        running: running,
+        complete: complete,
+        error: error,
+        paused: paused,
+        progressBar: progressBar,
+        tapOpensFile: tapOpensFile));
     return this;
   }
 
   /// Configure notification for a group of tasks
   FileDownloader configureNotificationForGroup(String group,
-      {TaskNotification? runningNotification,
-      TaskNotification? completeNotification,
-      TaskNotification? errorNotification,
-      TaskNotification? pausedNotification,
-      bool progressBar = false}) {
+      {TaskNotification? running,
+      TaskNotification? complete,
+      TaskNotification? error,
+      TaskNotification? paused,
+      bool progressBar = false,
+      bool tapOpensFile = false}) {
     _notificationConfigs.add(TaskNotificationConfig(
         taskOrGroup: group,
-        running: runningNotification,
-        complete: completeNotification,
-        error: errorNotification,
-        paused: pausedNotification,
-        progressBar: progressBar));
+        running: running,
+        complete: complete,
+        error: error,
+        paused: paused,
+        progressBar: progressBar,
+        tapOpensFile: tapOpensFile));
     return this;
   }
 
@@ -499,14 +503,16 @@ class FileDownloader {
       TaskNotification? complete,
       TaskNotification? error,
       TaskNotification? paused,
-      bool progressBar = false}) {
+      bool progressBar = false,
+      bool tapOpensFile = false}) {
     _notificationConfigs.add(TaskNotificationConfig(
         taskOrGroup: null,
         running: running,
         complete: complete,
         error: error,
         paused: paused,
-        progressBar: progressBar));
+        progressBar: progressBar,
+        tapOpensFile: tapOpensFile));
     return this;
   }
 

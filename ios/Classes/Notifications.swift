@@ -26,6 +26,7 @@ struct NotificationConfig : Codable {
     let error: NotificationContents?
     let paused: NotificationContents?
     let progressBar: Bool
+    let tapOpensFile: Bool
 }
 
 enum NotificationType : Int {

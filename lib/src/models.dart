@@ -906,6 +906,7 @@ class TaskNotificationConfig {
   final TaskNotification? error;
   final TaskNotification? paused;
   final bool progressBar;
+  final bool tapOpensFile;
 
   TaskNotificationConfig(
       {this.taskOrGroup,
@@ -913,7 +914,8 @@ class TaskNotificationConfig {
       this.complete,
       this.error,
       this.paused,
-      this.progressBar = false}) {
+      this.progressBar = false,
+      this.tapOpensFile = false}) {
     assert(
         running != null || complete != null || error != null || paused != null,
         'At least one notification must be set');
@@ -922,11 +924,12 @@ class TaskNotificationConfig {
   /// Return JSON Map representing object, excluding the [taskOrGroup] field,
   /// as the JSON map is only required to pass along the config with a task
   Map<String, dynamic> toJsonMap() => {
-        "running": running?.toJsonMap(),
-        "complete": complete?.toJsonMap(),
-        "error": error?.toJsonMap(),
-        "paused": paused?.toJsonMap(),
-        "progressBar": progressBar
+        'running': running?.toJsonMap(),
+        'complete': complete?.toJsonMap(),
+        'error': error?.toJsonMap(),
+        'paused': paused?.toJsonMap(),
+        'progressBar': progressBar,
+        'tapOpensFile': tapOpensFile
       };
 }
 

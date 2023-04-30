@@ -46,6 +46,15 @@ func isFinalState(status: TaskStatus) -> Bool {
     return !isNotFinalState(status: status)
 }
 
+/// Returns the filePath associated with this task, or nil
+func filePath(for task: Task) -> String? {
+    guard let directory = try? directoryForTask(task: task)
+    else {
+        return nil
+    }
+    return directory.appendingPathComponent(task.filename).path
+}
+
 /// Processes a change in status for the task
 ///
 /// Sends status update via the background channel to Dart, if requested
