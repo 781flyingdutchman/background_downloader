@@ -138,6 +138,11 @@ status, TaskError? taskError);
 /// These constants are available as [progressFailed] etc
 typedef TaskProgressCallback = void Function(Task task, double progress);
 
+/// Signature for function you can register to be called when a notification
+/// is tapped by the user
+typedef TaskNotificationTapCallback = void Function(
+    Task task, NotificationType notificationType);
+
 /// A server Request
 ///
 /// An equality test on a [Request] is an equality test on the [url]
@@ -869,6 +874,10 @@ class ResumeData {
 /// Types of undelivered data that can be requested
 enum Undelivered { resumeData, statusUpdates, progressUpdates }
 
+/// Notification types, as configured in [TaskNotificationConfig] and passed
+/// on to [TaskNotificationTapCallback]
+enum NotificationType { running, complete, error, paused }
+
 /// Notification specification for a [Task]
 ///
 /// [body] may contain special string {filename] to insert the filename
@@ -903,6 +912,7 @@ class TaskNotificationConfig {
   final TaskNotification? error;
   final TaskNotification? paused;
   final bool progressBar;
+  final bool tapOpensFile;
 
   TaskNotificationConfig(
       {this.taskOrGroup,
@@ -910,7 +920,8 @@ class TaskNotificationConfig {
       this.complete,
       this.error,
       this.paused,
-      this.progressBar = false}) {
+      this.progressBar = false,
+      this.tapOpensFile = false}) {
     assert(
         running != null || complete != null || error != null || paused != null,
         'At least one notification must be set');
@@ -919,11 +930,12 @@ class TaskNotificationConfig {
   /// Return JSON Map representing object, excluding the [taskOrGroup] field,
   /// as the JSON map is only required to pass along the config with a task
   Map<String, dynamic> toJsonMap() => {
-        "running": running?.toJsonMap(),
-        "complete": complete?.toJsonMap(),
-        "error": error?.toJsonMap(),
-        "paused": paused?.toJsonMap(),
-        "progressBar": progressBar
+        'running': running?.toJsonMap(),
+        'complete': complete?.toJsonMap(),
+        'error': error?.toJsonMap(),
+        'paused': paused?.toJsonMap(),
+        'progressBar': progressBar,
+        'tapOpensFile': tapOpensFile
       };
 }
 

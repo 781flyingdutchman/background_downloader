@@ -65,14 +65,11 @@ class FileDownloader {
   /// not have a registered callback
   Stream<TaskUpdate> get updates => _downloader.updates.stream;
 
-  /// Register status or progress callbacks to monitor download progress.
+  /// Register status or progress callbacks to monitor download progress, and
+  /// TaskNotificationTapCallback to respond to user tapping a notification.
   ///
   /// Status callbacks are called only when the state changes, while
   /// progress callbacks are called to inform of intermediate progress.
-  ///
-  /// Different callbacks can be set for different groups, and the group
-  /// can be passed on with the [DownloadTask] to ensure the
-  /// appropriate callbacks are called for that group.
   ///
   /// Note that callbacks will be called based on a task's [updates]
   /// property, which defaults to status change callbacks only. To also get
@@ -80,12 +77,21 @@ class FileDownloader {
   /// set the task's [updates] property to [Updates.progress] or
   /// [Updates.statusAndProgress].
   ///
+  /// For notification callbacks, make sure your AndroidManifest includes
+  /// android:launchMode="singleTask" to ensure proper behavior when a
+  /// notification is tapped.
+  ///
+  /// Different callbacks can be set for different groups, and the group
+  /// can be passed on with the [DownloadTask] to ensure the
+  /// appropriate callbacks are called for that group.
+  ///
   /// The call returns the [FileDownloader] to make chaining easier
   FileDownloader registerCallbacks(
       {String group = defaultGroup,
       TaskStatusCallback? taskStatusCallback,
       TaskStatusCallbackWithError? taskStatusCallbackWithError,
-      TaskProgressCallback? taskProgressCallback}) {
+      TaskProgressCallback? taskProgressCallback,
+      TaskNotificationTapCallback? taskNotificationTapCallback}) {
     assert(taskStatusCallback != null || taskProgressCallback != null ||
         taskStatusCallbackWithError != null,
         'Must provide at least one callback');
@@ -97,6 +103,10 @@ class FileDownloader {
     }
     if (taskProgressCallback != null) {
       _downloader.groupProgressCallbacks[group] = taskProgressCallback;
+    }
+    if (taskNotificationTapCallback != null) {
+      _downloader.groupNotificationTapCallbacks[group] =
+          taskNotificationTapCallback;
     }
     return this; // makes chaining calls easier
   }
@@ -453,35 +463,39 @@ class FileDownloader {
 
   /// Configure notification for a single task
   FileDownloader configureNotificationForTask(Task task,
-      {TaskNotification? runningNotification,
-      TaskNotification? completeNotification,
-      TaskNotification? errorNotification,
-      TaskNotification? pausedNotification,
-      bool progressBar = false}) {
+      {TaskNotification? running,
+      TaskNotification? complete,
+      TaskNotification? error,
+      TaskNotification? paused,
+      bool progressBar = false,
+      bool tapOpensFile = false}) {
     _notificationConfigs.add(TaskNotificationConfig(
         taskOrGroup: task,
-        running: runningNotification,
-        complete: completeNotification,
-        error: errorNotification,
-        paused: pausedNotification,
-        progressBar: progressBar));
+        running: running,
+        complete: complete,
+        error: error,
+        paused: paused,
+        progressBar: progressBar,
+        tapOpensFile: tapOpensFile));
     return this;
   }
 
   /// Configure notification for a group of tasks
   FileDownloader configureNotificationForGroup(String group,
-      {TaskNotification? runningNotification,
-      TaskNotification? completeNotification,
-      TaskNotification? errorNotification,
-      TaskNotification? pausedNotification,
-      bool progressBar = false}) {
+      {TaskNotification? running,
+      TaskNotification? complete,
+      TaskNotification? error,
+      TaskNotification? paused,
+      bool progressBar = false,
+      bool tapOpensFile = false}) {
     _notificationConfigs.add(TaskNotificationConfig(
         taskOrGroup: group,
-        running: runningNotification,
-        complete: completeNotification,
-        error: errorNotification,
-        paused: pausedNotification,
-        progressBar: progressBar));
+        running: running,
+        complete: complete,
+        error: error,
+        paused: paused,
+        progressBar: progressBar,
+        tapOpensFile: tapOpensFile));
     return this;
   }
 
@@ -494,14 +508,16 @@ class FileDownloader {
       TaskNotification? complete,
       TaskNotification? error,
       TaskNotification? paused,
-      bool progressBar = false}) {
+      bool progressBar = false,
+      bool tapOpensFile = false}) {
     _notificationConfigs.add(TaskNotificationConfig(
         taskOrGroup: null,
         running: running,
         complete: complete,
         error: error,
         paused: paused,
-        progressBar: progressBar));
+        progressBar: progressBar,
+        tapOpensFile: tapOpensFile));
     return this;
   }
 
@@ -569,6 +585,20 @@ class FileDownloader {
   }) async =>
       _downloader.moveToSharedStorage(
           filePath, destination, directory, mimeType);
+
+  /// Open the file represented by [task] or [filePath] using the application
+  /// available on the platform.
+  ///
+  /// [mimeType] may override the mimetype derived from the file extension,
+  /// though implementation depends on the platform and may not always work.
+  ///
+  /// Returns true if an application was launched successfully
+  Future<bool> openFile({Task? task, String? filePath, String? mimeType}) {
+    assert(task != null || filePath != null, 'Task or filePath must be set');
+    assert(!(task != null && filePath != null),
+        'Either task or filePath must be set, not both');
+    return _downloader.openFile(task, filePath, mimeType);
+  }
 
   /// Destroy the [FileDownloader]. Subsequent use requires initialization
   void destroy() {
