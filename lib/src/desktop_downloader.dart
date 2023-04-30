@@ -273,6 +273,26 @@ class DesktopDownloader extends BaseDownloader {
   }
 
   @override
+  Future<bool> openFile(Task? task, String? filePath, String? mimeType) async {
+    final executable = Platform.isLinux
+        ? 'xdg-open'
+        : Platform.isMacOS
+            ? 'open'
+            : 'start';
+    filePath ??= await task!.filePath();
+    if (!await File(filePath).exists()) {
+      _log.fine('File to open does not exist: $filePath');
+      return false;
+    }
+    final result = await Process.run(executable, [filePath], runInShell: true);
+    if (result.exitCode != 0) {
+      _log.fine(
+          'openFile command $executable returned exit code ${result.exitCode}');
+    }
+    return result.exitCode == 0;
+  }
+
+  @override
   void destroy() {
     super.destroy();
     _queue.clear();

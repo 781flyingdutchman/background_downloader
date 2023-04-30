@@ -8,7 +8,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
-import android.content.Context.*
+import android.content.Context.NOTIFICATION_SERVICE
+
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
@@ -24,7 +25,6 @@ import androidx.preference.PreferenceManager
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.*
 import java.io.*
 import java.lang.Double.min
@@ -37,8 +37,6 @@ import java.nio.file.StandardCopyOption
 import java.util.*
 import kotlin.concurrent.schedule
 import kotlin.concurrent.write
-import kotlin.io.path.Path
-import kotlin.io.path.pathString
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
@@ -372,9 +370,8 @@ class TaskWorker(
             }
             val gson = Gson()
             val taskJsonMapString = inputData.getString(keyTask)
-            val mapType = object : TypeToken<Map<String, Any>>() {}.type
             val task = Task(
-                gson.fromJson(taskJsonMapString, mapType)
+                gson.fromJson(taskJsonMapString, BackgroundDownloaderPlugin.jsonMapType)
             )
             notificationConfigJsonString = inputData.getString(keyNotificationConfig)
             notificationConfig =
@@ -450,7 +447,7 @@ class TaskWorker(
     private suspend fun connectAndProcess(
         connection: HttpURLConnection, task: Task, isResume: Boolean, tempFilePath: String
     ): TaskStatus {
-        val filePath = pathToFileForTask(task)
+        val filePath = task.filePath(applicationContext)
         try {
             if (task.isDownloadTask()) {
                 if (task.post != null) {
@@ -951,7 +948,7 @@ class TaskWorker(
             }
         }
         // action buttons
-        addActionButtons(notificationType, task, builder)
+        addNotificationActions(notificationType, task, builder)
         with(NotificationManagerCompat.from(applicationContext)) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 // On Android 33+, check/ask for permission
@@ -977,16 +974,38 @@ class TaskWorker(
 
 
     /**
-     * Add action buttons to notification
+     * Add action to notification via buttons or tap
      *
      * Which button(s) depends on the [notificationType], and the actions require
      * access to [task] and the [builder]
      */
-    private fun addActionButtons(
+    private fun addNotificationActions(
         notificationType: NotificationType, task: Task, builder: NotificationCompat.Builder
     ) {
         val activity = BackgroundDownloaderPlugin.activity
         if (activity != null) {
+            val taskJsonString = BackgroundDownloaderPlugin.gson.toJson(
+                task.toJsonMap()
+            )
+            // add tap action for all notifications
+            val tapIntent =
+                applicationContext.packageManager.getLaunchIntentForPackage(applicationContext.packageName)
+            if (tapIntent != null) {
+                tapIntent.apply {
+                    action = NotificationRcvr.actionTap
+                    putExtra(NotificationRcvr.bundleTask, taskJsonString)
+                    putExtra(NotificationRcvr.bundleNotificationType, notificationType.ordinal)
+                    putExtra(NotificationRcvr.bundleNotificationConfig, notificationConfigJsonString)
+                }
+                val tapPendingIntent: PendingIntent = PendingIntent.getActivity(
+                    applicationContext,
+                    notificationId,
+                    tapIntent,
+                    PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                builder.setContentIntent(tapPendingIntent)
+            }
+            // add buttons depending on notificationType
             when (notificationType) {
                 NotificationType.running -> {
                     // cancel button when running
@@ -1036,9 +1055,7 @@ class TaskWorker(
                     val cancelBundle = Bundle().apply {
                         putString(NotificationRcvr.bundleTaskId, task.taskId)
                         putString(
-                            NotificationRcvr.bundleTask, BackgroundDownloaderPlugin.gson.toJson(
-                                task.toJsonMap()
-                            )
+                            NotificationRcvr.bundleTask, taskJsonString
                         )
                     }
                     val cancelIntent = Intent(
@@ -1062,9 +1079,7 @@ class TaskWorker(
                     val resumeBundle = Bundle().apply {
                         putString(NotificationRcvr.bundleTaskId, task.taskId)
                         putString(
-                            NotificationRcvr.bundleTask, BackgroundDownloaderPlugin.gson.toJson(
-                                task.toJsonMap()
-                            )
+                            NotificationRcvr.bundleTask, taskJsonString
                         )
                         putString(
                             NotificationRcvr.bundleNotificationConfig,
@@ -1120,34 +1135,6 @@ class TaskWorker(
         }
     }
 
-    /**
-     * Returns full path (String) to the file to be downloaded
-     */
-    private fun pathToFileForTask(task: Task): String {
-        if (Build.VERSION.SDK_INT >= 26) {
-            val baseDirPath = when (task.baseDirectory) {
-                BaseDirectory.applicationDocuments -> Path(
-                    applicationContext.dataDir.path, "app_flutter"
-                ).pathString
-
-                BaseDirectory.temporary -> applicationContext.cacheDir.path
-                BaseDirectory.applicationSupport -> applicationContext.filesDir.path
-                BaseDirectory.applicationLibrary -> Path(
-                    applicationContext.filesDir.path, "Library"
-                ).pathString
-            }
-            val path = Path(baseDirPath, task.directory)
-            return Path(path.pathString, task.filename).pathString
-        } else {
-            val baseDirPath = when (task.baseDirectory) {
-                BaseDirectory.applicationDocuments -> "${applicationContext.dataDir.path}/app_flutter"
-                BaseDirectory.temporary -> applicationContext.cacheDir.path
-                BaseDirectory.applicationSupport -> applicationContext.filesDir.path
-                BaseDirectory.applicationLibrary -> "${applicationContext.filesDir.path}/Library"
-            }
-            return if (task.directory.isEmpty()) "$baseDirPath/${task.filename}" else "$baseDirPath/${task.directory}/${task.filename}"
-        }
-    }
 
     private fun deleteTempFile(tempFilePath: String) {
         if (tempFilePath.isNotEmpty()) {
