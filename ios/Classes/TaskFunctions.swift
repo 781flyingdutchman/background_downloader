@@ -47,7 +47,7 @@ func isFinalState(status: TaskStatus) -> Bool {
 }
 
 /// Returns the filePath associated with this task, or nil
-func filePath(for task: Task) -> String? {
+func getFilePath(for task: Task) -> String? {
     guard let directory = try? directoryForTask(task: task)
     else {
         return nil

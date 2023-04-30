@@ -6,13 +6,20 @@
 //
 
 import Foundation
+import MobileCoreServices
 
 ///
-func doOpenFile(filePath: String) -> Bool {
+func doOpenFile(filePath: String, mimeType: String?) -> Bool {
     let fileUrl = NSURL(fileURLWithPath: filePath)
     let documentInteractionController = UIDocumentInteractionController(url: fileUrl as URL)
     let delegate = DocumentInteractionControllerDelegate()
     documentInteractionController.delegate = delegate
+    if (mimeType != nil) {
+        if let uti = UTTypeCreatePreferredIdentifierForTag(kUTTagClassMIMEType, mimeType! as NSString, nil)?.takeRetainedValue()
+        {
+            documentInteractionController.uti = uti as String
+        }
+    }
     guard let view = UIApplication.shared.delegate?.window??.rootViewController?.view
     else {
         return false

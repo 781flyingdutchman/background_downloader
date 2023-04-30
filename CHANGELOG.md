@@ -18,6 +18,10 @@ The file opening behavior is platform dependent, and while you should check the 
 
 Note that on Android, files stored in the `BaseDirectory.applicationDocuments` cannot be opened. You need to download to a different base directory (e.g. `.applicationSupport`) or move the file to shared storage before attempting to open it.
 
+If all you want to do on notification tap is to open the file, you can simplify the process by 
+adding `tapOpensFile: true` to your call to `configureNotifications`, and you don't need to 
+register a `taskNotificationTapCallback`.
+
 ## 5.5.0
 
 Adds `withSuggestedFilename` for `DownloadTask`. Use:

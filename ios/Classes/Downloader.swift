@@ -334,18 +334,18 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         let taskJsonMapString = args[0] as? String
         var filePath = args[1] as? String
         if filePath == nil {
-            guard let task = taskFrom(jsonString: taskJsonMapString!),
-                  let directory = try? directoryForTask(task: task)
+            guard let task = taskFrom(jsonString: taskJsonMapString!)
             else {
                 return
             }
-            filePath = directory.appendingPathComponent(task.filename).path
+            filePath = getFilePath(for: task)
         }
         if !FileManager.default.fileExists(atPath: filePath!) {
             os_log("File does not exist: %@", log: log, type: .info, filePath!)
             return
         }
-        success = doOpenFile(filePath: filePath!)
+        let mimeType = args[2] as? String
+        success = doOpenFile(filePath: filePath!, mimeType: mimeType)
     }
     
     
@@ -666,12 +666,12 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                 guard let notificationConfigString = userInfo["notificationConfig"] as? String,
                       let notificationConfigData = notificationConfigString.data(using: .utf8),
                       let notificationConfig = try? JSONDecoder().decode(NotificationConfig.self, from: notificationConfigData),
-                      let filePath = filePath(for: task)
+                      let filePath = getFilePath(for: task)
                 else {
                     return
                 }
                 if notificationConfig.tapOpensFile {
-                    if !doOpenFile(filePath: filePath)
+                    if !doOpenFile(filePath: filePath, mimeType: nil)
                     {
                         os_log("Filed to open file on notification tap", log: log, type: .info)
                     }
@@ -705,17 +705,6 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
 }
 
 //MARK: helpers
-
-/// Return MIME type for this filename url
-func mimeType(url: URL) -> String {
-    let pathExtension = url.pathExtension
-    if let uti = UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension, pathExtension as NSString, nil)?.takeRetainedValue() {
-        if let mimetype = UTTypeCopyPreferredTagWithClass(uti, kUTTagClassMIMEType)?.takeRetainedValue() {
-            return mimetype as String
-        }
-    }
-    return "application/octet-stream"
-}
 
 /// Extension to append a String to a mutable data object
 extension NSMutableData {

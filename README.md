@@ -225,14 +225,22 @@ You can interact with the `database` using
 
 On iOS and Android, for downloads only, the downloader can generate notifications to keep the user informed of progress also when the app is in the background, and allow pause/resume and cancellation of an ongoing download from those notifications.
 
-Configure notifications by calling `FileDownloader().configureNotification` and supply a `TaskNotification` object for different states. For example, the following configures notifications to show only when actively running (i.e. download in progress), disappearing when the download completes or ends with an error. It will also show a progress bar and a 'cancel' button, and will substitute {filename} with the actual filename of the file being downloaded.
+Configure notifications by calling `FileDownloader().configureNotification` and supply a 
+`TaskNotification` object for different states. For example, the following configures 
+notifications to show only when actively running (i.e. download in progress), disappearing when 
+the download completes or ends with an error. It will also show a progress bar and a 'cancel' 
+button, and will substitute {filename} with the actual filename of the file being downloaded.
 ```
     FileDownloader().configureNotification(
         running: TaskNotification('Downloading', 'file: {filename}'),
         progressBar: true)
 ```
 
-To also show a notifications for other states, add a `TaskNotification` for `complete`, `error` and/or `paused`. If `paused` is configured and the task can be paused, a 'Pause' button will show for the `running` notification, next to the 'Cancel' button.
+To also show a notifications for other states, add a `TaskNotification` for `complete`, `error` 
+and/or `paused`. If `paused` is configured and the task can be paused, a 'Pause' button will 
+show for the `running` notification, next to the 'Cancel' button. To open the downloaded file 
+when the user taps the `complete` notification, add `tapOpensFile: true` to your call to 
+`configureNotification`
 
 There are three possible substitutions of the text in the `title` or `body` of a `TaskNotification`:
 * {filename} is replaced with the filename as defined in the `Task`
@@ -255,6 +263,10 @@ To open a file (e.g. in response to the user tapping a notification), call `File
 The file opening behavior is platform dependent, and while you should check the return value of the call to `openFile`, error checking is not fully consistent.
 
 Note that on Android, files stored in the `BaseDirectory.applicationDocuments` cannot be opened. You need to download to a different base directory (e.g. `.applicationSupport`) or move the file to shared storage before attempting to open it.
+
+If all you want to do on notification tap is to open the file, you can simplify the process by
+adding `tapOpensFile: true` to your call to `configureNotifications`, and you don't need to
+register a `taskNotificationTapCallback`.
 
 
 ### Setup for notifications
