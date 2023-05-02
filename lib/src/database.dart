@@ -110,37 +110,49 @@ class TaskRecord {
   final Task task;
   final TaskStatus taskStatus;
   final double progress;
+  final TaskError? error;
 
-  TaskRecord(this.task, this.taskStatus, this.progress);
+  TaskRecord(this.task, this.taskStatus, this.progress, [this.error]);
 
-  /// Returns the group collection this record is stored under
+  /// Returns the group collection this record is stored under, which is
+  /// the [task]'s [Task.group]
   String get group => task.group;
 
-  /// Returns the record id
+  /// Returns the record id, which is the [task]'s [Task.taskId]
   String get taskId => task.taskId;
 
   /// Create [TaskRecord] from a JSON map
   TaskRecord.fromJsonMap(Map<String, dynamic> jsonMap)
       : task = Task.createFromJsonMap(jsonMap),
-        taskStatus = TaskStatus.values[jsonMap['status'] as int],
-        progress = jsonMap['progress'];
+        taskStatus = TaskStatus.values[jsonMap['status'] as int? ?? 0],
+        progress = jsonMap['progress'] as double? ?? 0,
+        error = jsonMap['error'] == null
+            ? null
+            : TaskError.fromJsonMap(jsonMap['error']);
 
   /// Returns JSON map representation of this [TaskRecord]
+  ///
+  /// Note the [taskStatus], [progress] and [error] fields are merged into
+  /// the JSON map representation of the [task]
   Map<String, dynamic> toJsonMap() {
     final jsonMap = task.toJsonMap();
     jsonMap['status'] = taskStatus.index;
     jsonMap['progress'] = progress;
+    jsonMap['error'] = error?.toJsonMap();
     return jsonMap;
   }
 
-  /// Copy with optional replacements
-  TaskRecord copyWith({Task? task, TaskStatus? taskStatus, double? progress}) =>
+  /// Copy with optional replacements. [error] is always copied
+  TaskRecord copyWith(
+          {Task? task,
+          TaskStatus? taskStatus,
+          double? progress}) =>
       TaskRecord(task ?? this.task, taskStatus ?? this.taskStatus,
-          progress ?? this.progress);
+          progress ?? this.progress, error);
 
   @override
   String toString() {
-    return 'DatabaseRecord{task: $task, status: $taskStatus, progress: $progress}';
+    return 'DatabaseRecord{task: $task, status: $taskStatus, progress: $progress, error: $error}';
   }
 
   @override
@@ -150,8 +162,10 @@ class TaskRecord {
           runtimeType == other.runtimeType &&
           task == other.task &&
           taskStatus == other.taskStatus &&
-          progress == other.progress;
+          progress == other.progress &&
+          error == other.error;
 
   @override
-  int get hashCode => task.hashCode ^ taskStatus.hashCode ^ progress.hashCode;
+  int get hashCode =>
+      task.hashCode ^ taskStatus.hashCode ^ progress.hashCode ^ error.hashCode;
 }

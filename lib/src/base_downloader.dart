@@ -475,7 +475,7 @@ abstract class BaseDownloader {
   /// update the task in the database
   void _emitStatusUpdate(Task task, TaskStatus taskStatus,
       TaskError? taskError) {
-    _updateTaskInDatabase(task, status: taskStatus);
+    _updateTaskInDatabase(task, status: taskStatus, taskError: taskError);
     if (task.providesStatusUpdates) {
       final taskStatusCallback = groupStatusCallbacks[task.group];
       if (taskStatusCallback != null) {
@@ -519,7 +519,7 @@ abstract class BaseDownloader {
 
   /// Insert or update the [TaskRecord] in the tracking database
   Future<void> _updateTaskInDatabase(Task task,
-      {TaskStatus? status, double? progress}) async {
+      {TaskStatus? status, double? progress, TaskError? taskError}) async {
     if (trackedGroups.contains(task.group)) {
       if (status == null && progress != null) {
         // update existing record with progress only
@@ -556,7 +556,7 @@ abstract class BaseDownloader {
             break;
         }
       }
-      Database().updateRecord(TaskRecord(task, status!, progress!));
+      Database().updateRecord(TaskRecord(task, status!, progress!, taskError));
     }
   }
 

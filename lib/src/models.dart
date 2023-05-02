@@ -124,8 +124,8 @@ typedef TaskStatusCallback = void Function(Task task, TaskStatus status);
 /// Signature for a function you can register to be called
 /// when the state of a [task] changes, and are interested in detailed
 /// error information for failed tasks.
-typedef TaskStatusCallbackWithError = void Function(Task task, TaskStatus
-status, TaskError? taskError);
+typedef TaskStatusCallbackWithError = void Function(
+    Task task, TaskStatus status, TaskError? taskError);
 
 /// Signature for a function you can register to be called
 /// for every progress change of a [task].
@@ -980,11 +980,36 @@ class TaskError {
   final int httpResponseCode;
   final String description;
 
-  TaskError(this.type, {this.httpResponseCode = -1,
-    this.description = ''});
+  TaskError(this.type, {this.httpResponseCode = -1, this.description = ''});
+
+  /// Create object from JSON Map
+  TaskError.fromJsonMap(Map<String, dynamic> jsonMap)
+      : type = ErrorType.values[jsonMap['type'] as int? ?? 0],
+        httpResponseCode = jsonMap['httpResponseCode'] as int? ?? 0,
+        description = jsonMap['description'] ?? '';
+
+  /// Return JSON Map representing object
+  Map<String, dynamic> toJsonMap() => {
+        'type': type.index,
+        'httpResponseCode': httpResponseCode,
+        'description': description
+      };
 
   @override
   String toString() {
     return 'TaskError{type: $type, httpResponseCode: $httpResponseCode, description: $description}';
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TaskError &&
+          runtimeType == other.runtimeType &&
+          type == other.type &&
+          httpResponseCode == other.httpResponseCode &&
+          description == other.description;
+
+  @override
+  int get hashCode =>
+      type.hashCode ^ httpResponseCode.hashCode ^ description.hashCode;
 }

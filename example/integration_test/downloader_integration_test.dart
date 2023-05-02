@@ -1567,6 +1567,7 @@ void main() {
       expect(record?.taskStatus, equals(TaskStatus.running));
       expect(record?.progress, greaterThan(0));
       expect(record?.progress, equals(lastProgress));
+      expect(record?.error, isNull);
       await statusCallbackCompleter.future;
       // completed
       final record2 = await FileDownloader().database.recordForId(task.taskId);
@@ -1574,6 +1575,7 @@ void main() {
       expect(record2?.taskId, equals(task.taskId));
       expect(record2?.taskStatus, equals(TaskStatus.complete));
       expect(record2?.progress, equals(progressComplete));
+      expect(record2?.error, isNull);
       final records = await FileDownloader().database.allRecords();
       expect(records.length, equals(1));
       expect(records.first, equals(record2));
@@ -1662,6 +1664,35 @@ void main() {
       expect(record3?.taskStatus, equals(TaskStatus.complete));
       expect(record3?.progress, equals(progressComplete));
       print('Finished markDownloadedComplete');
+    });
+
+    testWidgets('track with error', (widgetTester) async {
+      await FileDownloader().database.deleteAllRecords();
+      await FileDownloader()
+          .registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback)
+          .trackTasks(markDownloadedComplete: false);
+      task = DownloadTask(
+          url: failingUrl,
+          filename: defaultFilename,
+          updates: Updates.statusAndProgress);
+      expect(await FileDownloader().enqueue(task), equals(true));
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.failed));
+      // failed
+      final record = await FileDownloader().database.recordForId(task.taskId);
+      expect(record, isNotNull);
+      expect(record?.taskId, equals(task.taskId));
+      expect(record?.taskStatus, equals(TaskStatus.failed));
+      expect(record?.progress, equals(progressFailed));
+      expect(record?.error, isNotNull);
+      final error = (record?.error)!;
+      expect(error.type, equals(ErrorType.httpResponse));
+      expect(error.httpResponseCode, equals(403));
+      expect(error.description.toLowerCase(), equals('forbidden'));
+      final records = await FileDownloader().database.allRecords();
+      expect(records.length, equals(1));
     });
   });
 
@@ -2050,5 +2081,6 @@ Future<bool> fileEqualsLargeTestFile(File file) async {
   ByteData data = await rootBundle.load("assets/$largeFilename");
   final targetData = data.buffer.asUint8List();
   final fileData = file.readAsBytesSync();
+  print('target= ${targetData.length} and file= ${fileData.length}');
   return listEquals(targetData, fileData);
 }
