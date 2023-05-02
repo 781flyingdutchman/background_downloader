@@ -1919,6 +1919,45 @@ void main() {
       expect(await FileDownloader().enqueue(task), equals(true));
       await statusCallbackCompleter.future;
     });
+
+    testWidgets('openFile', (widgetTester) async {
+      final result = await FileDownloader().download(task);
+      expect(result, equals(TaskStatus.complete));
+      var success = await FileDownloader().openFile(task: task);
+      if (!Platform.isAndroid) {
+        expect(success, isTrue);
+        // change to a .txt file
+        final filePath = await task.filePath();
+        await File(filePath).rename(join(
+            dirname(filePath), '${basenameWithoutExtension(filePath)}.txt'));
+        task = task.copyWith(filename: 'google.txt');
+        success = await FileDownloader().openFile(task: task);
+        expect(success, isTrue);
+        success =
+            await FileDownloader().openFile(filePath: await task.filePath());
+        expect(success, isTrue);
+        // change to a non-existent file
+        task = task.copyWith(filename: 'nonexistentFile.html');
+        success = await FileDownloader().openFile(task: task);
+        expect(success, isFalse);
+        // change to a file without extension
+        task = task.copyWith(filename: 'fileWithoutExtension');
+        success = await FileDownloader().openFile(task: task);
+        expect(success, isFalse);
+      } else {
+        expect(success, isFalse); // on Android cannot access docsdir
+        // change to a .txt file
+        final filePath = await task.filePath();
+        await File(filePath).rename(join(
+            dirname(filePath), '${basenameWithoutExtension(filePath)}.txt'));
+        task = task.copyWith(filename: 'google.txt');
+        final newFilename = await FileDownloader()
+            .moveToSharedStorage(task, SharedStorage.external);
+        print(newFilename);
+        success = await FileDownloader().openFile(filePath: newFilename);
+        expect(success, isTrue);
+      }
+    });
   });
 
   group('Shared storage', () {

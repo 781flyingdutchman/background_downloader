@@ -9,8 +9,8 @@ import 'widgets.dart';
 
 void main() {
   Logger.root.onRecord.listen((LogRecord rec) {
-    // ignore: avoid_print
-    print('${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
+    debugPrint(
+        '${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
   });
 
   runApp(const MyApp());
@@ -24,6 +24,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  final log = Logger('ExampleApp');
   final buttonTexts = ['Download', 'Cancel', 'Pause', 'Resume', 'Reset'];
 
   ButtonState buttonState = ButtonState.download;
@@ -33,14 +34,20 @@ class _MyAppState extends State<MyApp> {
   StreamController<DownloadProgressIndicatorUpdate> updateStream =
       StreamController();
 
+  // for the 'Load & Open' button
+  bool loadAndOpenInProgress = false;
+
   @override
   void initState() {
     super.initState();
     FileDownloader()
         .registerCallbacks(
             taskStatusCallback: myDownloadStatusCallback,
-            taskProgressCallback: myDownloadProgressCallback)
-        .configureNotification(
+            taskProgressCallback: myDownloadProgressCallback,
+            taskNotificationTapCallback: myNotificationTapCallback)
+        .configureNotificationForGroup(FileDownloader.defaultGroup,
+            // For the main download button
+            // which uses 'enqueue' and a default group
             running: TaskNotification(
                 'Download {filename}', 'File: {filename} - {progress}'),
             complete:
@@ -48,7 +55,14 @@ class _MyAppState extends State<MyApp> {
             error: TaskNotification('Download {filename}', 'Download failed'),
             paused: TaskNotification(
                 'Download {filename}', 'Paused with metadata {metadata}'),
-            progressBar: true);
+            progressBar: true)
+        .configureNotification(
+            // for the 'Download & Open' dog picture
+            // which uses 'download' which is not the .defaultGroup
+            // but the .await group so won't use the above config
+            complete:
+                TaskNotification('Download {filename}', 'Download complete'),
+            tapOpensFile: true); // dog can also open directly from tap
   }
 
   /// Process the status updates coming from the downloader
@@ -85,6 +99,11 @@ class _MyAppState extends State<MyApp> {
   /// Adds an update object to the stream that the main UI listens to
   void myDownloadProgressCallback(Task task, double progress) {
     updateStream.add(DownloadProgressIndicatorUpdate(task.filename, progress));
+  }
+
+  /// Process the user tapping on a notification by printing a message
+  void myNotificationTapCallback(Task task, NotificationType notificationType) {
+    print('Tapped notification $notificationType for taskId ${task.taskId}');
   }
 
   @override
@@ -140,7 +159,24 @@ class _MyAppState extends State<MyApp> {
                           Text('${downloadTaskStatus ?? "undefined"}')
                         ],
                       ),
-                    )
+                    ),
+                    Center(
+                        child: ElevatedButton(
+                            onPressed: loadAndOpenInProgress
+                                ? null
+                                : processLoadAndOpen,
+                            child: Text(
+                              'Load & Open',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headlineMedium
+                                  ?.copyWith(color: Colors.white),
+                            ))),
+                    Center(
+                        child: Text(
+                      loadAndOpenInProgress ? 'Loading' : '',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ))
                   ],
                 ),
               )),
@@ -148,6 +184,8 @@ class _MyAppState extends State<MyApp> {
         ));
   }
 
+  /// Process center button press (initially 'Download' but the text changes
+  /// based on state)
   Future<void> processButtonPress() async {
     switch (buttonState) {
       case ButtonState.download:
@@ -188,6 +226,27 @@ class _MyAppState extends State<MyApp> {
     }
     if (mounted) {
       setState(() {});
+    }
+  }
+
+  /// Process 'Load & Open' button
+  ///
+  /// Loads a JPG of a dog and launches viewer using [openFile]
+  Future<void> processLoadAndOpen() async {
+    if (!loadAndOpenInProgress) {
+      var task = DownloadTask(
+          url:
+              'https://i2.wp.com/www.skiptomylou.org/wp-content/uploads/2019/06/dog-drawing.jpg',
+          baseDirectory: BaseDirectory.applicationSupport,
+          filename: 'dog.jpg');
+      setState(() {
+        loadAndOpenInProgress = true;
+      });
+      await FileDownloader().download(task);
+      await FileDownloader().openFile(task: task);
+      setState(() {
+        loadAndOpenInProgress = false;
+      });
     }
   }
 }
