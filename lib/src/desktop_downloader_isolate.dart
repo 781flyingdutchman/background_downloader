@@ -114,11 +114,11 @@ Future<void> doDownloadTask(
         // determine if this task can be paused
         final acceptRangesHeader = response.headers['accept-ranges'];
         taskCanResume =
-          acceptRangesHeader == 'bytes' || response.statusCode == 206;
+            acceptRangesHeader == 'bytes' || response.statusCode == 206;
         sendPort.send(taskCanResume);
       }
-    isResume =
-        isResume && response.statusCode == 206; // confirm resume response
+      isResume =
+          isResume && response.statusCode == 206; // confirm resume response
       if (okResponses.contains(response.statusCode)) {
         resultStatus = await processOkDownloadResponse(task, filePath,
             tempFilePath, taskCanResume, isResume, response, sendPort);
@@ -263,7 +263,8 @@ Future<bool> prepareResume(
   final total = int.parse(matchResult.group(3) ?? '0');
   final tempFile = File(tempFilePath);
   final tempFileLength = await tempFile.length();
-  _log.finest('Resume start=$start, end=$end of total=$total bytes, tempFile = $tempFileLength bytes');
+  _log.finest(
+      'Resume start=$start, end=$end of total=$total bytes, tempFile = $tempFileLength bytes');
   if (total != end + 1 || start > tempFileLength) {
     _log.fine('Offered range not feasible: $range');
     taskError = TaskError(ErrorType.resume,

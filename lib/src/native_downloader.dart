@@ -40,8 +40,7 @@ class NativeDownloader extends BaseDownloader {
           TaskError? taskError;
           if (taskStatus == TaskStatus.failed) {
             taskError = TaskError(ErrorType.values[args[2]],
-                httpResponseCode: args[3],
-                description: args[4]);
+                httpResponseCode: args[3], description: args[4]);
           }
           processStatusUpdate(task, taskStatus, taskError);
           break;

@@ -143,10 +143,7 @@ class TaskRecord {
   }
 
   /// Copy with optional replacements. [error] is always copied
-  TaskRecord copyWith(
-          {Task? task,
-          TaskStatus? taskStatus,
-          double? progress}) =>
+  TaskRecord copyWith({Task? task, TaskStatus? taskStatus, double? progress}) =>
       TaskRecord(task ?? this.task, taskStatus ?? this.taskStatus,
           progress ?? this.progress, error);
 

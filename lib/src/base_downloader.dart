@@ -439,7 +439,8 @@ abstract class BaseDownloader {
   ///
   /// Also manages retries ([tasksWaitingToRetry] and delay) and pause/resume
   /// ([pausedTasks] and [_clearPauseResumeInfo]
-  void processStatusUpdate(Task task, TaskStatus taskStatus, [TaskError? taskError]) {
+  void processStatusUpdate(Task task, TaskStatus taskStatus,
+      [TaskError? taskError]) {
     // Normal status updates are only sent here when the task is expected
     // to provide those.  The exception is a .failed status when a task
     // has retriesRemaining > 0: those are always sent here, and are
@@ -461,8 +462,12 @@ abstract class BaseDownloader {
             log.warning('Could not enqueue task $task after retry timeout');
             removeModifiedTask(task);
             _clearPauseResumeInfo(task);
-            _emitStatusUpdate(task, TaskStatus.failed, TaskError(ErrorType.general,
-            description: 'Could not enqueue task $task after retry timeout'));
+            _emitStatusUpdate(
+                task,
+                TaskStatus.failed,
+                TaskError(ErrorType.general,
+                    description:
+                        'Could not enqueue task $task after retry timeout'));
             _emitProgressUpdate(task, progressFailed);
           }
         }
@@ -508,10 +513,14 @@ abstract class BaseDownloader {
 
   /// Emits the status update for this task to its callback or listener, and
   /// update the task in the database
-  void _emitStatusUpdate(Task task, TaskStatus taskStatus,
-      TaskError? taskError) {
+  void _emitStatusUpdate(
+      Task task, TaskStatus taskStatus, TaskError? taskError) {
     _updateTaskInDatabase(task, status: taskStatus, taskError: taskError);
+    print(taskError);
     if (task.providesStatusUpdates) {
+      if (taskStatus != TaskStatus.failed) {
+        taskError = null;
+      }
       final taskStatusCallback = groupStatusCallbacks[task.group];
       if (taskStatusCallback != null) {
         if (taskStatusCallback is TaskStatusCallback) {
@@ -522,7 +531,7 @@ abstract class BaseDownloader {
         }
       } else {
         if (updates.hasListener) {
-          updates.add(TaskStatusUpdate(task, taskStatus));
+          updates.add(TaskStatusUpdate(task, taskStatus, taskError));
         } else {
           log.warning('Requested status updates for task ${task.taskId} in '
               'group ${task.group} but no TaskStatusCallback '

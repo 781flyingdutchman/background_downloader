@@ -822,8 +822,9 @@ class TaskUpdate {
 /// A status update event
 class TaskStatusUpdate extends TaskUpdate {
   final TaskStatus status;
+  final TaskError? error;
 
-  TaskStatusUpdate(super.task, this.status);
+  TaskStatusUpdate(super.task, this.status, [this.error]);
 }
 
 /// A progress update event

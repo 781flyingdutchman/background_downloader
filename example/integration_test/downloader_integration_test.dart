@@ -285,7 +285,17 @@ void main() {
       // to the completer function we have defined
       final subscription = FileDownloader().updates.listen((event) {
         if (event is TaskStatusUpdate) {
-          statusCallback(event.task, event.status);
+          if (event.status != TaskStatus.failed) {
+            expect(event.error, isNull);
+          } else {
+            // expect 403 not found error, coming up in second test
+            print(event.status);
+            expect(event.error, isNotNull);
+            expect(event.error?.type, equals(ErrorType.httpResponse));
+            expect(event.error?.httpResponseCode, equals(403));
+            expect(event.error?.description.toLowerCase(), equals('forbidden'));
+          }
+          statusCallbackWithError(event.task, event.status, event.error);
         }
       });
       expect(await FileDownloader().enqueue(task), isTrue);
@@ -293,6 +303,16 @@ void main() {
       expect(statusCallbackCounter, equals(3));
       expect(lastStatus, equals(TaskStatus.complete));
       expect(File(path).existsSync(), isTrue);
+      // test with a failing url and check the error
+      statusCallbackCompleter = Completer();
+      task = DownloadTask(url: failingUrl, filename: 'test');
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.failed));
+      final error = lastError!;
+      expect(error.type, equals(ErrorType.httpResponse));
+      expect(error.httpResponseCode, equals(403));
+      expect(error.description.toLowerCase(), equals('forbidden'));
       subscription.cancel();
     });
 
@@ -1536,7 +1556,7 @@ void main() {
         expect(
             await FileDownloader().cancelTaskWithId(task.taskId), equals(true));
         await statusCallbackCompleter.future;
-        if (Platform.isIOS){
+        if (Platform.isIOS) {
           // canot avoid fail on iOS
           expect(lastStatus, equals(TaskStatus.failed));
         } else {
@@ -1670,8 +1690,8 @@ void main() {
       await FileDownloader().database.deleteAllRecords();
       await FileDownloader()
           .registerCallbacks(
-          taskStatusCallback: statusCallback,
-          taskProgressCallback: progressCallback)
+              taskStatusCallback: statusCallback,
+              taskProgressCallback: progressCallback)
           .trackTasks(markDownloadedComplete: false);
       task = DownloadTask(
           url: failingUrl,

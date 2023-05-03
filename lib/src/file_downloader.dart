@@ -92,14 +92,18 @@ class FileDownloader {
       TaskStatusCallbackWithError? taskStatusCallbackWithError,
       TaskProgressCallback? taskProgressCallback,
       TaskNotificationTapCallback? taskNotificationTapCallback}) {
-    assert(taskStatusCallback != null || taskProgressCallback != null ||
-        taskStatusCallbackWithError != null,
+    assert(
+        taskStatusCallback != null ||
+            taskProgressCallback != null ||
+            taskStatusCallbackWithError != null,
         'Must provide at least one callback');
-    assert(taskStatusCallback == null || taskStatusCallbackWithError == null,
-    'Must provide either taskStatusCallback or taskStatusCallbackWithError - '
+    assert(
+        taskStatusCallback == null || taskStatusCallbackWithError == null,
+        'Must provide either taskStatusCallback or taskStatusCallbackWithError - '
         'not both');
     if (taskStatusCallback != null || taskStatusCallbackWithError != null) {
-      _downloader.groupStatusCallbacks[group] = taskStatusCallback ?? taskStatusCallbackWithError;
+      _downloader.groupStatusCallbacks[group] =
+          taskStatusCallback ?? taskStatusCallbackWithError;
     }
     if (taskProgressCallback != null) {
       _downloader.groupProgressCallbacks[group] = taskProgressCallback;

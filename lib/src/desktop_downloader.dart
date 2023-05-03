@@ -121,8 +121,8 @@ class DesktopDownloader extends BaseDownloader {
           switch (message[0] as String) {
             case 'statusUpdate':
               final status = message[1] as TaskStatus;
-              processStatusUpdate(task, status, status == TaskStatus.failed ?
-              message[2] as TaskError : null);
+              processStatusUpdate(task, status,
+                  status == TaskStatus.failed ? message[2] as TaskError : null);
               break;
 
             case 'resumeData':
@@ -131,8 +131,8 @@ class DesktopDownloader extends BaseDownloader {
               break;
 
             default:
-              throw ArgumentError('Did not recognize message: ${message[0] as
-               String}');
+              throw ArgumentError(
+                  'Did not recognize message: ${message[0] as String}');
           }
         } else if (message is String) {
           // log message
