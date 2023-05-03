@@ -103,7 +103,7 @@ class _MyAppState extends State<MyApp> {
 
   /// Process the user tapping on a notification by printing a message
   void myNotificationTapCallback(Task task, NotificationType notificationType) {
-    print('Tapped notification $notificationType for taskId ${task.taskId}');
+    debugPrint('Tapped notification $notificationType for taskId ${task.taskId}');
   }
 
   @override

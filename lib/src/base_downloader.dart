@@ -516,7 +516,6 @@ abstract class BaseDownloader {
   void _emitStatusUpdate(
       Task task, TaskStatus taskStatus, TaskError? taskError) {
     _updateTaskInDatabase(task, status: taskStatus, taskError: taskError);
-    print(taskError);
     if (task.providesStatusUpdates) {
       if (taskStatus != TaskStatus.failed) {
         taskError = null;
