@@ -73,7 +73,7 @@ class TaskWorker(
         private var taskCanResume = false
         private var createdNotificationChannel = false
 
-        private var taskError: TaskError? = null
+        private var taskException: TaskException? = null
 
 
         /** Converts [Task] to JSON string representation */
@@ -89,7 +89,7 @@ class TaskWorker(
          * [arg] can be single variable or a MutableList
          */
         private suspend fun postOnBackgroundChannel(
-                method: String, task: Task, arg: Any
+            method: String, task: Task, arg: Any
         ): Boolean {
             val runningOnUIThread = Looper.myLooper() == Looper.getMainLooper()
             return coroutineScope {
@@ -97,7 +97,7 @@ class TaskWorker(
                 Handler(Looper.getMainLooper()).post {
                     try {
                         val argList = mutableListOf<Any>(
-                                taskToJsonString(task)
+                            taskToJsonString(task)
                         )
                         if (arg is ArrayList<*>) {
                             argList.addAll(arg)
@@ -137,11 +137,11 @@ class TaskWorker(
          * If the task is finished, processes a final progressUpdate update and removes
          * task from persistent storage.
          *
-         * Optional [taskError] for status .failed
+         * Optional [taskException] for status .failed
          * */
         suspend fun processStatusUpdate(
-                task: Task, status: TaskStatus, prefs: SharedPreferences, taskError: TaskError? =
-                        null
+            task: Task, status: TaskStatus, prefs: SharedPreferences, taskException: TaskException? =
+                null
         ) {
             val retryNeeded = status == TaskStatus.failed && task.retriesRemaining > 0
             // if task is in final state, process a final progressUpdate
@@ -179,13 +179,15 @@ class TaskWorker(
             }
             // Post update if task expects one, or if failed and retry is needed
             if (canSendStatusUpdate && (task.providesStatusUpdates() || retryNeeded)) {
-                val finalTaskError = taskError ?: TaskError(ErrorType.general)
-                // send error data only for .failed task, otherwise just the status
-                val arg: Any = if (status == TaskStatus.failed) mutableListOf(status.ordinal,
-                        finalTaskError.type.ordinal, finalTaskError.httpResponseCode,
-                        finalTaskError.description) else status.ordinal
+                val finalTaskException = taskException ?: TaskException(ExceptionType.general)
+                // send exception data only for .failed task, otherwise just the status
+                val arg: Any = if (status == TaskStatus.failed) mutableListOf(
+                    status.ordinal,
+                    finalTaskException.type.typeString,
+                    finalTaskException.description, finalTaskException.httpResponseCode
+                ) else status.ordinal
                 if (!postOnBackgroundChannel("statusUpdate", task, arg)) {
-                    // unsuccessful post, so store in local prefs (without error info)
+                    // unsuccessful post, so store in local prefs (without exception info)
                     Log.d(TAG, "Could not post status update -> storing locally")
                     val jsonMap = task.toJsonMap().toMutableMap()
                     jsonMap["taskStatus"] = status.ordinal // merge into Task JSON
@@ -274,9 +276,11 @@ class TaskWorker(
         suspend fun processResumeData(resumeData: ResumeData, prefs: SharedPreferences) {
             BackgroundDownloaderPlugin.localResumeData[resumeData.task.taskId] = resumeData
             if (!postOnBackgroundChannel(
-                            "resumeData", resumeData.task, mutableListOf(resumeData.data,
-                            resumeData.requiredStartByte)
+                    "resumeData", resumeData.task, mutableListOf(
+                        resumeData.data,
+                        resumeData.requiredStartByte
                     )
+                )
             ) {
                 // unsuccessful post, so store in local prefs
                 Log.d(TAG, "Could not post resume data -> storing locally")
@@ -407,7 +411,7 @@ class TaskWorker(
             }
             updateNotification(task, notificationTypeForTaskStatus(TaskStatus.running))
             val status = doTask(task, isResume, tempFilePath, requiredStartByte)
-            processStatusUpdate(task, status, prefs, taskError)
+            processStatusUpdate(task, status, prefs, taskException)
             updateNotification(task, notificationTypeForTaskStatus(status))
         }
         return Result.success()
@@ -454,7 +458,7 @@ class TaskWorker(
             Log.w(
                 TAG, "Error downloading from ${task.url} to ${task.filename}: $e"
             )
-            setTaskError(e)
+            setTaskException(e)
         }
         return TaskStatus.failed
     }
@@ -480,7 +484,7 @@ class TaskWorker(
             }
             return processUpload(connection, task, filePath)
         } catch (e: Exception) {
-            setTaskError(e)
+            setTaskException(e)
             when (e) {
                 is FileSystemException -> Log.w(
                     TAG, "Filesystem exception for url ${task.url} and $filePath: ${e.message}"
@@ -500,12 +504,13 @@ class TaskWorker(
 
                 else -> {
                     Log.w(
-                            TAG,
-                            "Error for url ${task.url} and $filePath: ${e.message}"
+                        TAG,
+                        "Error for url ${task.url} and $filePath: ${e.message}"
                     )
-                    e.printStackTrace()
-                    taskError = TaskError(ErrorType.general, description =
-                    "Error for url ${task.url} and $filePath: ${e.message}")
+                    taskException = TaskException(
+                        ExceptionType.general, description =
+                        "Error for url ${task.url} and $filePath: ${e.message}"
+                    )
                 }
             }
         }
@@ -592,8 +597,10 @@ class TaskWorker(
                         return TaskStatus.paused
                     }
                     Log.i(TAG, "Task ${task.taskId} cannot resume, therefore pause failed")
-                    taskError = TaskError(ErrorType.resume,
-                            description = "Task was paused but cannot resume")
+                    taskException = TaskException(
+                        ExceptionType.resume,
+                        description = "Task was paused but cannot resume"
+                    )
                     deleteTempFile(tempFilePath)
                     return TaskStatus.failed
                 }
@@ -603,7 +610,7 @@ class TaskWorker(
                     // so if allowed, pause it and schedule the resume task immediately
                     if (!task.allowPause) {
                         Log.i(TAG, "Task ${task.taskId} timed out")
-                        taskError = TaskError(ErrorType.connection, description = "Task timed out")
+                        taskException = TaskException(ExceptionType.connection, description = "Task timed out")
                         return TaskStatus.failed
                     }
                     if (taskCanResume) {
@@ -623,13 +630,13 @@ class TaskWorker(
                         return TaskStatus.paused
                     }
                     Log.i(TAG, "Task ${task.taskId} timed out and cannot pause/resume")
-                    taskError = TaskError(ErrorType.connection, description = "Task timed out")
+                    taskException = TaskException(ExceptionType.connection, description = "Task timed out")
                     deleteTempFile(tempFilePath)
                     return TaskStatus.failed
                 }
 
                 else -> {
-                    taskError = TaskError(ErrorType.general)
+                    taskException = TaskException(ExceptionType.general)
                     deleteTempFile(tempFilePath)
                     return TaskStatus.failed
                 }
@@ -639,8 +646,11 @@ class TaskWorker(
                 TAG,
                 "Response code ${connection.responseCode} for download from  ${task.url} to $filePath"
             )
-            taskError = TaskError(ErrorType.httpResponse, httpResponseCode = connection.responseCode,
-                    description = connection.responseMessage)
+            val responseContent = responseContent(connection)
+            taskException = TaskException(
+                ExceptionType.httpResponse, httpResponseCode = connection.responseCode,
+                description = if (responseContent?.isNotEmpty() == true) responseContent else connection.responseMessage
+            )
             return if (connection.responseCode == 404) {
                 TaskStatus.notFound
             } else {
@@ -674,15 +684,19 @@ class TaskWorker(
         val file = File(filePath)
         if (!file.exists() || !file.isFile) {
             Log.w(TAG, "File $filePath does not exist or is not a file")
-            taskError = TaskError(ErrorType.fileSystem,
-                    description = "File to upload does not exist: $filePath")
+            taskException = TaskException(
+                ExceptionType.fileSystem,
+                description = "File to upload does not exist: $filePath"
+            )
             return TaskStatus.failed
         }
         val fileSize = file.length()
         if (fileSize <= 0) {
             Log.w(TAG, "File $filePath has 0 length")
-            taskError = TaskError(ErrorType.fileSystem,
-                    description = "File $filePath has 0 length")
+            taskException = TaskException(
+                ExceptionType.fileSystem,
+                description = "File $filePath has 0 length"
+            )
             return TaskStatus.failed
         }
         var transferBytesResult: TaskStatus
@@ -769,8 +783,15 @@ class TaskWorker(
                     TAG,
                     "Response code ${connection.responseCode} for upload of $filePath to ${task.url}"
                 )
-                taskError = TaskError(ErrorType.httpResponse, httpResponseCode = connection.responseCode,
-                        description = connection.responseMessage)
+                val responseContent = responseContent(connection)
+                taskException = TaskException(
+                    ExceptionType.httpResponse, httpResponseCode = connection.responseCode,
+                    description = if (responseContent?.isNotEmpty() == true) responseContent else connection.responseMessage
+                )
+                taskException = TaskException(
+                    ExceptionType.httpResponse, httpResponseCode = connection.responseCode,
+                    description = connection.responseMessage
+                )
                 return if (connection.responseCode == 404) {
                     TaskStatus.notFound
                 } else {
@@ -833,7 +854,7 @@ class TaskWorker(
                 }
             } catch (e: Exception) {
                 Log.i(TAG, "Exception for ${task.taskId}: $e")
-                setTaskError(e)
+                setTaskException(e)
                 return@withContext TaskStatus.failed
             }
             return@withContext TaskStatus.complete
@@ -856,8 +877,10 @@ class TaskWorker(
         val matchResult = contentRangeRegEx.find(range)
         if (matchResult == null) {
             Log.i(TAG, "Could not process partial response Content-Range $range")
-            taskError = TaskError(ErrorType.resume,
-                    description = "Could not process partial response Content-Range $range")
+            taskException = TaskException(
+                ExceptionType.resume,
+                description = "Could not process partial response Content-Range $range"
+            )
             return false
         }
         val start = matchResult.groups[1]?.value?.toLong()!!
@@ -871,8 +894,10 @@ class TaskWorker(
         )
         if (total != end + 1 || start > tempFileLength) {
             Log.i(TAG, "Offered range not feasible: $range")
-            taskError = TaskError(ErrorType.resume,
-                    description = "Offered range not feasible: $range")
+            taskException = TaskException(
+                ExceptionType.resume,
+                description = "Offered range not feasible: $range"
+            )
             return false
         }
         startByte = start
@@ -881,8 +906,8 @@ class TaskWorker(
             RandomAccessFile(tempFilePath, "rw").use { it.setLength(start) }
         } catch (e: IOException) {
             Log.i(TAG, "Could not truncate temp file")
-            taskError =
-                    TaskError(ErrorType.resume, description = "Could not truncate temp file")
+            taskException =
+                TaskException(ExceptionType.resume, description = "Could not truncate temp file")
             return false
         }
         return true
@@ -1034,7 +1059,10 @@ class TaskWorker(
                     action = NotificationRcvr.actionTap
                     putExtra(NotificationRcvr.bundleTask, taskJsonString)
                     putExtra(NotificationRcvr.bundleNotificationType, notificationType.ordinal)
-                    putExtra(NotificationRcvr.bundleNotificationConfig, notificationConfigJsonString)
+                    putExtra(
+                        NotificationRcvr.bundleNotificationConfig,
+                        notificationConfigJsonString
+                    )
                 }
                 val tapPendingIntent: PendingIntent = PendingIntent.getActivity(
                     applicationContext,
@@ -1187,17 +1215,32 @@ class TaskWorker(
     }
 
     /**
-     * Set the [taskError] variable based on error e
+     * Return the response's content as a String, or null if unable
      */
-    private fun setTaskError(e: Any) {
-        var errorType = ErrorType.general
+    private fun responseContent(connection: HttpURLConnection): String? {
+        try {
+            return connection.errorStream.bufferedReader().readText()
+        } catch (e: Exception) {
+            Log.i(
+                TAG,
+                "Could not read response content from httpResponseCode ${connection.responseCode}: $e"
+            )
+        }
+        return null
+    }
+
+    /**
+     * Set the [taskException] variable based on Exception [e]
+     */
+    private fun setTaskException(e: Any) {
+        var exceptionType = ExceptionType.general
         if (e is FileSystemException || e is IOException) {
-            errorType = ErrorType.fileSystem
+            exceptionType = ExceptionType.fileSystem
         }
         if (e is SocketException) {
-            errorType = ErrorType.connection
+            exceptionType = ExceptionType.connection
         }
-        taskError = TaskError(errorType, description = e.toString())
+        taskException = TaskException(exceptionType, description = e.toString())
     }
 }
 

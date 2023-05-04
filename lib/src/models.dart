@@ -2,12 +2,14 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:background_downloader/background_downloader.dart';
-import 'package:background_downloader/src/desktop_downloader.dart';
+import 'desktop_downloader.dart';
 import 'package:logging/logging.dart';
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
+
+import 'exceptions.dart';
+import 'file_downloader.dart';
 
 final _log = Logger('FileDownloader');
 
@@ -33,7 +35,7 @@ enum TaskStatus {
   /// This is a final state
   notFound,
 
-  /// Task has failed due to an error
+  /// Task has failed due to an exception
   ///
   /// This is a final state
   failed,
@@ -123,9 +125,9 @@ typedef TaskStatusCallback = void Function(Task task, TaskStatus status);
 
 /// Signature for a function you can register to be called
 /// when the state of a [task] changes, and are interested in detailed
-/// error information for failed tasks.
-typedef TaskStatusCallbackWithError = void Function(
-    Task task, TaskStatus status, TaskError? taskError);
+/// exception information for failed tasks.
+typedef TaskStatusCallbackWithException = void Function(
+    Task task, TaskStatus status, TaskException? taskException);
 
 /// Signature for a function you can register to be called
 /// for every progress change of a [task].
@@ -822,9 +824,9 @@ class TaskUpdate {
 /// A status update event
 class TaskStatusUpdate extends TaskUpdate {
   final TaskStatus status;
-  final TaskError? error;
+  final TaskException? exception;
 
-  TaskStatusUpdate(super.task, this.status, [this.error]);
+  TaskStatusUpdate(super.task, this.status, [this.exception]);
 }
 
 /// A progress update event
@@ -961,68 +963,3 @@ enum SharedStorage {
   external
 }
 
-enum ErrorType {
-  /// Invalid HTTP response
-  httpResponse,
-
-  /// Could not save or find file, or create directory
-  fileSystem,
-
-  /// URL incorrect
-  url,
-
-  /// Connection problem, eg host not found, timeout
-  connection,
-
-  /// Could not resume or pause task
-  resume,
-
-  /// General error
-  general
-}
-
-/// Contains error information associated with a failed [Task]
-///
-/// The [type] categorizes the error
-/// The [httpResponseCode] is only valid if >0 and may offer details about the
-/// nature of the error
-/// The [description] is typically taken from the platform-generated
-/// error message, or from the plugin. The localization is undefined
-class TaskError {
-  final ErrorType type;
-  final int httpResponseCode;
-  final String description;
-
-  TaskError(this.type, {this.httpResponseCode = -1, this.description = ''});
-
-  /// Create object from JSON Map
-  TaskError.fromJsonMap(Map<String, dynamic> jsonMap)
-      : type = ErrorType.values[jsonMap['type'] as int? ?? 0],
-        httpResponseCode = jsonMap['httpResponseCode'] as int? ?? 0,
-        description = jsonMap['description'] ?? '';
-
-  /// Return JSON Map representing object
-  Map<String, dynamic> toJsonMap() => {
-        'type': type.index,
-        'httpResponseCode': httpResponseCode,
-        'description': description
-      };
-
-  @override
-  String toString() {
-    return 'TaskError{type: $type, httpResponseCode: $httpResponseCode, description: $description}';
-  }
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TaskError &&
-          runtimeType == other.runtimeType &&
-          type == other.type &&
-          httpResponseCode == other.httpResponseCode &&
-          description == other.description;
-
-  @override
-  int get hashCode =>
-      type.hashCode ^ httpResponseCode.hashCode ^ description.hashCode;
-}

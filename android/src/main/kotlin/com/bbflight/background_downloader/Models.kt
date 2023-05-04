@@ -187,33 +187,44 @@ class ResumeData(val task: Task, val data: String, val requiredStartByte: Long) 
     }
 }
 
-enum class ErrorType {
-    /// Invalid HTTP response
-    httpResponse,
+
+/**
+ * The type of a [TaskException]
+ *
+ * Exceptions are handled differently on the Kotlin side because they are only a vehicle to message
+ * to the Flutter side. An exception class hierarchy is therefore not required in Kotlin, and the
+ * single [TaskException] class has a field for the [TaskException.type] of exception, as well as all possible
+ * exception fields.
+ * The [TaskException.type] (as a String using the enum's [ExceptionType.typeString]) is used on the
+ * Flutter side to create the approrpriate Exception subclass.
+ */
+enum class ExceptionType(val typeString: String) {
+    /// General error
+    general("TaskException"),
 
     /// Could not save or find file, or create directory
-    fileSystem,
+    fileSystem("TaskFileSystemException"),
 
     /// URL incorrect
-    url,
+    url("TaskUrlException"),
 
     /// Connection problem, eg host not found, timeout
-    connection,
+    connection("TaskConnectionException"),
 
     /// Could not resume or pause task
-    resume,
+    resume("TaskResumeException"),
 
-    /// General error
-    general
+    /// Invalid HTTP response
+    httpResponse("TaskHttpException")
 }
 
 /**
 * Contains error information associated with a failed [Task]
 *
-* The [type] categorizes the error
+* The [type] categorizes the exception, used to create the appropriate subclass on the Flutter side
 * The [httpResponseCode] is only valid if >0 and may offer details about the
 * nature of the error
 * The [description] is typically taken from the platform-generated
 * error message, or from the plugin. The localization is undefined
 */
-class TaskError(val type: ErrorType, val httpResponseCode: Int = -1, val description: String = "")
+class TaskException(val type: ExceptionType, val httpResponseCode: Int = -1, val description: String = "")

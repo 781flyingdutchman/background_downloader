@@ -9,6 +9,7 @@ import 'package:localstore/localstore.dart';
 
 import 'database.dart';
 import 'desktop_downloader.dart';
+import 'exceptions.dart';
 import 'models.dart';
 import 'native_downloader.dart';
 
@@ -440,7 +441,7 @@ abstract class BaseDownloader {
   /// Also manages retries ([tasksWaitingToRetry] and delay) and pause/resume
   /// ([pausedTasks] and [_clearPauseResumeInfo]
   void processStatusUpdate(Task task, TaskStatus taskStatus,
-      [TaskError? taskError]) {
+      [TaskException? taskError]) {
     // Normal status updates are only sent here when the task is expected
     // to provide those.  The exception is a .failed status when a task
     // has retriesRemaining > 0: those are always sent here, and are
@@ -465,8 +466,7 @@ abstract class BaseDownloader {
             _emitStatusUpdate(
                 task,
                 TaskStatus.failed,
-                TaskError(ErrorType.general,
-                    description:
+                TaskException(
                         'Could not enqueue task $task after retry timeout'));
             _emitProgressUpdate(task, progressFailed);
           }
@@ -514,7 +514,7 @@ abstract class BaseDownloader {
   /// Emits the status update for this task to its callback or listener, and
   /// update the task in the database
   void _emitStatusUpdate(
-      Task task, TaskStatus taskStatus, TaskError? taskError) {
+      Task task, TaskStatus taskStatus, TaskException? taskError) {
     _updateTaskInDatabase(task, status: taskStatus, taskError: taskError);
     if (task.providesStatusUpdates) {
       if (taskStatus != TaskStatus.failed) {
@@ -525,7 +525,7 @@ abstract class BaseDownloader {
         if (taskStatusCallback is TaskStatusCallback) {
           taskStatusCallback(task, taskStatus);
         }
-        if (taskStatusCallback is TaskStatusCallbackWithError) {
+        if (taskStatusCallback is TaskStatusCallbackWithException) {
           taskStatusCallback(task, taskStatus, taskError);
         }
       } else {
@@ -562,7 +562,7 @@ abstract class BaseDownloader {
 
   /// Insert or update the [TaskRecord] in the tracking database
   Future<void> _updateTaskInDatabase(Task task,
-      {TaskStatus? status, double? progress, TaskError? taskError}) async {
+      {TaskStatus? status, double? progress, TaskException? taskError}) async {
     if (trackedGroups.contains(task.group)) {
       if (status == null && progress != null) {
         // update existing record with progress only

@@ -21,7 +21,7 @@ var progressCallbackCompleter = Completer<void>();
 var someProgressCompleter = Completer<void>(); // completes when progress > 0.1
 var lastStatus = TaskStatus.enqueued;
 var lastProgress = -100.0;
-TaskError? lastError;
+TaskException? lastException;
 
 const workingUrl = 'https://google.com';
 const failingUrl = 'https://avmaps-dot-bbflightserver-hrd.appspot'
@@ -63,13 +63,13 @@ void statusCallback(Task task, TaskStatus status) {
   }
 }
 
-void statusCallbackWithError(
-    Task task, TaskStatus status, TaskError? taskError) {
+void statusCallbackWithException(
+    Task task, TaskStatus status, TaskException? taskException) {
   print(
-      'statusCallbackWithError for $task with status $status and error $taskError');
+      'statusCallbackWithException for $task with status $status and exception $taskException');
   lastStatus = status;
   statusCallbackCounter++;
-  lastError = taskError;
+  lastException = taskException;
   if (!statusCallbackCompleter.isCompleted && status.isFinalState) {
     statusCallbackCompleter.complete();
   }
@@ -115,7 +115,7 @@ void main() {
     progressCallbackCompleter = Completer<void>();
     someProgressCompleter = Completer<void>();
     lastStatus = TaskStatus.enqueued;
-    lastError = null;
+    lastException = null;
     FileDownloader().destroy();
     final path =
         join((await getApplicationDocumentsDirectory()).path, task.filename);
@@ -286,16 +286,16 @@ void main() {
       final subscription = FileDownloader().updates.listen((event) {
         if (event is TaskStatusUpdate) {
           if (event.status != TaskStatus.failed) {
-            expect(event.error, isNull);
+            expect(event.exception, isNull);
           } else {
-            // expect 403 not found error, coming up in second test
+            // expect 403 Forbidden exception, coming up in second test
             print(event.status);
-            expect(event.error, isNotNull);
-            expect(event.error?.type, equals(ErrorType.httpResponse));
-            expect(event.error?.httpResponseCode, equals(403));
-            expect(event.error?.description.toLowerCase(), equals('forbidden'));
+            expect(event.exception, isNotNull);
+            expect(event.exception is TaskHttpException, isTrue);
+            expect(event.exception?.description, equals('Not authorized'));
+            expect((event.exception as TaskHttpException).httpResponseCode, equals(403));
           }
-          statusCallbackWithError(event.task, event.status, event.error);
+          statusCallbackWithException(event.task, event.status, event.exception);
         }
       });
       expect(await FileDownloader().enqueue(task), isTrue);
@@ -303,16 +303,16 @@ void main() {
       expect(statusCallbackCounter, equals(3));
       expect(lastStatus, equals(TaskStatus.complete));
       expect(File(path).existsSync(), isTrue);
-      // test with a failing url and check the error
+      // test with a failing url and check the exception
       statusCallbackCompleter = Completer();
       task = DownloadTask(url: failingUrl, filename: 'test');
       expect(await FileDownloader().enqueue(task), isTrue);
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.failed));
-      final error = lastError!;
-      expect(error.type, equals(ErrorType.httpResponse));
-      expect(error.httpResponseCode, equals(403));
-      expect(error.description.toLowerCase(), equals('forbidden'));
+      final exception = lastException!;
+      expect(exception is TaskHttpException, isTrue);
+      expect(exception.description, equals('Not authorized'));
+      expect((exception as TaskHttpException).httpResponseCode, equals(403));
       subscription.cancel();
     });
 
@@ -1587,7 +1587,7 @@ void main() {
       expect(record?.taskStatus, equals(TaskStatus.running));
       expect(record?.progress, greaterThan(0));
       expect(record?.progress, equals(lastProgress));
-      expect(record?.error, isNull);
+      expect(record?.exception, isNull);
       await statusCallbackCompleter.future;
       // completed
       final record2 = await FileDownloader().database.recordForId(task.taskId);
@@ -1595,7 +1595,7 @@ void main() {
       expect(record2?.taskId, equals(task.taskId));
       expect(record2?.taskStatus, equals(TaskStatus.complete));
       expect(record2?.progress, equals(progressComplete));
-      expect(record2?.error, isNull);
+      expect(record2?.exception, isNull);
       final records = await FileDownloader().database.allRecords();
       expect(records.length, equals(1));
       expect(records.first, equals(record2));
@@ -1686,7 +1686,7 @@ void main() {
       print('Finished markDownloadedComplete');
     });
 
-    testWidgets('track with error', (widgetTester) async {
+    testWidgets('track with exception', (widgetTester) async {
       await FileDownloader().database.deleteAllRecords();
       await FileDownloader()
           .registerCallbacks(
@@ -1706,11 +1706,11 @@ void main() {
       expect(record?.taskId, equals(task.taskId));
       expect(record?.taskStatus, equals(TaskStatus.failed));
       expect(record?.progress, equals(progressFailed));
-      expect(record?.error, isNotNull);
-      final error = (record?.error)!;
-      expect(error.type, equals(ErrorType.httpResponse));
-      expect(error.httpResponseCode, equals(403));
-      expect(error.description.toLowerCase(), equals('forbidden'));
+      expect(record?.exception, isNotNull);
+      final exception = (record?.exception)!;
+      expect(exception is TaskHttpException, isTrue);
+      expect(exception.description, equals('Not authorized'));
+      expect((exception as TaskHttpException).httpResponseCode, equals(403));
       final records = await FileDownloader().database.allRecords();
       expect(records.length, equals(1));
     });
@@ -2083,30 +2083,30 @@ void main() {
     });
   });
 
-  group('Error details', () {
+  group('Exception details', () {
     testWidgets('httpResponse: 403', (widgetTester) async {
       FileDownloader().registerCallbacks(
-          taskStatusCallbackWithError: statusCallbackWithError);
+          taskStatusCallbackWithError: statusCallbackWithException);
       task = DownloadTask(url: failingUrl, filename: 'test');
       expect(await FileDownloader().enqueue(task), isTrue);
       await statusCallbackCompleter.future;
-      final error = lastError!;
-      expect(error.type, equals(ErrorType.httpResponse));
-      expect(error.httpResponseCode, equals(403));
-      expect(error.description.toLowerCase(), equals('forbidden'));
+      final exception = lastException!;
+      expect(exception is TaskHttpException, isTrue);
+      expect(exception.description, equals('Not authorized'));
+      expect((exception as TaskHttpException).httpResponseCode, equals(403));
     });
 
     testWidgets('fileSystem: File to upload does not exist',
         (widgetTester) async {
       if (!Platform.isIOS) {
         FileDownloader().registerCallbacks(
-            taskStatusCallbackWithError: statusCallbackWithError);
+            taskStatusCallbackWithError: statusCallbackWithException);
         uploadTask = uploadTask.copyWith(filename: 'doesNotExist');
         expect(await FileDownloader().enqueue(uploadTask), isTrue);
         await statusCallbackCompleter.future;
-        final error = lastError!;
-        expect(error.type, equals(ErrorType.fileSystem));
-        expect(error.description.startsWith('File to upload does not exist'),
+        final exception = lastException!;
+        expect(exception is TaskFileSystemException, isTrue);
+        expect(exception.description.startsWith('File to upload does not exist'),
             isTrue);
       }
     });

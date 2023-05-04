@@ -89,7 +89,7 @@ class FileDownloader {
   FileDownloader registerCallbacks(
       {String group = defaultGroup,
       TaskStatusCallback? taskStatusCallback,
-      TaskStatusCallbackWithError? taskStatusCallbackWithError,
+      TaskStatusCallbackWithException? taskStatusCallbackWithError,
       TaskProgressCallback? taskProgressCallback,
       TaskNotificationTapCallback? taskNotificationTapCallback}) {
     assert(

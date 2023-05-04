@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'base_downloader.dart';
 import 'desktop_downloader_isolate.dart';
+import 'exceptions.dart';
 import 'file_downloader.dart';
 import 'models.dart';
 
@@ -90,7 +91,7 @@ class DesktopDownloader extends BaseDownloader {
       final error = (message as List).first as String;
       logError(task, error);
       processStatusUpdate(task, TaskStatus.failed,
-          TaskError(ErrorType.general, description: error));
+          TaskException(error));
       receivePort.close(); // also ends listener at then end
     });
     await Isolate.spawn(doTask, receivePort.sendPort,
@@ -122,7 +123,7 @@ class DesktopDownloader extends BaseDownloader {
             case 'statusUpdate':
               final status = message[1] as TaskStatus;
               processStatusUpdate(task, status,
-                  status == TaskStatus.failed ? message[2] as TaskError : null);
+                  status == TaskStatus.failed ? message[2] as TaskException : null);
               break;
 
             case 'resumeData':
