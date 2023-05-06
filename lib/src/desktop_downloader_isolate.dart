@@ -126,8 +126,11 @@ Future<void> doDownloadTask(
         if (response.statusCode == 404) {
           resultStatus = TaskStatus.notFound;
         } else {
+          final content = await responseContent(response);
           taskException = TaskHttpException(
-              response.reasonPhrase ?? 'Invalid HTTP Request',
+              content?.isNotEmpty == true
+                  ? content!
+                  : response.reasonPhrase ?? 'Invalid HTTP Request',
               response.statusCode);
         }
       }
@@ -352,14 +355,18 @@ Future<void> doUploadTask(
     // initiate the request and handle completion async
     final requestCompleter = Completer();
     var transferBytesResult = TaskStatus.failed;
-    client.send(request).then((response) {
+    client.send(request).then((response) async {
       // request completed, so send status update and finish
       resultStatus = transferBytesResult == TaskStatus.complete &&
               !okResponses.contains(response.statusCode)
           ? TaskStatus.failed
           : transferBytesResult;
+      final content = await responseContent(response);
       taskException ??= TaskHttpException(
-          response.reasonPhrase ?? 'Invalid HTP response', response.statusCode);
+          content?.isNotEmpty == true
+              ? content!
+              : response.reasonPhrase ?? 'Invalid HTP response',
+          response.statusCode);
       if (response.statusCode == 404) {
         resultStatus = TaskStatus.notFound;
       }
@@ -505,7 +512,7 @@ void processProgressUpdateInIsolate(
 }
 
 // The following functions are related to multipart uploads and are
-// by and large copied from the http package. Similar implementations
+// by and large copied from the dart:http package. Similar implementations
 // in Kotlin and Swift are translations of the same code
 
 /// Returns the multipart entry for one field name/value pair
@@ -568,5 +575,16 @@ void setTaskError(dynamic e) {
 
     default:
       taskException = TaskException(e.toString());
+  }
+}
+
+/// Return the response's content as a String, or null if unable
+Future<String?> responseContent(http.StreamedResponse response) {
+  try {
+    return response.stream.bytesToString();
+  } catch (e) {
+    _log.fine(
+        'Could not read response content from httpResponseCode ${response.statusCode}: $e');
+    return Future.value(null);
   }
 }

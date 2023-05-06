@@ -54,28 +54,21 @@ var retryTask =
 var uploadTask = UploadTask(url: uploadTestUrl, filename: uploadFilename);
 var uploadTaskBinary = uploadTask.copyWith(post: 'binary');
 
-void statusCallback(Task task, TaskStatus status) {
+void statusCallback(TaskStatusUpdate update) {
+  final task = update.task;
+  final status = update.status;
   print('statusCallback for $task with status $status');
   lastStatus = status;
+  lastException = update.exception;
   statusCallbackCounter++;
   if (!statusCallbackCompleter.isCompleted && status.isFinalState) {
     statusCallbackCompleter.complete();
   }
 }
 
-void statusCallbackWithException(
-    Task task, TaskStatus status, TaskException? taskException) {
-  print(
-      'statusCallbackWithException for $task with status $status and exception $taskException');
-  lastStatus = status;
-  statusCallbackCounter++;
-  lastException = taskException;
-  if (!statusCallbackCompleter.isCompleted && status.isFinalState) {
-    statusCallbackCompleter.complete();
-  }
-}
-
-void progressCallback(Task task, double progress) {
+void progressCallback(TaskProgressUpdate update) {
+  final task = update.task;
+  final progress = update.progress;
   print('progressCallback for $task with progress $progress');
   lastProgress = progress;
   progressCallbackCounter++;
@@ -283,19 +276,19 @@ void main() {
           'Check log output -> should have warned that there is no callback or listener');
       // Register listener. For testing convenience, we simply route the event
       // to the completer function we have defined
-      final subscription = FileDownloader().updates.listen((event) {
-        if (event is TaskStatusUpdate) {
-          if (event.status != TaskStatus.failed) {
-            expect(event.exception, isNull);
+      final subscription = FileDownloader().updates.listen((update) {
+        if (update is TaskStatusUpdate) {
+          if (update.status != TaskStatus.failed) {
+            expect(update.exception, isNull);
           } else {
             // expect 403 Forbidden exception, coming up in second test
-            print(event.status);
-            expect(event.exception, isNotNull);
-            expect(event.exception is TaskHttpException, isTrue);
-            expect(event.exception?.description, equals('Not authorized'));
-            expect((event.exception as TaskHttpException).httpResponseCode, equals(403));
+            print(update.status);
+            expect(update.exception, isNotNull);
+            expect(update.exception is TaskHttpException, isTrue);
+            expect(update.exception?.description, equals('Not authorized'));
+            expect((update.exception as TaskHttpException).httpResponseCode, equals(403));
           }
-          statusCallbackWithException(event.task, event.status, event.exception);
+          statusCallback(update);
         }
       });
       expect(await FileDownloader().enqueue(task), isTrue);
@@ -347,10 +340,10 @@ void main() {
           join((await getApplicationDocumentsDirectory()).path, task.filename);
       // Register listener. For testing convenience, we simply route the event
       // to the completer function we have defined
-      final subscription = FileDownloader().updates.listen((event) {
-        expect(event is TaskProgressUpdate, isTrue);
-        if (event is TaskProgressUpdate) {
-          progressCallback(event.task, event.progress);
+      final subscription = FileDownloader().updates.listen((update) {
+        expect(update is TaskProgressUpdate, isTrue);
+        if (update is TaskProgressUpdate) {
+          progressCallback(update);
         }
       });
       expect(await FileDownloader().enqueue(task), isTrue);
@@ -903,7 +896,7 @@ void main() {
 
     testWidgets('convenience download with callbacks', (widgetTester) async {
       var result = await FileDownloader()
-          .download(task, onStatus: (status) => statusCallback(task, status));
+          .download(task, onStatus: (status) => statusCallback(TaskStatusUpdate(task, status)));
       expect(result, equals(TaskStatus.complete));
       expect(statusCallbackCounter, equals(3));
       expect(progressCallbackCompleter.isCompleted, isFalse);
@@ -915,8 +908,8 @@ void main() {
       progressCallbackCompleter = Completer<void>();
       task = DownloadTask(url: urlWithContentLength, filename: defaultFilename);
       result = await FileDownloader().download(task,
-          onStatus: (status) => statusCallback(task, status),
-          onProgress: (progress) => progressCallback(task, progress));
+          onStatus: (status) => statusCallback(TaskStatusUpdate(task, status)),
+          onProgress: (progress) => progressCallback(TaskProgressUpdate(task, progress)));
       expect(result, equals(TaskStatus.complete));
       expect(statusCallbackCounter, equals(3));
       expect(progressCallbackCounter, greaterThan(1));
@@ -968,9 +961,9 @@ void main() {
       final failTask =
           DownloadTask(url: failingUrl, filename: defaultFilename, retries: 2);
       var failingResult = FileDownloader().download(failTask,
-          onStatus: (status) => statusCallback(failTask, status));
+          onStatus: (status) => statusCallback(TaskStatusUpdate(failTask, status)));
       var successResult = FileDownloader()
-          .download(task, onStatus: (status) => statusCallback(task, status));
+          .download(task, onStatus: (status) => statusCallback(TaskStatusUpdate(task, status)));
       await Future.wait([successResult, failingResult]);
       successResult.then((value) => expect(value, equals(TaskStatus.complete)));
       failingResult.then((value) => expect(value, equals(TaskStatus.failed)));
@@ -1481,7 +1474,7 @@ void main() {
 
     testWidgets('convenience upload with callbacks', (widgetTester) async {
       var result = await FileDownloader().upload(uploadTask,
-          onStatus: (status) => statusCallback(uploadTask, status));
+          onStatus: (status) => statusCallback(TaskStatusUpdate(uploadTask, status)));
       expect(result, equals(TaskStatus.complete));
       expect(statusCallbackCounter, equals(3));
       expect(progressCallbackCompleter.isCompleted, isFalse);
@@ -1493,8 +1486,8 @@ void main() {
       progressCallbackCompleter = Completer<void>();
       final task2 = uploadTask.copyWith(taskId: 'second');
       result = await FileDownloader().upload(task2,
-          onStatus: (status) => statusCallback(task2, status),
-          onProgress: (progress) => progressCallback(task2, progress));
+          onStatus: (status) => statusCallback(TaskStatusUpdate(task2, status)),
+          onProgress: (progress) => progressCallback(TaskProgressUpdate(task2, progress)));
       expect(result, equals(TaskStatus.complete));
       expect(statusCallbackCounter, equals(3));
       expect(progressCallbackCounter, greaterThan(1));
@@ -1507,11 +1500,11 @@ void main() {
     testWidgets('cancel enqueued tasks', (widgetTester) async {
       var cancelCounter = 0;
       var completeCounter = 0;
-      FileDownloader().registerCallbacks(taskStatusCallback: (task, status) {
-        if (status == TaskStatus.canceled) {
+      FileDownloader().registerCallbacks(taskStatusCallback: (update) {
+        if (update.status == TaskStatus.canceled) {
           cancelCounter++;
         }
-        if (status == TaskStatus.complete) {
+        if (update.status == TaskStatus.complete) {
           completeCounter++;
         }
       });
@@ -1854,8 +1847,8 @@ void main() {
           allowPause: true);
       // kick off convenience download but do not wait for the result
       unawaited(FileDownloader().download(task,
-          onStatus: (status) => statusCallback(task, status),
-          onProgress: (progress) => progressCallback(task, progress)));
+          onStatus: (status) => statusCallback(TaskStatusUpdate(task, status)),
+          onProgress: (progress) => progressCallback(TaskProgressUpdate(task, progress))));
       await someProgressCompleter.future;
       expect(await FileDownloader().pause(task), equals(true));
       await Future.delayed(const Duration(milliseconds: 250));
@@ -2086,7 +2079,7 @@ void main() {
   group('Exception details', () {
     testWidgets('httpResponse: 403', (widgetTester) async {
       FileDownloader().registerCallbacks(
-          taskStatusCallbackWithError: statusCallbackWithException);
+          taskStatusCallback: statusCallback);
       task = DownloadTask(url: failingUrl, filename: 'test');
       expect(await FileDownloader().enqueue(task), isTrue);
       await statusCallbackCompleter.future;
@@ -2100,7 +2093,7 @@ void main() {
         (widgetTester) async {
       if (!Platform.isIOS) {
         FileDownloader().registerCallbacks(
-            taskStatusCallbackWithError: statusCallbackWithException);
+            taskStatusCallback: statusCallback);
         uploadTask = uploadTask.copyWith(filename: 'doesNotExist');
         expect(await FileDownloader().enqueue(uploadTask), isTrue);
         await statusCallbackCompleter.future;

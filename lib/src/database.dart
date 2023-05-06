@@ -129,7 +129,7 @@ class TaskRecord {
         progress = jsonMap['progress'] as double? ?? 0,
         exception = jsonMap['exception'] == null
             ? null
-            : TaskException.fromJsonMap(jsonMap['error']);
+            : TaskException.fromJsonMap(jsonMap['exception']);
 
   /// Returns JSON map representation of this [TaskRecord]
   ///

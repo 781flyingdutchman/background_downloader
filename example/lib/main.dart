@@ -68,9 +68,9 @@ class _MyAppState extends State<MyApp> {
   /// Process the status updates coming from the downloader
   ///
   /// Stores the task status
-  void myDownloadStatusCallback(Task task, TaskStatus status) {
-    if (task == backgroundDownloadTask) {
-      switch (status) {
+  void myDownloadStatusCallback(TaskStatusUpdate update) {
+    if (update.task == backgroundDownloadTask) {
+      switch (update.status) {
         case TaskStatus.enqueued:
         case TaskStatus.notFound:
         case TaskStatus.failed:
@@ -89,7 +89,7 @@ class _MyAppState extends State<MyApp> {
           break;
       }
       setState(() {
-        downloadTaskStatus = status;
+        downloadTaskStatus = update.status;
       });
     }
   }
@@ -97,8 +97,8 @@ class _MyAppState extends State<MyApp> {
   /// Process the progress updates coming from the downloader
   ///
   /// Adds an update object to the stream that the main UI listens to
-  void myDownloadProgressCallback(Task task, double progress) {
-    updateStream.add(DownloadProgressIndicatorUpdate(task.filename, progress));
+  void myDownloadProgressCallback(TaskProgressUpdate update) {
+    updateStream.add(DownloadProgressIndicatorUpdate(update.task.filename, update.progress));
   }
 
   /// Process the user tapping on a notification by printing a message

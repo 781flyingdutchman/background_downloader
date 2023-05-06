@@ -121,13 +121,7 @@ enum Updates {
 
 /// Signature for a function you can register to be called
 /// when the state of a [task] changes.
-typedef TaskStatusCallback = void Function(Task task, TaskStatus status);
-
-/// Signature for a function you can register to be called
-/// when the state of a [task] changes, and are interested in detailed
-/// exception information for failed tasks.
-typedef TaskStatusCallbackWithException = void Function(
-    Task task, TaskStatus status, TaskException? taskException);
+typedef TaskStatusCallback = void Function(TaskStatusUpdate update);
 
 /// Signature for a function you can register to be called
 /// for every progress change of a [task].
@@ -138,7 +132,7 @@ typedef TaskStatusCallbackWithException = void Function(
 /// [TaskStatus.notFound] results in progress -3.0
 /// [TaskStatus.waitingToRetry] results in progress -4.0
 /// These constants are available as [progressFailed] etc
-typedef TaskProgressCallback = void Function(Task task, double progress);
+typedef TaskProgressCallback = void Function(TaskProgressUpdate update);
 
 /// Signature for function you can register to be called when a notification
 /// is tapped by the user
@@ -818,7 +812,7 @@ class Batch {
 class TaskUpdate {
   final Task task;
 
-  TaskUpdate(this.task);
+  const TaskUpdate(this.task);
 }
 
 /// A status update event
@@ -826,7 +820,7 @@ class TaskStatusUpdate extends TaskUpdate {
   final TaskStatus status;
   final TaskException? exception;
 
-  TaskStatusUpdate(super.task, this.status, [this.exception]);
+  const TaskStatusUpdate(super.task, this.status, [this.exception]);
 }
 
 /// A progress update event
@@ -839,7 +833,7 @@ class TaskStatusUpdate extends TaskUpdate {
 class TaskProgressUpdate extends TaskUpdate {
   final double progress;
 
-  TaskProgressUpdate(super.task, this.progress);
+  const TaskProgressUpdate(super.task, this.progress);
 }
 
 // Progress values representing a status
@@ -856,7 +850,7 @@ class ResumeData {
   final String data;
   final int requiredStartByte;
 
-  ResumeData(this.task, this.data, this.requiredStartByte);
+  const ResumeData(this.task, this.data, this.requiredStartByte);
 
   /// Create object from JSON Map
   ResumeData.fromJsonMap(Map<String, dynamic> jsonMap)
@@ -894,7 +888,7 @@ class TaskNotification {
   final String title;
   final String body;
 
-  TaskNotification(this.title, this.body);
+  const TaskNotification(this.title, this.body);
 
   /// Return JSON Map representing object
   Map<String, dynamic> toJsonMap() => {"title": title, "body": body};

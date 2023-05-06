@@ -151,6 +151,12 @@ class Task(
                 "$baseDirPath/${directory}/${filename}"
         }
     }
+
+    override fun toString(): String {
+        return "Task(taskId='$taskId', url='$url', filename='$filename', headers=$headers, post=$post, fileField='$fileField', mimeType='$mimeType', fields=$fields, directory='$directory', baseDirectory=$baseDirectory, group='$group', updates=$updates, requiresWiFi=$requiresWiFi, retries=$retries, retriesRemaining=$retriesRemaining, allowPause=$allowPause, metaData='$metaData', creationTime=$creationTime, taskType='$taskType')"
+    }
+
+
 }
 
 /** Defines a set of possible states which a [Task] can be in.

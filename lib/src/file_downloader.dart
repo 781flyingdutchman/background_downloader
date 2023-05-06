@@ -89,21 +89,12 @@ class FileDownloader {
   FileDownloader registerCallbacks(
       {String group = defaultGroup,
       TaskStatusCallback? taskStatusCallback,
-      TaskStatusCallbackWithException? taskStatusCallbackWithError,
       TaskProgressCallback? taskProgressCallback,
       TaskNotificationTapCallback? taskNotificationTapCallback}) {
-    assert(
-        taskStatusCallback != null ||
-            taskProgressCallback != null ||
-            taskStatusCallbackWithError != null,
+    assert(taskStatusCallback != null || taskProgressCallback != null,
         'Must provide at least one callback');
-    assert(
-        taskStatusCallback == null || taskStatusCallbackWithError == null,
-        'Must provide either taskStatusCallback or taskStatusCallbackWithError - '
-        'not both');
-    if (taskStatusCallback != null || taskStatusCallbackWithError != null) {
-      _downloader.groupStatusCallbacks[group] =
-          taskStatusCallback ?? taskStatusCallbackWithError;
+    if (taskStatusCallback != null) {
+      _downloader.groupStatusCallbacks[group] = taskStatusCallback;
     }
     if (taskProgressCallback != null) {
       _downloader.groupProgressCallbacks[group] = taskProgressCallback;
@@ -192,9 +183,11 @@ class FileDownloader {
     /// If the task is in final state, also removes the reference to the
     /// task-specific callbacks and completes the completer associated
     /// with this task
-    internalStatusCallback(Task task, TaskStatus status) {
+    internalStatusCallback(TaskStatusUpdate statusUpdate) {
+      final task = statusUpdate.task;
+      final status = statusUpdate.status;
       _shortTaskStatusCallbacks[task.taskId]?.call(status);
-      _taskStatusCallbacks[task.taskId]?.call(task, status);
+      _taskStatusCallbacks[task.taskId]?.call(statusUpdate);
       if (status.isFinalState) {
         if (_batches.isNotEmpty) {
           // check if this task is part of a batch
@@ -220,9 +213,10 @@ class FileDownloader {
 
     /// Internal callback function that only passes progress updates on
     /// to the task-specific progress callback passed as parameter to call
-    internalProgressCallBack(Task task, double progress) {
-      _shortTaskProgressCallbacks[task.taskId]?.call(progress);
-      _taskProgressCallbacks[task.taskId]?.call(task, progress);
+    internalProgressCallBack(TaskProgressUpdate progressUpdate) {
+      _shortTaskProgressCallbacks[progressUpdate.task.taskId]
+          ?.call(progressUpdate.progress);
+      _taskProgressCallbacks[progressUpdate.task.taskId]?.call(progressUpdate);
     }
 
     // register the internal callbacks and store the task-specific ones
@@ -413,10 +407,14 @@ class FileDownloader {
   /// their registered listener or callback.
   /// This is a convenient way to capture downloads that have completed while
   /// the app was suspended: on app startup, immediately register your
-  /// listener or callbacks, and call [trackTasks] fro each group.
-  Future<void> trackTasks(
-          {String group = defaultGroup, bool markDownloadedComplete = true}) =>
-      _downloader.trackTasks(group, markDownloadedComplete);
+  /// listener or callbacks, and call [trackTasks] for each group.
+  ///
+  /// Returns the [FileDownloader] for easy chaining
+  Future<FileDownloader> trackTasks(
+      {String group = defaultGroup, bool markDownloadedComplete = true}) async {
+    await _downloader.trackTasks(group, markDownloadedComplete);
+    return this;
+  }
 
   /// Wakes up the FileDownloader from possible background state, triggering
   /// a stream of updates that may have been processed while in the background,
@@ -466,6 +464,8 @@ class FileDownloader {
   }
 
   /// Configure notification for a single task
+  ///
+  /// Returns the [FileDownloader] for easy chaining
   FileDownloader configureNotificationForTask(Task task,
       {TaskNotification? running,
       TaskNotification? complete,
@@ -485,6 +485,8 @@ class FileDownloader {
   }
 
   /// Configure notification for a group of tasks
+  ///
+  /// Returns the [FileDownloader] for easy chaining
   FileDownloader configureNotificationForGroup(String group,
       {TaskNotification? running,
       TaskNotification? complete,
@@ -507,6 +509,8 @@ class FileDownloader {
   ///
   /// This is the notification configuration used for tasks that do not
   /// match a task-specific or group-specific notification configuration
+  ///
+  /// Returns the [FileDownloader] for easy chaining
   FileDownloader configureNotification(
       {TaskNotification? running,
       TaskNotification? complete,

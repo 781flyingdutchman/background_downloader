@@ -37,17 +37,17 @@ class NativeDownloader extends BaseDownloader {
       switch (call.method) {
         case 'statusUpdate':
           // int followed optionally followed by exception data
-          final taskStatus = TaskStatus.values[args[1]];
-          TaskException? taskException;
-          if (taskStatus == TaskStatus.failed) {
-            taskException = TaskException.fromTypeString(args[2] as String, args[3] as String, args[4] as int);
+          final status = TaskStatus.values[args[1]];
+          TaskException? exception;
+          if (status == TaskStatus.failed) {
+            exception = TaskException.fromTypeString(args[2] as String, args[3] as String, args[4] as int);
           }
-          processStatusUpdate(task, taskStatus, taskException);
+          processStatusUpdate(TaskStatusUpdate(task, status, exception));
           break;
 
         case 'progressUpdate':
           final progress = args.last as double;
-          processProgressUpdate(task, progress);
+          processProgressUpdate(TaskProgressUpdate(task, progress));
           break;
 
         case 'canResume':
