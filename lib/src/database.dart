@@ -1,6 +1,7 @@
 import 'package:localstore/localstore.dart';
 
 import 'base_downloader.dart';
+import 'exceptions.dart';
 import 'models.dart';
 
 /// Persistent database used for tracking task status and progress.
@@ -108,39 +109,48 @@ class Database {
 /// storage if [trackTasks] has been called to activate this.
 class TaskRecord {
   final Task task;
-  final TaskStatus taskStatus;
+  final TaskStatus status;
   final double progress;
+  final TaskException? exception;
 
-  TaskRecord(this.task, this.taskStatus, this.progress);
+  TaskRecord(this.task, this.status, this.progress, [this.exception]);
 
-  /// Returns the group collection this record is stored under
+  /// Returns the group collection this record is stored under, which is
+  /// the [task]'s [Task.group]
   String get group => task.group;
 
-  /// Returns the record id
+  /// Returns the record id, which is the [task]'s [Task.taskId]
   String get taskId => task.taskId;
 
   /// Create [TaskRecord] from a JSON map
   TaskRecord.fromJsonMap(Map<String, dynamic> jsonMap)
       : task = Task.createFromJsonMap(jsonMap),
-        taskStatus = TaskStatus.values[jsonMap['status'] as int],
-        progress = jsonMap['progress'];
+        status = TaskStatus.values[jsonMap['status'] as int? ?? 0],
+        progress = jsonMap['progress'] as double? ?? 0,
+        exception = jsonMap['exception'] == null
+            ? null
+            : TaskException.fromJsonMap(jsonMap['exception']);
 
   /// Returns JSON map representation of this [TaskRecord]
+  ///
+  /// Note the [status], [progress] and [exception] fields are merged into
+  /// the JSON map representation of the [task]
   Map<String, dynamic> toJsonMap() {
     final jsonMap = task.toJsonMap();
-    jsonMap['status'] = taskStatus.index;
+    jsonMap['status'] = status.index;
     jsonMap['progress'] = progress;
+    jsonMap['exception'] = exception?.toJsonMap();
     return jsonMap;
   }
 
-  /// Copy with optional replacements
-  TaskRecord copyWith({Task? task, TaskStatus? taskStatus, double? progress}) =>
-      TaskRecord(task ?? this.task, taskStatus ?? this.taskStatus,
-          progress ?? this.progress);
+  /// Copy with optional replacements. [exception] is always copied
+  TaskRecord copyWith({Task? task, TaskStatus? status, double? progress}) =>
+      TaskRecord(task ?? this.task, status ?? this.status,
+          progress ?? this.progress, exception);
 
   @override
   String toString() {
-    return 'DatabaseRecord{task: $task, status: $taskStatus, progress: $progress}';
+    return 'DatabaseRecord{task: $task, status: $status, progress: $progress, exception: $exception}';
   }
 
   @override
@@ -149,9 +159,11 @@ class TaskRecord {
       other is TaskRecord &&
           runtimeType == other.runtimeType &&
           task == other.task &&
-          taskStatus == other.taskStatus &&
-          progress == other.progress;
+          status == other.status &&
+          progress == other.progress &&
+          exception == other.exception;
 
   @override
-  int get hashCode => task.hashCode ^ taskStatus.hashCode ^ progress.hashCode;
+  int get hashCode =>
+      task.hashCode ^ status.hashCode ^ progress.hashCode ^ exception.hashCode;
 }

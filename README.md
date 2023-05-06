@@ -8,7 +8,7 @@ Optionally, keep track of task status and progress in a persistent [database](#u
 
 To upload a file, create an [UploadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/UploadTask-class.html) and call `upload`. To make a regular [server request](#server-requests), create a [Request](https://pub.dev/documentation/background_downloader/latest/background_downloader/Request-class.html) and call `request`.
 
-The plugin supports [headers](#headers), [retries](#retries), [requiring WiFi](#requiring-wifi) before starting the up/download, user-defined [metadata](#metadata) and GET and [POST](#post-requests) http(s) requests. You can [manage  the tasks in the queue](#managing-tasks-and-the-queue) (e.g. cancel, pause and resume), and have different handlers for updates by [group](#grouping-tasks) of tasks. Downloaded files can be moved to [shared storage](#shared-and-scoped-storage) to make them available outside the app.
+The plugin supports [headers](#headers), [retries](#retries), [requiring WiFi](#requiring-wifi) before starting the up/download, user-defined [metadata](#metadata) and GET, [POST](#post-requests) and other http(s) [requests](#http-request-method). You can [manage  the tasks in the queue](#managing-tasks-and-the-queue) (e.g. cancel, pause and resume), and have different handlers for updates by [group](#grouping-tasks) of tasks. Downloaded files can be moved to [shared storage](#shared-and-scoped-storage) to make them available outside the app.
 
 No setup is required for [Android](#android) (except when using notifications), Windows and Linux, and only minimal [setup for iOS](#ios) and [MacOS](#macos).
 
@@ -44,7 +44,7 @@ A `DownloadTask` or `UploadTask` (both subclasses of `Task`) defines one downloa
     final result = await FileDownloader().download(task);  // do the download and wait for result
 ```
 
-The `result` will be a `TaskStatus` that represents how the download ended: `.complete`, `.failed`, `.canceled` or `.notFound`.
+The `result` will be a [TaskStatusUpdate](#https://pub.dev/documentation/background_downloader/latest/background_downloader/TaskStatusUpdate-class.html), which has a field `status` that indicates how the download ended: `.complete`, `.failed`, `.canceled` or `.notFound`. If the `status` is `.failed`, the `result.exception` field will contain a `TaskException` with information about what went wrong.
 
 ### Monitoring the task
 
@@ -66,6 +66,20 @@ If you want to monitor status changes while the download is underway (i.e. not o
 ```
 
 The status will follow a sequence of `.enqueued` (waiting to execute), `.running` (actively downloading) and then one of the final states mentioned before, or `.waitingToRetry` if retries are enabled and the task failed.
+
+#### Elapsed time
+
+If you want to keep an eye on how long the download is taking (e.g. to warn the user that there may be an issue with their network connection, or to cancel the task if it takes too long), pass an `onElapsedTime` callback to the `download` method. The callback takes a single argument of type `Duration`, representing the time elapsed since the call to `download` was made. It is called at regular intervals (defined by `elapsedTimeInterval` which defaults to 5 seconds), so you can react in different ways depending on the total time elapsed. For example:
+```
+    final result = await FileDownloader().download(
+                      task, 
+                      onElapsedTime: (elapsed) {
+                          print('This is taking rather long: $elapsed');
+                      },
+                      elapsedTimeInterval: const Duration(seconds: 30));
+```
+
+The elapsed time logic is only available for `download`, `upload`, `downloadBatch` and `uploadBatch`. It is not available for tasks started using `enqueue`, as there is no expectation that those complete imminently.
 
 
 ### Specifying the location of the file to download or upload
@@ -118,7 +132,9 @@ The result is a `Batch` object that contains the result for each task in `.resul
 ```
 The callback will be called upon completion of each task (whether successful or not), and will start with (0, 0) before any downloads start, so you can use that to start a progress indicator.
 
-To also monitor status and progress for each file in the batch, add a `taskStatusCallback` (taking `Task` and `TaskStatus` as arguments) and/or a `taskProgressCallback (taking `Task` and a double as arguments).
+To also monitor status and progress for each file in the batch, add a [TaskStatusCallback](https://pub.dev/documentation/background_downloader/latest/background_downloader/TaskStatusCallback.html)  and/or a [TaskProgressCallback](https://pub.dev/documentation/background_downloader/latest/background_downloader/TaskProgressCallback.html)
+
+To monitor based on elapsed time, see [Elapsed time](#elapsed-time).
 
 For uploads, create a `List` of `UploadTask` objects and call `uploadBatch` - everything else is the same.
 
@@ -128,13 +144,13 @@ Instead of monitoring in the `download` call, you may want to use a centralized 
 1. You start download in multiple locations in your app, but want to monitor those in one place, instead of defining `onStatus` and `onProgress` for every call to `download`
 2. You have different groups of tasks, and each group needs a different monitor
 3. You want to keep track of the status and progress of tasks in a persistent database that you query
-4. Your downloads take long, and your user may switch away from your app for a long time, which causes your app to get suspended by the operating system. The downloads continue in the background and will finish eventually, but when your app restarts from a suspended state, the result `Future` that you were awaiting when you called `download` may no longer be 'alive', and you will therefore miss the completion of the downloads that happened while suspended. This situation is uncommon, as the app will typically remain alive for several minutes even when moving to the background, but if you find this to be a problem for your use case, then you should process status and progress updates for long running background tasks centrally.
+4. Your downloads take long, and your user may switch away from your app for a long time, which causes your app to get suspended by the operating system. A download started with a call to `download` will continue in the background and will finish eventually, but when your app restarts from a suspended state, the result `Future` that you were awaiting when you called `download` may no longer be 'alive', and you will therefore miss the completion of the downloads that happened while suspended. This situation is uncommon, as the app will typically remain alive for several minutes even when moving to the background, but if you find this to be a problem for your use case, then you should process status and progress updates for long running background tasks centrally.
 
 Central monitoring can be done by listening to an updates stream, or by registering callbacks. In both cases you now use `enqueue` instead of `download` or `upload`. `enqueue` returns almost immediately with a `bool` to indicate if the `Task` was successfully enqueued. Monitor status changes and act when a `Task` completes via the listener or callback.
 
 To ensure your callbacks or listener capture events that may have happened when your app was suspended in the background, call `resumeFromBackground` right after registering your callbacks or listener.
 
-In summary, to track your tasks persistently, follow these steps in order:
+In summary, to track your tasks persistently, follow these steps in order, immediately after app startup:
 1. Register an event listener or callback(s) to process status and progress updates
 2. call `await FileDownloader().trackTasks()` if you want to track the tasks in a persistent database
 3. call `await FileDownloader().resumeFromBackground()` to ensure events that happened while your app was in the background are processed
@@ -170,18 +186,17 @@ You can start your subscription in a convenient place, like a widget's `initStat
 
 Instead of listening to the `updates` stream you can register a callback for status updates, and/or a callback for progress updates.  This may be the easiest way if you want different callbacks for different [groups](#grouping-tasks).
 
-The `TaskStatusCallback` receives the `Task` and the updated `TaskStatus`, so a simple callback function is:
+The [TaskStatusCallback](https://pub.dev/documentation/background_downloader/latest/background_downloader/TaskStatusCallback.html) receives a [TaskStatusUpdate](https://pub.dev/documentation/background_downloader/latest/background_downloader/TaskStatusUpdate-class.html), so a simple callback function is:
 ```
-void taskStatusCallback(
-    Task task, TaskStatus status) {
-  print('taskStatusCallback for $task with status $status');
+void taskStatusCallback(TaskStatusUpdate update) {
+  print('taskStatusCallback for ${update.task) with status ${update.status} and exception ${update.exception}');
 }
 ```
 
-The `TaskProgressCallback` receives the `Task` and `progess` as a double, so a simple callback function is:
+The [TaskProgressCallback](https://pub.dev/documentation/background_downloader/latest/background_downloader/TaskProgressCallback.html) receives a [TaskProgressUpdate](https://pub.dev/documentation/background_downloader/latest/background_downloader/TaskProgressUpdate-class.html), so a simple callback function is:
 ```
-void taskProgressCallback(Task task, double progress) {
-  print('taskProgressCallback for $task with progress $progress');
+void taskProgressCallback(TaskProgressUpdate update) {
+  print('taskProgressCallback for ${update.task} with progress ${update.progress}');
 }
 ```
 
@@ -213,22 +228,20 @@ To keep track of the status and progress of all tasks, even after they have comp
     // from the database
     final record = await FileDownloader().database.recordForId(task.taskId);
     print('Taskid ${record.taskId} with task ${record.task} has '
-        'status ${record.taskStatus} and progress ${record.progress}'
+        'status ${record.status} and progress ${record.progress}'
 ```
 
-You can interact with the `database` using
-`allRecords`, `allRecordsOlderThan`, `recordForId`,
-`deleteAllRecords`,
-`deleteRecordWithId` etc. Note that only tasks that you asked to be tracked (using `trackTasks`, which activates tracking for all tasks in a [group](#grouping-tasks)) will be in the database. All active tasks in the queue, regardless of tracking, can be queried via the `FileDownloader().taskForId` call etc, but those will only return the task itself, not its status or progress, as those are expected to be monitored via listener or callback.  Note: tasks that are started using `download`, `upload`, `batchDownload` or `batchUpload` are assigned a special group name 'await', as callbacks for these tasks are handled within the `FileDownloader`. If you want to  track those tasks in the database, call `FileDownloader().trackTasks(FileDownloader.awaitGroup)` at the start of your app.
+You can interact with the `database` using `allRecords`, `allRecordsOlderThan`, `recordForId`,`deleteAllRecords`,
+`deleteRecordWithId` etc. If you only want to track tasks in a specific [group](#grouping-tasks), call `trackTasksInGroup` instead.
 
 ## Notifications
 
 On iOS and Android, for downloads only, the downloader can generate notifications to keep the user informed of progress also when the app is in the background, and allow pause/resume and cancellation of an ongoing download from those notifications.
 
-Configure notifications by calling `FileDownloader().configureNotification` and supply a 
-`TaskNotification` object for different states. For example, the following configures 
-notifications to show only when actively running (i.e. download in progress), disappearing when 
-the download completes or ends with an error. It will also show a progress bar and a 'cancel' 
+Configure notifications by calling `FileDownloader().configureNotification` and supply a
+`TaskNotification` object for different states. For example, the following configures
+notifications to show only when actively running (i.e. download in progress), disappearing when
+the download completes or ends with an error. It will also show a progress bar and a 'cancel'
 button, and will substitute {filename} with the actual filename of the file being downloaded.
 ```
     FileDownloader().configureNotification(
@@ -236,10 +249,10 @@ button, and will substitute {filename} with the actual filename of the file bein
         progressBar: true)
 ```
 
-To also show a notifications for other states, add a `TaskNotification` for `complete`, `error` 
-and/or `paused`. If `paused` is configured and the task can be paused, a 'Pause' button will 
-show for the `running` notification, next to the 'Cancel' button. To open the downloaded file 
-when the user taps the `complete` notification, add `tapOpensFile: true` to your call to 
+To also show a notifications for other states, add a `TaskNotification` for `complete`, `error`
+and/or `paused`. If `paused` is configured and the task can be paused, a 'Pause' button will
+show for the `running` notification, next to the 'Cancel' button. To open the downloaded file
+when the user taps the `complete` notification, add `tapOpensFile: true` to your call to
 `configureNotification`
 
 There are three possible substitutions of the text in the `title` or `body` of a `TaskNotification`:
@@ -256,6 +269,17 @@ While notifications are possible on desktop platforms, there is no true backgrou
 The `configureNotification` call configures notification behavior for all download tasks. You can specify a separate configuration for a `group` of tasks by calling `configureNotificationForGroup` and for a single task by calling `configureNotificationForTask`. A `Task` configuration overrides a `group` configuration, which overrides the default configuration.
 
 When attempting to show its first notification, the downloader will ask the user for permission to show notifications (platform version dependent) and abide by the user choice. For Android, starting with API 33, you need to add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />` to your app's `AndroidManifest.xml`. Also on Android you can localize the button text by overriding string resources `bg_downloader_cancel`, `bg_downloader_pause`, `bg_downloader_resume` and descriptions `bg_downloader_notification_channel_name`, `bg_downloader_notification_channel_description`. Localization on iOS is not currently supported.
+
+To respond to the user tapping a notification, register a callback that takes `Task` and `NotificationType` as parameters:
+
+```
+FileDownloader().registerCallbacks(
+            taskNotificationTapCallback: myNotificationTapCallback);
+            
+void myNotificationTapCallback(Task task, NotificationType notificationType) {
+    print('Tapped notification $notificationType for taskId ${task.taskId}');
+  }
+```
 
 ### Opening a downloaded file
 
@@ -278,17 +302,6 @@ On iOS, add the following to your `AppDelegate.swift`:
 or if using Objective C, add to `AppDelegate.m`:
 ```
    [UNUserNotificationCenter currentNotificationCenter].delegate = (id<UNUserNotificationCenterDelegate>) self;
-```
-
-To respond to the user tapping a notification, register a callback that takes `Task` and `NotificationType` as parameters:
-
-```
-FileDownloader().registerCallbacks(
-            taskNotificationTapCallback: myNotificationTapCallback);
-            
-void myNotificationTapCallback(Task task, NotificationType notificationType) {
-    print('Tapped notification $notificationType for taskId ${task.taskId}');
-  }
 ```
 
 
@@ -340,7 +353,7 @@ To cancel, pause or resume a task, call:
 * `cancelTaskWithId` to cancel the tasks with that taskId
 * `cancelTasksWithIds` to cancel all tasks with a `taskId` in the provided list of taskIds
 * `pause` to attempt to pause a task. Pausing is only possible for download GET requests, only if the `Task.allowPause` field is true, and only if the server supports pause/resume. Soon after the task is running (`TaskStatus.running`) you can call `taskCanResume` which will return a Future that resolves to `true` if the server appears capable of pause & resume. If it is not, then `pause` will have no effect and return false
-* `resume` to resume a previously paused task, which returns true if resume appears feasible. The taskStatus will follow the same sequence as a newly enqueued task. If resuming turns out to be not feasible (e.g. the operating system deleted the temp file with the partial download) then the task will either restart as a normal download, or fail.
+* `resume` to resume a previously paused task, which returns true if resume appears feasible. The task status will follow the same sequence as a newly enqueued task. If resuming turns out to be not feasible (e.g. the operating system deleted the temp file with the partial download) then the task will either restart as a normal download, or fail.
 
 
 To manage or query the queue of waiting or running tasks, call:
@@ -351,7 +364,7 @@ To manage or query the queue of waiting or running tasks, call:
 
 ### Grouping tasks
 
-Because an app may require different types of downloads, and handle those differently, you can specify a `group` with your task, and register callbacks specific to each `group`. If no group is specified the default group named `default` is used. For example, to create and handle downloads for group 'bigFiles':
+Because an app may require different types of downloads, and handle those differently, you can specify a `group` with your task, and register callbacks specific to each `group`. If no group is specified the default group `FileDownloader.defaultGroup` is used. For example, to create and handle downloads for group 'bigFiles':
 ```
   FileDownloader().registerCallbacks(
         group: 'bigFiles'
@@ -370,7 +383,7 @@ The methods `registerCallBacks`, `reset`, `allTaskIds` and `allTasks` all take a
 
 If you listen to the `updates` stream instead of using callbacks, you can test for the task's `group` field in your listener, and process the update differently for different groups.
 
-Note: tasks that are started using `download`, `upload`, `batchDownload` or `batchUpload` are assigned a special group name 'await', as callbacks for these tasks are handled within the `FileDownloader`.
+Note: tasks that are started using `download`, `upload`, `batchDownload` or `batchUpload` are assigned a special group name 'FileDownloader.awaitGroup', as callbacks for these tasks are handled within the `FileDownloader`.
 
 
 
@@ -393,6 +406,11 @@ If provided, these parameters (presented as a `Map<String, String>`) will be app
 #### Headers
 
 Optionally, `headers` can be added to the `Task`, which will be added to the HTTP request. This may be useful for authentication, for example.
+
+
+#### HTTP request method
+
+If provided, this request method will be used to make the request. By default, teh request method is `GET` unless `post` is not null, or the `Task` is a `DownloadTask`. Valid HTTP request methods are those listed in `Request.validHttpMethods`.
 
 #### POST requests
 

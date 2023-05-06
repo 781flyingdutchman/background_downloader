@@ -38,6 +38,7 @@ class Task(
     val url: String,
     val filename: String,
     val headers: Map<String, String>,
+    val httpRequestMethod: String,
     val post: String?,
     val fileField: String,
     val mimeType: String,
@@ -62,6 +63,7 @@ class Task(
         url = jsonMap["url"] as String? ?: "",
         filename = jsonMap["filename"] as String? ?: "",
         headers = jsonMap["headers"] as Map<String, String>? ?: mutableMapOf<String, String>(),
+        httpRequestMethod = jsonMap["httpRequestMethod"] as String? ?: "GET",
         post = jsonMap["post"] as String?,
         fileField = jsonMap["fileField"] as String? ?: "",
         mimeType = jsonMap["mimeType"] as String? ?: "",
@@ -87,6 +89,7 @@ class Task(
             "url" to url,
             "filename" to filename,
             "headers" to headers,
+            "httpRequestMethod" to httpRequestMethod,
             "post" to post,
             "fileField" to fileField,
             "mimeType" to mimeType,
@@ -151,6 +154,12 @@ class Task(
                 "$baseDirPath/${directory}/${filename}"
         }
     }
+
+    override fun toString(): String {
+        return "Task(taskId='$taskId', url='$url', filename='$filename', headers=$headers, httpRequestMethod=$httpRequestMethod, post=$post, fileField='$fileField', mimeType='$mimeType', fields=$fields, directory='$directory', baseDirectory=$baseDirectory, group='$group', updates=$updates, requiresWiFi=$requiresWiFi, retries=$retries, retriesRemaining=$retriesRemaining, allowPause=$allowPause, metaData='$metaData', creationTime=$creationTime, taskType='$taskType')"
+    }
+
+
 }
 
 /** Defines a set of possible states which a [Task] can be in.
@@ -186,3 +195,49 @@ class ResumeData(val task: Task, val data: String, val requiredStartByte: Long) 
         )
     }
 }
+
+
+/**
+ * The type of a [TaskException]
+ *
+ * Exceptions are handled differently on the Kotlin side because they are only a vehicle to message
+ * to the Flutter side. An exception class hierarchy is therefore not required in Kotlin, and the
+ * single [TaskException] class has a field for the [TaskException.type] of exception, as well as all possible
+ * exception fields.
+ * The [TaskException.type] (as a String using the enum's [ExceptionType.typeString]) is used on the
+ * Flutter side to create the approrpriate Exception subclass.
+ */
+enum class ExceptionType(val typeString: String) {
+    /// General error
+    general("TaskException"),
+
+    /// Could not save or find file, or create directory
+    fileSystem("TaskFileSystemException"),
+
+    /// URL incorrect
+    url("TaskUrlException"),
+
+    /// Connection problem, eg host not found, timeout
+    connection("TaskConnectionException"),
+
+    /// Could not resume or pause task
+    resume("TaskResumeException"),
+
+    /// Invalid HTTP response
+    httpResponse("TaskHttpException")
+}
+
+/**
+ * Contains error information associated with a failed [Task]
+ *
+ * The [type] categorizes the exception, used to create the appropriate subclass on the Flutter side
+ * The [httpResponseCode] is only valid if >0 and may offer details about the
+ * nature of the error
+ * The [description] is typically taken from the platform-generated
+ * error message, or from the plugin. The localization is undefined
+ */
+class TaskException(
+    val type: ExceptionType,
+    val httpResponseCode: Int = -1,
+    val description: String = ""
+)

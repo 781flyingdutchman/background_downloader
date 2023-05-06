@@ -9,6 +9,7 @@ import 'package:localstore/localstore.dart';
 
 import 'database.dart';
 import 'desktop_downloader.dart';
+import 'exceptions.dart';
 import 'models.dart';
 import 'native_downloader.dart';
 
@@ -47,7 +48,7 @@ abstract class BaseDownloader {
   var updates = StreamController<TaskUpdate>();
 
   /// Groups tracked in persistent database
-  final trackedGroups = <String>{};
+  final trackedGroups = <String?>{};
 
   /// Map of tasks and completer to indicate whether task can be resumed
   final canResumeTask = <Task, Completer<bool>>{};
@@ -85,8 +86,8 @@ abstract class BaseDownloader {
         // map is <taskId, Task/TaskStatus> where TaskStatus is added to Task JSON
         final payload = statusUpdateMap[taskId];
         final task = Task.createFromJsonMap(payload);
-        final taskStatus = TaskStatus.values[payload['taskStatus']];
-        processStatusUpdate(task, taskStatus);
+        final status = TaskStatus.values[payload['taskStatus']];
+        processStatusUpdate(TaskStatusUpdate(task, status));
       }
       final progressUpdateMap =
           await popUndeliveredData(Undelivered.progressUpdates);
@@ -95,7 +96,7 @@ abstract class BaseDownloader {
         final payload = progressUpdateMap[taskId];
         final task = Task.createFromJsonMap(payload);
         final progress = payload['progress'];
-        processProgressUpdate(task, progress);
+        processProgressUpdate(TaskProgressUpdate(task, progress));
       }
       _retrievedLocallyStoredData = true;
     }
@@ -157,8 +158,8 @@ abstract class BaseDownloader {
     // remove tasks waiting to retry from the list so they won't be retried
     for (final task in matchingTasksWaitingToRetry) {
       tasksWaitingToRetry.remove(task);
-      _emitStatusUpdate(task, TaskStatus.canceled);
-      _emitProgressUpdate(task, progressCanceled);
+      processStatusUpdate(TaskStatusUpdate(task, TaskStatus.canceled));
+      processProgressUpdate(TaskProgressUpdate(task, progressCanceled));
     }
     final remainingTaskIds = taskIds
         .where((taskId) => !matchingTaskIdsWaitingToRetry.contains(taskId));
@@ -202,7 +203,7 @@ abstract class BaseDownloader {
             log.fine('Could not delete temp file $tempFilePath');
           }
         }
-        processStatusUpdate(task, TaskStatus.canceled);
+        processStatusUpdate(TaskStatusUpdate(task, TaskStatus.canceled));
       }
     }
   }
@@ -235,18 +236,19 @@ abstract class BaseDownloader {
   /// This is a convenient way to capture downloads that have completed while
   /// the app was suspended, provided you have registered your listeners
   /// or callback before calling this.
-  Future<void> trackTasks(String group, bool markDownloadedComplete) async {
+  Future<void> trackTasks(String? group, bool markDownloadedComplete) async {
     trackedGroups.add(group);
     if (markDownloadedComplete) {
       final records = await Database().allRecords(group: group);
       for (var record in records.where((record) =>
           record.task is DownloadTask &&
-          record.taskStatus != TaskStatus.complete)) {
+          record.status != TaskStatus.complete)) {
         final filePath = await record.task.filePath();
         if (await File(filePath).exists()) {
-          processStatusUpdate(record.task, record.taskStatus);
+          processStatusUpdate(
+              TaskStatusUpdate(record.task, TaskStatus.complete));
           final updatedRecord = record.copyWith(
-              taskStatus: TaskStatus.complete, progress: progressComplete);
+              status: TaskStatus.complete, progress: progressComplete);
           await Database().updateRecord(updatedRecord);
         }
       }
@@ -439,14 +441,15 @@ abstract class BaseDownloader {
   ///
   /// Also manages retries ([tasksWaitingToRetry] and delay) and pause/resume
   /// ([pausedTasks] and [_clearPauseResumeInfo]
-  void processStatusUpdate(Task task, TaskStatus taskStatus) {
+  void processStatusUpdate(TaskStatusUpdate update) {
     // Normal status updates are only sent here when the task is expected
     // to provide those.  The exception is a .failed status when a task
     // has retriesRemaining > 0: those are always sent here, and are
     // intercepted to hold the task and reschedule in the near future
-    if (taskStatus == TaskStatus.failed && task.retriesRemaining > 0) {
-      _emitStatusUpdate(task, TaskStatus.waitingToRetry);
-      _emitProgressUpdate(task, progressWaitingToRetry);
+    final task = update.task;
+    if (update.status == TaskStatus.failed && task.retriesRemaining > 0) {
+      _emitStatusUpdate(TaskStatusUpdate(task, TaskStatus.waitingToRetry));
+      _emitProgressUpdate(TaskProgressUpdate(task, progressWaitingToRetry));
       task.decreaseRetriesRemaining();
       tasksWaitingToRetry.add(task);
       final waitTime = Duration(
@@ -461,27 +464,31 @@ abstract class BaseDownloader {
             log.warning('Could not enqueue task $task after retry timeout');
             removeModifiedTask(task);
             _clearPauseResumeInfo(task);
-            _emitStatusUpdate(task, TaskStatus.failed);
-            _emitProgressUpdate(task, progressFailed);
+            _emitStatusUpdate(TaskStatusUpdate(
+                task,
+                TaskStatus.failed,
+                TaskException(
+                    'Could not enqueue task $task after retry timeout')));
+            _emitProgressUpdate(TaskProgressUpdate(task, progressFailed));
           }
         }
       });
     } else {
       // normal status update
-      if (taskStatus == TaskStatus.paused) {
+      if (update.status == TaskStatus.paused) {
         setPausedTask(task);
       }
-      if (taskStatus.isFinalState) {
+      if (update.status.isFinalState) {
         removeModifiedTask(task);
         _clearPauseResumeInfo(task);
       }
-      _emitStatusUpdate(task, taskStatus);
+      _emitStatusUpdate(update);
     }
   }
 
   /// Process progress update coming from Downloader to client listener
-  void processProgressUpdate(Task task, double progress) {
-    _emitProgressUpdate(task, progress);
+  void processProgressUpdate(TaskProgressUpdate update) {
+    _emitProgressUpdate(update);
   }
 
   /// Process user tapping on a notification
@@ -507,15 +514,17 @@ abstract class BaseDownloader {
 
   /// Emits the status update for this task to its callback or listener, and
   /// update the task in the database
-  void _emitStatusUpdate(Task task, TaskStatus taskStatus) {
-    _updateTaskInDatabase(task, status: taskStatus);
+  void _emitStatusUpdate(TaskStatusUpdate update) {
+    final task = update.task;
+    _updateTaskInDatabase(task,
+        status: update.status, taskException: update.exception);
     if (task.providesStatusUpdates) {
       final taskStatusCallback = groupStatusCallbacks[task.group];
       if (taskStatusCallback != null) {
-        taskStatusCallback(task, taskStatus);
+        taskStatusCallback(update);
       } else {
         if (updates.hasListener) {
-          updates.add(TaskStatusUpdate(task, taskStatus));
+          updates.add(update);
         } else {
           log.warning('Requested status updates for task ${task.taskId} in '
               'group ${task.group} but no TaskStatusCallback '
@@ -528,14 +537,15 @@ abstract class BaseDownloader {
 
   /// Emit the progress update for this task to its callback or listener, and
   /// update the task in the database
-  void _emitProgressUpdate(Task task, progress) {
-    _updateTaskInDatabase(task, progress: progress);
+  void _emitProgressUpdate(TaskProgressUpdate update) {
+    final task = update.task;
+    _updateTaskInDatabase(task, progress: update.progress);
     if (task.providesProgressUpdates) {
       final taskProgressCallback = groupProgressCallbacks[task.group];
       if (taskProgressCallback != null) {
-        taskProgressCallback(task, progress);
+        taskProgressCallback(update);
       } else if (updates.hasListener) {
-        updates.add(TaskProgressUpdate(task, progress));
+        updates.add(update);
       } else {
         log.warning('Requested progress updates for task ${task.taskId} in '
             'group ${task.group} but no TaskProgressCallback '
@@ -547,8 +557,10 @@ abstract class BaseDownloader {
 
   /// Insert or update the [TaskRecord] in the tracking database
   Future<void> _updateTaskInDatabase(Task task,
-      {TaskStatus? status, double? progress}) async {
-    if (trackedGroups.contains(task.group)) {
+      {TaskStatus? status,
+      double? progress,
+      TaskException? taskException}) async {
+    if (trackedGroups.contains(null) || trackedGroups.contains(task.group)) {
       if (status == null && progress != null) {
         // update existing record with progress only
         final existingRecord = await Database().recordForId(task.taskId);
@@ -584,7 +596,8 @@ abstract class BaseDownloader {
             break;
         }
       }
-      Database().updateRecord(TaskRecord(task, status!, progress!));
+      Database()
+          .updateRecord(TaskRecord(task, status!, progress!, taskException));
     }
   }
 

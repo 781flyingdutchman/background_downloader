@@ -15,7 +15,9 @@ fun doOpenFile(activity: Activity, filePath: String, mimeType: String): Boolean 
     try {
         if (BackgroundDownloaderPlugin.activity != null) {
             val contentUri = getUriForFile(
-                activity, activity.packageName + ".com.bbflight.background_downloader.fileprovider", File(filePath)
+                activity,
+                activity.packageName + ".com.bbflight.background_downloader.fileprovider",
+                File(filePath)
             )
             intent.setDataAndType(contentUri, mimeType)
             intent.addFlags(

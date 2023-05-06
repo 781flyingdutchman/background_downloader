@@ -14,6 +14,7 @@ struct Task : Codable {
     var url: String
     var filename: String
     var headers: [String:String]
+    var httpRequestMethod: String
     var post: String?
     var fileField: String?
     var mimeType: String?
@@ -60,4 +61,43 @@ enum TaskStatus: Int {
          canceled,
          waitingToRetry,
          paused
+}
+
+/// The type of [TaskException]
+enum ExceptionType: String {
+    case
+    
+    // General error
+    general = "TaskException",
+    
+
+    // Could not save or find file, or create directory
+    fileSystem = "TaskFileSystemException",
+
+    // URL incorrect
+    url = "TaskUrlException",
+
+    // Connection problem, eg host not found, timeout
+    connection = "TaskConnectionException",
+
+    // Could not resume or pause task
+    resume = "TaskResumeException",
+
+    // Invalid HTTP response
+    httpResponse = "TaskHttpException"
+}
+
+/**
+* Contains error information associated with a failed [Task]
+*
+* The [type] categorizes the error
+* The [httpResponseCode] is only valid if >0 and may offer details about the
+* nature of the error
+* The [description] is typically taken from the platform-generated
+* error message, or from the plugin. The localization is undefined
+*/
+struct TaskException {
+    var type: ExceptionType
+    var httpResponseCode: Int
+    var description: String
 }

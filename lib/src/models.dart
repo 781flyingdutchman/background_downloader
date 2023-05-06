@@ -2,12 +2,14 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:background_downloader/background_downloader.dart';
-import 'package:background_downloader/src/desktop_downloader.dart';
+import 'desktop_downloader.dart';
 import 'package:logging/logging.dart';
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
+
+import 'exceptions.dart';
+import 'file_downloader.dart';
 
 final _log = Logger('FileDownloader');
 
@@ -33,7 +35,7 @@ enum TaskStatus {
   /// This is a final state
   notFound,
 
-  /// Task has failed due to an error
+  /// Task has failed due to an exception
   ///
   /// This is a final state
   failed,
@@ -118,8 +120,8 @@ enum Updates {
 }
 
 /// Signature for a function you can register to be called
-/// when the state of a [task] changes.
-typedef TaskStatusCallback = void Function(Task task, TaskStatus status);
+/// when the status of a [task] changes.
+typedef TaskStatusCallback = void Function(TaskStatusUpdate update);
 
 /// Signature for a function you can register to be called
 /// for every progress change of a [task].
@@ -130,7 +132,7 @@ typedef TaskStatusCallback = void Function(Task task, TaskStatus status);
 /// [TaskStatus.notFound] results in progress -3.0
 /// [TaskStatus.waitingToRetry] results in progress -4.0
 /// These constants are available as [progressFailed] etc
-typedef TaskProgressCallback = void Function(Task task, double progress);
+typedef TaskProgressCallback = void Function(TaskProgressUpdate update);
 
 /// Signature for function you can register to be called when a notification
 /// is tapped by the user
@@ -141,11 +143,16 @@ typedef TaskNotificationTapCallback = void Function(
 ///
 /// An equality test on a [Request] is an equality test on the [url]
 class Request {
+  final validHttpMethods = ['GET', 'POST', 'HEAD', 'PUT', 'DELETE', 'PATCH'];
+
   /// String representation of the url, urlEncoded
   final String url;
 
   /// potential additional headers to send with the request
   final Map<String, String> headers;
+
+  /// HTTP request method to use
+  final String httpRequestMethod;
 
   /// Set [post] to make the request using POST instead of GET.
   /// In the constructor, [post] must be one of the following:
@@ -181,15 +188,22 @@ class Request {
       {required String url,
       Map<String, String>? urlQueryParameters,
       this.headers = const {},
+      String? httpRequestMethod,
       post,
       this.retries = 0,
       DateTime? creationTime})
       : url = _urlWithQueryParameters(url, urlQueryParameters),
+        httpRequestMethod =
+            httpRequestMethod?.toUpperCase() ?? (post == null ? 'GET' : 'POST'),
         post = post is Uint8List ? String.fromCharCodes(post) : post,
         retriesRemaining = retries,
         creationTime = creationTime ?? DateTime.now() {
     if (retries < 0 || retries > 10) {
       throw ArgumentError('Number of retries must be in range 1 through 10');
+    }
+    if (!validHttpMethods.contains(this.httpRequestMethod)) {
+      throw ArgumentError(
+          'Invalid httpRequestMethod "${this.httpRequestMethod}": Must be one of ${validHttpMethods.join(', ')}');
     }
   }
 
@@ -197,9 +211,11 @@ class Request {
   Request.fromJsonMap(Map<String, dynamic> jsonMap)
       : url = jsonMap['url'] ?? '',
         headers = Map<String, String>.from(jsonMap['headers'] ?? {}),
-        post = jsonMap['post'],
-        retries = jsonMap['retries'] ?? 0,
-        retriesRemaining = jsonMap['retriesRemaining'] ?? 0,
+        httpRequestMethod = jsonMap['httpRequestMethod'] as String? ??
+            (jsonMap['post'] == null ? 'GET' : 'POST'),
+        post = jsonMap['post'] as String?,
+        retries = jsonMap['retries'] as int? ?? 0,
+        retriesRemaining = jsonMap['retriesRemaining'] as int? ?? 0,
         creationTime =
             DateTime.fromMillisecondsSinceEpoch(jsonMap['creationTime'] ?? 0);
 
@@ -207,6 +223,7 @@ class Request {
   Map<String, dynamic> toJsonMap() => {
         'url': url,
         'headers': headers,
+        'httpRequestMethod': httpRequestMethod,
         'post': post,
         'retries': retries,
         'retriesRemaining': retriesRemaining,
@@ -226,7 +243,8 @@ class Request {
 
   @override
   String toString() {
-    return 'Request{url: $url, headers: $headers, post: ${post == null ? "null" : "not null"}, '
+    return 'Request{url: $url, headers: $headers, httpRequestMethod: '
+        '$httpRequestMethod, post: ${post == null ? "null" : "not null"}, '
         'retries: $retries, retriesRemaining: $retriesRemaining}';
   }
 }
@@ -283,6 +301,7 @@ abstract class Task extends Request {
   /// [filename] of the file to save. If omitted, a random filename will be
   /// generated
   /// [headers] an optional map of HTTP request headers
+  /// [httpRequestMethod] the HTTP request method used (e.g. GET, POST)
   /// [post] if set, uses POST instead of GET. Post must be one of the
   /// following:
   /// - a String: POST request with [post] as the body, encoded in utf8
@@ -308,6 +327,7 @@ abstract class Task extends Request {
       super.urlQueryParameters,
       String? filename,
       super.headers,
+      super.httpRequestMethod,
       super.post,
       this.directory = '',
       this.baseDirectory = BaseDirectory.applicationDocuments,
@@ -369,6 +389,7 @@ abstract class Task extends Request {
       String? url,
       String? filename,
       Map<String, String>? headers,
+      String? httpRequestMethod,
       Object? post,
       String? directory,
       BaseDirectory? baseDirectory,
@@ -432,7 +453,8 @@ abstract class Task extends Request {
 
   @override
   String toString() {
-    return 'Task{taskId: $taskId, url: $url, filename: $filename, headers: $headers, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, updates: $updates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, metaData: $metaData}';
+    return 'Task{taskId: $taskId, url: $url, filename: $filename, headers: '
+        '$headers, httpRequestMethod: $httpRequestMethod, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, updates: $updates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, metaData: $metaData}';
   }
 }
 
@@ -447,6 +469,7 @@ class DownloadTask extends Task {
   /// [filename] of the file to save. If omitted, a random filename will be
   /// generated
   /// [headers] an optional map of HTTP request headers
+  /// [httpRequestMethod] the HTTP request method used (e.g. GET, POST)
   /// [post] if set, uses POST instead of GET. Post must be one of the
   /// following:
   /// - true: POST request without a body
@@ -471,6 +494,7 @@ class DownloadTask extends Task {
       super.urlQueryParameters,
       String? filename,
       super.headers,
+      super.httpRequestMethod,
       super.post,
       super.directory,
       super.baseDirectory,
@@ -501,6 +525,7 @@ class DownloadTask extends Task {
           String? url,
           String? filename,
           Map<String, String>? headers,
+          String? httpRequestMethod,
           Object? post,
           String? directory,
           BaseDirectory? baseDirectory,
@@ -517,6 +542,7 @@ class DownloadTask extends Task {
           url: url ?? this.url,
           filename: filename ?? this.filename,
           headers: headers ?? this.headers,
+          httpRequestMethod: httpRequestMethod ?? this.httpRequestMethod,
           post: post ?? this.post,
           directory: directory ?? this.directory,
           baseDirectory: baseDirectory ?? this.baseDirectory,
@@ -641,6 +667,7 @@ class UploadTask extends Task {
   ///   be properly encoded if necessary
   /// [filename] of the file to upload
   /// [headers] an optional map of HTTP request headers
+  /// [httpRequestMethod] the HTTP request method used (e.g. GET, POST)
   /// [post] if set to 'binary' will upload as binary file, otherwise multi-part
   /// [fileField] for multi-part uploads, name of the file field or 'file' by
   /// default
@@ -663,6 +690,7 @@ class UploadTask extends Task {
       super.urlQueryParameters,
       required String filename,
       super.headers,
+      String? httpRequestMethod,
       String? post,
       this.fileField = 'file',
       String? mimeType,
@@ -684,7 +712,11 @@ class UploadTask extends Task {
         fields = fields ?? {},
         mimeType =
             mimeType ?? lookupMimeType(filename) ?? 'application/octet-stream',
-        super(taskId: taskId, filename: filename, post: post) {
+        super(
+            taskId: taskId,
+            filename: filename,
+            httpRequestMethod: httpRequestMethod ?? 'POST',
+            post: post) {
     if (allowPause) {
       throw ArgumentError('Uploads cannot be paused-> Set `allowPause` to '
           'false');
@@ -717,6 +749,7 @@ class UploadTask extends Task {
           String? url,
           String? filename,
           Map<String, String>? headers,
+          String? httpRequestMethod,
           Object? post,
           String? fileField,
           String? mimeType,
@@ -736,6 +769,7 @@ class UploadTask extends Task {
           url: url ?? this.url,
           filename: filename ?? this.filename,
           headers: headers ?? this.headers,
+          httpRequestMethod: httpRequestMethod ?? this.httpRequestMethod,
           post: post as String? ?? this.post,
           fileField: fileField ?? this.fileField,
           mimeType: mimeType ?? this.mimeType,
@@ -801,7 +835,7 @@ class Batch {
   int get numFailed => results.values.length - numSucceeded;
 }
 
-/// Base class for events related to [task]. Actual events are
+/// Base class for updates related to [task]. Actual updates are
 /// either a status update or a progress update.
 ///
 /// When receiving an update, test if the update is a
@@ -810,19 +844,24 @@ class Batch {
 class TaskUpdate {
   final Task task;
 
-  TaskUpdate(this.task);
+  const TaskUpdate(this.task);
 }
 
-/// A status update event
+/// A status update
+///
+/// Contains [TaskStatus] and, if [TaskStatus.failed] possibly a
+/// [TaskException]
 class TaskStatusUpdate extends TaskUpdate {
   final TaskStatus status;
+  final TaskException? exception;
 
-  TaskStatusUpdate(super.task, this.status);
+  const TaskStatusUpdate(super.task, this.status, [this.exception]);
 }
 
-/// A progress update event
+/// A progress update
 ///
 /// A successfully downloaded task will always finish with progress 1.0
+///
 /// [TaskStatus.failed] results in progress -1.0
 /// [TaskStatus.canceled] results in progress -2.0
 /// [TaskStatus.notFound] results in progress -3.0
@@ -830,7 +869,7 @@ class TaskStatusUpdate extends TaskUpdate {
 class TaskProgressUpdate extends TaskUpdate {
   final double progress;
 
-  TaskProgressUpdate(super.task, this.progress);
+  const TaskProgressUpdate(super.task, this.progress);
 }
 
 // Progress values representing a status
@@ -847,7 +886,7 @@ class ResumeData {
   final String data;
   final int requiredStartByte;
 
-  ResumeData(this.task, this.data, this.requiredStartByte);
+  const ResumeData(this.task, this.data, this.requiredStartByte);
 
   /// Create object from JSON Map
   ResumeData.fromJsonMap(Map<String, dynamic> jsonMap)
@@ -885,7 +924,7 @@ class TaskNotification {
   final String title;
   final String body;
 
-  TaskNotification(this.title, this.body);
+  const TaskNotification(this.title, this.body);
 
   /// Return JSON Map representing object
   Map<String, dynamic> toJsonMap() => {"title": title, "body": body};

@@ -1,3 +1,24 @@
+## 6.0.0
+
+Breaking changes:
+* The `TaskStatusCallback` and `TaskProgressCallback` now take a single argument (`TaskStatusUpdate` and `TaskProgressUpdate` respectively) instead of multiple arguments. This aligns the callback API with the `updates` listener API, and makes it easier to add data to an update in the future. For example, in this version we add an `exception` property to programmatically handle exceptions
+* Similarly, the `download` and `upload` methods now return a `TaskStatusUpdate` instead of a `TaskStatus`
+* For consistency, the `taskStatus` property of the `TaskRecord` (used to store task information in a persistent database) is renamed to `status`
+* The `trackTasks` method no longer takes a `group` argument, and starts tracking for all tasks, regardless of group. If you need tracking only for a specific group, call the new `trackTasksInGroup` method
+
+Other changes (non-breaking):
+* You can override the `httpRequestMethod` used for requests by setting it in the `Request`, `DownloadTask` or `UploadTask`. By default, requests and downloads use GET (unless `post` is set) and uploads use PUT
+* The `download`, `upload`, `downloadBatch` and `uploadBatch` methods now take an optional `onElapsedTime` callback that is called at regular intervals (defined by the optional `elapsedTimeInterval` which defaults to 5 seconds) with the time elapsed since the call was made. This can be used to trigger UI warnings (e.g. 'this is taking rather long') or to cancel the task if it does not complete within a desired time. For performance reasons the `elapsedTimeInterval` should not be set to a value less than one second, and this mechanism should not be used to indicate progress.
+* If a task fails, the `TaskStatusUpdate` will contain a `TaskException` that provides information about the type of exception (e.g. a `TaskFileSystemException` indicates an issue with storing or retrieving the file) and contains a `description` and (for `TaskHttpException` only) the `httpResponseCode`. If tasks are tracked, the  The following `TaskException` subtypes may occur:
+  - `TaskException` (general exception)
+  - `TaskFileSystemException` (issue retrieving or storing the file)
+  - `TaskUrlException` (issue with the url)
+  - `TaskConnectionException` (issue with the connection to the server)
+  - `TaskResumeException` (issue with pausing or resuming a task)
+  - `TaskHttpException` (issue with the HTTP connection, e.g. we received an error response from the server, captured in `httpResponseCode`)
+
+Fixed a few bugs.
+
 ## 5.6.0
 
 Adds handler for when the user taps a notification, and an `openFile` method to open a file using the platform-specific convention.
@@ -18,8 +39,8 @@ The file opening behavior is platform dependent, and while you should check the 
 
 Note that on Android, files stored in the `BaseDirectory.applicationDocuments` cannot be opened. You need to download to a different base directory (e.g. `.applicationSupport`) or move the file to shared storage before attempting to open it.
 
-If all you want to do on notification tap is to open the file, you can simplify the process by 
-adding `tapOpensFile: true` to your call to `configureNotifications`, and you don't need to 
+If all you want to do on notification tap is to open the file, you can simplify the process by
+adding `tapOpensFile: true` to your call to `configureNotifications`, and you don't need to
 register a `taskNotificationTapCallback`.
 
 ## 5.5.0

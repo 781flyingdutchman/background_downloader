@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'base_downloader.dart';
+import 'exceptions.dart';
 import 'models.dart';
 
 /// Implementation of download functionality for native platforms
@@ -35,13 +36,19 @@ class NativeDownloader extends BaseDownloader {
       final task = Task.createFromJsonMap(jsonDecode(args.first as String));
       switch (call.method) {
         case 'statusUpdate':
-          final taskStatus = TaskStatus.values[args.last as int];
-          processStatusUpdate(task, taskStatus);
+          // int followed optionally followed by exception data
+          final status = TaskStatus.values[args[1]];
+          TaskException? exception;
+          if (status == TaskStatus.failed) {
+            exception = TaskException.fromTypeString(
+                args[2] as String, args[3] as String, args[4] as int);
+          }
+          processStatusUpdate(TaskStatusUpdate(task, status, exception));
           break;
 
         case 'progressUpdate':
           final progress = args.last as double;
-          processProgressUpdate(task, progress);
+          processProgressUpdate(TaskProgressUpdate(task, progress));
           break;
 
         case 'canResume':

@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'base_downloader.dart';
 import 'desktop_downloader_isolate.dart';
+import 'exceptions.dart';
 import 'file_downloader.dart';
 import 'models.dart';
 
@@ -51,7 +52,7 @@ class DesktopDownloader extends BaseDownloader {
     }
     super.enqueue(task);
     _queue.add(task);
-    processStatusUpdate(task, TaskStatus.enqueued);
+    processStatusUpdate(TaskStatusUpdate(task, TaskStatus.enqueued));
     _advanceQueue();
     return true;
   }
@@ -87,9 +88,10 @@ class DesktopDownloader extends BaseDownloader {
     final receivePort = ReceivePort();
     final errorPort = ReceivePort();
     errorPort.listen((message) {
-      final error = (message as List).first as String;
-      logError(task, error);
-      processStatusUpdate(task, TaskStatus.failed);
+      final exceptionDescription = (message as List).first as String;
+      logError(task, exceptionDescription);
+      processStatusUpdate(TaskStatusUpdate(
+          task, TaskStatus.failed, TaskException(exceptionDescription)));
       receivePort.close(); // also ends listener at then end
     });
     await Isolate.spawn(doTask, receivePort.sendPort,
@@ -109,22 +111,34 @@ class DesktopDownloader extends BaseDownloader {
         // sent when final state has been sent
         receivePort.close();
       } else {
-        // Process the status or progress update, or canResume flag
-        if (message is TaskStatus) {
-          // status
-          processStatusUpdate(task, message);
-        } else if (message is double) {
+        // Process the message
+        if (message is double) {
           // progress
-          processProgressUpdate(task, message);
+          processProgressUpdate(TaskProgressUpdate(task, message));
         } else if (message is bool) {
           // canResume flag
           setCanResume(task, message);
         } else if (message is List) {
-          // resume data
-          assert(message[0] as String == 'resumeData',
-              'Only recognize resume data');
-          setResumeData(
-              ResumeData(task, message[1] as String, message[2] as int));
+          switch (message[0] as String) {
+            case 'statusUpdate':
+              final status = message[1] as TaskStatus;
+              processStatusUpdate(TaskStatusUpdate(
+                  task,
+                  status,
+                  status == TaskStatus.failed
+                      ? message[2] as TaskException
+                      : null));
+              break;
+
+            case 'resumeData':
+              setResumeData(
+                  ResumeData(task, message[1] as String, message[2] as int));
+              break;
+
+            default:
+              throw ArgumentError(
+                  'Did not recognize message: ${message[0] as String}');
+          }
         } else if (message is String) {
           // log message
           _log.finest(message);
@@ -172,7 +186,7 @@ class DesktopDownloader extends BaseDownloader {
         .where((task) => taskIds.contains(task.taskId))
         .toList(growable: false);
     for (final task in inQueue) {
-      processStatusUpdate(task, TaskStatus.canceled);
+      processStatusUpdate(TaskStatusUpdate(task, TaskStatus.canceled));
       _remove(task);
     }
     final running = _running.where((task) => taskIds.contains(task.taskId));

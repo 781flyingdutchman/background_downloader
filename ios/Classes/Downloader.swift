@@ -129,6 +129,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             return
         }
         var baseRequest = URLRequest(url: url)
+        baseRequest.httpMethod = task.httpRequestMethod
         for (key, value) in task.headers {
             baseRequest.setValue(value, forHTTPHeaderField: key)
         }
@@ -150,7 +151,6 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     private func scheduleDownload(task: Task, taskDescription: String, baseRequest: URLRequest, resumeData: Data? , result: FlutterResult?) {
         var request = baseRequest
         if task.post != nil {
-            request.httpMethod = "POST"
             request.httpBody = Data((task.post ?? "").data(using: .utf8)!)
         }
         let urlSessionDownloadTask = resumeData == nil ? Downloader.urlSession!.downloadTask(with: request) : Downloader.urlSession!.downloadTask(withResumeData: resumeData!)
@@ -174,7 +174,6 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             return
         }
         var request = baseRequest
-        request.httpMethod = "POST"
         if task.post?.lowercased() == "binary" {
             os_log("Binary file upload", log: log, type: .debug)
             // binary post can use uploadTask fromFile method
@@ -416,7 +415,8 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             try? FileManager.default.removeItem(at: multipartUploader!.outputFileUrl())
             Downloader.uploaderForUrlSessionTaskIdentifier.removeValue(forKey: task.taskIdentifier)
         }
-        let statusCode = (task.response as! HTTPURLResponse?)?.statusCode ?? 0
+        let responseStatusCode = (task.response as! HTTPURLResponse?)?.statusCode ?? 0
+        let responseStatusDescription = HTTPURLResponse.localizedString(forStatusCode: responseStatusCode)
         let notificationConfig = getNotificationConfigFrom(urlSessionTask: task)
         guard let task = getTaskFrom(urlSessionTask: task) else {
             os_log("Could not find task related to urlSessionTask %d", log: log, type: .error, task.taskIdentifier)
@@ -442,7 +442,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             }
             else {
                 os_log("Error for taskId %@: %@", log: log, type: .error, task.taskId, error!.localizedDescription)
-                processStatusUpdate(task: task, status: .failed)
+                processStatusUpdate(task: task, status: .failed, taskException: TaskException(type: .general, httpResponseCode: -1, description: error!.localizedDescription))
             }
             if isDownloadTask(task: task) {
                 updateNotification(task: task, notificationType: .error, notificationConfig: notificationConfig)
@@ -452,12 +452,13 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         os_log("Fnished task with id %@", log: log, type: .info, task.taskId)
         // if this is an upload task, send final TaskStatus (based on HTTP status code
         if isUploadTask(task: task) {
-            let finalStatus = (200...206).contains(statusCode)
+            var taskException = TaskException(type: .httpResponse, httpResponseCode: responseStatusCode, description: responseStatusDescription)
+            let finalStatus = (200...206).contains(responseStatusCode)
             ? TaskStatus.complete
-            : statusCode == 404
+            : responseStatusCode == 404
             ? TaskStatus.notFound
             : TaskStatus.failed
-            processStatusUpdate(task: task, status: finalStatus)
+            processStatusUpdate(task: task, status: finalStatus, taskException: taskException)
         }
     }
     
@@ -542,14 +543,16 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         }
         if !(200...206).contains(response.statusCode)   {
             os_log("TaskId %@ returned response code %d", log: log,  type: .info, task.taskId, response.statusCode)
-            processStatusUpdate(task: task, status: TaskStatus.failed)
+            let responseContent = readFile(url: location)
+            processStatusUpdate(task: task, status: TaskStatus.failed, taskException: TaskException(type: .httpResponse, httpResponseCode: response.statusCode, description: responseContent?.isEmpty == false ? responseContent! : HTTPURLResponse.localizedString(forStatusCode: response.statusCode)))
             updateNotification(task: task, notificationType: .error, notificationConfig: notificationConfig)
             return
         }
         do {
             var finalStatus = TaskStatus.failed
+            var taskException: TaskException? = nil
             defer {
-                processStatusUpdate(task: task, status: finalStatus)
+                processStatusUpdate(task: task, status: finalStatus, taskException: taskException)
                 updateNotification(task: task, notificationType: notificationTypeForTaskStatus(status: finalStatus), notificationConfig: notificationConfig)
             }
             let directory = try directoryForTask(task: task)
@@ -558,6 +561,8 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories:  true)
             } catch {
                 os_log("Failed to create directory %@", log: log, type: .error, directory.path)
+                taskException = TaskException(type: .fileSystem, httpResponseCode: -1,
+                                          description: "Failed to create directory \(directory.path)")
                 return
             }
             let filePath = directory.appendingPathComponent(task.filename)
@@ -568,11 +573,13 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                 try FileManager.default.moveItem(at: location, to: filePath)
             } catch {
                 os_log("Failed to move file from %@ to %@: %@", log: log, type: .error, location.path, filePath.path, error.localizedDescription)
+                taskException = TaskException(type: .fileSystem, httpResponseCode: -1,
+                                          description: "Failed to move file from \(location.path) to \(filePath.path): \(error.localizedDescription)")
                 return
             }
             finalStatus = TaskStatus.complete
         } catch {
-            os_log("File download error for taskId %@ and file %@: %@", log: log, type: .error, task.taskId, task.filename, error.localizedDescription)
+            os_log("Uncaught file download error for taskId %@ and file %@: %@", log: log, type: .error, task.taskId, task.filename, error.localizedDescription)
         }
     }
     
@@ -700,6 +707,17 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     private func postResult(result: FlutterResult?, value: Any) {
         if result != nil {
             result!(value)
+        }
+    }
+    
+    /// Read the contents of a file to a String, or nil if unable
+    private func readFile(url: URL) -> String? {
+        do {
+            let data = try Data(contentsOf: url)
+            let string = String(data: data, encoding: .utf8)
+            return string
+        } catch {
+            return nil
         }
     }
 }
