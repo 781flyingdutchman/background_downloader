@@ -924,6 +924,15 @@ void main() {
       expect(progressCallbackCounter, greaterThanOrEqualTo(10));
     });
 
+    testWidgets('batch download with onElapsedTime', (widgetTester) async {
+      final tasks = <DownloadTask>[DownloadTask(url: urlWithContentLength), DownloadTask(url: urlWithContentLength), DownloadTask(url: urlWithContentLength)];
+      var ticks = 0;
+      final result = await FileDownloader().downloadBatch(tasks, onElapsedTime: (elapsed) => ticks++, elapsedTimeInterval: const Duration(milliseconds: 200));
+      expect(result.numSucceeded, equals(3));
+      expect(ticks, greaterThan(0));
+      await Future.delayed(const Duration(seconds: 10));
+    });
+
     testWidgets('convenience download with callbacks', (widgetTester) async {
       var result = await FileDownloader().download(task,
           onStatus: (status) => statusCallback(TaskStatusUpdate(task, status)));
@@ -1006,6 +1015,19 @@ void main() {
           .then((value) => expect(value.status, equals(TaskStatus.failed)));
       expect(statusCallbackCounter, equals(12));
       print('Finished simple parallel convenience downloads with callbacks');
+    });
+
+    testWidgets('onElapsedTime', (widgetTester) async {
+      task = DownloadTask(url: urlWithContentLength);
+      var ticks = 0;
+      final result = await FileDownloader().download(task,
+          onElapsedTime: (elapsed) {
+            print('Elapsed time: $elapsed');
+            ticks++;
+          },
+          elapsedTimeInterval: const Duration(milliseconds: 200));
+      expect(result.status, equals(TaskStatus.complete));
+      expect(ticks, greaterThan(0));
     });
   });
 
@@ -1509,6 +1531,15 @@ void main() {
       print('Finished batch upload with callback');
     });
 
+    testWidgets('batch upload with onElapsedTime', (widgetTester) async {
+      final tasks = <UploadTask>[uploadTask, uploadTask.copyWith(taskId: 'task2'), uploadTask.copyWith(taskId: 'task3')];
+      var ticks = 0;
+      final result = await FileDownloader().uploadBatch(tasks, onElapsedTime: (elapsed) => ticks++, elapsedTimeInterval: const Duration(milliseconds: 200));
+      expect(result.numSucceeded, equals(3));
+      expect(ticks, greaterThan(0));
+      await Future.delayed(const Duration(seconds: 10));
+    });
+
     testWidgets('convenience upload with callbacks', (widgetTester) async {
       var result = await FileDownloader().upload(uploadTask,
           onStatus: (status) =>
@@ -1532,6 +1563,18 @@ void main() {
       expect(progressCallbackCounter, greaterThan(1));
       expect(lastProgress, equals(1.0));
       print('Finished convenience upload with callbacks');
+    });
+
+    testWidgets('onElapsedTime', (widgetTester) async {
+      var ticks = 0;
+      final result = await FileDownloader().upload(uploadTask,
+          onElapsedTime: (elapsed) {
+            print('Elapsed time: $elapsed');
+            ticks++;
+          },
+          elapsedTimeInterval: const Duration(milliseconds: 200));
+      expect(result.status, equals(TaskStatus.complete));
+      expect(ticks, greaterThan(0));
     });
   });
 

@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:background_downloader/background_downloader.dart';
-import 'package:background_downloader/src/desktop_downloader.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -11,6 +9,8 @@ import 'package:logging/logging.dart';
 
 import 'base_downloader.dart';
 import 'database.dart';
+import 'desktop_downloader.dart';
+import 'exceptions.dart';
 import 'models.dart';
 
 /// Provides access to all functions of the plugin in a single place.
@@ -130,12 +130,28 @@ class FileDownloader {
   /// For example `Downloader.download(task, onStatus: (status) =>`
   /// `print('Status for ${task.taskId} is $status);`
   ///
+  /// An optional callback [onElapsedTime] will be called at regular intervals
+  /// (defined by [elapsedTimeInterval], which defaults to 5 seconds) with a
+  /// single argument that is the elapsed time since the call to [download].
+  /// This can be used to trigger UI warnings (e.g. 'this is taking rather long')
+  /// or to cancel the task if it does not complete within a desired time.
+  /// For performance reasons the [elapsedTimeInterval] should not be set to
+  /// a value less than one second.
+  /// The [onElapsedTime] callback should not be used to indicate progress. For
+  /// that, use the [onProgress] callback.
+  ///
   /// Note that the task's [group] is ignored and will be replaced with an
   /// internal group name '_enqueueAndWait' to track status
   Future<TaskStatusUpdate> download(DownloadTask task,
           {void Function(TaskStatus)? onStatus,
-          void Function(double)? onProgress}) =>
-      _enqueueAndAwait(task, onStatus: onStatus, onProgress: onProgress);
+          void Function(double)? onProgress,
+          void Function(Duration)? onElapsedTime,
+          Duration? elapsedTimeInterval}) =>
+      _enqueueAndAwait(task,
+          onStatus: onStatus,
+          onProgress: onProgress,
+          onElapsedTime: onElapsedTime,
+          elapsedTimeInterval: elapsedTimeInterval);
 
   /// Upload a file and return the final [TaskStatusUpdate]
   ///
@@ -149,15 +165,31 @@ class FileDownloader {
   /// added. These function only take a [TaskStatus] or [double] argument as
   /// the task they refer to is expected to be captured in the closure for
   /// this call.
-  /// For example `Downloader.download(task, onStatus: (status) =>`
+  /// For example `Downloader.upload(task, onStatus: (status) =>`
   /// `print('Status for ${task.taskId} is $status);`
+  ///
+  /// An optional callback [onElapsedTime] will be called at regular intervals
+  /// (defined by [elapsedTimeInterval], which defaults to 5 seconds) with a
+  /// single argument that is the elapsed time since the call to [upload].
+  /// This can be used to trigger UI warnings (e.g. 'this is taking rather long')
+  /// or to cancel the task if it does not complete within a desired time.
+  /// For performance reasons the [elapsedTimeInterval] should not be set to
+  /// a value less than one second.
+  /// The [onElapsedTime] callback should not be used to indicate progress. For
+  /// that, use the [onProgress] callback.
   ///
   /// Note that the task's [group] is ignored and will be replaced with an
   /// internal group name 'await' to track status
   Future<TaskStatusUpdate> upload(UploadTask task,
           {void Function(TaskStatus)? onStatus,
-          void Function(double)? onProgress}) =>
-      _enqueueAndAwait(task, onStatus: onStatus, onProgress: onProgress);
+          void Function(double)? onProgress,
+          void Function(Duration)? onElapsedTime,
+          Duration? elapsedTimeInterval}) =>
+      _enqueueAndAwait(task,
+          onStatus: onStatus,
+          onProgress: onProgress,
+          onElapsedTime: onElapsedTime,
+          elapsedTimeInterval: elapsedTimeInterval);
 
   /// Enqueue the [task] and wait for completion
   ///
@@ -171,7 +203,9 @@ class FileDownloader {
       {void Function(TaskStatus)? onStatus,
       void Function(double)? onProgress,
       TaskStatusCallback? taskStatusCallback,
-      TaskProgressCallback? taskProgressCallback}) async {
+      TaskProgressCallback? taskProgressCallback,
+      void Function(Duration)? onElapsedTime,
+      Duration? elapsedTimeInterval}) async {
     /// Internal callback function that passes the update on to different
     /// callbacks
     ///
@@ -243,6 +277,15 @@ class FileDownloader {
     if (taskProgressCallback != null) {
       _taskProgressCallbacks[task.taskId] = taskProgressCallback;
     }
+    // start the elapsedTime timer if necessary. It is cancelled when the
+    // taskCompleter completes (when the task itself completes)
+    Timer? timer;
+    if (onElapsedTime != null) {
+      final interval = elapsedTimeInterval ?? const Duration(seconds: 5);
+      timer = Timer.periodic(interval, (timer) {
+        onElapsedTime(interval * timer.tick);
+      });
+    }
     // Create taskCompleter and enqueue the task.
     // The completer will be completed in the internal status callback
     final taskCompleter = Completer<TaskStatusUpdate>();
@@ -252,6 +295,9 @@ class FileDownloader {
       _log.warning('Could not enqueue task $task');
       return Future.value(TaskStatusUpdate(task, TaskStatus.failed,
           TaskException('Could not enqueue task $task')));
+    }
+    if (timer != null) {
+      taskCompleter.future.then((_) => timer?.cancel());
     }
     return taskCompleter.future;
   }
@@ -272,6 +318,15 @@ class FileDownloader {
   /// a [taskStatusCallback] and/or [taskProgressCallback], which will be used
   /// for each task in the batch.
   ///
+  /// An optional callback [onElapsedTime] will be called at regular intervals
+  /// (defined by [elapsedTimeInterval], which defaults to 5 seconds) with a
+  /// single argument that is the elapsed time since the call to [downloadBatch].
+  /// This can be used to trigger UI warnings (e.g. 'this is taking rather long')
+  /// or to cancel the task if it does not complete within a desired time.
+  /// For performance reasons the [elapsedTimeInterval] should not be set to
+  /// a value less than one second.
+  /// The [onElapsedTime] callback should not be used to indicate progress.
+  ///
   /// Note that to allow for special processing of tasks in a batch, the task's
   /// [Task.group] and [Task.updates] value will be modified when enqueued, and
   /// those modified tasks are returned as part of the [Batch]
@@ -279,11 +334,15 @@ class FileDownloader {
   Future<Batch> downloadBatch(final List<DownloadTask> tasks,
           {BatchProgressCallback? batchProgressCallback,
           TaskStatusCallback? taskStatusCallback,
-          TaskProgressCallback? taskProgressCallback}) =>
+          TaskProgressCallback? taskProgressCallback,
+          void Function(Duration)? onElapsedTime,
+          Duration? elapsedTimeInterval}) =>
       _enqueueAndAwaitBatch(tasks,
           batchProgressCallback: batchProgressCallback,
           taskStatusCallback: taskStatusCallback,
-          taskProgressCallback: taskProgressCallback);
+          taskProgressCallback: taskProgressCallback,
+          onElapsedTime: onElapsedTime,
+          elapsedTimeInterval: elapsedTimeInterval);
 
   /// Enqueues a list of files to upload and returns when all uploads
   /// have finished (successfully or otherwise). The returned value is a
@@ -301,6 +360,15 @@ class FileDownloader {
   /// a [taskStatusCallback] and/or [taskProgressCallback], which will be used
   /// for each task in the batch.
   ///
+  /// An optional callback [onElapsedTime] will be called at regular intervals
+  /// (defined by [elapsedTimeInterval], which defaults to 5 seconds) with a
+  /// single argument that is the elapsed time since the call to [uploadBatch].
+  /// This can be used to trigger UI warnings (e.g. 'this is taking rather long')
+  /// or to cancel the task if it does not complete within a desired time.
+  /// For performance reasons the [elapsedTimeInterval] should not be set to
+  /// a value less than one second.
+  /// The [onElapsedTime] callback should not be used to indicate progress.
+  ///
   /// Note that to allow for special processing of tasks in a batch, the task's
   /// [Task.group] and [Task.updates] value will be modified when enqueued, and
   /// those modified tasks are returned as part of the [Batch]
@@ -308,11 +376,15 @@ class FileDownloader {
   Future<Batch> uploadBatch(final List<UploadTask> tasks,
           {BatchProgressCallback? batchProgressCallback,
           TaskStatusCallback? taskStatusCallback,
-          TaskProgressCallback? taskProgressCallback}) =>
+          TaskProgressCallback? taskProgressCallback,
+          void Function(Duration)? onElapsedTime,
+          Duration? elapsedTimeInterval}) =>
       _enqueueAndAwaitBatch(tasks,
           batchProgressCallback: batchProgressCallback,
           taskStatusCallback: taskStatusCallback,
-          taskProgressCallback: taskProgressCallback);
+          taskProgressCallback: taskProgressCallback,
+          onElapsedTime: onElapsedTime,
+          elapsedTimeInterval: elapsedTimeInterval);
 
   /// Enqueue a list of tasks and wait for completion
   ///
@@ -320,10 +392,19 @@ class FileDownloader {
   Future<Batch> _enqueueAndAwaitBatch(final List<Task> tasks,
       {BatchProgressCallback? batchProgressCallback,
       TaskStatusCallback? taskStatusCallback,
-      TaskProgressCallback? taskProgressCallback}) async {
+      TaskProgressCallback? taskProgressCallback,
+      void Function(Duration)? onElapsedTime,
+      Duration? elapsedTimeInterval}) async {
     assert(tasks.isNotEmpty, 'List of tasks cannot be empty');
     if (batchProgressCallback != null) {
       batchProgressCallback(0, 0); // initial callback
+    }
+    Timer? timer;
+    if (onElapsedTime != null) {
+      final interval = elapsedTimeInterval ?? const Duration(seconds: 5);
+      timer = Timer.periodic(interval, (timer) {
+        onElapsedTime(interval * timer.tick);
+      });
     }
     final batch = Batch(tasks, batchProgressCallback);
     _batches.add(batch);
@@ -342,6 +423,7 @@ class FileDownloader {
     }
     await Future.wait(taskFutures); // wait for all tasks to complete
     _batches.remove(batch);
+    timer?.cancel();
     return batch;
   }
 
@@ -412,8 +494,8 @@ class FileDownloader {
   /// listener or callbacks, and call [trackTasks] for each group.
   ///
   /// Returns the [FileDownloader] for easy chaining
-  Future<FileDownloader> trackTasksInGroup(
-      String group, {bool markDownloadedComplete = true}) async {
+  Future<FileDownloader> trackTasksInGroup(String group,
+      {bool markDownloadedComplete = true}) async {
     await _downloader.trackTasks(group, markDownloadedComplete);
     return this;
   }
