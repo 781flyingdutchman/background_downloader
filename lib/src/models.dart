@@ -120,7 +120,7 @@ enum Updates {
 }
 
 /// Signature for a function you can register to be called
-/// when the state of a [task] changes.
+/// when the status of a [task] changes.
 typedef TaskStatusCallback = void Function(TaskStatusUpdate update);
 
 /// Signature for a function you can register to be called
@@ -835,7 +835,7 @@ class Batch {
   int get numFailed => results.values.length - numSucceeded;
 }
 
-/// Base class for events related to [task]. Actual events are
+/// Base class for updates related to [task]. Actual updates are
 /// either a status update or a progress update.
 ///
 /// When receiving an update, test if the update is a
@@ -847,7 +847,10 @@ class TaskUpdate {
   const TaskUpdate(this.task);
 }
 
-/// A status update event
+/// A status update
+///
+/// Contains [TaskStatus] and, if [TaskStatus.failed] possibly a
+/// [TaskException]
 class TaskStatusUpdate extends TaskUpdate {
   final TaskStatus status;
   final TaskException? exception;
@@ -855,9 +858,10 @@ class TaskStatusUpdate extends TaskUpdate {
   const TaskStatusUpdate(super.task, this.status, [this.exception]);
 }
 
-/// A progress update event
+/// A progress update
 ///
 /// A successfully downloaded task will always finish with progress 1.0
+///
 /// [TaskStatus.failed] results in progress -1.0
 /// [TaskStatus.canceled] results in progress -2.0
 /// [TaskStatus.notFound] results in progress -3.0

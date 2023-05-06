@@ -925,9 +925,15 @@ void main() {
     });
 
     testWidgets('batch download with onElapsedTime', (widgetTester) async {
-      final tasks = <DownloadTask>[DownloadTask(url: urlWithContentLength), DownloadTask(url: urlWithContentLength), DownloadTask(url: urlWithContentLength)];
+      final tasks = <DownloadTask>[
+        DownloadTask(url: urlWithContentLength),
+        DownloadTask(url: urlWithContentLength),
+        DownloadTask(url: urlWithContentLength)
+      ];
       var ticks = 0;
-      final result = await FileDownloader().downloadBatch(tasks, onElapsedTime: (elapsed) => ticks++, elapsedTimeInterval: const Duration(milliseconds: 200));
+      final result = await FileDownloader().downloadBatch(tasks,
+          onElapsedTime: (elapsed) => ticks++,
+          elapsedTimeInterval: const Duration(milliseconds: 200));
       expect(result.numSucceeded, equals(3));
       expect(ticks, greaterThan(0));
       await Future.delayed(const Duration(seconds: 10));
@@ -1020,12 +1026,11 @@ void main() {
     testWidgets('onElapsedTime', (widgetTester) async {
       task = DownloadTask(url: urlWithContentLength);
       var ticks = 0;
-      final result = await FileDownloader().download(task,
-          onElapsedTime: (elapsed) {
-            print('Elapsed time: $elapsed');
-            ticks++;
-          },
-          elapsedTimeInterval: const Duration(milliseconds: 200));
+      final result =
+          await FileDownloader().download(task, onElapsedTime: (elapsed) {
+        print('Elapsed time: $elapsed');
+        ticks++;
+      }, elapsedTimeInterval: const Duration(milliseconds: 200));
       expect(result.status, equals(TaskStatus.complete));
       expect(ticks, greaterThan(0));
     });
@@ -1532,9 +1537,15 @@ void main() {
     });
 
     testWidgets('batch upload with onElapsedTime', (widgetTester) async {
-      final tasks = <UploadTask>[uploadTask, uploadTask.copyWith(taskId: 'task2'), uploadTask.copyWith(taskId: 'task3')];
+      final tasks = <UploadTask>[
+        uploadTask,
+        uploadTask.copyWith(taskId: 'task2'),
+        uploadTask.copyWith(taskId: 'task3')
+      ];
       var ticks = 0;
-      final result = await FileDownloader().uploadBatch(tasks, onElapsedTime: (elapsed) => ticks++, elapsedTimeInterval: const Duration(milliseconds: 200));
+      final result = await FileDownloader().uploadBatch(tasks,
+          onElapsedTime: (elapsed) => ticks++,
+          elapsedTimeInterval: const Duration(milliseconds: 200));
       expect(result.numSucceeded, equals(3));
       expect(ticks, greaterThan(0));
       await Future.delayed(const Duration(seconds: 10));
@@ -1567,12 +1578,11 @@ void main() {
 
     testWidgets('onElapsedTime', (widgetTester) async {
       var ticks = 0;
-      final result = await FileDownloader().upload(uploadTask,
-          onElapsedTime: (elapsed) {
-            print('Elapsed time: $elapsed');
-            ticks++;
-          },
-          elapsedTimeInterval: const Duration(milliseconds: 200));
+      final result =
+          await FileDownloader().upload(uploadTask, onElapsedTime: (elapsed) {
+        print('Elapsed time: $elapsed');
+        ticks++;
+      }, elapsedTimeInterval: const Duration(milliseconds: 200));
       expect(result.status, equals(TaskStatus.complete));
       expect(ticks, greaterThan(0));
     });
@@ -1659,7 +1669,7 @@ void main() {
       final record = await FileDownloader().database.recordForId(task.taskId);
       expect(record, isNotNull);
       expect(record?.taskId, equals(task.taskId));
-      expect(record?.taskStatus, equals(TaskStatus.running));
+      expect(record?.status, equals(TaskStatus.running));
       expect(record?.progress, greaterThan(0));
       expect(record?.progress, equals(lastProgress));
       expect(record?.exception, isNull);
@@ -1668,7 +1678,7 @@ void main() {
       final record2 = await FileDownloader().database.recordForId(task.taskId);
       expect(record2, isNotNull);
       expect(record2?.taskId, equals(task.taskId));
-      expect(record2?.taskStatus, equals(TaskStatus.complete));
+      expect(record2?.status, equals(TaskStatus.complete));
       expect(record2?.progress, equals(progressComplete));
       expect(record2?.exception, isNull);
       final records = await FileDownloader().database.allRecords();
@@ -1709,7 +1719,7 @@ void main() {
       record = await FileDownloader().database.recordForId(task.taskId);
       expect(record, isNotNull);
       expect(record?.taskId, equals(task.taskId));
-      expect(record?.taskStatus, equals(TaskStatus.running));
+      expect(record?.status, equals(TaskStatus.running));
       expect(record?.progress, greaterThan(0));
       expect(record?.progress, equals(lastProgress));
       expect(record?.exception, isNull);
@@ -1757,7 +1767,7 @@ void main() {
       final records = await FileDownloader().database.allRecords();
       expect(records.length, equals(1));
       expect(records.first.taskId, equals(task.taskId));
-      expect(records.first.taskStatus, equals(TaskStatus.complete));
+      expect(records.first.status, equals(TaskStatus.complete));
       expect(records.first.progress, equals(progressComplete));
     });
 
@@ -1782,13 +1792,13 @@ void main() {
       await FileDownloader().cancelTasksWithIds([task.taskId]);
       await Future.delayed(const Duration(milliseconds: 500));
       final record = await FileDownloader().database.recordForId(task.taskId);
-      expect(record?.taskStatus, equals(TaskStatus.canceled));
+      expect(record?.status, equals(TaskStatus.canceled));
       expect(File(filePath).existsSync(), isFalse);
       // reactivate tracking, this time with markDownloadedComplete = true
       await FileDownloader().trackTasks();
       // because no file, status does not change
       final record2 = await FileDownloader().database.recordForId(task.taskId);
-      expect(record2?.taskStatus, equals(TaskStatus.canceled));
+      expect(record2?.status, equals(TaskStatus.canceled));
       expect(record2?.progress, equals(record?.progress));
       // create a 'downloaded' file (even though the task was canceled)
       await File(filePath).writeAsString('test');
@@ -1796,7 +1806,7 @@ void main() {
       await FileDownloader().trackTasks();
       // status and progress should now reflect 'complete'
       final record3 = await FileDownloader().database.recordForId(task.taskId);
-      expect(record3?.taskStatus, equals(TaskStatus.complete));
+      expect(record3?.status, equals(TaskStatus.complete));
       expect(record3?.progress, equals(progressComplete));
       print('Finished markDownloadedComplete');
     });
@@ -1819,7 +1829,7 @@ void main() {
       final record = await FileDownloader().database.recordForId(task.taskId);
       expect(record, isNotNull);
       expect(record?.taskId, equals(task.taskId));
-      expect(record?.taskStatus, equals(TaskStatus.failed));
+      expect(record?.status, equals(TaskStatus.failed));
       expect(record?.progress, equals(progressFailed));
       expect(record?.exception, isNotNull);
       final exception = (record?.exception)!;
@@ -2042,8 +2052,8 @@ void main() {
     // passing tests in this group is not sufficient evidence that they
     // are working properly
     testWidgets('NotificationConfig', (widgetTester) async {
-      FileDownloader()
-          .configureNotification(running: TaskNotification('Title', 'Body'));
+      FileDownloader().configureNotification(
+          running: const TaskNotification('Title', 'Body'));
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);

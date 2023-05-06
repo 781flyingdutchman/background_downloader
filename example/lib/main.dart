@@ -48,20 +48,21 @@ class _MyAppState extends State<MyApp> {
         .configureNotificationForGroup(FileDownloader.defaultGroup,
             // For the main download button
             // which uses 'enqueue' and a default group
-            running: TaskNotification(
+            running: const TaskNotification(
                 'Download {filename}', 'File: {filename} - {progress}'),
-            complete:
-                TaskNotification('Download {filename}', 'Download complete'),
-            error: TaskNotification('Download {filename}', 'Download failed'),
-            paused: TaskNotification(
+            complete: const TaskNotification(
+                'Download {filename}', 'Download complete'),
+            error: const TaskNotification(
+                'Download {filename}', 'Download failed'),
+            paused: const TaskNotification(
                 'Download {filename}', 'Paused with metadata {metadata}'),
             progressBar: true)
         .configureNotification(
             // for the 'Download & Open' dog picture
             // which uses 'download' which is not the .defaultGroup
             // but the .await group so won't use the above config
-            complete:
-                TaskNotification('Download {filename}', 'Download complete'),
+            complete: const TaskNotification(
+                'Download {filename}', 'Download complete'),
             tapOpensFile: true); // dog can also open directly from tap
   }
 
@@ -98,12 +99,14 @@ class _MyAppState extends State<MyApp> {
   ///
   /// Adds an update object to the stream that the main UI listens to
   void myDownloadProgressCallback(TaskProgressUpdate update) {
-    updateStream.add(DownloadProgressIndicatorUpdate(update.task.filename, update.progress));
+    updateStream.add(
+        DownloadProgressIndicatorUpdate(update.task.filename, update.progress));
   }
 
   /// Process the user tapping on a notification by printing a message
   void myNotificationTapCallback(Task task, NotificationType notificationType) {
-    debugPrint('Tapped notification $notificationType for taskId ${task.taskId}');
+    debugPrint(
+        'Tapped notification $notificationType for taskId ${task.taskId}');
   }
 
   @override

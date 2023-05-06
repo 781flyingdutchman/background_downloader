@@ -28,7 +28,11 @@ val trailingPathSeparatorRegEx = Regex("""/$""")
  * If successful, the original file will have been deleted
  */
 fun moveToSharedStorage(
-    context: Context, filePath: String, destination: SharedStorage, directory: String, mimeType: String?
+    context: Context,
+    filePath: String,
+    destination: SharedStorage,
+    directory: String,
+    mimeType: String?
 ): String? {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
         return moveToPublicDirectory(filePath, destination, directory)
@@ -197,7 +201,7 @@ private fun getRelativePath(destination: SharedStorage, directory: String): Stri
 fun getMimeType(fileName: String): String {
     val extension = fileName.substringAfterLast(".", "")
     return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
-            ?: "application/octet-stream"
+        ?: "application/octet-stream"
 }
 
 /**

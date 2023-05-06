@@ -242,12 +242,13 @@ abstract class BaseDownloader {
       final records = await Database().allRecords(group: group);
       for (var record in records.where((record) =>
           record.task is DownloadTask &&
-          record.taskStatus != TaskStatus.complete)) {
+          record.status != TaskStatus.complete)) {
         final filePath = await record.task.filePath();
         if (await File(filePath).exists()) {
-          processStatusUpdate(TaskStatusUpdate(record.task, TaskStatus.complete));
+          processStatusUpdate(
+              TaskStatusUpdate(record.task, TaskStatus.complete));
           final updatedRecord = record.copyWith(
-              taskStatus: TaskStatus.complete, progress: progressComplete);
+              status: TaskStatus.complete, progress: progressComplete);
           await Database().updateRecord(updatedRecord);
         }
       }
@@ -463,8 +464,11 @@ abstract class BaseDownloader {
             log.warning('Could not enqueue task $task after retry timeout');
             removeModifiedTask(task);
             _clearPauseResumeInfo(task);
-            _emitStatusUpdate(TaskStatusUpdate(task, TaskStatus.failed, TaskException(
-                'Could not enqueue task $task after retry timeout')));
+            _emitStatusUpdate(TaskStatusUpdate(
+                task,
+                TaskStatus.failed,
+                TaskException(
+                    'Could not enqueue task $task after retry timeout')));
             _emitProgressUpdate(TaskProgressUpdate(task, progressFailed));
           }
         }
@@ -512,7 +516,8 @@ abstract class BaseDownloader {
   /// update the task in the database
   void _emitStatusUpdate(TaskStatusUpdate update) {
     final task = update.task;
-    _updateTaskInDatabase(task, status: update.status, taskException: update.exception);
+    _updateTaskInDatabase(task,
+        status: update.status, taskException: update.exception);
     if (task.providesStatusUpdates) {
       final taskStatusCallback = groupStatusCallbacks[task.group];
       if (taskStatusCallback != null) {
@@ -552,7 +557,9 @@ abstract class BaseDownloader {
 
   /// Insert or update the [TaskRecord] in the tracking database
   Future<void> _updateTaskInDatabase(Task task,
-      {TaskStatus? status, double? progress, TaskException? taskException}) async {
+      {TaskStatus? status,
+      double? progress,
+      TaskException? taskException}) async {
     if (trackedGroups.contains(null) || trackedGroups.contains(task.group)) {
       if (status == null && progress != null) {
         // update existing record with progress only
@@ -589,7 +596,8 @@ abstract class BaseDownloader {
             break;
         }
       }
-      Database().updateRecord(TaskRecord(task, status!, progress!, taskException));
+      Database()
+          .updateRecord(TaskRecord(task, status!, progress!, taskException));
     }
   }
 

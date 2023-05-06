@@ -333,7 +333,8 @@ Future<void> doUploadTask(
   var resultStatus = TaskStatus.failed;
   try {
     final client = DesktopDownloader.httpClient;
-    final request = http.StreamedRequest(task.httpRequestMethod, Uri.parse(task.url));
+    final request =
+        http.StreamedRequest(task.httpRequestMethod, Uri.parse(task.url));
     request.headers.addAll(task.headers);
     request.contentLength = contentLength;
     if (isBinaryUpload) {

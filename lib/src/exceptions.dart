@@ -38,7 +38,8 @@ class TaskException implements Exception {
   }
 
   /// Create object from String description of the type, and parameters
-  factory TaskException.fromTypeString(String typeString, String description, [int httpResponseCode = -1]) {
+  factory TaskException.fromTypeString(String typeString, String description,
+      [int httpResponseCode = -1]) {
     final exceptionType = _exceptions[typeString] ?? TaskException.new;
     if (typeString != 'TaskHttpException') {
       return exceptionType(description);
@@ -49,10 +50,7 @@ class TaskException implements Exception {
 
   /// Return JSON Map representing object
   Map<String, dynamic> toJsonMap() =>
-      {
-        'type': exceptionType,
-        'description': description
-      };
+      {'type': exceptionType, 'description': description};
 
   @override
   String toString() {
@@ -97,10 +95,8 @@ class TaskHttpException extends TaskException {
   String get exceptionType => 'TaskHttpException';
 
   @override
-  Map<String, dynamic> toJsonMap() => {
-    ...super.toJsonMap(),
-    'httpResponseCode': httpResponseCode
-  };
+  Map<String, dynamic> toJsonMap() =>
+      {...super.toJsonMap(), 'httpResponseCode': httpResponseCode};
 
   @override
   String toString() {

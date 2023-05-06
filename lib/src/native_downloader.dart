@@ -40,7 +40,8 @@ class NativeDownloader extends BaseDownloader {
           final status = TaskStatus.values[args[1]];
           TaskException? exception;
           if (status == TaskStatus.failed) {
-            exception = TaskException.fromTypeString(args[2] as String, args[3] as String, args[4] as int);
+            exception = TaskException.fromTypeString(
+                args[2] as String, args[3] as String, args[4] as int);
           }
           processStatusUpdate(TaskStatusUpdate(task, status, exception));
           break;

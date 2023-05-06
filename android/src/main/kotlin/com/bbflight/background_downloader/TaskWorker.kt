@@ -140,7 +140,10 @@ class TaskWorker(
          * Optional [taskException] for status .failed
          * */
         suspend fun processStatusUpdate(
-            task: Task, status: TaskStatus, prefs: SharedPreferences, taskException: TaskException? =
+            task: Task,
+            status: TaskStatus,
+            prefs: SharedPreferences,
+            taskException: TaskException? =
                 null
         ) {
             val retryNeeded = status == TaskStatus.failed && task.retriesRemaining > 0
@@ -608,7 +611,8 @@ class TaskWorker(
                     // so if allowed, pause it and schedule the resume task immediately
                     if (!task.allowPause) {
                         Log.i(TAG, "Task ${task.taskId} timed out")
-                        taskException = TaskException(ExceptionType.connection, description = "Task timed out")
+                        taskException =
+                            TaskException(ExceptionType.connection, description = "Task timed out")
                         return TaskStatus.failed
                     }
                     if (taskCanResume) {
@@ -628,7 +632,8 @@ class TaskWorker(
                         return TaskStatus.paused
                     }
                     Log.i(TAG, "Task ${task.taskId} timed out and cannot pause/resume")
-                    taskException = TaskException(ExceptionType.connection, description = "Task timed out")
+                    taskException =
+                        TaskException(ExceptionType.connection, description = "Task timed out")
                     deleteTempFile(tempFilePath)
                     return TaskStatus.failed
                 }

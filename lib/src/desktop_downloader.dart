@@ -90,8 +90,8 @@ class DesktopDownloader extends BaseDownloader {
     errorPort.listen((message) {
       final exceptionDescription = (message as List).first as String;
       logError(task, exceptionDescription);
-      processStatusUpdate(TaskStatusUpdate(task, TaskStatus.failed,
-          TaskException(exceptionDescription)));
+      processStatusUpdate(TaskStatusUpdate(
+          task, TaskStatus.failed, TaskException(exceptionDescription)));
       receivePort.close(); // also ends listener at then end
     });
     await Isolate.spawn(doTask, receivePort.sendPort,
@@ -122,8 +122,12 @@ class DesktopDownloader extends BaseDownloader {
           switch (message[0] as String) {
             case 'statusUpdate':
               final status = message[1] as TaskStatus;
-              processStatusUpdate(TaskStatusUpdate(task, status,
-                  status == TaskStatus.failed ? message[2] as TaskException : null));
+              processStatusUpdate(TaskStatusUpdate(
+                  task,
+                  status,
+                  status == TaskStatus.failed
+                      ? message[2] as TaskException
+                      : null));
               break;
 
             case 'resumeData':
