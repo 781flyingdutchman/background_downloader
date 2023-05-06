@@ -60,7 +60,7 @@ func getFilePath(for task: Task) -> String? {
 /// Sends status update via the background channel to Dart, if requested
 /// If the task is finished, processes a final progressUpdate update and removes
 /// task from persistent storage
-func processStatusUpdate(task: Task, status: TaskStatus, taskError: TaskError? = nil) {
+func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskException? = nil) {
     // Post update if task expects one, or if failed and retry is needed
     let retryNeeded = status == TaskStatus.failed && task.retriesRemaining > 0
     // if task is in final state, process a final progressUpdate
@@ -88,9 +88,9 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskError: TaskError? =
         Downloader.localResumeData.removeValue(forKey: task.taskId)
     }
     if providesStatusUpdates(downloadTask: task) || retryNeeded {
-        let finalTaskError = taskError == nil ? TaskError(type: .general,
-                                                           httpResponseCode: -1, description: "") : taskError
-        let arg: Any = status == .failed ? [status.rawValue, finalTaskError!.type.rawValue, finalTaskError!.httpResponseCode, finalTaskError!.description] : status.rawValue
+        let finalTaskException = taskException == nil ? TaskException(type: .general,
+                                                           httpResponseCode: -1, description: "") : taskException
+        let arg: Any = status == .failed ? [status.rawValue, finalTaskException!.type.rawValue, finalTaskException!.description, finalTaskException!.httpResponseCode] : status.rawValue
         if !postOnBackgroundChannel(method: "statusUpdate", task: task, arg: arg) {
             // store update locally as a merged task/status JSON string, without error info
             guard let jsonData = try? JSONEncoder().encode(task),

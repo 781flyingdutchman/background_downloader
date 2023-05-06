@@ -58,6 +58,9 @@ void statusCallback(TaskStatusUpdate update) {
   final task = update.task;
   final status = update.status;
   print('statusCallback for $task with status $status');
+  if (update.exception != null) {
+    print('Exception: ${update.exception}');
+  }
   lastStatus = status;
   lastException = update.exception;
   statusCallbackCounter++;
@@ -195,7 +198,8 @@ void main() {
       path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
       expect(
-          await FileDownloader().download(task), equals(TaskStatus.complete));
+          (await FileDownloader().download(task)).status, equals(TaskStatus
+          .complete));
       var result = jsonDecode(await File(path).readAsString());
       expect(result['args']['json'], equals('true'));
       expect(result['args']['test'], equals('with space'));
@@ -210,7 +214,8 @@ void main() {
       path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
       expect(
-          await FileDownloader().download(task), equals(TaskStatus.complete));
+          (await FileDownloader().download(task)).status, equals(TaskStatus
+          .complete));
       result = jsonDecode(await File(path).readAsString());
       expect(result['isPatch'], isTrue);
       await File(path).delete();
@@ -541,7 +546,7 @@ void main() {
           url: postTestUrl,
           filename: defaultFilename,
           headers: {'Auth': 'Test'},
-          httpRequestMethod: 'GET',
+          httpRequestMethod: 'post',
           post: 'TestPost',
           directory: 'directory',
           baseDirectory: BaseDirectory.temporary,
@@ -594,7 +599,7 @@ void main() {
           url: uploadTestUrl,
           filename: uploadFilename,
           headers: {'Auth': 'Test'},
-          httpRequestMethod: 'POST',
+          httpRequestMethod: 'post',
           post: null,
           fileField: 'fileField',
           mimeType: 'text/html',
@@ -606,6 +611,7 @@ void main() {
           allowPause: false,
           // cannot be true if post != null
           metaData: 'someMetaData');
+      expect(complexTask.httpRequestMethod, equals('POST'));
       final now = DateTime.now();
       expect(now.difference(complexTask.creationTime).inMilliseconds,
           lessThan(100));
@@ -1140,7 +1146,8 @@ void main() {
       final path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
       expect(
-          await FileDownloader().download(task), equals(TaskStatus.complete));
+          (await FileDownloader().download(task)).status, equals(TaskStatus
+          .complete));
       final result = jsonDecode(await File(path).readAsString());
       print(result);
       expect(result['args']['request-type'], equals('post-empty'));
@@ -1159,7 +1166,8 @@ void main() {
       final path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
       expect(
-          await FileDownloader().download(task), equals(TaskStatus.complete));
+          (await FileDownloader().download(task)).status, equals(TaskStatus
+          .complete));
       final result = jsonDecode(await File(path).readAsString());
       print(result);
       expect(result['args']['request-type'], equals('post-String'));
@@ -1180,7 +1188,8 @@ void main() {
       final path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
       expect(
-          await FileDownloader().download(task), equals(TaskStatus.complete));
+          (await FileDownloader().download(task)).status, equals(TaskStatus
+          .complete));
       final result = jsonDecode(await File(path).readAsString());
       print(result);
       expect(result['args']['request-type'], equals('post-Uint8List'));
@@ -1205,7 +1214,8 @@ void main() {
       final path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
       expect(
-          await FileDownloader().download(task), equals(TaskStatus.complete));
+          (await FileDownloader().download(task)).status, equals(TaskStatus
+          .complete));
       final result = jsonDecode(await File(path).readAsString());
       print(result);
       expect(result['args']['request-type'], equals('post-json'));
@@ -1960,7 +1970,7 @@ void main() {
 
     testWidgets('openFile', (widgetTester) async {
       final result = await FileDownloader().download(task);
-      expect(result, equals(TaskStatus.complete));
+      expect(result.status, equals(TaskStatus.complete));
       var success = await FileDownloader().openFile(task: task);
       if (!Platform.isAndroid) {
         expect(success, isTrue);
@@ -2102,7 +2112,7 @@ void main() {
   });
 
   group('Exception details', () {
-    testWidgets('httpResponse: 403', (widgetTester) async {
+    testWidgets('httpResponse: 403 downloadTask', (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback);
       task = DownloadTask(url: failingUrl, filename: 'test');

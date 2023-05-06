@@ -453,7 +453,8 @@ abstract class Task extends Request {
 
   @override
   String toString() {
-    return 'Task{taskId: $taskId, url: $url, filename: $filename, headers: $headers, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, updates: $updates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, metaData: $metaData}';
+    return 'Task{taskId: $taskId, url: $url, filename: $filename, headers: '
+        '$headers, httpRequestMethod: $httpRequestMethod, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, updates: $updates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, metaData: $metaData}';
   }
 }
 
@@ -493,7 +494,7 @@ class DownloadTask extends Task {
       super.urlQueryParameters,
       String? filename,
       super.headers,
-        super.httpRequestMethod,
+      super.httpRequestMethod,
       super.post,
       super.directory,
       super.baseDirectory,
@@ -524,7 +525,7 @@ class DownloadTask extends Task {
           String? url,
           String? filename,
           Map<String, String>? headers,
-            String? httpRequestMethod,
+          String? httpRequestMethod,
           Object? post,
           String? directory,
           BaseDirectory? baseDirectory,
@@ -689,7 +690,7 @@ class UploadTask extends Task {
       super.urlQueryParameters,
       required String filename,
       super.headers,
-        super.httpRequestMethod,
+      String? httpRequestMethod,
       String? post,
       this.fileField = 'file',
       String? mimeType,
@@ -711,7 +712,11 @@ class UploadTask extends Task {
         fields = fields ?? {},
         mimeType =
             mimeType ?? lookupMimeType(filename) ?? 'application/octet-stream',
-        super(taskId: taskId, filename: filename, post: post) {
+        super(
+            taskId: taskId,
+            filename: filename,
+            httpRequestMethod: httpRequestMethod ?? 'POST',
+            post: post) {
     if (allowPause) {
       throw ArgumentError('Uploads cannot be paused-> Set `allowPause` to '
           'false');
@@ -744,7 +749,7 @@ class UploadTask extends Task {
           String? url,
           String? filename,
           Map<String, String>? headers,
-          String?  httpRequestMethod,
+          String? httpRequestMethod,
           Object? post,
           String? fileField,
           String? mimeType,
