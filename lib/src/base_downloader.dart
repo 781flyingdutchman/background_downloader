@@ -48,7 +48,7 @@ abstract class BaseDownloader {
   var updates = StreamController<TaskUpdate>();
 
   /// Groups tracked in persistent database
-  final trackedGroups = <String>{};
+  final trackedGroups = <String?>{};
 
   /// Map of tasks and completer to indicate whether task can be resumed
   final canResumeTask = <Task, Completer<bool>>{};
@@ -236,7 +236,7 @@ abstract class BaseDownloader {
   /// This is a convenient way to capture downloads that have completed while
   /// the app was suspended, provided you have registered your listeners
   /// or callback before calling this.
-  Future<void> trackTasks(String group, bool markDownloadedComplete) async {
+  Future<void> trackTasks(String? group, bool markDownloadedComplete) async {
     trackedGroups.add(group);
     if (markDownloadedComplete) {
       final records = await Database().allRecords(group: group);
@@ -553,7 +553,7 @@ abstract class BaseDownloader {
   /// Insert or update the [TaskRecord] in the tracking database
   Future<void> _updateTaskInDatabase(Task task,
       {TaskStatus? status, double? progress, TaskException? taskException}) async {
-    if (trackedGroups.contains(task.group)) {
+    if (trackedGroups.contains(null) || trackedGroups.contains(task.group)) {
       if (status == null && progress != null) {
         // update existing record with progress only
         final existingRecord = await Database().recordForId(task.taskId);

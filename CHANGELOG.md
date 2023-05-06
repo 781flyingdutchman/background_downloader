@@ -6,6 +6,8 @@ TaskStatusUpdate now has an exception field (if status is .failed)
 
 You can set the httpRequestMethod
 
+TrackTasks: if no group is given, all tasks will be tracked (previously only tasks in the default group)
+
 
 ## 5.6.0
 

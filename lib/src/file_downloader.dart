@@ -412,9 +412,31 @@ class FileDownloader {
   /// listener or callbacks, and call [trackTasks] for each group.
   ///
   /// Returns the [FileDownloader] for easy chaining
-  Future<FileDownloader> trackTasks(
-      {String group = defaultGroup, bool markDownloadedComplete = true}) async {
+  Future<FileDownloader> trackTasksInGroup(
+      String group, {bool markDownloadedComplete = true}) async {
     await _downloader.trackTasks(group, markDownloadedComplete);
+    return this;
+  }
+
+  /// Activate tracking for all tasks
+  ///
+  /// All subsequent tasks will be recorded in persistent storage.
+  /// Use the [FileDownloader.database] to get or remove [TaskRecord] objects,
+  /// which contain a [Task], its [TaskStatus] and a [double] for progress.
+  ///
+  /// If [markDownloadedComplete] is true (default) then all tasks in the
+  /// database that are marked as not yet [TaskStatus.complete] will be set to
+  /// [TaskStatus.complete] if the target file for that task exists.
+  /// They will also emit [TaskStatus.complete] and [progressComplete] to
+  /// their registered listener or callback.
+  /// This is a convenient way to capture downloads that have completed while
+  /// the app was suspended: on app startup, immediately register your
+  /// listener or callbacks, and call [trackTasks] for each group.
+  ///
+  /// Returns the [FileDownloader] for easy chaining
+  Future<FileDownloader> trackTasks(
+      {bool markDownloadedComplete = true}) async {
+    await _downloader.trackTasks(null, markDownloadedComplete);
     return this;
   }
 
