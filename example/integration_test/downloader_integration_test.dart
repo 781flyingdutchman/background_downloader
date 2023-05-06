@@ -147,6 +147,10 @@ void main() {
       expect(task.fileField, equals('fileField'));
       expect(task.mimeType, equals('someThing'));
     });
+
+    test('task with httpRequestMethod', () {
+      expect(() => DownloadTask(url: workingUrl, httpRequestMethod: 'ILLEGAL'), throwsArgumentError);
+    });
   });
 
   group('Enqueuing tasks', () {
@@ -192,9 +196,23 @@ void main() {
           join((await getApplicationDocumentsDirectory()).path, task.filename);
       expect(
           await FileDownloader().download(task), equals(TaskStatus.complete));
-      final result = jsonDecode(await File(path).readAsString());
+      var result = jsonDecode(await File(path).readAsString());
       expect(result['args']['json'], equals('true'));
       expect(result['args']['test'], equals('with space'));
+      await File(path).delete();
+
+      // test url with PATCH httpRequestMethod
+      task = DownloadTask(
+          url: getTestUrl,
+          urlQueryParameters: {'json': 'true', 'test': 'with%20space'},
+          httpRequestMethod: 'PATCH',
+          filename: defaultFilename);
+      path =
+          join((await getApplicationDocumentsDirectory()).path, task.filename);
+      expect(
+          await FileDownloader().download(task), equals(TaskStatus.complete));
+      result = jsonDecode(await File(path).readAsString());
+      expect(result['isPatch'], isTrue);
       await File(path).delete();
       print('Finished enqueue');
     });
@@ -523,6 +541,7 @@ void main() {
           url: postTestUrl,
           filename: defaultFilename,
           headers: {'Auth': 'Test'},
+          httpRequestMethod: 'GET',
           post: 'TestPost',
           directory: 'directory',
           baseDirectory: BaseDirectory.temporary,
@@ -547,6 +566,7 @@ void main() {
         expect(task.url, equals(complexTask.url));
         expect(task.filename, equals(complexTask.filename));
         expect(task.headers, equals(complexTask.headers));
+        expect(task.httpRequestMethod, equals(complexTask.httpRequestMethod));
         expect(task.post, equals(complexTask.post));
         expect(task.directory, equals(complexTask.directory));
         expect(task.baseDirectory, equals(complexTask.baseDirectory));
@@ -574,6 +594,7 @@ void main() {
           url: uploadTestUrl,
           filename: uploadFilename,
           headers: {'Auth': 'Test'},
+          httpRequestMethod: 'POST',
           post: null,
           fileField: 'fileField',
           mimeType: 'text/html',
@@ -600,6 +621,7 @@ void main() {
         expect(task.url, equals(complexTask.url));
         expect(task.filename, equals(complexTask.filename));
         expect(task.headers, equals(complexTask.headers));
+        expect(task.httpRequestMethod, equals(complexTask.httpRequestMethod));
         expect(task.post, equals(complexTask.post));
         expect(task.fileField, equals(complexTask.fileField));
         expect(task.mimeType, equals(complexTask.mimeType));
@@ -634,6 +656,7 @@ void main() {
           url: postTestUrl,
           filename: defaultFilename,
           headers: {'Auth': 'Test'},
+          httpRequestMethod: 'PATCH',
           post: 'TestPost',
           directory: 'directory',
           baseDirectory: BaseDirectory.temporary,
@@ -650,6 +673,7 @@ void main() {
       expect(task.url, equals(complexTask.url));
       expect(task.filename, equals(complexTask.filename));
       expect(task.headers, equals(complexTask.headers));
+      expect(task.httpRequestMethod, equals(complexTask.httpRequestMethod));
       expect(task.post, equals(complexTask.post));
       expect(task.directory, equals(complexTask.directory));
       expect(task.baseDirectory, equals(complexTask.baseDirectory));

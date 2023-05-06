@@ -80,7 +80,7 @@ Future<void> doTask(SendPort sendPort) async {
   Isolate.exit();
 }
 
-/// Do the POST or GET based download task
+/// Execute the download task
 ///
 /// Sends updates via the [sendPort] and can be commanded to cancel/pause via
 /// the [messagesToIsolate] queue
@@ -94,9 +94,7 @@ Future<void> doDownloadTask(
   isResume = isResume &&
       await determineIfResumeIsPossible(tempFilePath, requiredStartByte);
   final client = DesktopDownloader.httpClient;
-  var request = task.post == null
-      ? http.Request('GET', Uri.parse(task.url))
-      : http.Request('POST', Uri.parse(task.url));
+  var request = http.Request(task.httpRequestMethod, Uri.parse(task.url));
   request.headers.addAll(task.headers);
   if (isResume) {
     request.headers['Range'] = 'bytes=$requiredStartByte-';
@@ -335,7 +333,7 @@ Future<void> doUploadTask(
   var resultStatus = TaskStatus.failed;
   try {
     final client = DesktopDownloader.httpClient;
-    final request = http.StreamedRequest('POST', Uri.parse(task.url));
+    final request = http.StreamedRequest(task.httpRequestMethod, Uri.parse(task.url));
     request.headers.addAll(task.headers);
     request.contentLength = contentLength;
     if (isBinaryUpload) {

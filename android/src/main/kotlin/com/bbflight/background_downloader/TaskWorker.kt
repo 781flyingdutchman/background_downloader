@@ -469,14 +469,12 @@ class TaskWorker(
     ): TaskStatus {
         val filePath = task.filePath(applicationContext)
         try {
+            connection.requestMethod = task.httpRequestMethod
             if (task.isDownloadTask()) {
                 if (task.post != null) {
-                    connection.requestMethod = "POST"
                     connection.doOutput = true
                     connection.setFixedLengthStreamingMode(task.post.length)
                     DataOutputStream(connection.outputStream).use { it.writeBytes(task.post) }
-                } else {
-                    connection.requestMethod = "GET"
                 }
                 return processDownload(
                     connection, task, filePath, isResume, tempFilePath
@@ -679,7 +677,6 @@ class TaskWorker(
     private suspend fun processUpload(
         connection: HttpURLConnection, task: Task, filePath: String
     ): TaskStatus {
-        connection.requestMethod = "POST"
         connection.doOutput = true
         val file = File(filePath)
         if (!file.exists() || !file.isFile) {

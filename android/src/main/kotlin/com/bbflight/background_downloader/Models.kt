@@ -38,6 +38,7 @@ class Task(
     val url: String,
     val filename: String,
     val headers: Map<String, String>,
+    val httpRequestMethod: String,
     val post: String?,
     val fileField: String,
     val mimeType: String,
@@ -62,6 +63,7 @@ class Task(
         url = jsonMap["url"] as String? ?: "",
         filename = jsonMap["filename"] as String? ?: "",
         headers = jsonMap["headers"] as Map<String, String>? ?: mutableMapOf<String, String>(),
+        httpRequestMethod = jsonMap["httpRequestMethod"] as String? ?: "GET",
         post = jsonMap["post"] as String?,
         fileField = jsonMap["fileField"] as String? ?: "",
         mimeType = jsonMap["mimeType"] as String? ?: "",
@@ -87,6 +89,7 @@ class Task(
             "url" to url,
             "filename" to filename,
             "headers" to headers,
+            "httpRequestMethod" to httpRequestMethod,
             "post" to post,
             "fileField" to fileField,
             "mimeType" to mimeType,
@@ -153,7 +156,7 @@ class Task(
     }
 
     override fun toString(): String {
-        return "Task(taskId='$taskId', url='$url', filename='$filename', headers=$headers, post=$post, fileField='$fileField', mimeType='$mimeType', fields=$fields, directory='$directory', baseDirectory=$baseDirectory, group='$group', updates=$updates, requiresWiFi=$requiresWiFi, retries=$retries, retriesRemaining=$retriesRemaining, allowPause=$allowPause, metaData='$metaData', creationTime=$creationTime, taskType='$taskType')"
+        return "Task(taskId='$taskId', url='$url', filename='$filename', headers=$headers, httpRequestMethod=$httpRequestMethod, post=$post, fileField='$fileField', mimeType='$mimeType', fields=$fields, directory='$directory', baseDirectory=$baseDirectory, group='$group', updates=$updates, requiresWiFi=$requiresWiFi, retries=$retries, retriesRemaining=$retriesRemaining, allowPause=$allowPause, metaData='$metaData', creationTime=$creationTime, taskType='$taskType')"
     }
 
 
@@ -225,12 +228,16 @@ enum class ExceptionType(val typeString: String) {
 }
 
 /**
-* Contains error information associated with a failed [Task]
-*
-* The [type] categorizes the exception, used to create the appropriate subclass on the Flutter side
-* The [httpResponseCode] is only valid if >0 and may offer details about the
-* nature of the error
-* The [description] is typically taken from the platform-generated
-* error message, or from the plugin. The localization is undefined
-*/
-class TaskException(val type: ExceptionType, val httpResponseCode: Int = -1, val description: String = "")
+ * Contains error information associated with a failed [Task]
+ *
+ * The [type] categorizes the exception, used to create the appropriate subclass on the Flutter side
+ * The [httpResponseCode] is only valid if >0 and may offer details about the
+ * nature of the error
+ * The [description] is typically taken from the platform-generated
+ * error message, or from the plugin. The localization is undefined
+ */
+class TaskException(
+    val type: ExceptionType,
+    val httpResponseCode: Int = -1,
+    val description: String = ""
+)
