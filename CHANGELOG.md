@@ -1,3 +1,12 @@
+## 6.0.0
+
+Callbacks now have a single paramter TaskStatusUpdate or TaskProgressUpdate
+.download method and .upload method now result in a TaskStatusUpdate
+TaskStatusUpdate now has an exception field (if status is .failed)
+
+You can set the httpRequestMethod
+
+
 ## 5.6.0
 
 Adds handler for when the user taps a notification, and an `openFile` method to open a file using the platform-specific convention.

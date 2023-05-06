@@ -777,8 +777,8 @@ void main() {
       if (exists) {
         await File(path).delete();
       }
-      final status = await FileDownloader().download(task);
-      expect(status, equals(TaskStatus.complete));
+      final result = await FileDownloader().download(task);
+      expect(result.status, equals(TaskStatus.complete));
       exists = await File(path).exists();
       expect(exists, isTrue);
       await File(path).delete();
@@ -804,9 +804,9 @@ void main() {
       // var result = await FileDownloader().download(task);
       final taskFuture = FileDownloader().download(task);
       final secondTaskFuture = FileDownloader().download(secondTask);
-      var statuses = await Future.wait([taskFuture, secondTaskFuture]);
-      for (var status in statuses) {
-        expect(status, equals(TaskStatus.complete));
+      var results = await Future.wait([taskFuture, secondTaskFuture]);
+      for (var result in results) {
+        expect(result.status, equals(TaskStatus.complete));
       }
       exists = await File(path).exists();
       expect(exists, isTrue);
@@ -921,7 +921,8 @@ void main() {
     testWidgets('convenience download with callbacks', (widgetTester) async {
       var result = await FileDownloader()
           .download(task, onStatus: (status) => statusCallback(TaskStatusUpdate(task, status)));
-      expect(result, equals(TaskStatus.complete));
+      expect(result.task, equals(task));
+      expect(result.status, equals(TaskStatus.complete));
       expect(statusCallbackCounter, equals(3));
       expect(progressCallbackCompleter.isCompleted, isFalse);
       expect(progressCallbackCounter, equals(0));
@@ -934,7 +935,7 @@ void main() {
       result = await FileDownloader().download(task,
           onStatus: (status) => statusCallback(TaskStatusUpdate(task, status)),
           onProgress: (progress) => progressCallback(TaskProgressUpdate(task, progress)));
-      expect(result, equals(TaskStatus.complete));
+      expect(result.status, equals(TaskStatus.complete));
       expect(statusCallbackCounter, equals(3));
       expect(progressCallbackCounter, greaterThan(1));
       expect(lastProgress, equals(1.0));
@@ -973,10 +974,10 @@ void main() {
         expect(p2, closeTo(1.0, 0.1)); // complete [1]
         expect(p3, closeTo(1.0, 0.1)); // complete [1]
       }
-      successResult.then((value) => expect(value, equals(TaskStatus.complete)));
+      successResult.then((value) => expect(value.status, equals(TaskStatus.complete)));
       successResult2
-          .then((value) => expect(value, equals(TaskStatus.complete)));
-      failingResult.then((value) => expect(value, equals(TaskStatus.failed)));
+          .then((value) => expect(value.status, equals(TaskStatus.complete)));
+      failingResult.then((value) => expect(value.status, equals(TaskStatus.failed)));
       print('Finished parallel convenience downloads with callbacks');
     });
 
@@ -989,8 +990,8 @@ void main() {
       var successResult = FileDownloader()
           .download(task, onStatus: (status) => statusCallback(TaskStatusUpdate(task, status)));
       await Future.wait([successResult, failingResult]);
-      successResult.then((value) => expect(value, equals(TaskStatus.complete)));
-      failingResult.then((value) => expect(value, equals(TaskStatus.failed)));
+      successResult.then((value) => expect(value.status, equals(TaskStatus.complete)));
+      failingResult.then((value) => expect(value.status, equals(TaskStatus.failed)));
       expect(statusCallbackCounter, equals(12));
       print('Finished simple parallel convenience downloads with callbacks');
     });
@@ -1428,8 +1429,8 @@ void main() {
 
   group('Convenience uploads', () {
     testWidgets('upload with await', (widgetTester) async {
-      final status = await FileDownloader().upload(uploadTask);
-      expect(status, equals(TaskStatus.complete));
+      final result = await FileDownloader().upload(uploadTask);
+      expect(result.status, equals(TaskStatus.complete));
     });
 
     testWidgets('multiple upload with futures', (widgetTester) async {
@@ -1439,9 +1440,9 @@ void main() {
       // var result = await FileDownloader().upload(task);
       final taskFuture = FileDownloader().upload(uploadTask);
       final secondTaskFuture = FileDownloader().upload(secondTask);
-      var statuses = await Future.wait([taskFuture, secondTaskFuture]);
-      for (var status in statuses) {
-        expect(status, equals(TaskStatus.complete));
+      var results = await Future.wait([taskFuture, secondTaskFuture]);
+      for (var result in results) {
+        expect(result.status, equals(TaskStatus.complete));
       }
     });
 
@@ -1499,7 +1500,7 @@ void main() {
     testWidgets('convenience upload with callbacks', (widgetTester) async {
       var result = await FileDownloader().upload(uploadTask,
           onStatus: (status) => statusCallback(TaskStatusUpdate(uploadTask, status)));
-      expect(result, equals(TaskStatus.complete));
+      expect(result.status, equals(TaskStatus.complete));
       expect(statusCallbackCounter, equals(3));
       expect(progressCallbackCompleter.isCompleted, isFalse);
       expect(progressCallbackCounter, equals(0));
@@ -1512,7 +1513,7 @@ void main() {
       result = await FileDownloader().upload(task2,
           onStatus: (status) => statusCallback(TaskStatusUpdate(task2, status)),
           onProgress: (progress) => progressCallback(TaskProgressUpdate(task2, progress)));
-      expect(result, equals(TaskStatus.complete));
+      expect(result.status, equals(TaskStatus.complete));
       expect(statusCallbackCounter, equals(3));
       expect(progressCallbackCounter, greaterThan(1));
       expect(lastProgress, equals(1.0));

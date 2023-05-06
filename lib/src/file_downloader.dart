@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:background_downloader/background_downloader.dart';
 import 'package:background_downloader/src/desktop_downloader.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
@@ -30,7 +31,7 @@ class FileDownloader {
   /// database via this [database] object.
   final database = Database();
 
-  final _taskCompleters = <Task, Completer<TaskStatus>>{};
+  final _taskCompleters = <Task, Completer<TaskStatusUpdate>>{};
   final _batches = <Batch>[];
   final _downloader = BaseDownloader.instance();
 
@@ -66,7 +67,7 @@ class FileDownloader {
   Stream<TaskUpdate> get updates => _downloader.updates.stream;
 
   /// Register status or progress callbacks to monitor download progress, and
-  /// TaskNotificationTapCallback to respond to user tapping a notification.
+  /// [TaskNotificationTapCallback] to respond to user tapping a notification.
   ///
   /// Status callbacks are called only when the state changes, while
   /// progress callbacks are called to inform of intermediate progress.
@@ -82,7 +83,7 @@ class FileDownloader {
   /// notification is tapped.
   ///
   /// Different callbacks can be set for different groups, and the group
-  /// can be passed on with the [DownloadTask] to ensure the
+  /// can be passed on with the [Task] to ensure the
   /// appropriate callbacks are called for that group.
   ///
   /// The call returns the [FileDownloader] to make chaining easier
@@ -103,10 +104,10 @@ class FileDownloader {
       _downloader.groupNotificationTapCallbacks[group] =
           taskNotificationTapCallback;
     }
-    return this; // makes chaining calls easier
+    return this;
   }
 
-  /// Start a new task
+  /// Enqueue a new [Task]
   ///
   /// Returns true if successfully enqueued. A new task will also generate
   /// a [TaskStatus.enqueued] update to the registered callback,
@@ -114,7 +115,7 @@ class FileDownloader {
   Future<bool> enqueue(Task task) =>
       _downloader.enqueue(task, _notificationConfigForTask(task));
 
-  /// Download a file and return the final [TaskStatus]
+  /// Download a file and return the final [TaskStatusUpdate]
   ///
   /// Different from [enqueue], this method does not return until the file
   /// has been downloaded, or an error has occurred.  While it uses the same
@@ -131,12 +132,12 @@ class FileDownloader {
   ///
   /// Note that the task's [group] is ignored and will be replaced with an
   /// internal group name '_enqueueAndWait' to track status
-  Future<TaskStatus> download(DownloadTask task,
+  Future<TaskStatusUpdate> download(DownloadTask task,
           {void Function(TaskStatus)? onStatus,
           void Function(double)? onProgress}) =>
       _enqueueAndAwait(task, onStatus: onStatus, onProgress: onProgress);
 
-  /// Upload a file and return the final [TaskStatus]
+  /// Upload a file and return the final [TaskStatusUpdate]
   ///
   /// Different from [enqueue], this method does not return until the file
   /// has been uploaded, or an error has occurred.  While it uses the same
@@ -153,7 +154,7 @@ class FileDownloader {
   ///
   /// Note that the task's [group] is ignored and will be replaced with an
   /// internal group name 'await' to track status
-  Future<TaskStatus> upload(UploadTask task,
+  Future<TaskStatusUpdate> upload(UploadTask task,
           {void Function(TaskStatus)? onStatus,
           void Function(double)? onProgress}) =>
       _enqueueAndAwait(task, onStatus: onStatus, onProgress: onProgress);
@@ -166,7 +167,7 @@ class FileDownloader {
   ///    for status and progress (omitting Task)
   /// 2. `downloadBatch` and `uploadBatch`, which may have a full callback
   ///    that is used for every task in the batch
-  Future<TaskStatus> _enqueueAndAwait(Task task,
+  Future<TaskStatusUpdate> _enqueueAndAwait(Task task,
       {void Function(TaskStatus)? onStatus,
       void Function(double)? onProgress,
       TaskStatusCallback? taskStatusCallback,
@@ -207,7 +208,7 @@ class FileDownloader {
         _taskStatusCallbacks.remove(task.taskId);
         _taskProgressCallbacks.remove(task.taskId);
         var taskCompleter = _taskCompleters.remove(task);
-        taskCompleter?.complete(status);
+        taskCompleter?.complete(statusUpdate);
       }
     }
 
@@ -244,12 +245,13 @@ class FileDownloader {
     }
     // Create taskCompleter and enqueue the task.
     // The completer will be completed in the internal status callback
-    final taskCompleter = Completer<TaskStatus>();
+    final taskCompleter = Completer<TaskStatusUpdate>();
     _taskCompleters[internalTask] = taskCompleter;
     final enqueueSuccess = await enqueue(internalTask);
     if (!enqueueSuccess) {
-      _log.warning('Could not enqueue task $task}');
-      return Future.value(TaskStatus.failed);
+      _log.warning('Could not enqueue task $task');
+      return Future.value(TaskStatusUpdate(task, TaskStatus.failed,
+          TaskException('Could not enqueue task $task')));
     }
     return taskCompleter.future;
   }
@@ -325,7 +327,7 @@ class FileDownloader {
     }
     final batch = Batch(tasks, batchProgressCallback);
     _batches.add(batch);
-    final taskFutures = <Future<TaskStatus>>[];
+    final taskFutures = <Future<TaskStatusUpdate>>[];
     var counter = 0;
     for (final task in tasks) {
       taskFutures.add(_enqueueAndAwait(task,
