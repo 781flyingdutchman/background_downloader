@@ -44,7 +44,7 @@ A `DownloadTask` or `UploadTask` (both subclasses of `Task`) defines one downloa
     final result = await FileDownloader().download(task);  // do the download and wait for result
 ```
 
-The `result` will be a [TaskStatusUpdate](#https://pub.dev/documentation/background_downloader/latest/background_downloader/TaskStatusUpdate-class.html), which has a field `status` that indicates how the download ended: `.complete`, `.failed`, `.canceled` or `.notFound`. If the `status` is `.failed`, the `result.exception` field will contain a `TaskException` with information about what went wrong.
+The `result` will be a [TaskStatusUpdate](https://pub.dev/documentation/background_downloader/latest/background_downloader/TaskStatusUpdate-class.html), which has a field `status` that indicates how the download ended: `.complete`, `.failed`, `.canceled` or `.notFound`. If the `status` is `.failed`, the `result.exception` field will contain a `TaskException` with information about what went wrong.
 
 ### Monitoring the task
 
@@ -180,7 +180,7 @@ Listen to updates from the downloader by listening to the `updates` stream, and 
 
 Note that `successFullyEnqueued` only refers to the enqueueing of the download task, not its result, which must be monitored via the listener. Also note that in order to get progress updates the task must set its `updates` field to a value that includes progress updates. In the example, we are asking for both status and progress updates, but other combinations are possible. For example, if you set `updates` to `Updates.status` then the task will only generate status updates and no progress updates. You define what updates to receive on a task by task basis via the `Task.updates` field, which defaults to status updates only.
 
-You can start your subscription in a convenient place, like a widget's `initState`, and don't forget to cancel your subscription to the stream using `subscription.cancel()`. Note the stream can only be listened to once.
+You can start your subscription in a convenient place, like a widget's `initState`, and don't forget to cancel your subscription to the stream using `subscription.cancel()`. Note the stream can only be listened to once, though you can reset the stream controller by calling `await FileDownloader().resetUpdates()` to start listening again.
 
 ### Using callbacks
 
@@ -210,6 +210,8 @@ A basic file download with just status monitoring (no progress) then requires re
 You define what updates to receive on a task by task basis via the `Task.updates` field, which defaults to status updates only.  If you register a callback for a type of task, updates are provided only through that callback and will not be posted on the `updates` stream.
 
 Note that all tasks will call the same callback, unless you register separate callbacks for different [groups](#grouping-tasks) and set your `Task.group` field accordingly.
+
+You can unregister callbacks using `FileDownloader().unregisterCallbacks()`.
 
 ### Using the database to track Tasks
 
@@ -379,7 +381,7 @@ Because an app may require different types of downloads, and handle those differ
   final successFullyEnqueued = await FileDownloader().enqueue(task);
 ```
 
-The methods `registerCallBacks`, `reset`, `allTaskIds` and `allTasks` all take an optional `group` parameter to target tasks in a specific group. Note that if tasks are enqueued with a `group` other than default, calling any of these methods without a group parameter will not affect/include those tasks - only the default tasks.
+The methods `registerCallBacks`, `unregisterCallBacks`, `reset`, `allTaskIds` and `allTasks` all take an optional `group` parameter to target tasks in a specific group. Note that if tasks are enqueued with a `group` other than default, calling any of these methods without a group parameter will not affect/include those tasks - only the default tasks.
 
 If you listen to the `updates` stream instead of using callbacks, you can test for the task's `group` field in your listener, and process the update differently for different groups.
 

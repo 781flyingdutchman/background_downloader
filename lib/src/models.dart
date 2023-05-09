@@ -596,33 +596,33 @@ class DownloadTask extends Task {
       final response = await DesktopDownloader.httpClient
           .head(Uri.parse(url), headers: headers);
       if ([200, 201, 202, 203, 204, 205, 206].contains(response.statusCode)) {
-        final disposition = response.headers['Content-Disposition'];
-        if (disposition != null) {
-          // Try filename="filename"
-          final plainFilenameRegEx =
-              RegExp(r'filename="?([^"]+)"?.*$', caseSensitive: false);
-          var match = plainFilenameRegEx.firstMatch(disposition);
-          if (match != null && match.group(1)?.isNotEmpty == true) {
-            return uniqueFilename(copyWith(filename: match.group(1)), unique);
-          }
-          // Try filename*=UTF-8'language'"encodedFilename"
-          final encodedFilenameRegEx = RegExp(
-              'filename\\*=([^\']+)\'([^\']*)\'"?([^"]+)"?',
-              caseSensitive: false);
-          match = encodedFilenameRegEx.firstMatch(disposition);
-          if (match != null &&
-              match.group(1)?.isNotEmpty == true &&
-              match.group(3)?.isNotEmpty == true) {
-            try {
-              final suggestedFilename = match.group(1) == 'UTF-8'
-                  ? Uri.decodeComponent(match.group(3)!)
-                  : match.group(3)!;
-              return uniqueFilename(
-                  copyWith(filename: suggestedFilename), true);
-            } on ArgumentError {
-              _log.finer(
-                  'Could not interpret suggested filename (UTF-8 url encoded) ${match.group(3)}');
-            }
+        final disposition = response.headers.entries
+            .firstWhere(
+                (element) => element.key.toLowerCase() == 'content-disposition')
+            .value;
+        // Try filename="filename"
+        final plainFilenameRegEx =
+            RegExp(r'filename="?([^"]+)"?.*$', caseSensitive: false);
+        var match = plainFilenameRegEx.firstMatch(disposition);
+        if (match != null && match.group(1)?.isNotEmpty == true) {
+          return uniqueFilename(copyWith(filename: match.group(1)), unique);
+        }
+        // Try filename*=UTF-8'language'"encodedFilename"
+        final encodedFilenameRegEx = RegExp(
+            'filename\\*=([^\']+)\'([^\']*)\'"?([^"]+)"?',
+            caseSensitive: false);
+        match = encodedFilenameRegEx.firstMatch(disposition);
+        if (match != null &&
+            match.group(1)?.isNotEmpty == true &&
+            match.group(3)?.isNotEmpty == true) {
+          try {
+            final suggestedFilename = match.group(1) == 'UTF-8'
+                ? Uri.decodeComponent(match.group(3)!)
+                : match.group(3)!;
+            return uniqueFilename(copyWith(filename: suggestedFilename), true);
+          } on ArgumentError {
+            _log.finer(
+                'Could not interpret suggested filename (UTF-8 url encoded) ${match.group(3)}');
           }
         }
       }

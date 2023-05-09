@@ -107,6 +107,33 @@ class FileDownloader {
     return this;
   }
 
+  /// Unregister a previously registered [TaskStatusCallback], [TaskProgressCallback]
+  /// or [TaskNotificationTapCallback].
+  ///
+  /// [group] defaults to the [FileDownloader.defaultGroup]
+  /// If [callback] is null, all callbacks for the [group] are unregistered
+  FileDownloader unregisterCallbacks(
+      {String group = defaultGroup, Function? callback}) {
+    if (callback != null) {
+      // remove specific callback
+      if (_downloader.groupStatusCallbacks[group] == callback) {
+        _downloader.groupStatusCallbacks.remove(group);
+      }
+      if (_downloader.groupProgressCallbacks[group] == callback) {
+        _downloader.groupProgressCallbacks.remove(group);
+      }
+      if (_downloader.groupNotificationTapCallbacks[group] == callback) {
+        _downloader.groupNotificationTapCallbacks.remove(group);
+      }
+    } else {
+      // remove all callbacks related to group
+      _downloader.groupStatusCallbacks.remove(group);
+      _downloader.groupProgressCallbacks.remove(group);
+      _downloader.groupNotificationTapCallbacks.remove(group);
+    }
+    return this;
+  }
+
   /// Enqueue a new [Task]
   ///
   /// Returns true if successfully enqueued. A new task will also generate
@@ -713,6 +740,10 @@ class FileDownloader {
         'Either task or filePath must be set, not both');
     return _downloader.openFile(task, filePath, mimeType);
   }
+
+  /// Closes the [updates] stream and re-initializes the [StreamController]
+  /// such that the stream can be listened to again
+  Future<void> resetUpdates() => _downloader.resetUpdatesStreamController();
 
   /// Destroy the [FileDownloader]. Subsequent use requires initialization
   void destroy() {
