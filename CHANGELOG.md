@@ -1,3 +1,9 @@
+## 6.1.0
+
+Added `unregisterCallBacks` to remove callbacks if you no longer want updates, and `resetUpdates` to reset the `updates` stream so it can be listened to again.
+
+Bug fix for `DownloadTask.withSuggestedFilename` for servers that do not follow case convention for the Content-Disposition header.
+
 ## 6.0.0
 
 Breaking changes:

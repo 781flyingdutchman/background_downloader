@@ -138,6 +138,64 @@ void main() {
           group: 'test', taskProgressCallback: progressCallback);
     });
 
+    test('unregisterCallbacks', () {
+      FileDownloader().registerCallbacks(
+          group: 'test',
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback,
+          taskNotificationTapCallback: (task, notificationType) {});
+      expect(FileDownloader().downloaderForTesting.groupStatusCallbacks['test'],
+          isNotNull);
+      expect(
+          FileDownloader().downloaderForTesting.groupProgressCallbacks['test'],
+          isNotNull);
+      expect(
+          FileDownloader()
+              .downloaderForTesting
+              .groupNotificationTapCallbacks['test'],
+          isNotNull);
+      // remove with different group, should not remove
+      FileDownloader().unregisterCallbacks(callback: statusCallback);
+      FileDownloader().unregisterCallbacks(callback: progressCallback);
+      expect(FileDownloader().downloaderForTesting.groupStatusCallbacks['test'],
+          isNotNull);
+      expect(
+          FileDownloader().downloaderForTesting.groupProgressCallbacks['test'],
+          isNotNull);
+      expect(
+          FileDownloader()
+              .downloaderForTesting
+              .groupNotificationTapCallbacks['test'],
+          isNotNull);
+      // remove for the right group, except the groupNotificationTapCallback
+      FileDownloader()
+          .unregisterCallbacks(group: 'test', callback: statusCallback);
+      FileDownloader()
+          .unregisterCallbacks(group: 'test', callback: progressCallback);
+      expect(FileDownloader().downloaderForTesting.groupStatusCallbacks['test'],
+          isNull);
+      expect(
+          FileDownloader().downloaderForTesting.groupProgressCallbacks['test'],
+          isNull);
+      expect(
+          FileDownloader()
+              .downloaderForTesting
+              .groupNotificationTapCallbacks['test'],
+          isNotNull);
+      // remove all callbacks for the test group
+      FileDownloader().unregisterCallbacks(group: 'test');
+      expect(FileDownloader().downloaderForTesting.groupStatusCallbacks['test'],
+          isNull);
+      expect(
+          FileDownloader().downloaderForTesting.groupProgressCallbacks['test'],
+          isNull);
+      expect(
+          FileDownloader()
+              .downloaderForTesting
+              .groupNotificationTapCallbacks['test'],
+          isNull);
+    });
+
     test('uploadTask', () {
       var task = UploadTask(url: uploadTestUrl, filename: uploadFilename);
       expect(task.fileField, equals('file'));
@@ -374,6 +432,37 @@ void main() {
       expect(progressCallbackCounter, greaterThan(1));
       expect(File(path).existsSync(), isTrue);
       await subscription.cancel();
+    });
+
+    testWidgets('enqueue with event listener, then reset and listen again',
+        (widgetTester) async {
+      // Register listener. For testing convenience, we simply route the event
+      // to the completer function we have defined
+      var subscription = FileDownloader().updates.listen((update) {
+        if (update is TaskStatusUpdate) {
+          statusCallback(update);
+        }
+      });
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(statusCallbackCounter, equals(3));
+      expect(lastStatus, equals(TaskStatus.complete));
+      subscription.cancel();
+      // reset and listen again
+      statusCallbackCompleter = Completer();
+      statusCallbackCounter = 0;
+      await FileDownloader().resetUpdates();
+      subscription = FileDownloader().updates.listen((update) {
+        if (update is TaskStatusUpdate) {
+          statusCallback(update);
+        }
+      });
+      expect(await FileDownloader().enqueue(task.copyWith(taskId: 'task2')),
+          isTrue);
+      await statusCallbackCompleter.future;
+      expect(statusCallbackCounter, equals(3));
+      expect(lastStatus, equals(TaskStatus.complete));
+      subscription.cancel();
     });
 
     testWidgets('enqueue with redirect', (widgetTester) async {

@@ -598,8 +598,7 @@ class DownloadTask extends Task {
       if ([200, 201, 202, 203, 204, 205, 206].contains(response.statusCode)) {
         final disposition = response.headers.entries
             .firstWhere(
-              (element) => element.key.toLowerCase() == 'content-disposition',
-            )
+                (element) => element.key.toLowerCase() == 'content-disposition')
             .value;
         // Try filename="filename"
         final plainFilenameRegEx =

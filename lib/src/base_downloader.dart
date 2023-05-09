@@ -419,6 +419,15 @@ abstract class BaseDownloader {
     await _db.collection(modifiedTasksPath).doc(task.taskId).delete();
   }
 
+  /// Closes the [updates] stream and re-initializes the [StreamController]
+  /// such that the stream can be listened to again
+  Future<void> resetUpdatesStreamController() async {
+    if (updates.hasListener && !updates.isPaused) {
+      await updates.close();
+    }
+    updates = StreamController();
+  }
+
   /// Destroy - clears callbacks, updates stream and retry queue
   ///
   /// Clears all queues and references without sending cancellation
@@ -433,8 +442,7 @@ abstract class BaseDownloader {
     removeResumeData(); // removes all
     removePausedTask(); // removes all
     removeModifiedTask(); // removes all
-    updates.close();
-    updates = StreamController();
+    resetUpdatesStreamController();
   }
 
   /// Process status update coming from Downloader and emits to listener
