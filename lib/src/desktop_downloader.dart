@@ -162,7 +162,7 @@ class DesktopDownloader extends BaseDownloader {
         .map((task) => task.taskId);
     final taskIds = [...inQueueIds, ...runningIds];
     if (taskIds.isNotEmpty) {
-      cancelTasksWithIds(taskIds);
+      await cancelTasksWithIds(taskIds);
     }
     return retryAndPausedTaskCount + taskIds.length;
   }

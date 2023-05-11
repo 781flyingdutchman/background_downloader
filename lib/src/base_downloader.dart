@@ -124,7 +124,7 @@ abstract class BaseDownloader {
     var pausedCount = 0;
     for (var task in pausedTasks) {
       if (task.group == group) {
-        removePausedTask(task.taskId);
+        await removePausedTask(task.taskId);
         pausedCount++;
       }
     }

@@ -127,7 +127,7 @@ void main() {
           .downloaderForTesting
           .setForceFailPostOnBackgroundChannel(false);
     }
-    Future.delayed(const Duration(milliseconds: 250));
+    await Future.delayed(const Duration(milliseconds: 250));
   });
 
   group('Initialization', () {
@@ -543,6 +543,7 @@ void main() {
 
   group('Queue and task management', () {
     testWidgets('reset', (widgetTester) async {
+      print('Starting reset');
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(task), isTrue);
       expect(await FileDownloader().reset(group: 'non-default'), equals(0));
