@@ -107,45 +107,29 @@ class DesktopDownloader extends BaseDownloader {
     // listen for events sent back from the isolate
     while (await messagesFromIsolate.hasNext) {
       final message = await messagesFromIsolate.next;
-      if (message == null) {
-        // sent when final state has been sent
-        receivePort.close();
-      } else {
-        // Process the message
-        if (message is double) {
-          // progress
-          processProgressUpdate(TaskProgressUpdate(task, message));
-        } else if (message is bool) {
-          // canResume flag
-          setCanResume(task, message);
-        } else if (message is List) {
-          switch (message[0] as String) {
-            case 'statusUpdate':
-              final status = message[1] as TaskStatus;
-              processStatusUpdate(TaskStatusUpdate(
-                  task,
-                  status,
-                  status == TaskStatus.failed
-                      ? message[2] as TaskException
-                      : null));
-              break;
+      switch (message) {
+        case 'done':
+          receivePort.close();
 
-            case 'resumeData':
-              setResumeData(
-                  ResumeData(task, message[1] as String, message[2] as int));
-              break;
+        case ('progressUpdate', double progress):
+          processProgressUpdate(TaskProgressUpdate(task, progress));
 
-            default:
-              throw ArgumentError(
-                  'Did not recognize message: ${message[0] as String}');
-          }
-        } else if (message is String) {
-          // log message
+        case ('taskCanResume', bool taskCanResume):
+          setCanResume(task, taskCanResume);
+
+        case String:
           _log.finest(message);
-        } else {
+
+        case ('statusUpdate', TaskStatus status, TaskException? exception):
+          processStatusUpdate(TaskStatusUpdate(
+              task, status, status == TaskStatus.failed ? exception : null));
+
+        case ('resumeData', String data, int requiredStartByte):
+          setResumeData(ResumeData(task, data, requiredStartByte));
+
+        default:
           _log.warning('Received message with unknown type '
               '${message.runtimeType} from Isolate');
-        }
       }
     }
     errorPort.close();

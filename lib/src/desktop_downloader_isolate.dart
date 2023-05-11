@@ -36,7 +36,7 @@ Future<void> doTask(SendPort sendPort) async {
   final messagesToIsolate = StreamQueue<dynamic>(commandPort);
   // get the arguments list and parse each argument
   final args = await messagesToIsolate.next as List<dynamic>;
-  final task = args[0];
+  final task = args[0] as Task;
   final filePath = args[1] as String;
   final tempFilePath = args[2] as String;
   final requiredStartByte = args[3] as int;
@@ -69,14 +69,13 @@ Future<void> doTask(SendPort sendPort) async {
   } else {
     // allow immediate cancel message to come through
     await Future.delayed(const Duration(milliseconds: 0));
-    if (task is DownloadTask) {
-      await doDownloadTask(
-          task, filePath, tempFilePath, requiredStartByte, isResume, sendPort);
-    } else {
-      await doUploadTask(task, filePath, sendPort);
-    }
+    await switch (task) {
+      DownloadTask() => doDownloadTask(
+          task, filePath, tempFilePath, requiredStartByte, isResume, sendPort),
+      UploadTask() => doUploadTask(task, filePath, sendPort)
+    };
   }
-  sendPort.send(null); // signals end
+  sendPort.send('done'); // signals end
   Isolate.exit();
 }
 
@@ -112,7 +111,7 @@ Future<void> doDownloadTask(
         final acceptRangesHeader = response.headers['accept-ranges'];
         taskCanResume =
             acceptRangesHeader == 'bytes' || response.statusCode == 206;
-        sendPort.send(taskCanResume);
+        sendPort.send(('taskCanResume', taskCanResume));
       }
       isResume =
           isResume && response.statusCode == 206; // confirm resume response
@@ -199,23 +198,20 @@ Future<TaskStatus> processOkDownloadResponse(
         Directory(dirPath).createSync(recursive: true);
         File(tempFilePath).copySync(filePath);
         resultStatus = TaskStatus.complete;
-        break;
 
       case TaskStatus.canceled:
         deleteTempFile(tempFilePath);
         resultStatus = TaskStatus.canceled;
-        break;
 
       case TaskStatus.paused:
         if (taskCanResume) {
-          sendPort.send(['resumeData', tempFilePath, _bytesTotal + _startByte]);
+          sendPort.send(('resumeData', tempFilePath, _bytesTotal + _startByte));
           resultStatus = TaskStatus.paused;
         } else {
           taskException =
               TaskResumeException('Task was paused but cannot resume');
           resultStatus = TaskStatus.failed;
         }
-        break;
 
       default:
         throw ArgumentError('Cannot process $transferBytesResult');
@@ -364,7 +360,7 @@ Future<void> doUploadTask(
       taskException ??= TaskHttpException(
           content?.isNotEmpty == true
               ? content!
-              : response.reasonPhrase ?? 'Invalid HTP response',
+              : response.reasonPhrase ?? 'Invalid HTTP response',
           response.statusCode);
       if (response.statusCode == 404) {
         resultStatus = TaskStatus.notFound;
@@ -464,39 +460,30 @@ void processStatusUpdateInIsolate(
   if (status.isFinalState) {
     switch (status) {
       case TaskStatus.complete:
-        {
-          processProgressUpdateInIsolate(task, progressComplete, sendPort);
-          break;
-        }
-      case TaskStatus.failed:
-        {
-          if (!retryNeeded) {
-            processProgressUpdateInIsolate(task, progressFailed, sendPort);
-          }
-          break;
-        }
+        processProgressUpdateInIsolate(task, progressComplete, sendPort);
+
+      case TaskStatus.failed when !retryNeeded:
+        processProgressUpdateInIsolate(task, progressFailed, sendPort);
+
       case TaskStatus.canceled:
-        {
-          processProgressUpdateInIsolate(task, progressCanceled, sendPort);
-          break;
-        }
+        processProgressUpdateInIsolate(task, progressCanceled, sendPort);
+
       case TaskStatus.notFound:
-        {
-          processProgressUpdateInIsolate(task, progressNotFound, sendPort);
-          break;
-        }
+        processProgressUpdateInIsolate(task, progressNotFound, sendPort);
+
       default:
         {}
     }
   }
 // Post update if task expects one, or if failed and retry is needed
   if (task.providesStatusUpdates || retryNeeded) {
-    if (status != TaskStatus.failed) {
-      sendPort.send(['statusUpdate', status]);
-    } else {
-      sendPort.send(
-          ['statusUpdate', status, taskException ?? TaskException('None')]);
-    }
+    sendPort.send((
+      'statusUpdate',
+      status,
+      status == TaskStatus.failed
+          ? taskException ?? TaskException('None')
+          : null
+    ));
   }
 }
 
@@ -506,7 +493,7 @@ void processStatusUpdateInIsolate(
 void processProgressUpdateInIsolate(
     Task task, double progress, SendPort sendPort) {
   if (task.providesProgressUpdates) {
-    sendPort.send(progress);
+    sendPort.send(('progressUpdate', progress));
   }
 }
 
@@ -565,12 +552,10 @@ void setTaskError(dynamic e) {
   switch (e.runtimeType) {
     case IOException:
       taskException = TaskFileSystemException(e.toString());
-      break;
 
     case HttpException:
     case TimeoutException:
       taskException = TaskConnectionException(e.toString());
-      break;
 
     default:
       taskException = TaskException(e.toString());
