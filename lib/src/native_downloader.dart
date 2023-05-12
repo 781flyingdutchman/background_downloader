@@ -34,42 +34,50 @@ class NativeDownloader extends BaseDownloader {
     _backgroundChannel.setMethodCallHandler((call) async {
       final args = call.arguments as List<dynamic>;
       final task = Task.createFromJsonMap(jsonDecode(args.first as String));
-      switch (call.method) {
-        case 'statusUpdate':
-          // int followed optionally followed by exception data
-          final status = TaskStatus.values[args[1]];
+      final message = (
+        call.method,
+        args.length > 2
+            ? args.getRange(1, args.length).toList(growable: false)
+            : args[1]
+      );
+      switch (message) {
+        case ('statusUpdate', int statusOrdinal):
+          final status = TaskStatus.values[statusOrdinal];
+          processStatusUpdate(TaskStatusUpdate(task, status));
+
+        case (
+            'statusUpdate',
+            [
+              int statusOrdinal,
+              String typeString,
+              String description,
+              int httpResponseCode
+            ]
+          ):
+          final status = TaskStatus.values[statusOrdinal];
           TaskException? exception;
           if (status == TaskStatus.failed) {
             exception = TaskException.fromTypeString(
-                args[2] as String, args[3] as String, args[4] as int);
+                typeString, description, httpResponseCode);
           }
           processStatusUpdate(TaskStatusUpdate(task, status, exception));
-          break;
 
-        case 'progressUpdate':
-          final progress = args.last as double;
+        case ('progressUpdate', double progress):
           processProgressUpdate(TaskProgressUpdate(task, progress));
-          break;
 
-        case 'canResume':
-          final canResume = args.last as bool;
+        case ('canResume', bool canResume):
           setCanResume(task, canResume);
-          break;
 
-        case 'resumeData':
-          final tempFilename = args[1] as String;
-          final startByte = args.last as int;
-          setResumeData(ResumeData(task, tempFilename, startByte));
-          break;
+        case ('resumeData', [String tempFilename, int requiredStartByte]):
+          setResumeData(ResumeData(task, tempFilename, requiredStartByte));
 
-        case 'notificationTap':
-          final notificationType = NotificationType.values[args.last as int];
+        case ('notificationTap', int notificationTypeOrdinal):
+          final notificationType =
+              NotificationType.values[notificationTypeOrdinal];
           processNotificationTap(task, notificationType);
-          break;
 
         default:
-          throw UnimplementedError(
-              'Background channel method call ${call.method} not supported');
+          throw StateError('Background channel: no match for message $message');
       }
     });
   }
