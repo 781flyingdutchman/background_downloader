@@ -1,5 +1,12 @@
 # A background file downloader and uploader for iOS, Android, MacOS, Windows and Linux
 
+---
+**NOTE**
+
+This is the last major version to support Dart 2 and will be maintained until the end of 2023. If you are using Dart 3 then please use version 7 or above.
+
+---
+
 Create a [DownloadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/DownloadTask-class.html) to define where to get your file from, where to store it, and how you want to monitor the download, then call `FileDownloader().download` and wait for the result.  Background_downloader uses URLSessions on iOS and DownloadWorker on Android, so tasks will complete also when your app is in the background. The download behavior is highly consistent across all supported platforms: iOS, Android, MacOS, Windows and Linux.
 
 Monitor progress by passing an `onProgress` listener, and monitor detailed status updates by passing an `onStatus` listener to the `download` call.  Alternatively, monitor tasks centrally using an [event listener](#using-an-event-listener) or [callbacks](#using-callbacks) and call `enqueue` to start the task.
@@ -37,11 +44,11 @@ No setup is required for [Android](#android) (except when using notifications), 
 ### Tasks and the FileDownloader
 
 A `DownloadTask` or `UploadTask` (both subclasses of `Task`) defines one download or upload. It contains the `url`, the file name and location, what updates you want to receive while the task is in progress, [etc](#optional-parameters).  The [FileDownloader](https://pub.dev/documentation/background_downloader/latest/background_downloader/FileDownloader-class.html) class is the entrypoint for all calls. To download a file:
-```
-    final task = DownloadTask(
-            url: 'https://google.com',
-            filename: 'testfile.txt'); // define your task
-    final result = await FileDownloader().download(task);  // do the download and wait for result
+```dart
+final task = DownloadTask(
+        url: 'https://google.com',
+        filename: 'testfile.txt'); // define your task
+final result = await FileDownloader().download(task);  // do the download and wait for result
 ```
 
 The `result` will be a [TaskStatusUpdate](https://pub.dev/documentation/background_downloader/latest/background_downloader/TaskStatusUpdate-class.html), which has a field `status` that indicates how the download ended: `.complete`, `.failed`, `.canceled` or `.notFound`. If the `status` is `.failed`, the `result.exception` field will contain a `TaskException` with information about what went wrong.
@@ -51,18 +58,18 @@ The `result` will be a [TaskStatusUpdate](https://pub.dev/documentation/backgrou
 #### Progress
 
 If you want to monitor progress during the download itself (e.g. for a large file), then add a progress callback that takes a double as its argument:
-```
-    final result = await FileDownloader().download(task, 
-        onProgress: (progress) => print('Progress update: $progress'));
+```dart
+final result = await FileDownloader().download(task, 
+    onProgress: (progress) => print('Progress update: $progress'));
 ```
 Progress updates start with 0.0 when the actual download starts (which may be in the future, e.g. if waiting for a WiFi connection), and will be sent periodically, not more than twice per second per task.  If a task completes successfully you will receive a final progress update with a `progress` value of 1.0 (`progressComplete`). Failed tasks generate `progress` of `progressFailed` (-1.0), canceled tasks `progressCanceled` (-2.0), notFound tasks `progressNotFound` (-3.0), waitingToRetry tasks `progressWaitingToRetry` (-4.0) and paused tasks `progressPaused` (-5.0).
 
 #### Status
 
 If you want to monitor status changes while the download is underway (i.e. not only the final state, which you will receive as the result of the `download` call) you can add a status change callback that takes the status as an argument:
-```
-    final result = await FileDownloader().download(task, 
-        onStatus: (status) => print('Status update: $status'));
+```dart
+final result = await FileDownloader().download(task, 
+    onStatus: (status) => print('Status update: $status'));
 ```
 
 The status will follow a sequence of `.enqueued` (waiting to execute), `.running` (actively downloading) and then one of the final states mentioned before, or `.waitingToRetry` if retries are enabled and the task failed.
@@ -70,13 +77,13 @@ The status will follow a sequence of `.enqueued` (waiting to execute), `.running
 #### Elapsed time
 
 If you want to keep an eye on how long the download is taking (e.g. to warn the user that there may be an issue with their network connection, or to cancel the task if it takes too long), pass an `onElapsedTime` callback to the `download` method. The callback takes a single argument of type `Duration`, representing the time elapsed since the call to `download` was made. It is called at regular intervals (defined by `elapsedTimeInterval` which defaults to 5 seconds), so you can react in different ways depending on the total time elapsed. For example:
-```
-    final result = await FileDownloader().download(
-                      task, 
-                      onElapsedTime: (elapsed) {
-                          print('This is taking rather long: $elapsed');
-                      },
-                      elapsedTimeInterval: const Duration(seconds: 30));
+```dart
+final result = await FileDownloader().download(
+                  task, 
+                  onElapsedTime: (elapsed) {
+                      print('This is taking rather long: $elapsed');
+                  },
+                  elapsedTimeInterval: const Duration(seconds: 30));
 ```
 
 The elapsed time logic is only available for `download`, `upload`, `downloadBatch` and `uploadBatch`. It is not available for tasks started using `enqueue`, as there is no expectation that those complete imminently.
@@ -87,7 +94,7 @@ The elapsed time logic is only available for `download`, `upload`, `downloadBatc
 In the `DownloadTask` and `UploadTask` objects, the `filename` of the task refers to the filename without directory. To store the task in a specific directory, add the `directory` parameter to the task. That directory is relative to the base directory, so cannot start with a `/`. By default, the base directory is the directory returned by the call to `getApplicationDocumentsDirectory()` of the [path_provider](https://pub.dev/packages/path_provider) package, but this can be changed by also passing a `baseDirectory` parameter (`BaseDirectory.temporary` for the directory returned by `getTemporaryDirectory()`, `BaseDirectory.applicationSupport` for the directory returned by `getApplicationSupportDirectory()` and `BaseDirectory.applicationLibrary` for the directory returned by `getLibraryDirectory()` on iOS and MacOS, or subdir 'Library' of the directory returned by `getApplicationSupportDirectory()` on other platforms).
 
 So, to store a file named 'testfile.txt' in the documents directory, subdirectory 'my/subdir', define the task as follows:
-```
+```dart
 final task = DownloadTask(
         url: 'https://google.com',
         filename: 'testfile.txt',
@@ -95,7 +102,7 @@ final task = DownloadTask(
 ```
 
 To store that file in the temporary directory:
-```
+```dart
 final task = DownloadTask(
         url: 'https://google.com',
         filename: 'testfile.txt',
@@ -108,9 +115,9 @@ The downloader will only store the file upon success (so there will be no partia
 Note: the reason you cannot simply pass a full absolute directory path to the downloader is that the location of the app's documents directory may change between application starts (on iOS), and may therefore fail for downloads that complete while the app is suspended.  You should therefore never store permanently, or hard-code, an absolute path.
 
 If you want the filename to be provided by the server (instead of assigning a value to `filename` yourself), use the following:
-```
-   final task = await DownloadTask(url: 'https://google.com')
-       .withSuggestedFilename(unique: true);
+```dart
+final task = await DownloadTask(url: 'https://google.com')
+                    .withSuggestedFilename(unique: true);
 ```
 
 The method `withSuggestedFilename` returns a copy of the task it is called on, with the `filename` field modified based on the filename suggested by the server, or the last path segment of the URL, or unchanged if neither is feasible. If `unique` is true, the filename will be modified such that it does not conflict with an existing filename by adding a sequence. For example "file.txt" would become "file (1).txt".
@@ -119,16 +126,16 @@ The method `withSuggestedFilename` returns a copy of the task it is called on, w
 ### A batch of files
 
 To download a batch of files and wait for completion of all, create a `List` of `DownloadTask` objects and call `downloadBatch`:
-```
-   final result = await FileDownloader().downloadBatch(tasks);
+```dart
+final result = await FileDownloader().downloadBatch(tasks);
 ```
 
 The result is a `Batch` object that contains the result for each task in `.results`. You can use `.numSucceeded` and `.numFailed` to check if all files in the batch downloaded successfully, and use `.succeeded` or `.failed` to iterate over successful or failed tasks within the batch.  If you want to get progress updates for the batch (in terms of how many files have been downloaded) then add a callback:
-```
-   final result = await FileDownloader().downloadBatch(tasks, batchProgressCallback: (succeeded, failed) {
-      print('$succeeded files succeeded, $failed have failed');
-      print('Progress is ${(succeeded + failed) / tasks.length} %');
-   });
+```dart
+final result = await FileDownloader().downloadBatch(tasks, batchProgressCallback: (succeeded, failed) {
+  print('$succeeded files succeeded, $failed have failed');
+  print('Progress is ${(succeeded + failed) / tasks.length} %');
+});
 ```
 The callback will be called upon completion of each task (whether successful or not), and will start with (0, 0) before any downloads start, so you can use that to start a progress indicator.
 
@@ -160,22 +167,22 @@ The rest of this section details [event listeners](#using-an-event-listener), [c
 ### Using an event listener
 
 Listen to updates from the downloader by listening to the `updates` stream, and process those updates centrally. For example, the following creates a listener to monitor status and progress updates for downloads, and then enqueues a task as an example:
-```
-  final subscription = FileDownloader().updates.listen((update) {
-      if (update is TaskStatusUpdate) {
-        print('Status update for ${update.task} with status ${update.status}');
-      } else if (update is TaskProgressUpdate) {
-        print('Progress update for ${update.task} with progress ${update.progress}');
-    });
-    // define the task
-    final task = DownloadTask(
-        url: 'https://google.com',
-        filename: 'google.html',
-        updates:
-            Updates.statusAndProgress); // needed to also get progress updates
-    // enqueue the download
-    final successFullyEnqueued = await FileDownloader().enqueue(task);
-    // updates will be sent to your subscription listener
+```dart
+final subscription = FileDownloader().updates.listen((update) {
+    if (update is TaskStatusUpdate) {
+      print('Status update for ${update.task} with status ${update.status}');
+    } else if (update is TaskProgressUpdate) {
+      print('Progress update for ${update.task} with progress ${update.progress}');
+  });
+// define the task
+final task = DownloadTask(
+    url: 'https://google.com',
+    filename: 'google.html',
+    updates:
+        Updates.statusAndProgress); // needed to also get progress updates
+// enqueue the download
+final successFullyEnqueued = await FileDownloader().enqueue(task);
+// updates will be sent to your subscription listener
 ```
 
 Note that `successFullyEnqueued` only refers to the enqueueing of the download task, not its result, which must be monitored via the listener. Also note that in order to get progress updates the task must set its `updates` field to a value that includes progress updates. In the example, we are asking for both status and progress updates, but other combinations are possible. For example, if you set `updates` to `Updates.status` then the task will only generate status updates and no progress updates. You define what updates to receive on a task by task basis via the `Task.updates` field, which defaults to status updates only.
@@ -187,24 +194,24 @@ You can start your subscription in a convenient place, like a widget's `initStat
 Instead of listening to the `updates` stream you can register a callback for status updates, and/or a callback for progress updates.  This may be the easiest way if you want different callbacks for different [groups](#grouping-tasks).
 
 The [TaskStatusCallback](https://pub.dev/documentation/background_downloader/latest/background_downloader/TaskStatusCallback.html) receives a [TaskStatusUpdate](https://pub.dev/documentation/background_downloader/latest/background_downloader/TaskStatusUpdate-class.html), so a simple callback function is:
-```
+```dart
 void taskStatusCallback(TaskStatusUpdate update) {
   print('taskStatusCallback for ${update.task) with status ${update.status} and exception ${update.exception}');
 }
 ```
 
 The [TaskProgressCallback](https://pub.dev/documentation/background_downloader/latest/background_downloader/TaskProgressCallback.html) receives a [TaskProgressUpdate](https://pub.dev/documentation/background_downloader/latest/background_downloader/TaskProgressUpdate-class.html), so a simple callback function is:
-```
+```dart
 void taskProgressCallback(TaskProgressUpdate update) {
   print('taskProgressCallback for ${update.task} with progress ${update.progress}');
 }
 ```
 
 A basic file download with just status monitoring (no progress) then requires registering the central callback, and a call to `enqueue` to start the download:
-``` 
-  FileDownloader().registerCallbacks(taskStatusCallback: taskStatusCallback);
-  final successFullyEnqueued = await FileDownloader().enqueue(
-      DownloadTask(url: 'https://google.com', filename: 'google.html'));
+```dart
+FileDownloader().registerCallbacks(taskStatusCallback: taskStatusCallback);
+final successFullyEnqueued = await FileDownloader().enqueue(
+    DownloadTask(url: 'https://google.com', filename: 'google.html'));
 ```
 
 You define what updates to receive on a task by task basis via the `Task.updates` field, which defaults to status updates only.  If you register a callback for a type of task, updates are provided only through that callback and will not be posted on the `updates` stream.
@@ -216,21 +223,21 @@ You can unregister callbacks using `FileDownloader().unregisterCallbacks()`.
 ### Using the database to track Tasks
 
 To keep track of the status and progress of all tasks, even after they have completed, activate tracking by calling `trackTasks()` and use the `database` field to query. For example:
-```
-    // at app startup, after registering listener or callback, start tracking
-    await FileDownloader().trackTasks();
-    
-    // somewhere else: enqueue a download
-    final task = DownloadTask(
-            url: 'https://google.com',
-            filename: 'testfile.txt');
-    final successfullyEnqueued = await FileDownloader().enqueue(task);
-    
-    // somewhere else: query the task status by getting a `TaskRecord`
-    // from the database
-    final record = await FileDownloader().database.recordForId(task.taskId);
-    print('Taskid ${record.taskId} with task ${record.task} has '
-        'status ${record.status} and progress ${record.progress}'
+```dart
+// at app startup, after registering listener or callback, start tracking
+await FileDownloader().trackTasks();
+
+// somewhere else: enqueue a download
+final task = DownloadTask(
+        url: 'https://google.com',
+        filename: 'testfile.txt');
+final successfullyEnqueued = await FileDownloader().enqueue(task);
+
+// somewhere else: query the task status by getting a `TaskRecord`
+// from the database
+final record = await FileDownloader().database.recordForId(task.taskId);
+print('Taskid ${record.taskId} with task ${record.task} has '
+    'status ${record.status} and progress ${record.progress}'
 ```
 
 You can interact with the `database` using `allRecords`, `allRecordsOlderThan`, `recordForId`,`deleteAllRecords`,
@@ -245,10 +252,10 @@ Configure notifications by calling `FileDownloader().configureNotification` and 
 notifications to show only when actively running (i.e. download in progress), disappearing when
 the download completes or ends with an error. It will also show a progress bar and a 'cancel'
 button, and will substitute {filename} with the actual filename of the file being downloaded.
-```
-    FileDownloader().configureNotification(
-        running: TaskNotification('Downloading', 'file: {filename}'),
-        progressBar: true)
+```dart
+FileDownloader().configureNotification(
+    running: TaskNotification('Downloading', 'file: {filename}'),
+    progressBar: true)
 ```
 
 To also show a notifications for other states, add a `TaskNotification` for `complete`, `error`
@@ -274,7 +281,7 @@ When attempting to show its first notification, the downloader will ask the user
 
 To respond to the user tapping a notification, register a callback that takes `Task` and `NotificationType` as parameters:
 
-```
+```dart
 FileDownloader().registerCallbacks(
             taskNotificationTapCallback: myNotificationTapCallback);
             
@@ -298,25 +305,25 @@ register a `taskNotificationTapCallback`.
 ### Setup for notifications
 
 On iOS, add the following to your `AppDelegate.swift`:
-```
-   UNUserNotificationCenter.current().delegate = self as UNUserNotificationCenterDelegate
+```swift
+UNUserNotificationCenter.current().delegate = self as UNUserNotificationCenterDelegate
 ```
 or if using Objective C, add to `AppDelegate.m`:
-```
-   [UNUserNotificationCenter currentNotificationCenter].delegate = (id<UNUserNotificationCenterDelegate>) self;
+```objective-c
+[UNUserNotificationCenter currentNotificationCenter].delegate = (id<UNUserNotificationCenterDelegate>) self;
 ```
 
 
 ## Shared and scoped storage
 
 The download directories specified in the `BaseDirectory` enum are all local to the app. To make downloaded files available to the user outside of the app, or to other apps, they need to be moved to shared or scoped storage, and this is platform dependent behavior. For example, to move the downloaded file associated with a `DownloadTask` to a shared 'Downloads' storage destination, execute the following _after_ the download has completed:
-```
-    final newFilepath = await FileDownloader().moveToSharedStorage(task, SharedStorage.downloads);
-    if (newFilePath == null) {
-        ... // handle error
-    } else {
-        ... // do something with the newFilePath
-    }
+```dart
+final newFilepath = await FileDownloader().moveToSharedStorage(task, SharedStorage.downloads);
+if (newFilePath == null) {
+    ... // handle error
+} else {
+    ... // do something with the newFilePath
+}
 ```
 
 Because the behavior is very platform-specific, not all `SharedStorage` destinations have the same result. The options are:
@@ -367,18 +374,18 @@ To manage or query the queue of waiting or running tasks, call:
 ### Grouping tasks
 
 Because an app may require different types of downloads, and handle those differently, you can specify a `group` with your task, and register callbacks specific to each `group`. If no group is specified the default group `FileDownloader.defaultGroup` is used. For example, to create and handle downloads for group 'bigFiles':
-```
-  FileDownloader().registerCallbacks(
-        group: 'bigFiles'
-        taskStatusCallback: bigFilesDownloadStatusCallback,
-        taskProgressCallback: bigFilesDownloadProgressCallback);
-  final task = DownloadTask(
-        group: 'bigFiles',
-        url: 'https://google.com',
-        filename: 'google.html',
-        updates:
-            Updates.statusAndProgress);
-  final successFullyEnqueued = await FileDownloader().enqueue(task);
+```dart
+FileDownloader().registerCallbacks(
+      group: 'bigFiles'
+      taskStatusCallback: bigFilesDownloadStatusCallback,
+      taskProgressCallback: bigFilesDownloadProgressCallback);
+final task = DownloadTask(
+      group: 'bigFiles',
+      url: 'https://google.com',
+      filename: 'google.html',
+      updates:
+          Updates.statusAndProgress);
+final successFullyEnqueued = await FileDownloader().enqueue(task);
 ```
 
 The methods `registerCallBacks`, `unregisterCallBacks`, `reset`, `allTaskIds` and `allTasks` all take an optional `group` parameter to target tasks in a specific group. Note that if tasks are enqueued with a `group` other than default, calling any of these methods without a group parameter will not affect/include those tasks - only the default tasks.
@@ -412,7 +419,7 @@ Optionally, `headers` can be added to the `Task`, which will be added to the HTT
 
 #### HTTP request method
 
-If provided, this request method will be used to make the request. By default, teh request method is `GET` unless `post` is not null, or the `Task` is a `DownloadTask`. Valid HTTP request methods are those listed in `Request.validHttpMethods`.
+If provided, this request method will be used to make the request. By default, the request method is GET unless `post` is not null, or the `Task` is a `DownloadTask`, in which case it will be POST. Valid HTTP request methods are those listed in `Request.validHttpMethods`.
 
 #### POST requests
 
@@ -475,12 +482,12 @@ On iOS, ensure that you have the Background Fetch capability enabled:
 Note that iOS by default requires all URLs to be https (and not http). See [here](https://developer.apple.com/documentation/security/preventing_insecure_network_connections) for more details and how to address issues.
 
 If using notifications, add the following to your `AppDelegate.swift`:
-```
-   UNUserNotificationCenter.current().delegate = self as UNUserNotificationCenterDelegate
+```swift
+UNUserNotificationCenter.current().delegate = self as UNUserNotificationCenterDelegate
 ```
 or if using Objective C, add to `AppDelegate.m`:
-```
-   [UNUserNotificationCenter currentNotificationCenter].delegate = (id<UNUserNotificationCenterDelegate>) self;
+```objective-c
+[UNUserNotificationCenter currentNotificationCenter].delegate = (id<UNUserNotificationCenterDelegate>) self;
 ```
 
 

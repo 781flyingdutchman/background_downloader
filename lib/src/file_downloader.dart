@@ -775,10 +775,37 @@ Future<http.Response> doRequest(Request request) async {
       reasonPhrase: 'Not attempted'); // dummy to start with
   while (request.retriesRemaining >= 0) {
     try {
-      response = request.post == null
-          ? await client.get(Uri.parse(request.url), headers: request.headers)
-          : await client.post(Uri.parse(request.url),
+      switch (request.httpRequestMethod) {
+        case 'GET':
+          response = await client.get(Uri.parse(request.url),
+              headers: request.headers);
+          break;
+
+        case 'POST':
+          response = await client.post(Uri.parse(request.url),
               headers: request.headers, body: request.post);
+          break;
+
+        case 'HEAD':
+          response = await client.head(Uri.parse(request.url),
+              headers: request.headers);
+          break;
+
+        case 'PUT':
+          response = await client.put(Uri.parse(request.url),
+              headers: request.headers);
+          break;
+
+        case 'DELETE':
+          response = await client.delete(Uri.parse(request.url),
+              headers: request.headers);
+          break;
+
+        case 'PATCH':
+          response = await client.patch(Uri.parse(request.url),
+              headers: request.headers);
+          break;
+      }
       if ([200, 201, 202, 203, 204, 205, 206, 404]
           .contains(response.statusCode)) {
         return response;

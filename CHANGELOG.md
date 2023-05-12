@@ -1,3 +1,7 @@
+## 6.1.1
+
+Bug fix for `request` method where the `httpRequestMethod` override was not taken into account properly.
+
 ## 6.1.0
 
 Added `unregisterCallBacks` to remove callbacks if you no longer want updates, and `resetUpdates` to reset the `updates` stream so it can be listened to again.
