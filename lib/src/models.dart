@@ -142,7 +142,7 @@ typedef TaskNotificationTapCallback = void Function(
 /// A server Request
 ///
 /// An equality test on a [Request] is an equality test on the [url]
-class Request {
+base class Request {
   final validHttpMethods = ['GET', 'POST', 'HEAD', 'PUT', 'DELETE', 'PATCH'];
 
   /// String representation of the url, urlEncoded
@@ -260,7 +260,7 @@ final _startsWithPathSeparator = RegExp(r'^[/\\]');
 ///
 /// An equality test on a [Task] is a test on the [taskId]
 /// only - all other fields are ignored in that test
-abstract class Task extends Request {
+sealed class Task extends Request {
   /// Identifier for the task - auto generated if omitted
   final String taskId;
 
@@ -459,7 +459,7 @@ abstract class Task extends Request {
 }
 
 /// Information related to a download task
-class DownloadTask extends Task {
+final class DownloadTask extends Task {
   /// Creates a [DownloadTask]
   ///
   /// [taskId] must be unique. A unique id will be generated if omitted
@@ -649,7 +649,7 @@ class DownloadTask extends Task {
 ///
 /// An equality test on a [UploadTask] is a test on the [taskId]
 /// only - all other fields are ignored in that test
-class UploadTask extends Task {
+final class UploadTask extends Task {
   /// Name of the field used for multi-part file upload
   final String fileField;
 
@@ -810,7 +810,7 @@ String _urlWithQueryParameters(
 typedef BatchProgressCallback = void Function(int succeeded, int failed);
 
 /// Contains tasks and results related to a batch of tasks
-class Batch {
+final class Batch {
   final List<Task> tasks;
   final BatchProgressCallback? batchProgressCallback;
   final results = <Task, TaskStatus>{};
@@ -841,7 +841,7 @@ class Batch {
 /// When receiving an update, test if the update is a
 /// [TaskStatusUpdate] or a [TaskProgressUpdate]
 /// and treat the update accordingly
-class TaskUpdate {
+sealed class TaskUpdate {
   final Task task;
 
   const TaskUpdate(this.task);
@@ -851,7 +851,7 @@ class TaskUpdate {
 ///
 /// Contains [TaskStatus] and, if [TaskStatus.failed] possibly a
 /// [TaskException]
-class TaskStatusUpdate extends TaskUpdate {
+final class TaskStatusUpdate extends TaskUpdate {
   final TaskStatus status;
   final TaskException? exception;
 
@@ -866,7 +866,7 @@ class TaskStatusUpdate extends TaskUpdate {
 /// [TaskStatus.canceled] results in progress -2.0
 /// [TaskStatus.notFound] results in progress -3.0
 /// [TaskStatus.waitingToRetry] results in progress -4.0
-class TaskProgressUpdate extends TaskUpdate {
+final class TaskProgressUpdate extends TaskUpdate {
   final double progress;
 
   const TaskProgressUpdate(super.task, this.progress);
@@ -920,7 +920,7 @@ enum NotificationType { running, complete, error, paused }
 ///
 /// Actual appearance of notification is dependent on the platform, e.g.
 /// on iOS {progress} and {progressBar} are not available and ignored
-class TaskNotification {
+final class TaskNotification {
   final String title;
   final String body;
 
@@ -938,7 +938,7 @@ class TaskNotification {
 /// [complete] is the notification used when the task completed
 /// [error] is the notification used when something went wrong,
 /// including pause, failed and notFound status
-class TaskNotificationConfig {
+final class TaskNotificationConfig {
   final dynamic taskOrGroup;
   final TaskNotification? running;
   final TaskNotification? complete;

@@ -14,7 +14,7 @@ const _exceptions = {
 /// exception message, or from the plugin. The localization is undefined
 /// For the [TaskHttpException], the [httpResponseCode] is only valid if >0
 /// and may offer details about the nature of the error
-class TaskException implements Exception {
+base class TaskException implements Exception {
   final String description;
 
   TaskException(this.description);
@@ -58,35 +58,35 @@ class TaskException implements Exception {
   }
 }
 
-class TaskFileSystemException extends TaskException {
+final class TaskFileSystemException extends TaskException {
   TaskFileSystemException(super.description);
 
   @override
   String get exceptionType => 'TaskFileSystemException';
 }
 
-class TaskUrlException extends TaskException {
+final class TaskUrlException extends TaskException {
   TaskUrlException(super.description);
 
   @override
   String get exceptionType => 'TaskUrlException';
 }
 
-class TaskConnectionException extends TaskException {
+final class TaskConnectionException extends TaskException {
   TaskConnectionException(super.description);
 
   @override
   String get exceptionType => 'TaskConnectionException';
 }
 
-class TaskResumeException extends TaskException {
+final class TaskResumeException extends TaskException {
   TaskResumeException(super.description);
 
   @override
   String get exceptionType => 'TaskResumeException';
 }
 
-class TaskHttpException extends TaskException {
+final class TaskHttpException extends TaskException {
   final int httpResponseCode;
 
   TaskHttpException(super.description, this.httpResponseCode);

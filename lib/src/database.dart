@@ -9,7 +9,7 @@ import 'models.dart';
 /// Stores [TaskRecord] objects.
 ///
 /// This object is accessed by the [Downloader] and [BaseDownloader]
-class Database {
+final class Database {
   static final Database _instance = Database._internal();
   final _db = Localstore.instance;
   static const tasksPath = 'backgroundDownloaderTaskRecords';
@@ -107,7 +107,7 @@ class Database {
 ///
 /// [TaskRecord] represents the state of the task as recorded in persistent
 /// storage if [trackTasks] has been called to activate this.
-class TaskRecord {
+final class TaskRecord {
   final Task task;
   final TaskStatus status;
   final double progress;

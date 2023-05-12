@@ -14,7 +14,7 @@ import 'exceptions.dart';
 import 'models.dart';
 
 /// Provides access to all functions of the plugin in a single place.
-class FileDownloader {
+final class FileDownloader {
   final _log = Logger('FileDownloader');
   static final FileDownloader _singleton = FileDownloader._internal();
 
@@ -775,10 +775,18 @@ Future<http.Response> doRequest(Request request) async {
       reasonPhrase: 'Not attempted'); // dummy to start with
   while (request.retriesRemaining >= 0) {
     try {
-      response = request.post == null
-          ? await client.get(Uri.parse(request.url), headers: request.headers)
-          : await client.post(Uri.parse(request.url),
-              headers: request.headers, body: request.post);
+      response = await switch (request.httpRequestMethod) {
+        'GET' => client.get(Uri.parse(request.url), headers: request.headers),
+        'POST' => client.post(Uri.parse(request.url),
+            headers: request.headers, body: request.post),
+        'HEAD' => client.head(Uri.parse(request.url), headers: request.headers),
+        'PUT' => client.put(Uri.parse(request.url), headers: request.headers),
+        'DELETE' =>
+          client.delete(Uri.parse(request.url), headers: request.headers),
+        'PATCH' =>
+          client.patch(Uri.parse(request.url), headers: request.headers),
+        _ => Future.value(response)
+      };
       if ([200, 201, 202, 203, 204, 205, 206, 404]
           .contains(response.statusCode)) {
         return response;

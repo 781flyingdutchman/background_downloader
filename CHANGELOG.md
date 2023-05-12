@@ -1,3 +1,13 @@
+## 7.0.0
+
+Migration to Dart 3 - not other functional change or API change.  If you use Dart 2 please use version `6.1.1` of this plugin, which will be maintained until the end of 2023.
+
+Most classes in the package are now `final` classes, and under the hood we use the new Records and Pattern matching features of Dart 3. None of this should matter if you've used the package as intended.
+
+## 6.1.1
+
+Bug fix for `request` method where the `httpRequestMethod` override was not taken into account properly.
+
 ## 6.1.0
 
 Added `unregisterCallBacks` to remove callbacks if you no longer want updates, and `resetUpdates` to reset the `updates` stream so it can be listened to again.
