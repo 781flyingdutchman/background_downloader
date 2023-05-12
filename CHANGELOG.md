@@ -1,3 +1,7 @@
+## 7.0.0
+
+Migration to Dart 3 - not other functional change.  If you use Dart 2 please use version `6.1.1` of this plugin, which will be maintained until the end of 2023.
+
 ## 6.1.1
 
 Bug fix for `request` method where the `httpRequestMethod` override was not taken into account properly.

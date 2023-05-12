@@ -3,7 +3,7 @@
 ---
 **NOTE**
 
-This is the last major version to support Dart 2 and will be maintained until the end of 2023. If you are using Dart 3 then please use version 7 or above.
+This version requires Dart 3. If you need support for Dart 2 please use version `^6.1.1`, which will be maintained until the end of 2023.
 
 ---
 
