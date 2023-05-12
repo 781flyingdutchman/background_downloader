@@ -14,7 +14,7 @@ import 'exceptions.dart';
 import 'models.dart';
 
 /// Provides access to all functions of the plugin in a single place.
-class FileDownloader {
+final class FileDownloader {
   final _log = Logger('FileDownloader');
   static final FileDownloader _singleton = FileDownloader._internal();
 
