@@ -5,13 +5,14 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 import 'package:collection/collection.dart';
-import 'package:localstore/localstore.dart';
+
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'database.dart';
 import 'desktop_downloader.dart';
 import 'exceptions.dart';
+import 'localstore/localstore.dart';
 import 'models.dart';
 import 'native_downloader.dart';
 
@@ -31,6 +32,8 @@ abstract class BaseDownloader {
   static const resumeDataPath = 'backgroundDownloaderResumeData';
   static const pausedTasksPath = 'backgroundDownloaderPausedTasks';
   static const modifiedTasksPath = 'backgroundDownloaderModifiedTasks';
+  static const metaDataCollection = 'backgroundDownloaderDatabase';
+
   static const databaseVersion = 1;
 
   /// Persistent storage
@@ -76,40 +79,45 @@ abstract class BaseDownloader {
   /// desktop or native
   @mustCallSuper
   Future<void> initialize() async {
-    const metaDataCollection = 'backgroundDownloaderDatabase';
-    var supportDir = await getApplicationSupportDirectory();
-    _db.setDatabaseDirectory(supportDir);
     final metaData =
         await _db.collection(metaDataCollection).doc('metaData').get();
     final version = metaData?['version'] ?? 0;
-    if (version == 0) {
-      // move files from docDir to supportDir
-      var docDir = await getApplicationDocumentsDirectory();
-      for (String path in [
-        resumeDataPath,
-        pausedTasksPath,
-        Database.tasksPath
-      ]) {
-        try {
-          final fromPath = join(docDir.path, path);
-          if (await Directory(fromPath).exists()) {
-            log.finest('Moving $path to support directory');
-            final toPath = join(supportDir.path, path);
-            await Directory(toPath).create(recursive: true);
-            await Directory(fromPath).list().forEach((entity) {
-              if (entity is File) {
-                entity.copySync(join(toPath, basename(entity.path)));
-              }
-            });
-            await Directory(fromPath).delete(recursive: true);
-          }
-        } catch (e) {
-          log.fine('Error migrating database for path $path: $e');
-        }
-      }
-    }
     if (version != databaseVersion) {
-      // perform other migration as necessary, then store database version
+      log.fine('Migrating database from version $version to $databaseVersion');
+      switch (version) {
+        case 0:
+          // move files from docDir to supportDir
+          final docDir = await getApplicationDocumentsDirectory();
+          final supportDir = await getApplicationSupportDirectory();
+          for (String path in [
+            resumeDataPath,
+            pausedTasksPath,
+            modifiedTasksPath,
+            Database.tasksPath
+          ]) {
+            try {
+              final fromPath = join(docDir.path, path);
+              if (await Directory(fromPath).exists()) {
+                log.finest('Moving $path to support directory');
+                final toPath = join(supportDir.path, path);
+                await Directory(toPath).create(recursive: true);
+                await Directory(fromPath).list().forEach((entity) {
+                  if (entity is File) {
+                    entity.copySync(join(toPath, basename(entity.path)));
+                  }
+                });
+                await Directory(fromPath).delete(recursive: true);
+              }
+            } catch (e) {
+              log.fine('Error migrating database for path $path: $e');
+            }
+          }
+          break;
+
+        default:
+          log.warning('Illegal starting version: $version');
+          break;
+      }
       await _db
           .collection(metaDataCollection)
           .doc('metaData')

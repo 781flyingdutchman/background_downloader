@@ -17,8 +17,6 @@ dependencies:
   path: ^1.8.1
   async: ^2.6.0
   mime: ^1.0.1
-  localstore:
-    path: '../localstore'
   collection: ^1.15.0
 
 dev_dependencies:
