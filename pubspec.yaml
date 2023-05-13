@@ -1,7 +1,7 @@
 name: background_downloader
 description: A multi-platform background file downloader and uploader. Define the task, enqueue and monitor progress
 
-version: 7.0.0
+version: 7.0.1
 repository: https://github.com/781flyingdutchman/background_downloader
 
 environment:
@@ -17,7 +17,6 @@ dependencies:
   path: ^1.8.1
   async: ^2.6.0
   mime: ^1.0.1
-  localstore: ^1.3.5
   collection: ^1.15.0
 
 dev_dependencies:

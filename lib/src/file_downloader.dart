@@ -11,6 +11,7 @@ import 'base_downloader.dart';
 import 'database.dart';
 import 'desktop_downloader.dart';
 import 'exceptions.dart';
+import 'localstore/localstore.dart';
 import 'models.dart';
 
 /// Provides access to all functions of the plugin in a single place.
@@ -755,6 +756,7 @@ final class FileDownloader {
     _taskProgressCallbacks.clear();
     _notificationConfigs.clear();
     _downloader.destroy();
+    Localstore.instance.clearCache();
   }
 }
 

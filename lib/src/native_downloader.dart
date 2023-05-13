@@ -26,6 +26,7 @@ class NativeDownloader extends BaseDownloader {
 
   @override
   Future<void> initialize() async {
+    await super.initialize();
     WidgetsFlutterBinding.ensureInitialized();
     // listen to the background channel, receiving updates on download status
     // or progress.
@@ -166,18 +167,11 @@ class NativeDownloader extends BaseDownloader {
   /// ProgressUpdates has a mixed Task & double json representation 'progress'
   @override
   Future<Map<String, dynamic>> popUndeliveredData(Undelivered dataType) async {
-    final String jsonMapString;
-    switch (dataType) {
-      case Undelivered.resumeData:
-        jsonMapString = await _channel.invokeMethod('popResumeData');
-        break;
-      case Undelivered.statusUpdates:
-        jsonMapString = await _channel.invokeMethod('popStatusUpdates');
-        break;
-      case Undelivered.progressUpdates:
-        jsonMapString = await _channel.invokeMethod('popProgressUpdates');
-        break;
-    }
+    final String jsonMapString = await switch (dataType) {
+      Undelivered.resumeData => _channel.invokeMethod('popResumeData'),
+      Undelivered.statusUpdates => _channel.invokeMethod('popStatusUpdates'),
+      Undelivered.progressUpdates => _channel.invokeMethod('popProgressUpdates')
+    };
     return jsonDecode(jsonMapString);
   }
 

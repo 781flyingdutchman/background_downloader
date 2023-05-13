@@ -1,7 +1,6 @@
-import 'package:localstore/localstore.dart';
-
 import 'base_downloader.dart';
 import 'exceptions.dart';
+import 'localstore/localstore.dart';
 import 'models.dart';
 
 /// Persistent database used for tracking task status and progress.
