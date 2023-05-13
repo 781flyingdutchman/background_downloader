@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:background_downloader/background_downloader.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -755,6 +756,7 @@ final class FileDownloader {
     _taskProgressCallbacks.clear();
     _notificationConfigs.clear();
     _downloader.destroy();
+    Localstore.instance.clearCache();
   }
 }
 

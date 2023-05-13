@@ -39,9 +39,6 @@ class DesktopDownloader extends BaseDownloader {
   DesktopDownloader._internal();
 
   @override
-  Future<void> initialize() async {}
-
-  @override
   Future<bool> enqueue(Task task,
       [TaskNotificationConfig? notificationConfig]) async {
     try {
