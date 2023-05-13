@@ -1,3 +1,7 @@
+## 6.1.2
+
+Migrating the persistent data from the documents directory to the support directory, so it is no longer visible in - for example - the iOS Files app, or the Linux home directory.
+
 ## 6.1.1
 
 Bug fix for `request` method where the `httpRequestMethod` override was not taken into account properly.
