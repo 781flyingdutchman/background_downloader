@@ -112,11 +112,9 @@ abstract class BaseDownloader {
               log.fine('Error migrating database for path $path: $e');
             }
           }
-          break;
 
         default:
           log.warning('Illegal starting version: $version');
-          break;
       }
       await _db
           .collection(metaDataCollection)
@@ -635,30 +633,15 @@ abstract class BaseDownloader {
       }
       if (progress == null && status != null) {
         // set progress based on status
-        switch (status) {
-          case TaskStatus.enqueued:
-          case TaskStatus.running:
-            progress = 0.0;
-            break;
-          case TaskStatus.complete:
-            progress = progressComplete;
-            break;
-          case TaskStatus.notFound:
-            progress = progressNotFound;
-            break;
-          case TaskStatus.failed:
-            progress = progressFailed;
-            break;
-          case TaskStatus.canceled:
-            progress = progressCanceled;
-            break;
-          case TaskStatus.waitingToRetry:
-            progress = progressWaitingToRetry;
-            break;
-          case TaskStatus.paused:
-            progress = progressPaused;
-            break;
-        }
+        progress = switch (status) {
+          TaskStatus.enqueued || TaskStatus.running => 0.0,
+          TaskStatus.complete => progressComplete,
+          TaskStatus.notFound => progressNotFound,
+          TaskStatus.failed => progressFailed,
+          TaskStatus.canceled => progressCanceled,
+          TaskStatus.waitingToRetry => progressWaitingToRetry,
+          TaskStatus.paused => progressPaused
+        };
       }
       Database()
           .updateRecord(TaskRecord(task, status!, progress!, taskException));

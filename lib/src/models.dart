@@ -363,23 +363,16 @@ sealed class Task extends Request {
 
   /// Returns the absolute path to the file represented by this task
   Future<String> filePath() async {
-    final Directory baseDir;
-    switch (baseDirectory) {
-      case BaseDirectory.applicationDocuments:
-        baseDir = await getApplicationDocumentsDirectory();
-        break;
-      case BaseDirectory.temporary:
-        baseDir = await getTemporaryDirectory();
-        break;
-      case BaseDirectory.applicationSupport:
-        baseDir = await getApplicationSupportDirectory();
-        break;
-      case BaseDirectory.applicationLibrary:
-        baseDir = Platform.isMacOS || Platform.isIOS
-            ? await getLibraryDirectory()
-            : Directory(path.join(
-                (await getApplicationSupportDirectory()).path, 'Library'));
-    }
+    final Directory baseDir = await switch (baseDirectory) {
+      BaseDirectory.applicationDocuments => getApplicationDocumentsDirectory(),
+      BaseDirectory.temporary => getTemporaryDirectory(),
+      BaseDirectory.applicationSupport => getApplicationSupportDirectory(),
+      BaseDirectory.applicationLibrary
+          when Platform.isMacOS || Platform.isIOS =>
+        getLibraryDirectory(),
+      BaseDirectory.applicationLibrary => Future.value(Directory(
+          path.join((await getApplicationSupportDirectory()).path, 'Library')))
+    };
     return path.join(baseDir.path, directory, filename);
   }
 

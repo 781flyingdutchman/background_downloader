@@ -5,6 +5,9 @@ import 'dart:typed_data';
 
 import '../localstore.dart';
 import 'utils_impl.dart';
+import 'package:logging/logging.dart';
+
+final _log = Logger('Localstore');
 
 class Utils implements UtilsImpl {
   Utils._();
@@ -202,7 +205,7 @@ class Utils implements UtilsImpl {
     try {
       await file.delete();
     } catch (e) {
-      print(e);
+      _log.finest(e);
     }
     _fileCache.remove(path);
   }
@@ -213,7 +216,7 @@ class Utils implements UtilsImpl {
     try {
       await dir.delete(recursive: true);
     } catch (e) {
-      print(e);
+      _log.finest(e);
     }
     _fileCache.removeWhere((key, value) => key.startsWith(path));
   }
