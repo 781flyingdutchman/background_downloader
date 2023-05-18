@@ -803,7 +803,7 @@ String _urlWithQueryParameters(
 typedef BatchProgressCallback = void Function(int succeeded, int failed);
 
 /// Contains tasks and results related to a batch of tasks
-final class Batch {
+class Batch {
   final List<Task> tasks;
   final BatchProgressCallback? batchProgressCallback;
   final results = <Task, TaskStatus>{};
@@ -844,7 +844,7 @@ sealed class TaskUpdate {
 ///
 /// Contains [TaskStatus] and, if [TaskStatus.failed] possibly a
 /// [TaskException]
-final class TaskStatusUpdate extends TaskUpdate {
+class TaskStatusUpdate extends TaskUpdate {
   final TaskStatus status;
   final TaskException? exception;
 
@@ -859,7 +859,7 @@ final class TaskStatusUpdate extends TaskUpdate {
 /// [TaskStatus.canceled] results in progress -2.0
 /// [TaskStatus.notFound] results in progress -3.0
 /// [TaskStatus.waitingToRetry] results in progress -4.0
-final class TaskProgressUpdate extends TaskUpdate {
+class TaskProgressUpdate extends TaskUpdate {
   final double progress;
 
   const TaskProgressUpdate(super.task, this.progress);

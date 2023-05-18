@@ -8,7 +8,7 @@ import 'models.dart';
 /// Stores [TaskRecord] objects.
 ///
 /// This object is accessed by the [Downloader] and [BaseDownloader]
-final class Database {
+interface class Database {
   static final Database _instance = Database._internal();
   final _db = Localstore.instance;
   static const tasksPath = 'backgroundDownloaderTaskRecords';
