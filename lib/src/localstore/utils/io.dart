@@ -203,10 +203,12 @@ class Utils implements UtilsImpl {
   Future _deleteFile(String path) async {
     final dbDir = await Localstore.instance.databaseDirectory;
     final file = File('${dbDir.path}$path');
-    try {
-      await file.delete();
-    } catch (e) {
-      _log.finest(e);
+    if (await file.exists()) {
+      try {
+        await file.delete();
+      } catch (e) {
+        _log.finest(e);
+      }
     }
     _fileCache.remove(path);
   }
@@ -214,10 +216,12 @@ class Utils implements UtilsImpl {
   Future _deleteDirectory(String path) async {
     final dbDir = await Localstore.instance.databaseDirectory;
     final dir = Directory('${dbDir.path}$path');
-    try {
-      await dir.delete(recursive: true);
-    } catch (e) {
-      _log.finest(e);
+    if (await dir.exists()) {
+      try {
+        await dir.delete(recursive: true);
+      } catch (e) {
+        _log.finest(e);
+      }
     }
     _fileCache.removeWhere((key, value) => key.startsWith(path));
   }

@@ -1,3 +1,7 @@
+## 6.1.3
+
+Added `namespace` to Android build.gradle and removed irrelevant log messages
+
 ## 6.1.2
 
 Migrating the persistent data from the documents directory to the support directory, so it is no longer visible in - for example - the iOS Files app, or the Linux home directory.
