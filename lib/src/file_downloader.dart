@@ -15,7 +15,7 @@ import 'localstore/localstore.dart';
 import 'models.dart';
 
 /// Provides access to all functions of the plugin in a single place.
-final class FileDownloader {
+interface class FileDownloader {
   final _log = Logger('FileDownloader');
   static final FileDownloader _singleton = FileDownloader._internal();
 

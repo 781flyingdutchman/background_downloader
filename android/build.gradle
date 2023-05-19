@@ -44,7 +44,7 @@ android {
         minSdkVersion 24
     }
 
-    namespace "com.bbflight.background_downloader"
+    namespace 'com.bbflight.background_downloader'
 }
 
 dependencies {
