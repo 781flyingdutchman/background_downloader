@@ -1,3 +1,7 @@
+## 6.1.4
+
+Fixed permission bug on Android 10
+
 ## 6.1.3
 
 Added `namespace` to Android build.gradle and removed irrelevant log messages
