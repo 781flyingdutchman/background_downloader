@@ -1,8 +1,16 @@
+## 7.0.2
+
+Added `namespace` to Android build.gradle and removed irrelevant log messages
+
+Fixed permission bug on Android 10
+
+Changed class modifiers to allow mocking with Mockito
+
 ## 7.0.1
 
 Migrating the persistent data from the documents directory to the support directory, so it is no longer visible in - for example - the iOS Files app, or the Linux home directory.
 
-Further Dart3 changes (not visible to user).
+Further Dart 3 changes (not visible to user).
 
 ## 7.0.0
 
@@ -10,7 +18,9 @@ Migration to Dart 3 - not other functional change or API change.  If you use Dar
 
 Most classes in the package are now `final` classes, and under the hood we use the new Records and Pattern matching features of Dart 3. None of this should matter if you've used the package as intended.
 
-## 6.1.3
+## 6.1.4
+
+Fixed permission bug on Android 10
 
 ## 6.1.3
 
