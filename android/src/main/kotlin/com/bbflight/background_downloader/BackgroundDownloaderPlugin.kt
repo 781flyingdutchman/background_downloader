@@ -479,7 +479,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         val directory = args[2] as String
         val mimeType = args[3] as String?
         // first check and potentially ask for permissions
-        if (Build.VERSION.SDK_INT < 30 && ActivityCompat.checkSelfPermission(
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q && ActivityCompat.checkSelfPermission(
                 applicationContext, Manifest.permission.WRITE_EXTERNAL_STORAGE
             ) != PackageManager.PERMISSION_GRANTED
         ) {
