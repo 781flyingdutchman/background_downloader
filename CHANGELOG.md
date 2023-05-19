@@ -10,6 +10,12 @@ Migration to Dart 3 - not other functional change or API change.  If you use Dar
 
 Most classes in the package are now `final` classes, and under the hood we use the new Records and Pattern matching features of Dart 3. None of this should matter if you've used the package as intended.
 
+## 6.1.3
+
+## 6.1.3
+
+Added `namespace` to Android build.gradle and removed irrelevant log messages
+
 ## 6.1.2
 
 Migrating the persistent data from the documents directory to the support directory, so it is no longer visible in - for example - the iOS Files app, or the Linux home directory.
