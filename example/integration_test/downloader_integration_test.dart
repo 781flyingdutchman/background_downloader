@@ -90,6 +90,9 @@ void main() {
     Logger.root.onRecord.listen((LogRecord rec) {
       print('${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
     });
+    await FileDownloader().reset();
+    await FileDownloader().reset(group: FileDownloader.awaitGroup);
+    await FileDownloader().reset(group: 'someGroup');
     // recreate the tasks
     task = DownloadTask(url: workingUrl, filename: defaultFilename);
     retryTask =
@@ -121,6 +124,9 @@ void main() {
   });
 
   tearDown(() async {
+    await FileDownloader().reset();
+    await FileDownloader().reset(group: FileDownloader.awaitGroup);
+    await FileDownloader().reset(group: 'someGroup');
     FileDownloader().destroy();
     if (Platform.isAndroid || Platform.isIOS) {
       await FileDownloader()
@@ -544,6 +550,7 @@ void main() {
   group('Queue and task management', () {
     testWidgets('reset', (widgetTester) async {
       print('Starting reset');
+      await Future.delayed(const Duration(seconds: 2)); // clear cancellations
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(task), isTrue);
       expect(await FileDownloader().reset(group: 'non-default'), equals(0));
@@ -556,6 +563,7 @@ void main() {
     });
 
     testWidgets('allTaskIds', (widgetTester) async {
+      print('Starting allTaskIds');
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(task), isTrue);
       expect(await FileDownloader().allTaskIds(group: 'non-default'), isEmpty);
@@ -567,6 +575,7 @@ void main() {
     });
 
     testWidgets('allTasks', (widgetTester) async {
+      print('Starting alTasks');
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(task), isTrue);
       expect(await FileDownloader().allTasks(group: 'non-default'), isEmpty);
@@ -577,6 +586,19 @@ void main() {
       expect(statusCallbackCounter, equals(3));
       expect(lastStatus, equals(TaskStatus.complete));
       print('Finished alTasks');
+    });
+
+    testWidgets('tasksFinished', (widgetTester) async {
+      print('Starting tasksFinished');
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
+      expect(await FileDownloader().enqueue(task), isTrue);
+      expect(await FileDownloader().tasksFinished(), isFalse);
+      expect(
+          await FileDownloader().tasksFinished(group: 'non-default'), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(await FileDownloader().tasksFinished(), isTrue);
+      print('Finished tasksFinished');
     });
 
     testWidgets('cancelTasksWithIds', (widgetTester) async {
@@ -613,6 +635,7 @@ void main() {
     });
 
     testWidgets('taskForId', (widgetTester) async {
+      print('Starting taskForId');
       final complexTask = DownloadTask(
           url: workingUrl,
           filename: defaultFilename,

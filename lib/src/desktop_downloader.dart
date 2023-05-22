@@ -119,6 +119,9 @@ class DesktopDownloader extends BaseDownloader {
           switch (message[0] as String) {
             case 'statusUpdate':
               final status = message[1] as TaskStatus;
+              if (status.isFinalState) {
+                _remove(task);
+              }
               processStatusUpdate(TaskStatusUpdate(
                   task,
                   status,

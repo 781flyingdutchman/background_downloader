@@ -369,7 +369,10 @@ To manage or query the queue of waiting or running tasks, call:
 * `reset` to reset the downloader, which cancels all ongoing download tasks
 * `allTaskIds` to get a list of `taskId` values of all tasks currently active (i.e. not in a final state). You can exclude tasks waiting for retries by setting `includeTasksWaitingToRetry` to `false`. Note that paused tasks are not included in this list
 * `allTasks` to get a list of all tasks currently active (i.e. not in a final state). You can exclude tasks waiting for retries by setting `includeTasksWaitingToRetry` to `false`. Note that paused tasks are not included in this list
-* `taskForId` to get the `DownloadTask` for the given `taskId`, or `null` if not found. Only tasks that are active (ie. not in a final state) are guaranteed to be returned, but returning a task does not guarantee that it is active
+* `taskForId` to get the `Task` for the given `taskId`, or `null` if not found. Only tasks that are active (ie. not in a final state) are guaranteed to be returned, but returning a task does not guarantee that it is active
+* `tasksFinished` to check if all tasks have finished (successfully or otherwise)
+
+Note that each of these methods accept a `group` parameter that targets the mehod to a specific group. If tasks are enqueued with a `group` other than default, calling any of these methods without a group parameter will not affect/include those tasks - only the default tasks. In particular, this may affect tasks started using a method like `download`, which changes the task's group to `FileDownloader.awaitGroup`.
 
 ### Grouping tasks
 
@@ -388,11 +391,11 @@ final task = DownloadTask(
 final successFullyEnqueued = await FileDownloader().enqueue(task);
 ```
 
-The methods `registerCallBacks`, `unregisterCallBacks`, `reset`, `allTaskIds` and `allTasks` all take an optional `group` parameter to target tasks in a specific group. Note that if tasks are enqueued with a `group` other than default, calling any of these methods without a group parameter will not affect/include those tasks - only the default tasks.
+The methods `registerCallBacks`, `unregisterCallBacks`, `reset`, `allTaskIds`, `allTasks` and `tasksFinished` all take an optional `group` parameter to target tasks in a specific group. Note that if tasks are enqueued with a `group` other than default, calling any of these methods without a group parameter will not affect/include those tasks - only the default tasks.
 
 If you listen to the `updates` stream instead of using callbacks, you can test for the task's `group` field in your listener, and process the update differently for different groups.
 
-Note: tasks that are started using `download`, `upload`, `batchDownload` or `batchUpload` are assigned a special group name 'FileDownloader.awaitGroup', as callbacks for these tasks are handled within the `FileDownloader`.
+Note: tasks that are started using `download`, `upload`, `batchDownload` or `batchUpload` are assigned a special group name `FileDownloader.awaitGroup`, as callbacks for these tasks are handled within the `FileDownloader`.
 
 
 

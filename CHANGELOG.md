@@ -1,3 +1,9 @@
+## 6.2.0
+
+Added `tasksFinished` method that returns `true` if all tasks in the group have finished
+
+Fixed bug related to `allTasks` method
+
 ## 6.1.4
 
 Fixed permission bug on Android 10

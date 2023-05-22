@@ -225,7 +225,7 @@ abstract class BaseDownloader {
         .where((task) => remainingTaskIds.contains(task.taskId))
         .map((e) => e.taskId)
         .toList(growable: false);
-    cancelPausedPlatformTasksWithIds(pausedTasks, pausedTaskIdsToCancel);
+    await cancelPausedPlatformTasksWithIds(pausedTasks, pausedTaskIdsToCancel);
     // cancel remaining taskIds on the platform
     final platformTaskIds = remainingTaskIds
         .where((taskId) => !pausedTaskIdsToCancel.contains(taskId))
@@ -242,7 +242,7 @@ abstract class BaseDownloader {
   /// Cancel paused tasks
   ///
   /// Deletes the associated temp file and emits [TaskStatus.cancel]
-  void cancelPausedPlatformTasksWithIds(
+  Future<void> cancelPausedPlatformTasksWithIds(
       List<Task> pausedTasks, List<String> taskIds) async {
     for (final taskId in taskIds) {
       final task =

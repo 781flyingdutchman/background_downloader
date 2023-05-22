@@ -461,12 +461,26 @@ class FileDownloader {
   /// Returns the number of tasks cancelled. Every canceled task wil emit a
   /// [TaskStatus.canceled] update to the registered callback, if
   /// requested
+  ///
+  /// This method acts on a [group] of tasks. If omitted, the [defaultGroup]
+  /// is used, which is the group used when you [enqueue] a task. If you
+  /// use a convenience function such as [download], the [group] of the
+  /// task is changed to [awaitGroup]. Therefore, for this method to act on
+  /// tasks used in a convenience function, make sure to pass [awaitGroup]
+  /// as the [group] argument.
   Future<int> reset({String group = defaultGroup}) => _downloader.reset(group);
 
   /// Returns a list of taskIds of all tasks currently active in this [group]
   ///
   /// Active means enqueued or running, and if [includeTasksWaitingToRetry] is
   /// true also tasks that are waiting to be retried
+  ///
+  /// This method acts on a [group] of tasks. If omitted, the [defaultGroup]
+  /// is used, which is the group used when you [enqueue] a task. If you
+  /// use a convenience function such as [download], the [group] of the
+  /// task is changed to [awaitGroup]. Therefore, for this method to act on
+  /// tasks used in a convenience function, make sure to pass [awaitGroup]
+  /// as the [group] argument.
   Future<List<String>> allTaskIds(
           {String group = defaultGroup,
           bool includeTasksWaitingToRetry = true}) async =>
@@ -480,10 +494,38 @@ class FileDownloader {
   ///
   /// Active means enqueued or running, and if [includeTasksWaitingToRetry] is
   /// true also tasks that are waiting to be retried
+  ///
+  /// This method acts on a [group] of tasks. If omitted, the [defaultGroup]
+  /// is used, which is the group used when you [enqueue] a task. If you
+  /// use a convenience function such as [download], the [group] of the
+  /// task is changed to [awaitGroup]. Therefore, for this method to act on
+  /// tasks used in a convenience function, make sure to pass [awaitGroup]
+  /// as the [group] argument.
   Future<List<Task>> allTasks(
           {String group = defaultGroup,
           bool includeTasksWaitingToRetry = true}) =>
       _downloader.allTasks(group, includeTasksWaitingToRetry);
+
+  /// Returns true if tasks in this [group] are finished
+  ///
+  /// Finished means "not active", i.e. no tasks are enqueued or running,
+  /// and if [includeTasksWaitingToRetry] is true (the default), no tasks are
+  /// waiting to be retried.
+  /// Finished does not mean that all tasks completed successfully.
+  ///
+  /// This method acts on a [group] of tasks. If omitted, the [defaultGroup]
+  /// is used, which is the group used when you [enqueue] a task. If you
+  /// use a convenience function such as [download], the [group] of the
+  /// task is changed to [awaitGroup]. Therefore, for this method to act on
+  /// tasks used in a convenience function, make sure to pass [awaitGroup]
+  /// as the [group] argument.
+  Future<bool> tasksFinished(
+      {String group = defaultGroup,
+      bool includeTasksWaitingToRetry = true}) async {
+    final tasksInProgress = await allTasks(
+        group: group, includeTasksWaitingToRetry: includeTasksWaitingToRetry);
+    return tasksInProgress.isEmpty;
+  }
 
   /// Cancel all tasks matching the taskIds in the list
   ///
