@@ -377,7 +377,10 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 val tags = workInfo.tags.filter { it.contains("taskId=") }
                 if (tags.isNotEmpty()) {
                     val taskId = tags.first().substring(7)
-                    tasksAsListOfJsonStrings.add(tasksMap[taskId] as String)
+                    val taskAsJsonString = tasksMap[taskId]
+                    if (taskAsJsonString != null) {
+                        tasksAsListOfJsonStrings.add(taskAsJsonString as String)
+                    }
                 }
             }
         }

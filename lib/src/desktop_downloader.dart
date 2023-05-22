@@ -60,7 +60,7 @@ class DesktopDownloader extends BaseDownloader {
       final task = _queue.removeFirst();
       _running.add(task);
       _executeTask(task).then((_) {
-        _running.remove(task);
+        _remove(task);
         _advanceQueue();
       });
     }
@@ -118,6 +118,9 @@ class DesktopDownloader extends BaseDownloader {
           _log.finest(message);
 
         case ('statusUpdate', TaskStatus status, TaskException? exception):
+          if (status.isFinalState) {
+            _remove(task);
+          }
           processStatusUpdate(TaskStatusUpdate(
               task, status, status == TaskStatus.failed ? exception : null));
 
