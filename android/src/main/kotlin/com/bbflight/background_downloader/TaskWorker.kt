@@ -639,7 +639,6 @@ class TaskWorker(
                 }
 
                 else -> {
-                    taskException = TaskException(ExceptionType.general)
                     deleteTempFile(tempFilePath)
                     return TaskStatus.failed
                 }
