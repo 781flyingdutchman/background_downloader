@@ -27,9 +27,6 @@ import 'persistent_storage.dart';
 abstract class BaseDownloader {
   final log = Logger('BaseDownloader');
 
-  static const resumeDataPath = 'backgroundDownloaderResumeData';
-  static const pausedTasksPath = 'backgroundDownloaderPausedTasks';
-  static const modifiedTasksPath = 'backgroundDownloaderModifiedTasks';
 
   static const databaseVersion = 1;
 
@@ -343,38 +340,30 @@ abstract class BaseDownloader {
       canResumeTask[task]?.future ?? Future.value(false);
 
   /// Stores the resume data
-  Future<void> setResumeData(ResumeData resumeData) => _storage.store(
-      resumeData.toJsonMap(), resumeDataPath, _safeId(resumeData.taskId));
+  Future<void> setResumeData(ResumeData resumeData) =>
+      _storage.storeResumeData(resumeData);
 
   /// Retrieve the resume data for this [taskId]
-  Future<ResumeData?> getResumeData(String taskId) async {
-    final jsonMap = await _storage.retrieve(resumeDataPath, _safeId(taskId));
-    return jsonMap == null ? null : ResumeData.fromJsonMap(jsonMap);
-  }
+  Future<ResumeData?> getResumeData(String taskId) =>
+      _storage.retrieveResumeData(taskId);
 
   /// Remove resumeData for this [taskId], or all if null
   Future<void> removeResumeData([String? taskId]) =>
-      _storage.delete(resumeDataPath, taskId == null ? null : _safeId(taskId));
+      _storage.removeResumeData(taskId);
 
   /// Store the paused [task]
-  Future<void> setPausedTask(Task task) =>
-      _storage.store(task.toJsonMap(), pausedTasksPath, _safeId(task.taskId));
+  Future<void> setPausedTask(Task task) => _storage.storePausedTask(task);
 
   /// Return a stored paused task with this [taskId], or null if not found
-  Future<Task?> getPausedTask(String taskId) async {
-    final jsonMap = await _storage.retrieve(pausedTasksPath, _safeId(taskId));
-    return jsonMap == null ? null : Task.createFromJsonMap(jsonMap);
-  }
+  Future<Task?> getPausedTask(String taskId) =>
+      _storage.retrievePausedTask(taskId);
 
   /// Return a list of paused [Task] objects
-  Future<List<Task>> getPausedTasks() async {
-    final jsonMap = await _storage.retrieveAll(pausedTasksPath);
-    return jsonMap.values.map((e) => Task.createFromJsonMap(e)).toList();
-  }
+  Future<List<Task>> getPausedTasks() => _storage.retrieveAllPausedTasks();
 
   /// Remove paused task for this taskId, or all if null
   Future<void> removePausedTask([String? taskId]) =>
-      _storage.delete(pausedTasksPath, taskId == null ? null : _safeId(taskId));
+      _storage.removePausedTask(taskId);
 
   /// Retrieve data that was not delivered to Dart
   Future<Map<String, dynamic>> popUndeliveredData(Undelivered dataType);
@@ -425,26 +414,19 @@ abstract class BaseDownloader {
   Future<void> setModifiedTask(Task modifiedTask, Task originalTask) async {
     if (modifiedTask.group != originalTask.group ||
         modifiedTask.updates != originalTask.updates) {
-      await _storage.store(modifiedTask.toJsonMap(), modifiedTasksPath,
-          _safeId(originalTask.taskId));
+      await _storage.storeModifiedTask(modifiedTask);
     }
   }
 
   /// Retrieves modified version of the [originalTask] or null
   ///
   /// See [setModifiedTask]
-  Future<Task?> getModifiedTask(Task originalTask) async {
-    final jsonMap = await _storage.retrieve(
-        modifiedTasksPath, _safeId(originalTask.taskId));
-    if (jsonMap == null) {
-      return null;
-    }
-    return Task.createFromJsonMap(jsonMap);
-  }
+  Future<Task?> getModifiedTask(Task originalTask) =>
+      _storage.retrieveModifiedTask(originalTask.taskId);
 
   /// Remove modified [task], or all if null
-  Future<void> removeModifiedTask([Task? task]) => _storage.delete(
-      modifiedTasksPath, task == null ? null : _safeId(task.taskId));
+  Future<void> removeModifiedTask([Task? task]) =>
+      _storage.removeModifiedTask(task?.taskId);
 
   /// Closes the [updates] stream and re-initializes the [StreamController]
   /// such that the stream can be listened to again
@@ -620,9 +602,4 @@ abstract class BaseDownloader {
           .updateRecord(TaskRecord(task, status!, progress!, taskException));
     }
   }
-
-  final _illegalPathCharacters = RegExp(r'[\\/:*?"<>|]');
-
-  /// Make the id safe for storing in the localStore
-  String _safeId(String id) => id.replaceAll(_illegalPathCharacters, '_');
 }

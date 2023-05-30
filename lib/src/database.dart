@@ -10,7 +10,6 @@ import 'models.dart';
 ///
 /// This object is accessed by the [Downloader] and [BaseDownloader]
 interface class Database {
-  static const tasksPath = 'backgroundDownloaderTaskRecords';
 
   static Database? _instance;
   late final PersistentStorage _storage;
@@ -29,9 +28,7 @@ interface class Database {
   ///
   /// Optionally, specify a [group] to filter by
   Future<List<TaskRecord>> allRecords({String? group}) async {
-    final allJsonRecords = await _storage.retrieveAll(tasksPath);
-    final allRecords =
-        allJsonRecords.values.map((e) => TaskRecord.fromJsonMap(e));
+    final allRecords = await _storage.retrieveAllTaskRecords();
     return group == null
         ? allRecords.toList()
         : allRecords.where((element) => element.group == group).toList();
@@ -50,11 +47,7 @@ interface class Database {
   }
 
   /// Return [TaskRecord] for this [taskId] or null if not found
-  Future<TaskRecord?> recordForId(String taskId) async {
-    final jsonMap = await _storage.retrieve(tasksPath, _safeId
-      (taskId));
-    return jsonMap != null ? TaskRecord.fromJsonMap(jsonMap) : null;
-  }
+  Future<TaskRecord?> recordForId(String taskId) => _storage.retrieveTaskRecord(taskId);
 
   /// Return list of [TaskRecord] corresponding to the [taskIds]
   ///
@@ -76,7 +69,7 @@ interface class Database {
   /// Optionally, specify a [group] to filter by
   Future<void> deleteAllRecords({String? group}) async {
     if (group == null) {
-      await _storage.delete(tasksPath); // return value ignored
+      await _storage.removeTaskRecord(null);
       return;
     }
     final allRecordsInGroup = await allRecords(group: group);
@@ -91,7 +84,7 @@ interface class Database {
   /// Delete records with these [taskIds]
   Future<void> deleteRecordsWithIds(Iterable<String> taskIds) async {
     for (var taskId in taskIds) {
-      await _storage.delete(tasksPath, _safeId(taskId));
+      await _storage.removeTaskRecord(taskId);
     }
   }
 
@@ -99,14 +92,7 @@ interface class Database {
   ///
   /// This is used by the [FileDownloader] to track tasks, and should not
   /// normally be used by the user of this package
-  Future<void> updateRecord(TaskRecord record) async {
-    await _storage.store(record.toJsonMap(), tasksPath, record.taskId);
-  }
-
-  final _illegalPathCharacters = RegExp(r'[\\/:*?"<>|]');
-
-  /// Make the id safe for storing in the localStore
-  String _safeId(String id) => id.replaceAll(_illegalPathCharacters, '_');
+  Future<void> updateRecord(TaskRecord record) async => _storage.storeTaskRecord(record);
 }
 
 /// Record containing task, task status and task progress.

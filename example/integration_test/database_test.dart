@@ -9,7 +9,7 @@ import 'package:path_provider/path_provider.dart';
 const def = 'default';
 const workingUrl = 'https://google.com';
 const defaultFilename = 'google.html';
-const tasksPath = Database.tasksPath;
+const tasksPath = LocalStorePersistentStorage.taskRecordsPath;
 final task = DownloadTask(url: workingUrl, filename: defaultFilename);
 final task2 = DownloadTask(url: workingUrl, filename: '$defaultFilename-2');
 final record = TaskRecord(task, TaskStatus.running, 0.5);
@@ -21,9 +21,9 @@ final database = Database(db);
 
 Future<void> deleteAllTaskDataFromFileSystem() async {
   final docDirTasksDir = path.join(
-      (await getApplicationDocumentsDirectory()).path, Database.tasksPath);
+      (await getApplicationDocumentsDirectory()).path, tasksPath);
   final supportDirTasksDir = path.join(
-      (await getApplicationSupportDirectory()).path, Database.tasksPath);
+      (await getApplicationSupportDirectory()).path, tasksPath);
   try {
     await Directory(docDirTasksDir).delete(recursive: true);
   } catch (e) {
