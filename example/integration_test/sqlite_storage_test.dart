@@ -1,10 +1,7 @@
-import 'dart:io';
-
 import 'package:background_downloader/background_downloader.dart';
+import 'package:background_downloader_example/sqlite_storage.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
 
 const def = 'default';
 const workingUrl = 'https://google.com';
@@ -15,55 +12,20 @@ final task2 = DownloadTask(url: workingUrl, filename: '$defaultFilename-2');
 final record = TaskRecord(task, TaskStatus.running, 0.5);
 final record2 = TaskRecord(task2, TaskStatus.enqueued, 0);
 
-final db = LocalStorePersistentStorage();
+SqlitePersistentStorage db = SqlitePersistentStorage();
 
-final database = Database(db);
-
-Future<void> deleteAllTaskDataFromFileSystem() async {
-  final docDirTasksDir =
-      path.join((await getApplicationDocumentsDirectory()).path, tasksPath);
-  final supportDirTasksDir =
-      path.join((await getApplicationSupportDirectory()).path, tasksPath);
-  try {
-    await Directory(docDirTasksDir).delete(recursive: true);
-  } catch (e) {
-    debugPrint(e.toString());
-  }
-  try {
-    await Directory(supportDirTasksDir).delete(recursive: true);
-  } catch (e) {
-    debugPrint(e.toString());
-  }
-}
+Database database = Database(db);
 
 void main() {
   setUp(() async {
     WidgetsFlutterBinding.ensureInitialized();
-    await deleteAllTaskDataFromFileSystem();
-    Localstore.instance.clearCache();
+    db = SqlitePersistentStorage();
+    database = Database(db);
+    await db.initialize();
   });
 
   tearDown(() async {
-    await deleteAllTaskDataFromFileSystem();
-    Localstore.instance.clearCache();
-  });
-
-  testWidgets('updateRecord', (tester) async {
-    await database.updateRecord(record);
-    final records = await db.retrieveAll(tasksPath);
-    expect(records.values.length, equals(1));
-    final storedRecordJsonMap = records.values.first;
-    expect(storedRecordJsonMap, isNotNull);
-    final storedRecord = TaskRecord.fromJsonMap(storedRecordJsonMap);
-    expect(storedRecord, equals(record));
-    await database.updateRecord(record2);
-    final records2 = await db.retrieveAll(tasksPath);
-    expect(records2.values.length, equals(2));
-    // confirm file exists in file system
-    await Future.delayed(const Duration(milliseconds: 200));
-    final docDir = await getApplicationSupportDirectory();
-    final filePath = '$tasksPath/${record.taskId}';
-    expect(File(path.join(docDir.path, filePath)).existsSync(), isTrue);
+    await database.deleteAllRecords();
   });
 
   testWidgets('allRecords', (widgetTester) async {
@@ -109,8 +71,6 @@ void main() {
     final r2 = await database.recordForId(record2.taskId);
     expect(r2, equals(record2));
     await database.deleteAllRecords();
-    // this brief delay should not be necessary, see issue #24 in localstore
-    await Future.delayed(const Duration(milliseconds: 100));
     // should be gone
     final r3 = await database.recordForId(record.taskId);
     expect(r3, isNull);

@@ -6,15 +6,12 @@ import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 import 'package:collection/collection.dart';
 
-import 'package:path/path.dart';
-import 'package:path_provider/path_provider.dart';
-
 import 'database.dart';
 import 'desktop_downloader.dart';
 import 'exceptions.dart';
-import 'localstore/localstore.dart';
 import 'models.dart';
 import 'native_downloader.dart';
+import 'persistent_storage.dart';
 
 /// Common download functionality
 ///
@@ -29,15 +26,12 @@ import 'native_downloader.dart';
 /// - Pause/resume status and information
 abstract class BaseDownloader {
   final log = Logger('BaseDownloader');
-  static const resumeDataPath = 'backgroundDownloaderResumeData';
-  static const pausedTasksPath = 'backgroundDownloaderPausedTasks';
-  static const modifiedTasksPath = 'backgroundDownloaderModifiedTasks';
-  static const metaDataCollection = 'backgroundDownloaderDatabase';
 
   static const databaseVersion = 1;
 
   /// Persistent storage
-  final _db = Localstore.instance;
+  late final PersistentStorage _storage;
+  late final Database database;
 
   final tasksWaitingToRetry = <Task>[];
 
@@ -64,64 +58,24 @@ abstract class BaseDownloader {
 
   BaseDownloader();
 
-  factory BaseDownloader.instance() {
+  factory BaseDownloader.instance(
+      PersistentStorage persistentStorage, Database database) {
     final instance = Platform.isMacOS || Platform.isLinux || Platform.isWindows
         ? DesktopDownloader()
         : NativeDownloader();
+    instance._storage = persistentStorage;
+    instance.database = database;
     unawaited(instance.initialize());
     return instance;
   }
 
   /// Initialize
   ///
-  /// Initializes the Localstore instance and if necessary perform database
+  /// Initializes the PersistentStorage instance and if necessary perform database
   /// migration, then initializes the subclassed implementation for
   /// desktop or native
   @mustCallSuper
-  Future<void> initialize() async {
-    final metaData =
-        await _db.collection(metaDataCollection).doc('metaData').get();
-    final version = metaData?['version'] ?? 0;
-    if (version != databaseVersion) {
-      log.fine('Migrating database from version $version to $databaseVersion');
-      switch (version) {
-        case 0:
-          // move files from docDir to supportDir
-          final docDir = await getApplicationDocumentsDirectory();
-          final supportDir = await getApplicationSupportDirectory();
-          for (String path in [
-            resumeDataPath,
-            pausedTasksPath,
-            modifiedTasksPath,
-            Database.tasksPath
-          ]) {
-            try {
-              final fromPath = join(docDir.path, path);
-              if (await Directory(fromPath).exists()) {
-                log.finest('Moving $path to support directory');
-                final toPath = join(supportDir.path, path);
-                await Directory(toPath).create(recursive: true);
-                await Directory(fromPath).list().forEach((entity) {
-                  if (entity is File) {
-                    entity.copySync(join(toPath, basename(entity.path)));
-                  }
-                });
-                await Directory(fromPath).delete(recursive: true);
-              }
-            } catch (e) {
-              log.fine('Error migrating database for path $path: $e');
-            }
-          }
-
-        default:
-          log.warning('Illegal starting version: $version');
-      }
-      await _db
-          .collection(metaDataCollection)
-          .doc('metaData')
-          .set({'version': databaseVersion});
-    }
-  }
+  Future<void> initialize() => _storage.initialize();
 
   /// Retrieve data that was stored locally because it could not be
   /// delivered to the downloader
@@ -293,7 +247,7 @@ abstract class BaseDownloader {
   Future<void> trackTasks(String? group, bool markDownloadedComplete) async {
     trackedGroups.add(group);
     if (markDownloadedComplete) {
-      final records = await Database().allRecords(group: group);
+      final records = await database.allRecords(group: group);
       for (var record in records.where((record) =>
           record.task is DownloadTask &&
           record.status != TaskStatus.complete)) {
@@ -303,7 +257,7 @@ abstract class BaseDownloader {
               TaskStatusUpdate(record.task, TaskStatus.complete));
           final updatedRecord = record.copyWith(
               status: TaskStatus.complete, progress: progressComplete);
-          await Database().updateRecord(updatedRecord);
+          await database.updateRecord(updatedRecord);
         }
       }
     }
@@ -342,57 +296,30 @@ abstract class BaseDownloader {
       canResumeTask[task]?.future ?? Future.value(false);
 
   /// Stores the resume data
-  Future<void> setResumeData(ResumeData resumeData) => _db
-      .collection(resumeDataPath)
-      .doc(_safeId(resumeData.taskId))
-      .set(resumeData.toJsonMap());
+  Future<void> setResumeData(ResumeData resumeData) =>
+      _storage.storeResumeData(resumeData);
 
   /// Retrieve the resume data for this [taskId]
-  Future<ResumeData?> getResumeData(String taskId) async {
-    final jsonMap =
-        await _db.collection(resumeDataPath).doc(_safeId(taskId)).get();
-    return jsonMap == null ? null : ResumeData.fromJsonMap(jsonMap);
-  }
+  Future<ResumeData?> getResumeData(String taskId) =>
+      _storage.retrieveResumeData(taskId);
 
   /// Remove resumeData for this [taskId], or all if null
-  Future<void> removeResumeData([String? taskId]) async {
-    if (taskId == null) {
-      await _db.collection(resumeDataPath).delete();
-      return;
-    }
-    await _db.collection(resumeDataPath).doc(_safeId(taskId)).delete();
-  }
+  Future<void> removeResumeData([String? taskId]) =>
+      _storage.removeResumeData(taskId);
 
   /// Store the paused [task]
-  Future<void> setPausedTask(Task task) => _db
-      .collection(pausedTasksPath)
-      .doc(_safeId(task.taskId))
-      .set(task.toJsonMap());
+  Future<void> setPausedTask(Task task) => _storage.storePausedTask(task);
 
   /// Return a stored paused task with this [taskId], or null if not found
-  Future<Task?> getPausedTask(String taskId) async {
-    final jsonMap =
-        await _db.collection(pausedTasksPath).doc(_safeId(taskId)).get();
-    return jsonMap == null ? null : Task.createFromJsonMap(jsonMap);
-  }
+  Future<Task?> getPausedTask(String taskId) =>
+      _storage.retrievePausedTask(taskId);
 
   /// Return a list of paused [Task] objects
-  Future<List<Task>> getPausedTasks() async {
-    final jsonMap = await _db.collection(pausedTasksPath).get();
-    if (jsonMap == null) {
-      return [];
-    }
-    return jsonMap.values.map((e) => Task.createFromJsonMap(e)).toList();
-  }
+  Future<List<Task>> getPausedTasks() => _storage.retrieveAllPausedTasks();
 
   /// Remove paused task for this taskId, or all if null
-  Future<void> removePausedTask([String? taskId]) async {
-    if (taskId == null) {
-      await _db.collection(pausedTasksPath).delete();
-      return;
-    }
-    await _db.collection(pausedTasksPath).doc(_safeId(taskId)).delete();
-  }
+  Future<void> removePausedTask([String? taskId]) =>
+      _storage.removePausedTask(taskId);
 
   /// Retrieve data that was not delivered to Dart
   Future<Map<String, dynamic>> popUndeliveredData(Undelivered dataType);
@@ -443,35 +370,19 @@ abstract class BaseDownloader {
   Future<void> setModifiedTask(Task modifiedTask, Task originalTask) async {
     if (modifiedTask.group != originalTask.group ||
         modifiedTask.updates != originalTask.updates) {
-      await _db
-          .collection(modifiedTasksPath)
-          .doc(_safeId(originalTask.taskId))
-          .set(modifiedTask.toJsonMap());
+      await _storage.storeModifiedTask(modifiedTask);
     }
   }
 
   /// Retrieves modified version of the [originalTask] or null
   ///
   /// See [setModifiedTask]
-  Future<Task?> getModifiedTask(Task originalTask) async {
-    final jsonMap = await _db
-        .collection(modifiedTasksPath)
-        .doc(_safeId(originalTask.taskId))
-        .get();
-    if (jsonMap == null) {
-      return null;
-    }
-    return Task.createFromJsonMap(jsonMap);
-  }
+  Future<Task?> getModifiedTask(Task originalTask) =>
+      _storage.retrieveModifiedTask(originalTask.taskId);
 
   /// Remove modified [task], or all if null
-  Future<void> removeModifiedTask([Task? task]) async {
-    if (task == null) {
-      await _db.collection(modifiedTasksPath).delete();
-      return;
-    }
-    await _db.collection(modifiedTasksPath).doc(task.taskId).delete();
-  }
+  Future<void> removeModifiedTask([Task? task]) =>
+      _storage.removeModifiedTask(task?.taskId);
 
   /// Closes the [updates] stream and re-initializes the [StreamController]
   /// such that the stream can be listened to again
@@ -625,9 +536,9 @@ abstract class BaseDownloader {
     if (trackedGroups.contains(null) || trackedGroups.contains(task.group)) {
       if (status == null && progress != null) {
         // update existing record with progress only
-        final existingRecord = await Database().recordForId(task.taskId);
+        final existingRecord = await database.recordForId(task.taskId);
         if (existingRecord != null) {
-          Database().updateRecord(existingRecord.copyWith(progress: progress));
+          database.updateRecord(existingRecord.copyWith(progress: progress));
         }
         return;
       }
@@ -643,13 +554,8 @@ abstract class BaseDownloader {
           TaskStatus.paused => progressPaused
         };
       }
-      Database()
+      database
           .updateRecord(TaskRecord(task, status!, progress!, taskException));
     }
   }
-
-  final _illegalPathCharacters = RegExp(r'[\\/:*?"<>|]');
-
-  /// Make the id safe for storing in the localStore
-  String _safeId(String id) => id.replaceAll(_illegalPathCharacters, '_');
 }
