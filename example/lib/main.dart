@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:background_downloader/background_downloader.dart';
+import 'package:background_downloader_example/sqlite_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
 import 'package:provider/provider.dart';
@@ -40,6 +41,17 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
+    // By default the downloader uses a modified version of the Localstore package
+    // to persistently store data. You can provide an alternative persistent
+    // storage backing that implements the [PersistentStorage] interface. You
+    // must initialize the FileDownloader by passing that alternative storage
+    // object on the first call to FileDownloader.
+    // As an example, this example app has implemented a backing using
+    // the sqflite package (works for Android/iOS only and isn't production
+    // ready -> only use as an example).
+    // To try that, uncomment the following line, which
+    // will initialize the downloader with that storage solution.
+    // FileDownloader(persistentStorage: SqlitePersistentStorage());
     FileDownloader()
         .registerCallbacks(
             taskStatusCallback: myDownloadStatusCallback,

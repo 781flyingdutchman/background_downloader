@@ -25,7 +25,7 @@ abstract interface class PersistentStorage {
   /// Store a [TaskRecord], keyed by taskId
   ///
   /// Returns true if successful
-  Future<bool> storeTaskRecord(TaskRecord record);
+  Future<void> storeTaskRecord(TaskRecord record);
 
   /// Retrieve [TaskRecord] with [taskId], or null if not found
   Future<TaskRecord?> retrieveTaskRecord(String taskId);
@@ -39,7 +39,7 @@ abstract interface class PersistentStorage {
   /// Store a paused [task], keyed by taskId
   ///
   /// Returns true if successful
-  Future<bool> storePausedTask(Task task);
+  Future<void> storePausedTask(Task task);
 
   /// Retrieve paused [Task] with [taskId], or null if not found
   Future<Task?> retrievePausedTask(String taskId);
@@ -53,7 +53,7 @@ abstract interface class PersistentStorage {
   /// Store a modified [task], keyed by taskId
   ///
   /// Returns true if successful
-  Future<bool> storeModifiedTask(Task task);
+  Future<void> storeModifiedTask(Task task);
 
   /// Retrieve modified [Task] with [taskId], or null if not found
   Future<Task?> retrieveModifiedTask(String taskId);
@@ -67,7 +67,7 @@ abstract interface class PersistentStorage {
   /// Store [ResumeData], keyed by its taskId
   ///
   /// Returns true if successful
-  Future<bool> storeResumeData(ResumeData resumeData);
+  Future<void> storeResumeData(ResumeData resumeData);
 
   /// Retrieve [ResumeData] with [taskId], or null if not found
   Future<ResumeData?> retrieveResumeData(String taskId);
@@ -88,12 +88,11 @@ abstract interface class PersistentStorage {
   /// Used for database migration, may be 'older' than the code version
   Future<(String, int)> get storedDatabaseVersion;
 
-  /// Migrate the data from this name and version to the current
-  /// name and version, as returned by [currentDatabaseVersion], if needed
+  /// Initialize the database - only called once
   ///
-  /// Returns true if successful. If not successful, the old data
-  /// may not have been migrated, but the new version will still work
-  Future<bool> migrateIfNeeded();
+  /// Migrates the data from stored name and version to the current
+  /// name and version, if needed
+  Future<void> initialize();
 }
 
 typedef JsonMap = Map<String, dynamic>;
@@ -103,7 +102,7 @@ class LocalStorePersistentStorage implements PersistentStorage {
   final log = Logger('LocalStorePersistentStorage');
   final _db = Localstore.instance;
   final _illegalPathCharacters = RegExp(r'[\\/:*?"<>|]');
-  
+
   static const taskRecordsPath = 'backgroundDownloaderTaskRecords';
   static const resumeDataPath = 'backgroundDownloaderResumeData';
   static const pausedTasksPath = 'backgroundDownloaderPausedTasks';
@@ -111,10 +110,9 @@ class LocalStorePersistentStorage implements PersistentStorage {
   static const metaDataCollection = 'backgroundDownloaderDatabase';
 
   /// Stores [JsonMap] formatted [document] in [collection] keyed under [identifier]
-  Future<bool> store(
+  Future<void> store(
       JsonMap document, String collection, String identifier) async {
     await _db.collection(collection).doc(identifier).set(document);
-    return true;
   }
 
   /// Returns [document] stored in [collection] under key [identifier]
@@ -228,19 +226,19 @@ class LocalStorePersistentStorage implements PersistentStorage {
   }
 
   @override
-  Future<bool> storeModifiedTask(Task task) =>
+  Future<void> storeModifiedTask(Task task) =>
       store(task.toJsonMap(), modifiedTasksPath, _safeId(task.taskId));
 
   @override
-  Future<bool> storePausedTask(Task task) =>
+  Future<void> storePausedTask(Task task) =>
       store(task.toJsonMap(), pausedTasksPath, _safeId(task.taskId));
 
   @override
-  Future<bool> storeResumeData(ResumeData resumeData) =>
+  Future<void> storeResumeData(ResumeData resumeData) =>
       store(resumeData.toJsonMap(), resumeDataPath, _safeId(resumeData.taskId));
 
   @override
-  Future<bool> storeTaskRecord(TaskRecord record) =>
+  Future<void> storeTaskRecord(TaskRecord record) =>
       store(record.toJsonMap(), taskRecordsPath, _safeId(record.taskId));
 
   @override
@@ -254,19 +252,18 @@ class LocalStorePersistentStorage implements PersistentStorage {
   (String, int) get currentDatabaseVersion => ('Localstore', 1);
 
   @override
-  Future<bool> migrateIfNeeded() async {
+  Future<void> initialize() async {
     final (currentName, currentVersion) = currentDatabaseVersion;
     final (storedName, storedVersion) = await storedDatabaseVersion;
     if (storedName != currentName) {
       log.warning('Cannot migrate from database name $storedName');
-      return false;
+      return;
     }
     if (storedVersion == currentVersion) {
-      return true;
+      return;
     }
     log.fine(
         'Migrating $currentName database from version $storedVersion to $currentVersion');
-    var success = false;
     switch (storedVersion) {
       case 0:
         // move files from docDir to supportDir
@@ -295,7 +292,6 @@ class LocalStorePersistentStorage implements PersistentStorage {
             log.fine('Error migrating database for path $path: $e');
           }
         }
-        success = true;
 
       default:
         log.warning('Illegal starting version: $storedVersion');
@@ -304,6 +300,5 @@ class LocalStorePersistentStorage implements PersistentStorage {
         .collection(metaDataCollection)
         .doc('metaData')
         .set({'version': currentVersion});
-    return success;
   }
 }

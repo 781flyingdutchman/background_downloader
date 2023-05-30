@@ -75,7 +75,7 @@ abstract class BaseDownloader {
   /// migration, then initializes the subclassed implementation for
   /// desktop or native
   @mustCallSuper
-  Future<void> initialize() => _storage.migrateIfNeeded();
+  Future<void> initialize() => _storage.initialize();
 
   /// Retrieve data that was stored locally because it could not be
   /// delivered to the downloader
