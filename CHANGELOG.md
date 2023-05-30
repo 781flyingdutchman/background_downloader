@@ -1,3 +1,11 @@
+## 7.2.0
+
+Added option to use a different persistent storage solution than the one provided by default. The downloader stores a few things in persistent storage, and uses a modified version of the [localstore](https://pub.dev/packages/localstore) package by default. To use a different persistent storage solution, create a class that implements the `PersistentStorage` interface, and initialize the downloader by calling `FileDownloader(persistentStorage: yourStorageClass())` as the first use of the `FileDownloader`.
+
+A simple example is included in the example app (using the [sqflite](https://pub.dev/packages/sqflite) package).
+
+Fixed a few bugs.
+
 ## 7.1.0
 
 Added `tasksFinished` method that returns `true` if all tasks in the group have finished

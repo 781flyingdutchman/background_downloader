@@ -243,6 +243,9 @@ print('Taskid ${record.taskId} with task ${record.task} has '
 You can interact with the `database` using `allRecords`, `allRecordsOlderThan`, `recordForId`,`deleteAllRecords`,
 `deleteRecordWithId` etc. If you only want to track tasks in a specific [group](#grouping-tasks), call `trackTasksInGroup` instead.
 
+By default, the downloader uses a modified version of the [localstore](https://pub.dev/packages/localstore) package to store the `TaskRecord` and other objects. To use a different persistent storage solution, create a class that implements the `PersistentStorage` interface, and initialize the downloader by calling `FileDownloader(persistentStorage: yourStorageClass())` as the first use of the `FileDownloader`.
+
+
 ## Notifications
 
 On iOS and Android, for downloads only, the downloader can generate notifications to keep the user informed of progress also when the app is in the background, and allow pause/resume and cancellation of an ongoing download from those notifications.
