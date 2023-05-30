@@ -27,7 +27,6 @@ import 'persistent_storage.dart';
 abstract class BaseDownloader {
   final log = Logger('BaseDownloader');
 
-
   static const databaseVersion = 1;
 
   /// Persistent storage
@@ -72,54 +71,11 @@ abstract class BaseDownloader {
 
   /// Initialize
   ///
-  /// Initializes the Localstore instance and if necessary perform database
+  /// Initializes the PersistentStorage instance and if necessary perform database
   /// migration, then initializes the subclassed implementation for
   /// desktop or native
   @mustCallSuper
-  Future<void> initialize() async {
-    // final metaData =
-    //     await _db.collection(metaDataCollection).doc('metaData').get();
-    // final version = metaData?['version'] ?? 0;
-    // if (version != databaseVersion) {
-    //   log.fine('Migrating database from version $version to $databaseVersion');
-    //   switch (version) {
-    //     case 0:
-    //       // move files from docDir to supportDir
-    //       final docDir = await getApplicationDocumentsDirectory();
-    //       final supportDir = await getApplicationSupportDirectory();
-    //       for (String path in [
-    //         resumeDataPath,
-    //         pausedTasksPath,
-    //         modifiedTasksPath,
-    //         Database.tasksPath
-    //       ]) {
-    //         try {
-    //           final fromPath = join(docDir.path, path);
-    //           if (await Directory(fromPath).exists()) {
-    //             log.finest('Moving $path to support directory');
-    //             final toPath = join(supportDir.path, path);
-    //             await Directory(toPath).create(recursive: true);
-    //             await Directory(fromPath).list().forEach((entity) {
-    //               if (entity is File) {
-    //                 entity.copySync(join(toPath, basename(entity.path)));
-    //               }
-    //             });
-    //             await Directory(fromPath).delete(recursive: true);
-    //           }
-    //         } catch (e) {
-    //           log.fine('Error migrating database for path $path: $e');
-    //         }
-    //       }
-    //
-    //     default:
-    //       log.warning('Illegal starting version: $version');
-    //   }
-    //   await _db
-    //       .collection(metaDataCollection)
-    //       .doc('metaData')
-    //       .set({'version': databaseVersion});
-    // }
-  }
+  Future<void> initialize() => _storage.migrateIfNeeded();
 
   /// Retrieve data that was stored locally because it could not be
   /// delivered to the downloader

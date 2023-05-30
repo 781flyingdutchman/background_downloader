@@ -20,10 +20,10 @@ final db = LocalStorePersistentStorage();
 final database = Database(db);
 
 Future<void> deleteAllTaskDataFromFileSystem() async {
-  final docDirTasksDir = path.join(
-      (await getApplicationDocumentsDirectory()).path, tasksPath);
-  final supportDirTasksDir = path.join(
-      (await getApplicationSupportDirectory()).path, tasksPath);
+  final docDirTasksDir =
+      path.join((await getApplicationDocumentsDirectory()).path, tasksPath);
+  final supportDirTasksDir =
+      path.join((await getApplicationSupportDirectory()).path, tasksPath);
   try {
     await Directory(docDirTasksDir).delete(recursive: true);
   } catch (e) {

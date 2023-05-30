@@ -1,12 +1,13 @@
 import 'dart:async';
+import 'dart:io';
+
+import 'package:logging/logging.dart';
+import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'database.dart';
 import 'localstore/localstore.dart';
 import 'models.dart';
-
-typedef JsonMap = Map<String, dynamic>;
-
-final _illegalPathCharacters = RegExp(r'[\\/:*?"<>|]');
 
 /// Interface for the persistent storage used to back the downloader
 ///
@@ -88,17 +89,21 @@ abstract interface class PersistentStorage {
   Future<(String, int)> get storedDatabaseVersion;
 
   /// Migrate the data from this name and version to the current
-  /// name and version, as returned by [currentDatabaseVersion]
+  /// name and version, as returned by [currentDatabaseVersion], if needed
   ///
   /// Returns true if successful. If not successful, the old data
   /// may not have been migrated, but the new version will still work
-  Future<bool> migrate((String, int) from);
+  Future<bool> migrateIfNeeded();
 }
+
+typedef JsonMap = Map<String, dynamic>;
 
 /// Default implementation of [PersistentStorage] using Localstore package
 class LocalStorePersistentStorage implements PersistentStorage {
+  final log = Logger('LocalStorePersistentStorage');
   final _db = Localstore.instance;
-
+  final _illegalPathCharacters = RegExp(r'[\\/:*?"<>|]');
+  
   static const taskRecordsPath = 'backgroundDownloaderTaskRecords';
   static const resumeDataPath = 'backgroundDownloaderResumeData';
   static const pausedTasksPath = 'backgroundDownloaderPausedTasks';
@@ -134,40 +139,29 @@ class LocalStorePersistentStorage implements PersistentStorage {
     }
   }
 
-
   /// Returns possibly modified id, safe for storing in the localStore
   String _safeId(String id) => id.replaceAll(_illegalPathCharacters, '_');
 
   /// Returns possibly modified id, safe for storing in the localStore, or null
   /// if [id] is null
-  String? _optionalSafeId(String? id) =>
+  String? _safeIdOrNull(String? id) =>
       id?.replaceAll(_illegalPathCharacters, '_');
 
   @override
-  // TODO: implement currentDatabaseVersion
-  (String, int) get currentDatabaseVersion => throw UnimplementedError();
-
-  @override
-  Future<bool> migrate((String, int) from) {
-    // TODO: implement migrate
-    throw UnimplementedError();
-  }
-
-  @override
   Future<void> removeModifiedTask(String? taskId) =>
-      remove(modifiedTasksPath, _optionalSafeId(taskId));
+      remove(modifiedTasksPath, _safeIdOrNull(taskId));
 
   @override
   Future<void> removePausedTask(String? taskId) =>
-      remove(pausedTasksPath, _optionalSafeId(taskId));
+      remove(pausedTasksPath, _safeIdOrNull(taskId));
 
   @override
   Future<void> removeResumeData(String? taskId) =>
-      remove(resumeDataPath, _optionalSafeId(taskId));
+      remove(resumeDataPath, _safeIdOrNull(taskId));
 
   @override
   Future<void> removeTaskRecord(String? taskId) =>
-      remove(taskRecordsPath, _optionalSafeId(taskId));
+      remove(taskRecordsPath, _safeIdOrNull(taskId));
 
   @override
   Future<List<Task>> retrieveAllModifiedTasks() async {
@@ -254,5 +248,62 @@ class LocalStorePersistentStorage implements PersistentStorage {
     final metaData =
         await _db.collection(metaDataCollection).doc('metaData').get();
     return ('Localstore', metaData?['version'] as int? ?? 0);
+  }
+
+  @override
+  (String, int) get currentDatabaseVersion => ('Localstore', 1);
+
+  @override
+  Future<bool> migrateIfNeeded() async {
+    final (currentName, currentVersion) = currentDatabaseVersion;
+    final (storedName, storedVersion) = await storedDatabaseVersion;
+    if (storedName != currentName) {
+      log.warning('Cannot migrate from database name $storedName');
+      return false;
+    }
+    if (storedVersion == currentVersion) {
+      return true;
+    }
+    log.fine(
+        'Migrating $currentName database from version $storedVersion to $currentVersion');
+    var success = false;
+    switch (storedVersion) {
+      case 0:
+        // move files from docDir to supportDir
+        final docDir = await getApplicationDocumentsDirectory();
+        final supportDir = await getApplicationSupportDirectory();
+        for (String path in [
+          resumeDataPath,
+          pausedTasksPath,
+          modifiedTasksPath,
+          taskRecordsPath
+        ]) {
+          try {
+            final fromPath = join(docDir.path, path);
+            if (await Directory(fromPath).exists()) {
+              log.finest('Moving $path to support directory');
+              final toPath = join(supportDir.path, path);
+              await Directory(toPath).create(recursive: true);
+              await Directory(fromPath).list().forEach((entity) {
+                if (entity is File) {
+                  entity.copySync(join(toPath, basename(entity.path)));
+                }
+              });
+              await Directory(fromPath).delete(recursive: true);
+            }
+          } catch (e) {
+            log.fine('Error migrating database for path $path: $e');
+          }
+        }
+        success = true;
+
+      default:
+        log.warning('Illegal starting version: $storedVersion');
+    }
+    await _db
+        .collection(metaDataCollection)
+        .doc('metaData')
+        .set({'version': currentVersion});
+    return success;
   }
 }

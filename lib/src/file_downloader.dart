@@ -61,10 +61,12 @@ interface class FileDownloader {
   final _notificationConfigs = <TaskNotificationConfig>[];
 
   factory FileDownloader({PersistentStorage? persistentStorage}) {
-    assert(_singleton == null || persistentStorage == null,
-    'You can only supply a persistentStorage on the very first call to '
+    assert(
+        _singleton == null || persistentStorage == null,
+        'You can only supply a persistentStorage on the very first call to '
         'FileDownloader()');
-    _singleton ??= FileDownloader._internal(persistentStorage ?? LocalStorePersistentStorage());
+    _singleton ??= FileDownloader._internal(
+        persistentStorage ?? LocalStorePersistentStorage());
     return _singleton!;
   }
 

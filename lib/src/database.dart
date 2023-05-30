@@ -10,7 +10,6 @@ import 'models.dart';
 ///
 /// This object is accessed by the [Downloader] and [BaseDownloader]
 interface class Database {
-
   static Database? _instance;
   late final PersistentStorage _storage;
 
@@ -47,7 +46,8 @@ interface class Database {
   }
 
   /// Return [TaskRecord] for this [taskId] or null if not found
-  Future<TaskRecord?> recordForId(String taskId) => _storage.retrieveTaskRecord(taskId);
+  Future<TaskRecord?> recordForId(String taskId) =>
+      _storage.retrieveTaskRecord(taskId);
 
   /// Return list of [TaskRecord] corresponding to the [taskIds]
   ///
@@ -92,7 +92,8 @@ interface class Database {
   ///
   /// This is used by the [FileDownloader] to track tasks, and should not
   /// normally be used by the user of this package
-  Future<void> updateRecord(TaskRecord record) async => _storage.storeTaskRecord(record);
+  Future<void> updateRecord(TaskRecord record) async =>
+      _storage.storeTaskRecord(record);
 }
 
 /// Record containing task, task status and task progress.
