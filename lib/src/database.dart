@@ -1,6 +1,7 @@
+import 'package:background_downloader/src/persistent_storage.dart';
+
 import 'base_downloader.dart';
 import 'exceptions.dart';
-import 'localstore/localstore.dart';
 import 'models.dart';
 
 /// Persistent database used for tracking task status and progress.
@@ -9,24 +10,31 @@ import 'models.dart';
 ///
 /// This object is accessed by the [Downloader] and [BaseDownloader]
 interface class Database {
-  static final Database _instance = Database._internal();
-  final _db = Localstore.instance;
   static const tasksPath = 'backgroundDownloaderTaskRecords';
 
-  factory Database() => _instance;
+  static Database? _instance;
+  late final PersistentStorage _storage;
 
-  Database._internal();
+  factory Database(PersistentStorage persistentStorage) {
+    _instance ??= Database._internal(persistentStorage);
+    return _instance!;
+  }
+
+  Database._internal(PersistentStorage persistentStorage) {
+    assert(_instance == null);
+    _storage = persistentStorage;
+  }
 
   /// Returns all [TaskRecord]
   ///
   /// Optionally, specify a [group] to filter by
   Future<List<TaskRecord>> allRecords({String? group}) async {
-    final allJsonRecords = await _db.collection(tasksPath).get();
+    final allJsonRecords = await _storage.retrieveAll(tasksPath);
     final allRecords =
-        allJsonRecords?.values.map((e) => TaskRecord.fromJsonMap(e));
+        allJsonRecords.values.map((e) => TaskRecord.fromJsonMap(e));
     return group == null
-        ? allRecords?.toList() ?? []
-        : allRecords?.where((element) => element.group == group).toList() ?? [];
+        ? allRecords.toList()
+        : allRecords.where((element) => element.group == group).toList();
   }
 
   /// Returns all [TaskRecord] older than [age]
@@ -41,9 +49,10 @@ interface class Database {
         .toList();
   }
 
-  /// Return [TaskRecord] for this [taskId]
+  /// Return [TaskRecord] for this [taskId] or null if not found
   Future<TaskRecord?> recordForId(String taskId) async {
-    final jsonMap = await _db.collection(tasksPath).doc(_safeId(taskId)).get();
+    final jsonMap = await _storage.retrieve(tasksPath, _safeId
+      (taskId));
     return jsonMap != null ? TaskRecord.fromJsonMap(jsonMap) : null;
   }
 
@@ -67,7 +76,8 @@ interface class Database {
   /// Optionally, specify a [group] to filter by
   Future<void> deleteAllRecords({String? group}) async {
     if (group == null) {
-      return _db.collection(tasksPath).delete();
+      await _storage.delete(tasksPath); // return value ignored
+      return;
     }
     final allRecordsInGroup = await allRecords(group: group);
     await deleteRecordsWithIds(
@@ -81,7 +91,7 @@ interface class Database {
   /// Delete records with these [taskIds]
   Future<void> deleteRecordsWithIds(Iterable<String> taskIds) async {
     for (var taskId in taskIds) {
-      await _db.collection(tasksPath).doc(_safeId(taskId)).delete();
+      await _storage.delete(tasksPath, _safeId(taskId));
     }
   }
 
@@ -90,10 +100,7 @@ interface class Database {
   /// This is used by the [FileDownloader] to track tasks, and should not
   /// normally be used by the user of this package
   Future<void> updateRecord(TaskRecord record) async {
-    await _db
-        .collection(tasksPath)
-        .doc(_safeId(record.taskId))
-        .set(record.toJsonMap());
+    await _storage.store(record.toJsonMap(), tasksPath, record.taskId);
   }
 
   final _illegalPathCharacters = RegExp(r'[\\/:*?"<>|]');

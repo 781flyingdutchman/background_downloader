@@ -13,11 +13,12 @@ import 'desktop_downloader.dart';
 import 'exceptions.dart';
 import 'localstore/localstore.dart';
 import 'models.dart';
+import 'persistent_storage.dart';
 
 /// Provides access to all functions of the plugin in a single place.
 interface class FileDownloader {
   final _log = Logger('FileDownloader');
-  static final FileDownloader _singleton = FileDownloader._internal();
+  static FileDownloader? _singleton;
 
   /// If no group is specified the default group name will be used
   static const defaultGroup = 'default';
@@ -30,11 +31,11 @@ interface class FileDownloader {
   ///
   /// Activate tracking by calling [trackTasks], and access the records in the
   /// database via this [database] object.
-  final database = Database();
+  late final Database database;
 
   final _taskCompleters = <Task, Completer<TaskStatusUpdate>>{};
   final _batches = <Batch>[];
-  final _downloader = BaseDownloader.instance();
+  late final BaseDownloader _downloader;
 
   /// Do not use: for testing only
   @visibleForTesting
@@ -59,9 +60,18 @@ interface class FileDownloader {
   /// List of notification configurations
   final _notificationConfigs = <TaskNotificationConfig>[];
 
-  factory FileDownloader() => _singleton;
+  factory FileDownloader({PersistentStorage? persistentStorage}) {
+    assert(_singleton == null || persistentStorage == null,
+    'You can only supply a persistentStorage on the very first call to '
+        'FileDownloader()');
+    _singleton ??= FileDownloader._internal(persistentStorage ?? LocalStorePersistentStorage());
+    return _singleton!;
+  }
 
-  FileDownloader._internal();
+  FileDownloader._internal(PersistentStorage persistentStorage) {
+    database = Database(persistentStorage);
+    _downloader = BaseDownloader.instance(persistentStorage, database);
+  }
 
   /// Stream of [TaskUpdate] updates for downloads that do
   /// not have a registered callback
