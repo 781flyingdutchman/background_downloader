@@ -67,26 +67,23 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
     // A 'failed' progress update is only provided if
     // a retry is not needed: if it is needed, a `waitingToRetry` progress update
     // will be generated on the Dart side
-    if isFinalState(status: status) {
-        switch (status) {
-        case .complete:
-            processProgressUpdate(task: task, progress: 1.0)
-        case .failed:
-            if !retryNeeded {
-                processProgressUpdate(task: task, progress: -1.0)
-            }
-        case .canceled:
-            processProgressUpdate(task: task, progress: -2.0)
-        case .notFound:
-            processProgressUpdate(task: task, progress: -3.0)
-        default:
-            break
+    switch (status) {
+    case .complete:
+        processProgressUpdate(task: task, progress: 1.0)
+    case .failed:
+        if !retryNeeded {
+            processProgressUpdate(task: task, progress: -1.0)
         }
-        // remove from persistent storage
-        Downloader.lastProgressUpdate.removeValue(forKey: task.taskId)
-        Downloader.nextProgressUpdateTime.removeValue(forKey: task.taskId)
-        Downloader.localResumeData.removeValue(forKey: task.taskId)
+    case .canceled:
+        processProgressUpdate(task: task, progress: -2.0)
+    case .notFound:
+        processProgressUpdate(task: task, progress: -3.0)
+    case .paused:
+        processProgressUpdate(task: task, progress: -5.0)
+    default:
+        break
     }
+
     if providesStatusUpdates(downloadTask: task) || retryNeeded {
         let finalTaskException = taskException == nil ? TaskException(type: .general,
                                                            httpResponseCode: -1, description: "") : taskException
@@ -101,6 +98,12 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
             jsonObject["taskStatus"] = status.rawValue
             storeLocally(prefsKey: Downloader.keyStatusUpdateMap, taskId: task.taskId, item: jsonObject)
         }
+    }
+    if isFinalState(status: status) {
+        // remove from persistent storage
+        Downloader.lastProgressUpdate.removeValue(forKey: task.taskId)
+        Downloader.nextProgressUpdateTime.removeValue(forKey: task.taskId)
+        Downloader.localResumeData.removeValue(forKey: task.taskId)
     }
 }
 

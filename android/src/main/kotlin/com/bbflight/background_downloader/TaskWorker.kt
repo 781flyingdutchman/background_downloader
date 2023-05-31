@@ -152,34 +152,37 @@ class TaskWorker(
             // a retry is not needed: if it is needed, a `waitingToRetry` progress update
             // will be generated on the Dart side
             var canSendStatusUpdate = true  // may become false for cancellations
-            if (status.isFinalState()) {
-                when (status) {
-                    TaskStatus.complete -> processProgressUpdate(
-                        task, 1.0, prefs
-                    )
+            when (status) {
+                TaskStatus.complete -> processProgressUpdate(
+                    task, 1.0, prefs
+                )
 
-                    TaskStatus.failed -> if (!retryNeeded) processProgressUpdate(
-                        task, -1.0, prefs
-                    )
+                TaskStatus.failed -> if (!retryNeeded) processProgressUpdate(
+                    task, -1.0, prefs
+                )
 
-                    TaskStatus.canceled -> {
-                        canSendStatusUpdate = canSendCancellation(task)
-                        if (canSendStatusUpdate) {
-                            BackgroundDownloaderPlugin.canceledTaskIds[task.taskId] =
-                                currentTimeMillis()
-                            processProgressUpdate(
-                                task, -2.0, prefs
-                            )
-                        }
+                TaskStatus.canceled -> {
+                    canSendStatusUpdate = canSendCancellation(task)
+                    if (canSendStatusUpdate) {
+                        BackgroundDownloaderPlugin.canceledTaskIds[task.taskId] =
+                            currentTimeMillis()
+                        processProgressUpdate(
+                            task, -2.0, prefs
+                        )
                     }
-
-                    TaskStatus.notFound -> processProgressUpdate(
-                        task, -3.0, prefs
-                    )
-
-                    else -> {}
                 }
+
+                TaskStatus.notFound -> processProgressUpdate(
+                    task, -3.0, prefs
+                )
+
+                TaskStatus.paused -> processProgressUpdate(
+                    task, -5.0, prefs
+                )
+
+                else -> {}
             }
+
             // Post update if task expects one, or if failed and retry is needed
             if (canSendStatusUpdate && (task.providesStatusUpdates() || retryNeeded)) {
                 val finalTaskException = taskException ?: TaskException(ExceptionType.general)
