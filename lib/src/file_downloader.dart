@@ -105,7 +105,7 @@ interface class FileDownloader {
       TaskStatusCallback? taskStatusCallback,
       TaskProgressCallback? taskProgressCallback,
       TaskNotificationTapCallback? taskNotificationTapCallback}) {
-    assert(taskStatusCallback != null || taskProgressCallback != null,
+    assert(taskStatusCallback != null || taskProgressCallback != null || taskNotificationTapCallback != null,
         'Must provide at least one callback');
     if (taskStatusCallback != null) {
       _downloader.groupStatusCallbacks[group] = taskStatusCallback;
