@@ -103,7 +103,7 @@ abstract class BaseDownloader {
         // map is <taskId, Task/progress> where progress is added to Task JSON
         final payload = progressUpdateMap[taskId];
         final task = Task.createFromJsonMap(payload);
-        final progress = payload['progress'];
+        final double progress = payload['progress'];
         processProgressUpdate(TaskProgressUpdate(task, progress));
       }
       _retrievedLocallyStoredData = true;
@@ -513,8 +513,8 @@ abstract class BaseDownloader {
   /// update the task in the database
   void _emitProgressUpdate(TaskProgressUpdate update) {
     final task = update.task;
-    _updateTaskInDatabase(task, progress: update.progress);
     if (task.providesProgressUpdates) {
+      _updateTaskInDatabase(task, progress: update.progress);
       final taskProgressCallback = groupProgressCallbacks[task.group];
       if (taskProgressCallback != null) {
         taskProgressCallback(update);
@@ -536,9 +536,9 @@ abstract class BaseDownloader {
       TaskException? taskException}) async {
     if (trackedGroups.contains(null) || trackedGroups.contains(task.group)) {
       if (status == null && progress != null) {
-        // update existing record with progress only
+        // update existing record with progress only (provided it's not 'paused')
         final existingRecord = await database.recordForId(task.taskId);
-        if (existingRecord != null) {
+        if (existingRecord != null && progress != progressPaused) {
           database.updateRecord(existingRecord.copyWith(progress: progress));
         }
         return;
@@ -555,8 +555,15 @@ abstract class BaseDownloader {
           TaskStatus.paused => progressPaused
         };
       }
-      database
-          .updateRecord(TaskRecord(task, status!, progress!, taskException));
+      if (status != TaskStatus.paused) {
+        database
+            .updateRecord(TaskRecord(task, status!, progress!, taskException));
+      } else {
+        // if paused, don't modify the stored progress
+        final existingRecord = await database.recordForId(task.taskId);
+        database.updateRecord(TaskRecord(
+            task, status!, existingRecord?.progress ?? 0, taskException));
+      }
     }
   }
 }

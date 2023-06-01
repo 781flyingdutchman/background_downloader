@@ -632,7 +632,6 @@ interface class FileDownloader {
   /// If the [Task.allowPause] field is set to false (default) or if this is
   /// a POST request, this method returns false immediately.
   Future<bool> pause(DownloadTask task) async {
-    _log.warning('allowPause = ${task.allowPause}');
     if (task.allowPause && task.post == null) {
       return _downloader.pause(task);
     }

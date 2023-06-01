@@ -34,41 +34,28 @@ class Utils implements UtilsImpl {
       final dbDir = await Localstore.instance.databaseDirectory;
       final fullPath = '${dbDir.path}$path';
       final dir = Directory(fullPath);
-      if (!dir.existsSync()) {
-        dir.createSync(recursive: true);
+      if (!await dir.exists()) {
+        return {};
       }
       List<FileSystemEntity> entries =
           dir.listSync(recursive: false).whereType<File>().toList();
-      if (conditions != null && conditions.first.isNotEmpty) {
-        return await _getAll(entries);
-        /*
-        // With conditions
-        entries.forEach((e) async {
-          final path = e.path.replaceAll(_docDir!.absolute.path, '');
-          final file = await _getFile(path);
-          _readFile(file!).then((data) {
-            if (data is Map<String, dynamic>) {
-              _data[path] = data;
-            }
-          });
-        });
-        return _data;
-        */
-      } else {
-        return await _getAll(entries);
-      }
+      return await _getAll(entries);
     } else {
-      // Reads the document referenced by this [DocumentRef].
-      final file = await _getFile(path);
-      final randomAccessFile = file!.openSync(mode: FileMode.append);
-      final data = await _readFile(randomAccessFile);
-      randomAccessFile.closeSync();
-      if (data is Map<String, dynamic>) {
-        final key = path.replaceAll(lastPathComponentRegEx, '');
-        // ignore: close_sinks
-        final storage = _storageCache.putIfAbsent(key, () => _newStream(key));
-        storage.add(data);
-        return data;
+      try {
+        // Reads the document referenced by this [DocumentRef].
+        final file = await _getFile(path);
+        final randomAccessFile = file!.openSync(mode: FileMode.append);
+        final data = await _readFile(randomAccessFile);
+        randomAccessFile.closeSync();
+        if (data is Map<String, dynamic>) {
+          final key = path.replaceAll(lastPathComponentRegEx, '');
+          // ignore: close_sinks
+          final storage = _storageCache.putIfAbsent(key, () => _newStream(key));
+          storage.add(data);
+          return data;
+        }
+      } on PathNotFoundException {
+        // return null if not found
       }
     }
     return null;
@@ -106,12 +93,16 @@ class Utils implements UtilsImpl {
     await Future.forEach(entries, (FileSystemEntity e) async {
       final path = e.path.replaceAll(dbDir.path, '');
       final file = await _getFile(path);
-      final randomAccessFile = await file!.open(mode: FileMode.append);
-      final data = await _readFile(randomAccessFile);
-      await randomAccessFile.close();
+      try {
+        final randomAccessFile = await file!.open(mode: FileMode.append);
+        final data = await _readFile(randomAccessFile);
+        await randomAccessFile.close();
 
-      if (data is Map<String, dynamic>) {
-        items[path] = data;
+        if (data is Map<String, dynamic>) {
+          items[path] = data;
+        }
+      } on PathNotFoundException {
+        // ignore if not found
       }
     });
 
@@ -184,15 +175,17 @@ class Utils implements UtilsImpl {
     final serialized = json.encode(data);
     final buffer = utf8.encode(serialized);
     final file = await _getFile(path);
-    final randomAccessFile = file!.openSync(mode: FileMode.append);
-
-    randomAccessFile.lockSync();
-    randomAccessFile.setPositionSync(0);
-    randomAccessFile.writeFromSync(buffer);
-    randomAccessFile.truncateSync(buffer.length);
-    randomAccessFile.unlockSync();
-    randomAccessFile.closeSync();
-
+    try {
+      final randomAccessFile = file!.openSync(mode: FileMode.append);
+      randomAccessFile.lockSync();
+      randomAccessFile.setPositionSync(0);
+      randomAccessFile.writeFromSync(buffer);
+      randomAccessFile.truncateSync(buffer.length);
+      randomAccessFile.unlockSync();
+      randomAccessFile.closeSync();
+    } on PathNotFoundException {
+      // ignore if path not found
+    }
     final key = path.replaceAll(lastPathComponentRegEx, '');
     // ignore: close_sinks
     final storage = _storageCache.putIfAbsent(key, () => _newStream(key));

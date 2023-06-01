@@ -5,6 +5,10 @@ Added `DownloadProgressIndicator` widget and modified the example app to show ho
 The widget is configurable (e.g. pause and cancel buttons) and can show multiple downloads simultaneously in either an expanded
 or collapsed mode.
 
+If tracking downloads in persistent storage, pausing a file now does not override the stored progress with `progressPaused`.
+
+Fixed bugs.
+
 ## 7.2.0
 
 Added option to use a different persistent storage solution than the one provided by default. The downloader stores a few things in persistent storage, and uses a modified version of the [localstore](https://pub.dev/packages/localstore) package by default. To use a different persistent storage solution, create a class that implements the `PersistentStorage` interface, and initialize the downloader by calling `FileDownloader(persistentStorage: yourStorageClass())` as the first use of the `FileDownloader`.
