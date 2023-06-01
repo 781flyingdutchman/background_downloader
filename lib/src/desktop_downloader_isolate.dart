@@ -453,10 +453,10 @@ Future<TaskStatus> transferBytes(
 void processStatusUpdateInIsolate(
     Task task, TaskStatus status, SendPort sendPort) {
   final retryNeeded = status == TaskStatus.failed && task.retriesRemaining > 0;
-// if task is in final state, process a final progressUpdate
-// A 'failed' progress update is only provided if
-// a retry is not needed: if it is needed, a `waitingToRetry` progress update
-// will be generated in the FileDownloader
+  // if task is in final state, process a final progressUpdate
+  // A 'failed' progress update is only provided if
+  // a retry is not needed: if it is needed, a `waitingToRetry` progress update
+  // will be generated in the FileDownloader
   switch (status) {
     case TaskStatus.complete:
       processProgressUpdateInIsolate(task, progressComplete, sendPort);

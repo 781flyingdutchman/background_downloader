@@ -1,12 +1,11 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:background_downloader/background_downloader.dart';
+// ignore: unused_import
 import 'package:background_downloader_example/sqlite_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
-import 'package:provider/provider.dart';
-
-import 'widgets.dart';
 
 void main() {
   Logger.root.onRecord.listen((LogRecord rec) {
@@ -32,11 +31,11 @@ class _MyAppState extends State<MyApp> {
   bool downloadWithError = false;
   TaskStatus? downloadTaskStatus;
   DownloadTask? backgroundDownloadTask;
-  StreamController<DownloadProgressIndicatorUpdate> updateStream =
+  StreamController<TaskProgressUpdate> progressUpdateStream =
       StreamController();
 
-  // for the 'Load & Open' button
   bool loadAndOpenInProgress = false;
+  bool loadABunchInProgress = false;
 
   @override
   void initState() {
@@ -52,10 +51,11 @@ class _MyAppState extends State<MyApp> {
     // To try that, uncomment the following line, which
     // will initialize the downloader with that storage solution.
     // FileDownloader(persistentStorage: SqlitePersistentStorage());
+
+    // Configure the downloader by registering a callback and configuring
+    // notifications
     FileDownloader()
         .registerCallbacks(
-            taskStatusCallback: myDownloadStatusCallback,
-            taskProgressCallback: myDownloadProgressCallback,
             taskNotificationTapCallback: myNotificationTapCallback)
         .configureNotificationForGroup(FileDownloader.defaultGroup,
             // For the main download button
@@ -76,43 +76,26 @@ class _MyAppState extends State<MyApp> {
             complete: const TaskNotification(
                 'Download {filename}', 'Download complete'),
             tapOpensFile: true); // dog can also open directly from tap
-  }
 
-  /// Process the status updates coming from the downloader
-  ///
-  /// Stores the task status
-  void myDownloadStatusCallback(TaskStatusUpdate update) {
-    if (update.task == backgroundDownloadTask) {
-      switch (update.status) {
-        case TaskStatus.enqueued:
-        case TaskStatus.notFound:
-        case TaskStatus.failed:
-        case TaskStatus.canceled:
-        case TaskStatus.waitingToRetry:
-          buttonState = ButtonState.reset;
-          break;
-        case TaskStatus.running:
-          buttonState = ButtonState.pause;
-          break;
-        case TaskStatus.complete:
-          buttonState = ButtonState.reset;
-          break;
-        case TaskStatus.paused:
-          buttonState = ButtonState.resume;
-          break;
+    // Listen to updates and process
+    FileDownloader().updates.listen((update) {
+      switch (update) {
+        case TaskStatusUpdate _:
+          if (update.task == backgroundDownloadTask) {
+            buttonState = switch (update.status) {
+              TaskStatus.running || TaskStatus.enqueued => ButtonState.pause,
+              TaskStatus.paused => ButtonState.resume,
+              _ => ButtonState.reset
+            };
+            setState(() {
+              downloadTaskStatus = update.status;
+            });
+          }
+
+        case TaskProgressUpdate _:
+          progressUpdateStream.add(update); // pass on to widget for indicator
       }
-      setState(() {
-        downloadTaskStatus = update.status;
-      });
-    }
-  }
-
-  /// Process the progress updates coming from the downloader
-  ///
-  /// Adds an update object to the stream that the main UI listens to
-  void myDownloadProgressCallback(TaskProgressUpdate update) {
-    updateStream.add(
-        DownloadProgressIndicatorUpdate(update.task.filename, update.progress));
+    });
   }
 
   /// Process the user tapping on a notification by printing a message
@@ -123,80 +106,105 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamProvider<DownloadProgressIndicatorUpdate>.value(
-        value: updateStream.stream,
-        initialData: DownloadProgressIndicatorUpdate('', 1),
-        child: MaterialApp(
-          home: Scaffold(
-              appBar: AppBar(
-                title: const Text('background_downloader example app'),
-              ),
-              body: Center(
-                  child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          Expanded(
-                              child: Text('Force error',
-                                  style:
-                                      Theme.of(context).textTheme.titleLarge)),
-                          Switch(
-                              value: downloadWithError,
-                              onChanged: (value) {
-                                setState(() {
-                                  downloadWithError = value;
-                                });
-                              })
-                        ],
-                      ),
-                    ),
-                    Center(
-                        child: ElevatedButton(
-                      onPressed: processButtonPress,
-                      child: Text(
-                        buttonTexts[buttonState.index],
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineMedium
-                            ?.copyWith(color: Colors.white),
-                      ),
-                    )),
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Row(
-                        children: [
-                          const Expanded(child: Text('File download status:')),
-                          Text('${downloadTaskStatus ?? "undefined"}')
-                        ],
-                      ),
-                    ),
-                    Center(
-                        child: ElevatedButton(
-                            onPressed: loadAndOpenInProgress
-                                ? null
-                                : processLoadAndOpen,
-                            child: Text(
-                              'Load & Open',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineMedium
-                                  ?.copyWith(color: Colors.white),
-                            ))),
-                    Center(
-                        child: Text(
-                      loadAndOpenInProgress ? 'Loading' : '',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ))
-                  ],
+    return MaterialApp(
+      home: Scaffold(
+          appBar: AppBar(
+            title: const Text('background_downloader example app'),
+          ),
+          body: Center(
+              child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                          child: Text('Force error',
+                              style: Theme.of(context).textTheme.titleLarge)),
+                      Switch(
+                          value: downloadWithError,
+                          onChanged: (value) {
+                            setState(() {
+                              downloadWithError = value;
+                            });
+                          })
+                    ],
+                  ),
                 ),
-              )),
-              bottomSheet: const DownloadProgressIndicator()),
-        ));
+                Center(
+                    child: ElevatedButton(
+                  onPressed: processButtonPress,
+                  child: Text(
+                    buttonTexts[buttonState.index],
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineMedium
+                        ?.copyWith(color: Colors.white),
+                  ),
+                )),
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    children: [
+                      const Expanded(child: Text('File download status:')),
+                      Text('${downloadTaskStatus ?? "undefined"}')
+                    ],
+                  ),
+                ),
+                const Divider(
+                  height: 30,
+                  thickness: 5,
+                  color: Colors.grey,
+                ),
+                Center(
+                    child: ElevatedButton(
+                        onPressed:
+                            loadAndOpenInProgress ? null : processLoadAndOpen,
+                        child: Text(
+                          'Load & Open',
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineMedium
+                              ?.copyWith(color: Colors.white),
+                        ))),
+                Center(
+                    child: Text(
+                  loadAndOpenInProgress ? 'Busy' : '',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                )),
+                const Divider(
+                  height: 30,
+                  thickness: 5,
+                  color: Colors.grey,
+                ),
+                Center(
+                    child: ElevatedButton(
+                        onPressed:
+                            loadABunchInProgress ? null : processLoadABunch,
+                        child: Text(
+                          'Load a bunch',
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineMedium
+                              ?.copyWith(color: Colors.white),
+                        ))),
+                Center(
+                    child: Text(
+                  loadABunchInProgress ? 'Enqueueing' : '',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                )),
+              ],
+            ),
+          )),
+          bottomSheet: DownloadProgressIndicator(progressUpdateStream.stream,
+              showPauseButton: true,
+              showCancelButton: true,
+              backgroundColor: Colors.grey,
+              maxExpandable: 3)),
+    );
   }
 
   /// Process center button press (initially 'Download' but the text changes
@@ -261,6 +269,25 @@ class _MyAppState extends State<MyApp> {
       await FileDownloader().openFile(task: task);
       setState(() {
         loadAndOpenInProgress = false;
+      });
+    }
+  }
+
+  Future<void> processLoadABunch() async {
+    if (!loadABunchInProgress) {
+      setState(() {
+        loadABunchInProgress = true;
+      });
+      for (var i = 0; i < 5; i++) {
+        await FileDownloader().enqueue(DownloadTask(
+            url:
+                'https://storage.googleapis.com/approachcharts/test/5MB-test.ZIP',
+            filename: 'File_${Random().nextInt(1000)}',
+            updates: Updates.progress)); // must provide progress updates!
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+      setState(() {
+        loadABunchInProgress = false;
       });
     }
   }

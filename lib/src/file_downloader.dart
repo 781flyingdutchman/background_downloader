@@ -105,7 +105,10 @@ interface class FileDownloader {
       TaskStatusCallback? taskStatusCallback,
       TaskProgressCallback? taskProgressCallback,
       TaskNotificationTapCallback? taskNotificationTapCallback}) {
-    assert(taskStatusCallback != null || taskProgressCallback != null || taskNotificationTapCallback != null,
+    assert(
+        taskStatusCallback != null ||
+            taskProgressCallback != null ||
+            taskNotificationTapCallback != null,
         'Must provide at least one callback');
     if (taskStatusCallback != null) {
       _downloader.groupStatusCallbacks[group] = taskStatusCallback;
@@ -629,6 +632,7 @@ interface class FileDownloader {
   /// If the [Task.allowPause] field is set to false (default) or if this is
   /// a POST request, this method returns false immediately.
   Future<bool> pause(DownloadTask task) async {
+    _log.warning('allowPause = ${task.allowPause}');
     if (task.allowPause && task.post == null) {
       return _downloader.pause(task);
     }

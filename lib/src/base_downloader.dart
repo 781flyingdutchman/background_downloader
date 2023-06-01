@@ -212,6 +212,7 @@ abstract class BaseDownloader {
           }
         }
         processStatusUpdate(TaskStatusUpdate(task, TaskStatus.canceled));
+        processProgressUpdate(TaskProgressUpdate(task, progressCanceled));
       }
     }
   }

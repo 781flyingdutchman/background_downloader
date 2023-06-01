@@ -64,6 +64,8 @@ final result = await FileDownloader().download(task,
 ```
 Progress updates start with 0.0 when the actual download starts (which may be in the future, e.g. if waiting for a WiFi connection), and will be sent periodically, not more than twice per second per task.  If a task completes successfully you will receive a final progress update with a `progress` value of 1.0 (`progressComplete`). Failed tasks generate `progress` of `progressFailed` (-1.0), canceled tasks `progressCanceled` (-2.0), notFound tasks `progressNotFound` (-3.0), waitingToRetry tasks `progressWaitingToRetry` (-4.0) and paused tasks `progressPaused` (-5.0).
 
+A `DownloadProgressIndicator` widget is included with the package, and the example app shows how to wire it up. The widget can be configured to include pause and resume buttons, and to expand to show multiple simultaneous downloads.
+
 #### Status
 
 If you want to monitor status changes while the download is underway (i.e. not only the final state, which you will receive as the result of the `download` call) you can add a status change callback that takes the status as an argument:
@@ -117,7 +119,7 @@ Note: the reason you cannot simply pass a full absolute directory path to the do
 If you want the filename to be provided by the server (instead of assigning a value to `filename` yourself), use the following:
 ```dart
 final task = await DownloadTask(url: 'https://google.com')
-                    .withSuggestedFilename(unique: true);
+        .withSuggestedFilename(unique: true);
 ```
 
 The method `withSuggestedFilename` returns a copy of the task it is called on, with the `filename` field modified based on the filename suggested by the server, or the last path segment of the URL, or unchanged if neither is feasible. If `unique` is true, the filename will be modified such that it does not conflict with an existing filename by adding a sequence. For example "file.txt" would become "file (1).txt".
@@ -169,17 +171,17 @@ The rest of this section details [event listeners](#using-an-event-listener), [c
 Listen to updates from the downloader by listening to the `updates` stream, and process those updates centrally. For example, the following creates a listener to monitor status and progress updates for downloads, and then enqueues a task as an example:
 ```dart
 final subscription = FileDownloader().updates.listen((update) {
-    if (update is TaskStatusUpdate) {
-      print('Status update for ${update.task} with status ${update.status}');
-    } else if (update is TaskProgressUpdate) {
-      print('Progress update for ${update.task} with progress ${update.progress}');
-  });
+if (update is TaskStatusUpdate) {
+print('Status update for ${update.task} with status ${update.status}');
+} else if (update is TaskProgressUpdate) {
+print('Progress update for ${update.task} with progress ${update.progress}');
+});
 // define the task
 final task = DownloadTask(
-    url: 'https://google.com',
-    filename: 'google.html',
-    updates:
-        Updates.statusAndProgress); // needed to also get progress updates
+url: 'https://google.com',
+filename: 'google.html',
+updates:
+Updates.statusAndProgress); // needed to also get progress updates
 // enqueue the download
 final successFullyEnqueued = await FileDownloader().enqueue(task);
 // updates will be sent to your subscription listener
@@ -286,11 +288,11 @@ To respond to the user tapping a notification, register a callback that takes `T
 
 ```dart
 FileDownloader().registerCallbacks(
-            taskNotificationTapCallback: myNotificationTapCallback);
-            
+taskNotificationTapCallback: myNotificationTapCallback);
+
 void myNotificationTapCallback(Task task, NotificationType notificationType) {
-    print('Tapped notification $notificationType for taskId ${task.taskId}');
-  }
+print('Tapped notification $notificationType for taskId ${task.taskId}');
+}
 ```
 
 ### Opening a downloaded file
@@ -323,9 +325,9 @@ The download directories specified in the `BaseDirectory` enum are all local to 
 ```dart
 final newFilepath = await FileDownloader().moveToSharedStorage(task, SharedStorage.downloads);
 if (newFilePath == null) {
-    ... // handle error
+... // handle error
 } else {
-    ... // do something with the newFilePath
+... // do something with the newFilePath
 }
 ```
 
@@ -382,15 +384,15 @@ Note that each of these methods accept a `group` parameter that targets the meho
 Because an app may require different types of downloads, and handle those differently, you can specify a `group` with your task, and register callbacks specific to each `group`. If no group is specified the default group `FileDownloader.defaultGroup` is used. For example, to create and handle downloads for group 'bigFiles':
 ```dart
 FileDownloader().registerCallbacks(
-      group: 'bigFiles'
-      taskStatusCallback: bigFilesDownloadStatusCallback,
-      taskProgressCallback: bigFilesDownloadProgressCallback);
+group: 'bigFiles'
+taskStatusCallback: bigFilesDownloadStatusCallback,
+taskProgressCallback: bigFilesDownloadProgressCallback);
 final task = DownloadTask(
-      group: 'bigFiles',
-      url: 'https://google.com',
-      filename: 'google.html',
-      updates:
-          Updates.statusAndProgress);
+group: 'bigFiles',
+url: 'https://google.com',
+filename: 'google.html',
+updates:
+Updates.statusAndProgress);
 final successFullyEnqueued = await FileDownloader().enqueue(task);
 ```
 
