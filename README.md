@@ -19,6 +19,114 @@ The plugin supports [headers](#headers), [retries](#retries), [requiring WiFi](#
 
 No setup is required for [Android](#android) (except when using notifications), Windows and Linux, and only minimal [setup for iOS](#ios) and [MacOS](#macos).
 
+## Quickstart
+
+### Downloads
+
+```dart
+/// define the download task (subset of parameters shown)
+final task = DownloadTask(
+              url: 'https://google.com/search',
+              urlQueryParameters: {'q': 'pizza'},
+              filename: 'results.html',
+              headers: {'myHeader': 'value'},
+              directory: 'my_sub_directory',
+              requiresWiFi: true,
+              retries: 5,
+              allowPause: true,
+              metaData: 'data for me');
+              
+// Start download, and wait for result. Show progress and status changes
+// while downloading
+final result = await FileDownloader().download(task,
+    onProgress: (progress) => print('Progress: ${progress * 100}%'),
+    onStatus: (status) => print('Status: $status'));
+    
+// Act on the result
+switch (result) {
+    case TaskStatus.complete:
+        print('Success!');
+        
+    case TaskStatus.canceled:
+        print('Download was canceled');
+        
+    case TaskStatus.paused:
+        print('Download was paused');
+        
+    default:
+        print('Download not successful');
+```
+
+Alternatively, use an [event listener](#using-an-event-listener) to process all updates centrally.
+
+### Uploads
+
+```dart
+/// define the multi-part upload task (subset of parameters shown)
+final task = UploadTask(
+              url: 'https://myserver.com/uploads',
+              filename: 'myData.txt',
+              fields: {'datafield': 'value'},
+              fileField: 'myFile'
+);
+              
+// Start upload, and wait for result. Show progress and status changes
+// while uploading
+final result = await FileDownloader().upload(task,
+    onProgress: (progress) => print('Progress: ${progress * 100}%'),
+    onStatus: (status) => print('Status: $status'));
+    
+// Act on result, similar to download
+```
+
+### Batch download
+```dart
+final tasks = [task1, task2, task3]; // a list of Download tasks
+
+// download the batch
+final result = await FileDownloader().downloadBatch(tasks,
+    batchProgressCallback: (succeeded, failed) => 
+        print('Completed ${succeeded + failed} out of ${tasks.length}, $failed failed')
+    );
+
+```
+
+### Task tracking database
+```dart
+// activate tracking at the start of your app
+await FileDownloader().trackTasks();
+
+// somewhere else: enqueue a download (does not complete immediately)
+final task = DownloadTask(
+        url: 'https://google.com',
+        filename: 'testfile.txt');
+final successfullyEnqueued = await FileDownloader().enqueue(task);
+
+// query the tracking database, returning a record for each task
+final records = await FileDownloader().database.allRecords();
+for (record in records) {
+    print('Task ${record.tasksId} status is ${record.status}');
+    if (record.status == TaskStatus.running) {
+        print('-- progress ${record.progress * 100}%');
+    }
+};
+
+// or get record for specific task
+final record = await FileDownloader().database.recordForId(task.taskId);
+```
+
+### Notifications
+```dart
+// configure notification for all tasks
+FileDownloader().configureNotification(
+    running: TaskNotification('Downloading', 'file: {filename}'),
+    complete: TaskNotification('Download finished', 'file: {filename}'),
+    progressBar: true);
+
+// all downloads will now show a notification while downloading, and when complete. 
+// {filename} will be replaced with the task's filename.
+```
+
 ## Contents
 
 - [Basic use](#basic-use)
@@ -170,21 +278,22 @@ The rest of this section details [event listeners](#using-an-event-listener), [c
 
 Listen to updates from the downloader by listening to the `updates` stream, and process those updates centrally. For example, the following creates a listener to monitor status and progress updates for downloads, and then enqueues a task as an example:
 ```dart
-final subscription = FileDownloader().updates.listen((update) {
-if (update is TaskStatusUpdate) {
-print('Status update for ${update.task} with status ${update.status}');
-} else if (update is TaskProgressUpdate) {
-print('Progress update for ${update.task} with progress ${update.progress}');
-});
-// define the task
-final task = DownloadTask(
-url: 'https://google.com',
-filename: 'google.html',
-updates:
-Updates.statusAndProgress); // needed to also get progress updates
-// enqueue the download
-final successFullyEnqueued = await FileDownloader().enqueue(task);
-// updates will be sent to your subscription listener
+    final subscription = FileDownloader().updates.listen((update) {
+        if (update is TaskStatusUpdate) {
+            print('Status update for ${update.task} with status ${update.status}');
+        } else if (update is TaskProgressUpdate) {
+            print('Progress update for ${update.task} with progress ${update.progress}');
+    });
+    
+    // define the task
+    final task = DownloadTask(
+        url: 'https://google.com',
+        filename: 'google.html',
+        updates: Updates.statusAndProgress); // needed to also get progress updates
+        
+    // enqueue the download
+    final successFullyEnqueued = await FileDownloader().enqueue(task);
+    // updates will be sent to your subscription listener
 ```
 
 Note that `successFullyEnqueued` only refers to the enqueueing of the download task, not its result, which must be monitored via the listener. Also note that in order to get progress updates the task must set its `updates` field to a value that includes progress updates. In the example, we are asking for both status and progress updates, but other combinations are possible. For example, if you set `updates` to `Updates.status` then the task will only generate status updates and no progress updates. You define what updates to receive on a task by task basis via the `Task.updates` field, which defaults to status updates only.
@@ -516,4 +625,4 @@ Then do the same thing in macos/Runner/Release.entitlements.
 * On Android, downloads are by default limited to 9 minutes, after which the download will end with `TaskStatus.failed`. To allow for longer downloads, set the `DownloadTask.allowPause` field to true: if the task times out, it will pause and automatically resume, eventually downloading the entire file.
 * On iOS, once enqueued (i.e. `TaskStatus.enqueued`), a background download must complete within 4 hours
 * Redirects will be followed
-* Background downloads and uploads are aggressively controlled by the native platform. You should therefore always assume that a task that was started may not complete, and may disappear without providing any status or progress update to indicate why. For example, if a user swipes your app up from the iOS App Switcher, all scheduled background downloads are terminated without notification
+* Background downloads and uploads are aggressively controlled by the native platform. You should therefore always assume that a task that was started may not complete, and may disappear without providing any status or progress update to indicate why. For example, if a user swipes your app up from the iOS App Switcher, all scheduled background downloads are terminated without notification    
