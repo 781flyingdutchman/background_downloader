@@ -12,7 +12,7 @@ import 'models.dart';
 /// Implementation of download functionality for native platforms
 ///
 /// Uses [MethodChannel] to communicate with native platforms
-class NativeDownloader extends BaseDownloader {
+final class NativeDownloader extends BaseDownloader {
   static final NativeDownloader _singleton = NativeDownloader._internal();
   static const _channel = MethodChannel('com.bbflight.background_downloader');
   static const _backgroundChannel =

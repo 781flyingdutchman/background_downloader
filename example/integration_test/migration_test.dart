@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/logging.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
+import 'package:background_downloader/src/localstore/localstore.dart';
+
 
 const tasksPath = 'backgroundDownloaderTaskRecords';
 const databaseMetadataPath = 'backgroundDownloaderDatabase';

@@ -2,7 +2,7 @@ part of localstore;
 
 /// A [CollectionRef] object can be used for adding documents, getting
 /// [DocumentRef]s, and querying for documents.
-class CollectionRef implements CollectionRefImpl {
+final class CollectionRef implements CollectionRefImpl {
   String _id;
 
   /// A string representing the path of the referenced document (relative to the

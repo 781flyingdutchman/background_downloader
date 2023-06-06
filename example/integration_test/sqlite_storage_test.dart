@@ -2,6 +2,7 @@ import 'package:background_downloader/background_downloader.dart';
 import 'package:background_downloader_example/sqlite_storage.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:background_downloader/src/persistent_storage.dart';
 
 const def = 'default';
 const workingUrl = 'https://google.com';

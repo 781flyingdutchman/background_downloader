@@ -7,7 +7,7 @@ part of localstore;
 /// ```dart
 /// final db = Localstore.instance;
 /// ```
-class Localstore implements LocalstoreImpl {
+final class Localstore implements LocalstoreImpl {
   final _databaseDirectory = getApplicationSupportDirectory();
   final _delegate = DocumentRef._('');
   static final Localstore _localstore = Localstore._();

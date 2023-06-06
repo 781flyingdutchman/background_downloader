@@ -9,7 +9,7 @@ import 'package:logging/logging.dart';
 
 final _log = Logger('Localstore');
 
-class Utils implements UtilsImpl {
+final class Utils implements UtilsImpl {
   Utils._();
 
   static final Utils _utils = Utils._();

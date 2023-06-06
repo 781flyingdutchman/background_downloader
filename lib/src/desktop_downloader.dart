@@ -23,7 +23,7 @@ const okResponses = [200, 201, 202, 203, 204, 205, 206];
 /// On desktop (MacOS, Linux, Windows) the download and upload are implemented
 /// in Dart, as there is no native platform equivalent of URLSession or
 /// WorkManager as there is on iOS and Android
-class DesktopDownloader extends BaseDownloader {
+final class DesktopDownloader extends BaseDownloader {
   final _log = Logger('DesktopDownloader');
   final maxConcurrent = 5;
   static final DesktopDownloader _singleton = DesktopDownloader._internal();

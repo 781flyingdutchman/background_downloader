@@ -24,7 +24,7 @@ import 'persistent_storage.dart';
 /// - tasks waiting to retry and retry handling
 /// - Task updates provided to the [FileDownloader]
 /// - Pause/resume status and information
-abstract class BaseDownloader {
+abstract base class BaseDownloader {
   final log = Logger('BaseDownloader');
 
   static const databaseVersion = 1;
