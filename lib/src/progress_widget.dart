@@ -10,26 +10,30 @@ import 'models.dart';
 /// Progress indicator for use with the [FileDownloader]
 ///
 /// Configuration parameters:
-/// [message] message show for a single download. Templates {filename} and
+/// [message] message to show for a single download. Templates {filename} and
 ///   {metadata} are replaced by a task's filename and metadata respectively
 /// [collapsedMessage] message to show when multiple file downloads are
 ///   collapsed into a single row. The template {n} is replaced by the number
-///   of files currently being downloaded. In collapsed mode, progress is
-///   indicated as the average of all files being downloaded, and will therefore
-///   not increase monotonically
+///   of tasks finished, and {total} is replaced by the total number of tasks
+///   started in this batch. Both reset to 0 when all downloads finish.
+///   In collapsed mode, progress is indicated as {n}/{total}
 /// [showPauseButton] if true, shows a pause button if the task allows it
 /// [showCancelButton] if true, shows a cancel button
 /// [height] height of the [DownloadProgressIndicator], and of each row when
 ///   in expanded mode
 /// [maxExpandable] maximum number of rows the indicator can expand to, with
 ///   each row showing one download in progress. If set to 1 (the default) the
-///   indicator will not expand and switch to a 'collapsed' state showing the
-///   number of files in progress.
+///   indicator will not expand: if the number of downloads in progress exceeds
+///   1, the indicator will switch to a 'collapsed' state showing the
+///   number of files finished out of the total started. It will stay in
+///   'collapsed' state until all downloads have finished. To start the
+///   indicator in collapsed state (i.e. never show the download progress of a
+///   single file), set [maxExpandable] to 0
 /// [backgroundColor] background color for the widget
 class DownloadProgressIndicator extends StatefulWidget {
   const DownloadProgressIndicator(this.updates,
       {this.message = '{filename}',
-      this.collapsedMessage = 'Downloading {n} files',
+      this.collapsedMessage = '{n}/{total}',
       this.showPauseButton = false,
       this.showCancelButton = false,
       this.height = 50,
@@ -55,29 +59,56 @@ class DownloadProgressIndicator extends StatefulWidget {
 class _DownloadProgressIndicatorState extends State<DownloadProgressIndicator> {
   StreamSubscription<TaskUpdate>? downloadUpdates;
   final inProgress = <Task, (double, int)>{};
-  bool isExpanded = false;
   final pausedTasks = <Task>{};
+  final totalTasks = <Task>{};
+  final finishedTasks = <Task>{};
+  bool isExpanded = false;
+  bool isCollapsed = false;
 
   @override
   void initState() {
     super.initState();
+    isCollapsed = widget.maxExpandable == 0;
     downloadUpdates = widget.updates.listen((update) {
-      if (update is TaskProgressUpdate) {
+      if (update is TaskStatusUpdate) {
+        switch (update.status) {
+          case TaskStatus.running:
+            totalTasks.add(update.task);
+            pausedTasks.remove(update.task);
+            inProgress[update.task] =
+                (0, DateTime.now().millisecondsSinceEpoch);
+
+          case TaskStatus.waitingToRetry:
+            break;
+
+          case TaskStatus.paused:
+            pausedTasks.add(update.task);
+
+          default:
+            // task finished
+            _finish(update.task);
+        }
+      } else if (update is TaskProgressUpdate) {
         switch (update.progress) {
           case >= 0 && < 1:
+            // active, so add task to set and update progress
+            totalTasks.add(update.task);
+            pausedTasks.remove(update.task);
             final previousInProgress = inProgress[update.task];
             inProgress[update.task] = (
               update.progress,
               previousInProgress?.$2 ?? DateTime.now().millisecondsSinceEpoch
             );
-            pausedTasks.remove(update.task);
 
-          case progressPaused when widget.showPauseButton:
+          case progressWaitingToRetry:
+            break;
+
+          case progressPaused:
             pausedTasks.add(update.task);
 
           default:
-            inProgress.remove(update.task);
-            pausedTasks.remove(update.task);
+            // task finished
+            _finish(update.task);
         }
         if (mounted) {
           setState(() {});
@@ -93,20 +124,40 @@ class _DownloadProgressIndicatorState extends State<DownloadProgressIndicator> {
     downloadUpdates = null;
   }
 
+  /// Process a finished task
+  ///
+  /// Remove the task from [inProgress] and [pausedTasks], add to [finishedTasks]
+  /// If [inProgress] is empty, also empty the sets and reset
+  /// the [isExpanded] and [isCollapsed] flags.
+  void _finish(Task task) {
+    inProgress.remove(task);
+    finishedTasks.add(task);
+    pausedTasks.remove(task);
+    if (inProgress.isEmpty) {
+      totalTasks.clear();
+      finishedTasks.clear();
+      isExpanded = false;
+      isCollapsed = widget.maxExpandable == 0;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final activeTasks = inProgress.keys
         .where((taskId) => inProgress[taskId]!.$1 >= 0)
         .sorted((a, b) => inProgress[a]!.$2.compareTo(inProgress[b]!.$2));
     final numActive = activeTasks.length;
-    if (numActive > 1 && widget.maxExpandable > 1) {
-      isExpanded = true;
+    if (numActive > 1) {
+      if (widget.maxExpandable > 1) {
+        isExpanded = true; // only resets when all downloads finish
+      } else {
+        isCollapsed = true; // only resets when all downloads finish
+      }
     }
-    final isCollapsed = !isExpanded && numActive > 1;
     final itemsToShow = isExpanded
         ? min(numActive, widget.maxExpandable)
         : isCollapsed
-            ? 1
+            ? min(1, numActive)
             : numActive;
     return AnimatedSize(
         duration: const Duration(milliseconds: 200),
@@ -116,8 +167,12 @@ class _DownloadProgressIndicatorState extends State<DownloadProgressIndicator> {
               height: 0,
             ),
           1 => isCollapsed
-              ? _CollapsedDownloadProgress(activeTasks, widget.collapsedMessage,
-                  widget.height, widget.backgroundColor, inProgress)
+              ? _CollapsedDownloadProgress(
+                  finishedTasks.length,
+                  totalTasks.length,
+                  widget.collapsedMessage,
+                  widget.height,
+                  widget.backgroundColor)
               : _DownloadProgressItem(
                   activeTasks.first,
                   inProgress[activeTasks.first]!.$1,
@@ -184,7 +239,7 @@ class _DownloadProgressItem extends StatelessWidget {
             ),
             Expanded(
               child: LinearProgressIndicator(
-                value: progress,
+                value: progress == 0 ? null : progress,
               ),
             ),
             if (showPauseButton &&
@@ -216,26 +271,27 @@ class _DownloadProgressItem extends StatelessWidget {
   }
 }
 
-/// Collapsed file download progress widget, showing the average progress
-/// across multiple files as a single progress indicator
+/// Collapsed file download progress widget, showing the number of files
+/// downloaded out of the total number of files downloaded as a progress
+/// indicator
 class _CollapsedDownloadProgress extends StatelessWidget {
-  const _CollapsedDownloadProgress(this.tasks, this.collapsedMessage,
-      this.height, this.backgroundColor, this.inProgress,
+  const _CollapsedDownloadProgress(this.numCompleted, this.numTotal,
+      this.collapsedMessage, this.height, this.backgroundColor,
       {Key? key})
       : super(key: key);
 
-  final List<Task> tasks;
+  final int numCompleted;
+  final int numTotal;
   final String collapsedMessage;
   final double height;
   final Color backgroundColor;
-  final Map<Task, (double, int)> inProgress;
 
   @override
   Widget build(BuildContext context) {
-    final messageText = collapsedMessage.replaceAll('{n}', '${tasks.length}');
-    final averageProgress = tasks.fold(0.0,
-            (previousValue, task) => previousValue + inProgress[task]!.$1) /
-        tasks.length;
+    final messageText = collapsedMessage
+        .replaceAll('{n}', '$numCompleted')
+        .replaceAll('{total}', '$numTotal');
+    final progress = numCompleted / numTotal;
 
     return Container(
         height: height,
@@ -253,7 +309,7 @@ class _CollapsedDownloadProgress extends StatelessWidget {
               ),
               Expanded(
                 child: LinearProgressIndicator(
-                  value: averageProgress,
+                  value: progress,
                 ),
               )
             ],

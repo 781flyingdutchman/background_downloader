@@ -19,42 +19,42 @@ The plugin supports [headers](#headers), [retries](#retries), [requiring WiFi](#
 
 No setup is required for [Android](#android) (except when using notifications), Windows and Linux, and only minimal [setup for iOS](#ios) and [MacOS](#macos).
 
-## Quickstart
+## Usage examples
 
 ### Downloads
 
 ```dart
 /// define the download task (subset of parameters shown)
 final task = DownloadTask(
-              url: 'https://google.com/search',
-              urlQueryParameters: {'q': 'pizza'},
-              filename: 'results.html',
-              headers: {'myHeader': 'value'},
-              directory: 'my_sub_directory',
-              requiresWiFi: true,
-              retries: 5,
-              allowPause: true,
-              metaData: 'data for me');
-              
+        url: 'https://google.com/search',
+        urlQueryParameters: {'q': 'pizza'},
+        filename: 'results.html',
+        headers: {'myHeader': 'value'},
+        directory: 'my_sub_directory',
+        requiresWiFi: true,
+        retries: 5,
+        allowPause: true,
+        metaData: 'data for me');
+
 // Start download, and wait for result. Show progress and status changes
 // while downloading
 final result = await FileDownloader().download(task,
-    onProgress: (progress) => print('Progress: ${progress * 100}%'),
-    onStatus: (status) => print('Status: $status'));
-    
+onProgress: (progress) => print('Progress: ${progress * 100}%'),
+onStatus: (status) => print('Status: $status'));
+
 // Act on the result
 switch (result) {
-    case TaskStatus.complete:
-        print('Success!');
-        
-    case TaskStatus.canceled:
-        print('Download was canceled');
-        
-    case TaskStatus.paused:
-        print('Download was paused');
-        
-    default:
-        print('Download not successful');
+case TaskStatus.complete:
+print('Success!');
+
+case TaskStatus.canceled:
+print('Download was canceled');
+
+case TaskStatus.paused:
+print('Download was paused');
+
+default:
+print('Download not successful');
 ```
 
 Alternatively, use an [event listener](#using-an-event-listener) to process all updates centrally.
@@ -64,18 +64,18 @@ Alternatively, use an [event listener](#using-an-event-listener) to process all 
 ```dart
 /// define the multi-part upload task (subset of parameters shown)
 final task = UploadTask(
-              url: 'https://myserver.com/uploads',
-              filename: 'myData.txt',
-              fields: {'datafield': 'value'},
-              fileField: 'myFile'
+        url: 'https://myserver.com/uploads',
+        filename: 'myData.txt',
+        fields: {'datafield': 'value'},
+        fileField: 'myFile'
 );
-              
+
 // Start upload, and wait for result. Show progress and status changes
 // while uploading
 final result = await FileDownloader().upload(task,
-    onProgress: (progress) => print('Progress: ${progress * 100}%'),
-    onStatus: (status) => print('Status: $status'));
-    
+onProgress: (progress) => print('Progress: ${progress * 100}%'),
+onStatus: (status) => print('Status: $status'));
+
 // Act on result, similar to download
 ```
 
@@ -85,9 +85,9 @@ final tasks = [task1, task2, task3]; // a list of Download tasks
 
 // download the batch
 final result = await FileDownloader().downloadBatch(tasks,
-    batchProgressCallback: (succeeded, failed) => 
-        print('Completed ${succeeded + failed} out of ${tasks.length}, $failed failed')
-    );
+batchProgressCallback: (succeeded, failed) =>
+print('Completed ${succeeded + failed} out of ${tasks.length}, $failed failed')
+);
 
 ```
 
@@ -105,10 +105,10 @@ final successfullyEnqueued = await FileDownloader().enqueue(task);
 // query the tracking database, returning a record for each task
 final records = await FileDownloader().database.allRecords();
 for (record in records) {
-    print('Task ${record.tasksId} status is ${record.status}');
-    if (record.status == TaskStatus.running) {
-        print('-- progress ${record.progress * 100}%');
-    }
+print('Task ${record.tasksId} status is ${record.status}');
+if (record.status == TaskStatus.running) {
+print('-- progress ${record.progress * 100}%');
+}
 };
 
 // or get record for specific task
@@ -119,9 +119,9 @@ final record = await FileDownloader().database.recordForId(task.taskId);
 ```dart
 // configure notification for all tasks
 FileDownloader().configureNotification(
-    running: TaskNotification('Downloading', 'file: {filename}'),
-    complete: TaskNotification('Download finished', 'file: {filename}'),
-    progressBar: true);
+running: TaskNotification('Downloading', 'file: {filename}'),
+complete: TaskNotification('Download finished', 'file: {filename}'),
+progressBar: true);
 
 // all downloads will now show a notification while downloading, and when complete. 
 // {filename} will be replaced with the task's filename.
@@ -172,7 +172,7 @@ final result = await FileDownloader().download(task,
 ```
 Progress updates start with 0.0 when the actual download starts (which may be in the future, e.g. if waiting for a WiFi connection), and will be sent periodically, not more than twice per second per task.  If a task completes successfully you will receive a final progress update with a `progress` value of 1.0 (`progressComplete`). Failed tasks generate `progress` of `progressFailed` (-1.0), canceled tasks `progressCanceled` (-2.0), notFound tasks `progressNotFound` (-3.0), waitingToRetry tasks `progressWaitingToRetry` (-4.0) and paused tasks `progressPaused` (-5.0).
 
-A `DownloadProgressIndicator` widget is included with the package, and the example app shows how to wire it up. The widget can be configured to include pause and resume buttons, and to expand to show multiple simultaneous downloads.
+A [DownloadProgressIndicator](https://pub.dev/documentation/background_downloader/latest/background_downloader/DownloadProgressIndicator-class.html) widget is included with the package, and the example app shows how to wire it up. The widget can be configured to include pause and resume buttons, and to expand to show multiple simultaneous downloads.
 
 #### Status
 
@@ -333,7 +333,7 @@ You can unregister callbacks using `FileDownloader().unregisterCallbacks()`.
 
 ### Using the database to track Tasks
 
-To keep track of the status and progress of all tasks, even after they have completed, activate tracking by calling `trackTasks()` and use the `database` field to query. For example:
+To keep track of the status and progress of all tasks, even after they have completed, activate tracking by calling `trackTasks()` and use the `database` field to query and retrieve the [TaskRecord](https://pub.dev/documentation/background_downloader/latest/background_downloader/TaskRecord-class.html) entries stored. For example:
 ```dart
 // at app startup, after registering listener or callback, start tracking
 await FileDownloader().trackTasks();
@@ -354,7 +354,7 @@ print('Taskid ${record.taskId} with task ${record.task} has '
 You can interact with the `database` using `allRecords`, `allRecordsOlderThan`, `recordForId`,`deleteAllRecords`,
 `deleteRecordWithId` etc. If you only want to track tasks in a specific [group](#grouping-tasks), call `trackTasksInGroup` instead.
 
-By default, the downloader uses a modified version of the [localstore](https://pub.dev/packages/localstore) package to store the `TaskRecord` and other objects. To use a different persistent storage solution, create a class that implements the `PersistentStorage` interface, and initialize the downloader by calling `FileDownloader(persistentStorage: yourStorageClass())` as the first use of the `FileDownloader`.
+By default, the downloader uses a modified version of the [localstore](https://pub.dev/packages/localstore) package to store the `TaskRecord` and other objects. To use a different persistent storage solution, create a class that implements the [PersistentStorage](https://pub.dev/documentation/background_downloader/latest/background_downloader/PersistentStorage-class.html) interface, and initialize the downloader by calling `FileDownloader(persistentStorage: yourStorageClass())` as the first use of the `FileDownloader`.
 
 
 ## Notifications
