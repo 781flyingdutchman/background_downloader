@@ -73,7 +73,8 @@ void statusCallback(TaskStatusUpdate update) {
 void progressCallback(TaskProgressUpdate update) {
   final task = update.task;
   final progress = update.progress;
-  print('progressCallback for $task with progress $progress and expectedFileSize ${update.expectedFileSize}');
+  print(
+      'progressCallback for $task with progress $progress and expectedFileSize ${update.expectedFileSize}');
   lastProgress = progress;
   if (progress > 0 && progress < 1) {
     lastValidExpectedFileSize = update.expectedFileSize;
@@ -898,7 +899,8 @@ void main() {
     testWidgets('DownloadTask expectedFileSize', (widgetTester) async {
       expect(await task.expectedFileSize(), equals(-1));
       task = DownloadTask(url: urlWithContentLength);
-      expect(await task.expectedFileSize(), equals(urlWithContentLengthFileSize));
+      expect(
+          await task.expectedFileSize(), equals(urlWithContentLengthFileSize));
     });
   });
 

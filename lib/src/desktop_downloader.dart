@@ -109,7 +109,8 @@ final class DesktopDownloader extends BaseDownloader {
           receivePort.close();
 
         case ('progressUpdate', double progress, int expectedFileSize):
-          processProgressUpdate(TaskProgressUpdate(task, progress, expectedFileSize));
+          processProgressUpdate(
+              TaskProgressUpdate(task, progress, expectedFileSize));
 
         case ('taskCanResume', bool taskCanResume):
           setCanResume(task, taskCanResume);

@@ -106,7 +106,8 @@ final class TaskRecord {
   final int expectedFileSize;
   final TaskException? exception;
 
-  TaskRecord(this.task, this.status, this.progress, this.expectedFileSize, [this.exception]);
+  TaskRecord(this.task, this.status, this.progress, this.expectedFileSize,
+      [this.exception]);
 
   /// Returns the group collection this record is stored under, which is
   /// the [task]'s [Task.group]
@@ -118,7 +119,8 @@ final class TaskRecord {
   /// Create [TaskRecord] from a JSON map
   TaskRecord.fromJsonMap(Map<String, dynamic> jsonMap)
       : task = Task.createFromJsonMap(jsonMap),
-        status = TaskStatus.values[jsonMap['status'] as int? ?? TaskStatus.failed.index],
+        status = TaskStatus
+            .values[jsonMap['status'] as int? ?? TaskStatus.failed.index],
         progress = jsonMap['progress'] as double? ?? progressFailed,
         expectedFileSize = jsonMap['expectedFileSize'] as int? ?? -1,
         exception = jsonMap['exception'] == null
@@ -139,13 +141,22 @@ final class TaskRecord {
   }
 
   /// Copy with optional replacements. [exception] is always copied
-  TaskRecord copyWith({Task? task, TaskStatus? status, double? progress, int? expectedFileSize}) =>
-      TaskRecord(task ?? this.task, status ?? this.status,
-          progress ?? this.progress, expectedFileSize ?? this.expectedFileSize,  exception);
+  TaskRecord copyWith(
+          {Task? task,
+          TaskStatus? status,
+          double? progress,
+          int? expectedFileSize}) =>
+      TaskRecord(
+          task ?? this.task,
+          status ?? this.status,
+          progress ?? this.progress,
+          expectedFileSize ?? this.expectedFileSize,
+          exception);
 
   @override
   String toString() {
-    return 'DatabaseRecord{task: $task, status: $status, progress: $progress, exception: $exception}';
+    return 'DatabaseRecord{task: $task, status: $status, progress: $progress,'
+        ' expectedFileSize: $expectedFileSize, exception: $exception}';
   }
 
   @override
@@ -156,6 +167,7 @@ final class TaskRecord {
           task == other.task &&
           status == other.status &&
           progress == other.progress &&
+          expectedFileSize == other.expectedFileSize &&
           exception == other.exception;
 
   @override

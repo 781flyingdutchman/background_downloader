@@ -111,9 +111,9 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
 /// Processes a progress update for the task
 ///
 /// Sends progress update via the background channel to Dart, if requested
-func processProgressUpdate(task: Task, progress: Double) {
+func processProgressUpdate(task: Task, progress: Double, expectedFileSize: Int64 = -1) {
     if providesProgressUpdates(task: task) {
-        if (!postOnBackgroundChannel(method: "progressUpdate", task: task, arg: progress)) {
+        if (!postOnBackgroundChannel(method: "progressUpdate", task: task, arg: [progress, expectedFileSize])) {
             // store update locally as a merged task/progress JSON string
             guard let jsonData = try? JSONEncoder().encode(task),
                   var jsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
@@ -121,6 +121,7 @@ func processProgressUpdate(task: Task, progress: Double) {
                 os_log("Could not store progress update locally", log: log, type: .info)
                 return }
             jsonObject["progress"] = progress
+            jsonObject["expectedFileSize"] = expectedFileSize
             storeLocally(prefsKey: Downloader.keyProgressUpdateMap, taskId: task.taskId, item: jsonObject)
         }
     }

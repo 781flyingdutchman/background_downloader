@@ -89,7 +89,6 @@ final result = await FileDownloader().downloadBatch(tasks,
   batchProgressCallback: (succeeded, failed) =>
     print('Completed ${succeeded + failed} out of ${tasks.length}, $failed failed')
 );
-
 ```
 
 ### Task tracking database
@@ -109,6 +108,7 @@ for (record in records) {
   print('Task ${record.tasksId} status is ${record.status}');
   if (record.status == TaskStatus.running) {
     print('-- progress ${record.progress * 100}%');
+    print('-- file size ${record.expectedFileSize} bytes');
   }
 };
 
@@ -174,7 +174,15 @@ final result = await FileDownloader().download(task,
 ```
 Progress updates start with 0.0 when the actual download starts (which may be in the future, e.g. if waiting for a WiFi connection), and will be sent periodically, not more than twice per second per task.  If a task completes successfully you will receive a final progress update with a `progress` value of 1.0 (`progressComplete`). Failed tasks generate `progress` of `progressFailed` (-1.0), canceled tasks `progressCanceled` (-2.0), notFound tasks `progressNotFound` (-3.0), waitingToRetry tasks `progressWaitingToRetry` (-4.0) and paused tasks `progressPaused` (-5.0).
 
-A [DownloadProgressIndicator](https://pub.dev/documentation/background_downloader/latest/background_downloader/DownloadProgressIndicator-class.html) widget is included with the package, and the example app shows how to wire it up. The widget can be configured to include pause and resume buttons, and to expand to show multiple simultaneous downloads.
+Use `await task.expectedFileSize()` to query the server for the size of the file you are about 
+to download.  The expected file size is also included in `TaskProgressUpdate`s that are sent to 
+listeners and callbacks - see [Using an event listener](#using-an-event-listener) and [Using callbacks](#using-callbacks)
+
+A [DownloadProgressIndicator](https://pub.
+dev/documentation/background_downloader/latest/background_downloader/DownloadProgressIndicator
+-class.html) widget is included with the package, and the example app shows how to wire it up. 
+The widget can be configured to include pause and resume buttons, and to expand to show multiple 
+simultaneous downloads, or to collapse and show a file download counter.
 
 #### Status
 
@@ -284,7 +292,9 @@ Listen to updates from the downloader by listening to the `updates` stream, and 
         if (update is TaskStatusUpdate) {
             print('Status update for ${update.task} with status ${update.status}');
         } else if (update is TaskProgressUpdate) {
-            print('Progress update for ${update.task} with progress ${update.progress}');
+            print('Progress update for ${update.task} with progress ${update.progress} '
+                  'and expected file size ${update.expectedFileSize()}');
+            // note: expectedFileSize is only valid if 0 < progress < 1. It is -1 otherwise
     });
     
     // define the task
@@ -316,7 +326,9 @@ void taskStatusCallback(TaskStatusUpdate update) {
 The [TaskProgressCallback](https://pub.dev/documentation/background_downloader/latest/background_downloader/TaskProgressCallback.html) receives a [TaskProgressUpdate](https://pub.dev/documentation/background_downloader/latest/background_downloader/TaskProgressUpdate-class.html), so a simple callback function is:
 ```dart
 void taskProgressCallback(TaskProgressUpdate update) {
-  print('taskProgressCallback for ${update.task} with progress ${update.progress}');
+  print('taskProgressCallback for ${update.task} with progress ${update.progress} '
+        'and expected file size ${update.expectedFileSize');
+  // note: expectedFileSize is only valid if 0 < progress < 1. It is -1 otherwise
 }
 ```
 
@@ -350,7 +362,8 @@ final successfullyEnqueued = await FileDownloader().enqueue(task);
 // from the database
 final record = await FileDownloader().database.recordForId(task.taskId);
 print('Taskid ${record.taskId} with task ${record.task} has '
-    'status ${record.status} and progress ${record.progress}'
+    'status ${record.status} and progress ${record.progress} '
+    'with an expected file size of ${record.expectedFileSize} bytes'
 ```
 
 You can interact with the `database` using `allRecords`, `allRecordsOlderThan`, `recordForId`,`deleteAllRecords`,
@@ -371,7 +384,7 @@ button, and will substitute {filename} with the actual filename of the file bein
 ```dart
 FileDownloader().configureNotification(
     running: TaskNotification('Downloading', 'file: {filename}'),
-    progressBar: true)
+    progressBar: true);
 ```
 
 To also show a notifications for other states, add a `TaskNotification` for `complete`, `error`
@@ -399,10 +412,10 @@ To respond to the user tapping a notification, register a callback that takes `T
 
 ```dart
 FileDownloader().registerCallbacks(
-taskNotificationTapCallback: myNotificationTapCallback);
+  taskNotificationTapCallback: myNotificationTapCallback);
 
 void myNotificationTapCallback(Task task, NotificationType notificationType) {
-print('Tapped notification $notificationType for taskId ${task.taskId}');
+  print('Tapped notification $notificationType for taskId ${task.taskId}');
 }
 ```
 
@@ -436,9 +449,9 @@ The download directories specified in the `BaseDirectory` enum are all local to 
 ```dart
 final newFilepath = await FileDownloader().moveToSharedStorage(task, SharedStorage.downloads);
 if (newFilePath == null) {
-... // handle error
+  ... // handle error
 } else {
-... // do something with the newFilePath
+  ... // do something with the newFilePath
 }
 ```
 
@@ -495,15 +508,14 @@ Note that each of these methods accept a `group` parameter that targets the meho
 Because an app may require different types of downloads, and handle those differently, you can specify a `group` with your task, and register callbacks specific to each `group`. If no group is specified the default group `FileDownloader.defaultGroup` is used. For example, to create and handle downloads for group 'bigFiles':
 ```dart
 FileDownloader().registerCallbacks(
-group: 'bigFiles'
-taskStatusCallback: bigFilesDownloadStatusCallback,
-taskProgressCallback: bigFilesDownloadProgressCallback);
+  group: 'bigFiles'
+  taskStatusCallback: bigFilesDownloadStatusCallback,
+  taskProgressCallback: bigFilesDownloadProgressCallback);
 final task = DownloadTask(
-group: 'bigFiles',
-url: 'https://google.com',
-filename: 'google.html',
-updates:
-Updates.statusAndProgress);
+  group: 'bigFiles',
+  url: 'https://google.com',
+  filename: 'google.html',
+  updates: Updates.statusAndProgress);
 final successFullyEnqueued = await FileDownloader().enqueue(task);
 ```
 

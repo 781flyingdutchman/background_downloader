@@ -641,7 +641,7 @@ final class DownloadTask extends Task {
   ///
   /// The expected file size is obtained by making a HEAD request to the url
   /// represented by the [DownloadTask], including urlQueryParameters and headers
-  Future<int>expectedFileSize() async {
+  Future<int> expectedFileSize() async {
     try {
       final response = await DesktopDownloader.httpClient
           .head(Uri.parse(url), headers: headers);
@@ -891,7 +891,8 @@ class TaskProgressUpdate extends TaskUpdate {
   final double progress;
   final int expectedFileSize;
 
-  const TaskProgressUpdate(super.task, this.progress, [this.expectedFileSize = -1]);
+  const TaskProgressUpdate(super.task, this.progress,
+      [this.expectedFileSize = -1]);
 }
 
 // Progress values representing a status

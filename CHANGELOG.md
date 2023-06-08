@@ -1,3 +1,10 @@
+## 7.4.0
+
+Added method `expectedFileSize()` to `DownloadTask`, and added field `expectedFileSize` to  
+`TaskProgressUpdate` (provided to callbacks or listeners during download), and `TaskRecord` 
+entries in the database. 
+Note that this field is only valid when 0 < progress < 1. It is -1 if file size cannot be determined. 
+
 ## 7.3.1
 
 Improved [DownloadProgressIndicator](https://pub.dev/documentation/background_downloader/latest/background_downloader/DownloadProgressIndicator-class.html) widget:

@@ -493,7 +493,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         if totalBytesExpectedToWrite != NSURLSessionTransferSizeUnknown && Date() > Downloader.nextProgressUpdateTime[task.taskId] ?? Date(timeIntervalSince1970: 0) {
             let progress = min(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite), 0.999)
             if progress - (Downloader.lastProgressUpdate[task.taskId] ?? 0.0) > 0.02 {
-                processProgressUpdate(task: task, progress: progress)
+                processProgressUpdate(task: task, progress: progress, expectedFileSize: totalBytesExpectedToWrite)
                 Downloader.lastProgressUpdate[task.taskId] = progress
                 Downloader.nextProgressUpdateTime[task.taskId] = Date().addingTimeInterval(0.5)
             }
