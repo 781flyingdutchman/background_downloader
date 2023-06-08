@@ -108,8 +108,8 @@ final class DesktopDownloader extends BaseDownloader {
         case 'done':
           receivePort.close();
 
-        case ('progressUpdate', double progress):
-          processProgressUpdate(TaskProgressUpdate(task, progress));
+        case ('progressUpdate', double progress, int expectedFileSize):
+          processProgressUpdate(TaskProgressUpdate(task, progress, expectedFileSize));
 
         case ('taskCanResume', bool taskCanResume):
           setCanResume(task, taskCanResume);
@@ -129,7 +129,7 @@ final class DesktopDownloader extends BaseDownloader {
 
         default:
           _log.warning('Received message with unknown type '
-              '${message.runtimeType} from Isolate');
+              '$message from Isolate');
       }
     }
     errorPort.close();

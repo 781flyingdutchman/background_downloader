@@ -103,9 +103,10 @@ final class TaskRecord {
   final Task task;
   final TaskStatus status;
   final double progress;
+  final int expectedFileSize;
   final TaskException? exception;
 
-  TaskRecord(this.task, this.status, this.progress, [this.exception]);
+  TaskRecord(this.task, this.status, this.progress, this.expectedFileSize, [this.exception]);
 
   /// Returns the group collection this record is stored under, which is
   /// the [task]'s [Task.group]
@@ -117,8 +118,9 @@ final class TaskRecord {
   /// Create [TaskRecord] from a JSON map
   TaskRecord.fromJsonMap(Map<String, dynamic> jsonMap)
       : task = Task.createFromJsonMap(jsonMap),
-        status = TaskStatus.values[jsonMap['status'] as int? ?? 0],
-        progress = jsonMap['progress'] as double? ?? 0,
+        status = TaskStatus.values[jsonMap['status'] as int? ?? TaskStatus.failed.index],
+        progress = jsonMap['progress'] as double? ?? progressFailed,
+        expectedFileSize = jsonMap['expectedFileSize'] as int? ?? -1,
         exception = jsonMap['exception'] == null
             ? null
             : TaskException.fromJsonMap(jsonMap['exception']);
@@ -131,14 +133,15 @@ final class TaskRecord {
     final jsonMap = task.toJsonMap();
     jsonMap['status'] = status.index;
     jsonMap['progress'] = progress;
+    jsonMap['expectedFileSize'] = expectedFileSize;
     jsonMap['exception'] = exception?.toJsonMap();
     return jsonMap;
   }
 
   /// Copy with optional replacements. [exception] is always copied
-  TaskRecord copyWith({Task? task, TaskStatus? status, double? progress}) =>
+  TaskRecord copyWith({Task? task, TaskStatus? status, double? progress, int? expectedFileSize}) =>
       TaskRecord(task ?? this.task, status ?? this.status,
-          progress ?? this.progress, exception);
+          progress ?? this.progress, expectedFileSize ?? this.expectedFileSize,  exception);
 
   @override
   String toString() {

@@ -21,6 +21,7 @@ var progressCallbackCompleter = Completer<void>();
 var someProgressCompleter = Completer<void>(); // completes when progress > 0.1
 var lastStatus = TaskStatus.enqueued;
 var lastProgress = -100.0;
+var lastValidExpectedFileSize = -1;
 TaskException? lastException;
 
 const workingUrl = 'https://google.com';
@@ -72,8 +73,11 @@ void statusCallback(TaskStatusUpdate update) {
 void progressCallback(TaskProgressUpdate update) {
   final task = update.task;
   final progress = update.progress;
-  print('progressCallback for $task with progress $progress');
+  print('progressCallback for $task with progress $progress and expectedFileSize ${update.expectedFileSize}');
   lastProgress = progress;
+  if (progress > 0 && progress < 1) {
+    lastValidExpectedFileSize = update.expectedFileSize;
+  }
   progressCallbackCounter++;
   if (!someProgressCompleter.isCompleted && progress > 0) {
     someProgressCompleter.complete();
@@ -114,6 +118,8 @@ void main() {
     progressCallbackCompleter = Completer<void>();
     someProgressCompleter = Completer<void>();
     lastStatus = TaskStatus.enqueued;
+    lastProgress = 0;
+    lastValidExpectedFileSize = -1;
     lastException = null;
     FileDownloader().destroy();
     final path =
@@ -307,6 +313,7 @@ void main() {
       // because google.com has no content-length, we only expect the 0.0 and
       // 1.0 progress update
       expect(progressCallbackCounter, equals(2));
+      expect(lastValidExpectedFileSize, equals(-1));
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
       // now try a file that has content length
@@ -321,6 +328,7 @@ void main() {
       expect(await FileDownloader().enqueue(task), isTrue);
       await progressCallbackCompleter.future;
       expect(progressCallbackCounter, greaterThan(1));
+      expect(lastValidExpectedFileSize, equals(urlWithContentLengthFileSize));
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
       print('Finished enqueue with progress');
@@ -847,7 +855,7 @@ void main() {
           throwsArgumentError);
     });
 
-    testWidgets('suggestedFilename', (widgetTester) async {
+    testWidgets('DownloadTask withSuggestedFilename', (widgetTester) async {
       // delete old downloads
       task = DownloadTask(url: urlWithContentLength, filename: '5MB-test.ZIP');
       try {
@@ -885,6 +893,12 @@ void main() {
       // again with 'unique' should yield (2) filename
       final task5 = await task.withSuggestedFilename(unique: true);
       expect(task5.filename, equals('5MB-test (2).ZIP'));
+    });
+
+    testWidgets('DownloadTask expectedFileSize', (widgetTester) async {
+      expect(await task.expectedFileSize(), equals(-1));
+      task = DownloadTask(url: urlWithContentLength);
+      expect(await task.expectedFileSize(), equals(urlWithContentLengthFileSize));
     });
   });
 

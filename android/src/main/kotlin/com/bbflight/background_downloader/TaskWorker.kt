@@ -246,14 +246,20 @@ class TaskWorker(
          * Sends progress update via the background channel to Flutter, if requested
          */
         suspend fun processProgressUpdate(
-            task: Task, progress: Double, prefs: SharedPreferences
+            task: Task, progress: Double, prefs: SharedPreferences, expectedFileSize: Long = -1
         ) {
             if (task.providesProgressUpdates()) {
-                if (!postOnBackgroundChannel("progressUpdate", task, progress)) {
+                if (!postOnBackgroundChannel(
+                        "progressUpdate",
+                        task,
+                        mutableListOf(progress, expectedFileSize)
+                    )
+                ) {
                     // unsuccessful post, so store in local prefs
                     Log.d(TAG, "Could not post progress update -> storing locally")
                     val jsonMap = task.toJsonMap().toMutableMap()
                     jsonMap["progress"] = progress // merge into Task JSON
+                    jsonMap["expectedFileSize"] = expectedFileSize
                     storeLocally(
                         BackgroundDownloaderPlugin.keyProgressUpdateMap, task.taskId, jsonMap,
                         prefs
@@ -848,7 +854,7 @@ class TaskWorker(
                         (bytesTotal + startByte).toDouble() / (contentLength + startByte), 0.999
                     )
                     if (contentLength > 0 && progress - lastProgressUpdate > 0.02 && currentTimeMillis() > nextProgressUpdateTime) {
-                        processProgressUpdate(task, progress, prefs)
+                        processProgressUpdate(task, progress, prefs, contentLength)
                         updateNotification(
                             task, notificationTypeForTaskStatus(TaskStatus.running), progress
                         )

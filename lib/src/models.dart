@@ -555,6 +555,9 @@ final class DownloadTask extends Task {
   /// If [unique] is true, the filename is guaranteed not to already exist. This
   /// is accomplished by adding a suffix to the suggested filename with a number,
   /// e.g. "data (2).txt"
+  ///
+  /// The suggested filename is obtained by making a HEAD request to the url
+  /// represented by the [DownloadTask], including urlQueryParameters and headers
   Future<DownloadTask> withSuggestedFilename({unique = false}) async {
     /// Returns [DownloadTask] with a filename similar to the one
     /// supplied, but unused.
@@ -632,6 +635,26 @@ final class DownloadTask extends Task {
     // if everything fails, return the task with unchanged filename
     // except for possibly making it unique
     return uniqueFilename(this, unique);
+  }
+
+  /// Return the expected file size for this task, or -1 if unknown
+  ///
+  /// The expected file size is obtained by making a HEAD request to the url
+  /// represented by the [DownloadTask], including urlQueryParameters and headers
+  Future<int>expectedFileSize() async {
+    try {
+      final response = await DesktopDownloader.httpClient
+          .head(Uri.parse(url), headers: headers);
+      if ([200, 201, 202, 203, 204, 205, 206].contains(response.statusCode)) {
+        return int.parse(response.headers.entries
+            .firstWhere(
+                (element) => element.key.toLowerCase() == 'content-length')
+            .value);
+      }
+    } catch (e) {
+      // no content length available
+    }
+    return -1;
   }
 
   @override
@@ -859,10 +882,16 @@ class TaskStatusUpdate extends TaskUpdate {
 /// [TaskStatus.canceled] results in progress -2.0
 /// [TaskStatus.notFound] results in progress -3.0
 /// [TaskStatus.waitingToRetry] results in progress -4.0
+///
+/// [expectedFileSize] will only be representative if the 0 < [progress] < 1,
+/// so NOT representative when progress == 0 or progress == 1, and
+/// will be -1 if the file size is not provided by the server or otherwise
+/// not known.
 class TaskProgressUpdate extends TaskUpdate {
   final double progress;
+  final int expectedFileSize;
 
-  const TaskProgressUpdate(super.task, this.progress);
+  const TaskProgressUpdate(super.task, this.progress, [this.expectedFileSize = -1]);
 }
 
 // Progress values representing a status

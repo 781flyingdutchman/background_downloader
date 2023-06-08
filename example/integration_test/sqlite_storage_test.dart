@@ -10,8 +10,8 @@ const defaultFilename = 'google.html';
 const tasksPath = LocalStorePersistentStorage.taskRecordsPath;
 final task = DownloadTask(url: workingUrl, filename: defaultFilename);
 final task2 = DownloadTask(url: workingUrl, filename: '$defaultFilename-2');
-final record = TaskRecord(task, TaskStatus.running, 0.5);
-final record2 = TaskRecord(task2, TaskStatus.enqueued, 0);
+final record = TaskRecord(task, TaskStatus.running, 0.5, 1000);
+final record2 = TaskRecord(task2, TaskStatus.enqueued, 0, 1000);
 
 SqlitePersistentStorage db = SqlitePersistentStorage();
 
@@ -42,7 +42,7 @@ void main() {
     }
     // add a record in a different group
     final task2 = DownloadTask(url: 'something', group: 'newGroup');
-    final record3 = TaskRecord(task2, TaskStatus.running, 0.2);
+    final record3 = TaskRecord(task2, TaskStatus.running, 0.2, 1000);
     await database.updateRecord(record3);
     final result2 = await database.allRecords();
     expect(result2.length, equals(3));

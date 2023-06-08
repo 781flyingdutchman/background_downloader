@@ -39,22 +39,23 @@ final task = DownloadTask(
 // Start download, and wait for result. Show progress and status changes
 // while downloading
 final result = await FileDownloader().download(task,
-onProgress: (progress) => print('Progress: ${progress * 100}%'),
-onStatus: (status) => print('Status: $status'));
+  onProgress: (progress) => print('Progress: ${progress * 100}%'),
+  onStatus: (status) => print('Status: $status'));
 
 // Act on the result
 switch (result) {
-case TaskStatus.complete:
-print('Success!');
-
-case TaskStatus.canceled:
-print('Download was canceled');
-
-case TaskStatus.paused:
-print('Download was paused');
-
-default:
-print('Download not successful');
+  case TaskStatus.complete:
+    print('Success!');
+  
+  case TaskStatus.canceled:
+    print('Download was canceled');
+  
+  case TaskStatus.paused:
+    print('Download was paused');
+  
+  default:
+    print('Download not successful');
+}
 ```
 
 Alternatively, use an [event listener](#using-an-event-listener) to process all updates centrally.
@@ -73,8 +74,8 @@ final task = UploadTask(
 // Start upload, and wait for result. Show progress and status changes
 // while uploading
 final result = await FileDownloader().upload(task,
-onProgress: (progress) => print('Progress: ${progress * 100}%'),
-onStatus: (status) => print('Status: $status'));
+  onProgress: (progress) => print('Progress: ${progress * 100}%'),
+  onStatus: (status) => print('Status: $status'));
 
 // Act on result, similar to download
 ```
@@ -85,8 +86,8 @@ final tasks = [task1, task2, task3]; // a list of Download tasks
 
 // download the batch
 final result = await FileDownloader().downloadBatch(tasks,
-batchProgressCallback: (succeeded, failed) =>
-print('Completed ${succeeded + failed} out of ${tasks.length}, $failed failed')
+  batchProgressCallback: (succeeded, failed) =>
+    print('Completed ${succeeded + failed} out of ${tasks.length}, $failed failed')
 );
 
 ```
@@ -105,10 +106,10 @@ final successfullyEnqueued = await FileDownloader().enqueue(task);
 // query the tracking database, returning a record for each task
 final records = await FileDownloader().database.allRecords();
 for (record in records) {
-print('Task ${record.tasksId} status is ${record.status}');
-if (record.status == TaskStatus.running) {
-print('-- progress ${record.progress * 100}%');
-}
+  print('Task ${record.tasksId} status is ${record.status}');
+  if (record.status == TaskStatus.running) {
+    print('-- progress ${record.progress * 100}%');
+  }
 };
 
 // or get record for specific task
@@ -119,9 +120,10 @@ final record = await FileDownloader().database.recordForId(task.taskId);
 ```dart
 // configure notification for all tasks
 FileDownloader().configureNotification(
-running: TaskNotification('Downloading', 'file: {filename}'),
-complete: TaskNotification('Download finished', 'file: {filename}'),
-progressBar: true);
+  running: TaskNotification('Downloading', 'file: {filename}'),
+  complete: TaskNotification('Download finished', 'file: {filename}'),
+  progressBar: true
+);
 
 // all downloads will now show a notification while downloading, and when complete. 
 // {filename} will be replaced with the task's filename.

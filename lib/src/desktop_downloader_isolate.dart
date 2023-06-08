@@ -430,7 +430,7 @@ Future<TaskStatus> transferBytes(
         if (contentLength > 0 &&
             (progress - lastProgressUpdate > 0.02 &&
                 now.isAfter(nextProgressUpdateTime))) {
-          processProgressUpdateInIsolate(task, progress, sendPort);
+          processProgressUpdateInIsolate(task, progress, sendPort, contentLength);
           lastProgressUpdate = progress;
           nextProgressUpdateTime = now.add(const Duration(milliseconds: 500));
         }
@@ -492,9 +492,9 @@ void processStatusUpdateInIsolate(
 ///
 /// Sends progress update via the [sendPort], if requested
 void processProgressUpdateInIsolate(
-    Task task, double progress, SendPort sendPort) {
+    Task task, double progress, SendPort sendPort, [int expectedFileSize = -1]) {
   if (task.providesProgressUpdates) {
-    sendPort.send(('progressUpdate', progress));
+    sendPort.send(('progressUpdate', progress, expectedFileSize));
   }
 }
 

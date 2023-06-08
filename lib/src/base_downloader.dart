@@ -94,7 +94,7 @@ abstract base class BaseDownloader {
         // map is <taskId, Task/TaskStatus> where TaskStatus is added to Task JSON
         final payload = statusUpdateMap[taskId];
         final task = Task.createFromJsonMap(payload);
-        final status = TaskStatus.values[payload['taskStatus']];
+        final status = TaskStatus.values[payload['taskStatus'] ?? 0];
         processStatusUpdate(TaskStatusUpdate(task, status));
       }
       final progressUpdateMap =
@@ -103,8 +103,9 @@ abstract base class BaseDownloader {
         // map is <taskId, Task/progress> where progress is added to Task JSON
         final payload = progressUpdateMap[taskId];
         final task = Task.createFromJsonMap(payload);
-        final double progress = payload['progress'];
-        processProgressUpdate(TaskProgressUpdate(task, progress));
+        final double progress = payload['progress'] ?? progressFailed;
+        final int expectedFileSize = payload['expectedFileSize'] ?? -1;
+        processProgressUpdate(TaskProgressUpdate(task, progress, expectedFileSize));
       }
       _retrievedLocallyStoredData = true;
     }
@@ -514,7 +515,7 @@ abstract base class BaseDownloader {
   void _emitProgressUpdate(TaskProgressUpdate update) {
     final task = update.task;
     if (task.providesProgressUpdates) {
-      _updateTaskInDatabase(task, progress: update.progress);
+      _updateTaskInDatabase(task, progress: update.progress, expectedFileSize: update.expectedFileSize);
       final taskProgressCallback = groupProgressCallbacks[task.group];
       if (taskProgressCallback != null) {
         taskProgressCallback(update);
@@ -533,6 +534,7 @@ abstract base class BaseDownloader {
   Future<void> _updateTaskInDatabase(Task task,
       {TaskStatus? status,
       double? progress,
+      int expectedFileSize = -1,
       TaskException? taskException}) async {
     if (trackedGroups.contains(null) || trackedGroups.contains(task.group)) {
       if (status == null && progress != null) {
@@ -557,12 +559,12 @@ abstract base class BaseDownloader {
       }
       if (status != TaskStatus.paused) {
         database
-            .updateRecord(TaskRecord(task, status!, progress!, taskException));
+            .updateRecord(TaskRecord(task, status!, progress!,expectedFileSize, taskException));
       } else {
         // if paused, don't modify the stored progress
         final existingRecord = await database.recordForId(task.taskId);
         database.updateRecord(TaskRecord(
-            task, status!, existingRecord?.progress ?? 0, taskException));
+            task, status!, existingRecord?.progress ?? 0, expectedFileSize, taskException));
       }
     }
   }
