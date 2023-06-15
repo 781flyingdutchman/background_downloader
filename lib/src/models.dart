@@ -2,12 +2,12 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'desktop_downloader.dart';
 import 'package:logging/logging.dart';
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
+import 'desktop_downloader.dart';
 import 'exceptions.dart';
 import 'file_downloader.dart';
 
@@ -403,9 +403,10 @@ sealed class Task extends Request {
       : taskId = jsonMap['taskId'] ?? '',
         filename = jsonMap['filename'] ?? '',
         directory = jsonMap['directory'] ?? '',
-        baseDirectory = BaseDirectory.values[jsonMap['baseDirectory'] ?? 0],
+        baseDirectory = BaseDirectory
+            .values[(jsonMap['baseDirectory'] as num?)?.toInt() ?? 0],
         group = jsonMap['group'] ?? FileDownloader.defaultGroup,
-        updates = Updates.values[jsonMap['updates'] ?? 0],
+        updates = Updates.values[(jsonMap['updates'] as num?)?.toInt() ?? 0],
         requiresWiFi = jsonMap['requiresWiFi'] ?? false,
         allowPause = jsonMap['allowPause'] ?? false,
         metaData = jsonMap['metaData'] ?? '',
@@ -915,7 +916,7 @@ class ResumeData {
   ResumeData.fromJsonMap(Map<String, dynamic> jsonMap)
       : task = Task.createFromJsonMap(jsonMap['task']),
         data = jsonMap['data'] as String,
-        requiredStartByte = jsonMap['requiredStartByte'] as int;
+        requiredStartByte = (jsonMap['requiredStartByte'] as num).toInt();
 
   /// Return JSON Map representing object
   Map<String, dynamic> toJsonMap() => {
