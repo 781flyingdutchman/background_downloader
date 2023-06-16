@@ -615,6 +615,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     
     //MARK: UNUserNotificationCenterDelegate
     
+    @MainActor
     public func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions
     {
         if ourCategories.contains(notification.request.content.categoryIdentifier) {
