@@ -119,10 +119,10 @@ final class TaskRecord {
   /// Create [TaskRecord] from a JSON map
   TaskRecord.fromJsonMap(Map<String, dynamic> jsonMap)
       : task = Task.createFromJsonMap(jsonMap),
-        status = TaskStatus
-            .values[jsonMap['status'] as int? ?? TaskStatus.failed.index],
-        progress = jsonMap['progress'] as double? ?? progressFailed,
-        expectedFileSize = jsonMap['expectedFileSize'] as int? ?? -1,
+        status = TaskStatus.values[
+            (jsonMap['status'] as num?)?.toInt() ?? TaskStatus.failed.index],
+        progress = (jsonMap['progress'] as num?)?.toDouble() ?? progressFailed,
+        expectedFileSize = (jsonMap['expectedFileSize'] as num?)?.toInt() ?? -1,
         exception = jsonMap['exception'] == null
             ? null
             : TaskException.fromJsonMap(jsonMap['exception']);

@@ -93,24 +93,14 @@ abstract base class BaseDownloader {
       for (var taskId in statusUpdateMap.keys) {
         // map is <taskId, Task/TaskStatus> where TaskStatus is added to Task JSON
         final payload = statusUpdateMap[taskId];
-        final task = Task.createFromJsonMap(payload);
-        final status = TaskStatus.values[payload['taskStatus'] ?? 0];
-        processStatusUpdate(TaskStatusUpdate(task, status));
+        processStatusUpdate(TaskStatusUpdate.fromJsonMap(payload));
       }
       final progressUpdateMap =
           await popUndeliveredData(Undelivered.progressUpdates);
       for (var taskId in progressUpdateMap.keys) {
         // map is <taskId, Task/progress> where progress is added to Task JSON
         final payload = progressUpdateMap[taskId];
-        final task = Task.createFromJsonMap(payload);
-        final double progress = switch (payload['progress']) {
-          int a => a.toDouble(),
-          double a => a,
-          _ => progressFailed
-        };
-        final int expectedFileSize = payload['expectedFileSize'] ?? -1;
-        processProgressUpdate(
-            TaskProgressUpdate(task, progress, expectedFileSize));
+        processProgressUpdate(TaskProgressUpdate.fromJsonMap(payload));
       }
       _retrievedLocallyStoredData = true;
     }

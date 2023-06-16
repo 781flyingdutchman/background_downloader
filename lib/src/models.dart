@@ -214,10 +214,10 @@ base class Request {
         httpRequestMethod = jsonMap['httpRequestMethod'] as String? ??
             (jsonMap['post'] == null ? 'GET' : 'POST'),
         post = jsonMap['post'] as String?,
-        retries = jsonMap['retries'] as int? ?? 0,
-        retriesRemaining = jsonMap['retriesRemaining'] as int? ?? 0,
-        creationTime =
-            DateTime.fromMillisecondsSinceEpoch(jsonMap['creationTime'] ?? 0);
+        retries = (jsonMap['retries'] as num?)?.toInt() ?? 0,
+        retriesRemaining = (jsonMap['retriesRemaining'] as num?)?.toInt() ?? 0,
+        creationTime = DateTime.fromMillisecondsSinceEpoch(
+            (jsonMap['creationTime'] as num?)?.toInt() ?? 0);
 
   /// Creates JSON map of this object
   Map<String, dynamic> toJsonMap() => {
@@ -862,6 +862,13 @@ sealed class TaskUpdate {
   final Task task;
 
   const TaskUpdate(this.task);
+
+  /// Create object from JSON Map
+  TaskUpdate.fromJsonMap(Map<String, dynamic> jsonMap)
+      : task = Task.createFromJsonMap(jsonMap);
+
+  /// Return JSON Map representing object
+  Map<String, dynamic> toJsonMap() => task.toJsonMap();
 }
 
 /// A status update
@@ -873,6 +880,22 @@ class TaskStatusUpdate extends TaskUpdate {
   final TaskException? exception;
 
   const TaskStatusUpdate(super.task, this.status, [this.exception]);
+
+  /// Create object from JSON Map
+  TaskStatusUpdate.fromJsonMap(Map<String, dynamic> jsonMap)
+      : status =
+            TaskStatus.values[(jsonMap['taskStatus'] as num?)?.toInt() ?? 0],
+        exception = jsonMap['exception'] != null
+            ? TaskException.fromJsonMap(jsonMap['exception'])
+            : null,
+        super.fromJsonMap(jsonMap);
+
+  /// Return JSON Map representing object
+  Map<String, dynamic> toJsonMap() => {
+        ...super.toJsonMap(),
+        'taskStatus': status.index,
+        'exception': exception?.toJsonMap()
+      };
 }
 
 /// A progress update
@@ -894,6 +917,19 @@ class TaskProgressUpdate extends TaskUpdate {
 
   const TaskProgressUpdate(super.task, this.progress,
       [this.expectedFileSize = -1]);
+
+  /// Create object from JSON Map
+  TaskProgressUpdate.fromJsonMap(Map<String, dynamic> jsonMap)
+      : progress = (jsonMap['progress'] as num?)?.toDouble() ?? progressFailed,
+        expectedFileSize = (jsonMap['expectedFileSize'] as num?)?.toInt() ?? -1,
+        super.fromJsonMap(jsonMap);
+
+  /// Return JSON Map representing object
+  Map<String, dynamic> toJsonMap() => {
+        ...super.toJsonMap(),
+        'progress': progress,
+        'expectedFileSize': expectedFileSize
+      };
 }
 
 // Progress values representing a status
@@ -916,7 +952,8 @@ class ResumeData {
   ResumeData.fromJsonMap(Map<String, dynamic> jsonMap)
       : task = Task.createFromJsonMap(jsonMap['task']),
         data = jsonMap['data'] as String,
-        requiredStartByte = (jsonMap['requiredStartByte'] as num).toInt();
+        requiredStartByte =
+            (jsonMap['requiredStartByte'] as num?)?.toInt() ?? 0;
 
   /// Return JSON Map representing object
   Map<String, dynamic> toJsonMap() => {

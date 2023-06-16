@@ -245,7 +245,7 @@ class LocalStorePersistentStorage implements PersistentStorage {
   Future<(String, int)> get storedDatabaseVersion async {
     final metaData =
         await _db.collection(metaDataCollection).doc('metaData').get();
-    return ('Localstore', metaData?['version'] as int? ?? 0);
+    return ('Localstore', (metaData?['version'] as num?)?.toInt() ?? 0);
   }
 
   @override

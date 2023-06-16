@@ -30,7 +30,8 @@ base class TaskException implements Exception {
       if (typeString != 'TaskHttpException') {
         return exceptionType(description);
       } else {
-        final httpResponseCode = jsonMap['httpResponseCode'] as int? ?? -1;
+        final httpResponseCode =
+            (jsonMap['httpResponseCode'] as num?)?.toInt() ?? -1;
         return exceptionType(description, httpResponseCode);
       }
     }
