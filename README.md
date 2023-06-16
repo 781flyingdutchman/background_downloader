@@ -21,7 +21,7 @@ No setup is required for [Android](#android) (except when using notifications), 
 
 ## Usage examples
 
-### Downloads
+### Downloads example
 
 ```dart
 /// define the download task (subset of parameters shown)
@@ -31,6 +31,7 @@ final task = DownloadTask(
         filename: 'results.html',
         headers: {'myHeader': 'value'},
         directory: 'my_sub_directory',
+        updates: Updates.statusAndProgress, // request status and progress updates
         requiresWiFi: true,
         retries: 5,
         allowPause: true,
@@ -60,7 +61,7 @@ switch (result) {
 
 Alternatively, use an [event listener](#using-an-event-listener) to process all updates centrally.
 
-### Uploads
+### Uploads example
 
 ```dart
 /// define the multi-part upload task (subset of parameters shown)
@@ -68,7 +69,8 @@ final task = UploadTask(
         url: 'https://myserver.com/uploads',
         filename: 'myData.txt',
         fields: {'datafield': 'value'},
-        fileField: 'myFile'
+        fileField: 'myFile', 
+        updates: Updates.statusAndProgress // request status and progress updates
 );
 
 // Start upload, and wait for result. Show progress and status changes
@@ -80,7 +82,7 @@ final result = await FileDownloader().upload(task,
 // Act on result, similar to download
 ```
 
-### Batch download
+### Batch download example
 ```dart
 final tasks = [task1, task2, task3]; // a list of Download tasks
 
@@ -91,7 +93,7 @@ final result = await FileDownloader().downloadBatch(tasks,
 );
 ```
 
-### Task tracking database
+### Task tracking database example
 ```dart
 // activate tracking at the start of your app
 await FileDownloader().trackTasks();
@@ -116,7 +118,7 @@ for (record in records) {
 final record = await FileDownloader().database.recordForId(task.taskId);
 ```
 
-### Notifications
+### Notifications example
 ```dart
 // configure notification for all tasks
 FileDownloader().configureNotification(
@@ -293,7 +295,7 @@ Listen to updates from the downloader by listening to the `updates` stream, and 
             print('Status update for ${update.task} with status ${update.status}');
         } else if (update is TaskProgressUpdate) {
             print('Progress update for ${update.task} with progress ${update.progress} '
-                  'and expected file size ${update.expectedFileSize()}');
+                  'and expected file size ${update.expectedFileSize}');
             // note: expectedFileSize is only valid if 0 < progress < 1. It is -1 otherwise
     });
     
@@ -327,7 +329,7 @@ The [TaskProgressCallback](https://pub.dev/documentation/background_downloader/l
 ```dart
 void taskProgressCallback(TaskProgressUpdate update) {
   print('taskProgressCallback for ${update.task} with progress ${update.progress} '
-        'and expected file size ${update.expectedFileSize');
+        'and expected file size ${update.expectedFileSize}');
   // note: expectedFileSize is only valid if 0 < progress < 1. It is -1 otherwise
 }
 ```

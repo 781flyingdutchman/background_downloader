@@ -891,6 +891,7 @@ class TaskStatusUpdate extends TaskUpdate {
         super.fromJsonMap(jsonMap);
 
   /// Return JSON Map representing object
+  @override
   Map<String, dynamic> toJsonMap() => {
         ...super.toJsonMap(),
         'taskStatus': status.index,
@@ -925,6 +926,7 @@ class TaskProgressUpdate extends TaskUpdate {
         super.fromJsonMap(jsonMap);
 
   /// Return JSON Map representing object
+  @override
   Map<String, dynamic> toJsonMap() => {
         ...super.toJsonMap(),
         'progress': progress,
