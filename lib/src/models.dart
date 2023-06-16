@@ -214,10 +214,10 @@ base class Request {
         httpRequestMethod = jsonMap['httpRequestMethod'] as String? ??
             (jsonMap['post'] == null ? 'GET' : 'POST'),
         post = jsonMap['post'] as String?,
-        retries = jsonMap['retries'] as int? ?? 0,
-        retriesRemaining = jsonMap['retriesRemaining'] as int? ?? 0,
-        creationTime =
-            DateTime.fromMillisecondsSinceEpoch(jsonMap['creationTime'] ?? 0);
+        retries = (jsonMap['retries'] as num?)?.toInt() ?? 0,
+        retriesRemaining = (jsonMap['retriesRemaining'] as num?)?.toInt() ?? 0,
+        creationTime = DateTime.fromMillisecondsSinceEpoch(
+            (jsonMap['creationTime'] as num?)?.toInt() ?? 0);
 
   /// Creates JSON map of this object
   Map<String, dynamic> toJsonMap() => {
