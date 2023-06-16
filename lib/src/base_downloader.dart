@@ -141,18 +141,14 @@ abstract class BaseDownloader {
       for (var taskId in statusUpdateMap.keys) {
         // map is <taskId, Task/TaskStatus> where TaskStatus is added to Task JSON
         final payload = statusUpdateMap[taskId];
-        final task = Task.createFromJsonMap(payload);
-        final status = TaskStatus.values[payload['taskStatus']];
-        processStatusUpdate(TaskStatusUpdate(task, status));
+        processStatusUpdate(TaskStatusUpdate.fromJsonMap(payload));
       }
       final progressUpdateMap =
           await popUndeliveredData(Undelivered.progressUpdates);
       for (var taskId in progressUpdateMap.keys) {
         // map is <taskId, Task/progress> where progress is added to Task JSON
         final payload = progressUpdateMap[taskId];
-        final task = Task.createFromJsonMap(payload);
-        final progress = payload['progress'];
-        processProgressUpdate(TaskProgressUpdate(task, progress));
+        processProgressUpdate(TaskProgressUpdate.fromJsonMap(payload));
       }
       _retrievedLocallyStoredData = true;
     }
@@ -260,6 +256,7 @@ abstract class BaseDownloader {
           }
         }
         processStatusUpdate(TaskStatusUpdate(task, TaskStatus.canceled));
+        processProgressUpdate(TaskProgressUpdate(task, progressCanceled));
       }
     }
   }

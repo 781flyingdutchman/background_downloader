@@ -124,8 +124,9 @@ class TaskRecord {
   /// Create [TaskRecord] from a JSON map
   TaskRecord.fromJsonMap(Map<String, dynamic> jsonMap)
       : task = Task.createFromJsonMap(jsonMap),
-        status = TaskStatus.values[jsonMap['status'] as int? ?? 0],
-        progress = jsonMap['progress'] as double? ?? 0,
+        status = TaskStatus.values[
+            (jsonMap['status'] as num?)?.toInt() ?? TaskStatus.failed.index],
+        progress = (jsonMap['progress'] as num?)?.toDouble() ?? progressFailed,
         exception = jsonMap['exception'] == null
             ? null
             : TaskException.fromJsonMap(jsonMap['exception']);
