@@ -430,7 +430,9 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                     os_log("Paused task with id %@", log: log, type: .info, task.taskId)
                     processStatusUpdate(task: task, status: .paused)
                     if isDownloadTask(task: task) {
-                        updateNotification(task: task, notificationType: .paused, notificationConfig: notificationConfig)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            updateNotification(task: task, notificationType: .paused, notificationConfig: notificationConfig)
+                        }
                     }
                     Downloader.lastProgressUpdate.removeValue(forKey: task.taskId) // ensure .running update on resume
                     return
@@ -449,7 +451,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             }
             return
         }
-        os_log("Fnished task with id %@", log: log, type: .info, task.taskId)
+        os_log("Finished task with id %@", log: log, type: .info, task.taskId)
         // if this is an upload task, send final TaskStatus (based on HTTP status code
         if isUploadTask(task: task) {
             var taskException = TaskException(type: .httpResponse, httpResponseCode: responseStatusCode, description: responseStatusDescription)
@@ -665,7 +667,9 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                 if resumeDataAsBase64String.isEmpty {
                     os_log("Resume data for taskId %@ no longer available: restarting", log: log, type: .info)
                 }
-                doEnqueue(taskJsonString: userInfo["task"] as! String, notificationConfigJsonString: userInfo["notificationConfig"] as? String, resumeDataAsBase64String: resumeDataAsBase64String, result: nil)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.doEnqueue(taskJsonString: userInfo["task"] as! String, notificationConfigJsonString: userInfo["notificationConfig"] as? String, resumeDataAsBase64String: resumeDataAsBase64String, result: nil)
+                }
                 
             case UNNotificationDefaultActionIdentifier:
                 _ = postOnBackgroundChannel(method: "notificationTap", task: task, arg: userInfo["notificationType"] as! Int)

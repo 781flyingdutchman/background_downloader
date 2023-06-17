@@ -90,7 +90,7 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
     if providesStatusUpdates(downloadTask: task) || retryNeeded {
         let finalTaskException = taskException == nil ? TaskException(type: .general,
                                                            httpResponseCode: -1, description: "") : taskException
-        let arg: Any = status == .failed ? [status.rawValue, finalTaskException!.type.rawValue, finalTaskException!.description, finalTaskException!.httpResponseCode] : status.rawValue
+        let arg: Any = status == .failed ? [status.rawValue, finalTaskException!.type.rawValue, finalTaskException!.description, finalTaskException!.httpResponseCode] as [Any] : status.rawValue
         if !postOnBackgroundChannel(method: "statusUpdate", task: task, arg: arg) {
             // store update locally as a merged task/status JSON string, without error info
             guard let jsonData = try? JSONEncoder().encode(task),
@@ -139,7 +139,7 @@ func processCanResume(task: Task, taskCanResume: Bool) {
 func processResumeData(task: Task, resumeData: Data) -> Bool {
     let resumeDataAsBase64String = resumeData.base64EncodedString()
     Downloader.localResumeData[task.taskId] = resumeDataAsBase64String
-    if !postOnBackgroundChannel(method: "resumeData", task: task, arg: [resumeDataAsBase64String, 0 as Int64]) {
+    if !postOnBackgroundChannel(method: "resumeData", task: task, arg: [resumeDataAsBase64String, 0 as Int64] as [Any]) {
         // store resume data locally
         guard let jsonData = try? JSONEncoder().encode(task),
               var taskJsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
