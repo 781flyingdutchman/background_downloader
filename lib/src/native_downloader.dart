@@ -44,6 +44,7 @@ final class NativeDownloader extends BaseDownloader {
       switch (message) {
         case ('statusUpdate', int statusOrdinal):
           final status = TaskStatus.values[statusOrdinal];
+          await killFailedTask(task, status);
           processStatusUpdate(TaskStatusUpdate(task, status));
 
         case (
@@ -56,6 +57,7 @@ final class NativeDownloader extends BaseDownloader {
             ]
           ):
           final status = TaskStatus.values[statusOrdinal];
+          await killFailedTask(task, status);
           TaskException? exception;
           if (status == TaskStatus.failed) {
             exception = TaskException.fromTypeString(
@@ -120,6 +122,16 @@ final class NativeDownloader extends BaseDownloader {
   @override
   Future<bool> cancelPlatformTasksWithIds(List<String> taskIds) async =>
       await _channel.invokeMethod<bool>('cancelTasksWithIds', taskIds) ?? false;
+
+  /// Kills the task if it failed, on Android only
+  ///
+  /// See methodKillTaskWithId in the Android plugin for explanation
+  Future<void> killFailedTask(Task task, TaskStatus status) async {
+    if (Platform.isAndroid && (status == TaskStatus.failed || status == TaskStatus.canceled)) {
+      print('Killing failed or canceled task');
+      _channel.invokeMethod('killTaskWithId', task.taskId);
+    }
+  }
 
   @override
   Future<Task?> taskForId(String taskId) async {

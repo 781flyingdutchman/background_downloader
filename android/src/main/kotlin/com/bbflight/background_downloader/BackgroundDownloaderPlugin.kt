@@ -290,6 +290,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 "reset" -> methodReset(call, result)
                 "allTasks" -> methodAllTasks(call, result)
                 "cancelTasksWithIds" -> methodCancelTasksWithIds(call, result)
+                "killTaskWithId" -> methodKillTaskWithId(call, result)
                 "taskForId" -> methodTaskForId(call, result)
                 "pause" -> methodPause(call, result)
                 "popResumeData" -> methodPopResumeData(result)
@@ -402,6 +403,33 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
             success = success && cancelActiveTaskWithId(applicationContext, taskId, workManager)
         }
         result.success(success)
+    }
+
+    /**
+     * Kills task with taskId provided as argument in call
+     *
+     * Killing differs from canceling in that it only removes the task from the WorkManager
+     * schedule, without emitting any status updates. It is used to prevent the WorkManager from
+     * rescheduling WorkManager tasks that are canceled because a constraint is no longer met, e.g.
+     * network disconnect. We want to handle such errors ourselves, using our retry mechanism,
+     * and not let the WorkManager reschedule those tasks.  The killTask method is therefore called
+     * whenever a task emits a 'failed' update, as we have no way to determine if the task failed
+     * with the worker 'SUCCESS' or with the worker 'CANCELED'
+     */
+    private fun methodKillTaskWithId(call: MethodCall, result: Result) {
+        val taskId = call.arguments as String
+        Log.d(TAG, "Killing failed task with id $taskId")
+        val workManager = WorkManager.getInstance(applicationContext)
+        val operation = workManager.cancelAllWorkByTag("taskId=$taskId")
+        try {
+            operation.result.get()
+        } catch (e: Throwable) {
+            Log.w(
+                TAG,
+                "Could not kill task wih id $taskId in operation: $operation"
+            )
+        }
+        result.success(null)
     }
 
     /** Returns Task for this taskId, or nil */

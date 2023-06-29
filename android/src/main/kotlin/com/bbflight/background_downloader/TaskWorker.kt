@@ -27,7 +27,8 @@ import androidx.work.WorkerParameters
 import com.google.gson.Gson
 import kotlinx.coroutines.*
 import java.io.*
-import java.lang.Double.min
+import java.lang.Integer.min as intMin
+import java.lang.Double.min as doubleMin
 import java.lang.System.currentTimeMillis
 import java.net.HttpURLConnection
 import java.net.SocketException
@@ -146,12 +147,13 @@ class TaskWorker(
             taskException: TaskException? =
                 null
         ) {
-            val retryNeeded = status == TaskStatus.failed && task.retriesRemaining > 0
-            // if task is in final state, process a final progressUpdate
+            Log.i(TAG, "Statusupdate $status")
             // A 'failed' progress update is only provided if
             // a retry is not needed: if it is needed, a `waitingToRetry` progress update
             // will be generated on the Dart side
+            val retryNeeded = status == TaskStatus.failed && task.retriesRemaining > 0
             var canSendStatusUpdate = true  // may become false for cancellations
+            // if task is in final state, process a final progressUpdate
             when (status) {
                 TaskStatus.complete -> processProgressUpdate(
                     task, 1.0, prefs
@@ -162,7 +164,9 @@ class TaskWorker(
                 )
 
                 TaskStatus.canceled -> {
+                    Log.d(TAG, "canceled: ${BackgroundDownloaderPlugin.canceledTaskIds[task.taskId]}")
                     canSendStatusUpdate = canSendCancellation(task)
+                    Log.d(TAG, "canSendStatusUpdate = $canSendStatusUpdate")
                     if (canSendStatusUpdate) {
                         BackgroundDownloaderPlugin.canceledTaskIds[task.taskId] =
                             currentTimeMillis()
@@ -185,6 +189,7 @@ class TaskWorker(
 
             // Post update if task expects one, or if failed and retry is needed
             if (canSendStatusUpdate && (task.providesStatusUpdates() || retryNeeded)) {
+                Log.d(TAG, "Updating status for $status")
                 val finalTaskException = taskException ?: TaskException(ExceptionType.general)
                 // send exception data only for .failed task, otherwise just the status
                 val arg: Any = if (status == TaskStatus.failed) mutableListOf(
@@ -202,6 +207,8 @@ class TaskWorker(
                         prefs
                     )
                 }
+            } else {
+                Log.d(TAG, "No status update provided for $task") //TODO remove
             }
             // if task is in final state, remove from persistent storage and remove
             // resume data from local memory
@@ -832,9 +839,10 @@ class TaskWorker(
         var numBytes: Int
         return withContext(Dispatchers.IO) {
             try {
-                while (inputStream.read(dataBuffer, 0, bufferSize)
+                while (inputStream.read(dataBuffer, 0, bufferSize /*intMin(bufferSize, inputStream.available())*/)
                         .also { numBytes = it } != -1
                 ) {
+                    Log.d(TAG, "NumBytes = $numBytes and available: ${inputStream.available()}")
                     // check if task is stopped (canceled), paused or timed out
                     if (isStopped) {
                         return@withContext TaskStatus.canceled
@@ -850,7 +858,7 @@ class TaskWorker(
                         outputStream.write(dataBuffer, 0, numBytes)
                         bytesTotal += numBytes
                     }
-                    val progress = min(
+                    val progress = doubleMin(
                         (bytesTotal + startByte).toDouble() / (contentLength + startByte), 0.999
                     )
                     if (contentLength > 0 && progress - lastProgressUpdate > 0.02 && currentTimeMillis() > nextProgressUpdateTime) {

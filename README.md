@@ -24,7 +24,9 @@ No setup is required for [Android](#android) (except when using notifications), 
 ### Downloads example
 
 ```dart
-/// define the download task (subset of parameters shown)
+// Use .download to start a download and wait for it to complete
+
+// define the download task (subset of parameters shown)
 final task = DownloadTask(
         url: 'https://google.com/search',
         urlQueryParameters: {'q': 'pizza'},
@@ -59,7 +61,44 @@ switch (result) {
 }
 ```
 
-Alternatively, use an [event listener](#using-an-event-listener) to process all updates centrally.
+### Enqueue example
+
+```dart
+// Use .enqueue for true parallel downloads, i.e. you don't wait for completion of the tasks you 
+// enqueue, and can enqueue hundreds of tasks simultaneously.
+
+// First define an event listener to process `TaskUpdate` events sent to you by the downloader, 
+// typically in your app's `initState()`:
+FileDownloader().updates.listen((update) {
+      switch (update) {
+        case TaskStatusUpdate _:
+          // process the TaskStatusUpdate, e.g.
+        switch (update.status) {
+          case TaskStatus.complete:
+          print('Task ${update.task.taskId} success!');
+          
+          case TaskStatus.canceled:
+          print('Download was canceled');
+          
+          case TaskStatus.paused:
+          print('Download was paused');
+          
+          default:
+          print('Download not successful');
+          }
+
+        case TaskProgressUpdate _:
+          // process the TaskProgressUpdate, e.g.
+          progressUpdateStream.add(update); // pass on to widget for indicator
+      }
+    });
+
+// Next, enqueue tasks to kick off background downloads, e.g.
+final successfullyEnqueued = await FileDownloader().enqueue(DownloadTask(
+                                url: 'https://google.com',
+                                filename: 'google.html',
+                                updates: Updates.statusAndProgress));
+```
 
 ### Uploads example
 
@@ -131,7 +170,9 @@ FileDownloader().configureNotification(
 // {filename} will be replaced with the task's filename.
 ```
 
-## Contents
+---
+
+# Contents
 
 - [Basic use](#basic-use)
   - [Tasks and the FileDownloader](#tasks-and-the-filedownloader)
@@ -150,6 +191,8 @@ FileDownloader().configureNotification(
   - [Grouping tasks](#grouping-tasks)
 - [Server requests](#server-requests)
 - [Optional parameters](#optional-parameters)
+- [Initial setup](#initial-setup)
+- [Limitations](#limitations)
 
 ## Basic use
 
@@ -176,14 +219,14 @@ final result = await FileDownloader().download(task,
 ```
 Progress updates start with 0.0 when the actual download starts (which may be in the future, e.g. if waiting for a WiFi connection), and will be sent periodically, not more than twice per second per task.  If a task completes successfully you will receive a final progress update with a `progress` value of 1.0 (`progressComplete`). Failed tasks generate `progress` of `progressFailed` (-1.0), canceled tasks `progressCanceled` (-2.0), notFound tasks `progressNotFound` (-3.0), waitingToRetry tasks `progressWaitingToRetry` (-4.0) and paused tasks `progressPaused` (-5.0).
 
-Use `await task.expectedFileSize()` to query the server for the size of the file you are about 
-to download.  The expected file size is also included in `TaskProgressUpdate`s that are sent to 
+Use `await task.expectedFileSize()` to query the server for the size of the file you are about
+to download.  The expected file size is also included in `TaskProgressUpdate`s that are sent to
 listeners and callbacks - see [Using an event listener](#using-an-event-listener) and [Using callbacks](#using-callbacks)
 
 A [DownloadProgressIndicator](https://pub.
 dev/documentation/background_downloader/latest/background_downloader/DownloadProgressIndicator
--class.html) widget is included with the package, and the example app shows how to wire it up. 
-The widget can be configured to include pause and resume buttons, and to expand to show multiple 
+-class.html) widget is included with the package, and the example app shows how to wire it up.
+The widget can be configured to include pause and resume buttons, and to expand to show multiple
 simultaneous downloads, or to collapse and show a file download counter.
 
 #### Status
@@ -638,6 +681,7 @@ Then do the same thing in macos/Runner/Release.entitlements.
 
 ## Limitations
 
+* iOS 13.0 or greater; Android API 24 or greater
 * On Android, downloads are by default limited to 9 minutes, after which the download will end with `TaskStatus.failed`. To allow for longer downloads, set the `DownloadTask.allowPause` field to true: if the task times out, it will pause and automatically resume, eventually downloading the entire file.
 * On iOS, once enqueued (i.e. `TaskStatus.enqueued`), a background download must complete within 4 hours
 * Redirects will be followed
