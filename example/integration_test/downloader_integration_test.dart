@@ -136,6 +136,17 @@ void main() {
     await Future.delayed(const Duration(milliseconds: 250));
   });
 
+  testWidgets('Issue 77', (widgetTester) async {
+    final task = DownloadTask(
+        url: urlWithContentLength,
+        retries: 1,
+        updates: Updates.statusAndProgress);
+    final result = await FileDownloader().download(task,
+        onProgress: (progress) => print(progress),
+        onStatus: (status) => print(status));
+    print(result);
+  });
+
   group('Initialization', () {
     test('registerCallbacks', () {
       expect(() => FileDownloader().registerCallbacks(), throwsAssertionError);

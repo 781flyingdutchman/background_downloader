@@ -255,7 +255,7 @@ button, and will substitute {filename} with the actual filename of the file bein
 ```dart
 FileDownloader().configureNotification(
     running: TaskNotification('Downloading', 'file: {filename}'),
-    progressBar: true)
+    progressBar: true);
 ```
 
 To also show a notifications for other states, add a `TaskNotification` for `complete`, `error`
@@ -508,6 +508,7 @@ Then do the same thing in macos/Runner/Release.entitlements.
 
 ## Limitations
 
+* iOS 13.0 or greater; Android API 24 or greater
 * On Android, downloads are by default limited to 9 minutes, after which the download will end with `TaskStatus.failed`. To allow for longer downloads, set the `DownloadTask.allowPause` field to true: if the task times out, it will pause and automatically resume, eventually downloading the entire file.
 * On iOS, once enqueued (i.e. `TaskStatus.enqueued`), a background download must complete within 4 hours
 * Redirects will be followed

@@ -27,7 +27,8 @@ import androidx.work.WorkerParameters
 import com.google.gson.Gson
 import kotlinx.coroutines.*
 import java.io.*
-import java.lang.Double.min
+import java.lang.Integer.min as intMin
+import java.lang.Double.min as doubleMin
 import java.lang.System.currentTimeMillis
 import java.net.HttpURLConnection
 import java.net.SocketException
@@ -153,28 +154,33 @@ class TaskWorker(
             // will be generated on the Dart side
             var canSendStatusUpdate = true  // may become false for cancellations
             if (status.isFinalState()) {
+                // if task is in final state, process a final progressUpdate
                 when (status) {
                     TaskStatus.complete -> processProgressUpdate(
-                        task, 1.0, prefs
+                            task, 1.0, prefs
                     )
 
                     TaskStatus.failed -> if (!retryNeeded) processProgressUpdate(
-                        task, -1.0, prefs
+                            task, -1.0, prefs
                     )
 
                     TaskStatus.canceled -> {
                         canSendStatusUpdate = canSendCancellation(task)
                         if (canSendStatusUpdate) {
                             BackgroundDownloaderPlugin.canceledTaskIds[task.taskId] =
-                                currentTimeMillis()
+                                    currentTimeMillis()
                             processProgressUpdate(
-                                task, -2.0, prefs
+                                    task, -2.0, prefs
                             )
                         }
                     }
 
                     TaskStatus.notFound -> processProgressUpdate(
-                        task, -3.0, prefs
+                            task, -3.0, prefs
+                    )
+
+                    TaskStatus.paused -> processProgressUpdate(
+                            task, -5.0, prefs
                     )
 
                     else -> {}
@@ -639,7 +645,6 @@ class TaskWorker(
                 }
 
                 else -> {
-                    taskException = TaskException(ExceptionType.general)
                     deleteTempFile(tempFilePath)
                     return TaskStatus.failed
                 }
@@ -842,7 +847,7 @@ class TaskWorker(
                         outputStream.write(dataBuffer, 0, numBytes)
                         bytesTotal += numBytes
                     }
-                    val progress = min(
+                    val progress = doubleMin(
                         (bytesTotal + startByte).toDouble() / (contentLength + startByte), 0.999
                     )
                     if (contentLength > 0 && progress - lastProgressUpdate > 0.02 && currentTimeMillis() > nextProgressUpdateTime) {

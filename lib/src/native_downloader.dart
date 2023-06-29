@@ -112,6 +112,16 @@ class NativeDownloader extends BaseDownloader {
   Future<bool> cancelPlatformTasksWithIds(List<String> taskIds) async =>
       await _channel.invokeMethod<bool>('cancelTasksWithIds', taskIds) ?? false;
 
+  /// Kills the task if it failed, on Android only
+  ///
+  /// See methodKillTaskWithId in the Android plugin for explanation
+  Future<void> killFailedTask(Task task, TaskStatus status) async {
+    if (Platform.isAndroid && (status == TaskStatus.failed || status == TaskStatus.canceled)) {
+      print('Killing failed or canceled task');
+      _channel.invokeMethod('killTaskWithId', task.taskId);
+    }
+  }
+
   @override
   Future<Task?> taskForId(String taskId) async {
     var task = await super.taskForId(taskId);
