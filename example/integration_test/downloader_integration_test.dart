@@ -2335,6 +2335,19 @@ void main() {
         }
       }
     });
+
+    testWidgets('path in shared storage', (widgetTester) async {
+      await FileDownloader().download(task);
+      final path = await FileDownloader()
+          .moveToSharedStorage(task, SharedStorage.downloads);
+      print('Path in downloads is $path');
+      expect(path, isNotNull);
+      expect(File(path!).existsSync(), isTrue);
+      final filePath = await FileDownloader()
+          .pathInSharedStorage(path, SharedStorage.downloads);
+      expect(filePath, equals(path));
+      File(path).deleteSync();
+    });
   });
 
   group('Exception details', () {

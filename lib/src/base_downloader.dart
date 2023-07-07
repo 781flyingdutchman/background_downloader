@@ -411,12 +411,19 @@ abstract class BaseDownloader {
   @visibleForTesting
   Future<void> setForceFailPostOnBackgroundChannel(bool value);
 
-  /// Android-only: Move the file at [filePath] to the shared storage
+  /// Move the file at [filePath] to the shared storage
   /// [destination] and potential subdirectory [directory]
   ///
   /// Returns the path to the file in shared storage, or null
   Future<String?> moveToSharedStorage(String filePath,
       SharedStorage destination, String directory, String? mimeType) {
+    return Future.value(null);
+  }
+
+  /// Returns the path to the file at [filePath] in shared storage
+  /// [destination] and potential subdirectory [directory], or null
+  Future<String?> pathInSharedStorage(
+      String filePath, SharedStorage destination, String directory) {
     return Future.value(null);
   }
 

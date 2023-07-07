@@ -298,6 +298,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 "popProgressUpdates" -> methodPopProgressUpdates(result)
                 "getTaskTimeout" -> methodGetTaskTimeout(result)
                 "moveToSharedStorage" -> methodMoveToSharedStorage(call, result)
+                "pathInSharedStorage" -> methodPathInSharedStorage(call, result)
                 "openFile" -> methodOpenFile(call, result)
                 "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
                     call, result
@@ -501,6 +502,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
      * - filePath (String): full path to file to be moved
      * - destination (Int as index into [SharedStorage] enum)
      * - directory (String): subdirectory within scoped storage
+     * - mimeType (String?): mimeType of the file, overrides derived mimeType
      */
     private fun methodMoveToSharedStorage(call: MethodCall, result: Result) {
         val args = call.arguments as List<*>
@@ -540,6 +542,25 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
     }
 
     /**
+     * Returns path to file in Android scoped/shared storage, or null
+     *
+     * Call arguments:
+     * - filePath (String): full path to file (only the name is used)
+     * - destination (Int as index into [SharedStorage] enum)
+     * - directory (String): subdirectory within scoped storage (ignored for Q+)
+     *
+     * For Android Q+ uses the MediaStore, matching on filename only, i.e. ignoring
+     * the directory
+     */
+    private fun methodPathInSharedStorage(call: MethodCall, result: Result) {
+        val args = call.arguments as List<*>
+        val filePath = args[0] as String
+        val destination = SharedStorage.values()[args[1] as Int]
+        val directory = args[2] as String
+        result.success(pathInSharedStorage(applicationContext, filePath, destination, directory))
+    }
+
+        /**
      * Open the file represented by the task, with optional mimeType
      *
      * Call arguments are [taskJsonMapString, filename, mimeType] with precondition that either

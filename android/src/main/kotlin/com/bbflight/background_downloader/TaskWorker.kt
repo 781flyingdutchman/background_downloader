@@ -64,8 +64,8 @@ class TaskWorker(
         private val fileNameRegEx = Regex("""\{filename\}""", RegexOption.IGNORE_CASE)
         private val progressRegEx = Regex("""\{progress\}""", RegexOption.IGNORE_CASE)
         private val metaDataRegEx = Regex("""\{metadata\}""", RegexOption.IGNORE_CASE)
-        private val asciiOnly = Regex("^[\\x00-\\x7F]+$")
-        private val newlineRegExp = Regex("\r\n|\r|\n")
+        private val asciiOnlyRegEx = Regex("^[\\x00-\\x7F]+$")
+        private val newlineRegEx = Regex("\r\n|\r|\n")
 
         const val boundary = "-----background_downloader-akjhfw281onqciyhnIk"
         const val lineFeed = "\r\n"
@@ -349,7 +349,7 @@ class TaskWorker(
          * Returns whether [string] is composed entirely of ASCII-compatible characters
          */
         private fun isPlainAscii(string: String): Boolean {
-            return asciiOnly.matches(string)
+            return asciiOnlyRegEx.matches(string)
         }
 
         /**
@@ -361,7 +361,7 @@ class TaskWorker(
             // follow this at all. Instead, they URL-encode `\r`, `\n`, and `\r\n` as
             // `\r\n`; URL-encode `"`; and do nothing else (even for `%` or non-ASCII
             // characters). We follow their behavior.
-            return value.replace(newlineRegExp, "%0D%0A").replace("\"", "%22")
+            return value.replace(newlineRegEx, "%0D%0A").replace("\"", "%22")
         }
 
         /**

@@ -78,6 +78,8 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             methodPopProgressUpdates(result: result)
         case "moveToSharedStorage":
             methodMoveToSharedStorage(call: call, result: result)
+        case "pathInSharedStorage":
+            methodPathInSharedStorage(call: call, result: result)
         case "openFile":
             methodOpenFile(call: call, result: result)
         case "forceFailPostOnBackgroundChannel":
@@ -321,6 +323,21 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         result(moveToSharedStorage(filePath: filePath, destination: destination, directory: directory))
     }
 
+    /// Returns path to file in a SharedStorage destination, or null
+    private func methodPathInSharedStorage(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        let args = call.arguments as! [Any]
+        let filePath = args[0] as! String
+        guard
+            let destination = SharedStorage.init(rawValue: args[1] as! Int)
+        else {
+            result(nil)
+            return
+        }
+        let directory = args[2] as! String
+        result(pathInSharedStorage(filePath: filePath, destination: destination, directory: directory))
+    }
+
+    
     /// Opens to file represented by the Task or filePath using iOS standard
     ///
     /// Results in true if successful

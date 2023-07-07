@@ -207,6 +207,12 @@ class NativeDownloader extends BaseDownloader {
           [filePath, destination.index, directory, mimeType]);
 
   @override
+  Future<String?> pathInSharedStorage(
+          String filePath, SharedStorage destination, String directory) =>
+      _channel.invokeMethod<String?>(
+          'pathInSharedStorage', [filePath, destination.index, directory]);
+
+  @override
   Future<bool> openFile(Task? task, String? filePath, String? mimeType) async {
     final result = await _channel.invokeMethod<bool>('openFile', [
       task != null ? jsonEncode(task.toJsonMap()) : null,
