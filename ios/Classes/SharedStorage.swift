@@ -21,12 +21,12 @@ public enum SharedStorage: Int {
 public func moveToSharedStorage(filePath: String, destination: SharedStorage, directory: String) -> String? {
     guard FileManager().fileExists(atPath: filePath)
     else {
-        os_log("Cannot move to shared storage: file %@ does not exist", log: log, type: .info, filePath)
+        os_log("Cannot move to shared storage: file %@ does not exist", log: log, type: .error, filePath)
         return nil
     }
     let fileUrl = NSURL(fileURLWithPath: filePath)
     guard let directory = try? directoryForSharedStorage(destination: destination, directory: directory) else {
-        os_log("Cannot move to shared storage: no permission for directory %@", log: log, type: .info, directory)
+        os_log("Cannot move to shared storage: no permission for directory %@", log: log, type: .error, directory)
         return nil
     }
     if !FileManager.default.fileExists(atPath: directory.path) {
@@ -34,18 +34,18 @@ public func moveToSharedStorage(filePath: String, destination: SharedStorage, di
         {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories:  true)
         } catch {
-            os_log("Failed to create directory %@: %@", log: log, type: .error, directory.path, error.localizedDescription)
+            os_log("Cannot move to shared storage: failed to create directory %@: %@", log: log, type: .error, directory.path, error.localizedDescription)
             return nil
         }
     }
-    let destUrl = directory.appendingPathComponent((filePath as NSString).lastPathComponent)
+    let destUrl = directory.appendingPathComponent((filePath as NSString).lastPathComponent, isDirectory: false)
     if FileManager.default.fileExists(atPath: destUrl.path) {
         try? FileManager.default.removeItem(at: destUrl)
     }
     do {
         try FileManager.default.moveItem(at: fileUrl as URL, to: destUrl)
     } catch {
-        os_log("Failed to move file %@: %@", log: log, type: .error, filePath, error.localizedDescription)
+        os_log("Failed to move file %@ to %@: %@", log: log, type: .error, filePath, destUrl.path, error.localizedDescription)
         return nil
     }
     os_log("Moved from %@ to %@", log: log, type: .info, fileUrl, destUrl.path)
@@ -65,27 +65,27 @@ public func pathInSharedStorage(filePath: String, destination: SharedStorage, di
 
 /// Returns the URL of the directory associated with the [destination] and [directory], or nil
 public func directoryForSharedStorage(destination: SharedStorage, directory: String) throws ->  URL? {
-    var dir: FileManager.SearchPathDirectory
+    var dir: String
     switch destination {
     case .downloads:
-        dir = .downloadsDirectory
+        dir = "Downloads"
     case .images:
-        dir = .picturesDirectory
+        dir = "Pictures"
     case .video:
-        dir = .moviesDirectory
+        dir = "Movies"
     case .audio:
-        dir = .musicDirectory
+        dir = "Music"
     case .files, .external:
-        os_log("Cannot move to shared storage: destination .files and .external are not supported on iOS", log: log, type: .info)
+        os_log("Destination .files and .external are not supported on iOS", log: log, type: .info)
         return nil
         
     }
     let documentsURL =
-    try FileManager.default.url(for: dir,
-                                in: .userDomainMask,
-                                appropriateFor: nil,
-                                create: false)
+        try? FileManager.default.url(for: FileManager.SearchPathDirectory.documentDirectory,
+                                 in: .userDomainMask,
+                                 appropriateFor: nil,
+                                 create: true)
     return directory.isEmpty
-    ? documentsURL
-    : documentsURL.appendingPathComponent(directory)
+        ? documentsURL?.appendingPathComponent(dir)
+        : documentsURL?.appendingPathComponent(dir).appendingPathComponent(directory)
 }
