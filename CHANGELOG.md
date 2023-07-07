@@ -1,3 +1,28 @@
+## 7.5.0
+
+* Added `pathInSharedStorage` method, which obtains the path to a file moved to shared storage.
+
+To check if a file exists in shared storage, obtain the path to the file by calling
+`pathInSharedStorage` and, if not null, check if that file exists.
+
+__On Android 29+:__ If you
+have generated a version with an indexed name (e.g. 'myFile (1).txt'), then only the most recently stored version is available this way, even if an earlier version actually does exist. Also, only files stored by your app will be returned via this call, as you don't have access to files stored by other apps.
+
+__On iOS:__ To make files visible in the Files browser, do not move them to shared storage. Instead, download the file to the `BaseDirectory.applicationDocuments` and add the following to your `Info.plist`:
+```
+<key>LSSupportsOpeningDocumentsInPlace</key>
+<true/>
+<key>UIFileSharingEnabled</key>
+<true/>
+```
+This will make all files in your app's `Documents` directory visible to the Files browser.
+
+* Fixed bug when download is interrupted due to lost network connection (on Android)
+* Fixed bug with `moveToSharedStorage` on iOS: shared storage is now 'faked' on iOS, creating 
+subdirectories of the regular Documents directory, as iOS apps do not have access to shared 
+media and download directories
+* Fixed bug with notifications disappearing on iOS
+
 ## 7.4.1
 
 Bug fix for type cast errors and for thread safety on iOS for notifications
