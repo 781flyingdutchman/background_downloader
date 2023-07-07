@@ -146,7 +146,6 @@ class TaskWorker(
                 taskException: TaskException? =
                         null
         ) {
-            Log.i(TAG, "Statusupdate $status")
             // A 'failed' progress update is only provided if
             // a retry is not needed: if it is needed, a `waitingToRetry` progress update
             // will be generated on the Dart side
@@ -163,10 +162,7 @@ class TaskWorker(
                 )
 
                 TaskStatus.canceled -> {
-                    Log.d(TAG,
-                            "canceled: ${BackgroundDownloaderPlugin.canceledTaskIds[task.taskId]}")
                     canSendStatusUpdate = canSendCancellation(task)
-                    Log.d(TAG, "canSendStatusUpdate = $canSendStatusUpdate")
                     if (canSendStatusUpdate) {
                         BackgroundDownloaderPlugin.canceledTaskIds[task.taskId] =
                                 currentTimeMillis()
@@ -189,7 +185,6 @@ class TaskWorker(
 
             // Post update if task expects one, or if failed and retry is needed
             if (canSendStatusUpdate && (task.providesStatusUpdates() || retryNeeded)) {
-                Log.d(TAG, "Updating status for $status")
                 val finalTaskException = taskException ?: TaskException(ExceptionType.general)
                 // send exception data only for .failed task, otherwise just the status
                 val arg: Any = if (status == TaskStatus.failed) mutableListOf(
@@ -207,8 +202,6 @@ class TaskWorker(
                             prefs
                     )
                 }
-            } else {
-                Log.d(TAG, "No status update provided for $task") //TODO remove
             }
             // if task is in final state, remove from persistent storage and remove
             // resume data from local memory
@@ -504,16 +497,17 @@ class TaskWorker(
             setTaskException(e)
             when (e) {
                 is FileSystemException -> Log.w(
-                        TAG, "Filesystem exception for url ${task.url} and $filePath: ${e.message}"
+                        TAG, "Filesystem exception for taskId ${task.taskId} and $filePath: ${e
+                        .message}"
                 )
 
                 is SocketException -> Log.i(
-                        TAG, "Socket exception for url ${task.url} and $filePath: ${e.message}"
+                        TAG, "Socket exception for taskId ${task.taskId} and $filePath: ${e.message}"
                 )
 
                 is CancellationException -> {
                     Log.i(
-                            TAG, "Job cancelled for url ${task.url} and $filePath: ${e.message}"
+                            TAG, "Job cancelled for taskId ${task.taskId} and $filePath: ${e.message}"
                     )
                     deleteTempFile(tempFilePath)
                     return TaskStatus.canceled
@@ -522,7 +516,7 @@ class TaskWorker(
                 else -> {
                     Log.w(
                             TAG,
-                            "Error for url ${task.url} and $filePath: ${e.message}"
+                            "Error for taskId ${task.taskId} and $filePath: ${e.message}"
                     )
                     taskException = TaskException(
                             ExceptionType.general, description =
@@ -570,7 +564,6 @@ class TaskWorker(
                     )
                 }
             }
-            Log.d(TAG, "transferBytesResult = $transferBytesResult")
             when (transferBytesResult) {
                 TaskStatus.complete -> {
                     // move file from its temp location to the destination
@@ -850,7 +843,6 @@ class TaskWorker(
                                     .also { numBytes = it } != -1
                     ) {
                         if (!isActive) {
-                            Log.d(TAG, "Completing readerJob with Failed")
                             doneCompleter.complete(TaskStatus.failed)
                             break
                         }
@@ -873,19 +865,16 @@ class TaskWorker(
                         }
                     }
                     doneCompleter.complete(TaskStatus.complete)
-                    Log.d(TAG, "Ending readerJob")
                 }
                 testerJob = launch {
                     while (isActive) {
                         // check if task is stopped (canceled), paused or timed out
                         if (isStopped) {
-                            Log.d(TAG, "isStopped was detected")
                             doneCompleter.complete(TaskStatus.failed)
                             break
                         }
                         // 'pause' is signalled by adding the taskId to a static list
                         if (BackgroundDownloaderPlugin.pausedTaskIds.contains(task.taskId)) {
-                            Log.d(TAG, "pause was detected")
                             doneCompleter.complete(TaskStatus.paused)
                             break
                         }
@@ -896,11 +885,10 @@ class TaskWorker(
                         }
                         delay(100)
                     }
-                    Log.d(TAG, "Ending testerJob")
                 }
                 return@withContext doneCompleter.await()
             } catch (e: Exception) {
-                Log.i(TAG, "Exception for ${task.taskId}: $e")
+                Log.i(TAG, "Exception for taskId ${task.taskId}: $e")
                 setTaskException(e)
                 return@withContext TaskStatus.failed
             } finally {
