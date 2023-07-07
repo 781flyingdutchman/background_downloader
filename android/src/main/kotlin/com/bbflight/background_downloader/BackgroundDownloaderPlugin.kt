@@ -221,9 +221,9 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
     }
 
     private var channel: MethodChannel? = null
-    lateinit var applicationContext: Context
-    var pauseReceiver: NotificationRcvr? = null
-    var resumeReceiver: NotificationRcvr? = null
+    private lateinit var applicationContext: Context
+    private var pauseReceiver: NotificationRcvr? = null
+    private var resumeReceiver: NotificationRcvr? = null
     private var scope: CoroutineScope? = null
 
     /**
@@ -418,7 +418,6 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
      */
     private fun methodKillTaskWithId(call: MethodCall, result: Result) {
         val taskId = call.arguments as String
-        Log.d(TAG, "Killing failed task with id $taskId")
         val workManager = WorkManager.getInstance(applicationContext)
         val operation = workManager.cancelAllWorkByTag("taskId=$taskId")
         try {
@@ -473,7 +472,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
     }
 
     /**
-     * Returns a JSON String of a map of [ResumeData], keyed by taskId, that has veen stored
+     * Returns a JSON String of a map of [ResumeData], keyed by taskId, that has been stored
      * in local shared preferences because they could not be delivered to the Dart side.
      * Local storage of this map is then cleared
      */
@@ -581,7 +580,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
     /**
      * Handle intent if received from tapping a notification
      *
-     * This may be called on statup of the application and at that time the [backgroundChannel] and
+     * This may be called on startup of the application and at that time the [backgroundChannel] and
      * its listener may not have been initialized yet. This function therefore includes retry logic.
      */
     private fun handleIntent(intent: Intent?): Boolean {

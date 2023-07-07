@@ -146,44 +146,41 @@ class TaskWorker(
                 taskException: TaskException? =
                         null
         ) {
-            Log.i(TAG, "Statusupdate $status")
             // A 'failed' progress update is only provided if
             // a retry is not needed: if it is needed, a `waitingToRetry` progress update
             // will be generated on the Dart side
             val retryNeeded = status == TaskStatus.failed && task.retriesRemaining > 0
             var canSendStatusUpdate = true  // may become false for cancellations
-            if (status.isFinalState()) {
-                // if task is in final state, process a final progressUpdate
-                when (status) {
-                    TaskStatus.complete -> processProgressUpdate(
-                            task, 1.0, prefs
-                    )
+            // if task is in final state, process a final progressUpdate
+            when (status) {
+                TaskStatus.complete -> processProgressUpdate(
+                        task, 1.0, prefs
+                )
 
-                    TaskStatus.failed -> if (!retryNeeded) processProgressUpdate(
-                            task, -1.0, prefs
-                    )
+                TaskStatus.failed -> if (!retryNeeded) processProgressUpdate(
+                        task, -1.0, prefs
+                )
 
-                    TaskStatus.canceled -> {
-                        canSendStatusUpdate = canSendCancellation(task)
-                        if (canSendStatusUpdate) {
-                            BackgroundDownloaderPlugin.canceledTaskIds[task.taskId] =
-                                    currentTimeMillis()
-                            processProgressUpdate(
-                                    task, -2.0, prefs
-                            )
-                        }
+                TaskStatus.canceled -> {
+                    canSendStatusUpdate = canSendCancellation(task)
+                    if (canSendStatusUpdate) {
+                        BackgroundDownloaderPlugin.canceledTaskIds[task.taskId] =
+                                currentTimeMillis()
+                        processProgressUpdate(
+                                task, -2.0, prefs
+                        )
                     }
-
-                    TaskStatus.notFound -> processProgressUpdate(
-                            task, -3.0, prefs
-                    )
-
-                    TaskStatus.paused -> processProgressUpdate(
-                            task, -5.0, prefs
-                    )
-
-                    else -> {}
                 }
+
+                TaskStatus.notFound -> processProgressUpdate(
+                        task, -3.0, prefs
+                )
+
+                TaskStatus.paused -> processProgressUpdate(
+                        task, -5.0, prefs
+                )
+
+                else -> {}
             }
 
             // Post update if task expects one, or if failed and retry is needed
@@ -494,16 +491,17 @@ class TaskWorker(
             setTaskException(e)
             when (e) {
                 is FileSystemException -> Log.w(
-                        TAG, "Filesystem exception for url ${task.url} and $filePath: ${e.message}"
+                        TAG, "Filesystem exception for taskId ${task.taskId} and $filePath: ${e
+                        .message}"
                 )
 
                 is SocketException -> Log.i(
-                        TAG, "Socket exception for url ${task.url} and $filePath: ${e.message}"
+                        TAG, "Socket exception for taskId ${task.taskId} and $filePath: ${e.message}"
                 )
 
                 is CancellationException -> {
                     Log.i(
-                            TAG, "Job cancelled for url ${task.url} and $filePath: ${e.message}"
+                            TAG, "Job cancelled for taskId ${task.taskId} and $filePath: ${e.message}"
                     )
                     deleteTempFile(tempFilePath)
                     return TaskStatus.canceled
@@ -512,7 +510,7 @@ class TaskWorker(
                 else -> {
                     Log.w(
                             TAG,
-                            "Error for url ${task.url} and $filePath: ${e.message}"
+                            "Error for taskId ${task.taskId} and $filePath: ${e.message}"
                     )
                     taskException = TaskException(
                             ExceptionType.general, description =
@@ -839,7 +837,6 @@ class TaskWorker(
                                     .also { numBytes = it } != -1
                     ) {
                         if (!isActive) {
-                            Log.d(TAG, "Completing readerJob with Failed")
                             doneCompleter.complete(TaskStatus.failed)
                             break
                         }
@@ -862,19 +859,16 @@ class TaskWorker(
                         }
                     }
                     doneCompleter.complete(TaskStatus.complete)
-                    Log.d(TAG, "Ending readerJob")
                 }
                 testerJob = launch {
                     while (isActive) {
                         // check if task is stopped (canceled), paused or timed out
                         if (isStopped) {
-                            Log.d(TAG, "isStopped was detected")
                             doneCompleter.complete(TaskStatus.failed)
                             break
                         }
                         // 'pause' is signalled by adding the taskId to a static list
                         if (BackgroundDownloaderPlugin.pausedTaskIds.contains(task.taskId)) {
-                            Log.d(TAG, "pause was detected")
                             doneCompleter.complete(TaskStatus.paused)
                             break
                         }
@@ -885,11 +879,10 @@ class TaskWorker(
                         }
                         delay(100)
                     }
-                    Log.d(TAG, "Ending testerJob")
                 }
                 return@withContext doneCompleter.await()
             } catch (e: Exception) {
-                Log.i(TAG, "Exception for ${task.taskId}: $e")
+                Log.i(TAG, "Exception for taskId ${task.taskId}: $e")
                 setTaskException(e)
                 return@withContext TaskStatus.failed
             } finally {

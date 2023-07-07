@@ -136,17 +136,6 @@ void main() {
     await Future.delayed(const Duration(milliseconds: 250));
   });
 
-  testWidgets('Issue 77', (widgetTester) async {
-    final task = DownloadTask(
-        url: urlWithContentLength,
-        retries: 1,
-        updates: Updates.statusAndProgress);
-    final result = await FileDownloader().download(task,
-        onProgress: (progress) => print(progress),
-        onStatus: (status) => print(status));
-    print(result);
-  });
-
   group('Initialization', () {
     test('registerCallbacks', () {
       expect(() => FileDownloader().registerCallbacks(), throwsAssertionError);
@@ -1740,6 +1729,7 @@ void main() {
               .cancelTasksWithIds(await FileDownloader().allTaskIds()),
           equals(true));
       await Future.delayed(const Duration(seconds: 2));
+      print('Completed: $completeCounter, cancelled: $cancelCounter');
       expect(cancelCounter + completeCounter, equals(tasks.length));
       final docsDir = await getApplicationDocumentsDirectory();
       for (var task in tasks) {
@@ -1748,6 +1738,20 @@ void main() {
           file.deleteSync();
         }
       }
+    });
+
+    testWidgets('cancel after some progress', (widgetTester) async {
+      final task = DownloadTask(
+          url: urlWithContentLength, updates: Updates.statusAndProgress);
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      expect(await FileDownloader().enqueue(task), equals(true));
+      await someProgressCompleter.future;
+      expect(await FileDownloader().cancelTaskWithId(task.taskId), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.canceled));
+      await Future.delayed(const Duration(seconds: 1));
     });
 
     /// If a task fails immediately, eg due to a malformed url, it
