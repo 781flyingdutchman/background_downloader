@@ -42,22 +42,22 @@ final task = DownloadTask(
 // Start download, and wait for result. Show progress and status changes
 // while downloading
 final result = await FileDownloader().download(task,
-  onProgress: (progress) => print('Progress: ${progress * 100}%'),
-  onStatus: (status) => print('Status: $status'));
+onProgress: (progress) => print('Progress: ${progress * 100}%'),
+onStatus: (status) => print('Status: $status'));
 
 // Act on the result
 switch (result) {
-  case TaskStatus.complete:
-    print('Success!');
-  
-  case TaskStatus.canceled:
-    print('Download was canceled');
-  
-  case TaskStatus.paused:
-    print('Download was paused');
-  
-  default:
-    print('Download not successful');
+case TaskStatus.complete:
+print('Success!');
+
+case TaskStatus.canceled:
+print('Download was canceled');
+
+case TaskStatus.paused:
+print('Download was paused');
+
+default:
+print('Download not successful');
 }
 ```
 
@@ -70,34 +70,34 @@ switch (result) {
 // First define an event listener to process `TaskUpdate` events sent to you by the downloader, 
 // typically in your app's `initState()`:
 FileDownloader().updates.listen((update) {
-      switch (update) {
-        case TaskStatusUpdate _:
-          // process the TaskStatusUpdate, e.g.
-        switch (update.status) {
-          case TaskStatus.complete:
-          print('Task ${update.task.taskId} success!');
-          
-          case TaskStatus.canceled:
-          print('Download was canceled');
-          
-          case TaskStatus.paused:
-          print('Download was paused');
-          
-          default:
-          print('Download not successful');
-          }
+switch (update) {
+case TaskStatusUpdate _:
+// process the TaskStatusUpdate, e.g.
+switch (update.status) {
+case TaskStatus.complete:
+print('Task ${update.task.taskId} success!');
 
-        case TaskProgressUpdate _:
-          // process the TaskProgressUpdate, e.g.
-          progressUpdateStream.add(update); // pass on to widget for indicator
-      }
-    });
+case TaskStatus.canceled:
+print('Download was canceled');
+
+case TaskStatus.paused:
+print('Download was paused');
+
+default:
+print('Download not successful');
+}
+
+case TaskProgressUpdate _:
+// process the TaskProgressUpdate, e.g.
+progressUpdateStream.add(update); // pass on to widget for indicator
+}
+});
 
 // Next, enqueue tasks to kick off background downloads, e.g.
 final successfullyEnqueued = await FileDownloader().enqueue(DownloadTask(
-                                url: 'https://google.com',
-                                filename: 'google.html',
-                                updates: Updates.statusAndProgress));
+url: 'https://google.com',
+filename: 'google.html',
+updates: Updates.statusAndProgress));
 ```
 
 ### Uploads example
@@ -108,15 +108,15 @@ final task = UploadTask(
         url: 'https://myserver.com/uploads',
         filename: 'myData.txt',
         fields: {'datafield': 'value'},
-        fileField: 'myFile', 
+        fileField: 'myFile',
         updates: Updates.statusAndProgress // request status and progress updates
 );
 
 // Start upload, and wait for result. Show progress and status changes
 // while uploading
 final result = await FileDownloader().upload(task,
-  onProgress: (progress) => print('Progress: ${progress * 100}%'),
-  onStatus: (status) => print('Status: $status'));
+onProgress: (progress) => print('Progress: ${progress * 100}%'),
+onStatus: (status) => print('Status: $status'));
 
 // Act on result, similar to download
 ```
@@ -127,8 +127,8 @@ final tasks = [task1, task2, task3]; // a list of Download tasks
 
 // download the batch
 final result = await FileDownloader().downloadBatch(tasks,
-  batchProgressCallback: (succeeded, failed) =>
-    print('Completed ${succeeded + failed} out of ${tasks.length}, $failed failed')
+batchProgressCallback: (succeeded, failed) =>
+print('Completed ${succeeded + failed} out of ${tasks.length}, $failed failed')
 );
 ```
 
@@ -146,11 +146,11 @@ final successfullyEnqueued = await FileDownloader().enqueue(task);
 // query the tracking database, returning a record for each task
 final records = await FileDownloader().database.allRecords();
 for (record in records) {
-  print('Task ${record.tasksId} status is ${record.status}');
-  if (record.status == TaskStatus.running) {
-    print('-- progress ${record.progress * 100}%');
-    print('-- file size ${record.expectedFileSize} bytes');
-  }
+print('Task ${record.tasksId} status is ${record.status}');
+if (record.status == TaskStatus.running) {
+print('-- progress ${record.progress * 100}%');
+print('-- file size ${record.expectedFileSize} bytes');
+}
 };
 
 // or get record for specific task
@@ -161,9 +161,9 @@ final record = await FileDownloader().database.recordForId(task.taskId);
 ```dart
 // configure notification for all tasks
 FileDownloader().configureNotification(
-  running: TaskNotification('Downloading', 'file: {filename}'),
-  complete: TaskNotification('Download finished', 'file: {filename}'),
-  progressBar: true
+running: TaskNotification('Downloading', 'file: {filename}'),
+complete: TaskNotification('Download finished', 'file: {filename}'),
+progressBar: true
 );
 
 // all downloads will now show a notification while downloading, and when complete. 
@@ -214,8 +214,8 @@ The `result` will be a [TaskStatusUpdate](https://pub.dev/documentation/backgrou
 
 If you want to monitor progress during the download itself (e.g. for a large file), then add a progress callback that takes a double as its argument:
 ```dart
-final result = await FileDownloader().download(task, 
-    onProgress: (progress) => print('Progress update: $progress'));
+final result = await FileDownloader().download(task,
+onProgress: (progress) => print('Progress update: $progress'));
 ```
 Progress updates start with 0.0 when the actual download starts (which may be in the future, e.g. if waiting for a WiFi connection), and will be sent periodically, not more than twice per second per task.  If a task completes successfully you will receive a final progress update with a `progress` value of 1.0 (`progressComplete`). Failed tasks generate `progress` of `progressFailed` (-1.0), canceled tasks `progressCanceled` (-2.0), notFound tasks `progressNotFound` (-3.0), waitingToRetry tasks `progressWaitingToRetry` (-4.0) and paused tasks `progressPaused` (-5.0).
 
@@ -233,8 +233,8 @@ simultaneous downloads, or to collapse and show a file download counter.
 
 If you want to monitor status changes while the download is underway (i.e. not only the final state, which you will receive as the result of the `download` call) you can add a status change callback that takes the status as an argument:
 ```dart
-final result = await FileDownloader().download(task, 
-    onStatus: (status) => print('Status update: $status'));
+final result = await FileDownloader().download(task,
+onStatus: (status) => print('Status update: $status'));
 ```
 
 The status will follow a sequence of `.enqueued` (waiting to execute), `.running` (actively downloading) and then one of the final states mentioned before, or `.waitingToRetry` if retries are enabled and the task failed.
@@ -244,11 +244,11 @@ The status will follow a sequence of `.enqueued` (waiting to execute), `.running
 If you want to keep an eye on how long the download is taking (e.g. to warn the user that there may be an issue with their network connection, or to cancel the task if it takes too long), pass an `onElapsedTime` callback to the `download` method. The callback takes a single argument of type `Duration`, representing the time elapsed since the call to `download` was made. It is called at regular intervals (defined by `elapsedTimeInterval` which defaults to 5 seconds), so you can react in different ways depending on the total time elapsed. For example:
 ```dart
 final result = await FileDownloader().download(
-                  task, 
-                  onElapsedTime: (elapsed) {
-                      print('This is taking rather long: $elapsed');
-                  },
-                  elapsedTimeInterval: const Duration(seconds: 30));
+task,
+onElapsedTime: (elapsed) {
+print('This is taking rather long: $elapsed');
+},
+elapsedTimeInterval: const Duration(seconds: 30));
 ```
 
 The elapsed time logic is only available for `download`, `upload`, `downloadBatch` and `uploadBatch`. It is not available for tasks started using `enqueue`, as there is no expectation that those complete imminently.
@@ -298,8 +298,8 @@ final result = await FileDownloader().downloadBatch(tasks);
 The result is a `Batch` object that contains the result for each task in `.results`. You can use `.numSucceeded` and `.numFailed` to check if all files in the batch downloaded successfully, and use `.succeeded` or `.failed` to iterate over successful or failed tasks within the batch.  If you want to get progress updates for the batch (in terms of how many files have been downloaded) then add a callback:
 ```dart
 final result = await FileDownloader().downloadBatch(tasks, batchProgressCallback: (succeeded, failed) {
-  print('$succeeded files succeeded, $failed have failed');
-  print('Progress is ${(succeeded + failed) / tasks.length} %');
+print('$succeeded files succeeded, $failed have failed');
+print('Progress is ${(succeeded + failed) / tasks.length} %');
 });
 ```
 The callback will be called upon completion of each task (whether successful or not), and will start with (0, 0) before any downloads start, so you can use that to start a progress indicator.
@@ -334,23 +334,23 @@ The rest of this section details [event listeners](#using-an-event-listener), [c
 Listen to updates from the downloader by listening to the `updates` stream, and process those updates centrally. For example, the following creates a listener to monitor status and progress updates for downloads, and then enqueues a task as an example:
 ```dart
     final subscription = FileDownloader().updates.listen((update) {
-        if (update is TaskStatusUpdate) {
-            print('Status update for ${update.task} with status ${update.status}');
-        } else if (update is TaskProgressUpdate) {
-            print('Progress update for ${update.task} with progress ${update.progress} '
-                  'and expected file size ${update.expectedFileSize}');
-            // note: expectedFileSize is only valid if 0 < progress < 1. It is -1 otherwise
-    });
-    
-    // define the task
-    final task = DownloadTask(
-        url: 'https://google.com',
-        filename: 'google.html',
-        updates: Updates.statusAndProgress); // needed to also get progress updates
-        
-    // enqueue the download
-    final successFullyEnqueued = await FileDownloader().enqueue(task);
-    // updates will be sent to your subscription listener
+if (update is TaskStatusUpdate) {
+print('Status update for ${update.task} with status ${update.status}');
+} else if (update is TaskProgressUpdate) {
+print('Progress update for ${update.task} with progress ${update.progress} '
+'and expected file size ${update.expectedFileSize}');
+// note: expectedFileSize is only valid if 0 < progress < 1. It is -1 otherwise
+});
+
+// define the task
+final task = DownloadTask(
+url: 'https://google.com',
+filename: 'google.html',
+updates: Updates.statusAndProgress); // needed to also get progress updates
+
+// enqueue the download
+final successFullyEnqueued = await FileDownloader().enqueue(task);
+// updates will be sent to your subscription listener
 ```
 
 Note that `successFullyEnqueued` only refers to the enqueueing of the download task, not its result, which must be monitored via the listener. Also note that in order to get progress updates the task must set its `updates` field to a value that includes progress updates. In the example, we are asking for both status and progress updates, but other combinations are possible. For example, if you set `updates` to `Updates.status` then the task will only generate status updates and no progress updates. You define what updates to receive on a task by task basis via the `Task.updates` field, which defaults to status updates only.
@@ -365,14 +365,14 @@ The [TaskStatusCallback](https://pub.dev/documentation/background_downloader/lat
 ```dart
 void taskStatusCallback(TaskStatusUpdate update) {
   print('taskStatusCallback for ${update.task) with status ${update.status} and exception ${update.exception}');
-}
+  }
 ```
 
 The [TaskProgressCallback](https://pub.dev/documentation/background_downloader/latest/background_downloader/TaskProgressCallback.html) receives a [TaskProgressUpdate](https://pub.dev/documentation/background_downloader/latest/background_downloader/TaskProgressUpdate-class.html), so a simple callback function is:
 ```dart
 void taskProgressCallback(TaskProgressUpdate update) {
   print('taskProgressCallback for ${update.task} with progress ${update.progress} '
-        'and expected file size ${update.expectedFileSize}');
+          'and expected file size ${update.expectedFileSize}');
   // note: expectedFileSize is only valid if 0 < progress < 1. It is -1 otherwise
 }
 ```
@@ -381,7 +381,7 @@ A basic file download with just status monitoring (no progress) then requires re
 ```dart
 FileDownloader().registerCallbacks(taskStatusCallback: taskStatusCallback);
 final successFullyEnqueued = await FileDownloader().enqueue(
-    DownloadTask(url: 'https://google.com', filename: 'google.html'));
+DownloadTask(url: 'https://google.com', filename: 'google.html'));
 ```
 
 You define what updates to receive on a task by task basis via the `Task.updates` field, which defaults to status updates only.  If you register a callback for a type of task, updates are provided only through that callback and will not be posted on the `updates` stream.
@@ -407,8 +407,8 @@ final successfullyEnqueued = await FileDownloader().enqueue(task);
 // from the database
 final record = await FileDownloader().database.recordForId(task.taskId);
 print('Taskid ${record.taskId} with task ${record.task} has '
-    'status ${record.status} and progress ${record.progress} '
-    'with an expected file size of ${record.expectedFileSize} bytes'
+'status ${record.status} and progress ${record.progress} '
+'with an expected file size of ${record.expectedFileSize} bytes'
 ```
 
 You can interact with the `database` using `allRecords`, `allRecordsOlderThan`, `recordForId`,`deleteAllRecords`,
@@ -428,8 +428,8 @@ the download completes or ends with an error. It will also show a progress bar a
 button, and will substitute {filename} with the actual filename of the file being downloaded.
 ```dart
 FileDownloader().configureNotification(
-    running: TaskNotification('Downloading', 'file: {filename}'),
-    progressBar: true);
+running: TaskNotification('Downloading', 'file: {filename}'),
+progressBar: true);
 ```
 
 To also show a notifications for other states, add a `TaskNotification` for `complete`, `error`
@@ -457,10 +457,10 @@ To respond to the user tapping a notification, register a callback that takes `T
 
 ```dart
 FileDownloader().registerCallbacks(
-  taskNotificationTapCallback: myNotificationTapCallback);
+taskNotificationTapCallback: myNotificationTapCallback);
 
 void myNotificationTapCallback(Task task, NotificationType notificationType) {
-  print('Tapped notification $notificationType for taskId ${task.taskId}');
+print('Tapped notification $notificationType for taskId ${task.taskId}');
 }
 ```
 
@@ -494,9 +494,9 @@ The download directories specified in the `BaseDirectory` enum are all local to 
 ```dart
 final newFilepath = await FileDownloader().moveToSharedStorage(task, SharedStorage.downloads);
 if (newFilePath == null) {
-  ... // handle error
+... // handle error
 } else {
-  ... // do something with the newFilePath
+... // do something with the newFilePath
 }
 ```
 
@@ -508,12 +508,32 @@ Because the behavior is very platform-specific, not all `SharedStorage` destinat
 * `.files` - implemented on Android only
 * `.external` - implemented on Android only
 
-On MacOS, for the `.downloads` to work you need to enable App Sandbox entitlements and set the key `com.apple.security.files.downloads.read-write` to true.
-On Android, depending on what `SharedStorage` destination you move a file to, and depending on the OS version your app runs on, you _may_ require extra permissions `WRITE_EXTERNAL_STORAGE` and/or `READ_EXTERNAL_STORAGE` . See [here](https://medium.com/androiddevelopers/android-11-storage-faq-78cefea52b7c) for details on the new scoped storage rules starting with Android API version 30, which is what the plugin is using.
-
 Methods `moveToSharedStorage` and the similar `moveFileToSharedStorage` also take an optional
 `directory` argument for a subdirectory in the `SharedStorage` destination. They also take an
 optional `mimeType` parameter that overrides the mimeType derived from the filePath extension.
+
+If the file already exists in shared storage, then on iOS and desktop it will be overwritten,
+whereas on Android API 29+ a new file will be created with an indexed name (e.g. 'myFile (1).txt').
+
+__On MacOS:__ For the `.downloads` to work you need to enable App Sandbox entitlements and set the key `com.apple.security.files.downloads.read-write` to true.  
+__On Android:__ Depending on what `SharedStorage` destination you move a file to, and depending on the OS version your app runs on, you _may_ require extra permissions `WRITE_EXTERNAL_STORAGE` and/or `READ_EXTERNAL_STORAGE` . See [here](https://medium.com/androiddevelopers/android-11-storage-faq-78cefea52b7c) for details on the new scoped storage rules starting with Android API version 30, which is what the plugin is using.
+
+### Path to file in shared storage
+
+To check if a file exists in shared storage, obtain the path to the file by calling
+`pathInSharedStorage` and, if not null, check if that file exists.
+
+__On Android 29+:__ If you
+have generated a version with an indexed name (e.g. 'myFile (1).txt'), then only the most recently stored version is available this way, even if an earlier version actually does exist. Also, only files stored by your app will be returned via this call, as you don't have access to files stored by other apps.
+
+__On iOS:__ To make files visible in the Files browser, do not move them to shared storage. Instead, download the file to the `BaseDirectory.applicationDocuments` and add the following to your `Info.plist`:
+```
+<key>LSSupportsOpeningDocumentsInPlace</key>
+<true/>
+<key>UIFileSharingEnabled</key>
+<true/>
+```
+This will make all files in your app's `Documents` directory visible to the Files browser.
 
 ## Uploads
 
@@ -553,14 +573,14 @@ Note that each of these methods accept a `group` parameter that targets the meho
 Because an app may require different types of downloads, and handle those differently, you can specify a `group` with your task, and register callbacks specific to each `group`. If no group is specified the default group `FileDownloader.defaultGroup` is used. For example, to create and handle downloads for group 'bigFiles':
 ```dart
 FileDownloader().registerCallbacks(
-  group: 'bigFiles'
-  taskStatusCallback: bigFilesDownloadStatusCallback,
-  taskProgressCallback: bigFilesDownloadProgressCallback);
+group: 'bigFiles'
+taskStatusCallback: bigFilesDownloadStatusCallback,
+taskProgressCallback: bigFilesDownloadProgressCallback);
 final task = DownloadTask(
-  group: 'bigFiles',
-  url: 'https://google.com',
-  filename: 'google.html',
-  updates: Updates.statusAndProgress);
+group: 'bigFiles',
+url: 'https://google.com',
+filename: 'google.html',
+updates: Updates.statusAndProgress);
 final successFullyEnqueued = await FileDownloader().enqueue(task);
 ```
 

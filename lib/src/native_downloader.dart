@@ -127,7 +127,8 @@ final class NativeDownloader extends BaseDownloader {
   ///
   /// See methodKillTaskWithId in the Android plugin for explanation
   Future<void> killFailedTask(Task task, TaskStatus status) async {
-    if (Platform.isAndroid && (status == TaskStatus.failed || status == TaskStatus.canceled)) {
+    if (Platform.isAndroid &&
+        (status == TaskStatus.failed || status == TaskStatus.canceled)) {
       _channel.invokeMethod('killTaskWithId', task.taskId);
     }
   }
@@ -207,6 +208,12 @@ final class NativeDownloader extends BaseDownloader {
           SharedStorage destination, String directory, String? mimeType) =>
       _channel.invokeMethod<String?>('moveToSharedStorage',
           [filePath, destination.index, directory, mimeType]);
+
+  @override
+  Future<String?> pathInSharedStorage(
+          String filePath, SharedStorage destination, String directory) =>
+      _channel.invokeMethod<String?>(
+          'pathInSharedStorage', [filePath, destination.index, directory]);
 
   @override
   Future<bool> openFile(Task? task, String? filePath, String? mimeType) async {

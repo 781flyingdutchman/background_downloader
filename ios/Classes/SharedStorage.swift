@@ -52,6 +52,16 @@ public func moveToSharedStorage(filePath: String, destination: SharedStorage, di
     return destUrl.path
 }
 
+/// Returns the path to the file at [filePath] in shared storage [destination] subdir [directory], or null
+public func pathInSharedStorage(filePath: String, destination: SharedStorage, directory: String) -> String? {
+    guard let directory = try? directoryForSharedStorage(destination: destination, directory: directory) else {
+        os_log("Cannot determine path in shared storage: no permission for directory %@", log: log, type: .info, directory)
+        return nil
+    }
+    let destUrl = directory.appendingPathComponent((filePath as NSString).lastPathComponent)
+    return destUrl.path
+}
+
 
 /// Returns the URL of the directory associated with the [destination] and [directory], or nil
 public func directoryForSharedStorage(destination: SharedStorage, directory: String) throws ->  URL? {

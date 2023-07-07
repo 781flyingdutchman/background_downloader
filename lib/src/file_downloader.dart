@@ -785,6 +785,18 @@ interface class FileDownloader {
       _downloader.moveToSharedStorage(
           filePath, destination, directory, mimeType);
 
+  /// Returns the filePath to the file represented by [filePath] in shared
+  /// storage [destination] and potentially a [directory] within that
+  /// destination.
+  ///
+  /// Returns the path to the stored file, or null if not successful
+  ///
+  /// Platform-dependent, not consistent across all platforms
+  Future<String?> pathInSharedStorage(
+          String filePath, SharedStorage destination,
+          {String directory = ''}) async =>
+      _downloader.pathInSharedStorage(filePath, destination, directory);
+
   /// Open the file represented by [task] or [filePath] using the application
   /// available on the platform.
   ///

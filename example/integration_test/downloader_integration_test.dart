@@ -1757,8 +1757,10 @@ void main() {
     });
 
     testWidgets('cancel after some progress', (widgetTester) async {
-      final task = DownloadTask(url: urlWithContentLength, updates: Updates.statusAndProgress);
-      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback,
+      final task = DownloadTask(
+          url: urlWithContentLength, updates: Updates.statusAndProgress);
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
       expect(await FileDownloader().enqueue(task), equals(true));
       await someProgressCompleter.future;
@@ -2348,6 +2350,19 @@ void main() {
           File(filePath).deleteSync();
         }
       }
+    });
+
+    testWidgets('path in shared storage', (widgetTester) async {
+      await FileDownloader().download(task);
+      final path = await FileDownloader()
+          .moveToSharedStorage(task, SharedStorage.downloads);
+      print('Path in downloads is $path');
+      expect(path, isNotNull);
+      expect(File(path!).existsSync(), isTrue);
+      final filePath = await FileDownloader()
+          .pathInSharedStorage(path, SharedStorage.downloads);
+      expect(filePath, equals(path));
+      File(path).deleteSync();
     });
   });
 
