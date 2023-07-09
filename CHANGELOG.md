@@ -1,6 +1,6 @@
 ## 7.5.0
 
-* Added `pathInSharedStorage` method, which obtains the path to a file moved to shared storage.
+Added `pathInSharedStorage` method, which obtains the path to a file moved to shared storage.
 
 To check if a file exists in shared storage, obtain the path to the file by calling
 `pathInSharedStorage` and, if not null, check if that file exists.
@@ -17,6 +17,7 @@ __On iOS:__ To make files visible in the Files browser, do not move them to shar
 ```
 This will make all files in your app's `Documents` directory visible to the Files browser.
 
+Bug fixes:
 * Fixed bug when download is interrupted due to lost network connection (on Android)
 * Fixed bug with `moveToSharedStorage` on iOS: shared storage is now 'faked' on iOS, creating 
 subdirectories of the regular Documents directory, as iOS apps do not have access to shared 
@@ -86,6 +87,36 @@ Further Dart 3 changes (not visible to user).
 Migration to Dart 3 - not other functional change or API change.  If you use Dart 2 please use version `6.1.1` of this plugin, which will be maintained until the end of 2023.
 
 Most classes in the package are now `final` classes, and under the hood we use the new Records and Pattern matching features of Dart 3. None of this should matter if you've used the package as intended.
+
+## 6.3.0
+
+Added `pathInSharedStorage` method, which obtains the path to a file moved to shared storage.
+
+To check if a file exists in shared storage, obtain the path to the file by calling
+`pathInSharedStorage` and, if not null, check if that file exists.
+
+__On Android 29+:__ If you
+have generated a version with an indexed name (e.g. 'myFile (1).txt'), then only the most recently stored version is available this way, even if an earlier version actually does exist. Also, only files stored by your app will be returned via this call, as you don't have access to files stored by other apps.
+
+__On iOS:__ To make files visible in the Files browser, do not move them to shared storage. Instead, download the file to the `BaseDirectory.applicationDocuments` and add the following to your `Info.plist`:
+```
+<key>LSSupportsOpeningDocumentsInPlace</key>
+<true/>
+<key>UIFileSharingEnabled</key>
+<true/>
+```
+This will make all files in your app's `Documents` directory visible to the Files browser.
+
+Bug fixes:
+* Fixed bug when download is interrupted due to lost network connection (on Android)
+* Fixed bug with `moveToSharedStorage` on iOS: shared storage is now 'faked' on iOS, creating
+  subdirectories of the regular Documents directory, as iOS apps do not have access to shared
+  media and download directories
+* Fixed bug with notifications disappearing on iOS
+
+## 6.2.1
+
+Bug fix for type cast errors and for thread safety on iOS for notifications
 
 ## 6.2.0
 
