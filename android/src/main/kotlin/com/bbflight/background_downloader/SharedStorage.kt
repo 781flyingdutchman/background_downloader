@@ -29,11 +29,11 @@ val trailingPathSeparatorRegEx = Regex("""/$""")
  * If successful, the original file will have been deleted
  */
 fun moveToSharedStorage(
-        context: Context,
-        filePath: String,
-        destination: SharedStorage,
-        directory: String,
-        mimeType: String?
+    context: Context,
+    filePath: String,
+    destination: SharedStorage,
+    directory: String,
+    mimeType: String?
 ): String? {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
         return moveToPublicDirectory(filePath, destination, directory)
@@ -41,13 +41,13 @@ fun moveToSharedStorage(
     val file = File(filePath)
     if (!file.exists()) {
         Log.i(
-                BackgroundDownloaderPlugin.TAG,
-                "File $filePath does not exist -> cannot move to shared storage"
+            BackgroundDownloaderPlugin.TAG,
+            "File $filePath does not exist -> cannot move to shared storage"
         )
         return null
     }
     val cleanDirectory =
-            trailingPathSeparatorRegEx.replace(leadingPathSeparatorRegEx.replace(directory, ""), "")
+        trailingPathSeparatorRegEx.replace(leadingPathSeparatorRegEx.replace(directory, ""), "")
     // Set up the content values for the new file
     val contentValues = ContentValues().apply {
         put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
@@ -78,8 +78,8 @@ fun moveToSharedStorage(
             }
         } catch (e: Exception) {
             Log.i(
-                    BackgroundDownloaderPlugin.TAG,
-                    "Error moving file $filePath to shared storage: $e"
+                BackgroundDownloaderPlugin.TAG,
+                "Error moving file $filePath to shared storage: $e"
             )
         } finally {
             contentValues.clear()
@@ -104,14 +104,14 @@ fun moveToSharedStorage(
  * READ_EXTERNAL_STORAGE and WRITE_EXTERNAL_STORAGE
  */
 private fun moveToPublicDirectory(
-        filePath: String, destination: SharedStorage, directory: String
+    filePath: String, destination: SharedStorage, directory: String
 ): String? {
     try {
         val file = File(filePath)
         if (!file.exists()) {
             Log.i(
-                    BackgroundDownloaderPlugin.TAG,
-                    "File $filePath does not exist -> cannot move to public directory"
+                BackgroundDownloaderPlugin.TAG,
+                "File $filePath does not exist -> cannot move to public directory"
             )
             return null
         }
@@ -145,8 +145,8 @@ private fun moveToPublicDirectory(
         return destinationFile.absolutePath
     } catch (e: Exception) {
         Log.i(
-                BackgroundDownloaderPlugin.TAG,
-                "Unable to move file $filePath to public directory: $e"
+            BackgroundDownloaderPlugin.TAG,
+            "Unable to move file $filePath to public directory: $e"
         )
         return null
     }
@@ -156,10 +156,10 @@ private fun moveToPublicDirectory(
  * Returns the path to the file in shared storage, or null
  */
 fun pathInSharedStorage(
-        context: Context,
-        filePath: String,
-        destination: SharedStorage,
-        directory: String
+    context: Context,
+    filePath: String,
+    destination: SharedStorage,
+    directory: String
 ): String? {
     val fileName = File(filePath).name
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
@@ -171,11 +171,14 @@ fun pathInSharedStorage(
     }
     // Version above Q uses MediaStore
     context.contentResolver.query(
-            getMediaStoreUri(destination),
-            arrayOf(MediaStore.Images.Media.DATA, MediaStore.MediaColumns.DISPLAY_NAME), // same for all collections AFAIK
-            "${MediaStore.MediaColumns.DISPLAY_NAME} = ?",
-            arrayOf(fileName),
-            null
+        getMediaStoreUri(destination),
+        arrayOf(
+            MediaStore.Images.Media.DATA,
+            MediaStore.MediaColumns.DISPLAY_NAME
+        ), // same for all collections AFAIK
+        "${MediaStore.MediaColumns.DISPLAY_NAME} = ?",
+        arrayOf(fileName),
+        null
     )?.use { cursor ->
         if (cursor.moveToFirst()) {
             return cursor.getString(0)
@@ -192,16 +195,20 @@ private fun getMediaStoreUri(destination: SharedStorage): Uri {
     return when (destination) {
         SharedStorage.files -> MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         SharedStorage.downloads -> MediaStore.Downloads.getContentUri(
-                MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            MediaStore.VOLUME_EXTERNAL_PRIMARY
+        )
 
         SharedStorage.images -> MediaStore.Images.Media.getContentUri(
-                MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            MediaStore.VOLUME_EXTERNAL_PRIMARY
+        )
 
         SharedStorage.video -> MediaStore.Video.Media.getContentUri(
-                MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            MediaStore.VOLUME_EXTERNAL_PRIMARY
+        )
 
         SharedStorage.audio -> MediaStore.Audio.Media.getContentUri(
-                MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            MediaStore.VOLUME_EXTERNAL_PRIMARY
+        )
 
         SharedStorage.external -> MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
     }
@@ -245,7 +252,7 @@ private fun getRelativePath(destination: SharedStorage, directory: String): Stri
 fun getMimeType(fileName: String): String {
     val extension = fileName.substringAfterLast(".", "")
     return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
-            ?: "application/octet-stream"
+        ?: "application/octet-stream"
 }
 
 /**
