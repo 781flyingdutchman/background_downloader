@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:background_downloader/src/base_downloader.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
@@ -88,10 +89,14 @@ abstract interface class PersistentStorage {
   /// Used for database migration, may be 'older' than the code version
   Future<(String, int)> get storedDatabaseVersion;
 
-  /// Initialize the database - only called once
+  /// Initialize the database - only called when the [BaseDownloader]
+  /// is created with this object, which happens when the [FileDownloader]
+  /// singleton is instantiated, OR as part of a migration away from this
+  /// database type.
   ///
   /// Migrates the data from stored name and version to the current
   /// name and version, if needed
+  /// This call runs async with the rest of the initialization
   Future<void> initialize();
 }
 
