@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:logging/logging.dart';
-import 'package:path/path.dart';
+import 'package:path/path.dart' as path;
 import 'package:sqflite/sqflite.dart' as sql;
 
 import 'package:path_provider/path_provider.dart';
@@ -74,9 +74,10 @@ class SqlitePersistentStorage implements PersistentStorage {
     final databasesPath = await (Platform.isIOS || Platform.isMacOS
         ? getLibraryDirectory()
         : getApplicationSupportDirectory());
-    final path = join(databasesPath.path, 'background_downloader.sqlite');
+    final dbPath =
+        path.join(databasesPath.path, 'background_downloader.sqlite');
     bool createdDatabase = false;
-    db = await sql.openDatabase(path, version: 1,
+    db = await sql.openDatabase(dbPath, version: 1,
         onCreate: (sql.Database dbase, int version) async {
       // When creating the db, create the table
       await dbase.execute(
@@ -87,17 +88,17 @@ class SqlitePersistentStorage implements PersistentStorage {
           'CREATE TABLE $modifiedTasksTable ($taskIdColumn TEXT PRIMARY KEY, $objectColumn TEXT)');
       await dbase.execute(
           'CREATE TABLE $resumeDataTable ($taskIdColumn TEXT PRIMARY KEY, $objectColumn TEXT)');
-      createdDatabase = true;  // newly created database
+      createdDatabase = true; // newly created database
     });
     // upon first creation, attempt database migrations
     if (createdDatabase && _migrationOptions.isNotEmpty) {
       final migratedFrom =
           await _persistentStorageMigrator.migrate(_migrationOptions, this);
       if (migratedFrom != null) {
-        log.fine('Migrated database from $_migrationOptions');
+        log.fine('Migrated database from $migratedFrom');
       }
     }
-    log.finest('Opened SqlitePersistentStorage database at ${db.path}');
+    log.finest('Initialized SqlitePersistentStorage database at ${db.path}');
   }
 
   /// Remove the row with [taskId] from the [table]. If [taskId] is null,
@@ -325,7 +326,7 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
       tempDir = await getTemporaryDirectory();
       libraryDir = Platform.isIOS
           ? await getLibraryDirectory()
-          : Directory(join(supportDir.path, 'Library'));
+          : Directory(path.join(supportDir.path, 'Library'));
     }
   }
 
@@ -343,7 +344,7 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
     if (_db == null) {
       return [];
     }
-    final result = await _db!.query('tasks',
+    final result = await _db!.query('task',
         columns: [
           'task_id',
           'status',
@@ -357,9 +358,10 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
         whereArgs: [3, 4, 5]);
     final taskRecords = <TaskRecord>[];
     for (var fdlTask in result) {
-      final headers = (fdlTask['headers'] as String? ?? '').isEmpty
-          ? ''
-          : jsonDecode(fdlTask['headers'] as String);
+      final Map<String, String> headers =
+          (fdlTask['headers'] as String? ?? '').isEmpty
+              ? {}
+              : Map.castFrom(jsonDecode(fdlTask['headers'] as String));
       var (baseDirectory, directory) =
           await getDirectories(fdlTask['savedDir'] as String? ?? '');
       final creationTime = DateTime.fromMillisecondsSinceEpoch(
@@ -456,7 +458,9 @@ class FlutterDownloaderPersistentStorageAndroid
   @override
   Future<String> getDatabasePath() async {
     final docsDir = await getApplicationDocumentsDirectory();
-    return join(docsDir.path, 'databases', 'download_tasks.db');
+    final dbDir =
+        RegExp(r'^.*?(?=app_flutter)').firstMatch(docsDir.path)?.group(0);
+    return path.join(dbDir!, 'databases', 'download_tasks.db');
   }
 }
 
@@ -465,6 +469,6 @@ class FlutterDownloaderPersistentStorageIOS
   @override
   Future<String> getDatabasePath() async {
     final supportDir = await getApplicationSupportDirectory();
-    return join(supportDir.path, 'download_tasks.sql');
+    return path.join(supportDir.path, 'download_tasks.sql');
   }
 }

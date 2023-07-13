@@ -342,8 +342,13 @@ class PersistentStorageMigrator {
   Future<String?> migrate(
       List<String> migrationOptions, PersistentStorage toStorage) async {
     for (var persistentStorageName in migrationOptions) {
-      if (await _migrateFrom(persistentStorageName, toStorage)) {
-        return persistentStorageName;
+      try {
+        if (await _migrateFrom(persistentStorageName, toStorage)) {
+          return persistentStorageName;
+        }
+      } on Exception catch (e, stacktrace) {
+        log.warning(
+            'Error attempting to migrate from $persistentStorageName: $e\n$stacktrace');
       }
     }
     return null; // no migration
@@ -353,19 +358,23 @@ class PersistentStorageMigrator {
   ///
   /// Returns true if the migration was successfully executed, false if it
   /// was not a viable migration
+  ///
+  /// If extending the class, add your mapping from a migration option String
+  /// to a _migrateFrom... method that does your migration.
   Future<bool> _migrateFrom(
           String persistentStorageName, PersistentStorage toStorage) =>
-      switch (persistentStorageName.toLowerCase()) {
-        'localstore' || 'local_store' => _migrateFromLocalStore(toStorage),
-        'flutterdownloader' ||
-        'flutter_downloader' =>
-          _migrateFromFlutterDownloader(toStorage),
+      switch (persistentStorageName.toLowerCase().replaceAll('_', '')) {
+        'localstore' => _migrateFromLocalStore(toStorage),
+        'flutterdownloader' => _migrateFromFlutterDownloader(toStorage),
         _ => Future.value(false)
       };
 
   /// Migrate from a persistent storage to our database
   ///
   /// Returns true if this migration took place
+  ///
+  /// This is a generic migrator that copies from one storage to another, and
+  /// is used by the _migrateFrom... methods
   Future<bool> _migrateFromPersistentStorage(
       PersistentStorage fromStorage, PersistentStorage toStorage) async {
     bool migratedSomething = false;
@@ -393,6 +402,16 @@ class PersistentStorageMigrator {
   ///
   /// Return true if successful. Successful migration removes the original
   /// data
+  ///
+  /// If extending this class, add a method like this that does the
+  /// migration by:
+  /// 1. Setting up the [PersistentStorage] object you want to migrate from
+  /// 2. Call [_migrateFromPersistentStorage] to do the transfer from that
+  ///    object to the new object, passed as [toStorage]
+  /// 3. Remove all traces of the [PersistentStorage] object you want to migrate
+  ///    from
+  ///
+  /// A second example is the [_migrateFromFlutterDownloader] method
   Future<bool> _migrateFromLocalStore(PersistentStorage toStorage) async {
     final localStore = LocalStorePersistentStorage();
     if (await _migrateFromPersistentStorage(localStore, toStorage)) {

@@ -21,7 +21,8 @@ void main() {
   setUp(() async {
     Logger.root.level = Level.ALL;
     Logger.root.onRecord.listen((LogRecord rec) {
-      debugPrint('${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
+      debugPrint(
+          '${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
     });
     WidgetsFlutterBinding.ensureInitialized();
     db = SqlitePersistentStorage();
@@ -93,6 +94,5 @@ void main() {
       final r2 = await database.recordForId(record2.taskId);
       expect(r2, equals(record2));
     });
-
   });
 }
