@@ -11,10 +11,29 @@ import 'database.dart';
 import 'models.dart';
 import 'persistent_storage.dart';
 
+/// [PersistentStorage] to back the database in the downloader, using
+/// an SQLite database as its own backend
+///
+/// Uses the sqflite package, so is limited to platforms supported by that
+/// package.
+///
+/// Data is stored in simple tables, one for each data type, with each table
+/// having a 'taskId' column, and a 'objectJsonMap' column where the object of
+/// that data type is stored in JSON string format.
+///
+/// The [SqlitePersistentStorage] can be constructed with a list of migration
+/// options, and an optional [PersistentStorageMigrator] to execute the
+/// migration from one of those options to this object.
+///
+/// A constructed [SqlitePersistentStorage] can be passed to the
+/// [FileDownloader] constructor to set the persistent storage to be used. It
+/// must be set on the very first call to [FileDownloader] only.
 class SqlitePersistentStorage implements PersistentStorage {
   final log = Logger('SqlitePersistentStorage');
-  final List<String> migrationList;
+
   late final sql.Database db;
+  final List<String> _migrationOptions;
+  final PersistentStorageMigrator _persistentStorageMigrator;
 
   final taskRecordsTable = 'taskRecords';
   final modifiedTasksTable = 'modifiedTasksTable';
@@ -25,10 +44,10 @@ class SqlitePersistentStorage implements PersistentStorage {
   final objectColumn = 'objectJsonMap';
 
   /// Create [SqlitePersistentStorage] object with optional list of database
-  /// backends to migrate from
-  /// 
-  /// Currently supported databases we can migrate from are:
-  /// * local_store (the default implementation of the database in 
+  /// backends to migrate from, using the [persistentStorageMigrator]
+  ///
+  /// The default [persistentStorageMigrator] supports the following migrations:
+  /// * local_store (the default implementation of the database in
   ///   background_downloader). Migration from local_store to
   ///   [SqlitePersistentStorage] is complete, i.e. all state is transferred.
   /// * flutter_downloader (a popular but now deprecated package for
@@ -38,10 +57,14 @@ class SqlitePersistentStorage implements PersistentStorage {
   ///   [BaseDirectory] and [directory] then the task's baseDirectory field
   ///   will be set to [BaseDirectory.applicationDocuments] and its
   ///   directory field will be set to the 'savedDir' field of the database
-  ///   used by flutter_downloader. You will have to determine what that 
+  ///   used by flutter_downloader. You will have to determine what that
   ///   directory resolves to (likely an external directory on Android)
-  SqlitePersistentStorage([List<String>? migrateFrom])
-      : migrationList = migrateFrom ?? [];
+  SqlitePersistentStorage(
+      {List<String>? migrationOptions,
+      PersistentStorageMigrator? persistentStorageMigrator})
+      : _migrationOptions = migrationOptions ?? [],
+        _persistentStorageMigrator =
+            persistentStorageMigrator ?? PersistentStorageMigrator();
 
   @override
   (String, int) get currentDatabaseVersion => ('Sqlite', 1);
@@ -52,7 +75,7 @@ class SqlitePersistentStorage implements PersistentStorage {
         ? getLibraryDirectory()
         : getApplicationSupportDirectory());
     final path = join(databasesPath.path, 'background_downloader.sqlite');
-
+    bool createdDatabase = false;
     db = await sql.openDatabase(path, version: 1,
         onCreate: (sql.Database dbase, int version) async {
       // When creating the db, create the table
@@ -64,97 +87,22 @@ class SqlitePersistentStorage implements PersistentStorage {
           'CREATE TABLE $modifiedTasksTable ($taskIdColumn TEXT PRIMARY KEY, $objectColumn TEXT)');
       await dbase.execute(
           'CREATE TABLE $resumeDataTable ($taskIdColumn TEXT PRIMARY KEY, $objectColumn TEXT)');
-      // upon first creation, do database migrations
-      for (var persistentStorageName in migrationList) {
-        if (await _migrateFrom(persistentStorageName)) {
-          break;
-        }
-      }
+      createdDatabase = true;  // newly created database
     });
-  }
-
-  /// Attempt to migrate data from [persistentStorageName] to our database
-  ///
-  /// Returns true if the migration was successfully executed, false if it
-  /// was not a viable migration
-  Future<bool> _migrateFrom(String persistentStorageName) =>
-      switch (persistentStorageName.toLowerCase()) {
-        'localstore' || 'local_store' => _migrateFromLocalStore(),
-        'flutterdownloader' ||
-        'flutter_downloader' =>
-          _migrateFromFlutterDownloader(),
-        _ => Future.value(false)
-      };
-
-  /// Migrate from a persistent storage to our database
-  ///
-  /// Returns true if this migration took place
-  Future<bool> _migrateFromPersistentStorage(PersistentStorage storage) async {
-    bool migratedSomething = false;
-    await storage.initialize();
-    for (final pausedTask in await storage.retrieveAllPausedTasks()) {
-      await storePausedTask(pausedTask);
-      migratedSomething = true;
-    }
-    for (final modifiedTask in await storage.retrieveAllModifiedTasks()) {
-      await storeModifiedTask(modifiedTask);
-      migratedSomething = true;
-    }
-    for (final resumeData in await storage.retrieveAllResumeData()) {
-      await storeResumeData(resumeData);
-      migratedSomething = true;
-    }
-    for (final taskRecord in await storage.retrieveAllTaskRecords()) {
-      await storeTaskRecord(taskRecord);
-      migratedSomething = true;
-    }
-    return migratedSomething;
-  }
-
-  /// Attempt to migrate from [LocalStorePersistentStorage]
-  Future<bool> _migrateFromLocalStore() async {
-    final localStore = LocalStorePersistentStorage();
-    if (await _migrateFromPersistentStorage(localStore)) {
-      // delete all paths related to LocalStore
-      final supportDir = await getApplicationSupportDirectory();
-      for (String collectionPath in [
-        LocalStorePersistentStorage.resumeDataPath,
-        LocalStorePersistentStorage.pausedTasksPath,
-        LocalStorePersistentStorage.modifiedTasksPath,
-        LocalStorePersistentStorage.taskRecordsPath,
-        LocalStorePersistentStorage.metaDataCollection
-      ]) {
-        try {
-          final path = join(supportDir.path, collectionPath);
-          if (await Directory(path).exists()) {
-            log.finest('Removing directory $path for LocalStore');
-            await Directory(path).delete(recursive: true);
-          }
-        } catch (e) {
-          log.fine('Error deleting collection path $collectionPath: $e');
-        }
+    // upon first creation, attempt database migrations
+    if (createdDatabase && _migrationOptions.isNotEmpty) {
+      final migratedFrom =
+          await _persistentStorageMigrator.migrate(_migrationOptions, this);
+      if (migratedFrom != null) {
+        log.fine('Migrated database from $_migrationOptions');
       }
-      return true; // we migrated a database
     }
-    return false; // we did not migrate a database
+    log.finest('Opened SqlitePersistentStorage database at ${db.path}');
   }
 
-  /// Attempt to migrate from FlutterDownloader
-  Future<bool> _migrateFromFlutterDownloader() async {
-    if (!(Platform.isAndroid || Platform.isIOS)) {
-      return false;
-    }
-    final fdl = Platform.isAndroid
-        ? _FlutterDownloaderPersistentStorageAndroid()
-        : _FlutterDownloaderPersistentStorageIOS();
-    if (await _migrateFromPersistentStorage(fdl)) {
-      await fdl.removeDatabase();
-      return true; // we migrated a database
-    }
-    return false; // we did not migrate a database
-  }
-
-  Future<void> remove(String table, String? taskId) async {
+  /// Remove the row with [taskId] from the [table]. If [taskId] is null,
+  /// removes all rows from the [table]
+  Future<void> _remove(String table, String? taskId) async {
     if (taskId == null) {
       await db.delete(table, where: null);
     } else {
@@ -164,19 +112,19 @@ class SqlitePersistentStorage implements PersistentStorage {
 
   @override
   Future<void> removeModifiedTask(String? taskId) =>
-      remove(modifiedTasksTable, taskId);
+      _remove(modifiedTasksTable, taskId);
 
   @override
   Future<void> removePausedTask(String? taskId) =>
-      remove(pausedTasksTable, taskId);
+      _remove(pausedTasksTable, taskId);
 
   @override
   Future<void> removeResumeData(String? taskId) =>
-      remove(resumeDataTable, taskId);
+      _remove(resumeDataTable, taskId);
 
   @override
   Future<void> removeTaskRecord(String? taskId) =>
-      remove(taskRecordsTable, taskId);
+      _remove(taskRecordsTable, taskId);
 
   @override
   Future<List<Task>> retrieveAllModifiedTasks() async {
@@ -311,11 +259,10 @@ class SqlitePersistentStorage implements PersistentStorage {
 /// FlutterDownloader SQLite database
 ///
 /// Only the [initialize] and retrieveAll... methods are implemented,
-/// as they are called from the migration methods in [SQLitePersistentStorage]
+/// as they are called from the migration methods in [PersistentStorageMigrator]
 ///
 /// This is an abstract class, implemented for Android and iOS below
-abstract class _FlutterDownloaderPersistentStorage
-    implements PersistentStorage {
+abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
   sql.Database? _db;
   late final Directory docsDir;
   late final Directory supportDir;
@@ -504,8 +451,8 @@ abstract class _FlutterDownloaderPersistentStorage
   Future<(String, int)> get storedDatabaseVersion => throw UnimplementedError();
 }
 
-class _FlutterDownloaderPersistentStorageAndroid
-    extends _FlutterDownloaderPersistentStorage {
+class FlutterDownloaderPersistentStorageAndroid
+    extends FlutterDownloaderPersistentStorage {
   @override
   Future<String> getDatabasePath() async {
     final docsDir = await getApplicationDocumentsDirectory();
@@ -513,8 +460,8 @@ class _FlutterDownloaderPersistentStorageAndroid
   }
 }
 
-class _FlutterDownloaderPersistentStorageIOS
-    extends _FlutterDownloaderPersistentStorage {
+class FlutterDownloaderPersistentStorageIOS
+    extends FlutterDownloaderPersistentStorage {
   @override
   Future<String> getDatabasePath() async {
     final supportDir = await getApplicationSupportDirectory();
