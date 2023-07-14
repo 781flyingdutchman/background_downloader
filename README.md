@@ -70,11 +70,14 @@ Progress updates start with 0.0 when the actual download starts (which may be in
 
 If you want to monitor status changes while the download is underway (i.e. not only the final state, which you will receive as the result of the `download` call) you can add a status change callback that takes the status as an argument:
 ```dart
-final result = await FileDownloader().download(task, 
+final result = await FileDownloader().download(task,
     onStatus: (status) => print('Status update: $status'));
 ```
 
-The status will follow a sequence of `.enqueued` (waiting to execute), `.running` (actively downloading) and then one of the final states mentioned before, or `.waitingToRetry` if retries are enabled and the task failed.
+The status will follow a sequence of `.enqueued` (waiting to execute), `.running` (actively 
+downloading) and then one of the final states mentioned before, or `.waitingToRetry` if retries 
+are enabled and the task failed. Note that Android OS may restart a task, leading to a repeat of 
+the `.running` status, so you need to allow for that occasion.
 
 #### Elapsed time
 
@@ -391,10 +394,33 @@ To manage or query the queue of waiting or running tasks, call:
 * `reset` to reset the downloader, which cancels all ongoing download tasks
 * `allTaskIds` to get a list of `taskId` values of all tasks currently active (i.e. not in a final state). You can exclude tasks waiting for retries by setting `includeTasksWaitingToRetry` to `false`. Note that paused tasks are not included in this list
 * `allTasks` to get a list of all tasks currently active (i.e. not in a final state). You can exclude tasks waiting for retries by setting `includeTasksWaitingToRetry` to `false`. Note that paused tasks are not included in this list
-* `taskForId` to get the `Task` for the given `taskId`, or `null` if not found. Only tasks that are active (ie. not in a final state) are guaranteed to be returned, but returning a task does not guarantee that it is active
+* `taskForId` to get the `Task` for the given `taskId`, or `null` if not found.
 * `tasksFinished` to check if all tasks have finished (successfully or otherwise)
 
-Note that each of these methods accept a `group` parameter that targets the mehod to a specific group. If tasks are enqueued with a `group` other than default, calling any of these methods without a group parameter will not affect/include those tasks - only the default tasks. In particular, this may affect tasks started using a method like `download`, which changes the task's group to `FileDownloader.awaitGroup`.
+Each of these methods accept a `group` parameter that targets the method to a specific group. If tasks are enqueued with a `group` other than default, calling any of these methods without a group parameter will not affect/include those tasks - only the default tasks. In particular, this may affect tasks started using a method like `download`, which changes the task's group to `FileDownloader.awaitGroup`.
+
+**NOTE:** Only tasks that are active (ie. not in a final state) are guaranteed to be returned or counted, but returning a task does not guarantee that it is active. This means that if you check `tasksFinished` when receiving task updates, you may get `false` even though that was the last task, as it takes a few milliseconds for the task queue to catch up. One way to remedy this is to use a `Timer`:
+```agsl
+// define the allTasksDoneTimer in the class containing your status checking logic
+Timer? allTasksDoneTimer;
+
+// Then, define a method to check all tasks are done, and if so, act on that.
+// Call this method in your status checking logic, whenever a task completes
+Future<void> checkAllTasksDone() async {
+  allTasksDoneTimer?.cancel();
+  final remainingTasks = await FileDownloader().allTaskIds();
+  switch (remainingTasks.length) {
+    case 0:
+      print('all tasks are done, so do what you need to do'); 
+
+    case 1:
+      // check every seconds
+      allTasksDoneTimer = Timer(const Duration(seconds: 1), checkAllTasksDone);
+
+    default:
+  }
+}
+```
 
 ### Grouping tasks
 
