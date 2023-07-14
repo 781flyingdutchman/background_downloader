@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter/cupertino.dart';
@@ -120,6 +121,12 @@ void main() {
       expect(newRecord.status, equals(TaskStatus.complete));
       expect(newRecord.progress, equals(1.0));
       expect(newRecord.expectedFileSize, equals(-1));
+      final task = newRecord.task;
+      expect(task.taskId, equals(fdlTaskId));
+      expect(task.filename, equals(fdlTask.filename));
+      final filePath = await task.filePath();
+      expect(File(filePath).existsSync(), isTrue);
+      expect(filePath, equals(destPath));
       // and expect original data is gone
       expect(File(dbPath).existsSync(), isFalse);
       // clean up
