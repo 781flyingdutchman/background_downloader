@@ -2012,6 +2012,7 @@ void main() {
       final canResume2 = await FileDownloader().taskCanResume(task);
       expect(canResume2, isFalse); // task allowPause not set
       expect(await FileDownloader().cancelTasksWithIds([task.taskId]), isTrue);
+      await Future.delayed(const Duration(seconds: 1));
     });
 
     testWidgets('pause and resume task', (widgetTester) async {
