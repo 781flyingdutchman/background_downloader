@@ -687,6 +687,7 @@ void main() {
       expect(await FileDownloader().taskForId(complexTask.taskId), isNull);
       expect(await FileDownloader().enqueue(complexTask), isTrue);
       final task = await FileDownloader().taskForId(complexTask.taskId);
+      expect(task is DownloadTask, isTrue);
       expect(task, equals(complexTask));
       if (task != null) {
         expect(task.taskId, equals(complexTask.taskId));

@@ -25,8 +25,6 @@ import 'sqlite_storage.dart';
 /// Also defined methods to allow migration from one database version to another
 abstract interface class PersistentStorage {
   /// Store a [TaskRecord], keyed by taskId
-  ///
-  /// Returns true if successful
   Future<void> storeTaskRecord(TaskRecord record);
 
   /// Retrieve [TaskRecord] with [taskId], or null if not found
@@ -39,8 +37,6 @@ abstract interface class PersistentStorage {
   Future<void> removeTaskRecord(String? taskId);
 
   /// Store a paused [task], keyed by taskId
-  ///
-  /// Returns true if successful
   Future<void> storePausedTask(Task task);
 
   /// Retrieve paused [Task] with [taskId], or null if not found
@@ -53,8 +49,6 @@ abstract interface class PersistentStorage {
   Future<void> removePausedTask(String? taskId);
 
   /// Store a modified [task], keyed by taskId
-  ///
-  /// Returns true if successful
   Future<void> storeModifiedTask(Task task);
 
   /// Retrieve modified [Task] with [taskId], or null if not found
@@ -67,8 +61,6 @@ abstract interface class PersistentStorage {
   Future<void> removeModifiedTask(String? taskId);
 
   /// Store [ResumeData], keyed by its taskId
-  ///
-  /// Returns true if successful
   Future<void> storeResumeData(ResumeData resumeData);
 
   /// Retrieve [ResumeData] with [taskId], or null if not found

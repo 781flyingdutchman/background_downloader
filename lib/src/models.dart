@@ -424,7 +424,8 @@ sealed class Task extends Request {
         'updates': updates.index, // stored as int
         'requiresWiFi': requiresWiFi,
         'allowPause': allowPause,
-        'metaData': metaData
+        'metaData': metaData,
+        'taskType': taskType
       };
 
   /// If true, task expects progress updates
@@ -434,6 +435,11 @@ sealed class Task extends Request {
   /// If true, task expects status updates
   bool get providesStatusUpdates =>
       updates == Updates.status || updates == Updates.statusAndProgress;
+
+  /// Returns the type of task as a String
+  ///
+  /// Used to identify the task type in JSON format
+  String get taskType => 'Task';
 
   @override
   bool operator ==(Object other) =>
@@ -447,7 +453,7 @@ sealed class Task extends Request {
 
   @override
   String toString() {
-    return 'Task{taskId: $taskId, url: $url, filename: $filename, headers: '
+    return '$taskType{taskId: $taskId, url: $url, filename: $filename, headers: '
         '$headers, httpRequestMethod: $httpRequestMethod, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, updates: $updates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, metaData: $metaData}';
   }
 }
@@ -510,8 +516,7 @@ final class DownloadTask extends Task {
         super.fromJsonMap(jsonMap);
 
   @override
-  Map<String, dynamic> toJsonMap() =>
-      {...super.toJsonMap(), 'taskType': 'DownloadTask'};
+  String get taskType => 'DownloadTask';
 
   @override
   DownloadTask copyWith(
@@ -657,9 +662,6 @@ final class DownloadTask extends Task {
     }
     return -1;
   }
-
-  @override
-  String toString() => 'Download${super.toString()}';
 }
 
 /// Information related to an upload task
@@ -756,9 +758,11 @@ final class UploadTask extends Task {
         ...super.toJsonMap(),
         'fileField': fileField,
         'mimeType': mimeType,
-        'fields': fields,
-        'taskType': 'UploadTask'
+        'fields': fields
       };
+
+  @override
+  String get taskType => 'UploadTask';
 
   @override
   UploadTask copyWith(
@@ -803,7 +807,7 @@ final class UploadTask extends Task {
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 
   @override
-  String toString() => 'Upload${super.toString()} and fileField $fileField, '
+  String toString() => '${super.toString()} and fileField $fileField, '
       'mimeType $mimeType and fields $fields';
 }
 
@@ -965,6 +969,19 @@ class ResumeData {
       };
 
   String get taskId => task.taskId;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ResumeData &&
+          runtimeType == other.runtimeType &&
+          task == other.task &&
+          data == other.data &&
+          requiredStartByte == other.requiredStartByte;
+
+  @override
+  int get hashCode =>
+      task.hashCode ^ data.hashCode ^ requiredStartByte.hashCode;
 }
 
 /// Types of undelivered data that can be requested

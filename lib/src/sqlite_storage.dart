@@ -42,6 +42,7 @@ class SqlitePersistentStorage implements PersistentStorage {
 
   final taskIdColumn = 'taskId';
   final objectColumn = 'objectJsonMap';
+  final modifiedColumn = 'modified'; // in seconds since epoch
 
   /// Create [SqlitePersistentStorage] object with optional list of database
   /// backends to migrate from, using the [persistentStorageMigrator]
@@ -75,19 +76,24 @@ class SqlitePersistentStorage implements PersistentStorage {
         ? getLibraryDirectory()
         : getApplicationSupportDirectory());
     final dbPath =
-        path.join(databasesPath.path, 'background_downloader.sqlite');
+        path.join(databasesPath.path, 'bgd_persistent_storage.sqlite');
     bool createdDatabase = false;
     db = await sql.openDatabase(dbPath, version: 1,
         onCreate: (sql.Database dbase, int version) async {
       // When creating the db, create the table
       await dbase.execute(
-          'CREATE TABLE $taskRecordsTable ($taskIdColumn TEXT PRIMARY KEY, $objectColumn TEXT)');
+          'CREATE TABLE $taskRecordsTable (taskId TEXT PRIMARY KEY, url TEXT, filename TEXT, '
+          '"group" TEXT, metaData TEXT, creationTime INTEGER, status INTEGER, '
+          'progress REAL, $objectColumn TEXT)');
       await dbase.execute(
-          'CREATE TABLE $pausedTasksTable ($taskIdColumn TEXT PRIMARY KEY, $objectColumn TEXT)');
+          'CREATE TABLE $pausedTasksTable ($taskIdColumn TEXT PRIMARY KEY, $objectColumn TEXT, '
+          '$modifiedColumn INTEGER)');
       await dbase.execute(
-          'CREATE TABLE $modifiedTasksTable ($taskIdColumn TEXT PRIMARY KEY, $objectColumn TEXT)');
+          'CREATE TABLE $modifiedTasksTable ($taskIdColumn TEXT PRIMARY KEY, $objectColumn TEXT, '
+          '$modifiedColumn INTEGER)');
       await dbase.execute(
-          'CREATE TABLE $resumeDataTable ($taskIdColumn TEXT PRIMARY KEY, $objectColumn TEXT)');
+          'CREATE TABLE $resumeDataTable ($taskIdColumn TEXT PRIMARY KEY, $objectColumn TEXT, '
+          '$modifiedColumn INTEGER)');
       createdDatabase = true; // newly created database
     });
     // upon first creation, attempt database migrations
@@ -98,7 +104,23 @@ class SqlitePersistentStorage implements PersistentStorage {
         log.fine('Migrated database from $migratedFrom');
       }
     }
+    await purgeOldRecords();
     log.finest('Initialized SqlitePersistentStorage database at ${db.path}');
+  }
+
+  /// Purges records in [modifiedTasksTable], [pausedTasksTable] and
+  /// [resumeDataTable] that were modified more than [age] ago.
+  Future<void> purgeOldRecords(
+      {Duration age = const Duration(days: 30)}) async {
+    final cutOff =
+        (DateTime.now().subtract(age).millisecondsSinceEpoch / 1000).floor();
+    for (final table in [
+      modifiedTasksTable,
+      pausedTasksTable,
+      resumeDataTable
+    ]) {
+      await db.delete(table, where: '$modifiedColumn < ?', whereArgs: [cutOff]);
+    }
   }
 
   /// Remove the row with [taskId] from the [table]. If [taskId] is null,
@@ -208,31 +230,48 @@ class SqlitePersistentStorage implements PersistentStorage {
 
   @override
   Future<TaskRecord?> retrieveTaskRecord(String taskId) async {
-    final result = await db.query(taskRecordsTable,
-        columns: [objectColumn],
-        where: '$taskIdColumn = ?',
-        whereArgs: [taskId]);
-    if (result.isEmpty) {
-      return null;
-    }
-    return TaskRecord.fromJsonMap(
-        jsonDecode(result.first[objectColumn] as String));
+    final result = await retrieveTaskRecords('$taskIdColumn = ?', [taskId]);
+    return result.firstOrNull;
   }
 
-  Future<void> store(
-      String table, String taskId, Map<String, dynamic> jsonMap) async {
-    final existingRecord = await db.query(table,
-        columns: [objectColumn],
-        where: '$taskIdColumn = ?',
-        whereArgs: [taskId]);
-    if (existingRecord.isEmpty) {
-      await db.insert(
-          table, {taskIdColumn: taskId, objectColumn: jsonEncode(jsonMap)});
-    } else {
-      await db.update(taskRecordsTable, {objectColumn: jsonEncode(jsonMap)},
-          where: '$taskIdColumn = ?', whereArgs: [taskId]);
-    }
+  /// Returns a list of [TaskRecord] objects matching the condition defined
+  /// by the SQLite [where] and [whereArgs] arguments.
+  ///
+  /// Example:
+  ///   final records = retrieveTaskRecords(where: 'status = ? AND timeCreated < ?',
+  ///       whereArgs: [TaskStatus.complete.index,
+  ///         DateTime.now().subtract(const Duration(days: 5)).millisecondsSinceEpoch]);
+  ///   // This returns records that have completed more than 5 days ago
+  ///
+  /// The database fields that can be used in this query are:
+  ///   taskId, url, filename, group, metaData, creationTime, status and progress,
+  ///   where creationTime is in secondsSinceEpoch and status is the index of
+  ///   the [TaskStatus] enum
+  Future<List<TaskRecord>> retrieveTaskRecords(
+      String where, List<Object?>? whereArgs) async {
+    final result = await db.query(taskRecordsTable,
+        columns: [objectColumn], where: where, whereArgs: whereArgs);
+    return result
+        .map((e) =>
+            TaskRecord.fromJsonMap(jsonDecode(e[objectColumn] as String)))
+        .toList(growable: false);
   }
+
+  /// Convenience method to store a jsonMap under the [objectColumn], keyed
+  /// by [taskId], with 'modified' set to seconds since epoch.
+  ///
+  /// Inserts or updates
+  Future<void> store(
+          String table, String taskId, Map<String, dynamic> jsonMap) =>
+      db.insert(
+          table,
+          {
+            taskIdColumn: taskId,
+            objectColumn: jsonEncode(jsonMap),
+            modifiedColumn:
+                (DateTime.now().millisecondsSinceEpoch / 1000).floor()
+          },
+          conflictAlgorithm: sql.ConflictAlgorithm.replace);
 
   @override
   Future<void> storeModifiedTask(Task task) =>
@@ -247,8 +286,23 @@ class SqlitePersistentStorage implements PersistentStorage {
       store(resumeDataTable, resumeData.taskId, resumeData.toJsonMap());
 
   @override
-  Future<void> storeTaskRecord(TaskRecord record) =>
-      store(taskRecordsTable, record.taskId, record.toJsonMap());
+  Future<void> storeTaskRecord(TaskRecord record) async {
+    final task = record.task;
+    await db.insert(
+        taskRecordsTable,
+        {
+          taskIdColumn: task.taskId,
+          'url': task.url,
+          'filename': task.filename,
+          'group': task.group,
+          'metaData': task.metaData,
+          'creationTime': (task.creationTime.millisecondsSinceEpoch / 1000).floor(),
+          'status': record.status.index,
+          'progress': record.progress,
+          objectColumn: jsonEncode(record.toJsonMap())
+        },
+        conflictAlgorithm: sql.ConflictAlgorithm.replace);
+  }
 
   @override
   Future<(String, int)> get storedDatabaseVersion async {
