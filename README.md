@@ -84,11 +84,11 @@ the `.running` status, so you need to allow for that occasion.
 If you want to keep an eye on how long the download is taking (e.g. to warn the user that there may be an issue with their network connection, or to cancel the task if it takes too long), pass an `onElapsedTime` callback to the `download` method. The callback takes a single argument of type `Duration`, representing the time elapsed since the call to `download` was made. It is called at regular intervals (defined by `elapsedTimeInterval` which defaults to 5 seconds), so you can react in different ways depending on the total time elapsed. For example:
 ```dart
 final result = await FileDownloader().download(
-                  task, 
-                  onElapsedTime: (elapsed) {
-                      print('This is taking rather long: $elapsed');
-                  },
-                  elapsedTimeInterval: const Duration(seconds: 30));
+                      task, 
+                      onElapsedTime: (elapsed) {
+                          print('This is taking rather long: $elapsed');
+                      },
+                      elapsedTimeInterval: const Duration(seconds: 30));
 ```
 
 The elapsed time logic is only available for `download`, `upload`, `downloadBatch` and `uploadBatch`. It is not available for tasks started using `enqueue`, as there is no expectation that those complete imminently.
@@ -288,11 +288,11 @@ To respond to the user tapping a notification, register a callback that takes `T
 
 ```dart
 FileDownloader().registerCallbacks(
-            taskNotificationTapCallback: myNotificationTapCallback);
-            
+  taskNotificationTapCallback: myNotificationTapCallback);
+
 void myNotificationTapCallback(Task task, NotificationType notificationType) {
-    print('Tapped notification $notificationType for taskId ${task.taskId}');
-  }
+  print('Tapped notification $notificationType for taskId ${task.taskId}');
+}
 ```
 
 ### Opening a downloaded file
@@ -325,19 +325,21 @@ The download directories specified in the `BaseDirectory` enum are all local to 
 ```dart
 final newFilepath = await FileDownloader().moveToSharedStorage(task, SharedStorage.downloads);
 if (newFilePath == null) {
-    ... // handle error
+  // handle error
 } else {
-    ... // do something with the newFilePath
+  // do something with the newFilePath
 }
 ```
 
 Because the behavior is very platform-specific, not all `SharedStorage` destinations have the same result. The options are:
-* `.downloads` - implemented on all platforms, but on iOS files in this directory are not accessible to other users
-* `.images` - implemented on Android and iOS only. On iOS files in this directory are not accessible to other users
-* `.video` - implemented on Android and iOS only. On iOS files in this directory are not accessible to other users
-* `.audio` - implemented on Android and iOS only. On iOS files in this directory are not accessible to other users
+* `.downloads` - implemented on all platforms, but 'faked' on iOS: files in this directory are not accessible to other users
+* `.images` - implemented on Android and iOS only, and 'faked' on iOS: files in this directory are not accessible to other users
+* `.video` - implemented on Android and iOS only, and 'faked' on iOS: files in this directory are not accessible to other users
+* `.audio` - implemented on Android and iOS only, and 'faked' on iOS: files in this directory are not accessible to other users
 * `.files` - implemented on Android only
 * `.external` - implemented on Android only
+
+The 'fake' on iOS is that we create an appropriately named subdirectory in the application's Documents directory where the file is moved to. iOS apps do not have access to the system wide directories.
 
 Methods `moveToSharedStorage` and the similar `moveFileToSharedStorage` also take an optional
 `directory` argument for a subdirectory in the `SharedStorage` destination. They also take an
@@ -399,27 +401,15 @@ To manage or query the queue of waiting or running tasks, call:
 
 Each of these methods accept a `group` parameter that targets the method to a specific group. If tasks are enqueued with a `group` other than default, calling any of these methods without a group parameter will not affect/include those tasks - only the default tasks. In particular, this may affect tasks started using a method like `download`, which changes the task's group to `FileDownloader.awaitGroup`.
 
-**NOTE:** Only tasks that are active (ie. not in a final state) are guaranteed to be returned or counted, but returning a task does not guarantee that it is active. This means that if you check `tasksFinished` when receiving task updates, you may get `false` even though that was the last task, as it takes a few milliseconds for the task queue to catch up. One way to remedy this is to use a `Timer`:
-```agsl
-// define the allTasksDoneTimer in the class containing your status checking logic
-Timer? allTasksDoneTimer;
-
-// Then, define a method to check all tasks are done, and if so, act on that.
-// Call this method in your status checking logic, whenever a task completes
-Future<void> checkAllTasksDone() async {
-  allTasksDoneTimer?.cancel();
-  final remainingTasks = await FileDownloader().allTaskIds();
-  switch (remainingTasks.length) {
-    case 0:
-      print('all tasks are done, so do what you need to do'); 
-
-    case 1:
-      // check every seconds
-      allTasksDoneTimer = Timer(const Duration(seconds: 1), checkAllTasksDone);
-
-    default:
+**NOTE:** Only tasks that are active (ie. not in a final state) are guaranteed to be returned or counted, but returning a task does not guarantee that it is active.
+This means that if you check `tasksFinished` when processing a task update, the task you received an update for may still show as 'active', even though it just finished, and result in `false` being returned. To fix this, pass that task as `ignoreTask` to the `tasksFinished` call, and it will be ignored for the purpose of testing if all tasks are finished: 
+```dart
+void downloadStatusCallback(TaskStatusUpdate update) {
+    // process your status update, then check if all tasks are finished
+    final bool allTasksFinished = update.status.isFinalState && 
+        await FileDownloader().tasksFinished(ignoreTask: update.task) ;
+    print('All tasks finished: $allTasksFinished');
   }
-}
 ```
 
 ### Grouping tasks
@@ -427,15 +417,14 @@ Future<void> checkAllTasksDone() async {
 Because an app may require different types of downloads, and handle those differently, you can specify a `group` with your task, and register callbacks specific to each `group`. If no group is specified the default group `FileDownloader.defaultGroup` is used. For example, to create and handle downloads for group 'bigFiles':
 ```dart
 FileDownloader().registerCallbacks(
-      group: 'bigFiles'
-      taskStatusCallback: bigFilesDownloadStatusCallback,
-      taskProgressCallback: bigFilesDownloadProgressCallback);
+    group: 'bigFiles'
+    taskStatusCallback: bigFilesDownloadStatusCallback,
+    taskProgressCallback: bigFilesDownloadProgressCallback);
 final task = DownloadTask(
-      group: 'bigFiles',
-      url: 'https://google.com',
-      filename: 'google.html',
-      updates:
-          Updates.statusAndProgress);
+    group: 'bigFiles',
+    url: 'https://google.com',
+    filename: 'google.html',
+    updates: Updates.statusAndProgress);
 final successFullyEnqueued = await FileDownloader().enqueue(task);
 ```
 

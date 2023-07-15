@@ -519,11 +519,22 @@ class FileDownloader {
   /// task is changed to [awaitGroup]. Therefore, for this method to act on
   /// tasks used in a convenience function, make sure to pass [awaitGroup]
   /// as the [group] argument.
+  ///
+  /// If an [ignoreTask] is provided, it will be excluded from the test. This
+  /// allows you to test for [tasksFinished] within the status update callback
+  /// for a task that just finished. In that situation, that task may still
+  /// be returned by the platform as 'active', but you already know it is not.
+  /// Calling [tasksFinished] while passing that just-finished task will ensure
+  /// a proper test in that situation.
   Future<bool> tasksFinished(
       {String group = defaultGroup,
-      bool includeTasksWaitingToRetry = true}) async {
+      bool includeTasksWaitingToRetry = true,
+      Task? ignoreTask}) async {
     final tasksInProgress = await allTasks(
         group: group, includeTasksWaitingToRetry: includeTasksWaitingToRetry);
+    if (ignoreTask != null) {
+      tasksInProgress.remove(ignoreTask);
+    }
     return tasksInProgress.isEmpty;
   }
 
