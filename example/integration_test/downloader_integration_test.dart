@@ -607,6 +607,14 @@ void main() {
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.complete));
       expect(await FileDownloader().tasksFinished(), isTrue);
+      // now start a task and intentionally ignore it
+      statusCallbackCompleter = Completer();
+      expect(await FileDownloader().enqueue(task), isTrue);
+      expect(await FileDownloader().tasksFinished(), isFalse);
+      expect(await FileDownloader().tasksFinished(ignoreTask: task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(await FileDownloader().tasksFinished(), isTrue);
       print('Finished tasksFinished');
     });
 
