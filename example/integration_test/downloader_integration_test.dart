@@ -740,8 +740,6 @@ void main() {
           updates: Updates.statusAndProgress,
           requiresWiFi: true,
           retries: 1,
-          allowPause: false,
-          // cannot be true if post != null
           metaData: 'someMetaData');
       expect(complexTask.httpRequestMethod, equals('POST'));
       final now = DateTime.now();
@@ -786,6 +784,66 @@ void main() {
       /// Should trigger 'notFound' because the fileField is not set to 'file
       /// which is what the server expects
       expect(lastStatus, equals(TaskStatus.notFound));
+    });
+
+    testWidgets('MultiUploadTask to and from Json', (widgetTester) async {
+      // try with list of Strings
+      var muTask = MultiUploadTask(
+          taskId: 'task1',
+          url: urlWithContentLength,
+          files: ['f1.txt', 'f2.txt']);
+      expect(muTask.fileFields, equals(['f1', 'f2']));
+      expect(muTask.filenames, equals(['f1.txt', 'f2.txt']));
+      expect(muTask.mimeTypes, equals(['text/plain', 'text/plain']));
+      expect(muTask.fileField, equals('["f1","f2"]')); // json string
+      expect(muTask.filename, equals('["f1.txt","f2.txt"]')); // json string
+      expect(muTask.mimeType, equals('["text/plain","text/plain"]')); // json string
+      var muTask2 = MultiUploadTask.fromJsonMap(muTask.toJsonMap());
+      expect(muTask2.taskId, equals(muTask.taskId));
+      expect(muTask2.fileFields, equals(muTask.fileFields));
+      expect(muTask2.filenames, equals(muTask.filenames));
+      expect(muTask2.mimeTypes, equals(muTask.mimeTypes));
+      expect(muTask2.fileField, equals(muTask.fileField));
+      expect(muTask2.filename, equals(muTask.filename));
+      expect(muTask2.mimeType, equals(muTask.mimeType));
+      // try with list of (String, String)
+      muTask = MultiUploadTask(
+          taskId: 'task2',
+          url: urlWithContentLength,
+          files: [('file1', 'f1.txt'), ('file2', 'f2.txt')]);
+      expect(muTask.fileFields, equals(['file1', 'file2']));
+      expect(muTask.filenames, equals(['f1.txt', 'f2.txt']));
+      expect(muTask.mimeTypes, equals(['text/plain', 'text/plain']));
+      expect(muTask.fileField, equals('["file1","file2"]'));
+      expect(muTask.filename, equals('["f1.txt","f2.txt"]'));
+      expect(muTask.mimeType, equals('["text/plain","text/plain"]'));
+      muTask2 = MultiUploadTask.fromJsonMap(muTask.toJsonMap());
+      expect(muTask2.taskId, equals(muTask.taskId));
+      expect(muTask2.fileFields, equals(muTask.fileFields));
+      expect(muTask2.filenames, equals(muTask.filenames));
+      expect(muTask2.mimeTypes, equals(muTask.mimeTypes));
+      expect(muTask2.fileField, equals(muTask.fileField));
+      expect(muTask2.filename, equals(muTask.filename));
+      expect(muTask2.mimeType, equals(muTask.mimeType));
+      //try with list of (String, String, String)
+      muTask = MultiUploadTask(
+          taskId: 'task3',
+          url: urlWithContentLength,
+          files: [('file1', 'f1.txt', 'text/plain'), ('file2', 'f2')]);
+      expect(muTask.fileFields, equals(['file1', 'file2']));
+      expect(muTask.filenames, equals(['f1.txt', 'f2']));
+      expect(muTask.mimeTypes, equals(['text/plain', 'application/octet-stream']));
+      expect(muTask.fileField, equals('["file1","file2"]'));
+      expect(muTask.filename, equals('["f1.txt","f2"]'));
+      expect(muTask.mimeType, equals('["text/plain","application/octet-stream"]'));
+      muTask2 = MultiUploadTask.fromJsonMap(muTask.toJsonMap());
+      expect(muTask2.taskId, equals(muTask.taskId));
+      expect(muTask2.fileFields, equals(muTask.fileFields));
+      expect(muTask2.filenames, equals(muTask.filenames));
+      expect(muTask2.mimeTypes, equals(muTask.mimeTypes));
+      expect(muTask2.fileField, equals(muTask.fileField));
+      expect(muTask2.filename, equals(muTask.filename));
+      expect(muTask2.mimeType, equals(muTask.mimeType));
     });
 
     testWidgets('copyWith', (widgetTester) async {
