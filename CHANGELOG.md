@@ -1,3 +1,19 @@
+## 7.6.0
+
+Added `SqlitePersistentStorage` as an alternative backing storage for the downloader, and implemented migration of a pre-existing database from the Flutter Downloader package. We use the `sqflite` package, so this is only supported iOS and Android.
+
+To use the downloader with SQLite backing and migration from Flutter Downloader, initialize the `FileDownloader` at the very beginning of your app:
+```dart
+final sqlStorage = SqlitePersistentStorage(migrationOptions: ['flutter_downloader', 'local_store']);
+FileDownloader(persistentStorage: sqlStorage);
+// start using the FileDownloader
+```
+
+This will migrate from either Flutter Downloader or the default LocalStore.
+
+In addition, added an optional parameter to the `tasksFinished` method that allows you to use it the moment you receive a status update for a task, like this:
+
+
 ## 7.5.0
 
 Added `pathInSharedStorage` method, which obtains the path to a file moved to shared storage.
