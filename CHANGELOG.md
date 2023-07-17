@@ -11,8 +11,16 @@ FileDownloader(persistentStorage: sqlStorage);
 
 This will migrate from either Flutter Downloader or the default LocalStore.
 
-In addition, added an optional parameter to the `tasksFinished` method that allows you to use it the moment you receive a status update for a task, like this:
-
+Added an optional parameter to the tasksFinished method that allows you to use it the moment you receive a status update for a task, like this:
+```dart
+void downloadStatusCallback(TaskStatusUpdate update) {
+    // process your status update, then check if all tasks are finished
+    final bool allTasksFinished = update.status.isFinalState && 
+        await FileDownloader().tasksFinished(ignoreTaskId: update.task.taskId) ;
+    print('All tasks finished: $allTasksFinished');
+  }
+```
+This excludes the task that is currently finishing up from the test. Without this, it's possible `tasksFinished` returns `false` as that currently finishing task may not have left the queue yet.
 
 ## 7.5.0
 
@@ -103,6 +111,19 @@ Further Dart 3 changes (not visible to user).
 Migration to Dart 3 - not other functional change or API change.  If you use Dart 2 please use version `6.1.1` of this plugin, which will be maintained until the end of 2023.
 
 Most classes in the package are now `final` classes, and under the hood we use the new Records and Pattern matching features of Dart 3. None of this should matter if you've used the package as intended.
+
+## 6.3.1
+
+Added an optional parameter to the tasksFinished method that allows you to use it the moment you receive a status update for a task, like this:
+```dart
+void downloadStatusCallback(TaskStatusUpdate update) {
+    // process your status update, then check if all tasks are finished
+    final bool allTasksFinished = update.status.isFinalState && 
+        await FileDownloader().tasksFinished(ignoreTaskId: update.task.taskId) ;
+    print('All tasks finished: $allTasksFinished');
+  }
+```
+This excludes the task that is currently finishing up from the test. Without this, it's possible `tasksFinished` returns `false` as that currently finishing task may not have left the queue yet.
 
 ## 6.3.0
 
