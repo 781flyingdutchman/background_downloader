@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:background_downloader/background_downloader.dart';
-// ignore: unused_import
-import 'package:background_downloader_example/sqlite_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
 
@@ -50,7 +48,7 @@ class _MyAppState extends State<MyApp> {
     // ready -> only use as an example).
     // To try that, uncomment the following line, which
     // will initialize the downloader with that storage solution.
-    // FileDownloader(persistentStorage: SqlitePersistentStorage());
+    FileDownloader(persistentStorage: SqlitePersistentStorage());
 
     // Configure the downloader by registering a callback and configuring
     // notifications

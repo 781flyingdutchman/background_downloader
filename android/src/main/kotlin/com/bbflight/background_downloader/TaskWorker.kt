@@ -32,8 +32,12 @@ import java.lang.System.currentTimeMillis
 import java.net.HttpURLConnection
 import java.net.SocketException
 import java.net.URL
+import java.nio.channels.FileChannel
 import java.nio.file.Files
+import java.nio.file.OpenOption
+import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
 import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.concurrent.schedule
@@ -433,10 +437,29 @@ class TaskWorker(
     private fun determineIfResumeIsPossible(
         tempFilePath: String, requiredStartByte: Long
     ): Boolean {
-        if (File(tempFilePath).exists()) {
-            if (File(tempFilePath).length() == requiredStartByte) {
+        val tempFile = File(tempFilePath)
+        if (tempFile.exists()) {
+            val tempFileLength = tempFile.length()
+            if (tempFileLength == requiredStartByte) {
                 return true
             } else {
+                // attempt to truncate the file to the expected size
+                Log.d(
+                    TAG,
+                    "File length = ${tempFile.length()} vs requiredStartByte = $requiredStartByte"
+                )
+                if (tempFileLength > requiredStartByte && Build.VERSION.SDK_INT >= 26) {
+                    try {
+                        val fileChannel =
+                            FileChannel.open(tempFile.toPath(), StandardOpenOption.WRITE)
+                        fileChannel.truncate(requiredStartByte)
+                        fileChannel.close()
+                        Log.d(TAG, "Truncated temp file to desired length")
+                        return true
+                    } catch (e: IOException) {
+                        e.printStackTrace()
+                    }
+                }
                 Log.i(TAG, "Partially downloaded file is corrupted, resume not possible")
             }
         } else {
@@ -504,12 +527,14 @@ class TaskWorker(
                 )
 
                 is SocketException -> Log.i(
-                    TAG, "Socket exception for taskId ${task.taskId} and $filePath: ${e.message}"
+                    TAG,
+                    "Socket exception for taskId ${task.taskId} and $filePath: ${e.message}"
                 )
 
                 is CancellationException -> {
                     Log.i(
-                        TAG, "Job cancelled for taskId ${task.taskId} and $filePath: ${e.message}"
+                        TAG,
+                        "Job cancelled for taskId ${task.taskId} and $filePath: ${e.message}"
                     )
                     deleteTempFile(tempFilePath)
                     return TaskStatus.canceled
@@ -542,7 +567,6 @@ class TaskWorker(
         isResumeParam: Boolean,
         tempFilePath: String
     ): TaskStatus {
-        Log.d(TAG, "Download for taskId ${task.taskId}")
         if (connection.responseCode in 200..206) {
             if (task.allowPause) {
                 val acceptRangesHeader = connection.headerFields["Accept-Ranges"]
