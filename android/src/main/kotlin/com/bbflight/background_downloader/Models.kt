@@ -7,6 +7,7 @@ import android.os.Build
 import kotlin.io.path.Path
 import kotlin.io.path.pathString
 
+
 /// Base directory in which files will be stored, based on their relative
 /// path.
 ///
@@ -120,15 +121,25 @@ class Task(
                 updates == Updates.statusChangeAndProgressUpdates
     }
 
-    /** True if this task is a DownloadTask, otherwise it is an UploadTask */
+    /** True if this task is a DownloadTask */
     fun isDownloadTask(): Boolean {
-        return taskType != "UploadTask"
+        return taskType == "DownloadTask"
+    }
+
+    /** True if this task is a MultiUploadTask */
+    fun isMultiUploadTask(): Boolean {
+        return taskType == "MultiUploadTask"
     }
 
     /**
-     * Returns full path (String) to the file to be downloaded
+     * Returns full path (String) to the file to be downloaded, or
+     * if the task is a MultiUploadTask, returns the empty string,
+     * as there is no single path that can be returned
      */
     fun filePath(context: Context): String {
+        if (isMultiUploadTask()) {
+            return ""
+        }
         if (Build.VERSION.SDK_INT >= 26) {
             val baseDirPath = when (baseDirectory) {
                 BaseDirectory.applicationDocuments -> Path(
@@ -153,6 +164,21 @@ class Task(
             return if (directory.isEmpty()) "$baseDirPath/${filename}" else
                 "$baseDirPath/${directory}/${filename}"
         }
+    }
+
+    /**
+     * Returns a list of fileData elements, one for each file to upload.
+     * Each elements is a triple containing fileField, filePath, mimeType
+     */
+    fun multiFileData(context: Context): List<Triple<String, String, String>> {
+        var fileFields = listOf<String>("a", "b")  // TODO()
+        var filenames = listOf<String>("a", "b")  // TODO()
+        var mimeTypes = listOf<String>("a", "b")  // TODO()
+        var result = ArrayList<Triple<String, String, String>>()
+        for (i in 1..fileFields.size) {
+            result.add(Triple(first = fileFields[i], second = filenames[i], third = mimeTypes[i]))
+        }
+        return result
     }
 
     override fun toString(): String {

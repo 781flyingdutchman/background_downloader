@@ -9,7 +9,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Context.NOTIFICATION_SERVICE
-
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
@@ -27,7 +26,6 @@ import androidx.work.WorkerParameters
 import com.google.gson.Gson
 import kotlinx.coroutines.*
 import java.io.*
-import java.lang.Double.min as doubleMin
 import java.lang.System.currentTimeMillis
 import java.net.HttpURLConnection
 import java.net.SocketException
@@ -35,17 +33,17 @@ import java.net.URL
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.*
-import kotlin.collections.ArrayList
 import kotlin.concurrent.schedule
 import kotlin.concurrent.write
 import kotlin.math.roundToInt
 import kotlin.random.Random
+import java.lang.Double.min as doubleMin
 
 
 /***
- * A simple worker that will post your input back to your Flutter application.
+ * The worker to execute one task
  *
- * It will block the background thread until a value of either true or false is received back from Flutter code.
+ * Processes DownloadTask, UploadTask or MultiUploadTask
  */
 class TaskWorker(
     applicationContext: Context, workerParams: WorkerParameters
@@ -391,6 +389,9 @@ class TaskWorker(
 
     private lateinit var prefs: SharedPreferences
 
+    /**
+     * Worker execution entrypoint
+     */
     override suspend fun doWork(): Result {
         prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
         withContext(Dispatchers.IO) {
@@ -820,6 +821,7 @@ class TaskWorker(
             }
         }
     }
+
 
 
     /**
@@ -1302,5 +1304,3 @@ fun getTaskMap(prefs: SharedPreferences): MutableMap<String, Any> {
         jsonString, BackgroundDownloaderPlugin.jsonMapType
     ).toMutableMap()
 }
-
-
