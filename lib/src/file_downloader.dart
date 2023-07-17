@@ -529,11 +529,11 @@ class FileDownloader {
   Future<bool> tasksFinished(
       {String group = defaultGroup,
       bool includeTasksWaitingToRetry = true,
-      Task? ignoreTask}) async {
+      String? ignoreTaskId}) async {
     final tasksInProgress = await allTasks(
         group: group, includeTasksWaitingToRetry: includeTasksWaitingToRetry);
-    if (ignoreTask != null) {
-      tasksInProgress.remove(ignoreTask);
+    if (ignoreTaskId != null) {
+      tasksInProgress.removeWhere((task) => task.taskId == ignoreTaskId);
     }
     return tasksInProgress.isEmpty;
   }
