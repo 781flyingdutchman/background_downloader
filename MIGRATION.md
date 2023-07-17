@@ -16,7 +16,7 @@ Key differences with Flutter Downloader:
 * Callbacks _can_ be registered, just like with Flutter Downloader, but prefer using `FileDownloader().updates.listen` and listen to updates in a more Flutter-like way
 * You can `enqueue` a task, like with Flutter Downloader, but you can also call `result = await FileDownloader().download(task)` and wait for a download to complete with a result
 * Notifications work very differently. You have to configure notifications (for all tasks, a group, or one specific task) before calling `enqueue` or `download`
-* By default, there is no database where task status is maintained, as you get status updates along the way. If you do want to track tasks, call `trackTasks`, and use the `database` field to query the database. There are different options for the backing database, and migration from the Flutter Downloader database is partially supported (see below)
+* By default, there is no database where task status is maintained, as you get status updates along the way. If you do want to track tasks, call `trackTasks`, and use the `database` field to query the database. There are different options for the backing database, and migration from the Flutter Downloader database is partially supported, see [below](#sqlite-persistent-storage).
 
 ## Migration of the persistent storage used in background_downloader
 
@@ -27,14 +27,14 @@ You can use a different persistent storage by passing an alternative (that imple
 
 ### SQLite persistent storage
 
-One such alternative, `SQLitePersistentStorage`, is included in the package (and adds a dependency to the sqflite package). This storage supports migrations from Localstore and from the Flutter Downloader SQLite database. To activate migration, pass the desired migrations to the constructor of the `SQLitePersistentStorage`, then pass the object to the `FileDownloader`:
+One such alternative, `SqlitePersistentStorage`, is included in the package (and adds a dependency to the sqflite package). This storage supports migrations from Localstore and from the Flutter Downloader SQLite database. To activate migration, pass the desired migrations to the constructor of the `SqlitePersistentStorage`, then pass the object to the `FileDownloader`:
 ```agsl
 final sqlStorage = SqlitePersistentStorage(migrationOptions: ['local_store', 'flutter_downloader']);
 FileDownloader(persistentStorage: sqlStorage);
 // start using the FileDownloader
 ```
 
-When used this way, the downloader will migrate data from either Localstore or Flutter Downloader to the new SQLite database. 
+When used this way, the downloader will migrate data from either Localstore or Flutter Downloader to the new SQLite database when it is created. 
 
 Only Flutter Downloader entries that are complete, failed or canceled will be migrated to the background downloader, and only the fields taskId, url, filename, headers and time_created migrate. We attempt to reconstruct the file destination (stored in `savedDir`), provided it points to an app-specific location. If the location is external (e.g. Downloads) then the `directory` of the task will be set to the absolute path described by the `savedDir` field in the Flutter Downloader database. Note that this is not a valid state for a `Task`, but done to allow further processing by the developer. 
 
@@ -48,10 +48,10 @@ The SQLite database has an additional method `retrieveTaskRecords` that takes SQ
 * status (as an integer, the index into the `TaskStatus` enum)
 * progress
 
-You only use these fields to query - the returned value is a list of `TaskRecord` objects.  The `retrieveTaskRecords` method is _only_ available on the `SQLitePersistentStorage` object that you created and passed to the `FileDownloader`. It is not part of the `FileDownloader().database` functionality (because not all backing databases allow a query like this), and you should continue to use the `database` object wherever possible, to ensure compatibility with future upgrades.
+You only use these fields to query - the returned value is a list of `TaskRecord` objects.  The `retrieveTaskRecords` method is _only_ available on the `SqlitePersistentStorage` object that you created and passed to the `FileDownloader`. It is not part of the `FileDownloader().database` functionality (because not all backing databases allow a query like this), and you should continue to use the `database` object wherever possible, to ensure compatibility with future upgrades.
 
 ### Other storage and migration
 
-If you already have an SQLite database that you use to keep track of things, you may want to use that to also store the downloader's data. You can extend `SQLitePersistentStorage` or implement the `PersistentStorage` interface in the class you already have.  Likewise, if you want to implement storage in Hive or some other solution, make sure to implement `PersistentStorage` and perhaps share your solution with the community!
+If you already have an SQLite database that you use to keep track of things, you may want to use that to also store the downloader's data. You can extend `SqlitePersistentStorage` or implement the `PersistentStorage` interface in the class you already have.  Likewise, if you want to implement storage in Hive or some other solution, make sure to implement `PersistentStorage` and perhaps share your solution with the community!
 
 If you want to add migration capability to your own `PersistentStorage` class, then use the `PersistentStorageMigrator` and/or extend that with functionality beyond Localstore and Flutter Downloader. The documentation shows you how this can be done.

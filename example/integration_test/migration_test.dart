@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter/cupertino.dart';
@@ -85,13 +84,14 @@ void main() {
       await FlutterDownloader.initialize(debug: true);
       FlutterDownloader.registerCallback(downloadCallback);
       final docsDir = await getApplicationDocumentsDirectory();
-      final destPath = path.join(docsDir.path, 'google.html');
+      final destPath = path.join(docsDir.path, defaultFilename);
       if (File(destPath).existsSync()) {
         File(destPath).deleteSync();
       }
       final fdlTaskId = await FlutterDownloader.enqueue(
-          url: 'https://www.google.com',
-          fileName: 'google.html',
+          url: workingUrl,
+          fileName: defaultFilename,
+          headers: {'key': 'value'},
           savedDir: docsDir.path,
           showNotification: false,
           openFileFromNotification: false);
@@ -118,6 +118,15 @@ void main() {
       expect(await sql.retrieveAllResumeData(), isEmpty);
       final newRecord = (await sql.retrieveAllTaskRecords()).first;
       expect(newRecord.taskId, equals(fdlTaskId));
+      expect(newRecord.task.url, equals(workingUrl));
+      expect(newRecord.task.filename, equals(defaultFilename));
+      expect(newRecord.task.headers, equals({'key': 'value'}));
+      expect(
+          newRecord.task.creationTime
+              .difference(DateTime.now())
+              .inSeconds
+              .abs(),
+          lessThan(5));
       expect(newRecord.status, equals(TaskStatus.complete));
       expect(newRecord.progress, equals(1.0));
       expect(newRecord.expectedFileSize, equals(-1));

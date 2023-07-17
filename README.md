@@ -7,6 +7,9 @@ This version requires Dart 3. If you need support for Dart 2 please use version 
 
 ---
 
+**If you are migrating from Flutter Downloader, please read the [migration document](https://github.com/781flyingdutchman/background_downloader/blob/main/MIGRATION.md)**
+
+---
 Create a [DownloadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/DownloadTask-class.html) to define where to get your file from, where to store it, and how you want to monitor the download, then call `FileDownloader().download` and wait for the result.  Background_downloader uses URLSessions on iOS and DownloadWorker on Android, so tasks will complete also when your app is in the background. The download behavior is highly consistent across all supported platforms: iOS, Android, MacOS, Windows and Linux.
 
 Monitor progress by passing an `onProgress` listener, and monitor detailed status updates by passing an `onStatus` listener to the `download` call.  Alternatively, monitor tasks centrally using an [event listener](#using-an-event-listener) or [callbacks](#using-callbacks) and call `enqueue` to start the task.
@@ -416,7 +419,7 @@ You can interact with the `database` using `allRecords`, `allRecordsOlderThan`, 
 
 By default, the downloader uses a modified version of the [localstore](https://pub.dev/packages/localstore) package to store the `TaskRecord` and other objects. To use a different persistent storage solution, create a class that implements the [PersistentStorage](https://pub.dev/documentation/background_downloader/latest/background_downloader/PersistentStorage-class.html) interface, and initialize the downloader by calling `FileDownloader(persistentStorage: yourStorageClass())` as the first use of the `FileDownloader`.
 
-As an alternative to LocalStore, use `SQLitePersistentStorage` and see the [migration document](https://github.com/781flyingdutchman/background_downloader/blob/main/MIGRATION.md) to understand how it can migrate files from Localstore and the Flutter Downloader package.
+As an alternative to LocalStore, use `SqlitePersistentStorage` and see the [migration document](https://github.com/781flyingdutchman/background_downloader/blob/main/MIGRATION.md) to understand how it can migrate files from Localstore and the Flutter Downloader package.
 
 
 ## Notifications

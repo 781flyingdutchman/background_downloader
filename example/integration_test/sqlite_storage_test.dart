@@ -6,8 +6,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:background_downloader/src/persistent_storage.dart';
 import 'package:logging/logging.dart';
+
 // ignore: unused_import
 import 'package:path/path.dart' as p;
+
 // ignore: unused_import
 import 'package:path_provider/path_provider.dart';
 

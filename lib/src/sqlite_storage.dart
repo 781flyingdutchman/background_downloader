@@ -296,7 +296,8 @@ class SqlitePersistentStorage implements PersistentStorage {
           'filename': task.filename,
           'group': task.group,
           'metaData': task.metaData,
-          'creationTime': (task.creationTime.millisecondsSinceEpoch / 1000).floor(),
+          'creationTime':
+              (task.creationTime.millisecondsSinceEpoch / 1000).floor(),
           'status': record.status.index,
           'progress': record.progress,
           objectColumn: jsonEncode(record.toJsonMap())
@@ -311,7 +312,7 @@ class SqlitePersistentStorage implements PersistentStorage {
 }
 
 /// Partial implementation used to extract the data stored in a
-/// FlutterDownloader SQLite database
+/// FlutterDownloader SQLite database, for migration
 ///
 /// Only the [initialize] and retrieveAll... methods are implemented,
 /// as they are called from the migration methods in [PersistentStorageMigrator]
@@ -412,10 +413,17 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
         whereArgs: [3, 4, 5]);
     final taskRecords = <TaskRecord>[];
     for (var fdlTask in result) {
-      final Map<String, String> headers =
-          (fdlTask['headers'] as String? ?? '').isEmpty
-              ? {}
-              : Map.castFrom(jsonDecode(fdlTask['headers'] as String));
+      var headerString = fdlTask['headers'] as String? ?? '';
+      Map<String, String> headers;
+      try {
+        headers = (headerString).isEmpty
+            ? {}
+            : Map.castFrom(jsonDecode(headerString));
+      } on FormatException {
+        // headers field may be url encoded
+        headerString = Uri.decodeFull(headerString);
+        headers = Map.castFrom(jsonDecode(headerString));
+      }
       var (baseDirectory, directory) =
           await getDirectories(fdlTask['savedDir'] as String? ?? '');
       final creationTime = DateTime.fromMillisecondsSinceEpoch(
