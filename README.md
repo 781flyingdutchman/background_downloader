@@ -7,6 +7,9 @@ This version requires Dart 3. If you need support for Dart 2 please use version 
 
 ---
 
+**If you are migrating from Flutter Downloader, please read the [migration document](https://github.com/781flyingdutchman/background_downloader/blob/main/MIGRATION.md)**
+
+---
 Create a [DownloadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/DownloadTask-class.html) to define where to get your file from, where to store it, and how you want to monitor the download, then call `FileDownloader().download` and wait for the result.  Background_downloader uses URLSessions on iOS and DownloadWorker on Android, so tasks will complete also when your app is in the background. The download behavior is highly consistent across all supported platforms: iOS, Android, MacOS, Windows and Linux.
 
 Monitor progress by passing an `onProgress` listener, and monitor detailed status updates by passing an `onStatus` listener to the `download` call.  Alternatively, monitor tasks centrally using an [event listener](#using-an-event-listener) or [callbacks](#using-callbacks) and call `enqueue` to start the task.
@@ -42,22 +45,23 @@ final task = DownloadTask(
 // Start download, and wait for result. Show progress and status changes
 // while downloading
 final result = await FileDownloader().download(task,
-onProgress: (progress) => print('Progress: ${progress * 100}%'),
-onStatus: (status) => print('Status: $status'));
+    onProgress: (progress) => print('Progress: ${progress * 100}%'),
+    onStatus: (status) => print('Status: $status')
+);
 
 // Act on the result
 switch (result) {
-case TaskStatus.complete:
-print('Success!');
+  case TaskStatus.complete:
+    print('Success!');
 
-case TaskStatus.canceled:
-print('Download was canceled');
+  case TaskStatus.canceled:
+    print('Download was canceled');
 
-case TaskStatus.paused:
-print('Download was paused');
+  case TaskStatus.paused:
+    print('Download was paused');
 
-default:
-print('Download not successful');
+  default:
+    print('Download not successful');
 }
 ```
 
@@ -116,7 +120,8 @@ final task = UploadTask(
 // while uploading
 final result = await FileDownloader().upload(task,
   onProgress: (progress) => print('Progress: ${progress * 100}%'),
-  onStatus: (status) => print('Status: $status'));
+  onStatus: (status) => print('Status: $status')
+);
 
 // Act on result, similar to download
 ```
@@ -223,9 +228,7 @@ Use `await task.expectedFileSize()` to query the server for the size of the file
 to download.  The expected file size is also included in `TaskProgressUpdate`s that are sent to
 listeners and callbacks - see [Using an event listener](#using-an-event-listener) and [Using callbacks](#using-callbacks)
 
-A [DownloadProgressIndicator](https://pub.
-dev/documentation/background_downloader/latest/background_downloader/DownloadProgressIndicator
--class.html) widget is included with the package, and the example app shows how to wire it up.
+A [DownloadProgressIndicator](https://pub.dev/documentation/background_downloader/latest/background_downloader/DownloadProgressIndicator-class.html) widget is included with the package, and the example app shows how to wire it up.
 The widget can be configured to include pause and resume buttons, and to expand to show multiple
 simultaneous downloads, or to collapse and show a file download counter.
 
@@ -233,22 +236,25 @@ simultaneous downloads, or to collapse and show a file download counter.
 
 If you want to monitor status changes while the download is underway (i.e. not only the final state, which you will receive as the result of the `download` call) you can add a status change callback that takes the status as an argument:
 ```dart
-final result = await FileDownloader().download(task, 
+final result = await FileDownloader().download(task,
     onStatus: (status) => print('Status update: $status'));
 ```
 
-The status will follow a sequence of `.enqueued` (waiting to execute), `.running` (actively downloading) and then one of the final states mentioned before, or `.waitingToRetry` if retries are enabled and the task failed.
+The status will follow a sequence of `.enqueued` (waiting to execute), `.running` (actively 
+downloading) and then one of the final states mentioned before, or `.waitingToRetry` if retries 
+are enabled and the task failed. Note that Android OS may restart a task, leading to a repeat of 
+the `.running` status, so you need to allow for that occasion.
 
 #### Elapsed time
 
 If you want to keep an eye on how long the download is taking (e.g. to warn the user that there may be an issue with their network connection, or to cancel the task if it takes too long), pass an `onElapsedTime` callback to the `download` method. The callback takes a single argument of type `Duration`, representing the time elapsed since the call to `download` was made. It is called at regular intervals (defined by `elapsedTimeInterval` which defaults to 5 seconds), so you can react in different ways depending on the total time elapsed. For example:
 ```dart
 final result = await FileDownloader().download(
-                  task, 
-                  onElapsedTime: (elapsed) {
-                      print('This is taking rather long: $elapsed');
-                  },
-                  elapsedTimeInterval: const Duration(seconds: 30));
+                      task, 
+                      onElapsedTime: (elapsed) {
+                          print('This is taking rather long: $elapsed');
+                      },
+                      elapsedTimeInterval: const Duration(seconds: 30));
 ```
 
 The elapsed time logic is only available for `download`, `upload`, `downloadBatch` and `uploadBatch`. It is not available for tasks started using `enqueue`, as there is no expectation that those complete imminently.
@@ -416,6 +422,8 @@ You can interact with the `database` using `allRecords`, `allRecordsOlderThan`, 
 
 By default, the downloader uses a modified version of the [localstore](https://pub.dev/packages/localstore) package to store the `TaskRecord` and other objects. To use a different persistent storage solution, create a class that implements the [PersistentStorage](https://pub.dev/documentation/background_downloader/latest/background_downloader/PersistentStorage-class.html) interface, and initialize the downloader by calling `FileDownloader(persistentStorage: yourStorageClass())` as the first use of the `FileDownloader`.
 
+As an alternative to LocalStore, use `SqlitePersistentStorage` and see the [migration document](https://github.com/781flyingdutchman/background_downloader/blob/main/MIGRATION.md) to understand how it can migrate files from Localstore and the Flutter Downloader package.
+
 
 ## Notifications
 
@@ -565,24 +573,35 @@ To manage or query the queue of waiting or running tasks, call:
 * `reset` to reset the downloader, which cancels all ongoing download tasks
 * `allTaskIds` to get a list of `taskId` values of all tasks currently active (i.e. not in a final state). You can exclude tasks waiting for retries by setting `includeTasksWaitingToRetry` to `false`. Note that paused tasks are not included in this list
 * `allTasks` to get a list of all tasks currently active (i.e. not in a final state). You can exclude tasks waiting for retries by setting `includeTasksWaitingToRetry` to `false`. Note that paused tasks are not included in this list
-* `taskForId` to get the `Task` for the given `taskId`, or `null` if not found. Only tasks that are active (ie. not in a final state) are guaranteed to be returned, but returning a task does not guarantee that it is active
+* `taskForId` to get the `Task` for the given `taskId`, or `null` if not found.
 * `tasksFinished` to check if all tasks have finished (successfully or otherwise)
 
-Note that each of these methods accept a `group` parameter that targets the mehod to a specific group. If tasks are enqueued with a `group` other than default, calling any of these methods without a group parameter will not affect/include those tasks - only the default tasks. In particular, this may affect tasks started using a method like `download`, which changes the task's group to `FileDownloader.awaitGroup`.
+Each of these methods accept a `group` parameter that targets the method to a specific group. If tasks are enqueued with a `group` other than default, calling any of these methods without a group parameter will not affect/include those tasks - only the default tasks. In particular, this may affect tasks started using a method like `download`, which changes the task's group to `FileDownloader.awaitGroup`.
+
+**NOTE:** Only tasks that are active (ie. not in a final state) are guaranteed to be returned or counted, but returning a task does not guarantee that it is active.
+This means that if you check `tasksFinished` when processing a task update, the task you received an update for may still show as 'active', even though it just finished, and result in `false` being returned. To fix this, pass that task's taskId as `ignoreTaskId` to the `tasksFinished` call, and it will be ignored for the purpose of testing if all tasks are finished: 
+```dart
+void downloadStatusCallback(TaskStatusUpdate update) {
+    // process your status update, then check if all tasks are finished
+    final bool allTasksFinished = update.status.isFinalState && 
+        await FileDownloader().tasksFinished(ignoreTaskId: update.task.taskId) ;
+    print('All tasks finished: $allTasksFinished');
+  }
+```
 
 ### Grouping tasks
 
 Because an app may require different types of downloads, and handle those differently, you can specify a `group` with your task, and register callbacks specific to each `group`. If no group is specified the default group `FileDownloader.defaultGroup` is used. For example, to create and handle downloads for group 'bigFiles':
 ```dart
 FileDownloader().registerCallbacks(
-group: 'bigFiles'
-taskStatusCallback: bigFilesDownloadStatusCallback,
-taskProgressCallback: bigFilesDownloadProgressCallback);
+    group: 'bigFiles'
+    taskStatusCallback: bigFilesDownloadStatusCallback,
+    taskProgressCallback: bigFilesDownloadProgressCallback);
 final task = DownloadTask(
-group: 'bigFiles',
-url: 'https://google.com',
-filename: 'google.html',
-updates: Updates.statusAndProgress);
+    group: 'bigFiles',
+    url: 'https://google.com',
+    filename: 'google.html',
+    updates: Updates.statusAndProgress);
 final successFullyEnqueued = await FileDownloader().enqueue(task);
 ```
 

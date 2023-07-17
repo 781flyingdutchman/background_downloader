@@ -560,7 +560,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         result.success(pathInSharedStorage(applicationContext, filePath, destination, directory))
     }
 
-        /**
+    /**
      * Open the file represented by the task, with optional mimeType
      *
      * Call arguments are [taskJsonMapString, filename, mimeType] with precondition that either

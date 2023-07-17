@@ -607,6 +607,15 @@ void main() {
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.complete));
       expect(await FileDownloader().tasksFinished(), isTrue);
+      // now start a task and intentionally ignore it
+      statusCallbackCompleter = Completer();
+      expect(await FileDownloader().enqueue(task), isTrue);
+      expect(await FileDownloader().tasksFinished(), isFalse);
+      expect(await FileDownloader().tasksFinished(ignoreTaskId: task.taskId),
+          isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(await FileDownloader().tasksFinished(), isTrue);
       print('Finished tasksFinished');
     });
 
@@ -687,6 +696,7 @@ void main() {
       expect(await FileDownloader().taskForId(complexTask.taskId), isNull);
       expect(await FileDownloader().enqueue(complexTask), isTrue);
       final task = await FileDownloader().taskForId(complexTask.taskId);
+      expect(task is DownloadTask, isTrue);
       expect(task, equals(complexTask));
       if (task != null) {
         expect(task.taskId, equals(complexTask.taskId));
@@ -2012,6 +2022,7 @@ void main() {
       final canResume2 = await FileDownloader().taskCanResume(task);
       expect(canResume2, isFalse); // task allowPause not set
       expect(await FileDownloader().cancelTasksWithIds([task.taskId]), isTrue);
+      await Future.delayed(const Duration(seconds: 1));
     });
 
     testWidgets('pause and resume task', (widgetTester) async {
