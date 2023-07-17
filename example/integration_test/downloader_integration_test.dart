@@ -602,7 +602,8 @@ void main() {
       statusCallbackCompleter = Completer();
       expect(await FileDownloader().enqueue(task), isTrue);
       expect(await FileDownloader().tasksFinished(), isFalse);
-      expect(await FileDownloader().tasksFinished(ignoreTaskId: task.taskId), isTrue);
+      expect(await FileDownloader().tasksFinished(ignoreTaskId: task.taskId),
+          isTrue);
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.complete));
       expect(await FileDownloader().tasksFinished(), isTrue);

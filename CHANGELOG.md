@@ -1,3 +1,16 @@
+## 6.3.1
+
+Added an optional parameter to the tasksFinished method that allows you to use it the moment you receive a status update for a task, like this:
+```dart
+void downloadStatusCallback(TaskStatusUpdate update) {
+    // process your status update, then check if all tasks are finished
+    final bool allTasksFinished = update.status.isFinalState && 
+        await FileDownloader().tasksFinished(ignoreTaskId: update.task.taskId) ;
+    print('All tasks finished: $allTasksFinished');
+  }
+```
+This excludes the task that is currently finishing up from the test. Without this, it's possible `tasksFinished` returns `false` as that currently finishing task may not have left the queue yet.
+
 ## 6.3.0
 
 Added `pathInSharedStorage` method, which obtains the path to a file moved to shared storage.
