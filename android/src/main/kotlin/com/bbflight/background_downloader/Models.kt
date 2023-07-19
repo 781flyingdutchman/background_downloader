@@ -183,7 +183,7 @@ class Task(
         val filenames = gson.fromJson(filename, Array<String>::class.java).asList()
         val mimeTypes = gson.fromJson(mimeType, Array<String>::class.java).asList()
         val result = ArrayList<Triple<String, String, String>>()
-        for (i in 1..fileFields.size) {
+        for (i in fileFields.indices) {
             result.add(Triple(first = fileFields[i],
                     second = filePath(context, withFilename = filenames[i]), third = mimeTypes[i]))
         }

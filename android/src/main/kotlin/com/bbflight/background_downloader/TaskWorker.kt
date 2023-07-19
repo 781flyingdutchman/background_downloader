@@ -380,7 +380,7 @@ class TaskWorker(
         }
     }
 
-    // properties related to pause/resume functionality
+    // properties related to pause/resume functionality and progress
     private var bytesTotal: Long = 0
     private var startByte = 0L
     private var isTimedOut = false
@@ -407,6 +407,7 @@ class TaskWorker(
             val task = Task(
                 gson.fromJson(taskJsonMapString, BackgroundDownloaderPlugin.jsonMapType)
             )
+            Log.v(TAG, "TaskType ${task.taskType}") //TODO()
             notificationConfigJsonString = inputData.getString(keyNotificationConfig)
             notificationConfig =
                 if (notificationConfigJsonString != null) BackgroundDownloaderPlugin.gson.fromJson(
@@ -844,13 +845,17 @@ class TaskWorker(
         // and file length, so that we can calculate total size of upload
         val separator = "$lineFeed--$boundary$lineFeed" // between files
         val terminator = "$lineFeed--$boundary--$lineFeed" // after last file
+        Log.v(TAG, "Filepath=$filePath")
         val filesData = if (filePath.isNotEmpty()) {
+            Log.v(TAG, "One file")
             listOf(
                 Triple(first = task.fileField, second = filePath, third = task.mimeType)
             )
         } else {
+            Log.v(TAG, "More files")
             task.extractFilesData(applicationContext)
         }
+        Log.v(TAG, "filesData = $filesData")
         val contentDispositionStrings = ArrayList<String>()
         val contentTypeStrings = ArrayList<String>()
         val fileLengths = ArrayList<Long>()
@@ -872,6 +877,7 @@ class TaskWorker(
                     contentTypeStrings.sumOf { string: String -> string.length } +
                     fileLengths.sum() + separator.length * contentDispositionStrings.size + 2
         val contentLength = fieldString.length + "--$boundary$lineFeed".length + fileDataLength
+        Log.v(TAG, "cl=$contentLength")
         // setup the connection
         connection.setRequestProperty("Accept-Charset", "UTF-8")
         connection.setRequestProperty("Connection", "Keep-Alive")
@@ -882,6 +888,7 @@ class TaskWorker(
         connection.setRequestProperty("Content-Length", contentLength.toString())
         connection.setFixedLengthStreamingMode(contentLength)
         connection.useCaches = false
+        Log.v(TAG, "$fieldString$contentDispositionStrings\n\n$contentTypeStrings\n\n$contentLength")
         // transfer the bytes
         return withContext(Dispatchers.IO) {
             DataOutputStream(connection.outputStream).use { outputStream ->
@@ -889,7 +896,7 @@ class TaskWorker(
                 // write form fields
                 writer.append(fieldString).append("--${boundary}").append(lineFeed)
                 // write each file
-                for (i in 0..filesData.size) {
+                for (i in filesData.indices) {
                     FileInputStream(filesData[i].second).use { inputStream ->
                         writer.append(contentDispositionStrings[i])
                             .append(contentTypeStrings[i]).flush()

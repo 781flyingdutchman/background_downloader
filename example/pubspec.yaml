@@ -62,4 +62,5 @@ flutter:
 
   assets:
     - assets/a_file.txt
+    - assets/second_file.txt
     - assets/5MB-test.ZIP

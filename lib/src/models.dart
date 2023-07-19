@@ -358,9 +358,13 @@ sealed class Task extends Request {
 
   /// Create a new [Task] subclass from the provided [jsonMap]
   factory Task.createFromJsonMap(Map<String, dynamic> jsonMap) =>
-      jsonMap['taskType'] == 'UploadTask'
-          ? UploadTask.fromJsonMap(jsonMap)
-          : DownloadTask.fromJsonMap(jsonMap);
+      switch (jsonMap['taskType']) {
+        'DownloadTask' => DownloadTask.fromJsonMap(jsonMap),
+        'UploadTask' => UploadTask.fromJsonMap(jsonMap),
+        'MultiUploadTask' => MultiUploadTask.fromJsonMap(jsonMap),
+        _ => throw ArgumentError(
+            'taskType not in [DownloadTask, UploadTask, MultiUploadTask]')
+      };
 
   /// Returns the absolute path to the file represented by this task
   Future<String> filePath() async {
@@ -898,7 +902,7 @@ final class MultiUploadTask extends UploadTask {
                   _ => throw ArgumentError(_filesArgumentError)
                 })
             .toList(growable: false),
-        super(filename: 'multi-upload', fileField: '', mimeType: '');
+        super(filename: 'multi-upload', fileField: '', mimeType: '', fields: fields);
 
   /// For [MultiUploadTask], returns jsonEncoded list of [fileFields]
   @override
@@ -927,8 +931,50 @@ final class MultiUploadTask extends UploadTask {
         super.fromJsonMap(jsonMap);
 
   @override
-  Map<String, dynamic> toJsonMap() =>
-      {...super.toJsonMap(), 'taskType': 'MultiUploadTask'};
+  MultiUploadTask copyWith(
+          {String? taskId,
+          String? url,
+          String? filename,
+          Map<String, String>? headers,
+          String? httpRequestMethod,
+          Object? post,
+          String? fileField,
+          String? mimeType,
+          Map<String, String>? fields,
+          String? directory,
+          BaseDirectory? baseDirectory,
+          String? group,
+          Updates? updates,
+          bool? requiresWiFi,
+          int? retries,
+          int? retriesRemaining,
+          bool? allowPause,
+          String? metaData,
+          DateTime? creationTime}) =>
+      MultiUploadTask(
+          taskId: taskId ?? this.taskId,
+          url: url ?? this.url,
+          files: fileFields.indexed.map(_toRecord).toList(),
+          headers: headers ?? this.headers,
+          httpRequestMethod: httpRequestMethod ?? this.httpRequestMethod,
+          fields: fields ?? this.fields,
+          directory: directory ?? this.directory,
+          baseDirectory: baseDirectory ?? this.baseDirectory,
+          group: group ?? this.group,
+          updates: updates ?? this.updates,
+          requiresWiFi: requiresWiFi ?? this.requiresWiFi,
+          retries: retries ?? this.retries,
+          metaData: metaData ?? this.metaData,
+          creationTime: creationTime ?? this.creationTime)
+        ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
+
+  /// Zips the fileField, filename and mimeType at an index to
+  /// a record
+  (String, String, String) _toRecord((int, String) record) =>
+      (fileFields[record.$1], filenames[record.$1], mimeTypes[record.$1]);
+
+  @override
+  String get taskType => 'MultiUploadTask';
 }
 
 /// Return url String composed of the [url] and the
