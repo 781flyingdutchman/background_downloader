@@ -1805,10 +1805,38 @@ void main() {
   });
 
   group('MultiUpload', () {
+    testWidgets('upload 2 files using enqueue', (widgetTester) async {
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      final multiTask = MultiUploadTask(
+          url: uploadMultiTestUrl,
+          files: [('f1', uploadFilename), ('f2', uploadFilename2)],
+          fields: {'key': 'value'},
+      updates: Updates.statusAndProgress);
+      expect(await FileDownloader().enqueue(multiTask), isTrue);
+      await someProgressCompleter.future;
+      expect(lastProgress, greaterThan(0));
+      expect(lastProgress, lessThan(1));
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+    });
+
     testWidgets('upload 2 files using upload', (widgetTester) async {
       final multiTask = MultiUploadTask(
           url: uploadMultiTestUrl,
           files: [('f1', uploadFilename), ('f2', uploadFilename2)],
+          fields: {'key': 'value'});
+      final result = await FileDownloader().upload(multiTask);
+      expect(result.status, equals(TaskStatus.complete));
+    });
+
+    testWidgets('upload 2 files with full file path', (widgetTester) async {
+      final docsDir = await getApplicationDocumentsDirectory();
+      final fullPath = join(docsDir.path, uploadFilename);
+      final multiTask = MultiUploadTask(
+          url: uploadMultiTestUrl,
+          files: [('f1', fullPath), ('f2', uploadFilename2)],
           fields: {'key': 'value'});
       final result = await FileDownloader().upload(multiTask);
       expect(result.status, equals(TaskStatus.complete));

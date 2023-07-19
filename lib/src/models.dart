@@ -344,7 +344,7 @@ sealed class Task extends Request {
     if (filename?.isEmpty == true) {
       throw ArgumentError('Filename cannot be empty');
     }
-    if (_pathSeparator.hasMatch(this.filename)) {
+    if (_pathSeparator.hasMatch(this.filename) && this is! MultiUploadTask) {
       throw ArgumentError('Filename cannot contain path separators');
     }
     if (_startsWithPathSeparator.hasMatch(directory)) {
@@ -819,13 +819,18 @@ final class UploadTask extends Task {
 /// only - all other fields are ignored in that test
 ///
 /// A [MultiUploadTask] is initialized with a list representing the files to upload.
-/// Each element is either a filename, or a fileField and filename, or a fileField and
-/// filename and mimeType. When instantiating a [MultiUploadTask], this list is
-/// converted into three lists: [fileFields], [filenames], and [mimeTypes], available
+/// Each element is either a filename/path, or a (fileField, filename/path),
+/// or a (fileField, filename/path, mimeType).
+/// When instantiating a [MultiUploadTask], this list is converted into
+/// three lists: [fileFields], [filenames], and [mimeTypes], available
 /// as fields. These lists are also encoded to a JSON string representation in
-/// the fields [fileField], [fileName] and [mimeType],so - different from
+/// the fields [fileField], [filename] and [mimeType],so - different from
 /// a single [UploadTask] - these fields now contain a JSON object representing all
 /// files.
+/// filename/path means either a filename without directory (and the
+/// directory will be based on the [Task.baseDirectory] and [Task.directory]
+/// fields), or you specify a full file path. For example: "hello.txt" or
+/// "/data/com.myapp/data/dir/hello.txt"
 final class MultiUploadTask extends UploadTask {
   final List<String> fileFields, filenames, mimeTypes;
 
@@ -840,13 +845,15 @@ final class MultiUploadTask extends UploadTask {
   /// [urlQueryParameters] may be added and will be appended to the [url], must
   ///   be properly encoded if necessary
   /// [files] list of objects representing each file to upload. The object must
-  ///   be either a String representing the filename (and the fileField will
+  ///   be either a String representing the filename/path (and the fileField will
   ///   be the filename without extension), a Record of type
-  ///   (String fileField, String filename) or a Record with a third String
+  ///   (String fileField, String filename/path) or a Record with a third String
   ///   for the mimeType (if omitted, mimeType will be derived from the filename
   ///   extension).
   ///   Each file must be based in the directory represented by the combination
-  ///   of [baseDirectory] and [directory].
+  ///   of [baseDirectory] and [directory], unless a full filepath is given
+  ///   instead of only the filename. For example: "hello.txt" or
+  ///   "/data/com.myapp/data/dir/hello.txt"
   /// [headers] an optional map of HTTP request headers
   /// [httpRequestMethod] the HTTP request method used (e.g. GET, POST)
   /// [fields] optional map of name/value pairs to upload

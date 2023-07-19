@@ -32,8 +32,6 @@ import java.net.SocketException
 import java.net.URL
 import java.nio.channels.FileChannel
 import java.nio.file.Files
-import java.nio.file.OpenOption
-import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import java.util.*
@@ -835,9 +833,9 @@ class TaskWorker(
         filePath: String
     ): TaskStatus {
         // field portion of the multipart
-        var fieldString = ""
+        var fieldsString = ""
         for (entry in task.fields.entries) {
-            fieldString += fieldEntry(entry.key, entry.value)
+            fieldsString += fieldEntry(entry.key, entry.value)
         }
         // File portion of the multi-part
         // Assumes list of files. If only one file, that becomes a list of length one.
@@ -845,39 +843,38 @@ class TaskWorker(
         // and file length, so that we can calculate total size of upload
         val separator = "$lineFeed--$boundary$lineFeed" // between files
         val terminator = "$lineFeed--$boundary--$lineFeed" // after last file
-        Log.v(TAG, "Filepath=$filePath")
         val filesData = if (filePath.isNotEmpty()) {
-            Log.v(TAG, "One file")
             listOf(
                 Triple(first = task.fileField, second = filePath, third = task.mimeType)
             )
         } else {
-            Log.v(TAG, "More files")
             task.extractFilesData(applicationContext)
         }
-        Log.v(TAG, "filesData = $filesData")
         val contentDispositionStrings = ArrayList<String>()
         val contentTypeStrings = ArrayList<String>()
         val fileLengths = ArrayList<Long>()
-        for (fileData in filesData) {
-            val file = File(fileData.second)
-            if (!file.exists()) {
-                Log.w(TAG, "File at ${fileData.second} does not exist")
-                throw IllegalArgumentException("File at ${fileData.second} does not exist")
+        for ((fileField, path, mimeType) in filesData) {
+            val file = File(path)
+            if (!file.exists() || !file.isFile) {
+                Log.w(TAG, "File at $path does not exist")
+                taskException = TaskException(
+                    ExceptionType.fileSystem,
+                    description = "File to upload does not exist: $path"
+                )
+                return TaskStatus.failed
             }
             contentDispositionStrings.add(
-                "Content-Disposition: form-data; name=\"${browserEncode(fileData.first)}\"; " +
+                "Content-Disposition: form-data; name=\"${browserEncode(fileField)}\"; " +
                         "filename=\"${browserEncode(file.name)}\"$lineFeed"
             )
-            contentTypeStrings.add("Content-Type: ${fileData.third}$lineFeed$lineFeed")
+            contentTypeStrings.add("Content-Type: $mimeType$lineFeed$lineFeed")
             fileLengths.add(file.length())
         }
         val fileDataLength =
             contentDispositionStrings.sumOf { string: String -> lengthInBytes(string) } +
                     contentTypeStrings.sumOf { string: String -> string.length } +
                     fileLengths.sum() + separator.length * contentDispositionStrings.size + 2
-        val contentLength = fieldString.length + "--$boundary$lineFeed".length + fileDataLength
-        Log.v(TAG, "cl=$contentLength")
+        val contentLength = lengthInBytes(fieldsString) + "--$boundary$lineFeed".length + fileDataLength
         // setup the connection
         connection.setRequestProperty("Accept-Charset", "UTF-8")
         connection.setRequestProperty("Connection", "Keep-Alive")
@@ -888,13 +885,12 @@ class TaskWorker(
         connection.setRequestProperty("Content-Length", contentLength.toString())
         connection.setFixedLengthStreamingMode(contentLength)
         connection.useCaches = false
-        Log.v(TAG, "$fieldString$contentDispositionStrings\n\n$contentTypeStrings\n\n$contentLength")
         // transfer the bytes
         return withContext(Dispatchers.IO) {
             DataOutputStream(connection.outputStream).use { outputStream ->
                 val writer = outputStream.writer()
                 // write form fields
-                writer.append(fieldString).append("--${boundary}").append(lineFeed)
+                writer.append(fieldsString).append("--${boundary}").append(lineFeed)
                 // write each file
                 for (i in filesData.indices) {
                     FileInputStream(filesData[i].second).use { inputStream ->
