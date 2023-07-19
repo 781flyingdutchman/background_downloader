@@ -75,7 +75,7 @@ final class DesktopDownloader extends BaseDownloader {
   Future<void> _executeTask(Task task) async {
     final data = await getResumeData(task.taskId);
     final isResume = _resume.remove(task) && data != null;
-    final filePath = await task.filePath();
+    final filePath = await task.filePath(); // "" for MultiUploadTask
     final tempFilePath = isResume
         ? data.data // always non-null
         : path.join((await getTemporaryDirectory()).path,

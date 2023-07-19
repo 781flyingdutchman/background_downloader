@@ -367,7 +367,15 @@ sealed class Task extends Request {
       };
 
   /// Returns the absolute path to the file represented by this task
-  Future<String> filePath() async {
+  /// based on the [Task.filename] (default) or [withFilename]
+  ///
+  /// If the task is a MultiUploadTask and no [withFilename] is given,
+  /// returns the empty string, as there is no single path that can be
+  /// returned.
+  Future<String> filePath({String? withFilename}) async {
+    if (this is MultiUploadTask && withFilename == null) {
+      return '';
+    }
     final Directory baseDir = await switch (baseDirectory) {
       BaseDirectory.applicationDocuments => getApplicationDocumentsDirectory(),
       BaseDirectory.temporary => getTemporaryDirectory(),
@@ -378,7 +386,7 @@ sealed class Task extends Request {
       BaseDirectory.applicationLibrary => Future.value(Directory(
           path.join((await getApplicationSupportDirectory()).path, 'Library')))
     };
-    return path.join(baseDir.path, directory, filename);
+    return path.join(baseDir.path, directory, withFilename ?? filename);
   }
 
   /// Returns a copy of the [Task] with optional changes to specific fields
@@ -755,6 +763,37 @@ final class UploadTask extends Task {
         mimeType = jsonMap['mimeType'] ?? 'application/octet-stream',
         fields = Map<String, String>.from(jsonMap['fields'] ?? {}),
         super.fromJsonMap(jsonMap);
+
+  /// Returns a list of fileData elements, one for each file to upload.
+  /// Each element is a triple containing fileField, full filePath, mimeType
+  ///
+  /// The lists are stored in the similarly named String fields as a JSON list,
+  /// with each list the same length. For the filenames list, if a filename refers
+  /// to a file that exists (i.e. it is a full path) then that is the filePath used,
+  /// otherwise the filename is appended to the [Task.baseDirectory] and [Task.directory]
+  /// to form a full file path
+  Future<List<(String, String, String)>> extractFilesData() async {
+    final List<String> fileFields = List.from(jsonDecode(fileField));
+    final List<String> filenames = List.from(jsonDecode(filename));
+    final List<String> mimeTypes = List.from(jsonDecode(mimeType));
+    final result = <(String, String, String)>[];
+    for (int i = 0; i < fileFields.length; i++) {
+      final file = File(filenames[i]);
+      if (await file.exists()) {
+        result.add((fileFields[i], filenames[i], mimeTypes[i]));
+      } else {
+        result.add(
+          (
+            fileFields[i],
+            await filePath(withFilename: filenames[i]),
+            mimeTypes[i],
+          ),
+        );
+      }
+    }
+    return result;
+  }
+
 
   @override
   Map<String, dynamic> toJsonMap() => {

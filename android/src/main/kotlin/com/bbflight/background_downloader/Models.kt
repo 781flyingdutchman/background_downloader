@@ -174,7 +174,7 @@ class Task(
 
     /**
      * Returns a list of fileData elements, one for each file to upload.
-     * Each elements is a triple containing fileField, full filePath, mimeType
+     * Each element is a triple containing fileField, full filePath, mimeType
      *
      * The lists are stored in the similarly named String fields as a JSON list,
      * with each list the same length. For the filenames list, if a filename refers

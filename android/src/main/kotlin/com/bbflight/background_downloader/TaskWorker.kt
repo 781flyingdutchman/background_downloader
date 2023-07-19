@@ -502,7 +502,7 @@ class TaskWorker(
     private suspend fun connectAndProcess(
         connection: HttpURLConnection, task: Task, isResume: Boolean, tempFilePath: String
     ): TaskStatus {
-        val filePath = task.filePath(applicationContext) // "" for multiUpload
+        val filePath = task.filePath(applicationContext) // "" for MultiUploadTask
         try {
             connection.requestMethod = task.httpRequestMethod
             if (task.isDownloadTask()) {
@@ -845,7 +845,7 @@ class TaskWorker(
         val terminator = "$lineFeed--$boundary--$lineFeed" // after last file
         val filesData = if (filePath.isNotEmpty()) {
             listOf(
-                Triple(first = task.fileField, second = filePath, third = task.mimeType)
+                Triple(task.fileField, filePath, task.mimeType)
             )
         } else {
             task.extractFilesData(applicationContext)
