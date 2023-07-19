@@ -4,6 +4,7 @@ package com.bbflight.background_downloader
 
 import android.content.Context
 import android.os.Build
+import com.bbflight.background_downloader.BackgroundDownloaderPlugin.Companion.gson
 import kotlin.io.path.Path
 import kotlin.io.path.pathString
 
@@ -35,77 +36,77 @@ enum class Updates {
  */
 
 class Task(
-    val taskId: String,
-    val url: String,
-    val filename: String,
-    val headers: Map<String, String>,
-    val httpRequestMethod: String,
-    val post: String?,
-    val fileField: String,
-    val mimeType: String,
-    val fields: Map<String, String>,
-    val directory: String,
-    val baseDirectory: BaseDirectory,
-    val group: String,
-    val updates: Updates,
-    val requiresWiFi: Boolean,
-    val retries: Int,
-    val retriesRemaining: Int,
-    val allowPause: Boolean,
-    val metaData: String,
-    val creationTime: Long, // untouched, so kept as integer on Android side
-    val taskType: String // distinction between DownloadTask and UploadTask
+        val taskId: String,
+        val url: String,
+        val filename: String,
+        val headers: Map<String, String>,
+        val httpRequestMethod: String,
+        val post: String?,
+        val fileField: String,
+        val mimeType: String,
+        val fields: Map<String, String>,
+        val directory: String,
+        val baseDirectory: BaseDirectory,
+        val group: String,
+        val updates: Updates,
+        val requiresWiFi: Boolean,
+        val retries: Int,
+        val retriesRemaining: Int,
+        val allowPause: Boolean,
+        val metaData: String,
+        val creationTime: Long, // untouched, so kept as integer on Android side
+        val taskType: String // distinction between DownloadTask and UploadTask
 ) {
 
     /** Creates object from JsonMap */
     @Suppress("UNCHECKED_CAST")
     constructor(jsonMap: Map<String, Any>) : this(
-        taskId = jsonMap["taskId"] as String? ?: "",
-        url = jsonMap["url"] as String? ?: "",
-        filename = jsonMap["filename"] as String? ?: "",
-        headers = jsonMap["headers"] as Map<String, String>? ?: mutableMapOf<String, String>(),
-        httpRequestMethod = jsonMap["httpRequestMethod"] as String? ?: "GET",
-        post = jsonMap["post"] as String?,
-        fileField = jsonMap["fileField"] as String? ?: "",
-        mimeType = jsonMap["mimeType"] as String? ?: "",
-        fields = jsonMap["fields"] as Map<String, String>? ?: mutableMapOf<String, String>(),
-        directory = jsonMap["directory"] as String? ?: "",
-        baseDirectory = BaseDirectory.values()[(jsonMap["baseDirectory"] as Double?
-            ?: 0).toInt()],
-        group = jsonMap["group"] as String? ?: "",
-        updates = Updates.values()[(jsonMap["updates"] as Double? ?: 0).toInt()],
-        requiresWiFi = jsonMap["requiresWiFi"] as Boolean? ?: false,
-        retries = (jsonMap["retries"] as Double? ?: 0).toInt(),
-        retriesRemaining = (jsonMap["retriesRemaining"] as Double? ?: 0).toInt(),
-        allowPause = (jsonMap["allowPause"] as Boolean? ?: false),
-        metaData = jsonMap["metaData"] as String? ?: "",
-        creationTime = (jsonMap["creationTime"] as Double? ?: 0).toLong(),
-        taskType = jsonMap["taskType"] as String? ?: ""
+            taskId = jsonMap["taskId"] as String? ?: "",
+            url = jsonMap["url"] as String? ?: "",
+            filename = jsonMap["filename"] as String? ?: "",
+            headers = jsonMap["headers"] as Map<String, String>? ?: mutableMapOf<String, String>(),
+            httpRequestMethod = jsonMap["httpRequestMethod"] as String? ?: "GET",
+            post = jsonMap["post"] as String?,
+            fileField = jsonMap["fileField"] as String? ?: "",
+            mimeType = jsonMap["mimeType"] as String? ?: "",
+            fields = jsonMap["fields"] as Map<String, String>? ?: mutableMapOf<String, String>(),
+            directory = jsonMap["directory"] as String? ?: "",
+            baseDirectory = BaseDirectory.values()[(jsonMap["baseDirectory"] as Double?
+                    ?: 0).toInt()],
+            group = jsonMap["group"] as String? ?: "",
+            updates = Updates.values()[(jsonMap["updates"] as Double? ?: 0).toInt()],
+            requiresWiFi = jsonMap["requiresWiFi"] as Boolean? ?: false,
+            retries = (jsonMap["retries"] as Double? ?: 0).toInt(),
+            retriesRemaining = (jsonMap["retriesRemaining"] as Double? ?: 0).toInt(),
+            allowPause = (jsonMap["allowPause"] as Boolean? ?: false),
+            metaData = jsonMap["metaData"] as String? ?: "",
+            creationTime = (jsonMap["creationTime"] as Double? ?: 0).toLong(),
+            taskType = jsonMap["taskType"] as String? ?: ""
     )
 
     /** Creates JSON map of this object */
     fun toJsonMap(): Map<String, Any?> {
         return mapOf(
-            "taskId" to taskId,
-            "url" to url,
-            "filename" to filename,
-            "headers" to headers,
-            "httpRequestMethod" to httpRequestMethod,
-            "post" to post,
-            "fileField" to fileField,
-            "mimeType" to mimeType,
-            "fields" to fields,
-            "directory" to directory,
-            "baseDirectory" to baseDirectory.ordinal, // stored as int
-            "group" to group,
-            "updates" to updates.ordinal,
-            "requiresWiFi" to requiresWiFi,
-            "retries" to retries,
-            "retriesRemaining" to retriesRemaining,
-            "allowPause" to allowPause,
-            "metaData" to metaData,
-            "creationTime" to creationTime,
-            "taskType" to taskType
+                "taskId" to taskId,
+                "url" to url,
+                "filename" to filename,
+                "headers" to headers,
+                "httpRequestMethod" to httpRequestMethod,
+                "post" to post,
+                "fileField" to fileField,
+                "mimeType" to mimeType,
+                "fields" to fields,
+                "directory" to directory,
+                "baseDirectory" to baseDirectory.ordinal, // stored as int
+                "group" to group,
+                "updates" to updates.ordinal,
+                "requiresWiFi" to requiresWiFi,
+                "retries" to retries,
+                "retriesRemaining" to retriesRemaining,
+                "allowPause" to allowPause,
+                "metaData" to metaData,
+                "creationTime" to creationTime,
+                "taskType" to taskType
         )
     }
 
@@ -132,28 +133,32 @@ class Task(
     }
 
     /**
-     * Returns full path (String) to the file to be downloaded, or
-     * if the task is a MultiUploadTask, returns the empty string,
-     * as there is no single path that can be returned
+     * Returns full path (String) to the file to be downloaded,
+     * based on [withFilename] or the [Task.filename] (default)
+     *
+     * If the task is a MultiUploadTask and no [withFilename] is given,
+     * returns the empty string, as there is no single path that can be
+     * returned.
      */
-    fun filePath(context: Context): String {
-        if (isMultiUploadTask()) {
+    fun filePath(context: Context, withFilename: String? = null): String {
+        if (isMultiUploadTask() && withFilename == null) {
             return ""
         }
+        val filenameToUse = withFilename ?: filename
         if (Build.VERSION.SDK_INT >= 26) {
             val baseDirPath = when (baseDirectory) {
                 BaseDirectory.applicationDocuments -> Path(
-                    context.dataDir.path, "app_flutter"
+                        context.dataDir.path, "app_flutter"
                 ).pathString
 
                 BaseDirectory.temporary -> context.cacheDir.path
                 BaseDirectory.applicationSupport -> context.filesDir.path
                 BaseDirectory.applicationLibrary -> Path(
-                    context.filesDir.path, "Library"
+                        context.filesDir.path, "Library"
                 ).pathString
             }
             val path = Path(baseDirPath, directory)
-            return Path(path.pathString, filename).pathString
+            return Path(path.pathString, filenameToUse).pathString
         } else {
             val baseDirPath = when (baseDirectory) {
                 BaseDirectory.applicationDocuments -> "${context.dataDir.path}/app_flutter"
@@ -161,22 +166,26 @@ class Task(
                 BaseDirectory.applicationSupport -> context.filesDir.path
                 BaseDirectory.applicationLibrary -> "${context.filesDir.path}/Library"
             }
-            return if (directory.isEmpty()) "$baseDirPath/${filename}" else
-                "$baseDirPath/${directory}/${filename}"
+            return if (directory.isEmpty()) "$baseDirPath/${filenameToUse}" else
+                "$baseDirPath/${directory}/${filenameToUse}"
         }
     }
 
     /**
      * Returns a list of fileData elements, one for each file to upload.
-     * Each elements is a triple containing fileField, filePath, mimeType
+     * Each elements is a triple containing fileField, full filePath, mimeType
+     *
+     * The lists are stored in the similarly named String fields as a JSON list,
+     * with each list the same length.
      */
-    fun multiFileData(context: Context): List<Triple<String, String, String>> {
-        var fileFields = listOf<String>("a", "b")  // TODO()
-        var filenames = listOf<String>("a", "b")  // TODO()
-        var mimeTypes = listOf<String>("a", "b")  // TODO()
-        var result = ArrayList<Triple<String, String, String>>()
+    fun extractFilesData(context: Context): List<Triple<String, String, String>> {
+        val fileFields = gson.fromJson(fileField, Array<String>::class.java).asList()
+        val filenames = gson.fromJson(filename, Array<String>::class.java).asList()
+        val mimeTypes = gson.fromJson(mimeType, Array<String>::class.java).asList()
+        val result = ArrayList<Triple<String, String, String>>()
         for (i in 1..fileFields.size) {
-            result.add(Triple(first = fileFields[i], second = filenames[i], third = mimeTypes[i]))
+            result.add(Triple(first = fileFields[i],
+                    second = filePath(context, withFilename = filenames[i]), third = mimeTypes[i]))
         }
         return result
     }
@@ -215,9 +224,9 @@ enum class TaskStatus {
 class ResumeData(val task: Task, val data: String, val requiredStartByte: Long) {
     fun toJsonMap(): MutableMap<String, Any?> {
         return mutableMapOf(
-            "task" to task.toJsonMap(),
-            "data" to data,
-            "requiredStartByte" to requiredStartByte
+                "task" to task.toJsonMap(),
+                "data" to data,
+                "requiredStartByte" to requiredStartByte
         )
     }
 }
@@ -263,7 +272,7 @@ enum class ExceptionType(val typeString: String) {
  * error message, or from the plugin. The localization is undefined
  */
 class TaskException(
-    val type: ExceptionType,
-    val httpResponseCode: Int = -1,
-    val description: String = ""
+        val type: ExceptionType,
+        val httpResponseCode: Int = -1,
+        val description: String = ""
 )
