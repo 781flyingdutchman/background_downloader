@@ -345,9 +345,9 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
   Future<(BaseDirectory, String)> getDirectories(String savedDir) async {
     BaseDirectory? baseDirectory;
     final directories = [docsDir, tempDir, supportDir, libraryDir];
-    for (final dir in directories) {
-      final subDir = _subDir(dir, savedDir);
-      if (subDir != null) {
+    for (final dir in directories.reversed) {
+      final (match, subDir) = _contains(dir, savedDir);
+      if (match) {
         baseDirectory = BaseDirectory.values[directories.indexOf(dir)];
         return (
           baseDirectory,
@@ -356,13 +356,18 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
       }
     }
     // if no match, savedDir points to somewhere outside the app space:
-    // we return BaseDirectory.applicationDocuments and the entire savedDir
-    return (BaseDirectory.applicationDocuments, savedDir);
+    // we return BaseDirectory.applicationDocuments and the entire savedDir.
+    // Note this is an inconsistent state, and needs to be resolved by the
+    // developer, as we don't normally store an absolute path
+    return (BaseDirectory.applicationDocuments, savedDir); //TODO
   }
 
-  /// Returns the subdirectory of the given [directory] within [savedDir] or null
-  String? _subDir(Directory directory, String savedDir) =>
-      RegExp('${docsDir.path}/(.*)').firstMatch(savedDir)?.group(1);
+  /// Returns the subdirectory of the given [directory] within [savedDir]
+  /// If found, returns (true, subdir) otherwise returns (false, '')
+  (bool, String) _contains(Directory directory, String savedDir) {
+    final match = RegExp('${directory.path}/?(.*)').firstMatch(savedDir);
+    return (match != null, match?.group(1) ?? '');
+  }
 
   // From here on down is PersistentStorage interface implementation
 
@@ -371,17 +376,17 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
 
   @override
   Future<void> initialize() async {
+    // set directory fields once
+    docsDir = await getApplicationDocumentsDirectory();
+    supportDir = await getApplicationSupportDirectory();
+    tempDir = await getTemporaryDirectory();
+    libraryDir = Platform.isIOS
+        ? await getLibraryDirectory()
+        : Directory(path.join(supportDir.path, 'Library'));
     final dbPath = await getDatabasePath();
     if (await File(dbPath).exists()) {
       // only open the database if it already exists - we don't create it
       _db = await sql.openDatabase(dbPath);
-      // set directory fields once
-      docsDir = await getApplicationDocumentsDirectory();
-      supportDir = await getApplicationSupportDirectory();
-      tempDir = await getTemporaryDirectory();
-      libraryDir = Platform.isIOS
-          ? await getLibraryDirectory()
-          : Directory(path.join(supportDir.path, 'Library'));
     }
   }
 
@@ -425,7 +430,7 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
         headers = Map.castFrom(jsonDecode(headerString));
       }
       var (baseDirectory, directory) =
-          await getDirectories(fdlTask['savedDir'] as String? ?? '');
+          await getDirectories(fdlTask['saved_dir'] as String? ?? '');
       final creationTime = DateTime.fromMillisecondsSinceEpoch(
           fdlTask['time_created'] as int? ?? 0);
       final task = DownloadTask(
