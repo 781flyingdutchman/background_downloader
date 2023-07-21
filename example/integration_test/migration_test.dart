@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter/cupertino.dart';
+
 // import 'package:flutter_downloader/flutter_downloader.dart' hide DownloadTask;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:background_downloader/src/persistent_storage.dart';
@@ -191,11 +192,55 @@ void main() {
       _testDirs(fdl, '$testPath/myDir/subDir', BaseDirectory.applicationLibrary,
           'myDir/subDir');
     });
+
+    testWidgets('directory that does not match', (widgetTester) async {
+      final fdl = Platform.isAndroid
+          ? FlutterDownloaderPersistentStorageAndroid()
+          : FlutterDownloaderPersistentStorageIOS();
+      await fdl.initialize();
+      var testPath = '/path/that/does/not/match';
+      _testDirs(fdl, testPath, BaseDirectory.applicationDocuments, null);
+    });
+
+    testWidgets('iOS directory that matches prior Application identifier',
+        (widgetTester) async {
+      if (Platform.isIOS) {
+        final fdl = FlutterDownloaderPersistentStorageIOS();
+        await fdl.initialize();
+        for (final (testDir, expectedBaseDir) in [
+          (
+            await getApplicationDocumentsDirectory(),
+            BaseDirectory.applicationDocuments
+          ),
+          (await getTemporaryDirectory(), BaseDirectory.temporary),
+          (
+            await getApplicationSupportDirectory(),
+            BaseDirectory.applicationSupport
+          ),
+          (await getLibraryDirectory(), BaseDirectory.applicationLibrary),
+        ]) {
+          _testAppIdentifierReplacement(testDir, fdl, expectedBaseDir);
+        }
+      }
+    });
   });
 }
 
+void _testAppIdentifierReplacement(Directory testDir,
+    FlutterDownloaderPersistentStorage fdl, BaseDirectory expectedBaseDir) {
+  final currentAppIdentifierMatch =
+      RegExp('Application/(.*?)/').firstMatch(testDir.path);
+  expect(currentAppIdentifierMatch, isNotNull);
+  if (currentAppIdentifierMatch != null) {
+    // replace the savedDirAppIdentifier with the current one and try again
+    final testPath =
+        '${testDir.path.replaceRange(currentAppIdentifierMatch.start, currentAppIdentifierMatch.end, 'Application/another-identifier/')}/subdir';
+    _testDirs(fdl, testPath, expectedBaseDir, 'subdir');
+  }
+}
+
 Future<void> _testDirs(FlutterDownloaderPersistentStorage fdl, String testPath,
-    BaseDirectory expectedBaseDir, String expectedDir) async {
+    BaseDirectory expectedBaseDir, String? expectedDir) async {
   var (baseDir, dir) = await fdl.getDirectories(testPath);
   debugPrint('$testPath: $baseDir, $dir');
   expect(baseDir, equals(expectedBaseDir));
