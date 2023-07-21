@@ -343,14 +343,26 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
 
   /// Extract the BaseDirectory and subdirectory from the [savedDir] string
   Future<(BaseDirectory, String)> getDirectories(String savedDir) async {
-    BaseDirectory? baseDirectory;
-    final directories = [docsDir, tempDir, supportDir, libraryDir];
-    for (final dir in directories.reversed) {
+    // Note: the order of directories matters, as some directories are
+    // subdirectories of others, so they need to be tested first
+    final directories = Platform.isIOS
+        ? {
+            tempDir: BaseDirectory.temporary,
+            supportDir: BaseDirectory.applicationSupport,
+            libraryDir: BaseDirectory.applicationLibrary,
+            docsDir: BaseDirectory.applicationDocuments
+          }
+        : {
+            tempDir: BaseDirectory.temporary,
+            libraryDir: BaseDirectory.applicationLibrary,
+            supportDir: BaseDirectory.applicationSupport,
+            docsDir: BaseDirectory.applicationDocuments
+          };
+    for (final dir in directories.keys) {
       final (match, subDir) = _contains(dir, savedDir);
       if (match) {
-        baseDirectory = BaseDirectory.values[directories.indexOf(dir)];
         return (
-          baseDirectory,
+          directories[dir]!,
           subDir.endsWith('/') ? subDir.substring(0, subDir.length - 1) : subDir
         );
       }
@@ -359,7 +371,7 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
     // we return BaseDirectory.applicationDocuments and the entire savedDir.
     // Note this is an inconsistent state, and needs to be resolved by the
     // developer, as we don't normally store an absolute path
-    return (BaseDirectory.applicationDocuments, savedDir); //TODO
+    return (BaseDirectory.applicationDocuments, savedDir);
   }
 
   /// Returns the subdirectory of the given [directory] within [savedDir]

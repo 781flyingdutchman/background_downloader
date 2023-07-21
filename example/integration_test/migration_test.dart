@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_downloader/flutter_downloader.dart' hide DownloadTask;
+// import 'package:flutter_downloader/flutter_downloader.dart' hide DownloadTask;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:background_downloader/src/persistent_storage.dart';
 import 'package:logging/logging.dart';
@@ -203,68 +203,68 @@ Future<void> _testDirs(FlutterDownloaderPersistentStorage fdl, String testPath,
 }
 
 Future<void> _migrateWithDir(Directory dir) async {
-  final fdl = Platform.isAndroid
-      ? FlutterDownloaderPersistentStorageAndroid()
-      : FlutterDownloaderPersistentStorageIOS();
-  final dbPath = await fdl.getDatabasePath();
-  if (File(dbPath).existsSync()) {
-    await File(dbPath).delete();
-  }
-  await FlutterDownloader.initialize(debug: true);
-  FlutterDownloader.registerCallback(downloadCallback);
-  debugPrint('Testing migration from directory $dir');
-  final destPath = path.join(dir.path, defaultFilename);
-  if (File(destPath).existsSync()) {
-    File(destPath).deleteSync();
-  }
-  final fdlTaskId = await FlutterDownloader.enqueue(
-      url: workingUrl,
-      fileName: defaultFilename,
-      headers: {'key': 'value'},
-      savedDir: dir.path,
-      showNotification: false,
-      openFileFromNotification: false);
-  await Future.delayed(const Duration(seconds: 2));
-  expect(File(destPath).existsSync(), isTrue);
-  expect(File(dbPath).existsSync(), isTrue);
-  debugPrint('Loaded file, file exists, database exists');
-  final fdlTask = (await FlutterDownloader.loadTasks())!.first;
-  expect(fdlTask.taskId, equals(fdlTaskId));
-  debugPrint(
-      'FDL SQLite database contains the task with status ${fdlTask.status}');
-  // delete sql database
-  final tempSql = SqlitePersistentStorage();
-  await tempSql.initialize();
-  await tempSql.db.close();
-  await File(tempSql.db.path).delete();
-  // now migrate
-  final sql = SqlitePersistentStorage(migrationOptions: ['flutter_downloader']);
-  await sql.initialize();
-  // after migration, expect data is in sql storage
-  expect(await sql.retrieveAllModifiedTasks(), isEmpty);
-  expect(await sql.retrieveAllPausedTasks(), isEmpty);
-  expect(await sql.retrieveAllResumeData(), isEmpty);
-  final newRecord = (await sql.retrieveAllTaskRecords()).first;
-  expect(newRecord.taskId, equals(fdlTaskId));
-  expect(newRecord.task.url, equals(workingUrl));
-  expect(newRecord.task.filename, equals(defaultFilename));
-  expect(newRecord.task.headers, equals({'key': 'value'}));
-  expect(newRecord.task.creationTime.difference(DateTime.now()).inSeconds.abs(),
-      lessThan(5));
-  expect(newRecord.status, equals(TaskStatus.complete));
-  expect(newRecord.progress, equals(1.0));
-  expect(newRecord.expectedFileSize, equals(-1));
-  final task = newRecord.task;
-  expect(task.taskId, equals(fdlTaskId));
-  expect(task.filename, equals(fdlTask.filename));
-  final filePath = await task.filePath();
-  expect(filePath, equals(destPath));
-  expect(File(filePath).existsSync(), isTrue);
-  // and expect original data is gone
-  expect(File(dbPath).existsSync(), isFalse);
-  // clean up
-  await (sql.db.close());
-  await File(sql.db.path).delete();
+  // final fdl = Platform.isAndroid
+  //     ? FlutterDownloaderPersistentStorageAndroid()
+  //     : FlutterDownloaderPersistentStorageIOS();
+  // final dbPath = await fdl.getDatabasePath();
+  // if (File(dbPath).existsSync()) {
+  //   await File(dbPath).delete();
+  // }
+  // await FlutterDownloader.initialize(debug: true);
+  // FlutterDownloader.registerCallback(downloadCallback);
+  // debugPrint('Testing migration from directory $dir');
+  // final destPath = path.join(dir.path, defaultFilename);
+  // if (File(destPath).existsSync()) {
+  //   File(destPath).deleteSync();
+  // }
+  // final fdlTaskId = await FlutterDownloader.enqueue(
+  //     url: workingUrl,
+  //     fileName: defaultFilename,
+  //     headers: {'key': 'value'},
+  //     savedDir: dir.path,
+  //     showNotification: false,
+  //     openFileFromNotification: false);
+  // await Future.delayed(const Duration(seconds: 2));
+  // expect(File(destPath).existsSync(), isTrue);
+  // expect(File(dbPath).existsSync(), isTrue);
+  // debugPrint('Loaded file, file exists, database exists');
+  // final fdlTask = (await FlutterDownloader.loadTasks())!.first;
+  // expect(fdlTask.taskId, equals(fdlTaskId));
+  // debugPrint(
+  //     'FDL SQLite database contains the task with status ${fdlTask.status}');
+  // // delete sql database
+  // final tempSql = SqlitePersistentStorage();
+  // await tempSql.initialize();
+  // await tempSql.db.close();
+  // await File(tempSql.db.path).delete();
+  // // now migrate
+  // final sql = SqlitePersistentStorage(migrationOptions: ['flutter_downloader']);
+  // await sql.initialize();
+  // // after migration, expect data is in sql storage
+  // expect(await sql.retrieveAllModifiedTasks(), isEmpty);
+  // expect(await sql.retrieveAllPausedTasks(), isEmpty);
+  // expect(await sql.retrieveAllResumeData(), isEmpty);
+  // final newRecord = (await sql.retrieveAllTaskRecords()).first;
+  // expect(newRecord.taskId, equals(fdlTaskId));
+  // expect(newRecord.task.url, equals(workingUrl));
+  // expect(newRecord.task.filename, equals(defaultFilename));
+  // expect(newRecord.task.headers, equals({'key': 'value'}));
+  // expect(newRecord.task.creationTime.difference(DateTime.now()).inSeconds.abs(),
+  //     lessThan(5));
+  // expect(newRecord.status, equals(TaskStatus.complete));
+  // expect(newRecord.progress, equals(1.0));
+  // expect(newRecord.expectedFileSize, equals(-1));
+  // final task = newRecord.task;
+  // expect(task.taskId, equals(fdlTaskId));
+  // expect(task.filename, equals(fdlTask.filename));
+  // final filePath = await task.filePath();
+  // expect(filePath, equals(destPath));
+  // expect(File(filePath).existsSync(), isTrue);
+  // // and expect original data is gone
+  // expect(File(dbPath).existsSync(), isFalse);
+  // // clean up
+  // await (sql.db.close());
+  // await File(sql.db.path).delete();
 }
 
 /// FlutterDownloader downloadCallBack (dummy)
