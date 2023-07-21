@@ -15,8 +15,8 @@ struct NotificationContents : Codable {
     let body: String
     
     init(json: [String:Any]) {
-        title = json["title"] as! String
-        body = json["body"] as! String
+        title = json["title"] as? String ?? ""
+        body = json["body"] as? String ?? ""
     }
 }
 
