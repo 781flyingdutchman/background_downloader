@@ -395,9 +395,9 @@ Future<TaskStatus> multipartUpload(
     }
     contentDispositionStrings.add(
       'Content-Disposition: form-data; name="${_browserEncode(fileField)}"; '
-      'filename="${_browserEncode(p.basename(file.path))}"\n',
+      'filename="${_browserEncode(p.basename(file.path))}"$lineFeed',
     );
-    contentTypeStrings.add('Content-Type: $mimeType\n\n');
+    contentTypeStrings.add('Content-Type: $mimeType$lineFeed$lineFeed');
     fileLengths.add(file.lengthSync());
   }
   final fileDataLength = contentDispositionStrings.fold<int>(
