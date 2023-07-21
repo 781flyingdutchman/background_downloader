@@ -3,10 +3,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
+import 'dart:ui';
 
 import 'package:async/async.dart';
 import 'package:background_downloader/src/exceptions.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
@@ -29,7 +31,10 @@ TaskException? taskException;
 /// The first message sent back is a [ReceivePort] that is the command port
 /// for the isolate. The first command must be the arguments: task and filePath.
 /// Any subsequent commands can only be 'cancel' or 'pause'.
-Future<void> doTask(SendPort sendPort) async {
+Future<void> doTask(List<Object?> isolateArguments) async {
+  final rootIsolateToken = isolateArguments[0] as RootIsolateToken;
+  BackgroundIsolateBinaryMessenger.ensureInitialized(rootIsolateToken);
+  final sendPort = isolateArguments[1] as SendPort;
   final commandPort = ReceivePort();
   // send the command port back to the main Isolate
   sendPort.send(commandPort.sendPort);
@@ -407,7 +412,7 @@ Future<TaskStatus> multipartUpload(
       separator.length * contentDispositionStrings.length +
       2;
   final contentLength =
-      lengthInBytes(fieldsString) + separator.length + fileDataLength;
+      lengthInBytes(fieldsString) + '--$boundary$lineFeed'.length + fileDataLength;
   var resultStatus = TaskStatus.failed;
   try {
     // setup the connection
