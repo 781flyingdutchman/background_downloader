@@ -21,14 +21,21 @@ func providesStatusUpdates(downloadTask: Task) -> Bool {
     return downloadTask.updates == Updates.statusChange.rawValue || downloadTask.updates == Updates.statusChangeAndProgressUpdates.rawValue
 }
 
-/// True if this task is a DownloadTask, false if it is an UploadTask
+/// True if this task is a DownloadTask, false if not
 func isDownloadTask(task: Task) -> Bool {
-    return task.taskType != "UploadTask"
+    return task.taskType == "DownloadTask"
 }
 
-/// True if this task is an UploadTask, false if it is an UploadTask
+/// True if this task is an UploadTask, false if not
+///
+/// A MultiUploadTask is also an UploadTask
 func isUploadTask(task: Task) -> Bool {
-    return task.taskType == "UploadTask"
+    return task.taskType == "UploadTask" || task.taskType == "MultiUploadTask"
+}
+
+/// True if this task is a MultiUploadTask, false if not
+func isMultiUploadTask(task: Task) -> Bool {
+    return task.taskType == "MultiUploadTask"
 }
 
 /// True if this task is a binary UploadTask
@@ -46,14 +53,56 @@ func isFinalState(status: TaskStatus) -> Bool {
     return !isNotFinalState(status: status)
 }
 
-/// Returns the filePath associated with this task, or nil
-func getFilePath(for task: Task) -> String? {
+/// Returns the absolute path to the file represented by this task
+/// based on the [Task.filename] (default) or [withFilename]
+///
+/// If the task is a MultiUploadTask and no [withFilename] is given,
+/// returns the empty string, as there is no single path that can be
+/// returned
+func getFilePath(for task: Task, withFilename: String? = nil) -> String? {
+    if isMultiUploadTask(task: task) && withFilename == nil {
+        return ""
+    }
     guard let directory = try? directoryForTask(task: task)
     else {
         return nil
     }
-    return directory.appendingPathComponent(task.filename).path
+    return directory.appendingPathComponent(withFilename ?? task.filename).path
 }
+
+/// Returns a list of fileData elements, one for each file to upload.
+/// Each element is a triple containing fileField, full filePath, mimeType
+///
+/// The lists are stored in the similarly named String fields as a JSON list,
+/// with each list the same length. For the filenames list, if a filename refers
+/// to a file that exists (i.e. it is a full path) then that is the filePath used,
+/// otherwise the filename is appended to the [Task.baseDirectory] and [Task.directory]
+/// to form a full file path
+func extractFilesData(task: Task) -> [((String, String, String))] {
+    let decoder = JSONDecoder()
+    guard
+        let fileFields = try? decoder.decode([String].self, from: task.fileField!.data(using: .utf8)!),
+        let filenames = try? decoder.decode([String].self, from: task.filename.data(using: .utf8)!),
+        let mimeTypes = try? decoder.decode([String].self, from: task.mimeType!.data(using: .utf8)!)
+    else {
+        os_log("Could not parse filesData from field=%@, filename=%@ and mimeType=%@", log: log, type: .error, task.fileField!, task.filename, task.mimeType!)
+        return []
+    }
+    var result = [(String, String, String)]()
+    for i in 0 ..< fileFields.count {
+        if FileManager.default.fileExists(atPath: filenames[i]) {
+            result.append((fileFields[i], filenames[i], mimeTypes[i]))
+        } else {
+            result.append((
+                fileFields[i],
+                getFilePath(for: task, withFilename: filenames[i]) ?? "",
+                mimeTypes[i]
+            ))
+        }
+    }
+    return result
+}
+
 
 /// Processes a change in status for the task
 ///
@@ -83,10 +132,10 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
     default:
         break
     }
-
+    
     if providesStatusUpdates(downloadTask: task) || retryNeeded {
         let finalTaskException = taskException == nil ? TaskException(type: .general,
-                                                           httpResponseCode: -1, description: "") : taskException
+                                                                      httpResponseCode: -1, description: "") : taskException
         let arg: Any = status == .failed ? [status.rawValue, finalTaskException!.type.rawValue, finalTaskException!.description, finalTaskException!.httpResponseCode] as [Any] : status.rawValue
         if !postOnBackgroundChannel(method: "statusUpdate", task: task, arg: arg) {
             // store update locally as a merged task/status JSON string, without error info

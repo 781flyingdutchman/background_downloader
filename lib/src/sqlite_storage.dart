@@ -319,6 +319,8 @@ class SqlitePersistentStorage implements PersistentStorage {
 ///
 /// This is an abstract class, implemented for Android and iOS below
 abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
+  final log = Logger('FlutterDownloaderPersistentStorage');
+
   sql.Database? _db;
   late final Directory docsDir;
   late final Directory supportDir;
@@ -342,27 +344,63 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
   }
 
   /// Extract the BaseDirectory and subdirectory from the [savedDir] string
-  Future<(BaseDirectory, String)> getDirectories(String savedDir) async {
-    BaseDirectory? baseDirectory;
-    final directories = [docsDir, tempDir, supportDir, libraryDir];
-    for (final dir in directories) {
-      final subDir = _subDir(dir, savedDir);
-      if (subDir != null) {
-        baseDirectory = BaseDirectory.values[directories.indexOf(dir)];
+  ///
+  /// If unable to extract, the subdirectory will be null
+  Future<(BaseDirectory, String?)> getDirectories(String savedDir,
+      {isRetry = false}) async {
+    // Note: the order of directories matters, as some directories are
+    // subdirectories of others, so they need to be tested first
+    final directories = Platform.isIOS
+        ? {
+            tempDir: BaseDirectory.temporary,
+            supportDir: BaseDirectory.applicationSupport,
+            libraryDir: BaseDirectory.applicationLibrary,
+            docsDir: BaseDirectory.applicationDocuments
+          }
+        : {
+            tempDir: BaseDirectory.temporary,
+            libraryDir: BaseDirectory.applicationLibrary,
+            supportDir: BaseDirectory.applicationSupport,
+            docsDir: BaseDirectory.applicationDocuments
+          };
+    for (final dir in directories.keys) {
+      final (match, subDir) = _contains(dir, savedDir);
+      if (match) {
         return (
-          baseDirectory,
+          directories[dir]!,
           subDir.endsWith('/') ? subDir.substring(0, subDir.length - 1) : subDir
         );
       }
     }
     // if no match, savedDir points to somewhere outside the app space:
-    // we return BaseDirectory.applicationDocuments and the entire savedDir
-    return (BaseDirectory.applicationDocuments, savedDir);
+    // we return BaseDirectory.applicationDocuments and null.
+    // However, on iOS we first attempt to replace a possible older app identifier
+    // with the current one, and try again
+    if (!isRetry && Platform.isIOS) {
+      // Attempt to reconstruct the absolute path by replacing the Application identifier
+      final currentAppIdentifierMatch =
+          RegExp('Application/(.*?)/').firstMatch(docsDir.path);
+      final savedDirAppIdentifierMatch =
+          RegExp('Application/(.*?)/').firstMatch(savedDir);
+      if (currentAppIdentifierMatch != null &&
+          savedDirAppIdentifierMatch != null) {
+        // replace the savedDirAppIdentifier with the current one and try again
+        final newSavedDir = savedDir.replaceRange(
+            savedDirAppIdentifierMatch.start,
+            savedDirAppIdentifierMatch.end,
+            'Application/${currentAppIdentifierMatch.group(1)}/');
+        return getDirectories(newSavedDir, isRetry: true);
+      }
+    }
+    return (BaseDirectory.applicationDocuments, null);
   }
 
-  /// Returns the subdirectory of the given [directory] within [savedDir] or null
-  String? _subDir(Directory directory, String savedDir) =>
-      RegExp('${docsDir.path}/(.*)').firstMatch(savedDir)?.group(1);
+  /// Returns the subdirectory of the given [directory] within [savedDir]
+  /// If found, returns (true, subdir) otherwise returns (false, '')
+  (bool, String) _contains(Directory directory, String savedDir) {
+    final match = RegExp('${directory.path}/?(.*)').firstMatch(savedDir);
+    return (match != null, match?.group(1) ?? '');
+  }
 
   // From here on down is PersistentStorage interface implementation
 
@@ -371,17 +409,17 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
 
   @override
   Future<void> initialize() async {
+    // set directory fields once
+    docsDir = await getApplicationDocumentsDirectory();
+    supportDir = await getApplicationSupportDirectory();
+    tempDir = await getTemporaryDirectory();
+    libraryDir = Platform.isIOS
+        ? await getLibraryDirectory()
+        : Directory(path.join(supportDir.path, 'Library'));
     final dbPath = await getDatabasePath();
     if (await File(dbPath).exists()) {
       // only open the database if it already exists - we don't create it
       _db = await sql.openDatabase(dbPath);
-      // set directory fields once
-      docsDir = await getApplicationDocumentsDirectory();
-      supportDir = await getApplicationSupportDirectory();
-      tempDir = await getTemporaryDirectory();
-      libraryDir = Platform.isIOS
-          ? await getLibraryDirectory()
-          : Directory(path.join(supportDir.path, 'Library'));
     }
   }
 
@@ -425,26 +463,31 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
         headers = Map.castFrom(jsonDecode(headerString));
       }
       var (baseDirectory, directory) =
-          await getDirectories(fdlTask['savedDir'] as String? ?? '');
+          await getDirectories(fdlTask['saved_dir'] as String? ?? '');
       final creationTime = DateTime.fromMillisecondsSinceEpoch(
           fdlTask['time_created'] as int? ?? 0);
-      final task = DownloadTask(
-          taskId: fdlTask['task_id'] as String?,
-          url: fdlTask['url'] as String,
-          filename: fdlTask['file_name'] as String,
-          headers: headers,
-          baseDirectory: baseDirectory,
-          directory: directory,
-          updates: Updates.statusAndProgress,
-          creationTime: creationTime);
-      final (status, progress) = switch (fdlTask['status'] as int? ?? 0) {
-        3 => (TaskStatus.complete, progressComplete),
-        4 => (TaskStatus.failed, progressFailed),
-        5 => (TaskStatus.canceled, progressCanceled),
-        _ => (TaskStatus.failed, progressFailed)
-      };
-      final record = TaskRecord(task, status, progress, -1);
-      taskRecords.add(record);
+      if (directory != null) {
+        final task = DownloadTask(
+            taskId: fdlTask['task_id'] as String?,
+            url: fdlTask['url'] as String,
+            filename: fdlTask['file_name'] as String,
+            headers: headers,
+            baseDirectory: baseDirectory,
+            directory: directory,
+            updates: Updates.statusAndProgress,
+            creationTime: creationTime);
+        final (status, progress) = switch (fdlTask['status'] as int? ?? 0) {
+          3 => (TaskStatus.complete, progressComplete),
+          4 => (TaskStatus.failed, progressFailed),
+          5 => (TaskStatus.canceled, progressCanceled),
+          _ => (TaskStatus.failed, progressFailed)
+        };
+        final record = TaskRecord(task, status, progress, -1);
+        taskRecords.add(record);
+      } else {
+        log.fine(
+            'Could not parse saved_dir path ${fdlTask['saved_dir']}, skipping record');
+      }
     }
     return taskRecords;
   }

@@ -95,7 +95,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     private func methodEnqueue(call: FlutterMethodCall, result: @escaping FlutterResult) {
         let args = call.arguments as! [Any]
         let taskJsonString = args[0] as! String
-        let notificationConfigJsonString = args[1] as! String?
+        let notificationConfigJsonString = args[1] as? String
         if notificationConfigJsonString != nil  && Downloader.haveNotificationPermission == nil {
             // check (or ask) if we have permission to send notifications
             let center = UNUserNotificationCenter.current()
@@ -107,7 +107,9 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             }
         }
         let isResume = args.count == 4
-        let resumeDataAsBase64String = isResume ? args[2] as! String : ""
+        let resumeDataAsBase64String = isResume
+            ? args[2] as? String ?? ""
+            : ""
         doEnqueue(taskJsonString: taskJsonString, notificationConfigJsonString: notificationConfigJsonString, resumeDataAsBase64String: resumeDataAsBase64String, result: result)
     }
     
@@ -164,20 +166,20 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     
     /// Schedule an upload task
     private func scheduleUpload(task: Task, taskDescription: String, baseRequest: URLRequest, result: FlutterResult?) {
-        guard let directory = try? directoryForTask(task: task) else {
-            os_log("Could not find directory for taskId %@", log: log, type: .info, task.taskId)
-            postResult(result: result, value: false)
-            return
-        }
-        let filePath = directory.appendingPathComponent(task.filename)
-        if !FileManager.default.fileExists(atPath: filePath.path) {
-            os_log("Could not find file %@ for taskId %@", log: log, type: .info, filePath.absoluteString, task.taskId)
-            postResult(result: result, value: false)
-            return
-        }
         var request = baseRequest
-        if task.post?.lowercased() == "binary" {
+        if isBinaryUploadTask(task: task) {
             os_log("Binary file upload", log: log, type: .debug)
+            guard let directory = try? directoryForTask(task: task) else {
+                os_log("Could not find directory for taskId %@", log: log, type: .info, task.taskId)
+                postResult(result: result, value: false)
+                return
+            }
+            let filePath = directory.appendingPathComponent(task.filename)
+            if !FileManager.default.fileExists(atPath: filePath.path) {
+                os_log("Could not find file %@ for taskId %@", log: log, type: .info, filePath.absoluteString, task.taskId)
+                postResult(result: result, value: false)
+                return
+            }
             // binary post can use uploadTask fromFile method
             request.setValue("attachment; filename=\"\(task.filename)\"", forHTTPHeaderField: "Content-Disposition")
             let urlSessionUploadTask = Downloader.urlSession!.uploadTask(with: request, fromFile: filePath)
@@ -225,7 +227,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             result(nil)
             return
         }
-        let tasksAsListOfJsonStrings = urlSessionTasks.filter({ $0.state == .running || $0.state == .suspended }).map({ getTaskFrom(urlSessionTask: $0)}).filter({ $0?.group == group }).map({ jsonStringFor(task: $0!) }).filter({ $0 != nil }) as! [String]
+        let tasksAsListOfJsonStrings = urlSessionTasks.filter({ $0.state == .running || $0.state == .suspended }).map({ getTaskFrom(urlSessionTask: $0)}).filter({ $0?.group == group }).map({ jsonStringFor(task: $0!) }).filter({ $0 != nil }) as? [String] ?? []
         os_log("Returning %d unfinished tasks", log: log, type: .info, tasksAsListOfJsonStrings.count)
         result(tasksAsListOfJsonStrings)
     }
@@ -312,28 +314,28 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     /// Results in the new filePath if successful, or nil
     private func methodMoveToSharedStorage(call: FlutterMethodCall, result: @escaping FlutterResult) {
         let args = call.arguments as! [Any]
-        let filePath = args[0] as! String
         guard
-            let destination = SharedStorage.init(rawValue: args[1] as! Int)
+            let filePath = args[0] as? String,
+            let destination = SharedStorage.init(rawValue: args[1] as? Int ?? 0),
+            let directory = args[2] as? String
         else {
             result(nil)
             return
         }
-        let directory = args[2] as! String
         result(moveToSharedStorage(filePath: filePath, destination: destination, directory: directory))
     }
 
     /// Returns path to file in a SharedStorage destination, or null
     private func methodPathInSharedStorage(call: FlutterMethodCall, result: @escaping FlutterResult) {
         let args = call.arguments as! [Any]
-        let filePath = args[0] as! String
         guard
-            let destination = SharedStorage.init(rawValue: args[1] as! Int)
+            let filePath = args[0] as? String,
+            let destination = SharedStorage.init(rawValue: args[1] as? Int ?? 0),
+            let directory = args[2] as? String
         else {
             result(nil)
             return
         }
-        let directory = args[2] as! String
         result(pathInSharedStorage(filePath: filePath, destination: destination, directory: directory))
     }
 
@@ -382,7 +384,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     private func getAllTasks() async -> [Task] {
         Downloader.urlSession = Downloader.urlSession ?? createUrlSession()
         guard let urlSessionTasks = await Downloader.urlSession?.allTasks else { return [] }
-        return urlSessionTasks.map({ getTaskFrom(urlSessionTask: $0) }).filter({ $0 != nil }) as! [Task]
+        return urlSessionTasks.map({ getTaskFrom(urlSessionTask: $0) }).filter({ $0 != nil }) as? [Task] ?? []
     }
     
     /// Return the active task with this taskId, or nil
@@ -432,7 +434,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             try? FileManager.default.removeItem(at: multipartUploader!.outputFileUrl())
             Downloader.uploaderForUrlSessionTaskIdentifier.removeValue(forKey: task.taskIdentifier)
         }
-        let responseStatusCode = (task.response as! HTTPURLResponse?)?.statusCode ?? 0
+        let responseStatusCode = (task.response as? HTTPURLResponse)?.statusCode ?? 0
         let responseStatusDescription = HTTPURLResponse.localizedString(forStatusCode: responseStatusCode)
         let notificationConfig = getNotificationConfigFrom(urlSessionTask: task)
         guard let task = getTaskFrom(urlSessionTask: task) else {
@@ -496,7 +498,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             processProgressUpdate(task: task, progress: 0.0)
             Downloader.lastProgressUpdate[task.taskId] = 0.0
             if task.allowPause {
-                let acceptRangesHeader = (downloadTask.response as! HTTPURLResponse?)?.allHeaderFields["Accept-Ranges"]
+                let acceptRangesHeader = (downloadTask.response as? HTTPURLResponse)?.allHeaderFields["Accept-Ranges"]
                 let taskCanResume = acceptRangesHeader as? String == "bytes"
                 processCanResume(task: task, taskCanResume: taskCanResume)
                 if taskCanResume {
@@ -654,7 +656,9 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         if ourCategories.contains(response.notification.request.content.categoryIdentifier) {
             // only handle "our" categories, in case another plugin is a notification center delegate
             let userInfo = response.notification.request.content.userInfo
-            guard let task = taskFrom(jsonString: userInfo["task"] as! String)
+            guard
+                let taskAsJsonString = userInfo["task"] as? String,
+                let task = taskFrom(jsonString: taskAsJsonString)
             else {
                 os_log("No task", log: log, type: .error)
                 return
@@ -685,24 +689,31 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                     os_log("Resume data for taskId %@ no longer available: restarting", log: log, type: .info)
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    self.doEnqueue(taskJsonString: userInfo["task"] as! String, notificationConfigJsonString: userInfo["notificationConfig"] as? String, resumeDataAsBase64String: resumeDataAsBase64String, result: nil)
+                    self.doEnqueue(taskJsonString: taskAsJsonString, notificationConfigJsonString: userInfo["notificationConfig"] as? String, resumeDataAsBase64String: resumeDataAsBase64String, result: nil)
                 }
                 
             case UNNotificationDefaultActionIdentifier:
-                _ = postOnBackgroundChannel(method: "notificationTap", task: task, arg: userInfo["notificationType"] as! Int)
-                if userInfo["notificationType"] as? Int == NotificationType.complete.rawValue
+                guard
+                    let notificationType = userInfo["notificationType"] as? Int
+                else {
+                    os_log("No notificationType for notification tap", log: log, type: .info)
+                    return
+                }
+                _ = postOnBackgroundChannel(method: "notificationTap", task: task, arg: notificationType)
+                if notificationType == NotificationType.complete.rawValue
                 {
                 guard let notificationConfigString = userInfo["notificationConfig"] as? String,
                       let notificationConfigData = notificationConfigString.data(using: .utf8),
                       let notificationConfig = try? JSONDecoder().decode(NotificationConfig.self, from: notificationConfigData),
                       let filePath = getFilePath(for: task)
                 else {
+                    os_log("Could not extract filePath for notification tap on .complete", log: log, type: .info)
                     return
                 }
                 if notificationConfig.tapOpensFile {
                     if !doOpenFile(filePath: filePath, mimeType: nil)
                     {
-                        os_log("Filed to open file on notification tap", log: log, type: .info)
+                        os_log("Failed to open file on notification tap", log: log, type: .info)
                     }
                 }}
                 

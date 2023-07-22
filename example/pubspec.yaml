@@ -40,7 +40,7 @@ dev_dependencies:
     sdk: flutter
   integration_test:
     sdk: flutter
-#  flutter_downloader: ^1.10.5 # use only for testing
+#  flutter_downloader: ^1.10.5 # use only for testing in migration_test
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -62,4 +62,5 @@ flutter:
 
   assets:
     - assets/a_file.txt
+    - assets/second_file.txt
     - assets/5MB-test.ZIP

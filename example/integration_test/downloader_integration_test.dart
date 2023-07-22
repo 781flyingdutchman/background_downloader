@@ -39,12 +39,14 @@ const uploadTestUrl =
     'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_upload_file';
 const uploadBinaryTestUrl =
     'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_upload_binary_file';
-
+const uploadMultiTestUrl =
+    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_multi_upload_file';
 const urlWithContentLengthFileSize = 6207471;
 
 const defaultFilename = 'google.html';
 const postFilename = 'post.txt';
 const uploadFilename = 'a_file.txt';
+const uploadFilename2 = 'second_file.txt';
 const largeFilename = '5MB-test.ZIP';
 
 var task = DownloadTask(url: workingUrl, filename: defaultFilename);
@@ -105,13 +107,15 @@ void main() {
     uploadTask = UploadTask(url: uploadTestUrl, filename: uploadFilename);
     uploadTaskBinary =
         uploadTask.copyWith(url: uploadBinaryTestUrl, post: 'binary');
-    // copy the test file to upload from assets to documents directory
+    // copy the test files to upload from assets to documents directory
     Directory directory = await getApplicationDocumentsDirectory();
-    var uploadFilePath = join(directory.path, uploadFilename);
-    ByteData data = await rootBundle.load("assets/$uploadFilename");
-    final buffer = data.buffer;
-    File(uploadFilePath).writeAsBytesSync(
-        buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
+    for (final filename in [uploadFilename, uploadFilename2]) {
+      var uploadFilePath = join(directory.path, filename);
+      ByteData data = await rootBundle.load("assets/$filename");
+      final buffer = data.buffer;
+      File(uploadFilePath).writeAsBytesSync(
+          buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
+    }
     // reset counters
     statusCallbackCounter = 0;
     progressCallbackCounter = 0;
@@ -740,8 +744,6 @@ void main() {
           updates: Updates.statusAndProgress,
           requiresWiFi: true,
           retries: 1,
-          allowPause: false,
-          // cannot be true if post != null
           metaData: 'someMetaData');
       expect(complexTask.httpRequestMethod, equals('POST'));
       final now = DateTime.now();
@@ -786,6 +788,71 @@ void main() {
       /// Should trigger 'notFound' because the fileField is not set to 'file
       /// which is what the server expects
       expect(lastStatus, equals(TaskStatus.notFound));
+    });
+
+    testWidgets('MultiUploadTask to and from Json', (widgetTester) async {
+      // try with list of Strings
+      var muTask = MultiUploadTask(
+          taskId: 'task1',
+          url: urlWithContentLength,
+          files: ['f1.txt', 'f2.txt']);
+      expect(muTask.fileFields, equals(['f1', 'f2']));
+      expect(muTask.filenames, equals(['f1.txt', 'f2.txt']));
+      expect(muTask.mimeTypes, equals(['text/plain', 'text/plain']));
+      expect(muTask.fileField, equals('["f1","f2"]')); // json string
+      expect(muTask.filename, equals('["f1.txt","f2.txt"]')); // json string
+      expect(muTask.mimeType,
+          equals('["text/plain","text/plain"]')); // json string
+      var muTask2 = MultiUploadTask.fromJsonMap(muTask.toJsonMap());
+      expect(muTask2.taskId, equals(muTask.taskId));
+      expect(muTask2.fileFields, equals(muTask.fileFields));
+      expect(muTask2.filenames, equals(muTask.filenames));
+      expect(muTask2.mimeTypes, equals(muTask.mimeTypes));
+      expect(muTask2.fileField, equals(muTask.fileField));
+      expect(muTask2.filename, equals(muTask.filename));
+      expect(muTask2.mimeType, equals(muTask.mimeType));
+      // try with list of (String, String)
+      muTask = MultiUploadTask(
+          taskId: 'task2',
+          url: urlWithContentLength,
+          files: [('file1', 'f1.txt'), ('file2', 'f2.txt')]);
+      expect(muTask.fileFields, equals(['file1', 'file2']));
+      expect(muTask.filenames, equals(['f1.txt', 'f2.txt']));
+      expect(muTask.mimeTypes, equals(['text/plain', 'text/plain']));
+      expect(muTask.fileField, equals('["file1","file2"]'));
+      expect(muTask.filename, equals('["f1.txt","f2.txt"]'));
+      expect(muTask.mimeType, equals('["text/plain","text/plain"]'));
+      muTask2 = MultiUploadTask.fromJsonMap(muTask.toJsonMap());
+      expect(muTask2.taskId, equals(muTask.taskId));
+      expect(muTask2.fileFields, equals(muTask.fileFields));
+      expect(muTask2.filenames, equals(muTask.filenames));
+      expect(muTask2.mimeTypes, equals(muTask.mimeTypes));
+      expect(muTask2.fileField, equals(muTask.fileField));
+      expect(muTask2.filename, equals(muTask.filename));
+      expect(muTask2.mimeType, equals(muTask.mimeType));
+      //try with list of (String, String, String)
+      muTask = MultiUploadTask(
+          taskId: 'task3',
+          url: urlWithContentLength,
+          files: [('file1', 'f1.txt', 'text/plain'), ('file2', 'f2')]);
+      expect(muTask.fileFields, equals(['file1', 'file2']));
+      expect(muTask.filenames, equals(['f1.txt', 'f2']));
+      expect(
+          muTask.mimeTypes, equals(['text/plain', 'application/octet-stream']));
+      expect(muTask.fileField, equals('["file1","file2"]'));
+      expect(muTask.filename, equals('["f1.txt","f2"]'));
+      expect(
+          muTask.mimeType, equals('["text/plain","application/octet-stream"]'));
+      muTask2 = MultiUploadTask.fromJsonMap(muTask.toJsonMap());
+      expect(muTask2.taskId, equals(muTask.taskId));
+      expect(muTask2.fileFields, equals(muTask.fileFields));
+      expect(muTask2.filenames, equals(muTask.filenames));
+      expect(muTask2.mimeTypes, equals(muTask.mimeTypes));
+      expect(muTask2.fileField, equals(muTask.fileField));
+      expect(muTask2.filename, equals(muTask.filename));
+      expect(muTask2.mimeType, equals(muTask.mimeType));
+      // check taskType
+      expect(muTask.toJsonMap()['taskType'], equals('MultiUploadTask'));
     });
 
     testWidgets('copyWith', (widgetTester) async {
@@ -1525,6 +1592,15 @@ void main() {
           equals(
               'Invalid argument(s): No host specified in URI somethingRandom'));
     });
+
+    testWidgets('get request with redirect', (widgetTester) async {
+      final request = Request(url: getRedirectTestUrl);
+      final response = await FileDownloader().request(request);
+      print('code = ${response.statusCode} and body is ${response.body}');
+      expect(response.statusCode, equals(200));
+      expect(
+          response.body.startsWith("{'args': {'redirected': 'true'}"), isTrue);
+    });
   });
 
   group('Basic upload', () {
@@ -1724,6 +1800,45 @@ void main() {
       }, elapsedTimeInterval: const Duration(milliseconds: 200));
       expect(result.status, equals(TaskStatus.complete));
       expect(ticks, greaterThan(0));
+    });
+  });
+
+  group('MultiUpload', () {
+    testWidgets('upload 2 files using enqueue', (widgetTester) async {
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      final multiTask = MultiUploadTask(
+          url: uploadMultiTestUrl,
+          files: [('f1', uploadFilename), ('f2', uploadFilename2)],
+          fields: {'key': 'value'},
+          updates: Updates.statusAndProgress);
+      expect(await FileDownloader().enqueue(multiTask), isTrue);
+      await someProgressCompleter.future;
+      expect(lastProgress, greaterThan(0));
+      expect(lastProgress, lessThan(1));
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+    });
+
+    testWidgets('upload 2 files using upload', (widgetTester) async {
+      final multiTask = MultiUploadTask(
+          url: uploadMultiTestUrl,
+          files: [('f1', uploadFilename), ('f2', uploadFilename2)],
+          fields: {'key': 'value'});
+      final result = await FileDownloader().upload(multiTask);
+      expect(result.status, equals(TaskStatus.complete));
+    });
+
+    testWidgets('upload 2 files with full file path', (widgetTester) async {
+      final docsDir = await getApplicationDocumentsDirectory();
+      final fullPath = join(docsDir.path, uploadFilename);
+      final multiTask = MultiUploadTask(
+          url: uploadMultiTestUrl,
+          files: [('f1', fullPath), ('f2', uploadFilename2)],
+          fields: {'key': 'value'});
+      final result = await FileDownloader().upload(multiTask);
+      expect(result.status, equals(TaskStatus.complete));
     });
   });
 
@@ -2225,6 +2340,7 @@ void main() {
       final result = await FileDownloader().download(task);
       expect(result.status, equals(TaskStatus.complete));
       var success = await FileDownloader().openFile(task: task);
+      await Future.delayed(const Duration(seconds: 1));
       if (!Platform.isAndroid) {
         expect(success, isTrue);
         // change to a .txt file

@@ -1,3 +1,23 @@
+## 7.7.0 
+
+### Uploading multiple files in a single request
+If you need to upload multiple files in a single request, create a [MultiUploadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/MultiUploadTask-class.html) instead of an `UploadTask`. It has similar parameters as the `UploadTask`, except you specifiy a list of files to upload as the `files` argument of the constructor, and do not use `fileName`, `fileField` and `mimeType`. Each element in the `files` list is either:
+* a filename (e.g. `"file1.txt"`). The `fileField` for that file will be set to the base name (i.e. "file1" for "file1.txt") and the mime type will be derived from the extension (i.e. "text/plain" for "file1.txt")
+* a record containing `(fileField, filename)`, e.g. `("document", "file1.txt")`. The `fileField` for that file will be set to "document" and the mime type derived from the file extension (i.e. "text/plain" for "file1.txt")
+* a record containing `(filefield, filename, mimeType)`, e.g. `("document", "file1.txt", "text/plain")`
+
+The `baseDirectory` and `directory` fields of the `MultiUploadTask` determine the expected location of the file referenced, unless the filename used in any of the 3 formats above is an absolute path (e.g. "/data/user/0/com.my_app/file1.txt"). In that case, the absolute path is used and the `baseDirectory` and `directory` fields are ignored for that element of the list.
+Once the `MultiUpoadTask` is created, the fields `fileFields`, `filenames` and `mimeTypes` will contain the parsed items, and the fields `fileField`, `filename` and `mimeType` contain those lists encoded as a JSON string.
+
+Use the `MultiTaskUpload` object in the `upload` and `enqueue` methods as you would a regular `UploadTask`.
+
+### Flutter Downloader migration
+Bug fixes related to migration from Flutter Downloader (see version 7.6.0). The migration is still experimental, so please test thoroughly before relying on the migration in your app.
+
+### Bug fixes
+
+Fixed a bug on iOS related to NSNull Json decoding
+
 ## 7.6.0
 
 Added `SqlitePersistentStorage` as an alternative backing storage for the downloader, and implemented migration of a pre-existing database from the Flutter Downloader package. We use the `sqflite` package, so this is only supported iOS and Android.
@@ -11,8 +31,16 @@ FileDownloader(persistentStorage: sqlStorage);
 
 This will migrate from either Flutter Downloader or the default LocalStore.
 
-In addition, added an optional parameter to the `tasksFinished` method that allows you to use it the moment you receive a status update for a task, like this:
-
+Added an optional parameter to the tasksFinished method that allows you to use it the moment you receive a status update for a task, like this:
+```dart
+void downloadStatusCallback(TaskStatusUpdate update) {
+    // process your status update, then check if all tasks are finished
+    final bool allTasksFinished = update.status.isFinalState && 
+        await FileDownloader().tasksFinished(ignoreTaskId: update.task.taskId) ;
+    print('All tasks finished: $allTasksFinished');
+  }
+```
+This excludes the task that is currently finishing up from the test. Without this, it's possible `tasksFinished` returns `false` as that currently finishing task may not have left the queue yet.
 
 ## 7.5.0
 
@@ -103,6 +131,19 @@ Further Dart 3 changes (not visible to user).
 Migration to Dart 3 - not other functional change or API change.  If you use Dart 2 please use version `6.1.1` of this plugin, which will be maintained until the end of 2023.
 
 Most classes in the package are now `final` classes, and under the hood we use the new Records and Pattern matching features of Dart 3. None of this should matter if you've used the package as intended.
+
+## 6.3.1
+
+Added an optional parameter to the tasksFinished method that allows you to use it the moment you receive a status update for a task, like this:
+```dart
+void downloadStatusCallback(TaskStatusUpdate update) {
+    // process your status update, then check if all tasks are finished
+    final bool allTasksFinished = update.status.isFinalState && 
+        await FileDownloader().tasksFinished(ignoreTaskId: update.task.taskId) ;
+    print('All tasks finished: $allTasksFinished');
+  }
+```
+This excludes the task that is currently finishing up from the test. Without this, it's possible `tasksFinished` returns `false` as that currently finishing task may not have left the queue yet.
 
 ## 6.3.0
 

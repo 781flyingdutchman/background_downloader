@@ -9,7 +9,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Context.NOTIFICATION_SERVICE
-
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
@@ -27,29 +26,26 @@ import androidx.work.WorkerParameters
 import com.google.gson.Gson
 import kotlinx.coroutines.*
 import java.io.*
-import java.lang.Double.min as doubleMin
 import java.lang.System.currentTimeMillis
 import java.net.HttpURLConnection
 import java.net.SocketException
 import java.net.URL
 import java.nio.channels.FileChannel
 import java.nio.file.Files
-import java.nio.file.OpenOption
-import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import java.util.*
-import kotlin.collections.ArrayList
 import kotlin.concurrent.schedule
 import kotlin.concurrent.write
 import kotlin.math.roundToInt
 import kotlin.random.Random
+import java.lang.Double.min as doubleMin
 
 
 /***
- * A simple worker that will post your input back to your Flutter application.
+ * The worker to execute one task
  *
- * It will block the background thread until a value of either true or false is received back from Flutter code.
+ * Processes DownloadTask, UploadTask or MultiUploadTask
  */
 class TaskWorker(
     applicationContext: Context, workerParams: WorkerParameters
@@ -382,7 +378,7 @@ class TaskWorker(
         }
     }
 
-    // properties related to pause/resume functionality
+    // properties related to pause/resume functionality and progress
     private var bytesTotal: Long = 0
     private var startByte = 0L
     private var isTimedOut = false
@@ -395,6 +391,9 @@ class TaskWorker(
 
     private lateinit var prefs: SharedPreferences
 
+    /**
+     * Worker execution entrypoint
+     */
     override suspend fun doWork(): Result {
         prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
         withContext(Dispatchers.IO) {
@@ -502,7 +501,7 @@ class TaskWorker(
     private suspend fun connectAndProcess(
         connection: HttpURLConnection, task: Task, isResume: Boolean, tempFilePath: String
     ): TaskStatus {
-        val filePath = task.filePath(applicationContext)
+        val filePath = task.filePath(applicationContext) // "" for MultiUploadTask
         try {
             connection.requestMethod = task.httpRequestMethod
             if (task.isDownloadTask()) {
@@ -701,16 +700,12 @@ class TaskWorker(
     }
 
 
-    /** Process the upload of the file
+    /**
+     * Process the upload of the file
      *
      * If the [Task.post] field is set to "binary" then the file will be uploaded as a byte stream POST
-     * and if the Content-Type header is not set, will attempt to derive it from the file extension.
-     * Content-Disposition will be set to "attachment" with filename [Task.filename].
      *
-     * If the [Task.post] field is not "binary" then the file will be uploaded as a multipart POST
-     * with the name and filename set to [Task.filename] and the content type derived from the
-     * file extension
-     * Note that the actual Content-Type of the request will be multipart/form-data.
+     * If the [Task.post] field is not "binary" then the file(s) will be uploaded as a multipart POST
      *
      * Note that the [Task.post] field is just used to set whether this is a binary or multipart
      * upload. The bytes that will be posted are derived from the file to be uploaded.
@@ -721,87 +716,12 @@ class TaskWorker(
         connection: HttpURLConnection, task: Task, filePath: String
     ): TaskStatus {
         connection.doOutput = true
-        val file = File(filePath)
-        if (!file.exists() || !file.isFile) {
-            Log.w(TAG, "File $filePath does not exist or is not a file")
-            taskException = TaskException(
-                ExceptionType.fileSystem,
-                description = "File to upload does not exist: $filePath"
-            )
-            return TaskStatus.failed
-        }
-        val fileSize = file.length()
-        if (fileSize <= 0) {
-            Log.w(TAG, "File $filePath has 0 length")
-            taskException = TaskException(
-                ExceptionType.fileSystem,
-                description = "File $filePath has 0 length"
-            )
-            return TaskStatus.failed
-        }
-        var transferBytesResult: TaskStatus
-        if (task.post?.lowercase() == "binary") {
-            // binary file upload posts file bytes directly
-            // set Content-Type based on file extension
-            Log.d(TAG, "Binary upload for taskId ${task.taskId}")
-            connection.setRequestProperty("Content-Type", task.mimeType)
-            connection.setRequestProperty(
-                "Content-Disposition", "attachment; filename=\"" + task.filename + "\""
-            )
-            connection.setRequestProperty("Content-Length", fileSize.toString())
-            connection.setFixedLengthStreamingMode(fileSize)
-            withContext(Dispatchers.IO) {
-                FileInputStream(file).use { inputStream ->
-                    DataOutputStream(connection.outputStream.buffered()).use { outputStream ->
-                        transferBytesResult =
-                            transferBytes(inputStream, outputStream, fileSize, task)
-                    }
-                }
+        val transferBytesResult =
+            if (task.post?.lowercase() == "binary") {
+                processBinaryUpload(connection, task, filePath)
+            } else {
+                processMultipartUpload(connection, task, filePath)
             }
-        } else {
-            // multipart file upload using Content-Type multipart/form-data
-            Log.d(TAG, "Multipart upload for taskId ${task.taskId}")
-            // field portion of the multipart
-            var fieldString = ""
-            for (entry in task.fields.entries) {
-                fieldString += fieldEntry(entry.key, entry.value)
-            }
-            // file portion of the multipart
-            val contentDispositionString =
-                "Content-Disposition: form-data; name=\"${browserEncode(task.fileField)}\"; " +
-                        "filename=\"${browserEncode(task.filename)}\""
-            val contentTypeString = "Content-Type: ${task.mimeType}"
-            // determine the content length of the multi-part data
-            val contentLength =
-                lengthInBytes(fieldString) + 2 * boundary.length + 6 * lineFeed.length +
-                        lengthInBytes(contentDispositionString) + contentTypeString.length +
-                        3 * "--".length + fileSize
-            connection.setRequestProperty("Accept-Charset", "UTF-8")
-            connection.setRequestProperty("Connection", "Keep-Alive")
-            connection.setRequestProperty("Cache-Control", "no-cache")
-            connection.setRequestProperty(
-                "Content-Type", "multipart/form-data; boundary=$boundary"
-            )
-            connection.setRequestProperty("Content-Length", contentLength.toString())
-            connection.setFixedLengthStreamingMode(contentLength)
-            connection.useCaches = false
-            withContext(Dispatchers.IO) {
-                FileInputStream(file).use { inputStream ->
-                    DataOutputStream(connection.outputStream).use { outputStream ->
-                        val writer = outputStream.writer()
-                        writer.append(fieldString).append("--${boundary}").append(lineFeed)
-                            .append(contentDispositionString).append(lineFeed)
-                            .append(contentTypeString).append(lineFeed).append(lineFeed).flush()
-                        transferBytesResult =
-                            transferBytes(inputStream, outputStream, fileSize, task)
-                        if (transferBytesResult == TaskStatus.complete) {
-                            writer.append(lineFeed).append("--${boundary}--").append(lineFeed)
-                        }
-                        writer.close()
-                    }
-                }
-            }
-        }
         when (transferBytesResult) {
             TaskStatus.canceled -> {
                 Log.i(TAG, "Canceled taskId ${task.taskId} for $filePath")
@@ -842,6 +762,154 @@ class TaskWorker(
             else -> {
                 return TaskStatus.failed
             }
+        }
+    }
+
+    /**
+     * Process the binary upload of the file
+     *
+     * Content-Disposition will be set to "attachment" with filename [Task.filename], and the
+     * mime-type will be set to [Task.mimeType]
+     *
+     * Returns the [TaskStatus]
+     */
+    private suspend fun processBinaryUpload(
+        connection: HttpURLConnection, task: Task, filePath: String
+    ): TaskStatus {
+        val file = File(filePath)
+        if (!file.exists() || !file.isFile) {
+            Log.w(TAG, "File $filePath does not exist or is not a file")
+            taskException = TaskException(
+                ExceptionType.fileSystem,
+                description = "File to upload does not exist: $filePath"
+            )
+            return TaskStatus.failed
+        }
+        val fileSize = file.length()
+        if (fileSize <= 0) {
+            Log.w(TAG, "File $filePath has 0 length")
+            taskException = TaskException(
+                ExceptionType.fileSystem,
+                description = "File $filePath has 0 length"
+            )
+            return TaskStatus.failed
+        }
+        // binary file upload posts file bytes directly
+        // set Content-Type based on file extension
+        Log.d(TAG, "Binary upload for taskId ${task.taskId}")
+        connection.setRequestProperty("Content-Type", task.mimeType)
+        connection.setRequestProperty(
+            "Content-Disposition", "attachment; filename=\"" + task.filename + "\""
+        )
+        connection.setRequestProperty("Content-Length", fileSize.toString())
+        connection.setFixedLengthStreamingMode(fileSize)
+        return withContext(Dispatchers.IO) {
+            FileInputStream(file).use { inputStream ->
+                DataOutputStream(connection.outputStream.buffered()).use { outputStream ->
+                    return@withContext transferBytes(inputStream, outputStream, fileSize, task)
+                }
+            }
+        }
+    }
+
+    /**
+     * Process the multi-part upload of one or more files, and potential form fields
+     *
+     * Form fields are taken from [Task.fields]. If only one file is to be uploaded,
+     * then the [filePath] determines the file, and [Task.fileField] and [Task.mimeType]
+     * are used to set the file field name and mime type respectively.
+     * If [filePath] is empty, then the list of fileField, filePath and mimeType are
+     * extracted from the [Task.fileField], [Task.filename] and [Task.mimeType] (which
+     * for MultiUploadTasks contain a JSON encoded list of strings).
+     *
+     * The total content length is calculated from the sum of all parts, the connection
+     * is set up, and the bytes for each part are transferred to the host.
+     *
+     * Returns the [TaskStatus]
+     */
+    private suspend fun processMultipartUpload(
+        connection: HttpURLConnection, task: Task,
+        filePath: String
+    ): TaskStatus {
+        // field portion of the multipart
+        var fieldsString = ""
+        for (entry in task.fields.entries) {
+            fieldsString += fieldEntry(entry.key, entry.value)
+        }
+        // File portion of the multi-part
+        // Assumes list of files. If only one file, that becomes a list of length one.
+        // For each file, determine contentDispositionString, contentTypeString
+        // and file length, so that we can calculate total size of upload
+        val separator = "$lineFeed--$boundary$lineFeed" // between files
+        val terminator = "$lineFeed--$boundary--$lineFeed" // after last file
+        val filesData = if (filePath.isNotEmpty()) {
+            listOf(
+                Triple(task.fileField, filePath, task.mimeType)
+            )
+        } else {
+            task.extractFilesData(applicationContext)
+        }
+        val contentDispositionStrings = ArrayList<String>()
+        val contentTypeStrings = ArrayList<String>()
+        val fileLengths = ArrayList<Long>()
+        for ((fileField, path, mimeType) in filesData) {
+            val file = File(path)
+            if (!file.exists() || !file.isFile) {
+                Log.w(TAG, "File at $path does not exist")
+                taskException = TaskException(
+                    ExceptionType.fileSystem,
+                    description = "File to upload does not exist: $path"
+                )
+                return TaskStatus.failed
+            }
+            contentDispositionStrings.add(
+                "Content-Disposition: form-data; name=\"${browserEncode(fileField)}\"; " +
+                        "filename=\"${browserEncode(file.name)}\"$lineFeed"
+            )
+            contentTypeStrings.add("Content-Type: $mimeType$lineFeed$lineFeed")
+            fileLengths.add(file.length())
+        }
+        val fileDataLength =
+            contentDispositionStrings.sumOf { string: String -> lengthInBytes(string) } +
+                    contentTypeStrings.sumOf { string: String -> string.length } +
+                    fileLengths.sum() + separator.length * contentDispositionStrings.size + 2
+        val contentLength = lengthInBytes(fieldsString) + "--$boundary$lineFeed".length + fileDataLength
+        // setup the connection
+        connection.setRequestProperty("Accept-Charset", "UTF-8")
+        connection.setRequestProperty("Connection", "Keep-Alive")
+        connection.setRequestProperty("Cache-Control", "no-cache")
+        connection.setRequestProperty(
+            "Content-Type", "multipart/form-data; boundary=$boundary"
+        )
+        connection.setRequestProperty("Content-Length", contentLength.toString())
+        connection.setFixedLengthStreamingMode(contentLength)
+        connection.useCaches = false
+        // transfer the bytes
+        return withContext(Dispatchers.IO) {
+            DataOutputStream(connection.outputStream).use { outputStream ->
+                val writer = outputStream.writer()
+                // write form fields
+                writer.append(fieldsString).append("--${boundary}").append(lineFeed)
+                // write each file
+                for (i in filesData.indices) {
+                    FileInputStream(filesData[i].second).use { inputStream ->
+                        writer.append(contentDispositionStrings[i])
+                            .append(contentTypeStrings[i]).flush()
+                        val transferBytesResult =
+                            transferBytes(inputStream, outputStream, contentLength, task)
+                        if (transferBytesResult == TaskStatus.complete) {
+                            if (i < filesData.size - 1) {
+                                writer.append(separator)
+                            } else
+                                writer.append(terminator)
+                        } else {
+                            return@withContext transferBytesResult
+                        }
+                    }
+                }
+                writer.close()
+            }
+            return@withContext TaskStatus.complete
         }
     }
 
@@ -1326,5 +1394,3 @@ fun getTaskMap(prefs: SharedPreferences): MutableMap<String, Any> {
         jsonString, BackgroundDownloaderPlugin.jsonMapType
     ).toMutableMap()
 }
-
-

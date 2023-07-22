@@ -39,34 +39,60 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
         outputFilename = NSUUID().uuidString
     }
     
+    
     /// Creates the multipart file so it can be uploaded
     ///
     /// Returns true if successful, false otherwise
     public func createMultipartFile() -> Bool {
-        // Create and open the fileInputStream
-        guard let directory = try? directoryForTask(task: task)  else {return false}
-        let fileUrl = directory.appendingPathComponent(task.filename)
-        let resourceValues = try? fileUrl.resourceValues(forKeys: [.fileSizeKey])
-        let fileSize = Int64(resourceValues?.fileSize ?? 0)
-        guard let inputStream = InputStream(url: fileUrl) else {
-            os_log("Could not open file to upload", log: log, type: .info)
+        // create the output file
+        FileManager.default.createFile(atPath: outputFileUrl().path,  contents:Data(" ".utf8), attributes: nil)
+        guard let fileHandle = try? FileHandle(forWritingTo: outputFileUrl()) else {
+            os_log("Could not open temporary file %@", log: log, type: .error, outputFileUrl().path)
             return false
         }
         // field portion of the multipart
         for entry in task.fields ?? [:] {
             fieldsString += fieldEntry(name: entry.key, value: entry.value)
         }
-        // determine the file related components of the preamble
-        contentDispositionString =
-        "Content-Disposition: form-data; name=\"\(browserEncode(task.fileField!))\"; filename=\"\(browserEncode(task.filename))\""
-        contentTypeString = "Content-Type: \(task.mimeType!)"
-        // create the output file and write preamble, file bytes and epilogue
-        FileManager.default.createFile(atPath: outputFileUrl().path,  contents:Data(" ".utf8), attributes: nil)
-        guard let fileHandle = try? FileHandle(forWritingTo: outputFileUrl()) else {
-            os_log("Could not open temporary file %@", log: log, type: .error, outputFileUrl().path)
+        if (!writeFields(fileHandle: fileHandle)) {
+            os_log("Could not write to temporary file %@", log: log, type: .error, outputFileUrl().path)
             return false
         }
-        return writePreamble(fileHandle: fileHandle) && writeFileBytes(fileHandle: fileHandle, inputStream: inputStream) && writeEpilogue(fileHandle: fileHandle)
+        // File portion of the multi-part
+        // Assumes list of files. If only one file, that becomes a list of length one.
+        // For each file, determine contentDispositionString, contentTypeString
+        // and file length, so that we can calculate total size of upload
+        let separator = "\(lineFeed)--\(Uploader.boundary)\(lineFeed)" // between files
+        let terminator = "\(lineFeed)--\(Uploader.boundary)--\(lineFeed)" // after last file
+        guard let filePath = getFilePath(for: task) else {return false}
+        let filesData = filePath.isEmpty
+            ? extractFilesData(task: task) // MultiUpload case
+            : [(task.fileField!, filePath, task.mimeType!)] // one file Upload case
+        for (fileField, path, mimeType) in filesData {
+            if !FileManager.default.fileExists(atPath: path) {
+                os_log("File to upload does not exist at %@", log: log, type: .error, path)
+                return false
+            }
+            let contentDispositionString =
+                "Content-Disposition: form-data; name=\"\(browserEncode(fileField))\"; "
+                + "filename=\"\(browserEncode(path.components(separatedBy: "/").last!))\"\(lineFeed)"
+            let contentTypeString = "Content-Type: \(mimeType)\(lineFeed)\(lineFeed)"
+            let fileUrl = URL(fileURLWithPath: path)
+            guard let inputStream = InputStream(url: fileUrl) else {
+                os_log("Could not open file to upload at %@", log: log, type: .error, path)
+                return false
+            }
+            if (!writeFileBytes(fileHandle: fileHandle, inputStream: inputStream, contentDisposition: contentDispositionString, contentType: contentTypeString)) {
+                os_log("Could not upload file at %@", log: log, type: .error, path)
+                return false
+            }
+            if (!writeText(fileHandle: fileHandle, text: path == filesData.last!.1 ?
+                           terminator : separator)) {
+                os_log("Could not write separator for file at %@", log: log, type: .error, path)
+                return false
+            }
+        }
+        return true
     }
     
     /// Return the URL of the generated outputfile with multipart data
@@ -76,26 +102,24 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
         return FileManager.default.temporaryDirectory.appendingPathComponent(outputFilename)
     }
     
-    /// Write the preamble for the multipart form to the fileHandle
-    ///
-    /// Writes content disposition and content type preceded by the boundary, and calculates totalBytesExpectedToWrite
+    /// Write form fields
     ///
     /// Returns true if successful, false otherwise
-    private func writePreamble(fileHandle: FileHandle) -> Bool {
+    private func writeFields(fileHandle: FileHandle) -> Bool {
         // construct the preamble
-        guard let preamble = "\(fieldsString)--\(Uploader.boundary)\(lineFeed)\(contentDispositionString)\(lineFeed)\(contentTypeString)\(lineFeed)\(lineFeed)".data(using: .utf8) else {
-            os_log("Could not create preamble")
-            return false
-        }
-        fileHandle.write(preamble)
-        totalBytesWritten += Int64(preamble.count)
-        return true
+        return writeText(fileHandle: fileHandle, text: "\(fieldsString)--\(Uploader.boundary)\(lineFeed)")
     }
     
     /// Write the data bytes from the provided inputStream to the fileHandle
     ///
     /// Retruns true if successful, false otherwise
-    private func writeFileBytes(fileHandle: FileHandle, inputStream: InputStream) -> Bool {
+    private func writeFileBytes(fileHandle: FileHandle, inputStream: InputStream, contentDisposition: String, contentType: String) -> Bool {
+        // multipart file header
+        if !(writeText(fileHandle: fileHandle, text: contentDisposition) &&
+             writeText(fileHandle: fileHandle, text: contentType)) {
+            return false
+        }
+        // file bytes
         inputStream.open()
         while inputStream.hasBytesAvailable {
             let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
@@ -119,18 +143,17 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
         return true
     }
     
-    /// Write the final portion of the request body to the fileHandle
-    ///
-    /// Retruns true if successful, false otherwise
-    private func writeEpilogue(fileHandle: FileHandle) -> Bool {
-        guard let epilogue = "\(lineFeed)--\(Uploader.boundary)--\(lineFeed)".data(using: .utf8) else {
-            os_log("Could not create epilogue")
+    /// Write text to the [fileHandle] and return true if successful
+    private func writeText(fileHandle: FileHandle, text: String) -> Bool {
+        guard let epilogue = text.data(using: .utf8) else {
+            os_log("Could not create text")
             return false
         }
         fileHandle.write(epilogue)
         totalBytesWritten += Int64(epilogue.count)
         return true
     }
+    
     
     /// Returns the multipart entry for one field name/value pair
     private func fieldEntry(name: String, value: String) -> String {
@@ -154,7 +177,7 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
     /// Returns whether [string] is composed entirely of ASCII-compatible characters
     private func isPlainAscii(_ string: String)-> Bool {
         let result = asciiOnly.matches(in: string,
-                                         range: NSMakeRange(0, (string as NSString).length))
+                                       range: NSMakeRange(0, (string as NSString).length))
         return !result.isEmpty
     }
     
@@ -166,9 +189,9 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
         // `\r\n`; URL-encode `"`; and do nothing else (even for `%` or non-ASCII
         // characters). We follow their behavior.
         let newlinesReplaced = newlineRegExp.stringByReplacingMatches(
-                                in: value,
-                                options: [],
-                                range: NSMakeRange(0, (value as NSString).length), withTemplate: "%0D%0A")
+            in: value,
+            options: [],
+            range: NSMakeRange(0, (value as NSString).length), withTemplate: "%0D%0A")
         return newlinesReplaced.replacingOccurrences(of: "\"", with: "%22")
     }
     

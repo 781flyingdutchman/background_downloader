@@ -44,11 +44,10 @@ class _MyAppState extends State<MyApp> {
     // must initialize the FileDownloader by passing that alternative storage
     // object on the first call to FileDownloader.
     // As an example, this example app has implemented a backing using
-    // the sqflite package (works for Android/iOS only and isn't production
-    // ready -> only use as an example).
-    // To try that, uncomment the following line, which
-    // will initialize the downloader with that storage solution.
-    FileDownloader(persistentStorage: SqlitePersistentStorage());
+    // the sqflite package (works for Android/iOS only).
+    // To try that SQLite version, uncomment the following line, which
+    // will initialize the downloader with the SQLite storage solution.
+    // FileDownloader(persistentStorage: SqlitePersistentStorage());
 
     // Configure the downloader by registering a callback and configuring
     // notifications
