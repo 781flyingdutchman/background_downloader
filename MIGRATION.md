@@ -34,9 +34,9 @@ FileDownloader(persistentStorage: sqlStorage);
 // start using the FileDownloader
 ```
 
-When used this way, the downloader will migrate data from either Localstore or Flutter Downloader to the new SQLite database when it is created. 
+When used this way, the downloader will attempt to migrate data from either Localstore or Flutter Downloader to the new SQLite database, when it is created. 
 
-Only Flutter Downloader entries that are complete, failed or canceled will be migrated to the background downloader, and only the fields taskId, url, filename, headers and time_created migrate. We attempt to reconstruct the file destination (stored in `savedDir`), provided it points to an app-specific location. If the location is external (e.g. Downloads) then the `directory` of the task will be set to the absolute path described by the `savedDir` field in the Flutter Downloader database. Note that this is not a valid state for a `Task`, but done to allow further processing by the developer. 
+Only Flutter Downloader entries that are `complete`, `failed` or `canceled` will be migrated to the background downloader, and only the fields `taskId`, `url`, `filename`, `headers` and `time_created` migrate. We attempt to reconstruct the file destination (stored in `savedDir`), provided it points to an app-specific location. If the location is external (e.g. Downloads) then the record will be skipped and not migrated. The migration is experimental, so please test thoroughly before relying on this for your existing app.
 
 The SQLite database has an additional method `retrieveTaskRecords` that takes SQL-like `where` and `whereArgs` arguments, allowing you to query the SQLite database with TaskRecords directly. Supported columns:
 * taskId
@@ -48,7 +48,7 @@ The SQLite database has an additional method `retrieveTaskRecords` that takes SQ
 * status (as an integer, the index into the `TaskStatus` enum)
 * progress
 
-You only use these fields to query - the returned value is a list of `TaskRecord` objects.  The `retrieveTaskRecords` method is _only_ available on the `SqlitePersistentStorage` object that you created and passed to the `FileDownloader`. It is not part of the `FileDownloader().database` functionality (because not all backing databases allow a query like this), and you should continue to use the `database` object wherever possible, to ensure compatibility with future upgrades.
+You only use these fields to query - the returned value is a list of `TaskRecord` objects.  The `retrieveTaskRecords` method is _only_ available on the `SqlitePersistentStorage` object that you created and passed to the `FileDownloader`. It is not part of the `FileDownloader().database` functionality (because not all backing databases allow a query like this), and you should continue to use the `database` object wherever possible, to ensure compatibility with future upgrades.  Future changes to `SqlitePersistentStorage` may not be considered breaking changes, as they do not affect the default.
 
 ### Other storage and migration
 

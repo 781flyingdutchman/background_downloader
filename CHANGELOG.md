@@ -1,3 +1,6 @@
+
+Bug fixes related to migration from Flutter Downloader. The migration is still experimental, so please test thoroughly before relying on the migration in your app.
+
 ## 7.6.0
 
 Added `SqlitePersistentStorage` as an alternative backing storage for the downloader, and implemented migration of a pre-existing database from the Flutter Downloader package. We use the `sqflite` package, so this is only supported iOS and Android.

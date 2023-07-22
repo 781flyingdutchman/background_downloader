@@ -1531,9 +1531,9 @@ void main() {
       final response = await FileDownloader().request(request);
       print('code = ${response.statusCode} and body is ${response.body}');
       expect(response.statusCode, equals(200));
-      expect(response.body.startsWith("{'args': {'redirected': 'true'}"), isTrue);
+      expect(
+          response.body.startsWith("{'args': {'redirected': 'true'}"), isTrue);
     });
-
   });
 
   group('Basic upload', () {
