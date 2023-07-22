@@ -1,4 +1,16 @@
 
+### Uploading multiple files in a single request
+If you need to upload multiple files in a single request, create a `MultiUploadTask` instead of an `UploadTask`. It has similar parameters as the `UploadTask`, except you specifiy a list of files to upload as the `files` argument of the constructor, and do not use `fileName`, `fileField` and `mimeType`. Each element in the `files` list is either:
+* a filename (e.g. `"file1.txt"`). The `fileField` for that file will be set to the base name (i.e. "file1" for "file1.txt") and the mime type will be derived from the extension (i.e. "text/plain" for "file1.txt")
+* a record containing `(fileField, filename)`, e.g. `("document", "file1.txt")`. The `fileField` for that file will be set to "document" and the mime type derived from the file extension (i.e. "text/plain" for "file1.txt")
+* a record containing `(filefield, filename, mimeType)`, e.g. `("document", "file1.txt", "text/plain")`
+
+The `baseDirectory` and `directory` fields of the `MultiUploadTask` determine the expected location of the file referenced, unless the filename used in any of the 3 formats above is an absolute path (e.g. "/data/user/0/com.my_app/file1.txt"). In that case, the absolute path is used and the `baseDirectory` and `directory` fields are ignored for that element of the list.
+Once the `MultiUpoadTask` is created, the fields `fileFields`, `filenames` and `mimeTypes` will contain the parsed items, and the fields `fileField`, `filename` and `mimeType` contain those lists encoded as a JSON string.
+
+Use the `MultiTaskUpload` object in the `upload` and `enqueue` methods as you would a regular `UploadTask`.
+
+
 Bug fixes related to migration from Flutter Downloader. The migration is still experimental, so please test thoroughly before relying on the migration in your app.
 
 ## 7.6.0

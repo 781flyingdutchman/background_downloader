@@ -5,6 +5,7 @@ import 'dart:isolate';
 import 'dart:math';
 
 import 'package:async/async.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as path;
@@ -75,7 +76,7 @@ final class DesktopDownloader extends BaseDownloader {
   Future<void> _executeTask(Task task) async {
     final data = await getResumeData(task.taskId);
     final isResume = _resume.remove(task) && data != null;
-    final filePath = await task.filePath();
+    final filePath = await task.filePath(); // "" for MultiUploadTask
     final tempFilePath = isResume
         ? data.data // always non-null
         : path.join((await getTemporaryDirectory()).path,
@@ -91,7 +92,12 @@ final class DesktopDownloader extends BaseDownloader {
           task, TaskStatus.failed, TaskException(exceptionDescription)));
       receivePort.close(); // also ends listener at then end
     });
-    await Isolate.spawn(doTask, receivePort.sendPort,
+    RootIsolateToken? rootIsolateToken = RootIsolateToken.instance;
+    if (rootIsolateToken == null) {
+      processStatusUpdate(TaskStatusUpdate(
+          task, TaskStatus.failed, TaskException('Could not obtain rootIsolateToken')));
+    }
+    await Isolate.spawn(doTask, [rootIsolateToken, receivePort.sendPort],
         onError: errorPort.sendPort);
     final messagesFromIsolate = StreamQueue<dynamic>(receivePort);
     final sendPort = await messagesFromIsolate.next;

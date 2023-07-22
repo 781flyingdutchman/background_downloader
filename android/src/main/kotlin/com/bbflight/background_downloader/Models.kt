@@ -4,8 +4,11 @@ package com.bbflight.background_downloader
 
 import android.content.Context
 import android.os.Build
+import com.bbflight.background_downloader.BackgroundDownloaderPlugin.Companion.gson
+import java.io.File
 import kotlin.io.path.Path
 import kotlin.io.path.pathString
+
 
 /// Base directory in which files will be stored, based on their relative
 /// path.
@@ -120,15 +123,29 @@ class Task(
                 updates == Updates.statusChangeAndProgressUpdates
     }
 
-    /** True if this task is a DownloadTask, otherwise it is an UploadTask */
+    /** True if this task is a DownloadTask */
     fun isDownloadTask(): Boolean {
-        return taskType != "UploadTask"
+        return taskType == "DownloadTask"
+    }
+
+    /** True if this task is a MultiUploadTask */
+    fun isMultiUploadTask(): Boolean {
+        return taskType == "MultiUploadTask"
     }
 
     /**
-     * Returns full path (String) to the file to be downloaded
+     * Returns full path (String) to the file,
+     * based on [withFilename] or the [Task.filename] (default)
+     *
+     * If the task is a MultiUploadTask and no [withFilename] is given,
+     * returns the empty string, as there is no single path that can be
+     * returned.
      */
-    fun filePath(context: Context): String {
+    fun filePath(context: Context, withFilename: String? = null): String {
+        if (isMultiUploadTask() && withFilename == null) {
+            return ""
+        }
+        val filenameToUse = withFilename ?: filename
         if (Build.VERSION.SDK_INT >= 26) {
             val baseDirPath = when (baseDirectory) {
                 BaseDirectory.applicationDocuments -> Path(
@@ -142,7 +159,7 @@ class Task(
                 ).pathString
             }
             val path = Path(baseDirPath, directory)
-            return Path(path.pathString, filename).pathString
+            return Path(path.pathString, filenameToUse).pathString
         } else {
             val baseDirPath = when (baseDirectory) {
                 BaseDirectory.applicationDocuments -> "${context.dataDir.path}/app_flutter"
@@ -150,9 +167,40 @@ class Task(
                 BaseDirectory.applicationSupport -> context.filesDir.path
                 BaseDirectory.applicationLibrary -> "${context.filesDir.path}/Library"
             }
-            return if (directory.isEmpty()) "$baseDirPath/${filename}" else
-                "$baseDirPath/${directory}/${filename}"
+            return if (directory.isEmpty()) "$baseDirPath/${filenameToUse}" else
+                "$baseDirPath/${directory}/${filenameToUse}"
         }
+    }
+
+    /**
+     * Returns a list of fileData elements, one for each file to upload.
+     * Each element is a triple containing fileField, full filePath, mimeType
+     *
+     * The lists are stored in the similarly named String fields as a JSON list,
+     * with each list the same length. For the filenames list, if a filename refers
+     * to a file that exists (i.e. it is a full path) then that is the filePath used,
+     * otherwise the filename is appended to the [Task.baseDirectory] and [Task.directory]
+     * to form a full file path
+     */
+    fun extractFilesData(context: Context): List<Triple<String, String, String>> {
+        val fileFields = gson.fromJson(fileField, Array<String>::class.java).asList()
+        val filenames = gson.fromJson(filename, Array<String>::class.java).asList()
+        val mimeTypes = gson.fromJson(mimeType, Array<String>::class.java).asList()
+        val result = ArrayList<Triple<String, String, String>>()
+        for (i in fileFields.indices) {
+            if (File(filenames[i]).exists()) {
+                result.add(Triple(fileFields[i], filenames[i], mimeTypes[i]))
+            } else {
+                result.add(
+                    Triple(
+                        fileFields[i],
+                        filePath(context, withFilename = filenames[i]),
+                        mimeTypes[i]
+                    )
+                )
+            }
+        }
+        return result
     }
 
     override fun toString(): String {

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
@@ -343,7 +344,7 @@ sealed class Task extends Request {
     if (filename?.isEmpty == true) {
       throw ArgumentError('Filename cannot be empty');
     }
-    if (_pathSeparator.hasMatch(this.filename)) {
+    if (_pathSeparator.hasMatch(this.filename) && this is! MultiUploadTask) {
       throw ArgumentError('Filename cannot contain path separators');
     }
     if (_startsWithPathSeparator.hasMatch(directory)) {
@@ -357,12 +358,24 @@ sealed class Task extends Request {
 
   /// Create a new [Task] subclass from the provided [jsonMap]
   factory Task.createFromJsonMap(Map<String, dynamic> jsonMap) =>
-      jsonMap['taskType'] == 'UploadTask'
-          ? UploadTask.fromJsonMap(jsonMap)
-          : DownloadTask.fromJsonMap(jsonMap);
+      switch (jsonMap['taskType']) {
+        'DownloadTask' => DownloadTask.fromJsonMap(jsonMap),
+        'UploadTask' => UploadTask.fromJsonMap(jsonMap),
+        'MultiUploadTask' => MultiUploadTask.fromJsonMap(jsonMap),
+        _ => throw ArgumentError(
+            'taskType not in [DownloadTask, UploadTask, MultiUploadTask]')
+      };
 
   /// Returns the absolute path to the file represented by this task
-  Future<String> filePath() async {
+  /// based on the [Task.filename] (default) or [withFilename]
+  ///
+  /// If the task is a MultiUploadTask and no [withFilename] is given,
+  /// returns the empty string, as there is no single path that can be
+  /// returned.
+  Future<String> filePath({String? withFilename}) async {
+    if (this is MultiUploadTask && withFilename == null) {
+      return '';
+    }
     final Directory baseDir = await switch (baseDirectory) {
       BaseDirectory.applicationDocuments => getApplicationDocumentsDirectory(),
       BaseDirectory.temporary => getTemporaryDirectory(),
@@ -373,7 +386,7 @@ sealed class Task extends Request {
       BaseDirectory.applicationLibrary => Future.value(Directory(
           path.join((await getApplicationSupportDirectory()).path, 'Library')))
     };
-    return path.join(baseDir.path, directory, filename);
+    return path.join(baseDir.path, directory, withFilename ?? filename);
   }
 
   /// Returns a copy of the [Task] with optional changes to specific fields
@@ -459,6 +472,9 @@ sealed class Task extends Request {
 }
 
 /// Information related to a download task
+///
+/// An equality test on a [DownloadTask] is a test on the [taskId]
+/// only - all other fields are ignored in that test
 final class DownloadTask extends Task {
   /// Creates a [DownloadTask]
   ///
@@ -488,11 +504,12 @@ final class DownloadTask extends Task {
   /// If not set may start download over cellular network
   /// [retries] if >0 will retry a failed download this many times
   /// [metaData] user data
+  /// [creationTime] time of task creation, 'now' by default.
   DownloadTask(
-      {String? taskId,
+      {super.taskId,
       required super.url,
       super.urlQueryParameters,
-      String? filename,
+      super.filename,
       super.headers,
       super.httpRequestMethod,
       super.post,
@@ -504,8 +521,7 @@ final class DownloadTask extends Task {
       super.retries,
       super.allowPause,
       super.metaData,
-      super.creationTime})
-      : super(taskId: taskId, filename: filename);
+      super.creationTime});
 
   /// Creates [DownloadTask] object from JsonMap
   DownloadTask.fromJsonMap(Map<String, dynamic> jsonMap)
@@ -703,8 +719,9 @@ final class UploadTask extends Task {
   /// If not set may start upload over cellular network
   /// [retries] if >0 will retry a failed upload this many times
   /// [metaData] user data
+  /// [creationTime] time of task creation, 'now' by default.
   UploadTask(
-      {String? taskId,
+      {super.taskId,
       required super.url,
       super.urlQueryParameters,
       required String filename,
@@ -720,7 +737,6 @@ final class UploadTask extends Task {
       super.updates,
       super.requiresWiFi,
       super.retries,
-      super.allowPause,
       super.metaData,
       super.creationTime})
       : assert(filename.isNotEmpty, 'A filename is required'),
@@ -732,26 +748,52 @@ final class UploadTask extends Task {
         mimeType =
             mimeType ?? lookupMimeType(filename) ?? 'application/octet-stream',
         super(
-            taskId: taskId,
             filename: filename,
             httpRequestMethod: httpRequestMethod ?? 'POST',
-            post: post) {
-    if (allowPause) {
-      throw ArgumentError('Uploads cannot be paused-> Set `allowPause` to '
-          'false');
-    }
-  }
+            post: post,
+            allowPause: false);
 
   /// Creates [UploadTask] object from JsonMap
   UploadTask.fromJsonMap(Map<String, dynamic> jsonMap)
       : assert(
-            jsonMap['taskType'] == 'UploadTask',
-            'The provided JSON map is not'
-            ' an UploadTask, because key "taskType" is not "UploadTask".'),
+            ['UploadTask', 'MultiUploadTask'].contains(jsonMap['taskType']),
+            'The provided JSON map is not an UploadTask, '
+            'because key "taskType" is not "UploadTask" or "MultiUploadTask.'),
         fileField = jsonMap['fileField'] ?? 'file',
         mimeType = jsonMap['mimeType'] ?? 'application/octet-stream',
         fields = Map<String, String>.from(jsonMap['fields'] ?? {}),
         super.fromJsonMap(jsonMap);
+
+  /// Returns a list of fileData elements, one for each file to upload.
+  /// Each element is a triple containing fileField, full filePath, mimeType
+  ///
+  /// The lists are stored in the similarly named String fields as a JSON list,
+  /// with each list the same length. For the filenames list, if a filename refers
+  /// to a file that exists (i.e. it is a full path) then that is the filePath used,
+  /// otherwise the filename is appended to the [Task.baseDirectory] and [Task.directory]
+  /// to form a full file path
+  Future<List<(String, String, String)>> extractFilesData() async {
+    final List<String> fileFields = List.from(jsonDecode(fileField));
+    final List<String> filenames = List.from(jsonDecode(filename));
+    final List<String> mimeTypes = List.from(jsonDecode(mimeType));
+    final result = <(String, String, String)>[];
+    for (int i = 0; i < fileFields.length; i++) {
+      final file = File(filenames[i]);
+      if (await file.exists()) {
+        result.add((fileFields[i], filenames[i], mimeTypes[i]));
+      } else {
+        result.add(
+          (
+            fileFields[i],
+            await filePath(withFilename: filenames[i]),
+            mimeTypes[i],
+          ),
+        );
+      }
+    }
+    return result;
+  }
+
 
   @override
   Map<String, dynamic> toJsonMap() => {
@@ -801,7 +843,6 @@ final class UploadTask extends Task {
           updates: updates ?? this.updates,
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
           retries: retries ?? this.retries,
-          allowPause: allowPause ?? this.allowPause,
           metaData: metaData ?? this.metaData,
           creationTime: creationTime ?? this.creationTime)
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
@@ -809,6 +850,177 @@ final class UploadTask extends Task {
   @override
   String toString() => '${super.toString()} and fileField $fileField, '
       'mimeType $mimeType and fields $fields';
+}
+
+/// Information related to an UploadTask, containing multiple files to upload
+///
+/// An equality test on a [UploadTask] is a test on the [taskId]
+/// only - all other fields are ignored in that test
+///
+/// A [MultiUploadTask] is initialized with a list representing the files to upload.
+/// Each element is either a filename/path, or a (fileField, filename/path),
+/// or a (fileField, filename/path, mimeType).
+/// When instantiating a [MultiUploadTask], this list is converted into
+/// three lists: [fileFields], [filenames], and [mimeTypes], available
+/// as fields. These lists are also encoded to a JSON string representation in
+/// the fields [fileField], [filename] and [mimeType],so - different from
+/// a single [UploadTask] - these fields now contain a JSON object representing all
+/// files.
+/// filename/path means either a filename without directory (and the
+/// directory will be based on the [Task.baseDirectory] and [Task.directory]
+/// fields), or you specify a full file path. For example: "hello.txt" or
+/// "/data/com.myapp/data/dir/hello.txt"
+final class MultiUploadTask extends UploadTask {
+  final List<String> fileFields, filenames, mimeTypes;
+
+  static const _filesArgumentError =
+      'files must be a list of filenames, or a list of records of type '
+      '(fileField, filename) or (fileField, filename, mimeType)';
+
+  /// Creates [UploadTask]
+  ///
+  /// [taskId] must be unique. A unique id will be generated if omitted
+  /// [url] properly encoded if necessary, can include query parameters
+  /// [urlQueryParameters] may be added and will be appended to the [url], must
+  ///   be properly encoded if necessary
+  /// [files] list of objects representing each file to upload. The object must
+  ///   be either a String representing the filename/path (and the fileField will
+  ///   be the filename without extension), a Record of type
+  ///   (String fileField, String filename/path) or a Record with a third String
+  ///   for the mimeType (if omitted, mimeType will be derived from the filename
+  ///   extension).
+  ///   Each file must be based in the directory represented by the combination
+  ///   of [baseDirectory] and [directory], unless a full filepath is given
+  ///   instead of only the filename. For example: "hello.txt" or
+  ///   "/data/com.myapp/data/dir/hello.txt"
+  /// [headers] an optional map of HTTP request headers
+  /// [httpRequestMethod] the HTTP request method used (e.g. GET, POST)
+  /// [fields] optional map of name/value pairs to upload
+  ///   along with the file as form fields
+  /// [directory] optional directory name, precedes [filename]
+  /// [baseDirectory] one of the base directories, precedes [directory]
+  /// [group] if set allows different callbacks or processing for different
+  /// groups
+  /// [updates] the kind of progress updates requested
+  /// [requiresWiFi] if set, will not start upload until WiFi is available.
+  /// If not set may start upload over cellular network
+  /// [retries] if >0 will retry a failed upload this many times
+  /// [metaData] user data
+  /// [creationTime] time of task creation, 'now' by default.
+  MultiUploadTask(
+      {super.taskId,
+      required super.url,
+      super.urlQueryParameters,
+      required List<dynamic> files,
+      super.headers,
+      super.httpRequestMethod,
+      Map<String, String>? fields = const {},
+      super.directory,
+      super.baseDirectory,
+      super.group,
+      super.updates,
+      super.requiresWiFi,
+      super.retries,
+      super.metaData,
+      super.creationTime})
+      : fileFields = files
+            .map((e) => switch (e) {
+                  String filename => path.basenameWithoutExtension(filename),
+                  (String fileField, String _, String _) => fileField,
+                  (String fileField, String _) => fileField,
+                  _ => throw ArgumentError(_filesArgumentError)
+                })
+            .toList(growable: false),
+        filenames = files
+            .map((e) => switch (e) {
+                  String filename => filename,
+                  (String _, String filename, String _) => filename,
+                  (String _, String filename) => filename,
+                  _ => throw ArgumentError(_filesArgumentError)
+                })
+            .toList(growable: false),
+        mimeTypes = files
+            .map((e) => switch (e) {
+                  (String _, String _, String mimeType) => mimeType,
+                  String filename ||
+                  (String _, String filename) =>
+                    lookupMimeType(filename) ?? 'application/octet-stream',
+                  _ => throw ArgumentError(_filesArgumentError)
+                })
+            .toList(growable: false),
+        super(filename: 'multi-upload', fileField: '', mimeType: '', fields: fields);
+
+  /// For [MultiUploadTask], returns jsonEncoded list of [fileFields]
+  @override
+  String get fileField => jsonEncode(fileFields);
+
+  /// For [MultiUploadTask], returns jsonEncoded list of [filenames]
+  @override
+  String get filename => jsonEncode(filenames);
+
+  /// For [MultiUploadTask], returns jsonEncoded list of [mimeTypes]
+  @override
+  String get mimeType => jsonEncode(mimeTypes);
+
+  /// Creates [MultiUploadTask] object from JsonMap
+  MultiUploadTask.fromJsonMap(Map<String, dynamic> jsonMap)
+      : assert(
+            jsonMap['taskType'] == 'MultiUploadTask',
+            'The provided JSON map is not'
+            ' a MultiUploadTask, because key "taskType" is not "MultiUploadTask".'),
+        fileFields =
+            List.from(jsonDecode(jsonMap['fileField'] as String? ?? '[]')),
+        filenames =
+            List.from(jsonDecode(jsonMap['filename'] as String? ?? '[]')),
+        mimeTypes =
+            List.from(jsonDecode(jsonMap['mimeType'] as String? ?? '[]')),
+        super.fromJsonMap(jsonMap);
+
+  @override
+  MultiUploadTask copyWith(
+          {String? taskId,
+          String? url,
+          String? filename,
+          Map<String, String>? headers,
+          String? httpRequestMethod,
+          Object? post,
+          String? fileField,
+          String? mimeType,
+          Map<String, String>? fields,
+          String? directory,
+          BaseDirectory? baseDirectory,
+          String? group,
+          Updates? updates,
+          bool? requiresWiFi,
+          int? retries,
+          int? retriesRemaining,
+          bool? allowPause,
+          String? metaData,
+          DateTime? creationTime}) =>
+      MultiUploadTask(
+          taskId: taskId ?? this.taskId,
+          url: url ?? this.url,
+          files: fileFields.indexed.map(_toRecord).toList(),
+          headers: headers ?? this.headers,
+          httpRequestMethod: httpRequestMethod ?? this.httpRequestMethod,
+          fields: fields ?? this.fields,
+          directory: directory ?? this.directory,
+          baseDirectory: baseDirectory ?? this.baseDirectory,
+          group: group ?? this.group,
+          updates: updates ?? this.updates,
+          requiresWiFi: requiresWiFi ?? this.requiresWiFi,
+          retries: retries ?? this.retries,
+          metaData: metaData ?? this.metaData,
+          creationTime: creationTime ?? this.creationTime)
+        ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
+
+  /// Zips the fileField, filename and mimeType at an index to
+  /// a record
+  (String, String, String) _toRecord((int, String) record) =>
+      (fileFields[record.$1], filenames[record.$1], mimeTypes[record.$1]);
+
+  @override
+  String get taskType => 'MultiUploadTask';
 }
 
 /// Return url String composed of the [url] and the

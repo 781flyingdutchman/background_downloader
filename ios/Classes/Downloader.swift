@@ -166,20 +166,20 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     
     /// Schedule an upload task
     private func scheduleUpload(task: Task, taskDescription: String, baseRequest: URLRequest, result: FlutterResult?) {
-        guard let directory = try? directoryForTask(task: task) else {
-            os_log("Could not find directory for taskId %@", log: log, type: .info, task.taskId)
-            postResult(result: result, value: false)
-            return
-        }
-        let filePath = directory.appendingPathComponent(task.filename)
-        if !FileManager.default.fileExists(atPath: filePath.path) {
-            os_log("Could not find file %@ for taskId %@", log: log, type: .info, filePath.absoluteString, task.taskId)
-            postResult(result: result, value: false)
-            return
-        }
         var request = baseRequest
-        if task.post?.lowercased() == "binary" {
+        if isBinaryUploadTask(task: task) {
             os_log("Binary file upload", log: log, type: .debug)
+            guard let directory = try? directoryForTask(task: task) else {
+                os_log("Could not find directory for taskId %@", log: log, type: .info, task.taskId)
+                postResult(result: result, value: false)
+                return
+            }
+            let filePath = directory.appendingPathComponent(task.filename)
+            if !FileManager.default.fileExists(atPath: filePath.path) {
+                os_log("Could not find file %@ for taskId %@", log: log, type: .info, filePath.absoluteString, task.taskId)
+                postResult(result: result, value: false)
+                return
+            }
             // binary post can use uploadTask fromFile method
             request.setValue("attachment; filename=\"\(task.filename)\"", forHTTPHeaderField: "Content-Disposition")
             let urlSessionUploadTask = Downloader.urlSession!.uploadTask(with: request, fromFile: filePath)
