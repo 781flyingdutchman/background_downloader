@@ -794,7 +794,6 @@ final class UploadTask extends Task {
     return result;
   }
 
-
   @override
   Map<String, dynamic> toJsonMap() => {
         ...super.toJsonMap(),
@@ -948,7 +947,11 @@ final class MultiUploadTask extends UploadTask {
                   _ => throw ArgumentError(_filesArgumentError)
                 })
             .toList(growable: false),
-        super(filename: 'multi-upload', fileField: '', mimeType: '', fields: fields);
+        super(
+            filename: 'multi-upload',
+            fileField: '',
+            mimeType: '',
+            fields: fields);
 
   /// For [MultiUploadTask], returns jsonEncoded list of [fileFields]
   @override

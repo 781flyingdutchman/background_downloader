@@ -248,6 +248,8 @@ Future<void> _testDirs(FlutterDownloaderPersistentStorage fdl, String testPath,
 }
 
 Future<void> _migrateWithDir(Directory dir) async {
+  debugPrint(
+      'Skipping _migrateWithDir test, as FDL is not imported and uncommented');
   // final fdl = Platform.isAndroid
   //     ? FlutterDownloaderPersistentStorageAndroid()
   //     : FlutterDownloaderPersistentStorageIOS();

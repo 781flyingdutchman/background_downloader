@@ -405,7 +405,6 @@ class TaskWorker(
             val task = Task(
                 gson.fromJson(taskJsonMapString, BackgroundDownloaderPlugin.jsonMapType)
             )
-            Log.v(TAG, "TaskType ${task.taskType}") //TODO()
             notificationConfigJsonString = inputData.getString(keyNotificationConfig)
             notificationConfig =
                 if (notificationConfigJsonString != null) BackgroundDownloaderPlugin.gson.fromJson(

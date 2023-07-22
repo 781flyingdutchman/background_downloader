@@ -94,8 +94,8 @@ final class DesktopDownloader extends BaseDownloader {
     });
     RootIsolateToken? rootIsolateToken = RootIsolateToken.instance;
     if (rootIsolateToken == null) {
-      processStatusUpdate(TaskStatusUpdate(
-          task, TaskStatus.failed, TaskException('Could not obtain rootIsolateToken')));
+      processStatusUpdate(TaskStatusUpdate(task, TaskStatus.failed,
+          TaskException('Could not obtain rootIsolateToken')));
     }
     await Isolate.spawn(doTask, [rootIsolateToken, receivePort.sendPort],
         onError: errorPort.sendPort);

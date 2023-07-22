@@ -1,6 +1,7 @@
+## 7.7.0 
 
 ### Uploading multiple files in a single request
-If you need to upload multiple files in a single request, create a `MultiUploadTask` instead of an `UploadTask`. It has similar parameters as the `UploadTask`, except you specifiy a list of files to upload as the `files` argument of the constructor, and do not use `fileName`, `fileField` and `mimeType`. Each element in the `files` list is either:
+If you need to upload multiple files in a single request, create a [MultiUploadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/MultiUploadTask-class.html) instead of an `UploadTask`. It has similar parameters as the `UploadTask`, except you specifiy a list of files to upload as the `files` argument of the constructor, and do not use `fileName`, `fileField` and `mimeType`. Each element in the `files` list is either:
 * a filename (e.g. `"file1.txt"`). The `fileField` for that file will be set to the base name (i.e. "file1" for "file1.txt") and the mime type will be derived from the extension (i.e. "text/plain" for "file1.txt")
 * a record containing `(fileField, filename)`, e.g. `("document", "file1.txt")`. The `fileField` for that file will be set to "document" and the mime type derived from the file extension (i.e. "text/plain" for "file1.txt")
 * a record containing `(filefield, filename, mimeType)`, e.g. `("document", "file1.txt", "text/plain")`
@@ -10,8 +11,12 @@ Once the `MultiUpoadTask` is created, the fields `fileFields`, `filenames` and `
 
 Use the `MultiTaskUpload` object in the `upload` and `enqueue` methods as you would a regular `UploadTask`.
 
+### Flutter Downloader migration
+Bug fixes related to migration from Flutter Downloader (see version 7.6.0). The migration is still experimental, so please test thoroughly before relying on the migration in your app.
 
-Bug fixes related to migration from Flutter Downloader. The migration is still experimental, so please test thoroughly before relying on the migration in your app.
+### Bug fixes
+
+Fixed a bug on iOS related to NSNull Json decoding
 
 ## 7.6.0
 

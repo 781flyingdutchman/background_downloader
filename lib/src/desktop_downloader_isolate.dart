@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
-import 'dart:ui';
 
 import 'package:async/async.dart';
 import 'package:background_downloader/src/exceptions.dart';
@@ -411,8 +410,9 @@ Future<TaskStatus> multipartUpload(
       fileLengths.fold<int>(0, (sum, length) => sum + length) +
       separator.length * contentDispositionStrings.length +
       2;
-  final contentLength =
-      lengthInBytes(fieldsString) + '--$boundary$lineFeed'.length + fileDataLength;
+  final contentLength = lengthInBytes(fieldsString) +
+      '--$boundary$lineFeed'.length +
+      fileDataLength;
   var resultStatus = TaskStatus.failed;
   try {
     // setup the connection

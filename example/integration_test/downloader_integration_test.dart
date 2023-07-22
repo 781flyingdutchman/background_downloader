@@ -40,8 +40,7 @@ const uploadTestUrl =
 const uploadBinaryTestUrl =
     'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_upload_binary_file';
 const uploadMultiTestUrl =
-    'https://4-2-5-dot-avmaps-dot-bbflightserver-hrd.appspot.com/public/test_multi_upload_file';
-//TODO remove version from test url
+    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_multi_upload_file';
 const urlWithContentLengthFileSize = 6207471;
 
 const defaultFilename = 'google.html';
@@ -1813,7 +1812,7 @@ void main() {
           url: uploadMultiTestUrl,
           files: [('f1', uploadFilename), ('f2', uploadFilename2)],
           fields: {'key': 'value'},
-      updates: Updates.statusAndProgress);
+          updates: Updates.statusAndProgress);
       expect(await FileDownloader().enqueue(multiTask), isTrue);
       await someProgressCompleter.future;
       expect(lastProgress, greaterThan(0));
@@ -2341,6 +2340,7 @@ void main() {
       final result = await FileDownloader().download(task);
       expect(result.status, equals(TaskStatus.complete));
       var success = await FileDownloader().openFile(task: task);
+      await Future.delayed(const Duration(seconds: 1));
       if (!Platform.isAndroid) {
         expect(success, isTrue);
         // change to a .txt file
