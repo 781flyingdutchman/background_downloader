@@ -404,7 +404,7 @@ Each of these methods accept a `group` parameter that targets the method to a sp
 **NOTE:** Only tasks that are active (ie. not in a final state) are guaranteed to be returned or counted, but returning a task does not guarantee that it is active.
 This means that if you check `tasksFinished` when processing a task update, the task you received an update for may still show as 'active', even though it just finished, and result in `false` being returned. To fix this, pass that task's taskId as `ignoreTaskId` to the `tasksFinished` call, and it will be ignored for the purpose of testing if all tasks are finished: 
 ```dart
-void downloadStatusCallback(TaskStatusUpdate update) {
+void downloadStatusCallback(TaskStatusUpdate update) await {
     // process your status update, then check if all tasks are finished
     final bool allTasksFinished = update.status.isFinalState && 
         await FileDownloader().tasksFinished(ignoreTaskId: update.task.taskId) ;

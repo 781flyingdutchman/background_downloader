@@ -1,3 +1,7 @@
+## 6.3.2
+
+Fixed a bug on iOS related to NSNull Json decoding
+
 ## 6.3.1
 
 Added an optional parameter to the tasksFinished method that allows you to use it the moment you receive a status update for a task, like this:
