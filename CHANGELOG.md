@@ -1,3 +1,7 @@
+## 7.7.1
+
+Bug fix for Flutter Downloader migration on iOS, issue #86
+
 ## 7.7.0 
 
 ### Uploading multiple files in a single request
@@ -131,6 +135,10 @@ Further Dart 3 changes (not visible to user).
 Migration to Dart 3 - not other functional change or API change.  If you use Dart 2 please use version `6.1.1` of this plugin, which will be maintained until the end of 2023.
 
 Most classes in the package are now `final` classes, and under the hood we use the new Records and Pattern matching features of Dart 3. None of this should matter if you've used the package as intended.
+
+## 6.3.2
+
+Fixed a bug on iOS related to NSNull Json decoding
 
 ## 6.3.1
 

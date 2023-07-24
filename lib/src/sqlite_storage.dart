@@ -392,6 +392,11 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
         return getDirectories(newSavedDir, isRetry: true);
       }
     }
+    if (Platform.isIOS && !savedDir.startsWith(Platform.pathSeparator)) {
+      // still no match on iOS, assume saveDir is a subdir of the
+      // documents directory
+      return (BaseDirectory.applicationDocuments, savedDir);
+    }
     return (BaseDirectory.applicationDocuments, null);
   }
 

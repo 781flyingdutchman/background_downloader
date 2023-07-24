@@ -223,6 +223,18 @@ void main() {
         }
       }
     });
+
+    testWidgets('iOS directory that is a subdir of docsDir',
+        (widgetTester) async {
+      if (Platform.isIOS) {
+        final fdl = FlutterDownloaderPersistentStorageIOS();
+        await fdl.initialize();
+        _testDirs(fdl, 'subdir/something', BaseDirectory.applicationDocuments,
+            'subdir/something');
+        _testDirs(
+            fdl, '/subdir/something', BaseDirectory.applicationDocuments, null);
+      }
+    });
   });
 }
 
