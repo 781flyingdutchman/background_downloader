@@ -1097,8 +1097,9 @@ sealed class TaskUpdate {
 class TaskStatusUpdate extends TaskUpdate {
   final TaskStatus status;
   final TaskException? exception;
+  final String? responseBody;
 
-  const TaskStatusUpdate(super.task, this.status, [this.exception]);
+  const TaskStatusUpdate(super.task, this.status, [this.exception, this.responseBody]);
 
   /// Create object from JSON Map
   TaskStatusUpdate.fromJsonMap(Map<String, dynamic> jsonMap)
@@ -1107,6 +1108,7 @@ class TaskStatusUpdate extends TaskUpdate {
         exception = jsonMap['exception'] != null
             ? TaskException.fromJsonMap(jsonMap['exception'])
             : null,
+        responseBody = jsonMap['responseBody'],
         super.fromJsonMap(jsonMap);
 
   /// Return JSON Map representing object
@@ -1114,7 +1116,8 @@ class TaskStatusUpdate extends TaskUpdate {
   Map<String, dynamic> toJsonMap() => {
         ...super.toJsonMap(),
         'taskStatus': status.index,
-        'exception': exception?.toJsonMap()
+        'exception': exception?.toJsonMap(),
+        'responseBody': responseBody
       };
 }
 

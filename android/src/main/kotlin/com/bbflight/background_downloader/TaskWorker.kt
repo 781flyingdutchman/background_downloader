@@ -70,10 +70,7 @@ class TaskWorker(
         const val boundary = "-----background_downloader-akjhfw281onqciyhnIk"
         const val lineFeed = "\r\n"
 
-        private var taskCanResume = false
         private var createdNotificationChannel = false
-
-        private var taskException: TaskException? = null
 
 
         /** Converts [Task] to JSON string representation */
@@ -143,8 +140,8 @@ class TaskWorker(
             task: Task,
             status: TaskStatus,
             prefs: SharedPreferences,
-            taskException: TaskException? =
-                null
+            taskException: TaskException? = null,
+            responseBody: String? = null
         ) {
             // A 'failed' progress update is only provided if
             // a retry is not needed: if it is needed, a `waitingToRetry` progress update
@@ -190,8 +187,13 @@ class TaskWorker(
                 val arg: Any = if (status == TaskStatus.failed) mutableListOf(
                     status.ordinal,
                     finalTaskException.type.typeString,
-                    finalTaskException.description, finalTaskException.httpResponseCode
-                ) else status.ordinal
+                    finalTaskException.description,
+                    finalTaskException.httpResponseCode,
+                    responseBody
+                ) else mutableListOf(
+                    status.ordinal,
+                    if (status.isFinalState()) responseBody else null
+                )
                 if (!postOnBackgroundChannel("statusUpdate", task, arg)) {
                     // unsuccessful post, so store in local prefs (without exception info)
                     Log.d(TAG, "Could not post status update -> storing locally")
@@ -272,7 +274,6 @@ class TaskWorker(
          * Send 'canResume' message via the background channel to Flutter
          */
         suspend fun processCanResume(task: Task, canResume: Boolean) {
-            taskCanResume = canResume
             postOnBackgroundChannel("canResume", task, canResume)
         }
 
@@ -382,12 +383,17 @@ class TaskWorker(
     private var bytesTotal: Long = 0
     private var startByte = 0L
     private var isTimedOut = false
+    private var taskCanResume = false
 
     // properties related to notifications
     private var notificationConfigJsonString: String? = null
     private var notificationConfig: NotificationConfig? = null
     private var notificationId = 0
     private var notificationProgress = 2.0 // indeterminate
+
+    private var taskException: TaskException? = null
+    private var responseBody: String? = null
+
 
     private lateinit var prefs: SharedPreferences
 
@@ -426,7 +432,7 @@ class TaskWorker(
             }
             updateNotification(task, notificationTypeForTaskStatus(TaskStatus.running))
             val status = doTask(task, isResume, tempFilePath, requiredStartByte)
-            processStatusUpdate(task, status, prefs, taskException)
+            processStatusUpdate(task, status, prefs, taskException, responseBody)
             updateNotification(task, notificationTypeForTaskStatus(status))
         }
         return Result.success()
@@ -569,9 +575,11 @@ class TaskWorker(
         if (connection.responseCode in 200..206) {
             if (task.allowPause) {
                 val acceptRangesHeader = connection.headerFields["Accept-Ranges"]
+                taskCanResume =
+                    acceptRangesHeader?.first() == "bytes" || connection.responseCode == 206
                 processCanResume(
                     task,
-                    acceptRangesHeader?.first() == "bytes" || connection.responseCode == 206
+                    taskCanResume
                 )
             }
             val isResume =
@@ -686,12 +694,13 @@ class TaskWorker(
                 TAG,
                 "Response code ${connection.responseCode} for download from  ${task.url} to $filePath"
             )
-            val responseContent = responseContent(connection)
+            val errorContent = responseErrorContent(connection)
             taskException = TaskException(
                 ExceptionType.httpResponse, httpResponseCode = connection.responseCode,
-                description = if (responseContent?.isNotEmpty() == true) responseContent else connection.responseMessage
+                description = if (errorContent?.isNotEmpty() == true) errorContent else connection.responseMessage
             )
             return if (connection.responseCode == 404) {
+                responseBody = errorContent
                 TaskStatus.notFound
             } else {
                 TaskStatus.failed
@@ -733,6 +742,7 @@ class TaskWorker(
             }
 
             TaskStatus.complete -> {
+                responseBody = responseBodyContent(connection)
                 if (connection.responseCode in 200..206) {
                     Log.i(
                         TAG, "Successfully uploaded taskId ${task.taskId} from $filePath"
@@ -743,14 +753,10 @@ class TaskWorker(
                     TAG,
                     "Response code ${connection.responseCode} for upload of $filePath to ${task.url}"
                 )
-                val responseContent = responseContent(connection)
+                val errorContent = responseErrorContent(connection)
                 taskException = TaskException(
                     ExceptionType.httpResponse, httpResponseCode = connection.responseCode,
-                    description = if (responseContent?.isNotEmpty() == true) responseContent else connection.responseMessage
-                )
-                taskException = TaskException(
-                    ExceptionType.httpResponse, httpResponseCode = connection.responseCode,
-                    description = connection.responseMessage
+                    description = if (errorContent?.isNotEmpty() == true) errorContent else connection.responseMessage
                 )
                 return if (connection.responseCode == 404) {
                     TaskStatus.notFound
@@ -873,7 +879,8 @@ class TaskWorker(
             contentDispositionStrings.sumOf { string: String -> lengthInBytes(string) } +
                     contentTypeStrings.sumOf { string: String -> string.length } +
                     fileLengths.sum() + separator.length * contentDispositionStrings.size + 2
-        val contentLength = lengthInBytes(fieldsString) + "--$boundary$lineFeed".length + fileDataLength
+        val contentLength =
+            lengthInBytes(fieldsString) + "--$boundary$lineFeed".length + fileDataLength
         // setup the connection
         connection.setRequestProperty("Accept-Charset", "UTF-8")
         connection.setRequestProperty("Connection", "Keep-Alive")
@@ -1356,19 +1363,35 @@ class TaskWorker(
     }
 
     /**
-     * Return the response's content as a String, or null if unable
+     * Return the response's error content as a String, or null if unable
      */
-    private fun responseContent(connection: HttpURLConnection): String? {
+    private fun responseErrorContent(connection: HttpURLConnection): String? {
         try {
             return connection.errorStream.bufferedReader().readText()
         } catch (e: Exception) {
             Log.i(
                 TAG,
-                "Could not read response content from httpResponseCode ${connection.responseCode}: $e"
+                "Could not read response error content from httpResponseCode ${connection.responseCode}: $e"
             )
         }
         return null
     }
+
+    /**
+     * Return the response's body content as a String, or null if unable
+     */
+    private fun responseBodyContent(connection: HttpURLConnection): String? {
+        try {
+            return connection.inputStream.bufferedReader().readText()
+        } catch (e: Exception) {
+            Log.i(
+                TAG,
+                "Could not read response body from httpResponseCode ${connection.responseCode}: $e"
+            )
+        }
+        return null
+    }
+
 
     /**
      * Set the [taskException] variable based on Exception [e]

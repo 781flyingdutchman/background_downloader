@@ -991,6 +991,8 @@ void main() {
       }
       final result = await FileDownloader().download(task);
       expect(result.status, equals(TaskStatus.complete));
+      expect(result.exception, isNull);
+      expect(result.responseBody, isNull);
       exists = await File(path).exists();
       expect(exists, isTrue);
       await File(path).delete();
@@ -1239,6 +1241,18 @@ void main() {
       }, elapsedTimeInterval: const Duration(milliseconds: 200));
       expect(result.status, equals(TaskStatus.complete));
       expect(ticks, greaterThan(0));
+    });
+
+    testWidgets('not found', (widgetTester) async {
+      task = DownloadTask(url: 'https://avmaps-dot-bbflightserver-hrd.appspot.com/something');
+      final result = await FileDownloader().download(task);
+      expect(result.status, equals(TaskStatus.notFound));
+      expect(result.responseBody, equals('<!doctype html>\n'
+      '<html lang=en>\n'
+      '<title>404 Not Found</title>\n'
+      '<h1>Not Found</h1>\n'
+      '<p>The requested URL was not found on the server. If you entered the URL manually '
+      'please check your spelling and try again.</p>\n'));
     });
   });
 
@@ -1682,9 +1696,16 @@ void main() {
   });
 
   group('Convenience uploads', () {
-    testWidgets('upload with await', (widgetTester) async {
+    testWidgets('multipart upload with await', (widgetTester) async {
       final result = await FileDownloader().upload(uploadTask);
       expect(result.status, equals(TaskStatus.complete));
+      expect(result.responseBody, equals('OK'));
+    });
+
+    testWidgets('binary upload with await', (widgetTester) async {
+      final result = await FileDownloader().upload(uploadTask.copyWith(url: uploadBinaryTestUrl));
+      expect(result.status, equals(TaskStatus.complete));
+      expect(result.responseBody, equals('OK'));
     });
 
     testWidgets('multiple upload with futures', (widgetTester) async {
@@ -1697,6 +1718,7 @@ void main() {
       var results = await Future.wait([taskFuture, secondTaskFuture]);
       for (var result in results) {
         expect(result.status, equals(TaskStatus.complete));
+        expect(result.responseBody, equals('OK'));
       }
     });
 
@@ -1828,6 +1850,7 @@ void main() {
           fields: {'key': 'value'});
       final result = await FileDownloader().upload(multiTask);
       expect(result.status, equals(TaskStatus.complete));
+      expect(result.responseBody, equals('OK'));
     });
 
     testWidgets('upload 2 files with full file path', (widgetTester) async {
@@ -1839,6 +1862,7 @@ void main() {
           fields: {'key': 'value'});
       final result = await FileDownloader().upload(multiTask);
       expect(result.status, equals(TaskStatus.complete));
+      expect(result.responseBody, equals('OK'));
     });
   });
 

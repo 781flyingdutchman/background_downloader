@@ -42,18 +42,27 @@ final class NativeDownloader extends BaseDownloader {
             : args[1]
       );
       switch (message) {
+        // simple status update
         case ('statusUpdate', int statusOrdinal):
           final status = TaskStatus.values[statusOrdinal];
           await killFailedTask(task, status);
           processStatusUpdate(TaskStatusUpdate(task, status));
 
+      // status update with responseBody, no exception
+        case ('statusUpdate', [int statusOrdinal, String? responseBody]):
+          final status = TaskStatus.values[statusOrdinal];
+          processStatusUpdate(
+              TaskStatusUpdate(task, status, null, responseBody));
+
+        // status update with TaskException and responseBody
         case (
             'statusUpdate',
             [
               int statusOrdinal,
               String typeString,
               String description,
-              int httpResponseCode
+              int httpResponseCode,
+              String? responseBody
             ]
           ):
           final status = TaskStatus.values[statusOrdinal];
@@ -63,7 +72,7 @@ final class NativeDownloader extends BaseDownloader {
             exception = TaskException.fromTypeString(
                 typeString, description, httpResponseCode);
           }
-          processStatusUpdate(TaskStatusUpdate(task, status, exception));
+          processStatusUpdate(TaskStatusUpdate(task, status, exception, responseBody));
 
         case ('progressUpdate', [double progress, int expectedFileSize]):
           processProgressUpdate(
