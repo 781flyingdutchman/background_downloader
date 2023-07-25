@@ -6,7 +6,7 @@ import MobileCoreServices
 
 let log = OSLog.init(subsystem: "FileDownloaderPlugin", category: "Downloader")
 
-public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSessionDownloadDelegate, UNUserNotificationCenterDelegate {
+public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSessionDownloadDelegate, URLSessionDataDelegate, UNUserNotificationCenterDelegate {
     
     static let instance = Downloader()
     
@@ -27,6 +27,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     static var haveNotificationPermission: Bool?
     static var taskIdsThatCanResume = Set<String>() // taskIds that can resume
     static var localResumeData = [String : String]() // locally stored to enable notification resume
+    static var responseBodyData = [String: [Data]]() // list of Data objects received for this UploadTask id
     
     private override init() {
         super.init()
@@ -437,10 +438,13 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         let responseStatusCode = (task.response as? HTTPURLResponse)?.statusCode ?? 0
         let responseStatusDescription = HTTPURLResponse.localizedString(forStatusCode: responseStatusCode)
         let notificationConfig = getNotificationConfigFrom(urlSessionTask: task)
+        // from here on, task refers to "our" task, not a URLSessionTask
         guard let task = getTaskFrom(urlSessionTask: task) else {
             os_log("Could not find task related to urlSessionTask %d", log: log, type: .error, task.taskIdentifier)
             return
         }
+        let responseBody = getResponseBody(taskId: task.taskId)
+        Downloader.responseBodyData.removeValue(forKey: task.taskId)
         Downloader.taskIdsThatCanResume.remove(task.taskId)
         guard error == nil else {
             let userInfo = (error! as NSError).userInfo
@@ -477,9 +481,9 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             let finalStatus = (200...206).contains(responseStatusCode)
             ? TaskStatus.complete
             : responseStatusCode == 404
-            ? TaskStatus.notFound
-            : TaskStatus.failed
-            processStatusUpdate(task: task, status: finalStatus, taskException: taskException)
+                ? TaskStatus.notFound
+                : TaskStatus.failed
+            processStatusUpdate(task: task, status: finalStatus, taskException: taskException, responseBody: responseBody)
         }
     }
     
@@ -506,9 +510,9 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                 }
             }
             // notify if needed
-            let notificationCongfig = getNotificationConfigFrom(urlSessionTask: downloadTask)
-            if (notificationCongfig != nil) {
-                updateNotification(task: task, notificationType: .running, notificationConfig: notificationCongfig)
+            let notificationConfig = getNotificationConfigFrom(urlSessionTask: downloadTask)
+            if (notificationConfig != nil) {
+                updateNotification(task: task, notificationType: .running, notificationConfig: notificationConfig)
             }
         }
         if totalBytesExpectedToWrite != NSURLSessionTransferSizeUnknown && Date() > Downloader.nextProgressUpdateTime[task.taskId] ?? Date(timeIntervalSince1970: 0) {
@@ -558,14 +562,15 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             return}
         let notificationConfig = getNotificationConfigFrom(urlSessionTask: downloadTask)
         if response.statusCode == 404 {
-            processStatusUpdate(task: task, status: TaskStatus.notFound)
+            let responseBody = readFile(url: location)
+            processStatusUpdate(task: task, status: TaskStatus.notFound, responseBody: responseBody)
             updateNotification(task: task, notificationType: .error, notificationConfig: notificationConfig)
             return
         }
         if !(200...206).contains(response.statusCode)   {
             os_log("TaskId %@ returned response code %d", log: log,  type: .info, task.taskId, response.statusCode)
-            let responseContent = readFile(url: location)
-            processStatusUpdate(task: task, status: TaskStatus.failed, taskException: TaskException(type: .httpResponse, httpResponseCode: response.statusCode, description: responseContent?.isEmpty == false ? responseContent! : HTTPURLResponse.localizedString(forStatusCode: response.statusCode)))
+            let responseBody = readFile(url: location)
+            processStatusUpdate(task: task, status: TaskStatus.failed, taskException: TaskException(type: .httpResponse, httpResponseCode: response.statusCode, description: responseBody?.isEmpty == false ? responseBody! : HTTPURLResponse.localizedString(forStatusCode: response.statusCode)))
             updateNotification(task: task, notificationType: .error, notificationConfig: notificationConfig)
             return
         }
@@ -604,6 +609,25 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         }
     }
     
+    
+    //MARK: URLSessionDataDelegate
+    
+    /// Collects incoming data following a file upload, by appending the data block to a static dictionary keyed by taskId
+    public func urlSession(
+        _ session: URLSession,
+        dataTask: URLSessionDataTask,
+        didReceive data: Data
+    )
+    {
+        guard let task = getTaskFrom(urlSessionTask: dataTask)
+        else {
+            os_log("Could not find task associated urlSessionTask %d", log: log,  type: .info, dataTask.taskIdentifier)
+            return
+        }
+        var dataList = Downloader.responseBodyData[task.taskId] ?? []
+        dataList.append(data)
+        Downloader.responseBodyData[task.taskId] = dataList
+    }
     
     //MARK: URLSessionDelegate
     
@@ -752,6 +776,25 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         } catch {
             return nil
         }
+    }
+    
+    /// Get response body for upload task with this [taskId]
+    private func getResponseBody(taskId: String) -> String? {
+        guard let dataList = Downloader.responseBodyData[taskId] else {
+            return nil
+        }
+        var allData: Data? = nil
+        dataList.forEach { data in
+            if allData == nil {
+                allData = data
+            } else {
+                allData?.append(data)
+            }
+        }
+        if (allData == nil) {
+            return nil
+        }
+        return String(data: allData!, encoding: .utf8)!
     }
 }
 

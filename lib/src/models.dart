@@ -1099,7 +1099,8 @@ class TaskStatusUpdate extends TaskUpdate {
   final TaskException? exception;
   final String? responseBody;
 
-  const TaskStatusUpdate(super.task, this.status, [this.exception, this.responseBody]);
+  const TaskStatusUpdate(super.task, this.status,
+      [this.exception, this.responseBody]);
 
   /// Create object from JSON Map
   TaskStatusUpdate.fromJsonMap(Map<String, dynamic> jsonMap)

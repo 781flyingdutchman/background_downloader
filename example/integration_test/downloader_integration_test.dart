@@ -1244,15 +1244,18 @@ void main() {
     });
 
     testWidgets('not found', (widgetTester) async {
-      task = DownloadTask(url: 'https://avmaps-dot-bbflightserver-hrd.appspot.com/something');
+      task = DownloadTask(
+          url: 'https://avmaps-dot-bbflightserver-hrd.appspot.com/something');
       final result = await FileDownloader().download(task);
       expect(result.status, equals(TaskStatus.notFound));
-      expect(result.responseBody, equals('<!doctype html>\n'
-      '<html lang=en>\n'
-      '<title>404 Not Found</title>\n'
-      '<h1>Not Found</h1>\n'
-      '<p>The requested URL was not found on the server. If you entered the URL manually '
-      'please check your spelling and try again.</p>\n'));
+      expect(
+          result.responseBody,
+          equals('<!doctype html>\n'
+              '<html lang=en>\n'
+              '<title>404 Not Found</title>\n'
+              '<h1>Not Found</h1>\n'
+              '<p>The requested URL was not found on the server. If you entered the URL manually '
+              'please check your spelling and try again.</p>\n'));
     });
   });
 
@@ -1703,7 +1706,8 @@ void main() {
     });
 
     testWidgets('binary upload with await', (widgetTester) async {
-      final result = await FileDownloader().upload(uploadTask.copyWith(url: uploadBinaryTestUrl));
+      final result = await FileDownloader()
+          .upload(uploadTask.copyWith(url: uploadBinaryTestUrl));
       expect(result.status, equals(TaskStatus.complete));
       expect(result.responseBody, equals('OK'));
     });

@@ -124,12 +124,17 @@ final class DesktopDownloader extends BaseDownloader {
         case String:
           _log.finest(message);
 
-        case ('statusUpdate', TaskStatus status, TaskException? exception, String? responseBody):
+        case (
+            'statusUpdate',
+            TaskStatus status,
+            TaskException? exception,
+            String? responseBody
+          ):
           if (status.isFinalState) {
             _remove(task);
           }
-          processStatusUpdate(TaskStatusUpdate(
-              task, status, status == TaskStatus.failed ? exception : null, responseBody));
+          processStatusUpdate(TaskStatusUpdate(task, status,
+              status == TaskStatus.failed ? exception : null, responseBody));
 
         case ('resumeData', String data, int requiredStartByte):
           setResumeData(ResumeData(task, data, requiredStartByte));

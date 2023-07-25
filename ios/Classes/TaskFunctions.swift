@@ -109,7 +109,7 @@ func extractFilesData(task: Task) -> [((String, String, String))] {
 /// Sends status update via the background channel to Dart, if requested
 /// If the task is finished, processes a final progressUpdate update and removes
 /// task from persistent storage
-func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskException? = nil) {
+func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskException? = nil, responseBody: String? = nil) {
     // Post update if task expects one, or if failed and retry is needed
     let retryNeeded = status == TaskStatus.failed && task.retriesRemaining > 0
     // if task is in final state, process a final progressUpdate
@@ -134,9 +134,12 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
     }
     
     if providesStatusUpdates(downloadTask: task) || retryNeeded {
-        let finalTaskException = taskException == nil ? TaskException(type: .general,
-                                                                      httpResponseCode: -1, description: "") : taskException
-        let arg: Any = status == .failed ? [status.rawValue, finalTaskException!.type.rawValue, finalTaskException!.description, finalTaskException!.httpResponseCode] as [Any] : status.rawValue
+        let finalTaskException = taskException == nil
+            ? TaskException(type: .general, httpResponseCode: -1, description: "")
+            : taskException
+        let arg: [Any?] = status == .failed
+            ? [status.rawValue, finalTaskException!.type.rawValue, finalTaskException!.description, finalTaskException!.httpResponseCode, responseBody] as [Any?]
+            : [status.rawValue, responseBody] as [Any?]
         if !postOnBackgroundChannel(method: "statusUpdate", task: task, arg: arg) {
             // store update locally as a merged task/status JSON string, without error info
             guard let jsonData = try? JSONEncoder().encode(task),
@@ -162,7 +165,7 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
 /// Sends progress update via the background channel to Dart, if requested
 func processProgressUpdate(task: Task, progress: Double, expectedFileSize: Int64 = -1) {
     if providesProgressUpdates(task: task) {
-        if (!postOnBackgroundChannel(method: "progressUpdate", task: task, arg: [progress, expectedFileSize])) {
+        if (!postOnBackgroundChannel(method: "progressUpdate", task: task, arg: [progress, expectedFileSize] as [Any])) {
             // store update locally as a merged task/progress JSON string
             guard let jsonData = try? JSONEncoder().encode(task),
                   var jsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
@@ -230,9 +233,9 @@ func postOnBackgroundChannel(method: String, task:Task, arg: Any) -> Bool {
         os_log("Could not convert task to JSON", log: log, type: .error)
         return false
     }
-    var argsList: [Any] = [jsonString]
-    if arg is [Any] {
-        argsList.append(contentsOf: arg as! [Any])
+    var argsList: [Any?] = [jsonString]
+    if arg is [Any?] {
+        argsList.append(contentsOf: arg as! [Any?])
     } else {
         argsList.append(arg)
     }
