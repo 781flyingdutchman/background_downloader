@@ -610,21 +610,27 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 intent.extras?.getString(NotificationRcvr.bundleTask)
             val notificationTypeOrdinal =
                 intent.getIntExtra(NotificationRcvr.bundleNotificationType, 0)
-            scope?.launch {
+            CoroutineScope(Dispatchers.Default).launch {
                 var retries = 0
                 var success = false
                 while (retries < 5 && !success) {
                     try {
-                        if (backgroundChannel != null) {
-                            backgroundChannel?.invokeMethod(
-                                "notificationTap",
-                                listOf(taskJsonMapString, notificationTypeOrdinal)
-                            )
-                            success = true
+                        if (backgroundChannel != null && scope != null) {
+                            val resultCompleter = CompletableFuture<Boolean>()
+                            val resultHandler = ResultHandler(resultCompleter)
+                            scope?.launch {
+                                backgroundChannel?.invokeMethod(
+                                    "notificationTap",
+                                    listOf(taskJsonMapString, notificationTypeOrdinal),
+                                    resultHandler
+                                )
+                            }
+                            success = resultCompleter.join()
                         }
-                    } catch (_: Exception) {
+                    } catch (e: Exception) {
+                        Log.v(TAG, "Exception in handleIntent: $e")
                     }
-                    if (retries < 4 && !success) {
+                    if (!success) {
                         delay(timeMillis = 100 * 2.0.pow(retries).toLong())
                         retries++
                     }
@@ -650,6 +656,27 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+        attach(binding)
+    }
+
+    override fun onDetachedFromActivityForConfigChanges() {
+        detach()
+    }
+
+    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
+        attach(binding)
+    }
+
+    override fun onDetachedFromActivity() {
+        detach()
+    }
+
+
+    /**
+     * Attach to activity
+     */
+    private fun attach(binding: ActivityPluginBinding) {
+        detach()
         activity = binding.activity
         scope = MainScope()
         binding.addRequestPermissionsResultListener(this)
@@ -659,16 +686,10 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         handleIntent(binding.activity.intent)
     }
 
-    override fun onDetachedFromActivityForConfigChanges() {
-        activity = null
-    }
-
-    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
-        activity = binding.activity
-        binding.addRequestPermissionsResultListener(this)
-    }
-
-    override fun onDetachedFromActivity() {
+    /**
+     * Detach from activity
+     */
+    private fun detach() {
         activity = null
         scope?.cancel()
         scope = null
@@ -695,4 +716,26 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
             }
         }
     }
+}
+
+/**
+ * Simple Flutter result handler, completes the [completer] with the result
+ * of the MethodChannel call
+ */
+class ResultHandler(private val completer: CompletableFuture<Boolean>) : Result {
+
+    override fun success(result: Any?) {
+        completer.complete(result == true)
+    }
+
+    override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
+        Log.i(BackgroundDownloaderPlugin.TAG, "Flutter result error $errorCode: $errorMessage")
+        completer.complete(false)
+    }
+
+    override fun notImplemented() {
+        Log.i(BackgroundDownloaderPlugin.TAG, "Flutter method not implemented")
+        completer.complete(false)
+    }
+
 }
