@@ -1,3 +1,9 @@
+## 7.8.0
+
+Added field `responseBody` to `TaskStatusUpdate` that, if not null, contains the server response for uploads, and for downloads that are not complete (e.g. `.notFound`). In those instances, the server response may contain useful information (e.g. a url where the uploaded file can be found, or the reason for the 'not found' status as provided by the server)
+
+Improved handling of notification tap callbacks.
+
 ## 7.7.1
 
 Bug fix for Flutter Downloader migration on iOS, issue #86
