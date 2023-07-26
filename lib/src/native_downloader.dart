@@ -89,6 +89,7 @@ final class NativeDownloader extends BaseDownloader {
           final notificationType =
               NotificationType.values[notificationTypeOrdinal];
           processNotificationTap(task, notificationType);
+          return true; // this message requires a confirmation
 
         default:
           throw StateError('Background channel: no match for message $message');
