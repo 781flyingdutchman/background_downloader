@@ -60,9 +60,13 @@ abstract base class BaseDownloader {
 
   factory BaseDownloader.instance(
       PersistentStorage persistentStorage, Database database) {
-    final instance = Platform.isMacOS || Platform.isLinux || Platform.isWindows
-        ? DesktopDownloader()
-        : NativeDownloader();
+    final instance = switch (Platform.operatingSystem) {
+      'android' => AndroidDownloader(),
+      'ios' => IOSDownloader(),
+      'macos' || 'linux' || 'windows' => DesktopDownloader(),
+      var platform =>
+        throw ArgumentError('$platform is not a supported platform')
+    };
     instance._storage = persistentStorage;
     instance.database = database;
     unawaited(instance.initialize());
@@ -76,6 +80,31 @@ abstract base class BaseDownloader {
   /// desktop or native
   @mustCallSuper
   Future<void> initialize() => _storage.initialize();
+
+  /// Configures the downloader
+  ///
+  /// Configuration is either a single config or a list of configs.
+  /// Each config is a String, or a (String, ...) where the String is the config
+  /// type and ... can be any appropriate parameter.
+  /// [globalConfig] is routed to every platform, whereas the platform specific
+  /// ones only get routed to that platform, after the global configs have
+  /// completed.
+  ///
+  /// Returns a list of (String, String) which is the config type and a response
+  /// which is empty if OK.
+  Future<List<(String, String)>> configure(
+      {dynamic globalConfig,
+      dynamic androidConfig,
+      dynamic iOSConfig,
+      dynamic desktopConfig});
+
+  /// Combines the [globalConfig] and [platformConfig] into a single iterator
+  Iterable<dynamic> configIterator(
+      dynamic globalConfig, dynamic platformConfig) {
+    final global = globalConfig is List ? globalConfig : [globalConfig];
+    final platform = platformConfig is List ? platformConfig : [platformConfig];
+    return [...global, ...platform];
+  }
 
   /// Retrieve data that was stored locally because it could not be
   /// delivered to the downloader

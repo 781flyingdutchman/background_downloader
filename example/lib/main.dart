@@ -52,6 +52,8 @@ class _MyAppState extends State<MyApp> {
     // Configure the downloader by registering a callback and configuring
     // notifications
     FileDownloader()
+        .configure(androidConfig: ('runInForegroundIfFileLargerThan', 10)).then((value) => print(value));
+    FileDownloader()
         .registerCallbacks(
             taskNotificationTapCallback: myNotificationTapCallback)
         .configureNotificationForGroup(FileDownloader.defaultGroup,

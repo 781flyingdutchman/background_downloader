@@ -40,6 +40,22 @@ final class DesktopDownloader extends BaseDownloader {
   DesktopDownloader._internal();
 
   @override
+  Future<List<(String, String)>> configure(
+      {dynamic globalConfig,
+        dynamic androidConfig,
+        dynamic iOSConfig,
+        dynamic desktopConfig}) async {
+    final result = <(String, String)>[];
+    for (final config in configIterator(globalConfig, desktopConfig)) {
+      switch (config) {
+        default:
+          _log.fine('Config $config not recognized -> ignored');
+      }
+    }
+    return result;
+  }
+
+  @override
   Future<bool> enqueue(Task task,
       [TaskNotificationConfig? notificationConfig]) async {
     try {

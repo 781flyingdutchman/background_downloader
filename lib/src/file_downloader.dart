@@ -79,6 +79,30 @@ interface class FileDownloader {
   /// not have a registered callback
   Stream<TaskUpdate> get updates => _downloader.updates.stream;
 
+  //TODO Add list of configs
+
+  /// Configures the downloader
+  ///
+  /// Configuration is either a single config or a list of configs.
+  /// Each config is a String, or a (String, ...) where the String is the config
+  /// type and ... can be any appropriate parameter.
+  /// [globalConfig] is routed to every platform, whereas the platform specific
+  /// ones only get routed to that platform, after the global configs have
+  /// completed.
+  ///
+  /// Returns a list of (String, String) which is the config type and a response
+  /// which is empty if OK.
+  Future<List<(String, String)>> configure(
+          {dynamic globalConfig,
+          dynamic androidConfig,
+          dynamic iOSConfig,
+          dynamic desktopConfig}) =>
+      _downloader.configure(
+          globalConfig: globalConfig,
+          androidConfig: androidConfig,
+          iOSConfig: iOSConfig,
+          desktopConfig: desktopConfig);
+
   /// Register status or progress callbacks to monitor download progress, and
   /// [TaskNotificationTapCallback] to respond to user tapping a notification.
   ///

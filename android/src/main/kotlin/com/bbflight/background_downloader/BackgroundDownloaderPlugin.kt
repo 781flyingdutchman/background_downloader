@@ -73,6 +73,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         var requestingNotificationPermission = false
         var externalStoragePermissionCompleter = CompletableFuture<Boolean>()
         var localResumeData = HashMap<String, ResumeData>()
+        var runInForegroundFileSize: Int = -1  // in MB, negative means never
 
         /**
          * Enqueue a WorkManager task based on the provided parameters
@@ -303,6 +304,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
                     call, result
                 )
+                "foregroundFileSize" -> methodForegroundFileSize(call, result)
 
                 else -> result.notImplemented()
             }
@@ -596,6 +598,12 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         result.success(null)
     }
 
+    private fun methodForegroundFileSize(call: MethodCall, result: Result) {
+        runInForegroundFileSize = call.arguments as Int
+        Log.v(TAG, "Set foreground file size threshold to ${runInForegroundFileSize} MB")
+        result.success(null)
+    }
+
     // ActivityAware implementation to capture Activity context needed for permissions and intents
 
     /**
@@ -657,6 +665,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         attach(binding)
+        handleIntent(binding.activity.intent)
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
@@ -683,7 +692,6 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         binding.addOnNewIntentListener(fun(intent: Intent?): Boolean {
             return handleIntent(intent)
         })
-        handleIntent(binding.activity.intent)
     }
 
     /**
