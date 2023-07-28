@@ -104,6 +104,10 @@ class FileDownloader {
     if (taskNotificationTapCallback != null) {
       _downloader.groupNotificationTapCallbacks[group] =
           taskNotificationTapCallback;
+      if (group == defaultGroup) {
+        _downloader.groupNotificationTapCallbacks[awaitGroup] =
+            taskNotificationTapCallback;
+      }
     }
     return this;
   }
