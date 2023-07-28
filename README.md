@@ -472,6 +472,8 @@ void myNotificationTapCallback(Task task, NotificationType notificationType) {
 }
 ```
 
+Note that convenience methods that `await` a result, such as `download` (but not `enqueue`), use the default `taskNotificationTapCallback` you register, even though those tasks are in the `awaitGroup`, because that behavior is more in line with expectations. If you need a separate callback for the `awaitGroup`, then set it _after_ setting the default callback. You set the default callback by omitting the `group` parameter in the `registerCallbacks` call.
+
 ### Opening a downloaded file
 
 To open a file (e.g. in response to the user tapping a notification), call `FileDownloader().openFile` and supply either a `Task` or a full `filePath` (but not both) and optionally a `mimeType` to assist the Platform in choosing the right application to use to open the file.
@@ -619,7 +621,7 @@ The methods `registerCallBacks`, `unregisterCallBacks`, `reset`, `allTaskIds`, `
 
 If you listen to the `updates` stream instead of using callbacks, you can test for the task's `group` field in your listener, and process the update differently for different groups.
 
-Note: tasks that are started using `download`, `upload`, `batchDownload` or `batchUpload` are assigned a special group name `FileDownloader.awaitGroup`, as callbacks for these tasks are handled within the `FileDownloader`.
+Note: tasks that are started using `download`, `upload`, `batchDownload` or `batchUpload` (where you `await` a result instead of `enqueue`ing a task) are assigned a special group name `FileDownloader.awaitGroup`, as callbacks for these tasks are handled within the `FileDownloader`, and will therefore not show up in your listener or callback.
 
 
 

@@ -98,6 +98,8 @@ interface class FileDownloader {
   /// Different callbacks can be set for different groups, and the group
   /// can be passed on with the [Task] to ensure the
   /// appropriate callbacks are called for that group.
+  /// For the `taskNotificationTapCallback` callback, the `defaultGroup` callback
+  /// is used when calling 'convenience' functions like `FileDownloader().download`
   ///
   /// The call returns the [FileDownloader] to make chaining easier
   FileDownloader registerCallbacks(

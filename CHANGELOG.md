@@ -1,3 +1,7 @@
+## 7.8.1
+
+Bug fix for `taskNotificationTapCallback`: convenience methods that `await` a result, such as `download` (but not `enqueue`), now use the default `taskNotificationTapCallback`, even though those tasks are in the `awaitGroup`, because that behavior is more in line with expectations. If you need a separate callback for the `awaitGroup`, then set it _after_ setting the default callback. You set the default callback by omitting the `group` parameter in the `registerCallbacks` call.
+
 ## 7.8.0
 
 Added field `responseBody` to `TaskStatusUpdate` that, if not null, contains the server response for uploads, and for downloads that are not complete (e.g. `.notFound`). In those instances, the server response may contain useful information (e.g. a url where the uploaded file can be found, or the reason for the 'not found' status as provided by the server)
