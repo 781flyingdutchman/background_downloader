@@ -309,7 +309,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 "configForegroundFileSize" -> methodConfigForegroundFileSize(call, result)
                 "configProxyAddress" -> methodConfigProxyAddress(call, result)
                 "configProxyPort" -> methodConfigProxyPort(call, result)
-                "configRequestTimeout" -> methodConfigRequestTimeout(call, result) //TODO test
+                "configRequestTimeout" -> methodConfigRequestTimeout(call, result)
                 "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
                     call, result
                 )
