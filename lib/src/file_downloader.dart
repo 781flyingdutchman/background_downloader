@@ -79,19 +79,23 @@ interface class FileDownloader {
   /// not have a registered callback
   Stream<TaskUpdate> get updates => _downloader.updates.stream;
 
-  //TODO Add list of configs
-
   /// Configures the downloader
   ///
-  /// Configuration is either a single config or a list of configs.
-  /// Each config is a String, or a (String, ...) where the String is the config
-  /// type and ... can be any appropriate parameter.
+  /// Configuration is either a single configItem or a list of configItems.
+  /// Each configItem is a (String, dynamic) where the String is the config
+  /// type and 'dynamic' can be any appropriate parameter, including another Record.
   /// [globalConfig] is routed to every platform, whereas the platform specific
   /// ones only get routed to that platform, after the global configs have
   /// completed.
+  /// If a config type appears more than once, they will all be executed in order,
+  /// with [globalConfig] executed before the platform-specific config.
   ///
   /// Returns a list of (String, String) which is the config type and a response
-  /// which is empty if OK.
+  /// which is empty if OK, 'not implemented' if the item could not be recognized and
+  /// processed, or may contain other error/warning information
+  ///
+  /// Please see [CONFIG.md](https://github.com/781flyingdutchman/background_downloader/blob/main/CONFIG.md)
+  /// for more information
   Future<List<(String, String)>> configure(
           {dynamic globalConfig,
           dynamic androidConfig,

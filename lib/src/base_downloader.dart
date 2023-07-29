@@ -93,8 +93,8 @@ abstract base class BaseDownloader {
   /// with [globalConfig] executed before the platform-specific config.
   ///
   /// Returns a list of (String, String) which is the config type and a response
-  /// which is empty if OK, 'ignored' if the item could not be recognized and
-  /// processed
+  /// which is empty if OK, 'not implemented' if the item could not be recognized and
+  /// processed, or may contain other error/warning information
   Future<List<(String, String)>> configure(
       {dynamic globalConfig,
       dynamic androidConfig,

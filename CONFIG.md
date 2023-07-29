@@ -16,3 +16,7 @@ The following configurations are supported:
   - `('runInForegroundIfFileLargerThan', int fileSize)` activates foreground mode for downloads/uploads that exceed this file size, expressed in MB
 * Localization
   - `'localize', Map<String, String> translation` localizes the words 'Cancel', 'Pause' and 'Resume' presented as a map
+
+On Android and iOS, configuration is stored in native 'shared preferences' to ensure that background tasks have access to the configuration. This means that configuration persists across application restarts, and this can lead to some surprising results. For example, if during testing you set a proxy and then remove that configuration line, the proxy configuration is not removed from persistent storage on your test device. You need to explicitly set `('proxy', false)` to remove the stored configuration on that device. 
+
+A configuration can be called multiple times, and affects all tasks *running* after the configuration call. Tasks enqueued _before_ a call, that run _after_ the call (e.g. because they are waiting for other downloads to complete) will run under the newly set configuration, not the one that was active when they were enqueued.
