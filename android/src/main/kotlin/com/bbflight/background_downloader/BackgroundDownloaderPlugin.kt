@@ -58,6 +58,9 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         const val keyProgressUpdateMap = "com.bbflight.background_downloader.progressUpdateMap"
         const val keyConfigForegroundFileSize =
             "com.bbflight.background_downloader.config.foregroundFileSize"
+        const val keyConfigProxyAddress = "com.bbflight.background_downloader.config.proxyAddress"
+        const val keyConfigProxyPort = "com.bbflight.background_downloader.config.proxyPort"
+        const val keyConfigRequestTimeout = "com.bbflight.background_downloader.config.requestTimeout"
         const val notificationChannel = "background_downloader"
         const val notificationPermissionRequestCode = 373921
         const val externalStoragePermissionRequestCode = 373922
@@ -75,6 +78,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         var requestingNotificationPermission = false
         var externalStoragePermissionCompleter = CompletableFuture<Boolean>()
         var localResumeData = HashMap<String, ResumeData>()
+        var haveLoggedProxyMessage = false
 
         /**
          * Enqueue a WorkManager task based on the provided parameters
@@ -302,7 +306,10 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 "moveToSharedStorage" -> methodMoveToSharedStorage(call, result)
                 "pathInSharedStorage" -> methodPathInSharedStorage(call, result)
                 "openFile" -> methodOpenFile(call, result)
-                "foregroundFileSize" -> methodForegroundFileSize(call, result)
+                "configForegroundFileSize" -> methodConfigForegroundFileSize(call, result)
+                "configProxyAddress" -> methodConfigProxyAddress(call, result)
+                "configProxyPort" -> methodConfigProxyPort(call, result)
+                "configRequestTimeout" -> methodConfigRequestTimeout(call, result) //TODO test
                 "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
                     call, result
                 )
@@ -596,15 +603,68 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
      * The value is in MB, or -1 to disable foreground always, and
      * is retrieved in [TaskWorker.doWork]
      */
-    private fun methodForegroundFileSize(call: MethodCall, result: Result) {
+    private fun methodConfigForegroundFileSize(call: MethodCall, result: Result) {
+        val fileSize = call.arguments as Int
         PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
-            putInt(keyConfigForegroundFileSize, call.arguments as Int)
+            putInt(keyConfigForegroundFileSize, fileSize)
             apply()
         }
-        Log.v(TAG, "Set foreground file size threshold to ${call.arguments as Int} MB")
+        val msg = when (fileSize) {
+            0 ->  "Enabled foreground mode for all tasks"
+            -1 -> "Disabled foreground mode for all tasks"
+            else -> "Set foreground file size threshold to $fileSize MB"
+        }
+        Log.v(TAG, msg)
         result.success(null)
     }
 
+    /**
+     * Store the proxy address config in shared preferences
+     */
+    private fun methodConfigProxyAddress(call: MethodCall, result: Result) {
+        PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
+            val address = call.arguments as String?
+            if (address != null) {
+                putString(keyConfigProxyAddress, address)
+            } else {
+                remove(keyConfigProxyAddress)
+            }
+            apply()
+        }
+        result.success(null)
+    }
+
+    /**
+     * Store the proxy port config in shared preferences
+     */
+    private fun methodConfigProxyPort(call: MethodCall, result: Result) {
+        PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
+            val port = call.arguments as Int?
+            if (port != null) {
+                putInt(keyConfigProxyPort, port)
+            } else {
+                remove(keyConfigProxyPort)
+            }
+            apply()
+        }
+        result.success(null)
+    }
+
+    /**
+     * Store the requestTimeout  config in shared preferences
+     */
+    private fun methodConfigRequestTimeout(call: MethodCall, result: Result) {
+        PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
+            val timeoutSeconds = call.arguments as Int?
+            if (timeoutSeconds != null) {
+                putInt(keyConfigRequestTimeout, timeoutSeconds)
+            } else {
+                remove(keyConfigRequestTimeout)
+            }
+            apply()
+        }
+        result.success(null)
+    }
 
     /**
      * Sets or resets flag to force failing posting on background channel

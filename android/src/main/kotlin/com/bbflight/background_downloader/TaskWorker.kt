@@ -29,6 +29,8 @@ import kotlinx.coroutines.*
 import java.io.*
 import java.lang.System.currentTimeMillis
 import java.net.HttpURLConnection
+import java.net.InetSocketAddress
+import java.net.Proxy
 import java.net.SocketException
 import java.net.URL
 import java.nio.channels.FileChannel
@@ -405,7 +407,8 @@ class TaskWorker(
      */
     override suspend fun doWork(): Result {
         prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
-        runInForegroundFileSize = prefs.getInt(BackgroundDownloaderPlugin.keyConfigForegroundFileSize, -1)
+        runInForegroundFileSize =
+            prefs.getInt(BackgroundDownloaderPlugin.keyConfigForegroundFileSize, -1)
         withContext(Dispatchers.IO) {
             Timer().schedule(taskTimeoutMillis) {
                 isTimedOut // triggers .failed in [TransferBytes] method if not runInForeground
@@ -488,10 +491,28 @@ class TaskWorker(
         try {
             val urlString = task.url
             val url = URL(urlString)
+            val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
+            val requestTimeoutSeconds =
+                prefs.getInt(BackgroundDownloaderPlugin.keyConfigRequestTimeout, 60)
+            val proxyAddress =
+                prefs.getString(BackgroundDownloaderPlugin.keyConfigProxyAddress, null)
+            val proxyPort = prefs.getInt(BackgroundDownloaderPlugin.keyConfigProxyPort, 0)
+            val proxy = if (proxyAddress != null && proxyPort != 0) Proxy(
+                Proxy.Type.HTTP,
+                InetSocketAddress(proxyAddress, proxyPort)
+            ) else null
+            if (!BackgroundDownloaderPlugin.haveLoggedProxyMessage) {
+                Log.i(
+                    TAG,
+                    if (proxy == null) "Not using proxy for any task"
+                    else "Using proxy $proxyAddress:$proxyPort for all tasks"
+                )
+                BackgroundDownloaderPlugin.haveLoggedProxyMessage = true
+            }
             with(withContext(Dispatchers.IO) {
-                url.openConnection()
+                url.openConnection(proxy ?: Proxy.NO_PROXY)
             } as HttpURLConnection) {
-                instanceFollowRedirects = true
+                connectTimeout = requestTimeoutSeconds * 1000
                 for (header in task.headers) {
                     setRequestProperty(header.key, header.value)
                 }

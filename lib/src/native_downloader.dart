@@ -255,13 +255,27 @@ final class AndroidDownloader extends NativeDownloader {
     final result = <(String, String)>[];
       for (final config in configIterator(globalConfig, androidConfig)) {
         switch (config) {
-          case ('runInForeground', bool flag):
-            await NativeDownloader.methodChannel.invokeMethod('foregroundFileSize', flag ? 0 : -1);
+          case ('runInForeground', bool activate):
+            await NativeDownloader.methodChannel.invokeMethod('configForegroundFileSize', activate ? 0 : -1);
             result.add(('runInForeground', ''));
 
           case ('runInForegroundIfFileLargerThan', int fileSize):
-            await NativeDownloader.methodChannel.invokeMethod('foregroundFileSize', fileSize);
+            await NativeDownloader.methodChannel.invokeMethod('configForegroundFileSize', fileSize);
             result.add(('runInForegroundIfFileLargerThan', ''));
+
+          case ('requestTimeout', Duration? duration):
+            await NativeDownloader.methodChannel.invokeMethod('configRequestTimeout', duration?.inSeconds);
+            result.add(('requestTimeout', ''));
+
+          case ('proxy', String address, int port):
+            await NativeDownloader.methodChannel.invokeMethod('configProxyAddress', address);
+            await NativeDownloader.methodChannel.invokeMethod('configProxyPort', port);
+            result.add(('proxy', ''));
+
+          case ("proxy", false):
+            await NativeDownloader.methodChannel.invokeMethod('configProxyAddress', null);
+            await NativeDownloader.methodChannel.invokeMethod('configProxyPort', null);
+            result.add(('proxy', ''));
 
           default:
             log.fine('Config $config not recognized -> ignored');
@@ -289,6 +303,31 @@ final class IOSDownloader extends NativeDownloader {
     final result = <(String, String)>[];
     for (final config in configIterator(globalConfig, iOSConfig)) {
       switch (config) {
+        case ('resourceTimeout', Duration? duration):
+          await NativeDownloader.methodChannel.invokeMethod('configResourceTimeout', duration?.inSeconds);
+          result.add(('resourceTimeout', ''));
+
+        case ('requestTimeout', Duration? duration):
+          await NativeDownloader.methodChannel.invokeMethod('configRequestTimeout', duration?.inSeconds);
+          result.add(('requestTimeout', ''));
+
+        case ('proxy', String address, int port):
+          await NativeDownloader.methodChannel.invokeMethod('configProxyAddress', address);
+          await NativeDownloader.methodChannel.invokeMethod('configProxyPort', port);
+          result.add(('proxy', ''));
+
+        case ("proxy", false):
+          await NativeDownloader.methodChannel.invokeMethod('configProxyAddress', null);
+          await NativeDownloader.methodChannel.invokeMethod('configProxyPort', null);
+          result.add(('proxy', ''));
+
+
+        case ("localize", Map<String, String>? translation):
+          await NativeDownloader.methodChannel.invokeMethod('configLocalize', translation);
+          result.add(('localize', ''));
+
+        case null:
+          break;
 
         default:
           log.fine('Config $config not recognized -> ignored');

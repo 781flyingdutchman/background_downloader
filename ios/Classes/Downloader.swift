@@ -10,13 +10,20 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     
     static let instance = Downloader()
     
-    private static var resourceTimeout = 4 * 60 * 60.0 // in seconds
+    private static var defaultResourceTimeout = 4 * 60 * 60.0 // in seconds
+    private static var defaultRequestTimeout = 60.0 // in seconds
     public static var sessionIdentifier = "com.bbflight.background_downloader.Downloader"
     public static var flutterPluginRegistrantCallback: FlutterPluginRegistrantCallback?
     public static var backgroundChannel: FlutterMethodChannel?
     public static var keyResumeDataMap = "com.bbflight.background_downloader.resumeDataMap"
     public static var keyStatusUpdateMap = "com.bbflight.background_downloader.statusUpdateMap"
     public static var keyProgressUpdateMap = "com.bbflight.background_downloader.progressUpdateMap"
+    public static var keyConfigLocalize = "com.bbflight.background_downloader.config.localize"
+    public static var keyConfigResourceTimeout = "com.bbflight.background_downloader.config.resourceTimeout"
+    public static var keyConfigRequestTimeout = "com.bbflight.background_downloader.config.requestTimeout"
+    public static var keyConfigProxyAdress = "com.bbflight.background_downloader.config.proxyAddress"
+    public static var keyConfigProxyPort = "com.bbflight.background_downloader.config.proxyPort"
+
     
     public static var forceFailPostOnBackgroundChannel = false
     private static var backgroundCompletionHandler: (() -> Void)?
@@ -25,6 +32,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     static var nextProgressUpdateTime = [String:Date]()
     static var uploaderForUrlSessionTaskIdentifier = [Int:Uploader]() // maps from UrlSessionTask TaskIdentifier
     static var haveNotificationPermission: Bool?
+    static var haveregisteredNotificationCategories = false
     static var taskIdsThatCanResume = Set<String>() // taskIds that can resume
     static var localResumeData = [String : String]() // locally stored to enable notification resume
     static var responseBodyData = [String: [Data]]() // list of Data objects received for this UploadTask id
@@ -38,7 +46,6 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         backgroundChannel = FlutterMethodChannel(name: "com.bbflight.background_downloader.background", binaryMessenger: registrar.messenger())
         registrar.addMethodCallDelegate(instance, channel: channel)
         registrar.addApplicationDelegate(instance)
-        registerNotificationCategories()
     }
     
     @objc
@@ -83,6 +90,16 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             methodPathInSharedStorage(call: call, result: result)
         case "openFile":
             methodOpenFile(call: call, result: result)
+        case "configLocalize":
+            methodStoreConfig(key: Downloader.keyConfigLocalize, value: call.arguments, result: result)
+        case "configResourceTimeout":
+            methodStoreConfig(key: Downloader.keyConfigResourceTimeout, value: call.arguments, result: result)
+        case "configRequestTimeout":
+            methodStoreConfig(key: Downloader.keyConfigRequestTimeout, value: call.arguments, result: result)
+        case "configProxyAddress":
+            methodStoreConfig(key: Downloader.keyConfigProxyAdress, value: call.arguments, result: result)
+        case "configProxyPort":
+            methodStoreConfig(key: Downloader.keyConfigProxyPort, value: call.arguments, result: result)
         case "forceFailPostOnBackgroundChannel":
             methodForceFailPostOnBackgroundChannel(call: call, result: result)
         default:
@@ -367,6 +384,19 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         success = doOpenFile(filePath: filePath!, mimeType: mimeType)
     }
     
+    /// Store or remove a configuration in shared preferences
+    ///
+    /// If the value is nil, the configuration is removed
+    private func methodStoreConfig(key: String, value: Any?, result: @escaping FlutterResult) {
+        let defaults = UserDefaults.standard
+        if value != nil {
+            defaults.set(value, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+        result(nil)
+    }
+    
     
     
     /// Sets or resets flag to force failing posting on background channel
@@ -447,6 +477,11 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         Downloader.responseBodyData.removeValue(forKey: task.taskId)
         Downloader.taskIdsThatCanResume.remove(task.taskId)
         guard error == nil else {
+            if (error! as NSError).code == NSURLErrorTimedOut {
+                os_log("Task with id %@ timed out", log: log, type: .info, task.taskId)
+                processStatusUpdate(task: task, status: .failed)
+                return
+            }
             let userInfo = (error! as NSError).userInfo
             if let resumeData = userInfo[NSURLSessionDownloadTaskResumeData] as? Data {
                 if processResumeData(task: task, resumeData: resumeData) {
@@ -751,12 +786,34 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     //MARK: helper methods
     
     /// Creates a urlSession
+    ///
+    /// Configues defaultResourceTimeout, defaultRequestTimeout and proxy based on configuration parameters,
+    /// or defaults
     private func createUrlSession() -> URLSession {
         if Downloader.urlSession != nil {
             os_log("createUrlSession called with non-null urlSession", log: log, type: .info)
         }
         let config = URLSessionConfiguration.background(withIdentifier: Downloader.sessionIdentifier)
-        config.timeoutIntervalForResource = Downloader.resourceTimeout
+        let defaults = UserDefaults.standard
+        let storedTimeoutIntervalForResource = defaults.double(forKey: Downloader.keyConfigResourceTimeout) // seconds
+        let timeOutIntervalForResource = storedTimeoutIntervalForResource > 0 ? storedTimeoutIntervalForResource : Downloader.defaultResourceTimeout
+        config.timeoutIntervalForResource = timeOutIntervalForResource
+        let storedTimeoutIntervalForRequest = defaults.double(forKey: Downloader.keyConfigRequestTimeout) // seconds
+        let timeoutIntervalForRequest = storedTimeoutIntervalForRequest > 0 ? storedTimeoutIntervalForRequest : Downloader.defaultRequestTimeout
+        config.timeoutIntervalForRequest = timeoutIntervalForRequest
+        let proxyAddress = defaults.string(forKey: Downloader.keyConfigProxyAdress)
+        let proxyPort = defaults.integer(forKey: Downloader.keyConfigProxyPort)
+        if (proxyAddress != nil && proxyPort != 0) {
+            config.connectionProxyDictionary = [
+                kCFNetworkProxiesHTTPEnable: true,
+                kCFNetworkProxiesHTTPProxy: proxyAddress!,
+                kCFNetworkProxiesHTTPPort: proxyPort,
+                "HTTPSEnable": true,
+                "HTTPSProxy": proxyAddress!,
+                "HTTPSPort": proxyPort
+            ]
+            os_log("proxy=%@:%d", log: log, type: .info, proxyAddress!, proxyPort)
+        }
         return URLSession(configuration: config, delegate: Downloader.instance, delegateQueue: nil)
     }
     
