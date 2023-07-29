@@ -56,6 +56,8 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         const val keyResumeDataMap = "com.bbflight.background_downloader.resumeDataMap"
         const val keyStatusUpdateMap = "com.bbflight.background_downloader.statusUpdateMap"
         const val keyProgressUpdateMap = "com.bbflight.background_downloader.progressUpdateMap"
+        const val keyConfigForegroundFileSize =
+            "com.bbflight.background_downloader.config.foregroundFileSize"
         const val notificationChannel = "background_downloader"
         const val notificationPermissionRequestCode = 373921
         const val externalStoragePermissionRequestCode = 373922
@@ -73,7 +75,6 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         var requestingNotificationPermission = false
         var externalStoragePermissionCompleter = CompletableFuture<Boolean>()
         var localResumeData = HashMap<String, ResumeData>()
-        var runInForegroundFileSize: Int = -1  // in MB, negative means never
 
         /**
          * Enqueue a WorkManager task based on the provided parameters
@@ -301,10 +302,10 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 "moveToSharedStorage" -> methodMoveToSharedStorage(call, result)
                 "pathInSharedStorage" -> methodPathInSharedStorage(call, result)
                 "openFile" -> methodOpenFile(call, result)
+                "foregroundFileSize" -> methodForegroundFileSize(call, result)
                 "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
                     call, result
                 )
-                "foregroundFileSize" -> methodForegroundFileSize(call, result)
 
                 else -> result.notImplemented()
             }
@@ -588,6 +589,23 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         result.success(TaskWorker.taskTimeoutMillis)
     }
 
+
+    /**
+     * Store foregroundFileSize in shared preferences
+     *
+     * The value is in MB, or -1 to disable foreground always, and
+     * is retrieved in [TaskWorker.doWork]
+     */
+    private fun methodForegroundFileSize(call: MethodCall, result: Result) {
+        PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
+            putInt(keyConfigForegroundFileSize, call.arguments as Int)
+            apply()
+        }
+        Log.v(TAG, "Set foreground file size threshold to ${call.arguments as Int} MB")
+        result.success(null)
+    }
+
+
     /**
      * Sets or resets flag to force failing posting on background channel
      *
@@ -595,12 +613,6 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
      */
     private fun methodForceFailPostOnBackgroundChannel(call: MethodCall, result: Result) {
         forceFailPostOnBackgroundChannel = call.arguments as Boolean
-        result.success(null)
-    }
-
-    private fun methodForegroundFileSize(call: MethodCall, result: Result) {
-        runInForegroundFileSize = call.arguments as Int
-        Log.v(TAG, "Set foreground file size threshold to ${runInForegroundFileSize} MB")
         result.success(null)
     }
 

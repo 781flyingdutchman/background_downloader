@@ -4,7 +4,6 @@ package com.bbflight.background_downloader
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -395,6 +394,7 @@ class TaskWorker(
 
     private var taskException: TaskException? = null
     private var responseBody: String? = null
+    private var runInForegroundFileSize: Int = -1
     private var canRunInForeground = false
     private var runInForeground = false
 
@@ -405,9 +405,10 @@ class TaskWorker(
      */
     override suspend fun doWork(): Result {
         prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
+        runInForegroundFileSize = prefs.getInt(BackgroundDownloaderPlugin.keyConfigForegroundFileSize, -1)
         withContext(Dispatchers.IO) {
             Timer().schedule(taskTimeoutMillis) {
-                isTimedOut = !runInForeground // only timout if not running in foreground
+                isTimedOut // triggers .failed in [TransferBytes] method if not runInForeground
             }
             val gson = Gson()
             val taskJsonMapString = inputData.getString(keyTask)
@@ -419,9 +420,8 @@ class TaskWorker(
                 if (notificationConfigJsonString != null) BackgroundDownloaderPlugin.gson.fromJson(
                     notificationConfigJsonString, NotificationConfig::class.java
                 ) else null
-            canRunInForeground = BackgroundDownloaderPlugin.runInForegroundFileSize >= 0 &&
-                    notificationConfig?.running != null // notification requirement
-            Log.v(TAG, "RunInForeground = $runInForeground")
+            canRunInForeground = runInForegroundFileSize >= 0 &&
+                    notificationConfig?.running != null // must have notification
             // pre-process resume
             val requiredStartByte = inputData.getLong(keyStartByte, 0)
             var isResume = requiredStartByte != 0L
@@ -596,8 +596,7 @@ class TaskWorker(
             }
             val tempFile = File(tempFilePath)
             val contentLength = connection.contentLengthLong
-            runInForeground =
-                canRunInForeground && contentLength > BackgroundDownloaderPlugin.runInForegroundFileSize * (1 shl 20)
+            determineRunInForeground(task, contentLength)
             val transferBytesResult: TaskStatus
             BufferedInputStream(connection.inputStream).use { inputStream ->
                 FileOutputStream(tempFile, isResume).use { outputStream ->
@@ -809,8 +808,7 @@ class TaskWorker(
             )
             return TaskStatus.failed
         }
-        runInForeground =
-            canRunInForeground && fileSize > BackgroundDownloaderPlugin.runInForegroundFileSize * (1 shl 20)
+        determineRunInForeground(task, fileSize)
         // binary file upload posts file bytes directly
         // set Content-Type based on file extension
         Log.d(TAG, "Binary upload for taskId ${task.taskId}")
@@ -892,8 +890,7 @@ class TaskWorker(
                     fileLengths.sum() + separator.length * contentDispositionStrings.size + 2
         val contentLength =
             lengthInBytes(fieldsString) + "--$boundary$lineFeed".length + fileDataLength
-        runInForeground =
-            canRunInForeground && contentLength > BackgroundDownloaderPlugin.runInForegroundFileSize * (1 shl 20)
+        determineRunInForeground(task, contentLength)
         // setup the connection
         connection.setRequestProperty("Accept-Charset", "UTF-8")
         connection.setRequestProperty("Connection", "Keep-Alive")
@@ -996,7 +993,7 @@ class TaskWorker(
                             doneCompleter.complete(TaskStatus.paused)
                             break
                         }
-                        if (isTimedOut) {
+                        if (isTimedOut && !runInForeground) {
                             doneCompleter.complete(
                                 TaskStatus.enqueued
                             ) // special use of this status, see [processDownload]
@@ -1194,10 +1191,13 @@ class TaskWorker(
             val androidNotification = builder.build()
             if (runInForeground) {
                 if (notificationType == NotificationType.running) {
-                    Log.v(TAG, "foreground")
+                    Log.v(TAG, "foreground running notification")
                     setForeground(ForegroundInfo(notificationId, androidNotification))
                 } else {
-                    Log.v(TAG, "Foreground not running")
+                    // to prevent the 'not running' notification getting killed as the foreground
+                    // process is terminated, this notification is shown regularly, but with
+                    // a delay
+                    Log.v(TAG, "Foreground not running notification")
                     CoroutineScope(Dispatchers.Main).launch {
                         delay(200)
                         Log.v(TAG, "Foreground not running notify")
@@ -1205,7 +1205,7 @@ class TaskWorker(
                     }
                 }
             } else {
-                Log.v(TAG, "Not foreground")
+                Log.v(TAG, "Regular notification (not foreground)")
                 notify(notificationId, androidNotification)
             }
         }
@@ -1378,6 +1378,18 @@ class TaskWorker(
         }
     }
 
+    /**
+     * Determine if this task should run in the foreground
+     *
+     * Based on [canRunInForeground] and [contentLength] > [runInForegroundFileSize]
+     */
+    private fun determineRunInForeground(task: Task, contentLength: Long) {
+        runInForeground =
+            canRunInForeground && contentLength > runInForegroundFileSize * (1 shl 20)
+        if (runInForeground) {
+            Log.i(TAG, "TaskId ${task.taskId} will run in foreground")
+        }
+    }
 
     private fun deleteTempFile(tempFilePath: String) {
         if (tempFilePath.isNotEmpty()) {
