@@ -28,21 +28,25 @@ String? _responseBody;
 /// The first message sent back is a [ReceivePort] that is the command port
 /// for the isolate. The first command must be the arguments: task and filePath.
 /// Any subsequent commands can only be 'cancel' or 'pause'.
-Future<void> doTask(List<Object?> isolateArguments) async {
-  final rootIsolateToken = isolateArguments[0] as RootIsolateToken;
+Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
+  final (rootIsolateToken, sendPort) = isolateArguments;
   BackgroundIsolateBinaryMessenger.ensureInitialized(rootIsolateToken);
-  final sendPort = isolateArguments[1] as SendPort;
   final commandPort = ReceivePort();
   // send the command port back to the main Isolate
   sendPort.send(commandPort.sendPort);
   final messagesToIsolate = StreamQueue<dynamic>(commandPort);
   // get the arguments list and parse each argument
-  final args = await messagesToIsolate.next as List<dynamic>;
-  final task = args[0] as Task;
-  final filePath = args[1] as String;
-  final tempFilePath = args[2] as String;
-  final requiredStartByte = args[3] as int;
-  final isResume = args[4] as bool;
+  final (
+    Task task,
+    String filePath,
+    String tempFilePath,
+    int requiredStartByte,
+    bool isResume,
+    Duration? requestTimeout,
+    Map<String, dynamic> proxy
+  ) = await messagesToIsolate.next;
+  DesktopDownloader.requestTimeout = requestTimeout;
+  DesktopDownloader.proxy = proxy;
   Logger.root.level = Level.ALL;
   Logger.root.onRecord.listen((LogRecord rec) {
     if (kDebugMode) {

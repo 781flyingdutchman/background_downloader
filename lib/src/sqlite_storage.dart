@@ -350,7 +350,7 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
       {isRetry = false}) async {
     // Note: the order of directories matters, as some directories are
     // subdirectories of others, so they need to be tested first
-    final directories = Platform.isIOS
+    final directories = Platform.isIOS //TODO make sure these maps are ordered
         ? {
             tempDir: BaseDirectory.temporary,
             supportDir: BaseDirectory.applicationSupport,

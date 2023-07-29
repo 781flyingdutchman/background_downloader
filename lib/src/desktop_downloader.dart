@@ -7,6 +7,7 @@ import 'dart:math';
 import 'package:async/async.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
@@ -33,27 +34,13 @@ final class DesktopDownloader extends BaseDownloader {
   final _resume = <Task>{};
   final _isolateSendPorts =
       <Task, SendPort?>{}; // isolate SendPort for running task
-  static final httpClient = http.Client();
+  static var httpClient = http.Client();
+  static Duration? _requestTimeout;
+  static var _proxy = <String, dynamic>{}; // 'address' and 'port'
 
   factory DesktopDownloader() => _singleton;
 
   DesktopDownloader._internal();
-
-  @override
-  Future<List<(String, String)>> configure(
-      {dynamic globalConfig,
-        dynamic androidConfig,
-        dynamic iOSConfig,
-        dynamic desktopConfig}) async {
-    final result = <(String, String)>[];
-    for (final config in configIterator(globalConfig, desktopConfig)) {
-      switch (config) {
-        default:
-          _log.fine('Config $config not recognized -> ignored');
-      }
-    }
-    return result;
-  }
 
   @override
   Future<bool> enqueue(Task task,
@@ -112,12 +99,13 @@ final class DesktopDownloader extends BaseDownloader {
     if (rootIsolateToken == null) {
       processStatusUpdate(TaskStatusUpdate(task, TaskStatus.failed,
           TaskException('Could not obtain rootIsolateToken')));
+      return;
     }
-    await Isolate.spawn(doTask, [rootIsolateToken, receivePort.sendPort],
+    await Isolate.spawn(doTask, (rootIsolateToken, receivePort.sendPort),
         onError: errorPort.sendPort);
     final messagesFromIsolate = StreamQueue<dynamic>(receivePort);
     final sendPort = await messagesFromIsolate.next;
-    sendPort.send([task, filePath, tempFilePath, requiredStartByte, isResume]);
+    sendPort.send((task, filePath, tempFilePath, requiredStartByte, isResume, _requestTimeout, _proxy));
     if (_isolateSendPorts.keys.contains(task)) {
       // if already registered with null value, cancel immediately
       sendPort.send('cancel');
@@ -342,6 +330,63 @@ final class DesktopDownloader extends BaseDownloader {
     }
     return result.exitCode == 0;
   }
+
+  @override
+  dynamic platformConfig(
+      {dynamic globalConfig,
+        dynamic androidConfig,
+        dynamic iOSConfig,
+        dynamic desktopConfig}) => desktopConfig;
+
+  @override
+  Future<(String, String)> configureItem((String, dynamic) configItem) async {
+    switch (configItem) {
+
+      case ('requestTimeout', Duration? duration):
+        requestTimeout = duration;
+
+      case ('proxy', (String address, int port)):
+        proxy = {'address': address, 'port': port};
+
+      case ("proxy", false):
+        proxy = {};
+
+      default:
+        return (configItem.$1, 'not implemented'); // this method did not process this configItem
+    }
+    return (configItem.$1, ''); // normal result
+  }
+
+  /// Sets requestTimeout and recreates HttpClient
+  static set requestTimeout(Duration? value) {
+    _requestTimeout = value;
+    _recreateClient();
+  }
+
+  static Duration? get requestTimeout => _requestTimeout;
+
+  /// Sets proxy and recreates HttpClient
+  ///
+  /// Value must be dict containing 'address' and 'port'
+  /// or empty for no proxy
+  static set proxy(Map<String, dynamic> value) {
+    _proxy = value;
+    _recreateClient();
+  }
+
+  static Map<String, dynamic> get proxy => _proxy;
+
+  /// Recreates the [httpClient] used for Requests and isolate downloads/uploads
+  static _recreateClient() {
+    final client = HttpClient();
+    client.connectionTimeout = _requestTimeout;
+    client.findProxy = _proxy.isNotEmpty
+        ? (_) => 'PROXY ${_proxy['address']}:${_proxy['port']}'
+        : null;
+    httpClient = IOClient(client);
+    print('Recreated client with $_requestTimeout and $_proxy');
+  }
+
 
   @override
   void destroy() {

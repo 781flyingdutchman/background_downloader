@@ -64,7 +64,7 @@ abstract base class BaseDownloader {
       'android' => AndroidDownloader(),
       'ios' => IOSDownloader(),
       'macos' || 'linux' || 'windows' => DesktopDownloader(),
-      var platform =>
+      final platform =>
         throw ArgumentError('$platform is not a supported platform')
     };
     instance._storage = persistentStorage;
@@ -83,28 +83,45 @@ abstract base class BaseDownloader {
 
   /// Configures the downloader
   ///
-  /// Configuration is either a single config or a list of configs.
-  /// Each config is a String, or a (String, ...) where the String is the config
-  /// type and ... can be any appropriate parameter.
+  /// Configuration is either a single configItem or a list of configItems.
+  /// Each configItem is a (String, dynamic) where the String is the config
+  /// type and 'dynamic' can be any appropriate parameter, including another Record.
   /// [globalConfig] is routed to every platform, whereas the platform specific
   /// ones only get routed to that platform, after the global configs have
   /// completed.
+  /// If a config type appears more than once, they will all be executed in order,
+  /// with [globalConfig] executed before the platform-specific config.
   ///
   /// Returns a list of (String, String) which is the config type and a response
-  /// which is empty if OK.
+  /// which is empty if OK, 'ignored' if the item could not be recognized and
+  /// processed
   Future<List<(String, String)>> configure(
+      {dynamic globalConfig,
+      dynamic androidConfig,
+      dynamic iOSConfig,
+      dynamic desktopConfig}) async {
+    final global = globalConfig is List ? globalConfig : [globalConfig];
+    final rawPlatformConfig = platformConfig(androidConfig: androidConfig, iOSConfig: iOSConfig, desktopConfig: desktopConfig);
+    final platform =
+    rawPlatformConfig is List ? rawPlatformConfig : [rawPlatformConfig];
+    return await Future.wait([...global, ...platform]
+        .where((e) => e != null)
+        .map((e) => configureItem(e)));
+  }
+
+  /// Returns the config for the platform, e.g. the [androidConfig] parameter
+  /// on Android
+  dynamic platformConfig(
       {dynamic globalConfig,
       dynamic androidConfig,
       dynamic iOSConfig,
       dynamic desktopConfig});
 
-  /// Combines the [globalConfig] and [platformConfig] into a single iterator
-  Iterable<dynamic> configIterator(
-      dynamic globalConfig, dynamic platformConfig) {
-    final global = globalConfig is List ? globalConfig : [globalConfig];
-    final platform = platformConfig is List ? platformConfig : [platformConfig];
-    return [...global, ...platform];
-  }
+  /// Configures one [configItem] and returns the (String, String) result
+  ///
+  /// If the second element is 'ignored' then the method did not act on
+  /// the [configItem]
+  Future<(String, String)> configureItem((String, dynamic) configItem);
 
   /// Retrieve data that was stored locally because it could not be
   /// delivered to the downloader

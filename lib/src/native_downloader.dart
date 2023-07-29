@@ -91,13 +91,6 @@ abstract base class NativeDownloader extends BaseDownloader {
   }
 
   @override
-  Future<List<(String, String)>> configure(
-      {dynamic globalConfig,
-        dynamic androidConfig,
-        dynamic iOSConfig,
-        dynamic desktopConfig});
-
-  @override
   Future<bool> enqueue(Task task,
       [TaskNotificationConfig? notificationConfig]) async {
     super.enqueue(task);
@@ -235,6 +228,27 @@ abstract base class NativeDownloader extends BaseDownloader {
     ]);
     return result ?? false;
   }
+
+  @override
+  Future<(String, String)> configureItem((String, dynamic) configItem) async {
+    switch (configItem) {
+
+      case ('requestTimeout', Duration? duration):
+        await NativeDownloader.methodChannel.invokeMethod('configRequestTimeout', duration?.inSeconds);
+
+      case ('proxy', (String address, int port)):
+        await NativeDownloader.methodChannel.invokeMethod('configProxyAddress', address);
+        await NativeDownloader.methodChannel.invokeMethod('configProxyPort', port);
+
+      case ("proxy", false):
+        await NativeDownloader.methodChannel.invokeMethod('configProxyAddress', null);
+        await NativeDownloader.methodChannel.invokeMethod('configProxyPort', null);
+
+      default:
+        return (configItem.$1, 'not implemented'); // this method did not process this configItem
+    }
+  return (configItem.$1, ''); // normal result
+  }
 }
 
 /// Android native downloader
@@ -247,41 +261,29 @@ final class AndroidDownloader extends NativeDownloader {
   AndroidDownloader._internal();
 
   @override
-  Future<List<(String, String)>> configure(
+  dynamic platformConfig(
       {dynamic globalConfig,
         dynamic androidConfig,
         dynamic iOSConfig,
-        dynamic desktopConfig}) async {
-    final result = <(String, String)>[];
-      for (final config in configIterator(globalConfig, androidConfig)) {
-        switch (config) {
-          case ('runInForeground', bool activate):
-            await NativeDownloader.methodChannel.invokeMethod('configForegroundFileSize', activate ? 0 : -1);
-            result.add(('runInForeground', ''));
+        dynamic desktopConfig}) => androidConfig;
 
-          case ('runInForegroundIfFileLargerThan', int fileSize):
-            await NativeDownloader.methodChannel.invokeMethod('configForegroundFileSize', fileSize);
-            result.add(('runInForegroundIfFileLargerThan', ''));
+  @override
+  Future<(String, String)> configureItem((String, dynamic) configItem) async {
+    final superResult = await super.configureItem(configItem);
+    if (superResult.$2 != 'not implemented') {
+      return superResult;
+    }
+    switch (configItem) {
+      case ('runInForeground', bool activate):
+        await NativeDownloader.methodChannel.invokeMethod('configForegroundFileSize', activate ? 0 : -1);
 
-          case ('requestTimeout', Duration? duration):
-            await NativeDownloader.methodChannel.invokeMethod('configRequestTimeout', duration?.inSeconds);
-            result.add(('requestTimeout', ''));
+      case ('runInForegroundIfFileLargerThan', int fileSize):
+        await NativeDownloader.methodChannel.invokeMethod('configForegroundFileSize', fileSize);
 
-          case ('proxy', String address, int port):
-            await NativeDownloader.methodChannel.invokeMethod('configProxyAddress', address);
-            await NativeDownloader.methodChannel.invokeMethod('configProxyPort', port);
-            result.add(('proxy', ''));
-
-          case ("proxy", false):
-            await NativeDownloader.methodChannel.invokeMethod('configProxyAddress', null);
-            await NativeDownloader.methodChannel.invokeMethod('configProxyPort', null);
-            result.add(('proxy', ''));
-
-          default:
-            log.fine('Config $config not recognized -> ignored');
-        }
-      }
-      return result;
+      default:
+        return (configItem.$1, 'not implemented'); // this method did not process this configItem
+    }
+    return (configItem.$1, ''); // normal result
   }
 }
 
@@ -295,44 +297,29 @@ final class IOSDownloader extends NativeDownloader {
   IOSDownloader._internal();
 
   @override
-  Future<List<(String, String)>> configure(
+  dynamic platformConfig(
       {dynamic globalConfig,
         dynamic androidConfig,
         dynamic iOSConfig,
-        dynamic desktopConfig}) async {
-    final result = <(String, String)>[];
-    for (final config in configIterator(globalConfig, iOSConfig)) {
-      switch (config) {
-        case ('resourceTimeout', Duration? duration):
-          await NativeDownloader.methodChannel.invokeMethod('configResourceTimeout', duration?.inSeconds);
-          result.add(('resourceTimeout', ''));
+        dynamic desktopConfig}) => iOSConfig;
 
-        case ('requestTimeout', Duration? duration):
-          await NativeDownloader.methodChannel.invokeMethod('configRequestTimeout', duration?.inSeconds);
-          result.add(('requestTimeout', ''));
-
-        case ('proxy', String address, int port):
-          await NativeDownloader.methodChannel.invokeMethod('configProxyAddress', address);
-          await NativeDownloader.methodChannel.invokeMethod('configProxyPort', port);
-          result.add(('proxy', ''));
-
-        case ("proxy", false):
-          await NativeDownloader.methodChannel.invokeMethod('configProxyAddress', null);
-          await NativeDownloader.methodChannel.invokeMethod('configProxyPort', null);
-          result.add(('proxy', ''));
-
-
-        case ("localize", Map<String, String>? translation):
-          await NativeDownloader.methodChannel.invokeMethod('configLocalize', translation);
-          result.add(('localize', ''));
-
-        case null:
-          break;
-
-        default:
-          log.fine('Config $config not recognized -> ignored');
-      }
+  @override
+  Future<(String, String)> configureItem((String, dynamic) configItem) async {
+    final superResult = await super.configureItem(configItem);
+    if (superResult.$2 != 'not implemented') {
+      return superResult;
     }
-    return result;
+    switch (configItem) {
+      case ('resourceTimeout', Duration? duration):
+        await NativeDownloader.methodChannel.invokeMethod('configResourceTimeout', duration?.inSeconds);
+
+      case ("localize", Map<String, String>? translation):
+        await NativeDownloader.methodChannel.invokeMethod('configLocalize', translation);
+
+      default:
+        return (configItem.$1, 'not implemented'); // this method did not process this configItem
+    }
+    return (configItem.$1, ''); // normal result
   }
+
 }
