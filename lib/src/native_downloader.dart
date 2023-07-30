@@ -13,7 +13,8 @@ import 'models.dart';
 ///
 /// Uses [MethodChannel] to communicate with native platforms
 abstract base class NativeDownloader extends BaseDownloader {
-  static const methodChannel = MethodChannel('com.bbflight.background_downloader');
+  static const methodChannel =
+      MethodChannel('com.bbflight.background_downloader');
   static const _backgroundChannel =
       MethodChannel('com.bbflight.background_downloader.background');
 
@@ -106,7 +107,8 @@ abstract base class NativeDownloader extends BaseDownloader {
   @override
   Future<int> reset(String group) async {
     final retryAndPausedTaskCount = await super.reset(group);
-    final nativeCount = await methodChannel.invokeMethod<int>('reset', group) ?? 0;
+    final nativeCount =
+        await methodChannel.invokeMethod<int>('reset', group) ?? 0;
     return retryAndPausedTaskCount + nativeCount;
   }
 
@@ -116,7 +118,8 @@ abstract base class NativeDownloader extends BaseDownloader {
     final retryAndPausedTasks =
         await super.allTasks(group, includeTasksWaitingToRetry);
     final result =
-        await methodChannel.invokeMethod<List<dynamic>?>('allTasks', group) ?? [];
+        await methodChannel.invokeMethod<List<dynamic>?>('allTasks', group) ??
+            [];
     final tasks = result
         .map((e) => Task.createFromJsonMap(jsonDecode(e as String)))
         .toList();
@@ -125,7 +128,8 @@ abstract base class NativeDownloader extends BaseDownloader {
 
   @override
   Future<bool> cancelPlatformTasksWithIds(List<String> taskIds) async =>
-      await methodChannel.invokeMethod<bool>('cancelTasksWithIds', taskIds) ?? false;
+      await methodChannel.invokeMethod<bool>('cancelTasksWithIds', taskIds) ??
+      false;
 
   /// Kills the task if it failed, on Android only
   ///
@@ -143,7 +147,8 @@ abstract base class NativeDownloader extends BaseDownloader {
     if (task != null) {
       return task;
     }
-    final jsonString = await methodChannel.invokeMethod<String>('taskForId', taskId);
+    final jsonString =
+        await methodChannel.invokeMethod<String>('taskForId', taskId);
     if (jsonString != null) {
       return Task.createFromJsonMap(jsonDecode(jsonString));
     }
@@ -186,8 +191,10 @@ abstract base class NativeDownloader extends BaseDownloader {
   Future<Map<String, dynamic>> popUndeliveredData(Undelivered dataType) async {
     final String jsonMapString = await switch (dataType) {
       Undelivered.resumeData => methodChannel.invokeMethod('popResumeData'),
-      Undelivered.statusUpdates => methodChannel.invokeMethod('popStatusUpdates'),
-      Undelivered.progressUpdates => methodChannel.invokeMethod('popProgressUpdates')
+      Undelivered.statusUpdates =>
+        methodChannel.invokeMethod('popStatusUpdates'),
+      Undelivered.progressUpdates =>
+        methodChannel.invokeMethod('popProgressUpdates')
     };
     return jsonDecode(jsonMapString);
   }
@@ -232,22 +239,29 @@ abstract base class NativeDownloader extends BaseDownloader {
   @override
   Future<(String, String)> configureItem((String, dynamic) configItem) async {
     switch (configItem) {
-
       case ('requestTimeout', Duration? duration):
-        await NativeDownloader.methodChannel.invokeMethod('configRequestTimeout', duration?.inSeconds);
+        await NativeDownloader.methodChannel
+            .invokeMethod('configRequestTimeout', duration?.inSeconds);
 
       case ('proxy', (String address, int port)):
-        await NativeDownloader.methodChannel.invokeMethod('configProxyAddress', address);
-        await NativeDownloader.methodChannel.invokeMethod('configProxyPort', port);
+        await NativeDownloader.methodChannel
+            .invokeMethod('configProxyAddress', address);
+        await NativeDownloader.methodChannel
+            .invokeMethod('configProxyPort', port);
 
       case ("proxy", false):
-        await NativeDownloader.methodChannel.invokeMethod('configProxyAddress', null);
-        await NativeDownloader.methodChannel.invokeMethod('configProxyPort', null);
+        await NativeDownloader.methodChannel
+            .invokeMethod('configProxyAddress', null);
+        await NativeDownloader.methodChannel
+            .invokeMethod('configProxyPort', null);
 
       default:
-        return (configItem.$1, 'not implemented'); // this method did not process this configItem
+        return (
+          configItem.$1,
+          'not implemented'
+        ); // this method did not process this configItem
     }
-  return (configItem.$1, ''); // normal result
+    return (configItem.$1, ''); // normal result
   }
 }
 
@@ -262,10 +276,11 @@ final class AndroidDownloader extends NativeDownloader {
 
   @override
   dynamic platformConfig(
-      {dynamic globalConfig,
-        dynamic androidConfig,
-        dynamic iOSConfig,
-        dynamic desktopConfig}) => androidConfig;
+          {dynamic globalConfig,
+          dynamic androidConfig,
+          dynamic iOSConfig,
+          dynamic desktopConfig}) =>
+      androidConfig;
 
   @override
   Future<(String, String)> configureItem((String, dynamic) configItem) async {
@@ -275,13 +290,18 @@ final class AndroidDownloader extends NativeDownloader {
     }
     switch (configItem) {
       case ('runInForeground', bool activate):
-        await NativeDownloader.methodChannel.invokeMethod('configForegroundFileSize', activate ? 0 : -1);
+        await NativeDownloader.methodChannel
+            .invokeMethod('configForegroundFileSize', activate ? 0 : -1);
 
       case ('runInForegroundIfFileLargerThan', int fileSize):
-        await NativeDownloader.methodChannel.invokeMethod('configForegroundFileSize', fileSize);
+        await NativeDownloader.methodChannel
+            .invokeMethod('configForegroundFileSize', fileSize);
 
       default:
-        return (configItem.$1, 'not implemented'); // this method did not process this configItem
+        return (
+          configItem.$1,
+          'not implemented'
+        ); // this method did not process this configItem
     }
     return (configItem.$1, ''); // normal result
   }
@@ -298,10 +318,11 @@ final class IOSDownloader extends NativeDownloader {
 
   @override
   dynamic platformConfig(
-      {dynamic globalConfig,
-        dynamic androidConfig,
-        dynamic iOSConfig,
-        dynamic desktopConfig}) => iOSConfig;
+          {dynamic globalConfig,
+          dynamic androidConfig,
+          dynamic iOSConfig,
+          dynamic desktopConfig}) =>
+      iOSConfig;
 
   @override
   Future<(String, String)> configureItem((String, dynamic) configItem) async {
@@ -311,15 +332,19 @@ final class IOSDownloader extends NativeDownloader {
     }
     switch (configItem) {
       case ('resourceTimeout', Duration? duration):
-        await NativeDownloader.methodChannel.invokeMethod('configResourceTimeout', duration?.inSeconds);
+        await NativeDownloader.methodChannel
+            .invokeMethod('configResourceTimeout', duration?.inSeconds);
 
       case ("localize", Map<String, String>? translation):
-        await NativeDownloader.methodChannel.invokeMethod('configLocalize', translation);
+        await NativeDownloader.methodChannel
+            .invokeMethod('configLocalize', translation);
 
       default:
-        return (configItem.$1, 'not implemented'); // this method did not process this configItem
+        return (
+          configItem.$1,
+          'not implemented'
+        ); // this method did not process this configItem
     }
     return (configItem.$1, ''); // normal result
   }
-
 }

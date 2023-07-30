@@ -101,9 +101,12 @@ abstract base class BaseDownloader {
       dynamic iOSConfig,
       dynamic desktopConfig}) async {
     final global = globalConfig is List ? globalConfig : [globalConfig];
-    final rawPlatformConfig = platformConfig(androidConfig: androidConfig, iOSConfig: iOSConfig, desktopConfig: desktopConfig);
+    final rawPlatformConfig = platformConfig(
+        androidConfig: androidConfig,
+        iOSConfig: iOSConfig,
+        desktopConfig: desktopConfig);
     final platform =
-    rawPlatformConfig is List ? rawPlatformConfig : [rawPlatformConfig];
+        rawPlatformConfig is List ? rawPlatformConfig : [rawPlatformConfig];
     return await Future.wait([...global, ...platform]
         .where((e) => e != null)
         .map((e) => configureItem(e)));

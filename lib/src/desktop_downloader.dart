@@ -104,8 +104,16 @@ final class DesktopDownloader extends BaseDownloader {
     await Isolate.spawn(doTask, (rootIsolateToken, receivePort.sendPort),
         onError: errorPort.sendPort);
     final messagesFromIsolate = StreamQueue<dynamic>(receivePort);
-    final sendPort = await messagesFromIsolate.next;
-    sendPort.send((task, filePath, tempFilePath, requiredStartByte, isResume, _requestTimeout, _proxy));
+    final sendPort = await messagesFromIsolate.next as SendPort;
+    sendPort.send((
+      task,
+      filePath,
+      tempFilePath,
+      requiredStartByte,
+      isResume,
+      _requestTimeout,
+      _proxy
+    ));
     if (_isolateSendPorts.keys.contains(task)) {
       // if already registered with null value, cancel immediately
       sendPort.send('cancel');
@@ -333,15 +341,15 @@ final class DesktopDownloader extends BaseDownloader {
 
   @override
   dynamic platformConfig(
-      {dynamic globalConfig,
-        dynamic androidConfig,
-        dynamic iOSConfig,
-        dynamic desktopConfig}) => desktopConfig;
+          {dynamic globalConfig,
+          dynamic androidConfig,
+          dynamic iOSConfig,
+          dynamic desktopConfig}) =>
+      desktopConfig;
 
   @override
   Future<(String, String)> configureItem((String, dynamic) configItem) async {
     switch (configItem) {
-
       case ('requestTimeout', Duration? duration):
         requestTimeout = duration;
 
@@ -352,7 +360,10 @@ final class DesktopDownloader extends BaseDownloader {
         proxy = {};
 
       default:
-        return (configItem.$1, 'not implemented'); // this method did not process this configItem
+        return (
+          configItem.$1,
+          'not implemented'
+        ); // this method did not process this configItem
     }
     return (configItem.$1, ''); // normal result
   }
@@ -386,7 +397,6 @@ final class DesktopDownloader extends BaseDownloader {
     httpClient = IOClient(client);
     print('Recreated client with $_requestTimeout and $_proxy');
   }
-
 
   @override
   void destroy() {

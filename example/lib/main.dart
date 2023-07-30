@@ -51,25 +51,23 @@ class _MyAppState extends State<MyApp> {
 
     // Configure the downloader by registering a callback and configuring
     // notifications
-    FileDownloader().configure(
-        globalConfig: [
-          ('proxy', ('localhost', 8080)),
-          // ('proxy', false),
-          ('requestTimeout', const Duration(seconds: 100)),
-          // ('requestTimeout', null),
-          ('localize', {'cancel': 'this_should_be_not_implemented'})
-        ],
-        androidConfig: [
-          ('runInForegroundIfFileLargerThan', 10),
-          ('proxy', false),
-          ('requestTimeout', const Duration(seconds: 10)),
-        ],
-        iOSConfig: [
-          ('proxy', ('localhost', 8080)),
-          ('resourceTimeout', null),
-          ('requestTimeout', const Duration(seconds: 55)),
-          ('localize', {'Cancel': 'stopit'}),
-        ]).then((value) => print('Configuration result = $value'));
+    FileDownloader().configure(globalConfig: [
+      ('proxy', ('localhost', 8080)),
+      // ('proxy', false),
+      ('requestTimeout', const Duration(seconds: 100)),
+      // ('requestTimeout', null),
+      ('localize', {'cancel': 'this_should_be_not_implemented'})
+    ], androidConfig: [
+      ('runInForegroundIfFileLargerThan', 10),
+      ('proxy', false),
+      ('requestTimeout', const Duration(seconds: 10)),
+    ], iOSConfig: [
+      ('proxy', ('localhost', 8080)),
+      ('proxy', false),
+      ('resourceTimeout', null),
+      ('requestTimeout', const Duration(seconds: 55)),
+      ('localize', {'Cancel': 'stopit'}),
+    ]).then((value) => print('Configuration result = $value'));
     FileDownloader()
         .registerCallbacks(
             taskNotificationTapCallback: myNotificationTapCallback)

@@ -788,7 +788,8 @@ interface class FileDownloader {
   /// the downloader. If not set, the default [http.Client] will be used.
   /// The request is executed on an Isolate, to ensure minimal interference
   /// with the main Isolate
-  Future<http.Response> request(Request request) => compute(doRequest, (request, DesktopDownloader.requestTimeout, DesktopDownloader.proxy));
+  Future<http.Response> request(Request request) => compute(doRequest,
+      (request, DesktopDownloader.requestTimeout, DesktopDownloader.proxy));
 
   /// Move the file represented by the [task] to a shared storage
   /// [destination] and potentially a [directory] within that destination. If
@@ -872,7 +873,8 @@ interface class FileDownloader {
 ///
 /// This function is run on an Isolate to ensure performance on the main
 /// Isolate is not affected
-Future<http.Response> doRequest((Request, Duration?, Map<String, dynamic>) params) async {
+Future<http.Response> doRequest(
+    (Request, Duration?, Map<String, dynamic>) params) async {
   final (request, requestTimeout, proxy) = params;
   Logger.root.level = Level.ALL;
   Logger.root.onRecord.listen((LogRecord rec) {
