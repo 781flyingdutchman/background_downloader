@@ -1,3 +1,7 @@
+## 6.3.3
+
+Bug fix for `taskNotificationTapCallback`: convenience methods that `await` a result, such as `download` (but not `enqueue`), now use the default taskNotificationTapCallback, even though those tasks are in the `awaitGroup`, because that behavior is more in line with expectations. If you need a separate callback for the `awaitGroup`, then set it after setting the default callback. You set the default callback by omitting the `group` parameter in the `registerCallbacks` call.
+
 ## 6.3.2
 
 Fixed a bug on iOS related to NSNull Json decoding
