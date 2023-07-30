@@ -5,6 +5,7 @@ import 'dart:isolate';
 import 'dart:math';
 
 import 'package:async/async.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
@@ -26,7 +27,7 @@ const okResponses = [200, 201, 202, 203, 204, 205, 206];
 /// in Dart, as there is no native platform equivalent of URLSession or
 /// WorkManager as there is on iOS and Android
 final class DesktopDownloader extends BaseDownloader {
-  final _log = Logger('DesktopDownloader');
+  static final _log = Logger('DesktopDownloader');
   final maxConcurrent = 5;
   static final DesktopDownloader _singleton = DesktopDownloader._internal();
   final _queue = Queue<Task>();
@@ -37,6 +38,7 @@ final class DesktopDownloader extends BaseDownloader {
   static var httpClient = http.Client();
   static Duration? _requestTimeout;
   static var _proxy = <String, dynamic>{}; // 'address' and 'port'
+  static var _bypassTLSCertificateValidation = false;
 
   factory DesktopDownloader() => _singleton;
 
@@ -111,8 +113,9 @@ final class DesktopDownloader extends BaseDownloader {
       tempFilePath,
       requiredStartByte,
       isResume,
-      _requestTimeout,
-      _proxy
+      requestTimeout,
+      proxy,
+    bypassTLSCertificateValidation
     ));
     if (_isolateSendPorts.keys.contains(task)) {
       // if already registered with null value, cancel immediately
@@ -359,6 +362,9 @@ final class DesktopDownloader extends BaseDownloader {
       case ("proxy", false):
         proxy = {};
 
+      case ('bypassTLSCertificateValidation', bool bypass):
+        bypassTLSCertificateValidation = bypass;
+
       default:
         return (
           configItem.$1,
@@ -387,15 +393,46 @@ final class DesktopDownloader extends BaseDownloader {
 
   static Map<String, dynamic> get proxy => _proxy;
 
+  /// Set or resets bypass for TLS certificate validation
+  static set bypassTLSCertificateValidation(bool value) {
+    _bypassTLSCertificateValidation = value;
+    _recreateClient();
+  }
+
+  static bool get bypassTLSCertificateValidation =>
+      _bypassTLSCertificateValidation;
+
+  /// Set the HTTP Client to use, with the given parameters
+  ///
+  /// This is a convenience method, bundling the [requestTimeout],
+  /// [proxy] and [bypassTLSCertificateValidation]
+  static void setHttpClient(Duration? requestTimeout, Map<String, dynamic> proxy, bool bypassTLSCertificateValidation) {
+    _requestTimeout = requestTimeout;
+    _proxy = proxy;
+    _bypassTLSCertificateValidation = bypassTLSCertificateValidation;
+    _recreateClient();
+  }
+
   /// Recreates the [httpClient] used for Requests and isolate downloads/uploads
   static _recreateClient() {
     final client = HttpClient();
-    client.connectionTimeout = _requestTimeout;
-    client.findProxy = _proxy.isNotEmpty
+    client.connectionTimeout = requestTimeout;
+    client.findProxy = proxy.isNotEmpty
         ? (_) => 'PROXY ${_proxy['address']}:${_proxy['port']}'
         : null;
+    client.badCertificateCallback = bypassTLSCertificateValidation && !kReleaseMode
+        ? (X509Certificate cert, String host, int port) => true
+        : null;
     httpClient = IOClient(client);
-    print('Recreated client with $_requestTimeout and $_proxy');
+    if (bypassTLSCertificateValidation) {
+      if (kReleaseMode) {
+        throw ArgumentError('You cannot bypass certificate validation in release mode');
+      } else {
+        _log.warning('TLS certificate validation is bypassed. This is insecure and cannot be '
+            'done in release mode');
+      }
+    }
+    print('Recreated client with requestTimeout $_requestTimeout, $_proxy and bypass=$bypassTLSCertificateValidation');
   }
 
   @override

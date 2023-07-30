@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -296,6 +297,20 @@ final class AndroidDownloader extends NativeDownloader {
       case ('runInForegroundIfFileLargerThan', int fileSize):
         await NativeDownloader.methodChannel
             .invokeMethod('configForegroundFileSize', fileSize);
+
+      case ('bypassTLSCertificateValidation', bool bypass):
+        if (bypass) {
+          if (kReleaseMode) {
+            throw ArgumentError('You cannot bypass certificate validation in release mode');
+          }
+          await NativeDownloader.methodChannel
+              .invokeMethod('configBypassTLSCertificateValidation');
+          log.warning('TLS certificate validation is bypassed. This is insecure and cannot be '
+              'done in release mode');
+        } else {
+          throw ArgumentError('To undo bypassing the certificate validation, '
+              'restart and leave out the "configBypassCertificateValidation" configuration');
+        }
 
       default:
         return (

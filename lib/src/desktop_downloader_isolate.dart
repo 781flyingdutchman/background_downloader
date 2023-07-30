@@ -43,10 +43,10 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
     int requiredStartByte,
     bool isResume,
     Duration? requestTimeout,
-    Map<String, dynamic> proxy
+    Map<String, dynamic> proxy,
+  bool bypassTLSCertificateValidation
   ) = await messagesToIsolate.next;
-  DesktopDownloader.requestTimeout = requestTimeout;
-  DesktopDownloader.proxy = proxy;
+  DesktopDownloader.setHttpClient(requestTimeout, proxy, bypassTLSCertificateValidation);
   Logger.root.level = Level.ALL;
   Logger.root.onRecord.listen((LogRecord rec) {
     if (kDebugMode) {

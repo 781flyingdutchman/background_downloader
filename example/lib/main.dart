@@ -52,9 +52,10 @@ class _MyAppState extends State<MyApp> {
     // Configure the downloader by registering a callback and configuring
     // notifications
     FileDownloader().configure(globalConfig: [
-      ('proxy', ('localhost', 8080)),
+      // ('proxy', ('localhost', 8080)),
       // ('proxy', false),
       ('requestTimeout', const Duration(seconds: 100)),
+      ('bypassTLSCertificateValidation', true),
       // ('requestTimeout', null),
       ('localize', {'cancel': 'this_should_be_not_implemented'})
     ], androidConfig: [

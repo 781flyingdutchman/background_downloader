@@ -310,6 +310,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 "configProxyAddress" -> methodConfigProxyAddress(call, result)
                 "configProxyPort" -> methodConfigProxyPort(call, result)
                 "configRequestTimeout" -> methodConfigRequestTimeout(call, result)
+                "configBypassTLSCertificateValidation" -> methodConfigBypassTLSCertificateValidation(result)
                 "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
                     call, result
                 )
@@ -663,6 +664,14 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
             }
             apply()
         }
+        result.success(null)
+    }
+
+    /**
+     * Bypass the certificate validation
+     */
+    private fun methodConfigBypassTLSCertificateValidation(result: Result) {
+        acceptUntrustedCertificates()
         result.success(null)
     }
 
