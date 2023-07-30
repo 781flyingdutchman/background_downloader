@@ -32,7 +32,7 @@ jobs:
         uses: github/issue-metrics@v2
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SEARCH_QUERY: 'repo:owner/repo created:${{ env.last_month }} -reason:"not planned"'
+          SEARCH_QUERY: 'repo:781flyingdutchman/background_downloader created:${{ env.last_month }} -reason:"not planned"'
 
       - name: Create issue for opened issues and prs
         uses: peter-evans/create-issue-from-file@v4
@@ -46,7 +46,7 @@ jobs:
         uses: github/issue-metrics@v2
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SEARCH_QUERY: 'repo:owner/repo closed:${{ env.last_month }} -reason:"not planned"'
+          SEARCH_QUERY: 'repo:781flyingdutchman/background_downloader closed:${{ env.last_month }} -reason:"not planned"'
 
       - name: Create issue for closed issues and prs
         uses: peter-evans/create-issue-from-file@v4
