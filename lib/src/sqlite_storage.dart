@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
@@ -350,19 +351,20 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
       {isRetry = false}) async {
     // Note: the order of directories matters, as some directories are
     // subdirectories of others, so they need to be tested first
-    final directories = Platform.isIOS
-        ? {
-            tempDir: BaseDirectory.temporary,
-            supportDir: BaseDirectory.applicationSupport,
-            libraryDir: BaseDirectory.applicationLibrary,
-            docsDir: BaseDirectory.applicationDocuments
-          }
-        : {
-            tempDir: BaseDirectory.temporary,
-            libraryDir: BaseDirectory.applicationLibrary,
-            supportDir: BaseDirectory.applicationSupport,
-            docsDir: BaseDirectory.applicationDocuments
-          };
+    final LinkedHashMap<Directory, BaseDirectory> directories =
+        LinkedHashMap.from(Platform.isIOS
+            ? {
+                tempDir: BaseDirectory.temporary,
+                supportDir: BaseDirectory.applicationSupport,
+                libraryDir: BaseDirectory.applicationLibrary,
+                docsDir: BaseDirectory.applicationDocuments
+              }
+            : {
+                tempDir: BaseDirectory.temporary,
+                libraryDir: BaseDirectory.applicationLibrary,
+                supportDir: BaseDirectory.applicationSupport,
+                docsDir: BaseDirectory.applicationDocuments
+              });
     for (final dir in directories.keys) {
       final (match, subDir) = _contains(dir, savedDir);
       if (match) {
