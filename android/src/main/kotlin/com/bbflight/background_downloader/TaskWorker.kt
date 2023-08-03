@@ -583,6 +583,9 @@ class TaskWorker(
                     )
                 }
             }
+        } finally {
+            // clean up remaining bytes tracking
+            BackgroundDownloaderPlugin.remainingBytesToDownload.remove(task.taskId)
         }
         deleteTempFile(tempFilePath)
         return TaskStatus.failed
@@ -617,6 +620,18 @@ class TaskWorker(
             }
             val tempFile = File(tempFilePath)
             val contentLength = connection.contentLengthLong
+            if (insufficientSpace(applicationContext, contentLength)) {
+                Log.i(
+                    TAG,
+                    "Insufficient space to store the file to be downloaded for taskId ${task.taskId}"
+                )
+                taskException = TaskException(
+                    ExceptionType.fileSystem,
+                    description = "Insufficient space to store the file to be downloaded"
+                )
+                return TaskStatus.failed
+            }
+            BackgroundDownloaderPlugin.remainingBytesToDownload[task.taskId] = contentLength
             determineRunInForeground(task, contentLength)
             val transferBytesResult: TaskStatus
             BufferedInputStream(connection.inputStream).use { inputStream ->
@@ -985,6 +1000,12 @@ class TaskWorker(
                         if (numBytes > 0) {
                             outputStream.write(dataBuffer, 0, numBytes)
                             bytesTotal += numBytes
+                            val remainingBytes =
+                                BackgroundDownloaderPlugin.remainingBytesToDownload[task.taskId]
+                            if (remainingBytes != null) {
+                                BackgroundDownloaderPlugin.remainingBytesToDownload[task.taskId] =
+                                    remainingBytes - numBytes
+                            }
                         }
                         val progress = doubleMin(
                             (bytesTotal + startByte).toDouble() / (contentLength + startByte),
@@ -1406,7 +1427,7 @@ class TaskWorker(
      */
     private fun determineRunInForeground(task: Task, contentLength: Long) {
         runInForeground =
-            canRunInForeground && contentLength > runInForegroundFileSize * (1 shl 20)
+            canRunInForeground && contentLength > (runInForegroundFileSize.toLong() shl 20)
         if (runInForeground) {
             Log.i(TAG, "TaskId ${task.taskId} will run in foreground")
         }

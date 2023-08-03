@@ -55,9 +55,8 @@ class _MyAppState extends State<MyApp> {
       // ('proxy', ('localhost', 8080)),
       // ('proxy', false),
       ('requestTimeout', const Duration(seconds: 100)),
-      ('bypassTLSCertificateValidation', true),
-      // ('requestTimeout', null),
-      ('localize', {'cancel': 'this_should_be_not_implemented'})
+      ('localize', {'cancel': 'this_should_be_not_implemented'}),
+       ('checkAvailableSpace', false)
     ], androidConfig: [
       ('runInForegroundIfFileLargerThan', 10),
       ('proxy', false),

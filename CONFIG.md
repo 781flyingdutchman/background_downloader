@@ -8,7 +8,10 @@ The following configurations are supported:
 * Timeouts
   - `('requestTimeout', Duration? duration)` sets the requestTimeout, or if null resets to default
   - `('resourceTimeout', Duration? duration)` sets the iOS resourceTimeout, or if null resets to default
-* HTTP Proxies
+* Checking available space
+  - `('checkAvailableSpace', int minMegabytes)` ensures a file download fails if less than `minMegabytes` space is available after this download completes
+  - `('checkAvailableSpace', false)` turns off checking available space
+* HTTP Proxy
   - `('proxy', (String address, int port))` sets the proxy to this address and port (note: address and port are contained in a record)
   - `('proxy', false)` removes the proxy
 * Bypassing HTTPS (TLS) certificate validation
@@ -17,7 +20,7 @@ The following configurations are supported:
   - `('runInForeground', bool activate)` activates or de-activates foreground mode for all tasks
   - `('runInForegroundIfFileLargerThan', int fileSize)` activates foreground mode for downloads/uploads that exceed this file size, expressed in MB
 * Localization
-  - `'localize', Map<String, String> translation` localizes the words 'Cancel', 'Pause' and 'Resume' presented as a map
+  - `'localize', Map<String, String> translation` localizes the words 'Cancel', 'Pause' and 'Resume' as used in notifications, presented as a map (iOS only, see docs for Android notifications)
 
 On Android and iOS, most configurations are stored in native 'shared preferences' to ensure that background tasks have access to the configuration. This means that configuration persists across application restarts, and this can lead to some surprising results. For example, if during testing you set a proxy and then remove that configuration line, the proxy configuration is not removed from persistent storage on your test device. You need to explicitly set `('proxy', false)` to remove the stored configuration on that device. 
 

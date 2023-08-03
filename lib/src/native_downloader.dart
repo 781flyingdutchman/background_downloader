@@ -250,11 +250,20 @@ abstract base class NativeDownloader extends BaseDownloader {
         await NativeDownloader.methodChannel
             .invokeMethod('configProxyPort', port);
 
-      case ("proxy", false):
+      case ('proxy', false):
         await NativeDownloader.methodChannel
             .invokeMethod('configProxyAddress', null);
         await NativeDownloader.methodChannel
             .invokeMethod('configProxyPort', null);
+
+      case ('checkAvailableSpace', int minimum):
+        assert(minimum > 0, 'Minimum available space must be in MB and > 0');
+        await NativeDownloader.methodChannel
+            .invokeMethod('configCheckAvailableSpace', minimum);
+
+      case ('checkAvailableSpace', false):
+        await NativeDownloader.methodChannel
+            .invokeMethod('configCheckAvailableSpace', null);
 
       default:
         return (

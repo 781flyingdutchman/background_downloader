@@ -61,6 +61,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         const val keyConfigProxyAddress = "com.bbflight.background_downloader.config.proxyAddress"
         const val keyConfigProxyPort = "com.bbflight.background_downloader.config.proxyPort"
         const val keyConfigRequestTimeout = "com.bbflight.background_downloader.config.requestTimeout"
+        const val keyConfigCheckAvailableSpace = "com.bbflight.background_downloader.config.checkAvailableSpace"
         const val notificationChannel = "background_downloader"
         const val notificationPermissionRequestCode = 373921
         const val externalStoragePermissionRequestCode = 373922
@@ -78,6 +79,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         var requestingNotificationPermission = false
         var externalStoragePermissionCompleter = CompletableFuture<Boolean>()
         var localResumeData = HashMap<String, ResumeData>()
+        var remainingBytesToDownload = HashMap<String, Long>()
         var haveLoggedProxyMessage = false
 
         /**
@@ -311,6 +313,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 "configProxyPort" -> methodConfigProxyPort(call, result)
                 "configRequestTimeout" -> methodConfigRequestTimeout(call, result)
                 "configBypassTLSCertificateValidation" -> methodConfigBypassTLSCertificateValidation(result)
+                "configCheckAvailableSpace" -> methodConfigcheckAvailableSpace(call, result)
                 "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
                     call, result
                 )
@@ -606,10 +609,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
      */
     private fun methodConfigForegroundFileSize(call: MethodCall, result: Result) {
         val fileSize = call.arguments as Int
-        PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
-            putInt(keyConfigForegroundFileSize, fileSize)
-            apply()
-        }
+        updateSharedPreferences(keyConfigForegroundFileSize, fileSize)
         val msg = when (fileSize) {
             0 ->  "Enabled foreground mode for all tasks"
             -1 -> "Disabled foreground mode for all tasks"
@@ -639,31 +639,15 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
      * Store the proxy port config in shared preferences
      */
     private fun methodConfigProxyPort(call: MethodCall, result: Result) {
-        PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
-            val port = call.arguments as Int?
-            if (port != null) {
-                putInt(keyConfigProxyPort, port)
-            } else {
-                remove(keyConfigProxyPort)
-            }
-            apply()
-        }
+        updateSharedPreferences(keyConfigProxyPort, call.arguments as Int?)
         result.success(null)
     }
 
     /**
-     * Store the requestTimeout  config in shared preferences
+     * Store the requestTimeout config in shared preferences
      */
     private fun methodConfigRequestTimeout(call: MethodCall, result: Result) {
-        PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
-            val timeoutSeconds = call.arguments as Int?
-            if (timeoutSeconds != null) {
-                putInt(keyConfigRequestTimeout, timeoutSeconds)
-            } else {
-                remove(keyConfigRequestTimeout)
-            }
-            apply()
-        }
+        updateSharedPreferences(keyConfigRequestTimeout, call.arguments as Int?)
         result.success(null)
     }
 
@@ -676,6 +660,14 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
     }
 
     /**
+     * Store the availableSpace config in shared preferences
+     */
+    private fun methodConfigcheckAvailableSpace(call: MethodCall, result: Result) {
+        updateSharedPreferences(keyConfigCheckAvailableSpace, call.arguments as Int?)
+        result.success(null)
+    }
+
+    /**
      * Sets or resets flag to force failing posting on background channel
      *
      * For testing only
@@ -683,6 +675,22 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
     private fun methodForceFailPostOnBackgroundChannel(call: MethodCall, result: Result) {
         forceFailPostOnBackgroundChannel = call.arguments as Boolean
         result.success(null)
+    }
+
+    /**
+     * Helper function to update or delete the [value] in shared preferences under [key]
+     *
+     * If [value] is null, the [key] is deleted
+     */
+    private fun updateSharedPreferences(key: String, value: Int?) {
+        PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
+            if (value != null) {
+                putInt(key, value)
+            } else {
+                remove(key)
+            }
+            apply()
+        }
     }
 
     // ActivityAware implementation to capture Activity context needed for permissions and intents
