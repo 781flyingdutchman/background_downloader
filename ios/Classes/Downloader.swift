@@ -23,6 +23,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     public static var keyConfigRequestTimeout = "com.bbflight.background_downloader.config.requestTimeout"
     public static var keyConfigProxyAdress = "com.bbflight.background_downloader.config.proxyAddress"
     public static var keyConfigProxyPort = "com.bbflight.background_downloader.config.proxyPort"
+    public static var keyConfigCheckAvailableSpace = "com.bbflight.background_downloader.config.checkAvailableSpace"
 
     
     public static var forceFailPostOnBackgroundChannel = false
@@ -34,7 +35,9 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     static var haveNotificationPermission: Bool?
     static var haveregisteredNotificationCategories = false
     static var taskIdsThatCanResume = Set<String>() // taskIds that can resume
+    static var taskIdsProgrammaticallyCancelled = Set<String>() // skips error handling for these tasks
     static var localResumeData = [String : String]() // locally stored to enable notification resume
+    static var remainingBytesToDownload = [String : Int64]()  // keyed by taskId
     static var responseBodyData = [String: [Data]]() // list of Data objects received for this UploadTask id
     
     private override init() {
@@ -100,6 +103,8 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             methodStoreConfig(key: Downloader.keyConfigProxyAdress, value: call.arguments, result: result)
         case "configProxyPort":
             methodStoreConfig(key: Downloader.keyConfigProxyPort, value: call.arguments, result: result)
+        case "configCheckAvailableSpace":
+            methodStoreConfig(key: Downloader.keyConfigCheckAvailableSpace, value: call.arguments, result: result)
         case "forceFailPostOnBackgroundChannel":
             methodForceFailPostOnBackgroundChannel(call: call, result: result)
         default:
@@ -476,39 +481,45 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         let responseBody = getResponseBody(taskId: task.taskId)
         Downloader.responseBodyData.removeValue(forKey: task.taskId)
         Downloader.taskIdsThatCanResume.remove(task.taskId)
+        let taskWasProgramaticallyCanceled: Bool = Downloader.taskIdsProgrammaticallyCancelled.remove(task.taskId) != nil
         guard error == nil else {
-            if (error! as NSError).code == NSURLErrorTimedOut {
-                os_log("Task with id %@ timed out", log: log, type: .info, task.taskId)
-                processStatusUpdate(task: task, status: .failed)
-                return
-            }
-            let userInfo = (error! as NSError).userInfo
-            if let resumeData = userInfo[NSURLSessionDownloadTaskResumeData] as? Data {
-                if processResumeData(task: task, resumeData: resumeData) {
-                    os_log("Paused task with id %@", log: log, type: .info, task.taskId)
-                    processStatusUpdate(task: task, status: .paused)
-                    if isDownloadTask(task: task) {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            updateNotification(task: task, notificationType: .paused, notificationConfig: notificationConfig)
-                        }
-                    }
-                    Downloader.lastProgressUpdate.removeValue(forKey: task.taskId) // ensure .running update on resume
+            // handle the error if this task wasn't programatically cancelled (in which
+            // case the error has been handled already)
+            if !taskWasProgramaticallyCanceled {
+                if (error! as NSError).code == NSURLErrorTimedOut {
+                    os_log("Task with id %@ timed out", log: log, type: .info, task.taskId)
+                    processStatusUpdate(task: task, status: .failed)
                     return
                 }
-            }
-            if (error! as NSError).code == NSURLErrorCancelled {
-                os_log("Canceled task with id %@", log: log, type: .info, task.taskId)
-                processStatusUpdate(task: task, status: .canceled)
-            }
-            else {
-                os_log("Error for taskId %@: %@", log: log, type: .error, task.taskId, error!.localizedDescription)
-                processStatusUpdate(task: task, status: .failed, taskException: TaskException(type: .general, httpResponseCode: -1, description: error!.localizedDescription))
+                let userInfo = (error! as NSError).userInfo
+                if let resumeData = userInfo[NSURLSessionDownloadTaskResumeData] as? Data {
+                    if processResumeData(task: task, resumeData: resumeData) {
+                        os_log("Paused task with id %@", log: log, type: .info, task.taskId)
+                        processStatusUpdate(task: task, status: .paused)
+                        if isDownloadTask(task: task) {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                updateNotification(task: task, notificationType: .paused, notificationConfig: notificationConfig)
+                            }
+                        }
+                        Downloader.lastProgressUpdate.removeValue(forKey: task.taskId) // ensure .running update on resume
+                        return
+                    }
+                }
+                if (error! as NSError).code == NSURLErrorCancelled {
+                    os_log("Canceled task with id %@", log: log, type: .info, task.taskId)
+                    processStatusUpdate(task: task, status: .canceled)
+                }
+                else {
+                    os_log("Error for taskId %@: %@", log: log, type: .error, task.taskId, error!.localizedDescription)
+                    processStatusUpdate(task: task, status: .failed, taskException: TaskException(type: .general, httpResponseCode: -1, description: error!.localizedDescription))
+                }
             }
             if isDownloadTask(task: task) {
                 updateNotification(task: task, notificationType: .error, notificationConfig: notificationConfig)
             }
             return
         }
+        // there was no error
         os_log("Finished task with id %@", log: log, type: .info, task.taskId)
         // if this is an upload task, send final TaskStatus (based on HTTP status code
         if isUploadTask(task: task) {
@@ -531,8 +542,18 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         guard let task = getTaskFrom(urlSessionTask: downloadTask) else { return }
         if Downloader.lastProgressUpdate[task.taskId] == nil {
-            // first 'didWriteData' call, so send 'running' status update
-            // and check if the task is resumable
+            // first 'didWriteData' call
+            // Check if there is enough space
+            if insufficientSpace(contentLength: totalBytesExpectedToWrite) {
+                if !Downloader.taskIdsProgrammaticallyCancelled.contains(task.taskId) {
+                    os_log("Error for taskId %@: Insufficient space to store the file to be downloaded", log: log, type: .error, task.taskId)
+                    processStatusUpdate(task: task, status: .failed, taskException: TaskException(type: .fileSystem, httpResponseCode: -1, description: "Insufficient space to store the file to be downloaded for taskId \(task.taskId)"))
+                    Downloader.taskIdsProgrammaticallyCancelled.insert(task.taskId)
+                    downloadTask.cancel()
+                }
+                return
+            }
+            // Send 'running' status update and check if the task is resumable
             processStatusUpdate(task: task, status: TaskStatus.running)
             processProgressUpdate(task: task, progress: 0.0)
             Downloader.lastProgressUpdate[task.taskId] = 0.0
@@ -550,12 +571,15 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                 updateNotification(task: task, notificationType: .running, notificationConfig: notificationConfig)
             }
         }
-        if totalBytesExpectedToWrite != NSURLSessionTransferSizeUnknown && Date() > Downloader.nextProgressUpdateTime[task.taskId] ?? Date(timeIntervalSince1970: 0) {
-            let progress = min(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite), 0.999)
-            if progress - (Downloader.lastProgressUpdate[task.taskId] ?? 0.0) > 0.02 {
-                processProgressUpdate(task: task, progress: progress, expectedFileSize: totalBytesExpectedToWrite)
-                Downloader.lastProgressUpdate[task.taskId] = progress
-                Downloader.nextProgressUpdateTime[task.taskId] = Date().addingTimeInterval(0.5)
+        if totalBytesExpectedToWrite !=  NSURLSessionTransferSizeUnknown {
+            Downloader.remainingBytesToDownload[task.taskId] = totalBytesExpectedToWrite - totalBytesWritten
+            if Date() > Downloader.nextProgressUpdateTime[task.taskId] ?? Date(timeIntervalSince1970: 0) {
+                let progress = min(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite), 0.999)
+                if progress - (Downloader.lastProgressUpdate[task.taskId] ?? 0.0) > 0.02 {
+                    processProgressUpdate(task: task, progress: progress, expectedFileSize: totalBytesExpectedToWrite)
+                    Downloader.lastProgressUpdate[task.taskId] = progress
+                    Downloader.nextProgressUpdateTime[task.taskId] = Date().addingTimeInterval(0.5)
+                }
             }
         }
     }
