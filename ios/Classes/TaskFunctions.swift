@@ -381,11 +381,8 @@ func insufficientSpace(contentLength: Int64) -> Bool {
     guard
         // Check if the configCheckAvailableSpace preference is set and is positive
         checkValue > 0,
-        // Get the path to the data directory
         let path = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first,
-        // Get the available space on the data directory
-        let stat = try? FileManager.default.attributesOfFileSystem(forPath: path),
-        let available = stat[FileAttributeKey.systemFreeSize] as? Int64
+        let available = try? URL(fileURLWithPath: path).resourceValues(forKeys: [URLResourceKey.volumeAvailableCapacityForImportantUsageKey]).volumeAvailableCapacityForImportantUsage
     else {
         return false
     }
