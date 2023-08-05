@@ -21,9 +21,10 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     public static var forceFailPostOnBackgroundChannel = false
     private static var backgroundCompletionHandler: (() -> Void)?
     private static var urlSession: URLSession?
-    static var lastProgressUpdate = [String:Double]()
-    static var nextProgressUpdateTime = [String:Date]()
-    static var networkSpeedInfo = [String: (TimeInterval, Int64, Double)]() // time, bytes, speed
+    static var progressInfo = [String: (lastProgressUpdateTime: TimeInterval,
+                                        lastProgressValue: Double,
+                                        lastTotalBytesDone: Int64,
+                                        lastNetworkSpeed: Double)]() // time, bytes, speed
     static var uploaderForUrlSessionTaskIdentifier = [Int:Uploader]() // maps from UrlSessionTask TaskIdentifier
     static var haveNotificationPermission: Bool?
     static var taskIdsThatCanResume = Set<String>() // taskIds that can resume
@@ -458,7 +459,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                             updateNotification(task: task, notificationType: .paused, notificationConfig: notificationConfig)
                         }
                     }
-                    Downloader.lastProgressUpdate.removeValue(forKey: task.taskId) // ensure .running update on resume
+                    Downloader.progressInfo.removeValue(forKey: task.taskId) // ensure .running update on resume
                     return
                 }
             }
@@ -490,18 +491,39 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     
     //MARK: URLSessionDownloadTaskDelegate
     
+    /// Calculate progress, network speed and time remaining, and send this at an appropriate
+    /// interval to the Dart side
+    private func updateProgress(task: Task, totalBytesExpected: Int64, totalBytesDone: Int64) {
+        let info = Downloader.progressInfo[task.taskId] ?? (lastProgressUpdateTime: 0.0, lastProgressValue: 0.0, lastTotalBytesDone: 0, lastNetworkSpeed: -1.0)
+        if totalBytesExpected != NSURLSessionTransferSizeUnknown && Date().timeIntervalSince1970 > info.lastProgressUpdateTime + 0.5 {
+            let progress = min(Double(totalBytesDone) / Double(totalBytesExpected), 0.999)
+            if progress - info.lastProgressValue > 0.02 {
+                // calculate network speed and time remaining
+                let now = Date().timeIntervalSince1970
+                let timeSinceLastUpdate = now - info.lastProgressUpdateTime
+                let bytesSinceLastUpdate = totalBytesDone - info.lastTotalBytesDone
+                let currentNetworkSpeed: Double = timeSinceLastUpdate > 3600 ? -1.0 : Double(bytesSinceLastUpdate) / timeSinceLastUpdate / 1000000.0
+                let newNetworkSpeed = info.lastNetworkSpeed == -1.0 ? currentNetworkSpeed : (info.lastNetworkSpeed * 3.0 + currentNetworkSpeed) / 4.0
+                let remainingBytes = (1.0 - progress) * Double(totalBytesExpected)
+                let timeRemaining: TimeInterval = newNetworkSpeed == -1.0 ? -1.0 : (remainingBytes / newNetworkSpeed / 1000000.0)
+                Downloader.progressInfo[task.taskId] = (lastProgressUpdateTime: now, lastProgressValue: progress, lastTotalBytesDone: totalBytesDone, lastNetworkSpeed: newNetworkSpeed)
+                processProgressUpdate(task: task, progress: progress, expectedFileSize: totalBytesExpected, networkSpeed: newNetworkSpeed, timeRemaining: timeRemaining)
+            }
+        }
+    }
+    
     /// Process taskdelegate progress update for download task
     ///
     /// If the task requires progress updates, provide these at a reasonable interval
     /// If this is the first update for this file, also emit a 'running' status update
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         guard let task = getTaskFrom(urlSessionTask: downloadTask) else { return }
-        if Downloader.lastProgressUpdate[task.taskId] == nil {
+        if Downloader.progressInfo[task.taskId] == nil {
             // first 'didWriteData' call, so send 'running' status update
             // and check if the task is resumable
             processStatusUpdate(task: task, status: TaskStatus.running)
             processProgressUpdate(task: task, progress: 0.0)
-            Downloader.lastProgressUpdate[task.taskId] = 0.0
+            Downloader.progressInfo[task.taskId] = (lastProgressUpdateTime: 0, lastProgressValue: 0.0, lastTotalBytesDone: 0, lastNetworkSpeed: -1.0)
             if task.allowPause {
                 let acceptRangesHeader = (downloadTask.response as? HTTPURLResponse)?.allHeaderFields["Accept-Ranges"]
                 let taskCanResume = acceptRangesHeader as? String == "bytes"
@@ -516,28 +538,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                 updateNotification(task: task, notificationType: .running, notificationConfig: notificationConfig)
             }
         }
-        if totalBytesExpectedToWrite != NSURLSessionTransferSizeUnknown && Date() > Downloader.nextProgressUpdateTime[task.taskId] ?? Date(timeIntervalSince1970: 0) {
-            //TODO check if totalBytesExpectedToWrite is correct for a resume task
-            let expectedFileSize = totalBytesExpectedToWrite
-            let progress = min(Double(totalBytesWritten) / Double(expectedFileSize), 0.999)
-            if progress - (Downloader.lastProgressUpdate[task.taskId] ?? 0.0) > 0.02 {
-                // calculate network speed and time remaining
-                let (lastProgressUpdateTime, lastTotalBytesWritten, lastNetworkSpeed) = Downloader.networkSpeedInfo[task.taskId]
-                    ?? (0.0, 0, -1.0)
-                let now = Date().timeIntervalSince1970
-                let timeSinceLastUpdate = now - lastProgressUpdateTime
-                let bytesSinceLastUpdate = totalBytesWritten - lastTotalBytesWritten
-                let currentNetworkSpeed: Double = timeSinceLastUpdate > 3600 ? -1.0 : Double(bytesSinceLastUpdate) / timeSinceLastUpdate / 1000000.0
-                let newNetworkSpeed = lastNetworkSpeed == -1.0 ? currentNetworkSpeed : (lastNetworkSpeed * 3.0 + currentNetworkSpeed) / 4.0
-                let remainingBytes = (1.0 - progress) * Double(expectedFileSize)
-                let timeRemaining: TimeInterval = newNetworkSpeed == -1.0 ? -1.0 : (remainingBytes / newNetworkSpeed / 1000000.0)
-                Downloader.networkSpeedInfo[task.taskId] = (now, totalBytesWritten, newNetworkSpeed)
-                processProgressUpdate(task: task, progress: progress, expectedFileSize: totalBytesExpectedToWrite, networkSpeed: newNetworkSpeed, timeRemaining: timeRemaining)
-                //TODO combine last, next and networkSpeedInfo
-                Downloader.lastProgressUpdate[task.taskId] = progress
-                Downloader.nextProgressUpdateTime[task.taskId] = Date().addingTimeInterval(0.5)
-            }
-        }
+        updateProgress(task: task, totalBytesExpected: totalBytesExpectedToWrite, totalBytesDone: totalBytesWritten)
     }
     
     /// Process taskdelegate progress update for upload task
@@ -548,20 +549,18 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         let urlSessionTask = task
         guard let task = getTaskFrom(urlSessionTask: task) else {return}
         let taskId = task.taskId
-        if Downloader.lastProgressUpdate[taskId] == nil {
+        if Downloader.progressInfo[taskId] == nil {
             // first call to this method: send 'running' status update
             processStatusUpdate(task: task, status: TaskStatus.running)
             processProgressUpdate(task: task, progress: 0.0)
-            Downloader.lastProgressUpdate[taskId] = 0.0
-        }
-        if totalBytesExpectedToSend != NSURLSessionTransferSizeUnknown && Date() > Downloader.nextProgressUpdateTime[taskId] ?? Date(timeIntervalSince1970: 0) {
-            let progress = min(Double(totalBytesSent) / Double(totalBytesExpectedToSend), 0.999)
-            if progress - (Downloader.lastProgressUpdate[taskId] ?? 0.0) > 0.02 {
-                processProgressUpdate(task: task, progress: progress)
-                Downloader.lastProgressUpdate[taskId] = progress
-                Downloader.nextProgressUpdateTime[taskId] = Date().addingTimeInterval(0.5)
+            Downloader.progressInfo[task.taskId] = (lastProgressUpdateTime: 0, lastProgressValue: 0.0, lastTotalBytesDone: 0, lastNetworkSpeed: -1.0)
+            // notify if needed
+            let notificationConfig = getNotificationConfigFrom(urlSessionTask: urlSessionTask)
+            if (notificationConfig != nil) {
+                updateNotification(task: task, notificationType: .running, notificationConfig: notificationConfig)
             }
         }
+        updateProgress(task: task, totalBytesExpected: totalBytesExpectedToSend, totalBytesDone: totalBytesSent)
     }
     
     /// Process end of downloadTask sent by the urlSession.

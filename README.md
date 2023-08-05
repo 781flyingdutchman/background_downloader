@@ -343,9 +343,11 @@ Listen to updates from the downloader by listening to the `updates` stream, and 
         if (update is TaskStatusUpdate) {
             print('Status update for ${update.task} with status ${update.status}');
         } else if (update is TaskProgressUpdate) {
-            print('Progress update for ${update.task} with progress ${update.progress} '
-                  'and expected file size ${update.expectedFileSize}');
-            // note: expectedFileSize is only valid if 0 < progress < 1. It is -1 otherwise
+            print('Progress update for ${update.task} with progress ${update.progress}');
+            // note: other fields include expectedFileSize, networkSpeed and timeRemaining
+            //       You must check hasExpectedFileSize, hasNetworkSpeed and hasTimeRemaining
+            //       before using these fields, as they will not contain valid values
+            //       otherwise
     });
     
     // define the task
@@ -379,7 +381,6 @@ The [TaskProgressCallback](https://pub.dev/documentation/background_downloader/l
 void taskProgressCallback(TaskProgressUpdate update) {
   print('taskProgressCallback for ${update.task} with progress ${update.progress} '
         'and expected file size ${update.expectedFileSize}');
-  // note: expectedFileSize is only valid if 0 < progress < 1. It is -1 otherwise
 }
 ```
 

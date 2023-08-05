@@ -1173,16 +1173,16 @@ class TaskProgressUpdate extends TaskUpdate {
 
   bool get hasTimeRemaining => !timeRemaining.isNegative;
 
-  /// String is '--' if N/A, otherwise in MB/s or kB/s
+  /// String is '-- MB/s' if N/A, otherwise in MB/s or kB/s
   String get networkSpeedAsString => switch (networkSpeed) {
-        <= 0 => '--',
+        <= 0 => '-- MB/s',
         >= 1 => '${networkSpeed.round()} MB/s',
         _ => '${(networkSpeed * 1000).round()} kB/s'
       };
 
-  // String is '--' if N/A, otherwise HH:MM:SS or MM:SS
+  /// String is '--:--' if N/A, otherwise HH:MM:SS or MM:SS
   String get timeRemainingAsString => switch (timeRemaining.inSeconds) {
-        <= 0 => '--',
+        <= 0 => '--:--',
         < 3600 => '${timeRemaining.inMinutes.toString().padLeft(2, "0")}'
             ':${timeRemaining.inSeconds.remainder(60).toString().padLeft(2, "0")}',
         _ => '${timeRemaining.inHours}'

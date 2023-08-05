@@ -18,10 +18,13 @@ var progressCallbackCounter = 0;
 
 var statusCallbackCompleter = Completer<void>();
 var progressCallbackCompleter = Completer<void>();
-var someProgressCompleter = Completer<void>(); // completes when progress > 0.1
+var someProgressCompleter = Completer<void>(); // completes when progress > 0
+var significantProgressCompleter = Completer<void>(); // completes when progress > 0.1
 var lastStatus = TaskStatus.enqueued;
 var lastProgress = -100.0;
 var lastValidExpectedFileSize = -1;
+var lastValidNetworkSpeed = -1.0;
+var lastValidTimeRemaining = const Duration(seconds: -1);
 TaskException? lastException;
 
 const workingUrl = 'https://google.com';
@@ -29,6 +32,8 @@ const failingUrl = 'https://avmaps-dot-bbflightserver-hrd.appspot'
     '.com/public/get_current_app_data?key=background_downloader_integration_test';
 const urlWithContentLength = 'https://storage.googleapis'
     '.com/approachcharts/test/5MB-test.ZIP';
+const urlWithLongContentLength = 'https://storage.googleapis'
+    '.com/approachcharts/test/57MB-test.ZIP';
 const getTestUrl =
     'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_get_data';
 const getRedirectTestUrl =
@@ -77,12 +82,21 @@ void progressCallback(TaskProgressUpdate update) {
   final progress = update.progress;
   print('progressCallback for $task with $update}');
   lastProgress = progress;
-  if (progress > 0 && progress < 1) {
+  if (update.hasExpectedFileSize) {
     lastValidExpectedFileSize = update.expectedFileSize;
+  }
+  if (update.hasNetworkSpeed) {
+    lastValidNetworkSpeed = update.networkSpeed;
+  }
+  if (update.hasTimeRemaining) {
+    lastValidTimeRemaining = update.timeRemaining;
   }
   progressCallbackCounter++;
   if (!someProgressCompleter.isCompleted && progress > 0) {
     someProgressCompleter.complete();
+  }
+  if (!significantProgressCompleter.isCompleted && progress > 0.1) {
+    significantProgressCompleter.complete();
   }
   if (!progressCallbackCompleter.isCompleted &&
       (progress < 0 || progress == 1)) {
@@ -120,10 +134,13 @@ void main() {
     progressCallbackCounter = 0;
     statusCallbackCompleter = Completer<void>();
     progressCallbackCompleter = Completer<void>();
+    significantProgressCompleter = Completer<void>();
     someProgressCompleter = Completer<void>();
     lastStatus = TaskStatus.enqueued;
     lastProgress = 0;
     lastValidExpectedFileSize = -1;
+    lastValidNetworkSpeed = -1.0;
+    lastValidTimeRemaining = const Duration(seconds: -1);
     lastException = null;
     FileDownloader().destroy();
     final path =
@@ -336,6 +353,30 @@ void main() {
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
       print('Finished enqueue with progress');
+    });
+
+    testWidgets('enqueue with download speed and time remaining', (widgetTester) async {
+      task = DownloadTask(
+          url: urlWithLongContentLength,
+          filename: defaultFilename,
+          updates: Updates.statusAndProgress);
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await significantProgressCompleter.future;
+      final networkSpeed = lastValidNetworkSpeed;
+      final timeRemaining = lastValidTimeRemaining;
+      expect(networkSpeed, greaterThan(0));
+      expect(timeRemaining.isNegative, isFalse);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      final networkSpeed2 = lastValidNetworkSpeed;
+      final timeRemaining2 = lastValidTimeRemaining;
+      expect(networkSpeed2, greaterThan(0));
+      expect(timeRemaining2.isNegative, isFalse);
+      expect(networkSpeed, isNot(equals(networkSpeed2)));
+      expect(timeRemaining, isNot(equals(timeRemaining2)));
     });
 
     testWidgets('enqueue with non-default group callbacks',
@@ -1938,7 +1979,7 @@ void main() {
             await FileDownloader().cancelTaskWithId(task.taskId), equals(true));
         await statusCallbackCompleter.future;
         if (Platform.isIOS) {
-          // canot avoid fail on iOS
+          // cannot avoid fail on iOS
           expect(lastStatus, equals(TaskStatus.failed));
         } else {
           expect(lastStatus, equals(TaskStatus.canceled));
@@ -2243,11 +2284,11 @@ void main() {
       // before the initial pause command, or did not have time for two
       // pause/resume cycles -> shorten interval
       var interval = Platform.isAndroid || Platform.isIOS
-          ? const Duration(milliseconds: 1000)
+          ? const Duration(milliseconds: 500)
           : const Duration(milliseconds: 2000);
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       task = DownloadTask(
-          url: urlWithContentLength,
+          url: urlWithLongContentLength,
           filename: defaultFilename,
           allowPause: true);
       expect(await FileDownloader().enqueue(task), equals(true));
@@ -2263,8 +2304,7 @@ void main() {
           expect(await FileDownloader().resume(task), isTrue);
         }
       }
-      expect(
-          await fileEqualsLargeTestFile(File(await task.filePath())), isTrue);
+      expect(await (File(await task.filePath())).length(), equals(59673498));
       expect(statusCallbackCounter, greaterThanOrEqualTo(9)); // min 2 pause
     });
 

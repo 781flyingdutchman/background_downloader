@@ -153,8 +153,7 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
     }
     if isFinalState(status: status) {
         // remove from persistent storage
-        Downloader.lastProgressUpdate.removeValue(forKey: task.taskId)
-        Downloader.nextProgressUpdateTime.removeValue(forKey: task.taskId)
+        Downloader.progressInfo.removeValue(forKey: task.taskId)
         Downloader.localResumeData.removeValue(forKey: task.taskId)
     }
 }

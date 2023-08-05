@@ -991,7 +991,7 @@ class TaskWorker(
                             )
                             updateNotification(
                                 task, notificationTypeForTaskStatus(TaskStatus.running),
-                                progress, networkSpeed, timeRemaining
+                                progress, timeRemaining
                             )
                             lastProgressUpdate = progress
                             nextProgressUpdateTime = currentTimeMillis() + 500
@@ -1121,12 +1121,12 @@ class TaskWorker(
      * The [progress] field is only relevant for [NotificationType.running]. If progress is
      * negative no progress bar will be shown. If progress > 1 an indeterminate progress bar
      * will be shown
-     * [downloadSpeed] and [timeRemaining] are only relevant for [NotificationType.running]
+     * [networkSpeed] and [timeRemaining] are only relevant for [NotificationType.running]
      */
     @SuppressLint("MissingPermission")
     private fun updateNotification(
         task: Task, notificationType: NotificationType, progress: Double = 2.0,
-        downloadSpeed: Double = -1.0, timeRemaining: Long = -1000
+        timeRemaining: Long = -1000
     ) {
         val notification = when (notificationType) {
             NotificationType.running -> notificationConfig?.running
@@ -1173,7 +1173,6 @@ class TaskWorker(
             notification.title,
             task,
             notificationProgress,
-            downloadSpeed,
             timeRemaining
         )
         if (title.isNotEmpty()) {
@@ -1183,7 +1182,6 @@ class TaskWorker(
             notification.body,
             task,
             notificationProgress,
-            downloadSpeed,
             timeRemaining
         )
         if (body.isNotEmpty()) {
@@ -1376,7 +1374,6 @@ class TaskWorker(
         input: String,
         task: Task,
         progress: Double,
-        networkSpeed: Double,
         timeRemaining: Long
     ): String {
         // filename and metadata
@@ -1389,13 +1386,13 @@ class TaskWorker(
         val output2 = progressRegEx.replace(output, progressString)
         // download speed
         val networkSpeedString =
-            if (networkSpeed <= 0.0) "--" else if (networkSpeed > 1) "${networkSpeed.roundToInt()} MB/s" else "${(networkSpeed * 1000).roundToInt()} kB/s"
+            if (networkSpeed <= 0.0) "-- MB/s" else if (networkSpeed > 1) "${networkSpeed.roundToInt()} MB/s" else "${(networkSpeed * 1000).roundToInt()} kB/s"
         val output3 = networkSpeedRegEx.replace(output2, networkSpeedString)
         // time remaining
         val hours = timeRemaining.div(3600000L)
         val minutes = (timeRemaining.mod(3600000L)).div(60000L)
         val seconds = (timeRemaining.mod(60000L)).div(1000L)
-        val timeRemainingString = if (timeRemaining < 0) "--" else if (hours > 0)
+        val timeRemainingString = if (timeRemaining < 0) "--:--" else if (hours > 0)
             String.format(
                 "%02d:%02d:%02d",
                 hours,

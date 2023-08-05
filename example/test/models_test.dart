@@ -8,6 +8,8 @@ void main() {
     expect(update.hasExpectedFileSize, isFalse);
     expect(update.hasNetworkSpeed, isFalse);
     expect(update.hasTimeRemaining, isFalse);
+    expect(update.networkSpeedAsString, equals('-- MB/s'));
+    expect(update.timeRemainingAsString, equals('--:--'));
     update =
         TaskProgressUpdate(task, 0.1, 123, 0.2, const Duration(seconds: 30));
     expect(update.hasExpectedFileSize, isTrue);
