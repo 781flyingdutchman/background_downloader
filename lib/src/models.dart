@@ -1135,17 +1135,26 @@ class TaskStatusUpdate extends TaskUpdate {
 /// so NOT representative when progress == 0 or progress == 1, and
 /// will be -1 if the file size is not provided by the server or otherwise
 /// not known.
+/// [downloadSpeed] is valid if positive, expressed in MB/second
+/// [timeRemaining] is valid if positive
 class TaskProgressUpdate extends TaskUpdate {
   final double progress;
   final int expectedFileSize;
+  final double downloadSpeed;
+  final Duration timeRemaining;
 
   const TaskProgressUpdate(super.task, this.progress,
-      [this.expectedFileSize = -1]);
+      [this.expectedFileSize = -1,
+      this.downloadSpeed = -1,
+      this.timeRemaining = const Duration(seconds: -1)]);
 
   /// Create object from JSON Map
   TaskProgressUpdate.fromJsonMap(Map<String, dynamic> jsonMap)
       : progress = (jsonMap['progress'] as num?)?.toDouble() ?? progressFailed,
         expectedFileSize = (jsonMap['expectedFileSize'] as num?)?.toInt() ?? -1,
+        downloadSpeed = (jsonMap['downloadSpeed'] as num?)?.toDouble() ?? -1,
+        timeRemaining = Duration(
+            seconds: (jsonMap['timeRemaining'] as num?)?.toInt() ?? -1),
         super.fromJsonMap(jsonMap);
 
   /// Return JSON Map representing object
@@ -1153,8 +1162,38 @@ class TaskProgressUpdate extends TaskUpdate {
   Map<String, dynamic> toJsonMap() => {
         ...super.toJsonMap(),
         'progress': progress,
-        'expectedFileSize': expectedFileSize
+        'expectedFileSize': expectedFileSize,
+        'downloadSpeed': downloadSpeed,
+        'timeRemaining': timeRemaining.inSeconds
       };
+
+  bool get hasExpectedFileSize => expectedFileSize >= 0;
+
+  bool get hasDownloadSpeed => downloadSpeed >= 0;
+
+  bool get hasTimeRemaining => !timeRemaining.isNegative;
+
+  /// String is '--' if N/A, otherwise in MB/s or kB/s
+  String get downloadSpeedAsString => switch (downloadSpeed) {
+        <= 0 => '--',
+        >= 1 => '${downloadSpeed.round()} MB/s',
+        _ => '${(downloadSpeed * 1000).round()} kB/s'
+      };
+
+  // String is '--' if N/A, otherwise HH:MM:SS or MM:SS
+  String get timeRemainingAsString => switch (timeRemaining.inSeconds) {
+        <= 0 => '--',
+        < 3600 => '${timeRemaining.inMinutes.toString().padLeft(2, "0")}'
+            ':${timeRemaining.inSeconds.remainder(60).toString().padLeft(2, "0")}',
+        _ => '${timeRemaining.inHours}'
+            ':${timeRemaining.inMinutes.remainder(60).toString().padLeft(2, "0")}'
+            ':${timeRemaining.inSeconds.remainder(60).toString().padLeft(2, "0")}'
+      };
+
+  @override
+  String toString() {
+    return 'TaskProgressUpdate{progress: $progress, expectedFileSize: $expectedFileSize, downloadSpeed: $downloadSpeed, timeRemaining: $timeRemaining}';
+  }
 }
 
 // Progress values representing a status

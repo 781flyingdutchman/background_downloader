@@ -76,7 +76,7 @@ void progressCallback(TaskProgressUpdate update) {
   final task = update.task;
   final progress = update.progress;
   print(
-      'progressCallback for $task with progress $progress and expectedFileSize ${update.expectedFileSize}');
+      'progressCallback for $task with $update}');
   lastProgress = progress;
   if (progress > 0 && progress < 1) {
     lastValidExpectedFileSize = update.expectedFileSize;

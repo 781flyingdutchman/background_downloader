@@ -17,7 +17,10 @@ import 'models.dart';
 
 /// global variables, unique to this isolate
 var _bytesTotal = 0;
+var _bytesTotalAtLastProgressUpdate = 0;
 var _startByte = 0;
+var _lastProgressUpdateTime = DateTime.fromMillisecondsSinceEpoch(0);
+var _downloadSpeed = 0.0; // in MB/s
 var _isPaused = false;
 var _isCanceled = false;
 TaskException? _taskException;
@@ -519,7 +522,7 @@ Future<TaskStatus> transferBytes(
             (progress - lastProgressUpdate > 0.02 &&
                 now.isAfter(nextProgressUpdateTime))) {
           processProgressUpdateInIsolate(
-              task, progress, sendPort, contentLength);
+              task, progress, sendPort, contentLength + _startByte);
           lastProgressUpdate = progress;
           nextProgressUpdateTime = now.add(const Duration(milliseconds: 500));
         }
@@ -585,7 +588,42 @@ void processProgressUpdateInIsolate(
     Task task, double progress, SendPort sendPort,
     [int expectedFileSize = -1]) {
   if (task.providesProgressUpdates) {
-    sendPort.send(('progressUpdate', progress, expectedFileSize));
+    if (progress > 0 && progress < 1) {
+      // calculate download speed and time remaining
+      final now = DateTime.now();
+      final timeSinceLastUpdate = now.difference(_lastProgressUpdateTime);
+      _lastProgressUpdateTime = now;
+      final bytesSinceLastUpdate =
+          _bytesTotal - _bytesTotalAtLastProgressUpdate;
+      _bytesTotalAtLastProgressUpdate = _bytesTotal;
+      final currentDownloadSpeed = timeSinceLastUpdate.inHours > 0
+          ? 0.0
+          : bytesSinceLastUpdate / timeSinceLastUpdate.inMicroseconds;
+      _downloadSpeed = switch (currentDownloadSpeed) {
+        0 => 0,
+        _ when _downloadSpeed == 0 => currentDownloadSpeed,
+        _ => (_downloadSpeed * 3 + currentDownloadSpeed) / 4.0
+      };
+      final remainingBytes = (1 - progress) * expectedFileSize;
+      final timeRemaining = _downloadSpeed == 0 || expectedFileSize < 0 ? const Duration(seconds: -1)
+          : Duration(microseconds: (remainingBytes / _downloadSpeed).round());
+      sendPort.send((
+        'progressUpdate',
+        progress,
+        expectedFileSize,
+        _downloadSpeed,
+        timeRemaining
+      ));
+    } else {
+      // no download speed or time remaining
+      sendPort.send((
+        'progressUpdate',
+        progress,
+        expectedFileSize,
+        -1.0,
+        const Duration(seconds: -1)
+      ));
+    }
   }
 }
 
