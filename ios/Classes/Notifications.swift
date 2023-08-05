@@ -48,6 +48,10 @@ enum NotificationCategory : String, CaseIterable {
 let ourCategories = NotificationCategory.allCases.map { $0.rawValue }
 
 func updateNotification(task: Task, notificationType: NotificationType, notificationConfig: NotificationConfig?) {
+    if !Downloader.haveregisteredNotificationCategories {
+        registerNotificationCategories()
+        Downloader.haveregisteredNotificationCategories = true
+    }
     let center = UNUserNotificationCenter.current()
     center.getNotificationSettings { settings in
         guard (settings.authorizationStatus == .authorized) else { return }
@@ -131,18 +135,22 @@ func replaceTokens(input: String, task: Task) -> String {
 
 /// Registers notification categories and actions for the different notification types
 func registerNotificationCategories() {
+    // get values from shared preferences
+    let defaults = UserDefaults.standard
+    let localize = defaults.dictionary(forKey: Downloader.keyConfigLocalize)
+
     // define the actions
     let cancelAction = UNNotificationAction(identifier: "cancel_action",
-                                            title: "Cancel",
+                                            title: localize?["Cancel"] as? String ?? "Cancel",
                                             options: [])
     let cancelInactiveAction = UNNotificationAction(identifier: "cancel_inactive_action",
-                                                    title: "Cancel",
+                                                    title: localize?["Cancel"] as? String ?? "Cancel",
                                                     options: [])
     let pauseAction = UNNotificationAction(identifier: "pause_action",
-                                           title: "Pause",
+                                           title: localize?["Pause"] as? String ?? "Pause",
                                            options: [])
     let resumeAction = UNNotificationAction(identifier: "resume_action",
-                                            title: "Resume",
+                                            title: localize?["Resume"] as? String ?? "Resume",
                                             options: [])
     // Define the notification categories using these actions
     let runningWithPauseCategory =

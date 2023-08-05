@@ -60,9 +60,13 @@ abstract base class BaseDownloader {
 
   factory BaseDownloader.instance(
       PersistentStorage persistentStorage, Database database) {
-    final instance = Platform.isMacOS || Platform.isLinux || Platform.isWindows
-        ? DesktopDownloader()
-        : NativeDownloader();
+    final instance = switch (Platform.operatingSystem) {
+      'android' => AndroidDownloader(),
+      'ios' => IOSDownloader(),
+      'macos' || 'linux' || 'windows' => DesktopDownloader(),
+      final platform =>
+        throw ArgumentError('$platform is not a supported platform')
+    };
     instance._storage = persistentStorage;
     instance.database = database;
     unawaited(instance.initialize());
@@ -76,6 +80,51 @@ abstract base class BaseDownloader {
   /// desktop or native
   @mustCallSuper
   Future<void> initialize() => _storage.initialize();
+
+  /// Configures the downloader
+  ///
+  /// Configuration is either a single configItem or a list of configItems.
+  /// Each configItem is a (String, dynamic) where the String is the config
+  /// type and 'dynamic' can be any appropriate parameter, including another Record.
+  /// [globalConfig] is routed to every platform, whereas the platform specific
+  /// ones only get routed to that platform, after the global configs have
+  /// completed.
+  /// If a config type appears more than once, they will all be executed in order,
+  /// with [globalConfig] executed before the platform-specific config.
+  ///
+  /// Returns a list of (String, String) which is the config type and a response
+  /// which is empty if OK, 'not implemented' if the item could not be recognized and
+  /// processed, or may contain other error/warning information
+  Future<List<(String, String)>> configure(
+      {dynamic globalConfig,
+      dynamic androidConfig,
+      dynamic iOSConfig,
+      dynamic desktopConfig}) async {
+    final global = globalConfig is List ? globalConfig : [globalConfig];
+    final rawPlatformConfig = platformConfig(
+        androidConfig: androidConfig,
+        iOSConfig: iOSConfig,
+        desktopConfig: desktopConfig);
+    final platform =
+        rawPlatformConfig is List ? rawPlatformConfig : [rawPlatformConfig];
+    return await Future.wait([...global, ...platform]
+        .where((e) => e != null)
+        .map((e) => configureItem(e)));
+  }
+
+  /// Returns the config for the platform, e.g. the [androidConfig] parameter
+  /// on Android
+  dynamic platformConfig(
+      {dynamic globalConfig,
+      dynamic androidConfig,
+      dynamic iOSConfig,
+      dynamic desktopConfig});
+
+  /// Configures one [configItem] and returns the (String, String) result
+  ///
+  /// If the second element is 'ignored' then the method did not act on
+  /// the [configItem]
+  Future<(String, String)> configureItem((String, dynamic) configItem);
 
   /// Retrieve data that was stored locally because it could not be
   /// delivered to the downloader

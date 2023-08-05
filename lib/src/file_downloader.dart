@@ -79,6 +79,34 @@ interface class FileDownloader {
   /// not have a registered callback
   Stream<TaskUpdate> get updates => _downloader.updates.stream;
 
+  /// Configures the downloader
+  ///
+  /// Configuration is either a single configItem or a list of configItems.
+  /// Each configItem is a (String, dynamic) where the String is the config
+  /// type and 'dynamic' can be any appropriate parameter, including another Record.
+  /// [globalConfig] is routed to every platform, whereas the platform specific
+  /// ones only get routed to that platform, after the global configs have
+  /// completed.
+  /// If a config type appears more than once, they will all be executed in order,
+  /// with [globalConfig] executed before the platform-specific config.
+  ///
+  /// Returns a list of (String, String) which is the config type and a response
+  /// which is empty if OK, 'not implemented' if the item could not be recognized and
+  /// processed, or may contain other error/warning information
+  ///
+  /// Please see [CONFIG.md](https://github.com/781flyingdutchman/background_downloader/blob/main/CONFIG.md)
+  /// for more information
+  Future<List<(String, String)>> configure(
+          {dynamic globalConfig,
+          dynamic androidConfig,
+          dynamic iOSConfig,
+          dynamic desktopConfig}) =>
+      _downloader.configure(
+          globalConfig: globalConfig,
+          androidConfig: androidConfig,
+          iOSConfig: iOSConfig,
+          desktopConfig: desktopConfig);
+
   /// Register status or progress callbacks to monitor download progress, and
   /// [TaskNotificationTapCallback] to respond to user tapping a notification.
   ///
@@ -766,7 +794,8 @@ interface class FileDownloader {
   /// the downloader. If not set, the default [http.Client] will be used.
   /// The request is executed on an Isolate, to ensure minimal interference
   /// with the main Isolate
-  Future<http.Response> request(Request request) => compute(doRequest, request);
+  Future<http.Response> request(Request request) => compute(doRequest,
+      (request, DesktopDownloader.requestTimeout, DesktopDownloader.proxy, DesktopDownloader.bypassTLSCertificateValidation));
 
   /// Move the file represented by the [task] to a shared storage
   /// [destination] and potentially a [directory] within that destination. If
@@ -850,7 +879,9 @@ interface class FileDownloader {
 ///
 /// This function is run on an Isolate to ensure performance on the main
 /// Isolate is not affected
-Future<http.Response> doRequest(Request request) async {
+Future<http.Response> doRequest(
+    (Request, Duration?, Map<String, dynamic>, bool) params) async {
+  final (request, requestTimeout, proxy, bypassTLSCertificateValidation) = params;
   Logger.root.level = Level.ALL;
   Logger.root.onRecord.listen((LogRecord rec) {
     if (kDebugMode) {
@@ -858,6 +889,7 @@ Future<http.Response> doRequest(Request request) async {
     }
   });
   final log = Logger('FileDownloader.request');
+  DesktopDownloader.setHttpClient(requestTimeout, proxy, bypassTLSCertificateValidation);
   final client = DesktopDownloader.httpClient;
   var response = http.Response('', 499,
       reasonPhrase: 'Not attempted'); // dummy to start with

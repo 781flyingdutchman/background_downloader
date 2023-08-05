@@ -152,9 +152,10 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
         }
     }
     if isFinalState(status: status) {
-        // remove from persistent storage
+        // remove references to this task that are no longer needed
         Downloader.progressInfo.removeValue(forKey: task.taskId)
         Downloader.localResumeData.removeValue(forKey: task.taskId)
+        Downloader.remainingBytesToDownload.removeValue(forKey: task.taskId)
     }
 }
 
@@ -356,4 +357,41 @@ func directoryForTask(task: Task) throws ->  URL {
     return task.directory.isEmpty
     ? documentsURL
     : documentsURL.appendingPathComponent(task.directory)
+}
+
+/**
+ * Returns true if there is insufficient space to store a file of length
+ * [contentLength]
+ *
+ * Returns false if [contentLength] <= 0
+ * Returns false if configCheckAvailableSpace has not been set, or if available
+ * space is greater than that setting
+ * Returns true otherwise
+ */
+func insufficientSpace(contentLength: Int64) -> Bool {
+    // Check if contentLength is positive
+    guard contentLength > 0 else {
+        return false
+    }
+
+    // Get the value of the configCheckAvailableSpace preference.
+    let checkValue = UserDefaults.standard.integer(forKey: Downloader.keyConfigCheckAvailableSpace)
+
+    guard
+        // Check if the configCheckAvailableSpace preference is set and is positive
+        checkValue > 0,
+        let path = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first,
+        let available = try? URL(fileURLWithPath: path).resourceValues(forKeys: [URLResourceKey.volumeAvailableCapacityForImportantUsageKey]).volumeAvailableCapacityForImportantUsage
+    else {
+        return false
+    }
+
+    os_log("available= %d", log: log, type: .error, available)
+
+    // Calculate the total remaining bytes to download.
+    let remainingBytesToDownload = Downloader.remainingBytesToDownload.values.reduce(0, +)
+    os_log("remainingtodownload= %d", log: log, type: .error, remainingBytesToDownload)
+
+    // Return true if there is insufficient space to store the file.
+    return available - (remainingBytesToDownload + contentLength) < checkValue << 20
 }

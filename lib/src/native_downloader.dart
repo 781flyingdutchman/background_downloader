@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -12,17 +13,11 @@ import 'models.dart';
 /// Implementation of download functionality for native platforms
 ///
 /// Uses [MethodChannel] to communicate with native platforms
-final class NativeDownloader extends BaseDownloader {
-  static final NativeDownloader _singleton = NativeDownloader._internal();
-  static const _channel = MethodChannel('com.bbflight.background_downloader');
+abstract base class NativeDownloader extends BaseDownloader {
+  static const methodChannel =
+      MethodChannel('com.bbflight.background_downloader');
   static const _backgroundChannel =
       MethodChannel('com.bbflight.background_downloader.background');
-
-  factory NativeDownloader() {
-    return _singleton;
-  }
-
-  NativeDownloader._internal();
 
   @override
   Future<void> initialize() async {
@@ -113,7 +108,7 @@ final class NativeDownloader extends BaseDownloader {
   Future<bool> enqueue(Task task,
       [TaskNotificationConfig? notificationConfig]) async {
     super.enqueue(task);
-    return await _channel.invokeMethod<bool>('enqueue', [
+    return await methodChannel.invokeMethod<bool>('enqueue', [
           jsonEncode(task.toJsonMap()),
           notificationConfig != null
               ? jsonEncode(notificationConfig.toJsonMap())
@@ -125,7 +120,8 @@ final class NativeDownloader extends BaseDownloader {
   @override
   Future<int> reset(String group) async {
     final retryAndPausedTaskCount = await super.reset(group);
-    final nativeCount = await _channel.invokeMethod<int>('reset', group) ?? 0;
+    final nativeCount =
+        await methodChannel.invokeMethod<int>('reset', group) ?? 0;
     return retryAndPausedTaskCount + nativeCount;
   }
 
@@ -135,7 +131,8 @@ final class NativeDownloader extends BaseDownloader {
     final retryAndPausedTasks =
         await super.allTasks(group, includeTasksWaitingToRetry);
     final result =
-        await _channel.invokeMethod<List<dynamic>?>('allTasks', group) ?? [];
+        await methodChannel.invokeMethod<List<dynamic>?>('allTasks', group) ??
+            [];
     final tasks = result
         .map((e) => Task.createFromJsonMap(jsonDecode(e as String)))
         .toList();
@@ -144,7 +141,8 @@ final class NativeDownloader extends BaseDownloader {
 
   @override
   Future<bool> cancelPlatformTasksWithIds(List<String> taskIds) async =>
-      await _channel.invokeMethod<bool>('cancelTasksWithIds', taskIds) ?? false;
+      await methodChannel.invokeMethod<bool>('cancelTasksWithIds', taskIds) ??
+      false;
 
   /// Kills the task if it failed, on Android only
   ///
@@ -152,7 +150,7 @@ final class NativeDownloader extends BaseDownloader {
   Future<void> killFailedTask(Task task, TaskStatus status) async {
     if (Platform.isAndroid &&
         (status == TaskStatus.failed || status == TaskStatus.canceled)) {
-      _channel.invokeMethod('killTaskWithId', task.taskId);
+      methodChannel.invokeMethod('killTaskWithId', task.taskId);
     }
   }
 
@@ -162,7 +160,8 @@ final class NativeDownloader extends BaseDownloader {
     if (task != null) {
       return task;
     }
-    final jsonString = await _channel.invokeMethod<String>('taskForId', taskId);
+    final jsonString =
+        await methodChannel.invokeMethod<String>('taskForId', taskId);
     if (jsonString != null) {
       return Task.createFromJsonMap(jsonDecode(jsonString));
     }
@@ -171,7 +170,7 @@ final class NativeDownloader extends BaseDownloader {
 
   @override
   Future<bool> pause(Task task) async =>
-      await _channel.invokeMethod<bool>('pause', task.taskId) ?? false;
+      await methodChannel.invokeMethod<bool>('pause', task.taskId) ?? false;
 
   @override
   Future<bool> resume(Task task,
@@ -179,7 +178,7 @@ final class NativeDownloader extends BaseDownloader {
     if (await super.resume(task)) {
       final taskResumeData = await getResumeData(task.taskId);
       if (taskResumeData != null) {
-        return await _channel.invokeMethod<bool>('enqueue', [
+        return await methodChannel.invokeMethod<bool>('enqueue', [
               jsonEncode(task.toJsonMap()),
               notificationConfig != null
                   ? jsonEncode(notificationConfig.toJsonMap())
@@ -204,9 +203,11 @@ final class NativeDownloader extends BaseDownloader {
   @override
   Future<Map<String, dynamic>> popUndeliveredData(Undelivered dataType) async {
     final String jsonMapString = await switch (dataType) {
-      Undelivered.resumeData => _channel.invokeMethod('popResumeData'),
-      Undelivered.statusUpdates => _channel.invokeMethod('popStatusUpdates'),
-      Undelivered.progressUpdates => _channel.invokeMethod('popProgressUpdates')
+      Undelivered.resumeData => methodChannel.invokeMethod('popResumeData'),
+      Undelivered.statusUpdates =>
+        methodChannel.invokeMethod('popStatusUpdates'),
+      Undelivered.progressUpdates =>
+        methodChannel.invokeMethod('popProgressUpdates')
     };
     return jsonDecode(jsonMapString);
   }
@@ -215,7 +216,7 @@ final class NativeDownloader extends BaseDownloader {
   Future<Duration> getTaskTimeout() async {
     if (Platform.isAndroid) {
       final timeoutMillis =
-          await _channel.invokeMethod<int>('getTaskTimeout') ?? 0;
+          await methodChannel.invokeMethod<int>('getTaskTimeout') ?? 0;
       return Duration(milliseconds: timeoutMillis);
     }
     return const Duration(hours: 4); // on iOS, resource timeout
@@ -223,28 +224,163 @@ final class NativeDownloader extends BaseDownloader {
 
   @override
   Future<void> setForceFailPostOnBackgroundChannel(bool value) async {
-    await _channel.invokeMethod('forceFailPostOnBackgroundChannel', value);
+    await methodChannel.invokeMethod('forceFailPostOnBackgroundChannel', value);
   }
 
   @override
   Future<String?> moveToSharedStorage(String filePath,
           SharedStorage destination, String directory, String? mimeType) =>
-      _channel.invokeMethod<String?>('moveToSharedStorage',
+      methodChannel.invokeMethod<String?>('moveToSharedStorage',
           [filePath, destination.index, directory, mimeType]);
 
   @override
   Future<String?> pathInSharedStorage(
           String filePath, SharedStorage destination, String directory) =>
-      _channel.invokeMethod<String?>(
+      methodChannel.invokeMethod<String?>(
           'pathInSharedStorage', [filePath, destination.index, directory]);
 
   @override
   Future<bool> openFile(Task? task, String? filePath, String? mimeType) async {
-    final result = await _channel.invokeMethod<bool>('openFile', [
+    final result = await methodChannel.invokeMethod<bool>('openFile', [
       task != null ? jsonEncode(task.toJsonMap()) : null,
       filePath,
       mimeType
     ]);
     return result ?? false;
+  }
+
+  @override
+  Future<(String, String)> configureItem((String, dynamic) configItem) async {
+    switch (configItem) {
+      case ('requestTimeout', Duration? duration):
+        await NativeDownloader.methodChannel
+            .invokeMethod('configRequestTimeout', duration?.inSeconds);
+
+      case ('proxy', (String address, int port)):
+        await NativeDownloader.methodChannel
+            .invokeMethod('configProxyAddress', address);
+        await NativeDownloader.methodChannel
+            .invokeMethod('configProxyPort', port);
+
+      case ('proxy', false):
+        await NativeDownloader.methodChannel
+            .invokeMethod('configProxyAddress', null);
+        await NativeDownloader.methodChannel
+            .invokeMethod('configProxyPort', null);
+
+      case ('checkAvailableSpace', int minimum):
+        assert(minimum > 0, 'Minimum available space must be in MB and > 0');
+        await NativeDownloader.methodChannel
+            .invokeMethod('configCheckAvailableSpace', minimum);
+
+      case ('checkAvailableSpace', false):
+        await NativeDownloader.methodChannel
+            .invokeMethod('configCheckAvailableSpace', null);
+
+      default:
+        return (
+          configItem.$1,
+          'not implemented'
+        ); // this method did not process this configItem
+    }
+    return (configItem.$1, ''); // normal result
+  }
+}
+
+/// Android native downloader
+final class AndroidDownloader extends NativeDownloader {
+  static final AndroidDownloader _singleton = AndroidDownloader._internal();
+
+  factory AndroidDownloader() {
+    return _singleton;
+  }
+  AndroidDownloader._internal();
+
+  @override
+  dynamic platformConfig(
+          {dynamic globalConfig,
+          dynamic androidConfig,
+          dynamic iOSConfig,
+          dynamic desktopConfig}) =>
+      androidConfig;
+
+  @override
+  Future<(String, String)> configureItem((String, dynamic) configItem) async {
+    final superResult = await super.configureItem(configItem);
+    if (superResult.$2 != 'not implemented') {
+      return superResult;
+    }
+    switch (configItem) {
+      case ('runInForeground', bool activate):
+        await NativeDownloader.methodChannel
+            .invokeMethod('configForegroundFileSize', activate ? 0 : -1);
+
+      case ('runInForegroundIfFileLargerThan', int fileSize):
+        await NativeDownloader.methodChannel
+            .invokeMethod('configForegroundFileSize', fileSize);
+
+      case ('bypassTLSCertificateValidation', bool bypass):
+        if (bypass) {
+          if (kReleaseMode) {
+            throw ArgumentError('You cannot bypass certificate validation in release mode');
+          }
+          await NativeDownloader.methodChannel
+              .invokeMethod('configBypassTLSCertificateValidation');
+          log.warning('TLS certificate validation is bypassed. This is insecure and cannot be '
+              'done in release mode');
+        } else {
+          throw ArgumentError('To undo bypassing the certificate validation, '
+              'restart and leave out the "configBypassCertificateValidation" configuration');
+        }
+
+      default:
+        return (
+          configItem.$1,
+          'not implemented'
+        ); // this method did not process this configItem
+    }
+    return (configItem.$1, ''); // normal result
+  }
+}
+
+/// iOS native downloader
+final class IOSDownloader extends NativeDownloader {
+  static final IOSDownloader _singleton = IOSDownloader._internal();
+
+  factory IOSDownloader() {
+    return _singleton;
+  }
+  IOSDownloader._internal();
+
+  @override
+  dynamic platformConfig(
+          {dynamic globalConfig,
+          dynamic androidConfig,
+          dynamic iOSConfig,
+          dynamic desktopConfig}) =>
+      iOSConfig;
+
+  @override
+  Future<(String, String)> configureItem((String, dynamic) configItem) async {
+    final superResult = await super.configureItem(configItem);
+    if (superResult.$2 != 'not implemented') {
+      return superResult;
+    }
+    switch (configItem) {
+      case ('resourceTimeout', Duration? duration):
+        await NativeDownloader.methodChannel
+            .invokeMethod('configResourceTimeout', duration?.inSeconds);
+
+      case ("localize", Map<String, String>? translation):
+        await NativeDownloader.methodChannel
+            .invokeMethod('configLocalize', translation);
+
+      default:
+        return (
+          configItem.$1,
+          'not implemented'
+        ); // this method did not process this configItem
+    }
+    return (configItem.$1, ''); // normal result
   }
 }

@@ -10,14 +10,22 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     
     static let instance = Downloader()
     
-    private static var resourceTimeout = 4 * 60 * 60.0 // in seconds
+    private static var defaultResourceTimeout = 4 * 60 * 60.0 // in seconds
+    private static var defaultRequestTimeout = 60.0 // in seconds
     public static var sessionIdentifier = "com.bbflight.background_downloader.Downloader"
     public static var flutterPluginRegistrantCallback: FlutterPluginRegistrantCallback?
     public static var backgroundChannel: FlutterMethodChannel?
     public static var keyResumeDataMap = "com.bbflight.background_downloader.resumeDataMap"
     public static var keyStatusUpdateMap = "com.bbflight.background_downloader.statusUpdateMap"
     public static var keyProgressUpdateMap = "com.bbflight.background_downloader.progressUpdateMap"
-    
+    public static var keyConfigLocalize = "com.bbflight.background_downloader.config.localize"
+    public static var keyConfigResourceTimeout = "com.bbflight.background_downloader.config.resourceTimeout"
+    public static var keyConfigRequestTimeout = "com.bbflight.background_downloader.config.requestTimeout"
+    public static var keyConfigProxyAdress = "com.bbflight.background_downloader.config.proxyAddress"
+    public static var keyConfigProxyPort = "com.bbflight.background_downloader.config.proxyPort"
+    public static var keyConfigCheckAvailableSpace = "com.bbflight.background_downloader.config.checkAvailableSpace"
+
+
     public static var forceFailPostOnBackgroundChannel = false
     private static var backgroundCompletionHandler: (() -> Void)?
     private static var urlSession: URLSession?
@@ -27,8 +35,11 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                                         lastNetworkSpeed: Double)]() // time, bytes, speed
     static var uploaderForUrlSessionTaskIdentifier = [Int:Uploader]() // maps from UrlSessionTask TaskIdentifier
     static var haveNotificationPermission: Bool?
+    static var haveregisteredNotificationCategories = false
     static var taskIdsThatCanResume = Set<String>() // taskIds that can resume
+    static var taskIdsProgrammaticallyCancelled = Set<String>() // skips error handling for these tasks
     static var localResumeData = [String : String]() // locally stored to enable notification resume
+    static var remainingBytesToDownload = [String : Int64]()  // keyed by taskId
     static var responseBodyData = [String: [Data]]() // list of Data objects received for this UploadTask id
     
     private override init() {
@@ -40,7 +51,6 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         backgroundChannel = FlutterMethodChannel(name: "com.bbflight.background_downloader.background", binaryMessenger: registrar.messenger())
         registrar.addMethodCallDelegate(instance, channel: channel)
         registrar.addApplicationDelegate(instance)
-        registerNotificationCategories()
     }
     
     @objc
@@ -85,6 +95,18 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             methodPathInSharedStorage(call: call, result: result)
         case "openFile":
             methodOpenFile(call: call, result: result)
+        case "configLocalize":
+            methodStoreConfig(key: Downloader.keyConfigLocalize, value: call.arguments, result: result)
+        case "configResourceTimeout":
+            methodStoreConfig(key: Downloader.keyConfigResourceTimeout, value: call.arguments, result: result)
+        case "configRequestTimeout":
+            methodStoreConfig(key: Downloader.keyConfigRequestTimeout, value: call.arguments, result: result)
+        case "configProxyAddress":
+            methodStoreConfig(key: Downloader.keyConfigProxyAdress, value: call.arguments, result: result)
+        case "configProxyPort":
+            methodStoreConfig(key: Downloader.keyConfigProxyPort, value: call.arguments, result: result)
+        case "configCheckAvailableSpace":
+            methodStoreConfig(key: Downloader.keyConfigCheckAvailableSpace, value: call.arguments, result: result)
         case "forceFailPostOnBackgroundChannel":
             methodForceFailPostOnBackgroundChannel(call: call, result: result)
         default:
@@ -369,7 +391,20 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         success = doOpenFile(filePath: filePath!, mimeType: mimeType)
     }
     
-    
+    /// Store or remove a configuration in shared preferences
+    ///
+    /// If the value is nil, the configuration is removed
+    private func methodStoreConfig(key: String, value: Any?, result: @escaping FlutterResult) {
+        let defaults = UserDefaults.standard
+        if value != nil {
+            defaults.set(value, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+        result(nil)
+    }
+
+
     
     /// Sets or resets flag to force failing posting on background channel
     ///
@@ -448,34 +483,45 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         let responseBody = getResponseBody(taskId: task.taskId)
         Downloader.responseBodyData.removeValue(forKey: task.taskId)
         Downloader.taskIdsThatCanResume.remove(task.taskId)
+        let taskWasProgramaticallyCanceled: Bool = Downloader.taskIdsProgrammaticallyCancelled.remove(task.taskId) != nil
         guard error == nil else {
-            let userInfo = (error! as NSError).userInfo
-            if let resumeData = userInfo[NSURLSessionDownloadTaskResumeData] as? Data {
-                if processResumeData(task: task, resumeData: resumeData) {
-                    os_log("Paused task with id %@", log: log, type: .info, task.taskId)
-                    processStatusUpdate(task: task, status: .paused)
-                    if isDownloadTask(task: task) {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            updateNotification(task: task, notificationType: .paused, notificationConfig: notificationConfig)
-                        }
-                    }
-                    Downloader.progressInfo.removeValue(forKey: task.taskId) // ensure .running update on resume
+            // handle the error if this task wasn't programatically cancelled (in which
+            // case the error has been handled already)
+            if !taskWasProgramaticallyCanceled {
+                if (error! as NSError).code == NSURLErrorTimedOut {
+                    os_log("Task with id %@ timed out", log: log, type: .info, task.taskId)
+                    processStatusUpdate(task: task, status: .failed)
                     return
                 }
-            }
-            if (error! as NSError).code == NSURLErrorCancelled {
-                os_log("Canceled task with id %@", log: log, type: .info, task.taskId)
-                processStatusUpdate(task: task, status: .canceled)
-            }
-            else {
-                os_log("Error for taskId %@: %@", log: log, type: .error, task.taskId, error!.localizedDescription)
-                processStatusUpdate(task: task, status: .failed, taskException: TaskException(type: .general, httpResponseCode: -1, description: error!.localizedDescription))
+                let userInfo = (error! as NSError).userInfo
+                if let resumeData = userInfo[NSURLSessionDownloadTaskResumeData] as? Data {
+                    if processResumeData(task: task, resumeData: resumeData) {
+                        os_log("Paused task with id %@", log: log, type: .info, task.taskId)
+                        processStatusUpdate(task: task, status: .paused)
+                        if isDownloadTask(task: task) {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                updateNotification(task: task, notificationType: .paused, notificationConfig: notificationConfig)
+                            }
+                        }
+                        Downloader.progressInfo.removeValue(forKey: task.taskId) // ensure .running update on resume
+                        return
+                    }
+                }
+                if (error! as NSError).code == NSURLErrorCancelled {
+                    os_log("Canceled task with id %@", log: log, type: .info, task.taskId)
+                    processStatusUpdate(task: task, status: .canceled)
+                }
+                else {
+                    os_log("Error for taskId %@: %@", log: log, type: .error, task.taskId, error!.localizedDescription)
+                    processStatusUpdate(task: task, status: .failed, taskException: TaskException(type: .general, httpResponseCode: -1, description: error!.localizedDescription))
+                }
             }
             if isDownloadTask(task: task) {
                 updateNotification(task: task, notificationType: .error, notificationConfig: notificationConfig)
             }
             return
         }
+        // there was no error
         os_log("Finished task with id %@", log: log, type: .info, task.taskId)
         // if this is an upload task, send final TaskStatus (based on HTTP status code
         if isUploadTask(task: task) {
@@ -511,7 +557,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             }
         }
     }
-    
+
     /// Process taskdelegate progress update for download task
     ///
     /// If the task requires progress updates, provide these at a reasonable interval
@@ -519,8 +565,18 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         guard let task = getTaskFrom(urlSessionTask: downloadTask) else { return }
         if Downloader.progressInfo[task.taskId] == nil {
-            // first 'didWriteData' call, so send 'running' status update
-            // and check if the task is resumable
+            // first 'didWriteData' call
+            // Check if there is enough space
+            if insufficientSpace(contentLength: totalBytesExpectedToWrite) {
+                if !Downloader.taskIdsProgrammaticallyCancelled.contains(task.taskId) {
+                    os_log("Error for taskId %@: Insufficient space to store the file to be downloaded", log: log, type: .error, task.taskId)
+                    processStatusUpdate(task: task, status: .failed, taskException: TaskException(type: .fileSystem, httpResponseCode: -1, description: "Insufficient space to store the file to be downloaded for taskId \(task.taskId)"))
+                    Downloader.taskIdsProgrammaticallyCancelled.insert(task.taskId)
+                    downloadTask.cancel()
+                }
+                return
+            }
+            // Send 'running' status update and check if the task is resumable
             processStatusUpdate(task: task, status: TaskStatus.running)
             processProgressUpdate(task: task, progress: 0.0)
             Downloader.progressInfo[task.taskId] = (lastProgressUpdateTime: 0, lastProgressValue: 0.0, lastTotalBytesDone: 0, lastNetworkSpeed: -1.0)
@@ -538,7 +594,14 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                 updateNotification(task: task, notificationType: .running, notificationConfig: notificationConfig)
             }
         }
-        updateProgress(task: task, totalBytesExpected: totalBytesExpectedToWrite, totalBytesDone: totalBytesWritten)
+        if totalBytesExpectedToWrite != NSURLSessionTransferSizeUnknown && Date() > Downloader.nextProgressUpdateTime[task.taskId] ?? Date(timeIntervalSince1970: 0) {
+            let progress = min(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite), 0.999)
+            if progress - (Downloader.lastProgressUpdate[task.taskId] ?? 0.0) > 0.02 {
+                processProgressUpdate(task: task, progress: progress, expectedFileSize: totalBytesExpectedToWrite)
+                Downloader.lastProgressUpdate[task.taskId] = progress
+                Downloader.nextProgressUpdateTime[task.taskId] = Date().addingTimeInterval(0.5)
+            }
+        }
     }
     
     /// Process taskdelegate progress update for upload task
@@ -765,12 +828,34 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     //MARK: helper methods
     
     /// Creates a urlSession
+    ///
+    /// Configues defaultResourceTimeout, defaultRequestTimeout and proxy based on configuration parameters,
+    /// or defaults
     private func createUrlSession() -> URLSession {
         if Downloader.urlSession != nil {
             os_log("createUrlSession called with non-null urlSession", log: log, type: .info)
         }
         let config = URLSessionConfiguration.background(withIdentifier: Downloader.sessionIdentifier)
-        config.timeoutIntervalForResource = Downloader.resourceTimeout
+        let defaults = UserDefaults.standard
+        let storedTimeoutIntervalForResource = defaults.double(forKey: Downloader.keyConfigResourceTimeout) // seconds
+        let timeOutIntervalForResource = storedTimeoutIntervalForResource > 0 ? storedTimeoutIntervalForResource : Downloader.defaultResourceTimeout
+        config.timeoutIntervalForResource = timeOutIntervalForResource
+        let storedTimeoutIntervalForRequest = defaults.double(forKey: Downloader.keyConfigRequestTimeout) // seconds
+        let timeoutIntervalForRequest = storedTimeoutIntervalForRequest > 0 ? storedTimeoutIntervalForRequest : Downloader.defaultRequestTimeout
+        config.timeoutIntervalForRequest = timeoutIntervalForRequest
+        let proxyAddress = defaults.string(forKey: Downloader.keyConfigProxyAdress)
+        let proxyPort = defaults.integer(forKey: Downloader.keyConfigProxyPort)
+        if (proxyAddress != nil && proxyPort != 0) {
+            config.connectionProxyDictionary = [
+                kCFNetworkProxiesHTTPEnable: true,
+                kCFNetworkProxiesHTTPProxy: proxyAddress!,
+                kCFNetworkProxiesHTTPPort: proxyPort,
+                "HTTPSEnable": true,
+                "HTTPSProxy": proxyAddress!,
+                "HTTPSPort": proxyPort
+            ]
+            os_log("proxy=%@:%d", log: log, type: .info, proxyAddress!, proxyPort)
+        }
         return URLSession(configuration: config, delegate: Downloader.instance, delegateQueue: nil)
     }
     
