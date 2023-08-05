@@ -63,6 +63,8 @@ class TaskWorker(
 
         private val fileNameRegEx = Regex("""\{filename\}""", RegexOption.IGNORE_CASE)
         private val progressRegEx = Regex("""\{progress\}""", RegexOption.IGNORE_CASE)
+        private val downloadSpeedRegEx = Regex("""\{downloadSpeed\}""", RegexOption.IGNORE_CASE)
+        private val timeRemainingRegEx = Regex("""\{timeRemaining\}""", RegexOption.IGNORE_CASE)
         private val metaDataRegEx = Regex("""\{metadata\}""", RegexOption.IGNORE_CASE)
         private val asciiOnlyRegEx = Regex("^[\\x00-\\x7F]+$")
         private val newlineRegEx = Regex("\r\n|\r|\n")
@@ -248,13 +250,14 @@ class TaskWorker(
          * Sends progress update via the background channel to Flutter, if requested
          */
         suspend fun processProgressUpdate(
-            task: Task, progress: Double, prefs: SharedPreferences, expectedFileSize: Long = -1
+            task: Task, progress: Double, prefs: SharedPreferences, expectedFileSize: Long = -1,
+            downloadSpeed: Double = -1.0, timeRemaining: Long = -1000
         ) {
             if (task.providesProgressUpdates()) {
                 if (!postOnBackgroundChannel(
                         "progressUpdate",
                         task,
-                        mutableListOf(progress, expectedFileSize)
+                        mutableListOf(progress, expectedFileSize, downloadSpeed, timeRemaining)
                     )
                 ) {
                     // unsuccessful post, so store in local prefs
@@ -380,8 +383,11 @@ class TaskWorker(
     }
 
     // properties related to pause/resume functionality and progress
-    private var bytesTotal: Long = 0
+    private var bytesTotal = 0L
+    private var bytesTotalAtLastProgressUpdate = 0L
     private var startByte = 0L
+    private var lastProgressUpdateTime = 0L // in millis
+    private var downloadSpeed = 0.0 // in MB/s
     private var isTimedOut = false
     private var taskCanResume = false
 
@@ -955,15 +961,37 @@ class TaskWorker(
                             outputStream.write(dataBuffer, 0, numBytes)
                             bytesTotal += numBytes
                         }
+                        val expectedFileSize = contentLength + startByte
                         val progress = doubleMin(
-                            (bytesTotal + startByte).toDouble() / (contentLength + startByte),
+                            (bytesTotal + startByte).toDouble() / expectedFileSize,
                             0.999
                         )
                         if (contentLength > 0 && progress - lastProgressUpdate > 0.02 && currentTimeMillis() > nextProgressUpdateTime) {
-                            processProgressUpdate(task, progress, prefs, contentLength)
+                            // calculate download speed and time remaining
+                            val now = currentTimeMillis()
+                            val timeSinceLastUpdate = now - lastProgressUpdateTime
+                            lastProgressUpdateTime = now
+                            val bytesSinceLastUpdate = bytesTotal - bytesTotalAtLastProgressUpdate
+                            bytesTotalAtLastProgressUpdate = bytesTotal
+                            val currentDownloadSpeed: Double = if (timeSinceLastUpdate > 3600000)
+                                0.0 else bytesSinceLastUpdate / (timeSinceLastUpdate * 1000.0)
+                            downloadSpeed =
+                                if (downloadSpeed == 0.0) currentDownloadSpeed else (downloadSpeed * 3.0 + currentDownloadSpeed) / 4.0
+                            val remainingBytes = (1 - progress) * expectedFileSize
+                            val timeRemaining: Long =
+                                if (downloadSpeed == 0.0) -1000 else (remainingBytes / downloadSpeed / 1000).toLong()
+                            // update progress and notification
+                            processProgressUpdate(
+                                task,
+                                progress,
+                                prefs,
+                                expectedFileSize,
+                                downloadSpeed,
+                                timeRemaining
+                            )
                             updateNotification(
                                 task, notificationTypeForTaskStatus(TaskStatus.running),
-                                progress
+                                progress, downloadSpeed, timeRemaining
                             )
                             lastProgressUpdate = progress
                             nextProgressUpdateTime = currentTimeMillis() + 500
@@ -1093,10 +1121,12 @@ class TaskWorker(
      * The [progress] field is only relevant for [NotificationType.running]. If progress is
      * negative no progress bar will be shown. If progress > 1 an indeterminate progress bar
      * will be shown
+     * [downloadSpeed] and [timeRemaining] are only relevant for [NotificationType.running]
      */
     @SuppressLint("MissingPermission")
     private fun updateNotification(
-        task: Task, notificationType: NotificationType, progress: Double = 2.0
+        task: Task, notificationType: NotificationType, progress: Double = 2.0,
+        downloadSpeed: Double = -1.0, timeRemaining: Long = -1000
     ) {
         val notification = when (notificationType) {
             NotificationType.running -> notificationConfig?.running
@@ -1139,11 +1169,23 @@ class TaskWorker(
         notificationProgress =
             if (notificationType == NotificationType.paused) notificationProgress else progress
         // title and body interpolation of {filename}, {progress} and {metadata}
-        val title = replaceTokens(notification.title, task, notificationProgress)
+        val title = replaceTokens(
+            notification.title,
+            task,
+            notificationProgress,
+            downloadSpeed,
+            timeRemaining
+        )
         if (title.isNotEmpty()) {
             builder.setContentTitle(title)
         }
-        val body = replaceTokens(notification.body, task, notificationProgress)
+        val body = replaceTokens(
+            notification.body,
+            task,
+            notificationProgress,
+            downloadSpeed,
+            timeRemaining
+        )
         if (body.isNotEmpty()) {
             builder.setContentText(body)
         }
@@ -1327,15 +1369,45 @@ class TaskWorker(
     }
 
     /**
-     * Replace special tokens {filename}, {metadata} and {progress} with their respective values
+     * Replace special tokens {filename}, {metadata}, {progress}, {downloadSpeed},
+     * {timeRemaining} with their respective values
      */
-    private fun replaceTokens(input: String, task: Task, progress: Double): String {
+    private fun replaceTokens(
+        input: String,
+        task: Task,
+        progress: Double,
+        downloadSpeed: Double,
+        timeRemaining: Long
+    ): String {
+        // filename and metadata
         val output =
             fileNameRegEx.replace(metaDataRegEx.replace(input, task.metaData), task.filename)
+        // progress
         val progressString =
             if (progress in 0.0..1.0) (progress * 100).roundToInt().toString() + "%"
             else ""
-        return progressRegEx.replace(output, progressString)
+        val output2 = progressRegEx.replace(output, progressString)
+        // download speed
+        val downloadSpeedString =
+            if (downloadSpeed <= 0.0) "--" else if (downloadSpeed > 1) "${downloadSpeed.roundToInt()} MB/s" else "${(downloadSpeed * 1000).roundToInt()} kB/s"
+        val output3 = downloadSpeedRegEx.replace(output2, downloadSpeedString)
+        // time remaining
+        val hours = timeRemaining.div(3600000L)
+        val minutes = (timeRemaining.mod(3600000L)).div(60000L)
+        val seconds = (timeRemaining.mod(60000L)).div(1000L)
+        val timeRemainingString = if (timeRemaining < 0) "--" else if (hours > 0)
+            String.format(
+                "%02d:%02d:%02d",
+                hours,
+                minutes,
+                seconds
+            ) else
+            String.format(
+                "%02d:%02d",
+                minutes,
+                seconds
+            )
+        return timeRemainingRegEx.replace(output3, timeRemainingString)
     }
 
     /**

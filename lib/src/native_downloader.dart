@@ -75,9 +75,9 @@ final class NativeDownloader extends BaseDownloader {
           processStatusUpdate(
               TaskStatusUpdate(task, status, exception, responseBody));
 
-        case ('progressUpdate', [double progress, int expectedFileSize]):
+        case ('progressUpdate', [double progress, int expectedFileSize, double downloadSpeed, int timeRemaining]):
           processProgressUpdate(
-              TaskProgressUpdate(task, progress, expectedFileSize));
+              TaskProgressUpdate(task, progress, expectedFileSize, downloadSpeed, Duration(milliseconds: timeRemaining)));
 
         case ('canResume', bool canResume):
           setCanResume(task, canResume);
