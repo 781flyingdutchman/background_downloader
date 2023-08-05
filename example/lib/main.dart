@@ -57,8 +57,8 @@ class _MyAppState extends State<MyApp> {
         .configureNotificationForGroup(FileDownloader.defaultGroup,
             // For the main download button
             // which uses 'enqueue' and a default group
-            running: const TaskNotification(
-                'Download {filename}', 'File: {filename} - {progress} speed {downloadSpeed} and {timeRemaining} remaining'),
+            running: const TaskNotification('Download {filename}',
+                'File: {filename} - {progress} speed {networkSpeed} and {timeRemaining} remaining'),
             complete: const TaskNotification(
                 'Download {filename}', 'Download complete'),
             error: const TaskNotification(

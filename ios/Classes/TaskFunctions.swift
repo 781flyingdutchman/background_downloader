@@ -163,9 +163,9 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
 /// Processes a progress update for the task
 ///
 /// Sends progress update via the background channel to Dart, if requested
-func processProgressUpdate(task: Task, progress: Double, expectedFileSize: Int64 = -1) {
+func processProgressUpdate(task: Task, progress: Double, expectedFileSize: Int64 = -1, networkSpeed: Double = -1.0, timeRemaining: TimeInterval = -1.0) {
     if providesProgressUpdates(task: task) {
-        if (!postOnBackgroundChannel(method: "progressUpdate", task: task, arg: [progress, expectedFileSize] as [Any])) {
+        if (!postOnBackgroundChannel(method: "progressUpdate", task: task, arg: [progress, expectedFileSize, networkSpeed, Int(timeRemaining * 1000.0)] as [Any])) {
             // store update locally as a merged task/progress JSON string
             guard let jsonData = try? JSONEncoder().encode(task),
                   var jsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]

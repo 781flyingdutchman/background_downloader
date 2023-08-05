@@ -20,7 +20,7 @@ var _bytesTotal = 0;
 var _bytesTotalAtLastProgressUpdate = 0;
 var _startByte = 0;
 var _lastProgressUpdateTime = DateTime.fromMillisecondsSinceEpoch(0);
-var _downloadSpeed = 0.0; // in MB/s
+var _networkSpeed = 0.0; // in MB/s
 var _isPaused = false;
 var _isCanceled = false;
 TaskException? _taskException;
@@ -596,22 +596,23 @@ void processProgressUpdateInIsolate(
       final bytesSinceLastUpdate =
           _bytesTotal - _bytesTotalAtLastProgressUpdate;
       _bytesTotalAtLastProgressUpdate = _bytesTotal;
-      final currentDownloadSpeed = timeSinceLastUpdate.inHours > 0
-          ? 0.0
+      final currentNetworkSpeed = timeSinceLastUpdate.inHours > 0
+          ? -1.0
           : bytesSinceLastUpdate / timeSinceLastUpdate.inMicroseconds;
-      _downloadSpeed = switch (currentDownloadSpeed) {
-        0 => 0,
-        _ when _downloadSpeed == 0 => currentDownloadSpeed,
-        _ => (_downloadSpeed * 3 + currentDownloadSpeed) / 4.0
+      _networkSpeed = switch (currentNetworkSpeed) {
+        -1.0 => -1.0,
+        _ when _networkSpeed == -1.0 => currentNetworkSpeed,
+        _ => (_networkSpeed * 3 + currentNetworkSpeed) / 4.0
       };
       final remainingBytes = (1 - progress) * expectedFileSize;
-      final timeRemaining = _downloadSpeed == 0 || expectedFileSize < 0 ? const Duration(seconds: -1)
-          : Duration(microseconds: (remainingBytes / _downloadSpeed).round());
+      final timeRemaining = _networkSpeed == -1.0 || expectedFileSize < 0
+          ? const Duration(seconds: -1)
+          : Duration(microseconds: (remainingBytes / _networkSpeed).round());
       sendPort.send((
         'progressUpdate',
         progress,
         expectedFileSize,
-        _downloadSpeed,
+        _networkSpeed,
         timeRemaining
       ));
     } else {

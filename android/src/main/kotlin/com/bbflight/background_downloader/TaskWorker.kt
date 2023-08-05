@@ -63,7 +63,7 @@ class TaskWorker(
 
         private val fileNameRegEx = Regex("""\{filename\}""", RegexOption.IGNORE_CASE)
         private val progressRegEx = Regex("""\{progress\}""", RegexOption.IGNORE_CASE)
-        private val downloadSpeedRegEx = Regex("""\{downloadSpeed\}""", RegexOption.IGNORE_CASE)
+        private val networkSpeedRegEx = Regex("""\{networkSpeed\}""", RegexOption.IGNORE_CASE)
         private val timeRemainingRegEx = Regex("""\{timeRemaining\}""", RegexOption.IGNORE_CASE)
         private val metaDataRegEx = Regex("""\{metadata\}""", RegexOption.IGNORE_CASE)
         private val asciiOnlyRegEx = Regex("^[\\x00-\\x7F]+$")
@@ -387,7 +387,7 @@ class TaskWorker(
     private var bytesTotalAtLastProgressUpdate = 0L
     private var startByte = 0L
     private var lastProgressUpdateTime = 0L // in millis
-    private var downloadSpeed = 0.0 // in MB/s
+    private var networkSpeed = -1.0 // in MB/s
     private var isTimedOut = false
     private var taskCanResume = false
 
@@ -973,25 +973,25 @@ class TaskWorker(
                             lastProgressUpdateTime = now
                             val bytesSinceLastUpdate = bytesTotal - bytesTotalAtLastProgressUpdate
                             bytesTotalAtLastProgressUpdate = bytesTotal
-                            val currentDownloadSpeed: Double = if (timeSinceLastUpdate > 3600000)
-                                0.0 else bytesSinceLastUpdate / (timeSinceLastUpdate * 1000.0)
-                            downloadSpeed =
-                                if (downloadSpeed == 0.0) currentDownloadSpeed else (downloadSpeed * 3.0 + currentDownloadSpeed) / 4.0
+                            val currentNetworkSpeed: Double = if (timeSinceLastUpdate > 3600000)
+                                -1.0 else bytesSinceLastUpdate / (timeSinceLastUpdate * 1000.0)
+                            networkSpeed =
+                                if (networkSpeed == -1.0) currentNetworkSpeed else (networkSpeed * 3.0 + currentNetworkSpeed) / 4.0
                             val remainingBytes = (1 - progress) * expectedFileSize
                             val timeRemaining: Long =
-                                if (downloadSpeed == 0.0) -1000 else (remainingBytes / downloadSpeed / 1000).toLong()
+                                if (networkSpeed == -1.0) -1000 else (remainingBytes / networkSpeed / 1000).toLong()
                             // update progress and notification
                             processProgressUpdate(
                                 task,
                                 progress,
                                 prefs,
                                 expectedFileSize,
-                                downloadSpeed,
+                                networkSpeed,
                                 timeRemaining
                             )
                             updateNotification(
                                 task, notificationTypeForTaskStatus(TaskStatus.running),
-                                progress, downloadSpeed, timeRemaining
+                                progress, networkSpeed, timeRemaining
                             )
                             lastProgressUpdate = progress
                             nextProgressUpdateTime = currentTimeMillis() + 500
@@ -1369,14 +1369,14 @@ class TaskWorker(
     }
 
     /**
-     * Replace special tokens {filename}, {metadata}, {progress}, {downloadSpeed},
+     * Replace special tokens {filename}, {metadata}, {progress}, {networkSpeed},
      * {timeRemaining} with their respective values
      */
     private fun replaceTokens(
         input: String,
         task: Task,
         progress: Double,
-        downloadSpeed: Double,
+        networkSpeed: Double,
         timeRemaining: Long
     ): String {
         // filename and metadata
@@ -1388,9 +1388,9 @@ class TaskWorker(
             else ""
         val output2 = progressRegEx.replace(output, progressString)
         // download speed
-        val downloadSpeedString =
-            if (downloadSpeed <= 0.0) "--" else if (downloadSpeed > 1) "${downloadSpeed.roundToInt()} MB/s" else "${(downloadSpeed * 1000).roundToInt()} kB/s"
-        val output3 = downloadSpeedRegEx.replace(output2, downloadSpeedString)
+        val networkSpeedString =
+            if (networkSpeed <= 0.0) "--" else if (networkSpeed > 1) "${networkSpeed.roundToInt()} MB/s" else "${(networkSpeed * 1000).roundToInt()} kB/s"
+        val output3 = networkSpeedRegEx.replace(output2, networkSpeedString)
         // time remaining
         val hours = timeRemaining.div(3600000L)
         val minutes = (timeRemaining.mod(3600000L)).div(60000L)

@@ -23,6 +23,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     private static var urlSession: URLSession?
     static var lastProgressUpdate = [String:Double]()
     static var nextProgressUpdateTime = [String:Date]()
+    static var networkSpeedInfo = [String: (TimeInterval, Int64, Double)]() // time, bytes, speed
     static var uploaderForUrlSessionTaskIdentifier = [Int:Uploader]() // maps from UrlSessionTask TaskIdentifier
     static var haveNotificationPermission: Bool?
     static var taskIdsThatCanResume = Set<String>() // taskIds that can resume
@@ -516,9 +517,23 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             }
         }
         if totalBytesExpectedToWrite != NSURLSessionTransferSizeUnknown && Date() > Downloader.nextProgressUpdateTime[task.taskId] ?? Date(timeIntervalSince1970: 0) {
-            let progress = min(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite), 0.999)
+            //TODO check if totalBytesExpectedToWrite is correct for a resume task
+            let expectedFileSize = totalBytesExpectedToWrite
+            let progress = min(Double(totalBytesWritten) / Double(expectedFileSize), 0.999)
             if progress - (Downloader.lastProgressUpdate[task.taskId] ?? 0.0) > 0.02 {
-                processProgressUpdate(task: task, progress: progress, expectedFileSize: totalBytesExpectedToWrite)
+                // calculate network speed and time remaining
+                let (lastProgressUpdateTime, lastTotalBytesWritten, lastNetworkSpeed) = Downloader.networkSpeedInfo[task.taskId]
+                    ?? (0.0, 0, -1.0)
+                let now = Date().timeIntervalSince1970
+                let timeSinceLastUpdate = now - lastProgressUpdateTime
+                let bytesSinceLastUpdate = totalBytesWritten - lastTotalBytesWritten
+                let currentNetworkSpeed: Double = timeSinceLastUpdate > 3600 ? -1.0 : Double(bytesSinceLastUpdate) / timeSinceLastUpdate / 1000000.0
+                let newNetworkSpeed = lastNetworkSpeed == -1.0 ? currentNetworkSpeed : (lastNetworkSpeed * 3.0 + currentNetworkSpeed) / 4.0
+                let remainingBytes = (1.0 - progress) * Double(expectedFileSize)
+                let timeRemaining: TimeInterval = newNetworkSpeed == -1.0 ? -1.0 : (remainingBytes / newNetworkSpeed / 1000000.0)
+                Downloader.networkSpeedInfo[task.taskId] = (now, totalBytesWritten, newNetworkSpeed)
+                processProgressUpdate(task: task, progress: progress, expectedFileSize: totalBytesExpectedToWrite, networkSpeed: newNetworkSpeed, timeRemaining: timeRemaining)
+                //TODO combine last, next and networkSpeedInfo
                 Downloader.lastProgressUpdate[task.taskId] = progress
                 Downloader.nextProgressUpdateTime[task.taskId] = Date().addingTimeInterval(0.5)
             }

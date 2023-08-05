@@ -1135,24 +1135,24 @@ class TaskStatusUpdate extends TaskUpdate {
 /// so NOT representative when progress == 0 or progress == 1, and
 /// will be -1 if the file size is not provided by the server or otherwise
 /// not known.
-/// [downloadSpeed] is valid if positive, expressed in MB/second
+/// [networkSpeed] is valid if positive, expressed in MB/second
 /// [timeRemaining] is valid if positive
 class TaskProgressUpdate extends TaskUpdate {
   final double progress;
   final int expectedFileSize;
-  final double downloadSpeed;
+  final double networkSpeed;
   final Duration timeRemaining;
 
   const TaskProgressUpdate(super.task, this.progress,
       [this.expectedFileSize = -1,
-      this.downloadSpeed = -1,
+      this.networkSpeed = -1,
       this.timeRemaining = const Duration(seconds: -1)]);
 
   /// Create object from JSON Map
   TaskProgressUpdate.fromJsonMap(Map<String, dynamic> jsonMap)
       : progress = (jsonMap['progress'] as num?)?.toDouble() ?? progressFailed,
         expectedFileSize = (jsonMap['expectedFileSize'] as num?)?.toInt() ?? -1,
-        downloadSpeed = (jsonMap['downloadSpeed'] as num?)?.toDouble() ?? -1,
+        networkSpeed = (jsonMap['networkSpeed'] as num?)?.toDouble() ?? -1,
         timeRemaining = Duration(
             seconds: (jsonMap['timeRemaining'] as num?)?.toInt() ?? -1),
         super.fromJsonMap(jsonMap);
@@ -1163,21 +1163,21 @@ class TaskProgressUpdate extends TaskUpdate {
         ...super.toJsonMap(),
         'progress': progress,
         'expectedFileSize': expectedFileSize,
-        'downloadSpeed': downloadSpeed,
+        'networkSpeed': networkSpeed,
         'timeRemaining': timeRemaining.inSeconds
       };
 
   bool get hasExpectedFileSize => expectedFileSize >= 0;
 
-  bool get hasDownloadSpeed => downloadSpeed >= 0;
+  bool get hasNetworkSpeed => networkSpeed >= 0;
 
   bool get hasTimeRemaining => !timeRemaining.isNegative;
 
   /// String is '--' if N/A, otherwise in MB/s or kB/s
-  String get downloadSpeedAsString => switch (downloadSpeed) {
+  String get networkSpeedAsString => switch (networkSpeed) {
         <= 0 => '--',
-        >= 1 => '${downloadSpeed.round()} MB/s',
-        _ => '${(downloadSpeed * 1000).round()} kB/s'
+        >= 1 => '${networkSpeed.round()} MB/s',
+        _ => '${(networkSpeed * 1000).round()} kB/s'
       };
 
   // String is '--' if N/A, otherwise HH:MM:SS or MM:SS
@@ -1192,7 +1192,7 @@ class TaskProgressUpdate extends TaskUpdate {
 
   @override
   String toString() {
-    return 'TaskProgressUpdate{progress: $progress, expectedFileSize: $expectedFileSize, downloadSpeed: $downloadSpeed, timeRemaining: $timeRemaining}';
+    return 'TaskProgressUpdate{progress: $progress, expectedFileSize: $expectedFileSize, networkSpeed: $networkSpeed, timeRemaining: $timeRemaining}';
   }
 }
 
