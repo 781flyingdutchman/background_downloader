@@ -222,7 +222,6 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
          * Marks the task for pausing, actual pausing happens in [TaskWorker]
          */
         fun pauseTaskWithId(taskId: String): Boolean {
-            Log.v(TAG, "Marking taskId $taskId for pausing")
             pausedTaskIds.add(taskId)
             return true
         }

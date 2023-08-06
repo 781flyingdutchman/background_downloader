@@ -794,8 +794,12 @@ interface class FileDownloader {
   /// the downloader. If not set, the default [http.Client] will be used.
   /// The request is executed on an Isolate, to ensure minimal interference
   /// with the main Isolate
-  Future<http.Response> request(Request request) => compute(doRequest,
-      (request, DesktopDownloader.requestTimeout, DesktopDownloader.proxy, DesktopDownloader.bypassTLSCertificateValidation));
+  Future<http.Response> request(Request request) => compute(doRequest, (
+        request,
+        DesktopDownloader.requestTimeout,
+        DesktopDownloader.proxy,
+        DesktopDownloader.bypassTLSCertificateValidation
+      ));
 
   /// Move the file represented by the [task] to a shared storage
   /// [destination] and potentially a [directory] within that destination. If
@@ -881,7 +885,8 @@ interface class FileDownloader {
 /// Isolate is not affected
 Future<http.Response> doRequest(
     (Request, Duration?, Map<String, dynamic>, bool) params) async {
-  final (request, requestTimeout, proxy, bypassTLSCertificateValidation) = params;
+  final (request, requestTimeout, proxy, bypassTLSCertificateValidation) =
+      params;
   Logger.root.level = Level.ALL;
   Logger.root.onRecord.listen((LogRecord rec) {
     if (kDebugMode) {
@@ -889,7 +894,8 @@ Future<http.Response> doRequest(
     }
   });
   final log = Logger('FileDownloader.request');
-  DesktopDownloader.setHttpClient(requestTimeout, proxy, bypassTLSCertificateValidation);
+  DesktopDownloader.setHttpClient(
+      requestTimeout, proxy, bypassTLSCertificateValidation);
   final client = DesktopDownloader.httpClient;
   var response = http.Response('', 499,
       reasonPhrase: 'Not attempted'); // dummy to start with

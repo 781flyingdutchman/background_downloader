@@ -1,3 +1,25 @@
+## 7.9.0
+
+### Configuration
+
+Add configuration of the downloader for several aspect:
+* Running tasks in 'foreground mode' on Android to allow longer runs and prevent the OS killing some tasks when the app is in the background
+* Setting the request timeout value and, for iOS only, the 'resourceTimeout'
+* Checking available space before attempting a download
+* Setting a proxy
+* Localizing the notification button texts on iOS
+* Bypassing TLS Certificate validation (for debug mode only)
+
+Please read the [configuration document](https://github.com/781flyingdutchman/background_downloader/blob/main/CONFIG.md) for details on how to configure.
+
+Configuration is experimental, so please test thoroughly before using in production, and let me know if there are any issues.
+
+### Network speed and time remaining in `TaskStatusUpdate`
+`TaskStatusUpdate` now has fields `networkSpeed` (in MB/s) and `timeRemaining`. Check the associated `hasNetworkSpeed` and `hasTimeRemaining` before using the values in these fields.  Use `networkSpeedAsString` and `timeRemainingAsString` for human readable versions of these values.
+
+### Filter `TaskRecord` entries by status: `allRecordsWithStatus`
+The `database` now has method `allRecordsWithStatus` to filter records based on their `TaskStatus`
+
 ## 7.8.1
 
 Bug fix for `taskNotificationTapCallback`: convenience methods that `await` a result, such as `download` (but not `enqueue`), now use the default `taskNotificationTapCallback`, even though those tasks are in the `awaitGroup`, because that behavior is more in line with expectations. If you need a separate callback for the `awaitGroup`, then set it _after_ setting the default callback. You set the default callback by omitting the `group` parameter in the `registerCallbacks` call.

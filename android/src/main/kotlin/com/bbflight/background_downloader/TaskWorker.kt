@@ -417,7 +417,7 @@ class TaskWorker(
             prefs.getInt(BackgroundDownloaderPlugin.keyConfigForegroundFileSize, -1)
         withContext(Dispatchers.IO) {
             Timer().schedule(taskTimeoutMillis) {
-                isTimedOut // triggers .failed in [TransferBytes] method if not runInForeground
+                isTimedOut = true // triggers .failed in [TransferBytes] method if not runInForeground
             }
             val gson = Gson()
             val taskJsonMapString = inputData.getString(keyTask)
@@ -1064,9 +1064,8 @@ class TaskWorker(
                             break
                         }
                         if (isTimedOut && !runInForeground) {
-                            doneCompleter.complete(
-                                TaskStatus.enqueued
-                            ) // special use of this status, see [processDownload]
+                            // special use of .enqueued status, see [processDownload]
+                            doneCompleter.complete(TaskStatus.enqueued)
                             break
                         }
                         delay(100)
@@ -1177,8 +1176,6 @@ class TaskWorker(
      */
     @SuppressLint("MissingPermission")
     private suspend fun updateNotification(
-        task: Task, notificationType: NotificationType, progress: Double = 2.0
-    private fun updateNotification(
         task: Task, notificationType: NotificationType, progress: Double = 2.0,
         timeRemaining: Long = -1000
     ) {
@@ -1275,21 +1272,17 @@ class TaskWorker(
             val androidNotification = builder.build()
             if (runInForeground) {
                 if (notificationType == NotificationType.running) {
-                    Log.v(TAG, "foreground running notification")
                     setForeground(ForegroundInfo(notificationId, androidNotification))
                 } else {
                     // to prevent the 'not running' notification getting killed as the foreground
                     // process is terminated, this notification is shown regularly, but with
                     // a delay
-                    Log.v(TAG, "Foreground not running notification")
                     CoroutineScope(Dispatchers.Main).launch {
                         delay(200)
-                        Log.v(TAG, "Foreground not running notify")
                         notify(notificationId, androidNotification)
                     }
                 }
             } else {
-                Log.v(TAG, "Regular notification (not foreground)")
                 notify(notificationId, androidNotification)
             }
         }

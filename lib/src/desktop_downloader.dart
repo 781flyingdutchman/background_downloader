@@ -115,7 +115,7 @@ final class DesktopDownloader extends BaseDownloader {
       isResume,
       requestTimeout,
       proxy,
-    bypassTLSCertificateValidation
+      bypassTLSCertificateValidation
     ));
     if (_isolateSendPorts.keys.contains(task)) {
       // if already registered with null value, cancel immediately
@@ -412,7 +412,8 @@ final class DesktopDownloader extends BaseDownloader {
   ///
   /// This is a convenience method, bundling the [requestTimeout],
   /// [proxy] and [bypassTLSCertificateValidation]
-  static void setHttpClient(Duration? requestTimeout, Map<String, dynamic> proxy, bool bypassTLSCertificateValidation) {
+  static void setHttpClient(Duration? requestTimeout,
+      Map<String, dynamic> proxy, bool bypassTLSCertificateValidation) {
     _requestTimeout = requestTimeout;
     _proxy = proxy;
     _bypassTLSCertificateValidation = bypassTLSCertificateValidation;
@@ -426,19 +427,23 @@ final class DesktopDownloader extends BaseDownloader {
     client.findProxy = proxy.isNotEmpty
         ? (_) => 'PROXY ${_proxy['address']}:${_proxy['port']}'
         : null;
-    client.badCertificateCallback = bypassTLSCertificateValidation && !kReleaseMode
-        ? (X509Certificate cert, String host, int port) => true
-        : null;
+    client.badCertificateCallback =
+        bypassTLSCertificateValidation && !kReleaseMode
+            ? (X509Certificate cert, String host, int port) => true
+            : null;
     httpClient = IOClient(client);
     if (bypassTLSCertificateValidation) {
       if (kReleaseMode) {
-        throw ArgumentError('You cannot bypass certificate validation in release mode');
+        throw ArgumentError(
+            'You cannot bypass certificate validation in release mode');
       } else {
-        _log.warning('TLS certificate validation is bypassed. This is insecure and cannot be '
+        _log.warning(
+            'TLS certificate validation is bypassed. This is insecure and cannot be '
             'done in release mode');
       }
     }
-    print('Recreated client with requestTimeout $_requestTimeout, $_proxy and bypass=$bypassTLSCertificateValidation');
+    _log.finest(
+        'Using HTTP client with requestTimeout $_requestTimeout, proxy $_proxy and TLSCertificateBypass = $bypassTLSCertificateValidation');
   }
 
   @override

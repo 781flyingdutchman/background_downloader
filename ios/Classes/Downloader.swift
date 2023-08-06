@@ -15,6 +15,8 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     public static var sessionIdentifier = "com.bbflight.background_downloader.Downloader"
     public static var flutterPluginRegistrantCallback: FlutterPluginRegistrantCallback?
     public static var backgroundChannel: FlutterMethodChannel?
+    private static var backgroundCompletionHandler: (() -> Void)?
+    private static var urlSession: URLSession?
     public static var keyResumeDataMap = "com.bbflight.background_downloader.resumeDataMap"
     public static var keyStatusUpdateMap = "com.bbflight.background_downloader.statusUpdateMap"
     public static var keyProgressUpdateMap = "com.bbflight.background_downloader.progressUpdateMap"
@@ -24,11 +26,8 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     public static var keyConfigProxyAdress = "com.bbflight.background_downloader.config.proxyAddress"
     public static var keyConfigProxyPort = "com.bbflight.background_downloader.config.proxyPort"
     public static var keyConfigCheckAvailableSpace = "com.bbflight.background_downloader.config.checkAvailableSpace"
-
-
     public static var forceFailPostOnBackgroundChannel = false
-    private static var backgroundCompletionHandler: (() -> Void)?
-    private static var urlSession: URLSession?
+        
     static var progressInfo = [String: (lastProgressUpdateTime: TimeInterval,
                                         lastProgressValue: Double,
                                         lastTotalBytesDone: Int64,
@@ -594,14 +593,8 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                 updateNotification(task: task, notificationType: .running, notificationConfig: notificationConfig)
             }
         }
-        if totalBytesExpectedToWrite != NSURLSessionTransferSizeUnknown && Date() > Downloader.nextProgressUpdateTime[task.taskId] ?? Date(timeIntervalSince1970: 0) {
-            let progress = min(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite), 0.999)
-            if progress - (Downloader.lastProgressUpdate[task.taskId] ?? 0.0) > 0.02 {
-                processProgressUpdate(task: task, progress: progress, expectedFileSize: totalBytesExpectedToWrite)
-                Downloader.lastProgressUpdate[task.taskId] = progress
-                Downloader.nextProgressUpdateTime[task.taskId] = Date().addingTimeInterval(0.5)
-            }
-        }
+        Downloader.remainingBytesToDownload[task.taskId] = totalBytesExpectedToWrite - totalBytesWritten
+        updateProgress(task: task, totalBytesExpected: totalBytesExpectedToWrite, totalBytesDone: totalBytesWritten)
     }
     
     /// Process taskdelegate progress update for upload task
@@ -686,7 +679,6 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         }
     }
     
-    
     //MARK: URLSessionDataDelegate
     
     /// Collects incoming data following a file upload, by appending the data block to a static dictionary keyed by taskId
@@ -707,7 +699,6 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     }
     
     //MARK: URLSessionDelegate
-    
     
     /// When the app restarts, recreate the urlSession if needed, and store the completion handler
     public func application(_ application: UIApplication,
@@ -824,7 +815,6 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         }
     }
     
-    
     //MARK: helper methods
     
     /// Creates a urlSession
@@ -833,15 +823,17 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     /// or defaults
     private func createUrlSession() -> URLSession {
         if Downloader.urlSession != nil {
-            os_log("createUrlSession called with non-null urlSession", log: log, type: .info)
+            os_log("createUrlSession called with non-null urlSession", log: log, type: .error)
         }
         let config = URLSessionConfiguration.background(withIdentifier: Downloader.sessionIdentifier)
         let defaults = UserDefaults.standard
         let storedTimeoutIntervalForResource = defaults.double(forKey: Downloader.keyConfigResourceTimeout) // seconds
         let timeOutIntervalForResource = storedTimeoutIntervalForResource > 0 ? storedTimeoutIntervalForResource : Downloader.defaultResourceTimeout
+        os_log("timeoutIntervalForResource = %d seconds", log: log, type: .info, Int(timeOutIntervalForResource))
         config.timeoutIntervalForResource = timeOutIntervalForResource
         let storedTimeoutIntervalForRequest = defaults.double(forKey: Downloader.keyConfigRequestTimeout) // seconds
         let timeoutIntervalForRequest = storedTimeoutIntervalForRequest > 0 ? storedTimeoutIntervalForRequest : Downloader.defaultRequestTimeout
+        os_log("timeoutIntervalForRequest = %d seconds", log: log, type: .info, Int(timeoutIntervalForRequest))
         config.timeoutIntervalForRequest = timeoutIntervalForRequest
         let proxyAddress = defaults.string(forKey: Downloader.keyConfigProxyAdress)
         let proxyPort = defaults.integer(forKey: Downloader.keyConfigProxyPort)
@@ -854,7 +846,9 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                 "HTTPSProxy": proxyAddress!,
                 "HTTPSPort": proxyPort
             ]
-            os_log("proxy=%@:%d", log: log, type: .info, proxyAddress!, proxyPort)
+            os_log("Using proxy %@:%d for all tasks", log: log, type: .info, proxyAddress!, proxyPort)
+        } else {
+            os_log("Not using proxy for any task", log: log, type: .info)
         }
         return URLSession(configuration: config, delegate: Downloader.instance, delegateQueue: nil)
     }

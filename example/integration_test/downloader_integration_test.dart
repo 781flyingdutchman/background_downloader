@@ -19,7 +19,8 @@ var progressCallbackCounter = 0;
 var statusCallbackCompleter = Completer<void>();
 var progressCallbackCompleter = Completer<void>();
 var someProgressCompleter = Completer<void>(); // completes when progress > 0
-var significantProgressCompleter = Completer<void>(); // completes when progress > 0.1
+var significantProgressCompleter =
+    Completer<void>(); // completes when progress > 0.1
 var lastStatus = TaskStatus.enqueued;
 var lastProgress = -100.0;
 var lastValidExpectedFileSize = -1;
@@ -355,7 +356,8 @@ void main() {
       print('Finished enqueue with progress');
     });
 
-    testWidgets('enqueue with download speed and time remaining', (widgetTester) async {
+    testWidgets('enqueue with download speed and time remaining',
+        (widgetTester) async {
       task = DownloadTask(
           url: urlWithLongContentLength,
           filename: defaultFilename,
@@ -2284,7 +2286,7 @@ void main() {
       // before the initial pause command, or did not have time for two
       // pause/resume cycles -> shorten interval
       var interval = Platform.isAndroid || Platform.isIOS
-          ? const Duration(milliseconds: 500)
+          ? const Duration(milliseconds: 750)
           : const Duration(milliseconds: 2000);
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       task = DownloadTask(

@@ -1,15 +1,17 @@
 # Configuration
 
-The downloader can be configured by calling `FileDownloader().configure` before executing any downloads or uploads. Configurations can be set for Global, Android, iOS or Desktop separately, where only the `globalConfig` is applied to every platform.
+The downloader can be configured by calling `FileDownloader().configure` before executing any downloads or uploads. Configurations can be set for Global, Android, iOS or Desktop separately, where only the `globalConfig` is applied to every platform, before the platform-specific configuration is applied. This can be used to 'override' the configuration for only one platform.
 
-A configuration can be single config or a list of configs, and every config is a Record with the first element a String indicating what to configure, and the second element an argument (which itself can be a Record if more than one argument is needed).
+Configurations are platform-specific and support and behavior may change between platforms. At this moment, consider configuration experimental, and expect changes that will not be considered breaking (and will not trigger a major version increase).
+
+A configuration can be a single config or a list of configs, and every config is a `Record` with the first element a `String` indicating what to configure, and the second element an argument (which itself can be a `Record` if more than one argument is needed).
 
 The following configurations are supported:
 * Timeouts
-  - `('requestTimeout', Duration? duration)` sets the requestTimeout, or if null resets to default
-  - `('resourceTimeout', Duration? duration)` sets the iOS resourceTimeout, or if null resets to default
+  - `('requestTimeout', Duration? duration)` sets the requestTimeout, or if null resets to default. This is the time allowed to connect with the server
+  - `('resourceTimeout', Duration? duration)` sets the iOS resourceTimeout, or if null resets to default. This is the time allowed to complete the download/upload
 * Checking available space
-  - `('checkAvailableSpace', int minMegabytes)` ensures a file download fails if less than `minMegabytes` space is available after this download completes
+  - `('checkAvailableSpace', int minMegabytes)` ensures a file download fails if less than `minMegabytes` space will be available after this download completes
   - `('checkAvailableSpace', false)` turns off checking available space
 * HTTP Proxy
   - `('proxy', (String address, int port))` sets the proxy to this address and port (note: address and port are contained in a record)
@@ -24,4 +26,4 @@ The following configurations are supported:
 
 On Android and iOS, most configurations are stored in native 'shared preferences' to ensure that background tasks have access to the configuration. This means that configuration persists across application restarts, and this can lead to some surprising results. For example, if during testing you set a proxy and then remove that configuration line, the proxy configuration is not removed from persistent storage on your test device. You need to explicitly set `('proxy', false)` to remove the stored configuration on that device. 
 
-A configuration can be called multiple times, and affects all tasks *running* after the configuration call. Tasks enqueued _before_ a call, that run _after_ the call (e.g. because they are waiting for other downloads to complete) will run under the newly set configuration, not the one that was active when they were enqueued.
+A configuration can be called multiple times, and affects all tasks *running* after the configuration call. Tasks enqueued _before_ a call, that run _after_ the call (e.g. because they are waiting for other downloads to complete) will run under the newly set configuration, not the one that was active when they were enqueued. On iOS, configuration of requestTimeout, resourceTimeout and proxy can only be set once, before the first task is executed

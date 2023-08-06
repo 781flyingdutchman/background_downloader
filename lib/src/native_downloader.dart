@@ -322,11 +322,13 @@ final class AndroidDownloader extends NativeDownloader {
       case ('bypassTLSCertificateValidation', bool bypass):
         if (bypass) {
           if (kReleaseMode) {
-            throw ArgumentError('You cannot bypass certificate validation in release mode');
+            throw ArgumentError(
+                'You cannot bypass certificate validation in release mode');
           }
           await NativeDownloader.methodChannel
               .invokeMethod('configBypassTLSCertificateValidation');
-          log.warning('TLS certificate validation is bypassed. This is insecure and cannot be '
+          log.warning(
+              'TLS certificate validation is bypassed. This is insecure and cannot be '
               'done in release mode');
         } else {
           throw ArgumentError('To undo bypassing the certificate validation, '

@@ -225,6 +225,8 @@ final result = await FileDownloader().download(task,
 ```
 Progress updates start with 0.0 when the actual download starts (which may be in the future, e.g. if waiting for a WiFi connection), and will be sent periodically, not more than twice per second per task.  If a task completes successfully you will receive a final progress update with a `progress` value of 1.0 (`progressComplete`). Failed tasks generate `progress` of `progressFailed` (-1.0), canceled tasks `progressCanceled` (-2.0), notFound tasks `progressNotFound` (-3.0), waitingToRetry tasks `progressWaitingToRetry` (-4.0) and paused tasks `progressPaused` (-5.0).
 
+The update includes `expectedFileSize`, `networkSpeed` and `timeRemaining`. Check the associated `hasExpectedFileSize`, `hasNetworkSpeed` and `hasTimeRemaining` before using the values in these fields.  Use `networkSpeedAsString` and `timeRemainingAsString` for human readable versions of these values.
+
 Use `await task.expectedFileSize()` to query the server for the size of the file you are about
 to download.  The expected file size is also included in `TaskProgressUpdate`s that are sent to
 listeners and callbacks - see [Using an event listener](#using-an-event-listener) and [Using callbacks](#using-callbacks)
@@ -348,7 +350,9 @@ Listen to updates from the downloader by listening to the `updates` stream, and 
             // note: other fields include expectedFileSize, networkSpeed and timeRemaining
             //       You must check hasExpectedFileSize, hasNetworkSpeed and hasTimeRemaining
             //       before using these fields, as they will not contain valid values
-            //       otherwise
+            //       if false.
+            // tip: use networkSpeedAsString and timeRemainingAsString for a human readable
+            //      version of these values
     });
     
     // define the task
@@ -737,8 +741,10 @@ Then do the same thing in macos/Runner/Release.entitlements.
 Several aspects of the downloader can be configured on startup:
 * Running tasks in 'foreground mode' on Android to allow longer runs
 * Setting the request timeout value and, for iOS only, the 'resourceTimeout'
+* Checking available space before attempting a download
 * Setting a proxy
 * Localizing the notification button texts on iOS
+* Bypassing TLS Certificate validation (for debug mode only)
   
 Please read the [configuration document](https://github.com/781flyingdutchman/background_downloader/blob/main/CONFIG.md) for details on how to configure.
 

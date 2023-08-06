@@ -49,25 +49,17 @@ class _MyAppState extends State<MyApp> {
     // will initialize the downloader with the SQLite storage solution.
     // FileDownloader(persistentStorage: SqlitePersistentStorage());
 
-    // Configure the downloader by registering a callback and configuring
-    // notifications
+    // optional: configure the downloader with platform specific settings,
+    // see CONFIG.md
     FileDownloader().configure(globalConfig: [
-      // ('proxy', ('localhost', 8080)),
-      // ('proxy', false),
       ('requestTimeout', const Duration(seconds: 100)),
-      ('localize', {'cancel': 'this_should_be_not_implemented'}),
-       ('checkAvailableSpace', 1000)
     ], androidConfig: [
       ('runInForegroundIfFileLargerThan', 10),
-      ('proxy', false),
-      ('requestTimeout', const Duration(seconds: 10)),
     ], iOSConfig: [
-      ('proxy', ('localhost', 8080)),
-      ('proxy', false),
-      ('resourceTimeout', null),
-      ('requestTimeout', const Duration(seconds: 55)),
-      ('localize', {'Cancel': 'stopit'}),
-    ]).then((value) => print('Configuration result = $value'));
+      ('localize', {'Cancel': 'StopIt'}),
+    ]).then((result) => debugPrint('Configuration result = $result'));
+
+    // Registering a callback and configure notifications
     FileDownloader()
         .registerCallbacks(
             taskNotificationTapCallback: myNotificationTapCallback)
@@ -75,7 +67,7 @@ class _MyAppState extends State<MyApp> {
             // For the main download button
             // which uses 'enqueue' and a default group
             running: const TaskNotification('Download {filename}',
-                'File: {filename} - {progress} speed {networkSpeed} and {timeRemaining} remaining'),
+                'File: {filename} - {progress} - speed {networkSpeed} and {timeRemaining} remaining'),
             complete: const TaskNotification(
                 'Download {filename}', 'Download complete'),
             error: const TaskNotification(
@@ -230,7 +222,7 @@ class _MyAppState extends State<MyApp> {
         backgroundDownloadTask = DownloadTask(
             url: downloadWithError
                 ? 'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/get_current_app_data' // returns 403 status code
-                : 'https://storage.googleapis.com/approachcharts/test/57MB-test.ZIP',
+                : 'https://storage.googleapis.com/approachcharts/test/5MB-test.ZIP',
             filename: 'zipfile.zip',
             directory: 'my/directory',
             baseDirectory: BaseDirectory.applicationDocuments,
@@ -298,7 +290,7 @@ class _MyAppState extends State<MyApp> {
                 'https://storage.googleapis.com/approachcharts/test/5MB-test.ZIP',
             filename: 'File_${Random().nextInt(1000)}',
             updates: Updates.progress)); // must provide progress updates!
-        await Future.delayed(const Duration(milliseconds: 500));
+        await Future.delayed(const Duration(milliseconds: 100));
       }
       setState(() {
         loadABunchInProgress = false;

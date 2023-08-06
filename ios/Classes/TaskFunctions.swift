@@ -369,14 +369,10 @@ func directoryForTask(task: Task) throws ->  URL {
  * Returns true otherwise
  */
 func insufficientSpace(contentLength: Int64) -> Bool {
-    // Check if contentLength is positive
     guard contentLength > 0 else {
         return false
     }
-
-    // Get the value of the configCheckAvailableSpace preference.
     let checkValue = UserDefaults.standard.integer(forKey: Downloader.keyConfigCheckAvailableSpace)
-
     guard
         // Check if the configCheckAvailableSpace preference is set and is positive
         checkValue > 0,
@@ -385,13 +381,8 @@ func insufficientSpace(contentLength: Int64) -> Bool {
     else {
         return false
     }
-
-    os_log("available= %d", log: log, type: .error, available)
-
-    // Calculate the total remaining bytes to download.
+    // Calculate the total remaining bytes to download
     let remainingBytesToDownload = Downloader.remainingBytesToDownload.values.reduce(0, +)
-    os_log("remainingtodownload= %d", log: log, type: .error, remainingBytesToDownload)
-
-    // Return true if there is insufficient space to store the file.
+    // Return true if there is insufficient space to store the file
     return available - (remainingBytesToDownload + contentLength) < checkValue << 20
 }
