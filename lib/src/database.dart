@@ -44,6 +44,17 @@ interface class Database {
         .toList();
   }
 
+  /// Returns all [TaskRecord] with [TaskStatus] [status]
+  ///
+  /// Optionally, specify a [group] to filter by
+  Future<List<TaskRecord>> allRecordsWithStatus(TaskStatus status,
+      {String? group}) async {
+    final allRecordsInGroup = await allRecords(group: group);
+    return allRecordsInGroup
+        .where((record) => record.status == status)
+        .toList();
+  }
+
   /// Return [TaskRecord] for this [taskId] or null if not found
   Future<TaskRecord?> recordForId(String taskId) =>
       _storage.retrieveTaskRecord(taskId);
