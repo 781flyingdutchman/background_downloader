@@ -115,20 +115,27 @@ Future<void> doDownloadTask(
   try {
     final response = await client.send(request);
     if (!_isCanceled) {
+      final acceptRangesHeader = response.headers['accept-ranges'];
+      final serverAcceptsRanges =
+          acceptRangesHeader == 'bytes' || response.statusCode == 206;
       var taskCanResume = false;
       if (task.allowPause) {
         // determine if this task can be paused
-        //TODO add serverAcceptsRanges, to be tested when task fails
-        final acceptRangesHeader = response.headers['accept-ranges'];
-        taskCanResume =
-            acceptRangesHeader == 'bytes' || response.statusCode == 206;
+        taskCanResume = serverAcceptsRanges;
         sendPort.send(('taskCanResume', taskCanResume));
       }
       isResume =
           isResume && response.statusCode == 206; // confirm resume response
       if (okResponses.contains(response.statusCode)) {
-        resultStatus = await processOkDownloadResponse(task, filePath,
-            tempFilePath, taskCanResume, isResume, response, sendPort);
+        resultStatus = await processOkDownloadResponse(
+            task,
+            filePath,
+            tempFilePath,
+            serverAcceptsRanges,
+            taskCanResume,
+            isResume,
+            response,
+            sendPort);
       } else {
         // not an OK response
         _responseBody = await responseContent(response);
@@ -183,6 +190,7 @@ Future<TaskStatus> processOkDownloadResponse(
     Task task,
     String filePath,
     String tempFilePath,
+    bool serverAcceptsRanges,
     bool taskCanResume,
     bool isResume,
     http.StreamedResponse response,
@@ -224,6 +232,9 @@ Future<TaskStatus> processOkDownloadResponse(
           resultStatus = TaskStatus.failed;
         }
 
+      case TaskStatus.failed:
+        break;
+
       default:
         throw ArgumentError('Cannot process $transferBytesResult');
     }
@@ -233,7 +244,12 @@ Future<TaskStatus> processOkDownloadResponse(
   } finally {
     try {
       await outStream?.close();
-      if (resultStatus != TaskStatus.paused) {
+      if (resultStatus == TaskStatus.failed &&
+          serverAcceptsRanges &&
+          _bytesTotal + _startByte > 1 << 20) {
+        // send ResumeData to allow resume after fail
+        sendPort.send(('resumeData', tempFilePath, _bytesTotal + _startByte));
+      } else if (resultStatus != TaskStatus.paused) {
         File(tempFilePath).deleteSync();
       }
     } catch (e) {
@@ -507,8 +523,18 @@ Future<TaskStatus> transferBytes(
   var lastProgressUpdate = 0.0;
   var nextProgressUpdateTime = DateTime.fromMillisecondsSinceEpoch(0);
   late StreamSubscription<List<int>> subscription;
+  final requestTimeout = const Duration(seconds: 10);
+  var timeout = Timer(requestTimeout, () {
+    _taskException = TaskConnectionException('Request timed out');
+    streamResultStatus.complete(TaskStatus.failed);
+  });
   subscription = inStream.listen(
       (bytes) {
+        timeout.cancel();
+        timeout = Timer(requestTimeout, () {
+          _taskException = TaskConnectionException('Request timed out');
+          streamResultStatus.complete(TaskStatus.failed);
+        });
         if (_isCanceled) {
           streamResultStatus.complete(TaskStatus.canceled);
           return;

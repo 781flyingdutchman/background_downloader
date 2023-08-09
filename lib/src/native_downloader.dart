@@ -36,7 +36,6 @@ abstract base class NativeDownloader extends BaseDownloader {
             ? args.getRange(1, args.length).toList(growable: false)
             : args[1]
       );
-      print('message=$message');
       switch (message) {
         // simple status update
         case ('statusUpdate', int statusOrdinal):
@@ -163,12 +162,10 @@ abstract base class NativeDownloader extends BaseDownloader {
 
   @override
   Future<bool> resume(Task task) async {
-    print("Native Resume");
     if (await super.resume(task)) {
       final taskResumeData = await getResumeData(task.taskId);
       if (taskResumeData != null) {
         final notificationConfig = notificationConfigForTask(task);
-        print("Native Resume returns with invocation result");
         return await methodChannel.invokeMethod<bool>('enqueue', [
               jsonEncode(task.toJsonMap()),
               notificationConfig != null
@@ -180,7 +177,6 @@ abstract base class NativeDownloader extends BaseDownloader {
             false;
       }
     }
-    print("Native Resume returns with false");
     return false;
   }
 

@@ -1449,7 +1449,6 @@ void main() {
         statusCallbackCompleter = Completer();
         someProgressCompleter = Completer();
         expect(await FileDownloader().resume(task), isTrue);
-        await someProgressCompleter.future;
         await statusCallbackCompleter.future;
         expect(lastStatus, equals(TaskStatus.complete));
       } else {

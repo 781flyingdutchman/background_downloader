@@ -95,7 +95,7 @@ final class DesktopDownloader extends BaseDownloader {
       logError(task, exceptionDescription);
       processStatusUpdate(TaskStatusUpdate(
           task, TaskStatus.failed, TaskException(exceptionDescription)));
-      receivePort.close(); // also ends listener at then end
+      receivePort.close(); // also ends listener at the end
     });
     RootIsolateToken? rootIsolateToken = RootIsolateToken.instance;
     if (rootIsolateToken == null) {
