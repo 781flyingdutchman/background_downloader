@@ -484,17 +484,23 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         Downloader.taskIdsThatCanResume.remove(task.taskId)
         let taskWasProgramaticallyCanceled: Bool = Downloader.taskIdsProgrammaticallyCancelled.remove(task.taskId) != nil
         guard error == nil else {
+            os_log("Error is: %@", log: log, type: .error, error!.localizedDescription)
             // handle the error if this task wasn't programatically cancelled (in which
             // case the error has been handled already)
             if !taskWasProgramaticallyCanceled {
+                // check if we have resume data, and if so, process it
+                let userInfo = (error! as NSError).userInfo
+                let resumeData = userInfo[NSURLSessionDownloadTaskResumeData] as? Data
+                let canResume = resumeData != nil && processResumeData(task: task, resumeData: resumeData!)
+                // check different error codes
                 if (error! as NSError).code == NSURLErrorTimedOut {
                     os_log("Task with id %@ timed out", log: log, type: .info, task.taskId)
-                    processStatusUpdate(task: task, status: .failed)
+                    processStatusUpdate(task: task, status: .failed, taskException: TaskException(type: .connection, httpResponseCode: -1, description: error!.localizedDescription))
                     return
                 }
-                let userInfo = (error! as NSError).userInfo
-                if let resumeData = userInfo[NSURLSessionDownloadTaskResumeData] as? Data {
-                    if processResumeData(task: task, resumeData: resumeData) {
+                if (error! as NSError).code == NSURLErrorCancelled {
+                    // cancelled with resumedata implies 'pause'
+                    if canResume {
                         os_log("Paused task with id %@", log: log, type: .info, task.taskId)
                         processStatusUpdate(task: task, status: .paused)
                         if isDownloadTask(task: task) {
@@ -505,8 +511,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                         Downloader.progressInfo.removeValue(forKey: task.taskId) // ensure .running update on resume
                         return
                     }
-                }
-                if (error! as NSError).code == NSURLErrorCancelled {
+                    // cancelled without resumedata implies 'cancel'
                     os_log("Canceled task with id %@", log: log, type: .info, task.taskId)
                     processStatusUpdate(task: task, status: .canceled)
                 }

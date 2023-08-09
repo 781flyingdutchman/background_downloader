@@ -1434,6 +1434,7 @@ void main() {
     testWidgets('resume on failure', (widgetTester) async {
       // this test requires manual failure while the task is downloading
       // and therefore does NOT fail if the task completes normally
+      //print(await FileDownloader().configure(iOSConfig: ('resourceTimeout', const Duration(seconds: 15))));
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback, taskProgressCallback: progressCallback);
       task = DownloadTask(url: urlWithLongContentLength, updates: Updates.statusAndProgress);
       expect(await FileDownloader().enqueue(task), isTrue);

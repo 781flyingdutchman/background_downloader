@@ -33,7 +33,7 @@ abstract base class BaseDownloader {
   late final PersistentStorage _storage;
   late final Database database;
 
-  final tasksWaitingToRetry = <Task>[];
+  final tasksWaitingToRetry = <Task>{};
 
   /// Registered [TaskStatusCallback] for each group
   final groupStatusCallbacks = <String, TaskStatusCallback>{};
@@ -502,9 +502,9 @@ abstract base class BaseDownloader {
       _emitStatusUpdate(TaskStatusUpdate(task, TaskStatus.waitingToRetry));
       _emitProgressUpdate(TaskProgressUpdate(task, progressWaitingToRetry));
       task.decreaseRetriesRemaining();
-      tasksWaitingToRetry.add(task); // TODO should this be a set instead?
+      tasksWaitingToRetry.add(task);
       final waitTime = Duration(
-          seconds: pow(2, (task.retries - task.retriesRemaining)).toInt());
+          seconds: 2 << min(task.retries - task.retriesRemaining - 1, 8));
       log.finer('TaskId ${task.taskId} failed, waiting ${waitTime.inSeconds}'
           ' seconds before retrying. ${task.retriesRemaining}'
           ' retries remaining');
