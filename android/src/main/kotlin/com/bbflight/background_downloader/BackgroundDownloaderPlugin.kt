@@ -78,7 +78,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         val jsonMapType = object : TypeToken<Map<String, Any>>() {}.type
         var requestingNotificationPermission = false
         var externalStoragePermissionCompleter = CompletableFuture<Boolean>()
-        var localResumeData = HashMap<String, ResumeData>()
+        var localResumeData = HashMap<String, ResumeData>() // for pause notifications
         var remainingBytesToDownload = HashMap<String, Long>()
         var haveLoggedProxyMessage = false
 

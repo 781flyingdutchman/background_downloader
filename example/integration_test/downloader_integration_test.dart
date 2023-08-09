@@ -1430,6 +1430,45 @@ void main() {
       expect(await FileDownloader().taskForId(task.taskId), isNull);
       await FileDownloader().cancelTasksWithIds([retryTask.taskId]);
     });
+
+    testWidgets('resume on failure', (widgetTester) async {
+      // this test requires manual failure while the task is downloading
+      // and therefore does NOT fail if the task completes normally
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback, taskProgressCallback: progressCallback);
+      task = DownloadTask(url: urlWithLongContentLength, updates: Updates.statusAndProgress);
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await someProgressCompleter.future;
+      expect(await FileDownloader().taskCanResume(task), isFalse); // allowPause not set
+      print('FAIL TASK NOW!');
+      await statusCallbackCompleter.future;
+      if (lastStatus == TaskStatus.failed) {
+        // manual fail succeeded, we should have resume data
+        expect(await FileDownloader().downloaderForTesting.getResumeData(task.taskId), isNotNull);
+        expect(await FileDownloader().taskCanResume(task), isTrue);
+        // reset and resume the task
+        statusCallbackCompleter = Completer();
+        someProgressCompleter = Completer();
+        expect(await FileDownloader().resume(task), isTrue);
+        await someProgressCompleter.future;
+        await statusCallbackCompleter.future;
+        expect(lastStatus, equals(TaskStatus.complete));
+      } else {
+        print('Test skipped because task was not failed manually. Task status = $lastStatus');
+      }
+    });
+
+    testWidgets('resume on retry', (widgetTester) async {
+      // this test requires manual failure while the task is downloading
+      // and therefore does NOT fail if the task completes normally
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback, taskProgressCallback: progressCallback);
+      task = DownloadTask(url: urlWithLongContentLength, updates: Updates.statusAndProgress, retries: 2);
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await someProgressCompleter.future;
+      expect(await FileDownloader().taskCanResume(task), isFalse); // allowPause not set
+      print('FAIL TASK NOW!');
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+    });
   });
 
   group('DownloadTask with POST request', () {
@@ -1963,6 +2002,7 @@ void main() {
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.canceled));
       await Future.delayed(const Duration(seconds: 1));
+      expect(lastStatus, equals(TaskStatus.canceled));
     });
 
     /// If a task fails immediately, eg due to a malformed url, it

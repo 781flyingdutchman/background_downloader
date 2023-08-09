@@ -44,6 +44,9 @@ abstract base class BaseDownloader {
   /// Registered [TaskNotificationTapCallback] for each group
   final groupNotificationTapCallbacks = <String, TaskNotificationTapCallback>{};
 
+  /// List of notification configurations
+  final notificationConfigs = <TaskNotificationConfig>[];
+
   /// StreamController for [TaskUpdate] updates
   var updates = StreamController<TaskUpdate>();
 
@@ -155,10 +158,21 @@ abstract base class BaseDownloader {
     }
   }
 
+  /// Returns the [TaskNotificationConfig] for this [task] or null
+  ///
+  /// Matches on task, then on group, then on default
+  TaskNotificationConfig? notificationConfigForTask(Task task) {
+    return notificationConfigs
+            .firstWhereOrNull((config) => config.taskOrGroup == task) ??
+        notificationConfigs
+            .firstWhereOrNull((config) => config.taskOrGroup == task.group) ??
+        notificationConfigs
+            .firstWhereOrNull((config) => config.taskOrGroup == null);
+  }
+
   /// Enqueue the task
   @mustCallSuper
-  Future<bool> enqueue(Task task,
-      [TaskNotificationConfig? notificationConfig]) async {
+  Future<bool> enqueue(Task task) async {
     if (task.allowPause) {
       canResumeTask[task] = Completer();
     }
@@ -318,8 +332,7 @@ abstract base class BaseDownloader {
   ///
   /// Returns true if successful
   @mustCallSuper
-  Future<bool> resume(Task task,
-      [TaskNotificationConfig? notificationConfig]) async {
+  Future<bool> resume(Task task) async {
     await removePausedTask(task.taskId);
     if (await getResumeData(task.taskId) != null) {
       canResumeTask[task] = Completer();
@@ -338,8 +351,19 @@ abstract base class BaseDownloader {
   }
 
   /// Returns a Future that indicates whether this task can be resumed
-  Future<bool> taskCanResume(Task task) =>
-      canResumeTask[task]?.future ?? Future.value(false);
+  ///
+  /// If we have stored [ResumeData] this is true
+  /// If we have completer then we return the awaited completed value
+  /// Otherwise we return false
+  Future<bool> taskCanResume(Task task) async {
+    if (await getResumeData(task.taskId) != null) {
+      return true;
+    }
+    if (canResumeTask.containsKey(task)) {
+      return canResumeTask[task]!.future;
+    }
+    return false;
+  }
 
   /// Stores the resume data
   Future<void> setResumeData(ResumeData resumeData) =>
@@ -417,8 +441,8 @@ abstract base class BaseDownloader {
   ///
   /// Modification happens in convenience functions, and storing the modified
   /// version allows us to replace the original when used in pause/resume
-  /// functionality. Without this, a convenience download may not be
-  /// resumable using the original [modifiedTask] object (as the [Task.group]
+  /// functionality. Without this, a convenience download may not be able to
+  /// resume using the original [modifiedTask] object (as the [Task.group]
   /// and [Task.updates] fields may have been modified)
   Future<void> setModifiedTask(Task modifiedTask, Task originalTask) async {
     if (modifiedTask.group != originalTask.group ||
@@ -455,6 +479,7 @@ abstract base class BaseDownloader {
     tasksWaitingToRetry.clear();
     groupStatusCallbacks.clear();
     groupProgressCallbacks.clear();
+    notificationConfigs.clear();
     trackedGroups.clear();
     canResumeTask.clear();
     removeResumeData(); // removes all
@@ -463,7 +488,7 @@ abstract base class BaseDownloader {
     resetUpdatesStreamController();
   }
 
-  /// Process status update coming from Downloader and emits to listener
+  /// Process status update coming from Downloader and emit to listener
   ///
   /// Also manages retries ([tasksWaitingToRetry] and delay) and pause/resume
   /// ([pausedTasks] and [_clearPauseResumeInfo]
@@ -477,24 +502,27 @@ abstract base class BaseDownloader {
       _emitStatusUpdate(TaskStatusUpdate(task, TaskStatus.waitingToRetry));
       _emitProgressUpdate(TaskProgressUpdate(task, progressWaitingToRetry));
       task.decreaseRetriesRemaining();
-      tasksWaitingToRetry.add(task);
+      tasksWaitingToRetry.add(task); // TODO should this be a set instead?
       final waitTime = Duration(
           seconds: pow(2, (task.retries - task.retriesRemaining)).toInt());
       log.finer('TaskId ${task.taskId} failed, waiting ${waitTime.inSeconds}'
           ' seconds before retrying. ${task.retriesRemaining}'
           ' retries remaining');
       Future.delayed(waitTime, () async {
-        // after delay, enqueue task again if it's still waiting
+        // after delay, resume or enqueue task again if it's still waiting
         if (tasksWaitingToRetry.remove(task)) {
-          if (!await enqueue(task)) {
-            log.warning('Could not enqueue task $task after retry timeout');
+          if (!((await getResumeData(task.taskId) != null &&
+                  await resume(task)) ||
+              await enqueue(task))) {
+            log.warning(
+                'Could not resume/enqueue taskId ${task.taskId} after retry timeout');
             removeModifiedTask(task);
             _clearPauseResumeInfo(task);
             _emitStatusUpdate(TaskStatusUpdate(
                 task,
                 TaskStatus.failed,
                 TaskException(
-                    'Could not enqueue task $task after retry timeout')));
+                    'Could not resume/enqueue taskId${task.taskId} after retry timeout')));
             _emitProgressUpdate(TaskProgressUpdate(task, progressFailed));
           }
         }

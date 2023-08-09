@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
@@ -56,9 +55,6 @@ interface class FileDownloader {
 
   /// Registered [TaskProgressCallback] for convenience batch down/upload tasks
   final _taskProgressCallbacks = <String, TaskProgressCallback>{};
-
-  /// List of notification configurations
-  final _notificationConfigs = <TaskNotificationConfig>[];
 
   factory FileDownloader({PersistentStorage? persistentStorage}) {
     assert(
@@ -189,8 +185,7 @@ interface class FileDownloader {
   /// Returns true if successfully enqueued. A new task will also generate
   /// a [TaskStatus.enqueued] update to the registered callback,
   /// if requested by its [updates] property
-  Future<bool> enqueue(Task task) =>
-      _downloader.enqueue(task, _notificationConfigForTask(task));
+  Future<bool> enqueue(Task task) => _downloader.enqueue(task);
 
   /// Download a file and return the final [TaskStatusUpdate]
   ///
@@ -685,18 +680,12 @@ interface class FileDownloader {
 
   /// Resume the task
   ///
-  /// Returns true if the pause was attempted successfully. Status will change
+  /// Returns true if the resume was successful. Status will change
   /// similar to a call to [enqueue]. If the task is able to resume, it will,
   /// otherwise it will restart the task from scratch.
-  ///
-  /// If the [Task.allowPause] field is set to false (default) or if this is
-  /// a POST request, this method returns false immediately.
   Future<bool> resume(DownloadTask task) async {
-    if (task.allowPause && task.post == null) {
-      final resumeTask = await _downloader.getModifiedTask(task) ?? task;
-      return _downloader.resume(resumeTask, _notificationConfigForTask(task));
-    }
-    return false;
+    final resumeTask = await _downloader.getModifiedTask(task) ?? task;
+    return _downloader.resume(resumeTask);
   }
 
   /// Configure notification for a single task
@@ -709,7 +698,7 @@ interface class FileDownloader {
       TaskNotification? paused,
       bool progressBar = false,
       bool tapOpensFile = false}) {
-    _notificationConfigs.add(TaskNotificationConfig(
+    _downloader.notificationConfigs.add(TaskNotificationConfig(
         taskOrGroup: task,
         running: running,
         complete: complete,
@@ -730,7 +719,7 @@ interface class FileDownloader {
       TaskNotification? paused,
       bool progressBar = false,
       bool tapOpensFile = false}) {
-    _notificationConfigs.add(TaskNotificationConfig(
+    _downloader.notificationConfigs.add(TaskNotificationConfig(
         taskOrGroup: group,
         running: running,
         complete: complete,
@@ -754,7 +743,7 @@ interface class FileDownloader {
       TaskNotification? paused,
       bool progressBar = false,
       bool tapOpensFile = false}) {
-    _notificationConfigs.add(TaskNotificationConfig(
+    _downloader.notificationConfigs.add(TaskNotificationConfig(
         taskOrGroup: null,
         running: running,
         complete: complete,
@@ -763,18 +752,6 @@ interface class FileDownloader {
         progressBar: progressBar,
         tapOpensFile: tapOpensFile));
     return this;
-  }
-
-  /// Returns the [TaskNotificationConfig] for this [task] or null
-  ///
-  /// Matches on task, then on group, then on default
-  TaskNotificationConfig? _notificationConfigForTask(Task task) {
-    return _notificationConfigs
-            .firstWhereOrNull((config) => config.taskOrGroup == task) ??
-        _notificationConfigs
-            .firstWhereOrNull((config) => config.taskOrGroup == task.group) ??
-        _notificationConfigs
-            .firstWhereOrNull((config) => config.taskOrGroup == null);
   }
 
   /// Perform a server request for this [request]
@@ -873,7 +850,6 @@ interface class FileDownloader {
     _shortTaskProgressCallbacks.clear();
     _taskStatusCallbacks.clear();
     _taskProgressCallbacks.clear();
-    _notificationConfigs.clear();
     _downloader.destroy();
     Localstore.instance.clearCache();
   }

@@ -249,8 +249,7 @@ final class DesktopDownloader extends BaseDownloader {
   }
 
   @override
-  Future<bool> resume(Task task,
-      [TaskNotificationConfig? notificationConfig]) async {
+  Future<bool> resume(Task task) async {
     if (await super.resume(task)) {
       _resume.add(task);
       return enqueue(task);

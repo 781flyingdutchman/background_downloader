@@ -36,11 +36,11 @@ abstract base class NativeDownloader extends BaseDownloader {
             ? args.getRange(1, args.length).toList(growable: false)
             : args[1]
       );
+      print('message=$message');
       switch (message) {
         // simple status update
         case ('statusUpdate', int statusOrdinal):
           final status = TaskStatus.values[statusOrdinal];
-          await killFailedTask(task, status);
           processStatusUpdate(TaskStatusUpdate(task, status));
 
         // status update with responseBody, no exception
@@ -61,7 +61,6 @@ abstract base class NativeDownloader extends BaseDownloader {
             ]
           ):
           final status = TaskStatus.values[statusOrdinal];
-          await killFailedTask(task, status);
           TaskException? exception;
           if (status == TaskStatus.failed) {
             exception = TaskException.fromTypeString(
@@ -105,9 +104,9 @@ abstract base class NativeDownloader extends BaseDownloader {
   }
 
   @override
-  Future<bool> enqueue(Task task,
-      [TaskNotificationConfig? notificationConfig]) async {
+  Future<bool> enqueue(Task task) async {
     super.enqueue(task);
+    final notificationConfig = notificationConfigForTask(task);
     return await methodChannel.invokeMethod<bool>('enqueue', [
           jsonEncode(task.toJsonMap()),
           notificationConfig != null
@@ -144,16 +143,6 @@ abstract base class NativeDownloader extends BaseDownloader {
       await methodChannel.invokeMethod<bool>('cancelTasksWithIds', taskIds) ??
       false;
 
-  /// Kills the task if it failed, on Android only
-  ///
-  /// See methodKillTaskWithId in the Android plugin for explanation
-  Future<void> killFailedTask(Task task, TaskStatus status) async {
-    if (Platform.isAndroid &&
-        (status == TaskStatus.failed || status == TaskStatus.canceled)) {
-      methodChannel.invokeMethod('killTaskWithId', task.taskId);
-    }
-  }
-
   @override
   Future<Task?> taskForId(String taskId) async {
     var task = await super.taskForId(taskId);
@@ -173,11 +162,13 @@ abstract base class NativeDownloader extends BaseDownloader {
       await methodChannel.invokeMethod<bool>('pause', task.taskId) ?? false;
 
   @override
-  Future<bool> resume(Task task,
-      [TaskNotificationConfig? notificationConfig]) async {
+  Future<bool> resume(Task task) async {
+    print("Native Resume");
     if (await super.resume(task)) {
       final taskResumeData = await getResumeData(task.taskId);
       if (taskResumeData != null) {
+        final notificationConfig = notificationConfigForTask(task);
+        print("Native Resume returns with invocation result");
         return await methodChannel.invokeMethod<bool>('enqueue', [
               jsonEncode(task.toJsonMap()),
               notificationConfig != null
@@ -189,6 +180,7 @@ abstract base class NativeDownloader extends BaseDownloader {
             false;
       }
     }
+    print("Native Resume returns with false");
     return false;
   }
 

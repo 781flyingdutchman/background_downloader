@@ -118,6 +118,7 @@ Future<void> doDownloadTask(
       var taskCanResume = false;
       if (task.allowPause) {
         // determine if this task can be paused
+        //TODO add serverAcceptsRanges, to be tested when task fails
         final acceptRangesHeader = response.headers['accept-ranges'];
         taskCanResume =
             acceptRangesHeader == 'bytes' || response.statusCode == 206;

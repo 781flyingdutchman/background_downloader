@@ -23,6 +23,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.preference.PreferenceManager
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
+import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.google.gson.Gson
 import kotlinx.coroutines.*
@@ -146,7 +147,8 @@ class TaskWorker(
             status: TaskStatus,
             prefs: SharedPreferences,
             taskException: TaskException? = null,
-            responseBody: String? = null
+            responseBody: String? = null,
+            context: Context? = null
         ) {
             // A 'failed' progress update is only provided if
             // a retry is not needed: if it is needed, a `waitingToRetry` progress update
@@ -210,9 +212,27 @@ class TaskWorker(
                     )
                 }
             }
-            // if task is in final state, remove from persistent storage and remove
-            // resume data from local memory
+            // if task is in final state, cancel the WorkManager job (if failed),
+            // remove task from persistent storage and remove resume data from local memory
             if (status.isFinalState()) {
+                if (context != null && status == TaskStatus.failed) {
+                    // Cancel the WorkManager job.
+                    // This is to avoid the WorkManager restarting a job that was
+                    // canceled because job constraints are violated (e.g. network unavailable)
+                    // We want to manage cancellation ourselves, so we cancel the job
+                    val workManager = WorkManager.getInstance(context)
+                    val operation = workManager.cancelAllWorkByTag("taskId=${task.taskId}")
+                    try {
+                        withContext(Dispatchers.IO) {
+                            operation.result.get()
+                        }
+                    } catch (e: Throwable) {
+                        Log.w(
+                            BackgroundDownloaderPlugin.TAG,
+                            "Could not kill task wih id ${task.taskId} in operation: $operation"
+                        )
+                    }
+                }
                 BackgroundDownloaderPlugin.prefsLock.write {
                     val tasksMap = getTaskMap(prefs)
                     tasksMap.remove(task.taskId)
@@ -392,7 +412,8 @@ class TaskWorker(
     private var lastProgressUpdateTime = 0L // in millis
     private var networkSpeed = -1.0 // in MB/s
     private var isTimedOut = false
-    private var taskCanResume = false
+    private var taskCanResume = false // whether task is able to resume
+    private var serverAcceptsRanges = false // if true, send resume data on fail
 
     // properties related to notifications
     private var notificationConfigJsonString: String? = null
@@ -447,8 +468,12 @@ class TaskWorker(
             }
             updateNotification(task, notificationTypeForTaskStatus(TaskStatus.running))
             val status = doTask(task, isResume, tempFilePath, requiredStartByte)
-            processStatusUpdate(task, status, prefs, taskException, responseBody)
-            updateNotification(task, notificationTypeForTaskStatus(status))
+            withContext(NonCancellable) {
+                // NonCancellable to make sure we complete the status and notification
+                // updates even if the job is being cancelled
+                processStatusUpdate(task, status, prefs, taskException, responseBody, applicationContext)
+                updateNotification(task, notificationTypeForTaskStatus(status))
+            }
         }
         return Result.success()
     }
@@ -558,10 +583,7 @@ class TaskWorker(
             setTaskException(e)
             when (e) {
                 is FileSystemException -> Log.w(
-                    TAG, "Filesystem exception for taskId ${task.taskId} and $filePath: ${
-                        e
-                            .message
-                    }"
+                    TAG, "Filesystem exception for taskId ${task.taskId} and $filePath: ${e.message}"
                 )
 
                 is SocketException -> Log.i(
@@ -593,7 +615,7 @@ class TaskWorker(
             // clean up remaining bytes tracking
             BackgroundDownloaderPlugin.remainingBytesToDownload.remove(task.taskId)
         }
-        deleteTempFile(tempFilePath)
+        prepResumeAfterFailure(task, tempFilePath)
         return TaskStatus.failed
     }
 
@@ -609,10 +631,11 @@ class TaskWorker(
         tempFilePath: String
     ): TaskStatus {
         if (connection.responseCode in 200..206) {
+            val acceptRangesHeader = connection.headerFields["Accept-Ranges"]
+            serverAcceptsRanges =
+                acceptRangesHeader?.first() == "bytes" || connection.responseCode == 206
             if (task.allowPause) {
-                val acceptRangesHeader = connection.headerFields["Accept-Ranges"]
-                taskCanResume =
-                    acceptRangesHeader?.first() == "bytes" || connection.responseCode == 206
+                taskCanResume = serverAcceptsRanges
                 processCanResume(
                     task,
                     taskCanResume
@@ -734,7 +757,13 @@ class TaskWorker(
                     return TaskStatus.failed
                 }
 
+                TaskStatus.failed -> {
+                    prepResumeAfterFailure(task, tempFilePath)
+                    return TaskStatus.failed
+                }
+
                 else -> {
+                    Log.e(TAG, "Unknown transferBytesResult $transferBytesResult")
                     deleteTempFile(tempFilePath)
                     return TaskStatus.failed
                 }
@@ -1136,6 +1165,27 @@ class TaskWorker(
             return false
         }
         return true
+    }
+
+    /**
+     * Attempt to allow resume after failure by sending resume data
+     * back to Dart
+     *
+     * If this is not possible, the temp file will be deleted
+     */
+    private suspend fun prepResumeAfterFailure(task: Task, tempFilePath: String) {
+        if (serverAcceptsRanges && bytesTotal + startByte > 1 shl 20) {
+            // if failure can be resumed, post resume data
+            processResumeData(
+                ResumeData(
+                    task, tempFilePath, bytesTotal + startByte
+                ), prefs
+            )
+        } else {
+            // if it cannot be resumed, delete the temp file
+            deleteTempFile(tempFilePath)
+        }
+
     }
 
     /**
