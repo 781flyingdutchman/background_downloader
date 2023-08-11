@@ -234,12 +234,13 @@ enum class TaskStatus {
 }
 
 /// Holds data associated with a resume
-class ResumeData(val task: Task, val data: String, val requiredStartByte: Long) {
+class ResumeData(val task: Task, val data: String, val requiredStartByte: Long, val eTag: String?) {
     fun toJsonMap(): MutableMap<String, Any?> {
         return mutableMapOf(
             "task" to task.toJsonMap(),
             "data" to data,
-            "requiredStartByte" to requiredStartByte
+            "requiredStartByte" to requiredStartByte,
+            "eTag" to eTag
         )
     }
 }

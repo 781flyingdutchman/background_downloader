@@ -62,6 +62,7 @@ class TaskWorker(
         const val keyNotificationConfig = "notificationConfig"
         const val keyTempFilename = "tempFilename"
         const val keyStartByte = "startByte"
+        const val keyEtag = "eTag"
         const val bufferSize = 8096
         const val taskTimeoutMillis = 9 * 60 * 1000L  // 9 minutes
 
@@ -317,7 +318,8 @@ class TaskWorker(
             if (!postOnBackgroundChannel(
                     "resumeData", resumeData.task, mutableListOf(
                         resumeData.data,
-                        resumeData.requiredStartByte
+                        resumeData.requiredStartByte,
+                        resumeData.eTag
                     )
                 )
             ) {
@@ -409,6 +411,7 @@ class TaskWorker(
     private var bytesTotal = 0L
     private var bytesTotalAtLastProgressUpdate = 0L
     private var startByte = 0L
+    private var eTagHeader: String? = null
     private var lastProgressUpdateTime = 0L // in millis
     private var networkSpeed = -1.0 // in MB/s
     private var isTimedOut = false
@@ -457,6 +460,7 @@ class TaskWorker(
             var isResume = requiredStartByte != 0L
             val tempFilePath = if (isResume) inputData.getString(keyTempFilename) ?: ""
             else "${applicationContext.cacheDir}/com.bbflight.background_downloader${Random.nextInt()}"
+            val eTag = inputData.getString(keyEtag)
             isResume = isResume && determineIfResumeIsPossible(tempFilePath, requiredStartByte)
             Log.i(
                 TAG,
@@ -467,7 +471,7 @@ class TaskWorker(
                 processProgressUpdate(task, 0.0, prefs)
             }
             updateNotification(task, notificationTypeForTaskStatus(TaskStatus.running))
-            val status = doTask(task, isResume, tempFilePath, requiredStartByte)
+            val status = doTask(task, isResume, tempFilePath, requiredStartByte, eTag)
             withContext(NonCancellable) {
                 // NonCancellable to make sure we complete the status and notification
                 // updates even if the job is being cancelled
@@ -517,7 +521,7 @@ class TaskWorker(
      * do the task: download or upload a file
      */
     private suspend fun doTask(
-        task: Task, isResume: Boolean, tempFilePath: String, requiredStartByte: Long
+        task: Task, isResume: Boolean, tempFilePath: String, requiredStartByte: Long, eTag: String?
     ): TaskStatus {
         try {
             val urlString = task.url
@@ -550,7 +554,7 @@ class TaskWorker(
                 if (isResume) {
                     setRequestProperty("Range", "bytes=$requiredStartByte-")
                 }
-                return connectAndProcess(this, task, isResume, tempFilePath)
+                return connectAndProcess(this, task, isResume, tempFilePath, eTag)
             }
         } catch (e: Exception) {
             Log.w(
@@ -563,7 +567,7 @@ class TaskWorker(
 
     /** Make the request to the [connection] and process the [Task] */
     private suspend fun connectAndProcess(
-        connection: HttpURLConnection, task: Task, isResume: Boolean, tempFilePath: String
+        connection: HttpURLConnection, task: Task, isResume: Boolean, tempFilePath: String, eTag: String?
     ): TaskStatus {
         val filePath = task.filePath(applicationContext) // "" for MultiUploadTask
         try {
@@ -575,7 +579,7 @@ class TaskWorker(
                     DataOutputStream(connection.outputStream).use { it.writeBytes(task.post) }
                 }
                 return processDownload(
-                    connection, task, filePath, isResume, tempFilePath
+                    connection, task, filePath, isResume, tempFilePath, eTag
                 )
             }
             return processUpload(connection, task, filePath)
@@ -628,9 +632,11 @@ class TaskWorker(
         task: Task,
         filePath: String,
         isResumeParam: Boolean,
-        tempFilePath: String
+        tempFilePath: String,
+        eTag: String?
     ): TaskStatus {
         if (connection.responseCode in 200..206) {
+            eTagHeader = connection.headerFields["ETag"]?.first()
             val acceptRangesHeader = connection.headerFields["Accept-Ranges"]
             serverAcceptsRanges =
                 acceptRangesHeader?.first() == "bytes" || connection.responseCode == 206
@@ -645,6 +651,15 @@ class TaskWorker(
                 isResumeParam && connection.responseCode == 206  // confirm resume response
             if (isResume && !prepareResume(connection, tempFilePath)) {
                 deleteTempFile(tempFilePath)
+                return TaskStatus.failed
+            }
+            if (isResume && (eTagHeader != eTag || eTag?.subSequence(0, 1) == "W/")) {
+                deleteTempFile(tempFilePath)
+                Log.i(TAG, "Cannot resume: ETag is not identical, or is weak")
+                taskException = TaskException(
+                    ExceptionType.resume,
+                    description = "Cannot resume: ETag is not identical, or is weak"
+                )
                 return TaskStatus.failed
             }
             val tempFile = File(tempFilePath)
@@ -708,7 +723,7 @@ class TaskWorker(
                         Log.i(TAG, "Task ${task.taskId} paused")
                         processResumeData(
                             ResumeData(
-                                task, tempFilePath, bytesTotal + startByte
+                                task, tempFilePath, bytesTotal + startByte, eTagHeader
                             ), prefs
                         )
                         return TaskStatus.paused
@@ -746,6 +761,7 @@ class TaskWorker(
                             notificationConfigJsonString,
                             tempFilePath,
                             start,
+                            eTag,
                             1000
                         )
                         return TaskStatus.paused
@@ -1178,7 +1194,7 @@ class TaskWorker(
             // if failure can be resumed, post resume data
             processResumeData(
                 ResumeData(
-                    task, tempFilePath, bytesTotal + startByte
+                    task, tempFilePath, bytesTotal + startByte, eTagHeader
                 ), prefs
             )
         } else {

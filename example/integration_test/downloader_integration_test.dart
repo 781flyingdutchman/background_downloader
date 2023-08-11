@@ -2288,7 +2288,7 @@ void main() {
       expect(lastStatus, equals(TaskStatus.paused));
       // mess with the ResumeData
       final resumeData = await FileDownloader().database.storage.retrieveResumeData(task.taskId);
-      final newResumeData = ResumeData(task, resumeData!.data, resumeData!.requiredStartByte, 'differentTag');
+      final newResumeData = ResumeData(task, resumeData!.data, resumeData.requiredStartByte, 'differentTag');
       await FileDownloader().database.storage.storeResumeData(newResumeData);
       // resume
       expect(await FileDownloader().resume(task), isTrue);

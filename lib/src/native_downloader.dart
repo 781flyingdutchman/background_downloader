@@ -172,7 +172,8 @@ abstract base class NativeDownloader extends BaseDownloader {
                   ? jsonEncode(notificationConfig.toJsonMap())
                   : null,
               taskResumeData.data,
-              taskResumeData.requiredStartByte
+              taskResumeData.requiredStartByte,
+          taskResumeData.eTag
             ]) ??
             false;
       }

@@ -14,6 +14,7 @@ import androidx.preference.PreferenceManager
 import androidx.work.*
 import com.bbflight.background_downloader.TaskWorker.Companion.keyNotificationConfig
 import com.bbflight.background_downloader.TaskWorker.Companion.keyStartByte
+import com.bbflight.background_downloader.TaskWorker.Companion.keyEtag
 import com.bbflight.background_downloader.TaskWorker.Companion.keyTempFilename
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -91,6 +92,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
             notificationConfigJsonString: String?,
             tempFilePath: String?,
             startByte: Long?,
+            eTag: String?,
             initialDelayMillis: Long = 0
         ): Boolean {
             val task = Task(gson.fromJson(taskJsonMapString, jsonMapType))
@@ -107,6 +109,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
             if (tempFilePath != null && startByte != null) {
                 dataBuilder.putString(keyTempFilename, tempFilePath)
                     .putLong(keyStartByte, startByte)
+                    .putString(keyEtag, eTag)
             }
             val data = dataBuilder.build()
             val constraints = Constraints.Builder().setRequiredNetworkType(
@@ -330,19 +333,22 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
      */
     private suspend fun methodEnqueue(call: MethodCall, result: Result) {
         // Arguments are a list of Task, NotificationConfig?, optionally followed
-        // by tempFilePath and startByte if this enqueue is a resume from pause
+        // by tempFilePath, startByte and eTag if this enqueue is a resume from pause
         val args = call.arguments as List<*>
         val taskJsonMapString = args[0] as String
         val notificationConfigJsonString = args[1] as String?
-        val isResume = args.size == 4
+        val isResume = args.size == 5
         val startByte: Long?
         val tempFilePath: String?
+        val eTag: String?
         if (isResume) {
             tempFilePath = args[2] as String
             startByte = if (args[3] is Long) args[3] as Long else (args[3] as Int).toLong()
+            eTag = args[4] as String?
         } else {
             tempFilePath = null
             startByte = null
+            eTag = null
         }
         result.success(
             doEnqueue(
@@ -350,7 +356,8 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 taskJsonMapString,
                 notificationConfigJsonString,
                 tempFilePath,
-                startByte
+                startByte,
+                eTag
             )
         )
     }

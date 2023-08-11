@@ -129,7 +129,8 @@ class NotificationRcvr : BroadcastReceiver() {
                                     taskJsonString,
                                     notificationConfigJsonString,
                                     resumeData.data,
-                                    resumeData.requiredStartByte
+                                    resumeData.requiredStartByte,
+                                    resumeData.eTag
                                 )
                             } else {
                                 BackgroundDownloaderPlugin.cancelActiveTaskWithId(
