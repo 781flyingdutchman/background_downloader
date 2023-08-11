@@ -123,20 +123,30 @@ void main() {
     });
 
     test('ResumeData', () {
-      final resumeData = ResumeData(task, 'data', 123);
+      final resumeData = ResumeData(task, 'data', 123, 'tag');
       const expected =
-          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask"},"data":"data","requiredStartByte":123}';
+          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask"},"data":"data","requiredStartByte":123,"eTag":"tag"}';
       expect(jsonEncode(resumeData.toJsonMap()), equals(expected));
       final update2 = ResumeData.fromJsonMap(jsonDecode(expected));
       expect(update2.task, equals(resumeData.task));
       expect(update2.data, equals('data'));
       expect(update2.requiredStartByte, equals(123));
+      expect(update2.eTag, equals('tag'));
       const withDoubles =
-          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5.0,"retriesRemaining":5.0,"creationTime":1000.0,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1.0,"group":"group","updates":3.0,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask"},"data":"data","requiredStartByte":123.0}';
+          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5.0,"retriesRemaining":5.0,"creationTime":1000.0,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1.0,"group":"group","updates":3.0,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask"},"data":"data","requiredStartByte":123.0,"eTag":"tag"}';
       expect(
           jsonEncode(
               ResumeData.fromJsonMap(jsonDecode(withDoubles)).toJsonMap()),
           equals(expected));
+      final resumeData2 = ResumeData(task, 'data', 123, null);
+      const expected2 =
+          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask"},"data":"data","requiredStartByte":123,"eTag":null}';
+      expect(jsonEncode(resumeData2.toJsonMap()), equals(expected2));
+      final update3 = ResumeData.fromJsonMap(jsonDecode(expected2));
+      expect(update3.task, equals(resumeData.task));
+      expect(update3.data, equals('data'));
+      expect(update3.requiredStartByte, equals(123));
+      expect(update3.eTag, isNull);
     });
   });
 }

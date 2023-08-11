@@ -168,7 +168,7 @@ void main() {
       expect(await sql.retrievePausedTask(task2.taskId), isNull);
       await sql.removePausedTask(null);
       // ResumeData
-      final resumeData = ResumeData(task, 'test', 100);
+      final resumeData = ResumeData(task, 'test', 100, 'tag');
       await sql.removeResumeData(null);
       expect(await sql.retrieveAllResumeData(), isEmpty);
       await sql.storeResumeData(resumeData);

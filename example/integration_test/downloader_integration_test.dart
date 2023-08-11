@@ -2272,6 +2272,31 @@ void main() {
           await fileEqualsLargeTestFile(File(await task.filePath())), isTrue);
     });
 
+    testWidgets('pause and resume with invalid ETag', (widgetTester) async {
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      task = DownloadTask(
+          url: urlWithContentLength,
+          filename: defaultFilename,
+          updates: Updates.statusAndProgress,
+          allowPause: true);
+      expect(await FileDownloader().enqueue(task), equals(true));
+      await someProgressCompleter.future;
+      expect(await FileDownloader().pause(task), isTrue);
+      await Future.delayed(const Duration(milliseconds: 200));
+      expect(lastStatus, equals(TaskStatus.paused));
+      // mess with the ResumeData
+      final resumeData = await FileDownloader().database.storage.retrieveResumeData(task.taskId);
+      final newResumeData = ResumeData(task, resumeData!.data, resumeData!.requiredStartByte, 'differentTag');
+      await FileDownloader().database.storage.storeResumeData(newResumeData);
+      // resume
+      expect(await FileDownloader().resume(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.failed));
+      expect(lastException?.description, equals('Cannot resume: ETag is not identical, or is weak'));
+    });
+
     testWidgets('pause task that cannot be paused', (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,

@@ -45,8 +45,7 @@ final class DesktopDownloader extends BaseDownloader {
   DesktopDownloader._internal();
 
   @override
-  Future<bool> enqueue(Task task,
-      [TaskNotificationConfig? notificationConfig]) async {
+  Future<bool> enqueue(Task task) async {
     try {
       Uri.decodeFull(task.url);
     } catch (e) {
@@ -80,6 +79,9 @@ final class DesktopDownloader extends BaseDownloader {
   /// [FileDownloader]
   Future<void> _executeTask(Task task) async {
     final data = await getResumeData(task.taskId);
+    if (data != null) {
+      await removeResumeData(task.taskId);
+    }
     final isResume = _resume.remove(task) && data != null;
     final filePath = await task.filePath(); // "" for MultiUploadTask
     final tempFilePath = isResume
@@ -87,6 +89,7 @@ final class DesktopDownloader extends BaseDownloader {
         : path.join((await getTemporaryDirectory()).path,
             'com.bbflight.background_downloader${Random().nextInt(1 << 32).toString()}');
     final requiredStartByte = data?.requiredStartByte ?? 0; // start for resume
+    final eTag = data?.eTag;
     // spawn an isolate to do the task
     final receivePort = ReceivePort();
     final errorPort = ReceivePort();
@@ -112,6 +115,7 @@ final class DesktopDownloader extends BaseDownloader {
       filePath,
       tempFilePath,
       requiredStartByte,
+      eTag,
       isResume,
       requestTimeout,
       proxy,
@@ -142,9 +146,6 @@ final class DesktopDownloader extends BaseDownloader {
         case ('taskCanResume', bool taskCanResume):
           setCanResume(task, taskCanResume);
 
-        case String:
-          _log.finest(message);
-
         case (
             'statusUpdate',
             TaskStatus status,
@@ -157,8 +158,11 @@ final class DesktopDownloader extends BaseDownloader {
           processStatusUpdate(TaskStatusUpdate(task, status,
               status == TaskStatus.failed ? exception : null, responseBody));
 
-        case ('resumeData', String data, int requiredStartByte):
-          setResumeData(ResumeData(task, data, requiredStartByte));
+        case ('resumeData', String data, int requiredStartByte, String? eTag):
+          setResumeData(ResumeData(task, data, requiredStartByte, eTag));
+
+        case ('log', String logMessage):
+          _log.finest(logMessage);
 
         default:
           _log.warning('Received message with unknown type '

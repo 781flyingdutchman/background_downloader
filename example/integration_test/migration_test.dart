@@ -15,7 +15,7 @@ const workingUrl = 'https://google.com';
 const defaultFilename = 'google.html';
 final task = DownloadTask(url: workingUrl, filename: defaultFilename);
 final task2 = DownloadTask(url: workingUrl, filename: '$defaultFilename-2');
-final resumeData = ResumeData(task, 'data', 100);
+final resumeData = ResumeData(task, 'data', 100, 'tag');
 final record = TaskRecord(task, TaskStatus.running, 0.5, 1000);
 
 void main() {

@@ -19,6 +19,7 @@ import 'models.dart';
 var _bytesTotal = 0;
 var _bytesTotalAtLastProgressUpdate = 0;
 var _startByte = 0;
+String? _eTagHeader;
 var _lastProgressUpdateTime = DateTime.fromMillisecondsSinceEpoch(0);
 var _networkSpeed = 0.0; // in MB/s
 var _isPaused = false;
@@ -44,6 +45,7 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
     String filePath,
     String tempFilePath,
     int requiredStartByte,
+    String? eTag,
     bool isResume,
     Duration? requestTimeout,
     Map<String, dynamic> proxy,
@@ -81,7 +83,7 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
     await Future.delayed(const Duration(milliseconds: 0));
     await switch (task) {
       DownloadTask() => doDownloadTask(
-          task, filePath, tempFilePath, requiredStartByte, isResume, sendPort),
+          task, filePath, tempFilePath, requiredStartByte, eTag, isResume, requestTimeout ?? const Duration(seconds: 60), sendPort),
       UploadTask() => doUploadTask(task, filePath, sendPort)
     };
   }
@@ -98,7 +100,9 @@ Future<void> doDownloadTask(
     String filePath,
     String tempFilePath,
     int requiredStartByte,
+    String? eTag,
     bool isResume,
+    Duration requestTimeout,
     SendPort sendPort) async {
   isResume = isResume &&
       await determineIfResumeIsPossible(tempFilePath, requiredStartByte);
@@ -115,6 +119,7 @@ Future<void> doDownloadTask(
   try {
     final response = await client.send(request);
     if (!_isCanceled) {
+      _eTagHeader = response.headers['etag'] ?? response.headers['ETag'];
       final acceptRangesHeader = response.headers['accept-ranges'];
       final serverAcceptsRanges =
           acceptRangesHeader == 'bytes' || response.statusCode == 206;
@@ -126,6 +131,9 @@ Future<void> doDownloadTask(
       }
       isResume =
           isResume && response.statusCode == 206; // confirm resume response
+      if (isResume && (_eTagHeader != eTag || eTag?.startsWith('W/') == true)) {
+        throw TaskException('Cannot resume: ETag is not identical, or is weak');
+      }
       if (okResponses.contains(response.statusCode)) {
         resultStatus = await processOkDownloadResponse(
             task,
@@ -134,6 +142,7 @@ Future<void> doDownloadTask(
             serverAcceptsRanges,
             taskCanResume,
             isResume,
+            requestTimeout,
             response,
             sendPort);
       } else {
@@ -193,6 +202,7 @@ Future<TaskStatus> processOkDownloadResponse(
     bool serverAcceptsRanges,
     bool taskCanResume,
     bool isResume,
+    Duration requestTimeout,
     http.StreamedResponse response,
     SendPort sendPort) async {
   final contentLength = response.contentLength ?? -1;
@@ -208,7 +218,7 @@ Future<TaskStatus> processOkDownloadResponse(
     outStream = File(tempFilePath)
         .openWrite(mode: isResume ? FileMode.append : FileMode.write);
     final transferBytesResult = await transferBytes(
-        response.stream, outStream, contentLength, task, sendPort);
+        response.stream, outStream, contentLength, task, sendPort, requestTimeout);
     switch (transferBytesResult) {
       case TaskStatus.complete:
         // copy file to destination, creating dirs if needed
@@ -224,7 +234,7 @@ Future<TaskStatus> processOkDownloadResponse(
 
       case TaskStatus.paused:
         if (taskCanResume) {
-          sendPort.send(('resumeData', tempFilePath, _bytesTotal + _startByte));
+          sendPort.send(('resumeData', tempFilePath, _bytesTotal + _startByte, _eTagHeader));
           resultStatus = TaskStatus.paused;
         } else {
           _taskException =
@@ -248,7 +258,7 @@ Future<TaskStatus> processOkDownloadResponse(
           serverAcceptsRanges &&
           _bytesTotal + _startByte > 1 << 20) {
         // send ResumeData to allow resume after fail
-        sendPort.send(('resumeData', tempFilePath, _bytesTotal + _startByte));
+        sendPort.send(('resumeData', tempFilePath, _bytesTotal + _startByte, _eTagHeader));
       } else if (resultStatus != TaskStatus.paused) {
         File(tempFilePath).deleteSync();
       }
@@ -515,7 +525,7 @@ Future<TaskStatus> transferBytes(
     EventSink<List<int>> outStream,
     int contentLength,
     Task task,
-    SendPort sendPort) async {
+    SendPort sendPort, [Duration requestTimeout = const Duration(seconds: 60)]) async {
   if (contentLength == 0) {
     contentLength = -1;
   }
@@ -523,16 +533,15 @@ Future<TaskStatus> transferBytes(
   var lastProgressUpdate = 0.0;
   var nextProgressUpdateTime = DateTime.fromMillisecondsSinceEpoch(0);
   late StreamSubscription<List<int>> subscription;
-  final requestTimeout = const Duration(seconds: 10);
   var timeout = Timer(requestTimeout, () {
-    _taskException = TaskConnectionException('Request timed out');
+    _taskException = TaskConnectionException('Connection timed out');
     streamResultStatus.complete(TaskStatus.failed);
   });
   subscription = inStream.listen(
       (bytes) {
         timeout.cancel();
         timeout = Timer(requestTimeout, () {
-          _taskException = TaskConnectionException('Request timed out');
+          _taskException = TaskConnectionException('Connection timed out');
           streamResultStatus.complete(TaskStatus.failed);
         });
         if (_isCanceled) {
@@ -719,6 +728,9 @@ void setTaskError(dynamic e) {
     case HttpException:
     case TimeoutException:
       _taskException = TaskConnectionException(e.toString());
+
+    case TaskException:
+      _taskException = e;
 
     default:
       _taskException = TaskException(e.toString());

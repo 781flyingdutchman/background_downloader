@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import 'base_downloader.dart';
 import 'exceptions.dart';
 import 'models.dart';
@@ -21,6 +23,11 @@ interface class Database {
     assert(_instance == null);
     _storage = persistentStorage;
   }
+
+  /// Direct access to the [PersistentStorage] object underlying the
+  /// database. For testing only
+  @visibleForTesting
+  PersistentStorage get storage => _storage;
 
   /// Returns all [TaskRecord]
   ///

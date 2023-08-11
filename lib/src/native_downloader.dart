@@ -87,8 +87,8 @@ abstract base class NativeDownloader extends BaseDownloader {
         case ('canResume', bool canResume):
           setCanResume(task, canResume);
 
-        case ('resumeData', [String tempFilename, int requiredStartByte]):
-          setResumeData(ResumeData(task, tempFilename, requiredStartByte));
+        case ('resumeData', [String tempFilename, int requiredStartByte, String? eTag]):
+          setResumeData(ResumeData(task, tempFilename, requiredStartByte, eTag));
 
         case ('notificationTap', int notificationTypeOrdinal):
           final notificationType =

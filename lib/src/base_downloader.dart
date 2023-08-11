@@ -335,7 +335,11 @@ abstract base class BaseDownloader {
   Future<bool> resume(Task task) async {
     await removePausedTask(task.taskId);
     if (await getResumeData(task.taskId) != null) {
-      canResumeTask[task] = Completer();
+      final currentCompleter = canResumeTask[task];
+      if (currentCompleter == null || currentCompleter.isCompleted) {
+        // create if didn't exist or was completed
+        canResumeTask[task] = Completer();
+      }
       return true;
     }
     return false;

@@ -1209,21 +1209,24 @@ class ResumeData {
   final Task task;
   final String data;
   final int requiredStartByte;
+  final String? eTag;
 
-  const ResumeData(this.task, this.data, this.requiredStartByte);
+  const ResumeData(this.task, this.data, this.requiredStartByte, this.eTag);
 
   /// Create object from JSON Map
   ResumeData.fromJsonMap(Map<String, dynamic> jsonMap)
       : task = Task.createFromJsonMap(jsonMap['task']),
         data = jsonMap['data'] as String,
         requiredStartByte =
-            (jsonMap['requiredStartByte'] as num?)?.toInt() ?? 0;
+            (jsonMap['requiredStartByte'] as num?)?.toInt() ?? 0,
+        eTag = jsonMap['eTag'] as String?;
 
   /// Return JSON Map representing object
   Map<String, dynamic> toJsonMap() => {
         'task': task.toJsonMap(),
         'data': data,
-        'requiredStartByte': requiredStartByte
+        'requiredStartByte': requiredStartByte,
+        'eTag': eTag
       };
 
   String get taskId => task.taskId;
@@ -1235,11 +1238,15 @@ class ResumeData {
           runtimeType == other.runtimeType &&
           task == other.task &&
           data == other.data &&
-          requiredStartByte == other.requiredStartByte;
+          requiredStartByte == other.requiredStartByte &&
+          eTag == other.eTag;
 
   @override
   int get hashCode =>
-      task.hashCode ^ data.hashCode ^ requiredStartByte.hashCode;
+      task.hashCode ^
+      data.hashCode ^
+      requiredStartByte.hashCode ^
+      (eTag?.hashCode ?? 0);
 }
 
 /// Types of undelivered data that can be requested
