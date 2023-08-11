@@ -87,8 +87,12 @@ abstract base class NativeDownloader extends BaseDownloader {
         case ('canResume', bool canResume):
           setCanResume(task, canResume);
 
-        case ('resumeData', [String tempFilename, int requiredStartByte, String? eTag]):
-          setResumeData(ResumeData(task, tempFilename, requiredStartByte, eTag));
+        case (
+            'resumeData',
+            [String tempFilename, int requiredStartByte, String? eTag]
+          ):
+          setResumeData(
+              ResumeData(task, tempFilename, requiredStartByte, eTag));
 
         case ('resumeData', String data): // iOS version
           setResumeData(ResumeData(task, data));
@@ -176,7 +180,7 @@ abstract base class NativeDownloader extends BaseDownloader {
                   : null,
               taskResumeData.data,
               taskResumeData.requiredStartByte,
-          taskResumeData.eTag
+              taskResumeData.eTag
             ]) ??
             false;
       }

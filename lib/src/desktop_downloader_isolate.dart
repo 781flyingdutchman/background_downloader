@@ -83,7 +83,14 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
     await Future.delayed(const Duration(milliseconds: 0));
     await switch (task) {
       DownloadTask() => doDownloadTask(
-          task, filePath, tempFilePath, requiredStartByte, eTag, isResume, requestTimeout ?? const Duration(seconds: 60), sendPort),
+          task,
+          filePath,
+          tempFilePath,
+          requiredStartByte,
+          eTag,
+          isResume,
+          requestTimeout ?? const Duration(seconds: 60),
+          sendPort),
       UploadTask() => doUploadTask(task, filePath, sendPort)
     };
   }
@@ -217,8 +224,8 @@ Future<TaskStatus> processOkDownloadResponse(
     // do the actual download
     outStream = File(tempFilePath)
         .openWrite(mode: isResume ? FileMode.append : FileMode.write);
-    final transferBytesResult = await transferBytes(
-        response.stream, outStream, contentLength, task, sendPort, requestTimeout);
+    final transferBytesResult = await transferBytes(response.stream, outStream,
+        contentLength, task, sendPort, requestTimeout);
     switch (transferBytesResult) {
       case TaskStatus.complete:
         // copy file to destination, creating dirs if needed
@@ -234,7 +241,12 @@ Future<TaskStatus> processOkDownloadResponse(
 
       case TaskStatus.paused:
         if (taskCanResume) {
-          sendPort.send(('resumeData', tempFilePath, _bytesTotal + _startByte, _eTagHeader));
+          sendPort.send((
+            'resumeData',
+            tempFilePath,
+            _bytesTotal + _startByte,
+            _eTagHeader
+          ));
           resultStatus = TaskStatus.paused;
         } else {
           _taskException =
@@ -258,7 +270,12 @@ Future<TaskStatus> processOkDownloadResponse(
           serverAcceptsRanges &&
           _bytesTotal + _startByte > 1 << 20) {
         // send ResumeData to allow resume after fail
-        sendPort.send(('resumeData', tempFilePath, _bytesTotal + _startByte, _eTagHeader));
+        sendPort.send((
+          'resumeData',
+          tempFilePath,
+          _bytesTotal + _startByte,
+          _eTagHeader
+        ));
       } else if (resultStatus != TaskStatus.paused) {
         File(tempFilePath).deleteSync();
       }
@@ -525,7 +542,8 @@ Future<TaskStatus> transferBytes(
     EventSink<List<int>> outStream,
     int contentLength,
     Task task,
-    SendPort sendPort, [Duration requestTimeout = const Duration(seconds: 60)]) async {
+    SendPort sendPort,
+    [Duration requestTimeout = const Duration(seconds: 60)]) async {
   if (contentLength == 0) {
     contentLength = -1;
   }

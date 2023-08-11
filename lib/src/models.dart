@@ -1211,7 +1211,8 @@ class ResumeData {
   final int requiredStartByte;
   final String? eTag;
 
-  const ResumeData(this.task, this.data, [this.requiredStartByte = 0, this.eTag]);
+  const ResumeData(this.task, this.data,
+      [this.requiredStartByte = 0, this.eTag]);
 
   /// Create object from JSON Map
   ResumeData.fromJsonMap(Map<String, dynamic> jsonMap)

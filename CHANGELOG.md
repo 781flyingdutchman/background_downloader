@@ -1,3 +1,9 @@
+## 7.9.1
+
+Failed download tasks can now be resumed (under certain conditions) even if the `Task.allowPause` field is false. Resuming a failed task will attempt to continue the download where the failure occurred.  If `retries` are set to a value >0 then retries will also first attempt to resume, and only start from scratch if that fails.
+
+Tasks can only resume if the ETag header provided by the server is strong, and equal to the ETag at the moment the download was paused/failed, or if it is not provided at all.
+
 ## 7.9.0
 
 ### Configuration
