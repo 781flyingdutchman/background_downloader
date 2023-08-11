@@ -130,7 +130,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                 Downloader.haveNotificationPermission = granted
             }
         }
-        let isResume = args.count == 4
+        let isResume = args.count == 5
         let resumeDataAsBase64String = isResume
             ? args[2] as? String ?? ""
             : ""
@@ -323,7 +323,8 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         let defaults = UserDefaults.standard
         guard let map = defaults.dictionary(forKey: key),
               let jsonData = try? JSONSerialization.data(withJSONObject: map),
-              let jsonString = String(data: jsonData, encoding: .utf8) else {
+              let jsonString = String(data: jsonData, encoding: .utf8)
+        else {
             os_log("Could not pop local storage for key %@", log: log, type: .info, key)
             result("{}")
             return
@@ -484,7 +485,6 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         Downloader.taskIdsThatCanResume.remove(task.taskId)
         let taskWasProgramaticallyCanceled: Bool = Downloader.taskIdsProgrammaticallyCancelled.remove(task.taskId) != nil
         guard error == nil else {
-            os_log("Error is: %@", log: log, type: .error, error!.localizedDescription)
             // handle the error if this task wasn't programatically cancelled (in which
             // case the error has been handled already)
             if !taskWasProgramaticallyCanceled {
@@ -529,7 +529,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         os_log("Finished task with id %@", log: log, type: .info, task.taskId)
         // if this is an upload task, send final TaskStatus (based on HTTP status code
         if isUploadTask(task: task) {
-            var taskException = TaskException(type: .httpResponse, httpResponseCode: responseStatusCode, description: responseStatusDescription)
+            let taskException = TaskException(type: .httpResponse, httpResponseCode: responseStatusCode, description: responseStatusDescription)
             let finalStatus = (200...206).contains(responseStatusCode)
             ? TaskStatus.complete
             : responseStatusCode == 404

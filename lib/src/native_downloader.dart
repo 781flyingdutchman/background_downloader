@@ -90,6 +90,9 @@ abstract base class NativeDownloader extends BaseDownloader {
         case ('resumeData', [String tempFilename, int requiredStartByte, String? eTag]):
           setResumeData(ResumeData(task, tempFilename, requiredStartByte, eTag));
 
+        case ('resumeData', String data): // iOS version
+          setResumeData(ResumeData(task, data));
+
         case ('notificationTap', int notificationTypeOrdinal):
           final notificationType =
               NotificationType.values[notificationTypeOrdinal];

@@ -195,7 +195,7 @@ func processCanResume(task: Task, taskCanResume: Bool) {
 func processResumeData(task: Task, resumeData: Data) -> Bool {
     let resumeDataAsBase64String = resumeData.base64EncodedString()
     Downloader.localResumeData[task.taskId] = resumeDataAsBase64String
-    if !postOnBackgroundChannel(method: "resumeData", task: task, arg: [resumeDataAsBase64String, 0 as Int64] as [Any]) {
+    if !postOnBackgroundChannel(method: "resumeData", task: task, arg: resumeDataAsBase64String) {
         // store resume data locally
         guard let jsonData = try? JSONEncoder().encode(task),
               var taskJsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
@@ -204,8 +204,7 @@ func processResumeData(task: Task, resumeData: Data) -> Bool {
             return false}
         let resumeDataMap = [
             "task": taskJsonObject,
-            "data": resumeDataAsBase64String,
-            "requiredStartByte": 0
+            "data": resumeDataAsBase64String
         ] as [String : Any]
         storeLocally(prefsKey: Downloader.keyResumeDataMap, taskId: task.taskId, item: resumeDataMap)
     }
