@@ -185,13 +185,22 @@ interface class FileDownloader {
   /// Returns true if successfully enqueued. A new task will also generate
   /// a [TaskStatus.enqueued] update to the registered callback,
   /// if requested by its [updates] property
+  ///
+  /// Use [enqueue] instead of the convenience functions (like
+  /// [download] and [upload]) if:
+  /// - your download/upload is likely to take long and may require
+  ///   running in the background
+  /// - you want to monitor tasks centrally, via a listener
+  /// - you want more detailed progress information
+  ///   (e.g. file size, network speed, time remaining)
   Future<bool> enqueue(Task task) => _downloader.enqueue(task);
 
   /// Download a file and return the final [TaskStatusUpdate]
   ///
-  /// Different from [enqueue], this method does not return until the file
-  /// has been downloaded, or an error has occurred.  While it uses the same
-  /// download mechanism as [enqueue], and will execute the download also when
+  /// Different from [enqueue], this method returns a [Future] that completes
+  /// when the file has been downloaded, or an error has occurred.
+  /// While it uses the same download mechanism as [enqueue],
+  /// and will execute the download also when
   /// the app moves to the background, it is meant for downloads that are
   /// awaited while the app is in the foreground.
   ///
@@ -213,7 +222,14 @@ interface class FileDownloader {
   /// that, use the [onProgress] callback.
   ///
   /// Note that the task's [group] is ignored and will be replaced with an
-  /// internal group name '_enqueueAndWait' to track status
+  /// internal group name [awaitGroup] to track status
+  ///
+  /// Use [enqueue] instead of [download] if:
+  /// - your download/upload is likely to take long and may require
+  ///   running in the background
+  /// - you want to monitor tasks centrally, via a listener
+  /// - you want more detailed progress information
+  ///   (e.g. file size, network speed, time remaining)
   Future<TaskStatusUpdate> download(DownloadTask task,
           {void Function(TaskStatus)? onStatus,
           void Function(double)? onProgress,
@@ -227,9 +243,10 @@ interface class FileDownloader {
 
   /// Upload a file and return the final [TaskStatusUpdate]
   ///
-  /// Different from [enqueue], this method does not return until the file
-  /// has been uploaded, or an error has occurred.  While it uses the same
-  /// upload mechanism as [enqueue], and will execute the upload also when
+  /// Different from [enqueue], this method returns a [Future] that completes
+  /// when the file has been uploaded, or an error has occurred.
+  /// While it uses the same upload mechanism as [enqueue],
+  /// and will execute the upload also when
   /// the app moves to the background, it is meant for uploads that are
   /// awaited while the app is in the foreground.
   ///
@@ -252,6 +269,13 @@ interface class FileDownloader {
   ///
   /// Note that the task's [group] is ignored and will be replaced with an
   /// internal group name 'await' to track status
+  ///
+  /// Use [enqueue] instead of [upload] if:
+  /// - your download/upload is likely to take long and may require
+  ///   running in the background
+  /// - you want to monitor tasks centrally, via a listener
+  /// - you want more detailed progress information
+  ///   (e.g. file size, network speed, time remaining)
   Future<TaskStatusUpdate> upload(UploadTask task,
           {void Function(TaskStatus)? onStatus,
           void Function(double)? onProgress,
@@ -559,7 +583,7 @@ interface class FileDownloader {
   ///
   /// This method acts on a [group] of tasks. If omitted, the [defaultGroup]
   /// is used, which is the group used when you [enqueue] a task. If you
-  /// use a convenience function such as [download], the [group] of the
+  /// use a convenience function such as [download], the [Task.group] of the
   /// task is changed to [awaitGroup]. Therefore, for this method to act on
   /// tasks used in a convenience function, make sure to pass [awaitGroup]
   /// as the [group] argument.
@@ -638,7 +662,7 @@ interface class FileDownloader {
   /// their registered listener or callback.
   /// This is a convenient way to capture downloads that have completed while
   /// the app was suspended: on app startup, immediately register your
-  /// listener or callbacks, and call [trackTasks] for each group.
+  /// listener or callbacks, and call [trackTasks].
   ///
   /// Returns the [FileDownloader] for easy chaining
   Future<FileDownloader> trackTasks(
@@ -658,9 +682,8 @@ interface class FileDownloader {
   /// Returns true if task can be resumed on pause
   ///
   /// This future only completes once the task is running and has received
-  /// information from the server to determine whether resume is possible.
-  /// If the [Task.allowPause] field is set to false (default) then
-  /// this method returns false immediately.
+  /// information from the server to determine whether resume is possible, or
+  /// if the task fails and resume is possible
   Future<bool> taskCanResume(Task task) => _downloader.taskCanResume(task);
 
   /// Pause the task
@@ -680,15 +703,39 @@ interface class FileDownloader {
 
   /// Resume the task
   ///
-  /// Returns true if the resume was successful. Status will change
-  /// similar to a call to [enqueue]. If the task is able to resume, it will,
-  /// otherwise it will restart the task from scratch.
+  /// If no resume data is available for this task, the call to [resume]
+  /// will return false and the task is not resumed.
+  /// If resume data is available, the call to [resume] will return true,
+  /// but this does not guarantee that resuming is actually possible, just that
+  /// the task is now enqueued for resume.
+  /// If the task is able to resume, it will, otherwise it will restart the
+  /// task from scratch, or fail.
   Future<bool> resume(DownloadTask task) async {
     final resumeTask = await _downloader.getModifiedTask(task) ?? task;
     return _downloader.resume(resumeTask);
   }
 
   /// Configure notification for a single task
+  ///
+  /// The configuration determines what notifications are shown,
+  /// whether a progress bar is shown (Android only), and whether tapping
+  /// the 'complete' notification opens the downloaded file.
+  ///
+  /// [running] is the notification used while the task is in progress
+  /// [complete] is the notification used when the task completed
+  /// [error] is the notification used when something went wrong,
+  /// including pause, failed and notFound status
+  ///
+  /// The [TaskNotification] is the actual notification shown for a [Task], and
+  /// [body] and [title] may contain special strings to substitute display values:
+  /// {filename] to insert the filename
+  /// {progress} to insert progress in %
+  /// {networkSpeed} to insert the network speed in MB/s or kB/s, or '--' if N/A
+  /// {timeRemaining} to insert the estimated time remaining to complete the task
+  ///   in HH:MM:SS or MM:SS or --:-- if N/A
+  ///
+  /// Actual appearance of notification is dependent on the platform, e.g.
+  /// on iOS {progress} is not available and ignored
   ///
   /// Returns the [FileDownloader] for easy chaining
   FileDownloader configureNotificationForTask(Task task,
@@ -710,6 +757,26 @@ interface class FileDownloader {
   }
 
   /// Configure notification for a group of tasks
+  ///
+  /// The configuration determines what notifications are shown,
+  /// whether a progress bar is shown (Android only), and whether tapping
+  /// the 'complete' notification opens the downloaded file.
+  ///
+  /// [running] is the notification used while the task is in progress
+  /// [complete] is the notification used when the task completed
+  /// [error] is the notification used when something went wrong,
+  /// including pause, failed and notFound status
+  ///
+  /// The [TaskNotification] is the actual notification shown for a [Task], and
+  /// [body] and [title] may contain special strings to substitute display values:
+  /// {filename] to insert the filename
+  /// {progress} to insert progress in %
+  /// {networkSpeed} to insert the network speed in MB/s or kB/s, or '--' if N/A
+  /// {timeRemaining} to insert the estimated time remaining to complete the task
+  ///   in HH:MM:SS or MM:SS or --:-- if N/A
+  ///
+  /// Actual appearance of notification is dependent on the platform, e.g.
+  /// on iOS {progress} is not available and ignored
   ///
   /// Returns the [FileDownloader] for easy chaining
   FileDownloader configureNotificationForGroup(String group,
@@ -734,6 +801,26 @@ interface class FileDownloader {
   ///
   /// This is the notification configuration used for tasks that do not
   /// match a task-specific or group-specific notification configuration
+  ///
+  /// The configuration determines what notifications are shown,
+  /// whether a progress bar is shown (Android only), and whether tapping
+  /// the 'complete' notification opens the downloaded file.
+  ///
+  /// [running] is the notification used while the task is in progress
+  /// [complete] is the notification used when the task completed
+  /// [error] is the notification used when something went wrong,
+  /// including pause, failed and notFound status
+  ///
+  /// The [TaskNotification] is the actual notification shown for a [Task], and
+  /// [body] and [title] may contain special strings to substitute display values:
+  /// {filename] to insert the filename
+  /// {progress} to insert progress in %
+  /// {networkSpeed} to insert the network speed in MB/s or kB/s, or '--' if N/A
+  /// {timeRemaining} to insert the estimated time remaining to complete the task
+  ///   in HH:MM:SS or MM:SS or --:-- if N/A
+  ///
+  /// Actual appearance of notification is dependent on the platform, e.g.
+  /// on iOS {progress} is not available and ignored
   ///
   /// Returns the [FileDownloader] for easy chaining
   FileDownloader configureNotification(
@@ -781,7 +868,7 @@ interface class FileDownloader {
   /// Move the file represented by the [task] to a shared storage
   /// [destination] and potentially a [directory] within that destination. If
   /// the [mimeType] is not provided we will attempt to derive it from the
-  /// [filePath] extension
+  /// [Task.filePath] extension
   ///
   /// Returns the path to the stored file, or null if not successful
   ///

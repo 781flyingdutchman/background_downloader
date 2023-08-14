@@ -59,6 +59,8 @@ base class TaskException implements Exception {
   }
 }
 
+/// Exception related to the filesystem, e.g. insufficient space
+/// or file not found
 final class TaskFileSystemException extends TaskException {
   TaskFileSystemException(super.description);
 
@@ -66,6 +68,7 @@ final class TaskFileSystemException extends TaskException {
   String get exceptionType => 'TaskFileSystemException';
 }
 
+/// Exception related to the url, eg malformed
 final class TaskUrlException extends TaskException {
   TaskUrlException(super.description);
 
@@ -73,6 +76,8 @@ final class TaskUrlException extends TaskException {
   String get exceptionType => 'TaskUrlException';
 }
 
+/// Exception related to the connection, e.g. socket exception
+/// or request timeout
 final class TaskConnectionException extends TaskException {
   TaskConnectionException(super.description);
 
@@ -80,6 +85,8 @@ final class TaskConnectionException extends TaskException {
   String get exceptionType => 'TaskConnectionException';
 }
 
+/// Exception related to an attempt to resume a task, e.g.
+/// the temp filename no longer exists, or eTag has changed
 final class TaskResumeException extends TaskException {
   TaskResumeException(super.description);
 
@@ -87,6 +94,8 @@ final class TaskResumeException extends TaskException {
   String get exceptionType => 'TaskResumeException';
 }
 
+/// Exception related to the HTTP response, e.g. a 403
+/// response code
 final class TaskHttpException extends TaskException {
   final int httpResponseCode;
 

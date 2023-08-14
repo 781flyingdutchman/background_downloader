@@ -225,8 +225,6 @@ final result = await FileDownloader().download(task,
 ```
 Progress updates start with 0.0 when the actual download starts (which may be in the future, e.g. if waiting for a WiFi connection), and will be sent periodically, not more than twice per second per task.  If a task completes successfully you will receive a final progress update with a `progress` value of 1.0 (`progressComplete`). Failed tasks generate `progress` of `progressFailed` (-1.0), canceled tasks `progressCanceled` (-2.0), notFound tasks `progressNotFound` (-3.0), waitingToRetry tasks `progressWaitingToRetry` (-4.0) and paused tasks `progressPaused` (-5.0).
 
-The update includes `expectedFileSize`, `networkSpeed` and `timeRemaining`. Check the associated `hasExpectedFileSize`, `hasNetworkSpeed` and `hasTimeRemaining` before using the values in these fields.  Use `networkSpeedAsString` and `timeRemainingAsString` for human readable versions of these values.
-
 Use `await task.expectedFileSize()` to query the server for the size of the file you are about
 to download.  The expected file size is also included in `TaskProgressUpdate`s that are sent to
 listeners and callbacks - see [Using an event listener](#using-an-event-listener) and [Using callbacks](#using-callbacks)
@@ -245,8 +243,9 @@ final result = await FileDownloader().download(task,
 
 The status will follow a sequence of `.enqueued` (waiting to execute), `.running` (actively 
 downloading) and then one of the final states mentioned before, or `.waitingToRetry` if retries 
-are enabled and the task failed. Note that Android OS may restart a task, leading to a repeat of 
-the `.running` status, so you need to allow for that occasion.
+are enabled and the task failed.
+
+If a task fails with `TaskStatus.failed` then in some cases it is possible to `resume` the task without having to start from scratch. You can test whether this is possible by calling `FileDownloader().taskCanResume(task)` and if true, call `resume` instead of `download` or `enqueue`.
 
 #### Elapsed time
 
@@ -347,12 +346,7 @@ Listen to updates from the downloader by listening to the `updates` stream, and 
             print('Status update for ${update.task} with status ${update.status}');
         } else if (update is TaskProgressUpdate) {
             print('Progress update for ${update.task} with progress ${update.progress}');
-            // note: other fields include expectedFileSize, networkSpeed and timeRemaining
-            //       You must check hasExpectedFileSize, hasNetworkSpeed and hasTimeRemaining
-            //       before using these fields, as they will not contain valid values
-            //       if false.
-            // tip: use networkSpeedAsString and timeRemainingAsString for a human readable
-            //      version of these values
+        }
     });
     
     // define the task
@@ -365,6 +359,8 @@ Listen to updates from the downloader by listening to the `updates` stream, and 
     final successFullyEnqueued = await FileDownloader().enqueue(task);
     // updates will be sent to your subscription listener
 ```
+
+A TaskProgressUpdate includes `expectedFileSize`, `networkSpeed` and `timeRemaining`. Check the associated `hasExpectedFileSize`, `hasNetworkSpeed` and `hasTimeRemaining` before using the values in these fields.  Use `networkSpeedAsString` and `timeRemainingAsString` for human readable versions of these values.
 
 Note that `successFullyEnqueued` only refers to the enqueueing of the download task, not its result, which must be monitored via the listener. Also note that in order to get progress updates the task must set its `updates` field to a value that includes progress updates. In the example, we are asking for both status and progress updates, but other combinations are possible. For example, if you set `updates` to `Updates.status` then the task will only generate status updates and no progress updates. You define what updates to receive on a task by task basis via the `Task.updates` field, which defaults to status updates only.
 
@@ -584,7 +580,7 @@ To cancel, pause or resume a task, call:
 * `cancelTaskWithId` to cancel the tasks with that taskId
 * `cancelTasksWithIds` to cancel all tasks with a `taskId` in the provided list of taskIds
 * `pause` to attempt to pause a task. Pausing is only possible for download GET requests, only if the `Task.allowPause` field is true, and only if the server supports pause/resume. Soon after the task is running (`TaskStatus.running`) you can call `taskCanResume` which will return a Future that resolves to `true` if the server appears capable of pause & resume. If it is not, then `pause` will have no effect and return false
-* `resume` to resume a previously paused task, which returns true if resume appears feasible. The task status will follow the same sequence as a newly enqueued task. If resuming turns out to be not feasible (e.g. the operating system deleted the temp file with the partial download) then the task will either restart as a normal download, or fail.
+* `resume` to resume a previously paused task (or certain failed tasks), which returns true if resume appears feasible. The task status will follow the same sequence as a newly enqueued task. If resuming turns out to be not feasible (e.g. the operating system deleted the temp file with the partial download) then the task will either restart as a normal download, or fail.
 
 
 To manage or query the queue of waiting or running tasks, call:
@@ -670,6 +666,8 @@ updates from `enqueued` -> `running` -> `complete` (or `notFound`). If `retries`
 the task fails, the sequence will be `enqueued` -> `running` ->
 `waitingToRetry` -> `enqueued` -> `running` -> `complete` (if the second try succeeds, or more
 retries if needed).  A `Request` will behave similarly, except it does not provide intermediate status updates.
+
+Note that certain failures can be resumed, and retries will therefore attempt to resume from a failure instead of retrying the task from scratch.
 
 ### DownloadTask & UploadTask
 

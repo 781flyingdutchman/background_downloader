@@ -261,9 +261,7 @@ abstract base class BaseDownloader {
       if (task != null) {
         final resumeData = await getResumeData(task.taskId);
         if (!Platform.isIOS && resumeData != null) {
-          // on non-iOS, data[0] is the tempFilePath, and that file must be
-          // deleted
-          final tempFilePath = resumeData.data;
+          final tempFilePath = resumeData.tempFilepath;
           try {
             await File(tempFilePath).delete();
           } on FileSystemException {
@@ -348,6 +346,7 @@ abstract base class BaseDownloader {
   /// Sets the 'canResumeTask' flag for this task
   ///
   /// Completes the completer already associated with this task
+  /// if it wasn't completed already
   void setCanResume(Task task, bool canResume) {
     if (canResumeTask[task]?.isCompleted == false) {
       canResumeTask[task]?.complete(canResume);
@@ -357,7 +356,7 @@ abstract base class BaseDownloader {
   /// Returns a Future that indicates whether this task can be resumed
   ///
   /// If we have stored [ResumeData] this is true
-  /// If we have completer then we return the awaited completed value
+  /// If we have completer then we return its future
   /// Otherwise we return false
   Future<bool> taskCanResume(Task task) async {
     if (await getResumeData(task.taskId) != null) {

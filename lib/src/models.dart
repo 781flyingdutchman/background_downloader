@@ -1093,7 +1093,7 @@ sealed class TaskUpdate {
 /// A status update
 ///
 /// Contains [TaskStatus] and, if [TaskStatus.failed] possibly a
-/// [TaskException]
+/// [TaskException] and [responseBody]
 class TaskStatusUpdate extends TaskUpdate {
   final TaskStatus status;
   final TaskException? exception;
@@ -1137,10 +1137,12 @@ class TaskStatusUpdate extends TaskUpdate {
 /// not known.
 /// [networkSpeed] is valid if positive, expressed in MB/second
 /// [timeRemaining] is valid if positive
+///
+/// Use the [has...] getters to determine whether a field is valid
 class TaskProgressUpdate extends TaskUpdate {
   final double progress;
   final int expectedFileSize;
-  final double networkSpeed;
+  final double networkSpeed; // in MB/s
   final Duration timeRemaining;
 
   const TaskProgressUpdate(super.task, this.progress,
@@ -1167,10 +1169,13 @@ class TaskProgressUpdate extends TaskUpdate {
         'timeRemaining': timeRemaining.inSeconds
       };
 
+  /// If true, [expectedFileSize] contains a valid value
   bool get hasExpectedFileSize => expectedFileSize >= 0;
 
+  /// If true, [networkSpeed] contains a valid value
   bool get hasNetworkSpeed => networkSpeed >= 0;
 
+  /// If true, [timeRemaining] contains a valid value
   bool get hasTimeRemaining => !timeRemaining.isNegative;
 
   /// String is '-- MB/s' if N/A, otherwise in MB/s or kB/s
@@ -1232,7 +1237,8 @@ class ResumeData {
 
   String get taskId => task.taskId;
 
-  String get tempFilename => data;
+  /// The tempFilepath contained in the [data] field
+  String get tempFilepath => data;
 
   @override
   bool operator ==(Object other) =>
@@ -1261,13 +1267,15 @@ enum NotificationType { running, complete, error, paused }
 
 /// Notification specification for a [Task]
 ///
-/// [body] may contain special string {filename] to insert the filename
-///   and/or special string {progress} to insert progress in %
-///   and/or special trailing string {progressBar} to add a progress bar under
-///   the body text in the notification
+/// [body] and [title] may contain special strings to substitute display values:
+/// {filename] to insert the filename
+/// {progress} to insert progress in %
+/// {networkSpeed} to insert the network speed in MB/s or kB/s, or '--' if N/A
+/// {timeRemaining} to insert the estimated time remaining to complete the task
+///   in HH:MM:SS or MM:SS or --:-- if N/A
 ///
 /// Actual appearance of notification is dependent on the platform, e.g.
-/// on iOS {progress} and {progressBar} are not available and ignored
+/// on iOS {progress} is not available and ignored
 final class TaskNotification {
   final String title;
   final String body;
@@ -1295,6 +1303,14 @@ final class TaskNotificationConfig {
   final bool progressBar;
   final bool tapOpensFile;
 
+  /// Create notification configuration that determines what notifications are shown,
+  /// whether a progress bar is shown (Android only), and whether tapping
+  /// the 'complete' notification opens the downloaded file.
+  ///
+  /// [running] is the notification used while the task is in progress
+  /// [complete] is the notification used when the task completed
+  /// [error] is the notification used when something went wrong,
+  /// including pause, failed and notFound status
   TaskNotificationConfig(
       {this.taskOrGroup,
       this.running,
