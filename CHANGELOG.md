@@ -1,3 +1,7 @@
+## 7.9.2
+
+Fix on Android 33 related to the new (predictive back gesture navigation)[https://developer.android.com/guide/navigation/custom-back/predictive-back-gesture]
+
 ## 7.9.1
 
 Failed download tasks can now be resumed (under certain conditions) even if the `Task.allowPause` field is false. Resuming a failed task will attempt to continue the download where the failure occurred.  If `retries` are set to a value >0 then retries will also first attempt to resume, and only start from scratch if that fails.

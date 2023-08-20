@@ -2,10 +2,7 @@
     package="com.bbflight.background_downloader"
     xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <application
-        android:enableOnBackInvokedCallback="true"
-        tools:targetApi="tiramisu"
-        >
+    <application>
 
         <receiver android:name="NotificationRcvr" android:exported="false">
             <intent-filter>

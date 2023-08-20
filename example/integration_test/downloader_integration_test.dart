@@ -2301,7 +2301,7 @@ void main() {
         expect(await FileDownloader().enqueue(task), equals(true));
         await someProgressCompleter.future;
         expect(await FileDownloader().pause(task), isTrue);
-        await Future.delayed(const Duration(milliseconds: 200));
+        await Future.delayed(const Duration(milliseconds: 500));
         expect(lastStatus, equals(TaskStatus.paused));
         // mess with the ResumeData
         final resumeData = await FileDownloader()
