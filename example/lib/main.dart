@@ -52,11 +52,11 @@ class _MyAppState extends State<MyApp> {
     // optional: configure the downloader with platform specific settings,
     // see CONFIG.md
     FileDownloader().configure(globalConfig: [
-      ('requestTimeout', const Duration(seconds: 100)),
+      (Config.requestTimeout, const Duration(seconds: 100)),
     ], androidConfig: [
-      ('runInForegroundIfFileLargerThan', 10),
+      (Config.useCacheDir, Config.whenAble),
     ], iOSConfig: [
-      ('localize', {'Cancel': 'StopIt'}),
+      (Config.localize, {'Cancel': 'StopIt'}),
     ]).then((result) => debugPrint('Configuration result = $result'));
 
     // Registering a callback and configure notifications

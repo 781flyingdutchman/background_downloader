@@ -1,6 +1,10 @@
 ## 7.9.2
 
-Fix on Android 33 related to the new (predictive back gesture navigation)[https://developer.android.com/guide/navigation/custom-back/predictive-back-gesture]
+Add configuration `Config.useCacheDir` for Android and improved temp file logic. By default (`Config.whenAble`) the downloader will now use the application's `cacheDir` when the size of the file to download is less than half of the `cacheQuotaBytes` given to the app by Android, and use `filesDir` otherwise. If you find that downloads do not complete (or cannot be resumed when paused) this indicates the OS is removing the temp file from the `cacheDir` due to low memory conditions. In that situation, consider using `Config.never` to force the use of `filesDir`, but make sure to clean up remnant temp files in `filesDir`, as the OS does not do that for you. 
+
+Fix for Android 33 related to the new [predictive back gesture navigation](https://developer.android.com/guide/navigation/custom-back/predictive-back-gesture)
+
+Documentation updates
 
 ## 7.9.1
 

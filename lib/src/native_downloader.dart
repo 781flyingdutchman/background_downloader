@@ -248,28 +248,29 @@ abstract base class NativeDownloader extends BaseDownloader {
   @override
   Future<(String, String)> configureItem((String, dynamic) configItem) async {
     switch (configItem) {
-      case ('requestTimeout', Duration? duration):
+      case (Config.requestTimeout, Duration? duration):
         await NativeDownloader.methodChannel
             .invokeMethod('configRequestTimeout', duration?.inSeconds);
 
-      case ('proxy', (String address, int port)):
+      case (Config.proxy, (String address, int port)):
         await NativeDownloader.methodChannel
             .invokeMethod('configProxyAddress', address);
         await NativeDownloader.methodChannel
             .invokeMethod('configProxyPort', port);
 
-      case ('proxy', false):
+      case (Config.proxy, false):
         await NativeDownloader.methodChannel
             .invokeMethod('configProxyAddress', null);
         await NativeDownloader.methodChannel
             .invokeMethod('configProxyPort', null);
 
-      case ('checkAvailableSpace', int minimum):
+      case (Config.checkAvailableSpace, int minimum):
         assert(minimum > 0, 'Minimum available space must be in MB and > 0');
         await NativeDownloader.methodChannel
             .invokeMethod('configCheckAvailableSpace', minimum);
 
-      case ('checkAvailableSpace', false):
+      case (Config.checkAvailableSpace, false):
+      case (Config.checkAvailableSpace, Config.never):
         await NativeDownloader.methodChannel
             .invokeMethod('configCheckAvailableSpace', null);
 
@@ -307,15 +308,25 @@ final class AndroidDownloader extends NativeDownloader {
       return superResult;
     }
     switch (configItem) {
-      case ('runInForeground', bool activate):
+      case (Config.runInForeground, bool activate):
         await NativeDownloader.methodChannel
             .invokeMethod('configForegroundFileSize', activate ? 0 : -1);
 
-      case ('runInForegroundIfFileLargerThan', int fileSize):
+      case (Config.runInForeground, String whenTo):
+        assert(
+            [Config.never, Config.always].contains(whenTo),
+            '${Config.runInForeground} expects one of ${[
+              Config.never,
+              Config.always
+            ]}');
+        await NativeDownloader.methodChannel
+            .invokeMethod('configForegroundFileSize', Config.argToInt(whenTo));
+
+      case (Config.runInForegroundIfFileLargerThan, int fileSize):
         await NativeDownloader.methodChannel
             .invokeMethod('configForegroundFileSize', fileSize);
 
-      case ('bypassTLSCertificateValidation', bool bypass):
+      case (Config.bypassTLSCertificateValidation, bool bypass):
         if (bypass) {
           if (kReleaseMode) {
             throw ArgumentError(
@@ -330,6 +341,17 @@ final class AndroidDownloader extends NativeDownloader {
           throw ArgumentError('To undo bypassing the certificate validation, '
               'restart and leave out the "configBypassCertificateValidation" configuration');
         }
+
+      case (Config.useCacheDir, String whenTo):
+        assert(
+            [Config.never, Config.whenAble, Config.always].contains(whenTo),
+            '${Config.useCacheDir} expects one of ${[
+              Config.never,
+              Config.whenAble,
+              Config.always
+            ]}');
+        await NativeDownloader.methodChannel
+            .invokeMethod('configUseCacheDir', Config.argToInt(whenTo));
 
       default:
         return (
@@ -365,11 +387,11 @@ final class IOSDownloader extends NativeDownloader {
       return superResult;
     }
     switch (configItem) {
-      case ('resourceTimeout', Duration? duration):
+      case (Config.resourceTimeout, Duration? duration):
         await NativeDownloader.methodChannel
             .invokeMethod('configResourceTimeout', duration?.inSeconds);
 
-      case ("localize", Map<String, String>? translation):
+      case (Config.localize, Map<String, String>? translation):
         await NativeDownloader.methodChannel
             .invokeMethod('configLocalize', translation);
 

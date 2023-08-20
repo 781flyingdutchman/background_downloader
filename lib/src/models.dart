@@ -1356,3 +1356,35 @@ enum SharedStorage {
   /// Android-only: the 'external storage' directory
   external
 }
+
+final class Config {
+  // Config topics
+  static const requestTimeout = 'requestTimeout';
+  static const resourceTimeout = 'resourceTimeout';
+  static const checkAvailableSpace = 'checkAvailableSpace';
+  static const proxy = 'proxy';
+  static const bypassTLSCertificateValidation =
+      'bypassTLSCertificateValidation';
+  static const runInForeground = 'runInForeground';
+  static const runInForegroundIfFileLargerThan =
+      'runInForegroundIfFileLargerThan';
+  static const localize = 'localize';
+  static const useCacheDir = 'useCacheDir';
+
+  // Config arguments
+  static const always = 'always'; // int 0
+  static const never = 'never'; // int -1
+  static const whenAble = 'whenAble'; // int -2
+
+  /// Returns the int equivalent of commonly used String arguments
+  ///
+  /// The int equivalent is used in communication with the native downloader
+  static int argToInt(String argument) {
+    final value =
+        {Config.always: 0, Config.whenAble: -2, Config.never: -1}[argument];
+    if (value == null) {
+      throw ArgumentError('Argument $argument cannot be converted to int');
+    }
+    return value;
+  }
+}

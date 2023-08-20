@@ -61,8 +61,11 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
             "com.bbflight.background_downloader.config.foregroundFileSize"
         const val keyConfigProxyAddress = "com.bbflight.background_downloader.config.proxyAddress"
         const val keyConfigProxyPort = "com.bbflight.background_downloader.config.proxyPort"
-        const val keyConfigRequestTimeout = "com.bbflight.background_downloader.config.requestTimeout"
-        const val keyConfigCheckAvailableSpace = "com.bbflight.background_downloader.config.checkAvailableSpace"
+        const val keyConfigRequestTimeout =
+            "com.bbflight.background_downloader.config.requestTimeout"
+        const val keyConfigCheckAvailableSpace =
+            "com.bbflight.background_downloader.config.checkAvailableSpace"
+        const val keyConfigUseCacheDir = "com.bbflight.background_downloader.config.useCacheDir"
         const val notificationChannel = "background_downloader"
         const val notificationPermissionRequestCode = 373921
         const val externalStoragePermissionRequestCode = 373922
@@ -314,8 +317,12 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 "configProxyAddress" -> methodConfigProxyAddress(call, result)
                 "configProxyPort" -> methodConfigProxyPort(call, result)
                 "configRequestTimeout" -> methodConfigRequestTimeout(call, result)
-                "configBypassTLSCertificateValidation" -> methodConfigBypassTLSCertificateValidation(result)
-                "configCheckAvailableSpace" -> methodConfigcheckAvailableSpace(call, result)
+                "configBypassTLSCertificateValidation" -> methodConfigBypassTLSCertificateValidation(
+                    result
+                )
+
+                "configCheckAvailableSpace" -> methodConfigCheckAvailableSpace(call, result)
+                "configUseCacheDir" -> methodConfigUseCacheDir(call, result)
                 "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
                     call, result
                 )
@@ -617,7 +624,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         val fileSize = call.arguments as Int
         updateSharedPreferences(keyConfigForegroundFileSize, fileSize)
         val msg = when (fileSize) {
-            0 ->  "Enabled foreground mode for all tasks"
+            0 -> "Enabled foreground mode for all tasks"
             -1 -> "Disabled foreground mode for all tasks"
             else -> "Set foreground file size threshold to $fileSize MB"
         }
@@ -668,8 +675,16 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
     /**
      * Store the availableSpace config in shared preferences
      */
-    private fun methodConfigcheckAvailableSpace(call: MethodCall, result: Result) {
+    private fun methodConfigCheckAvailableSpace(call: MethodCall, result: Result) {
         updateSharedPreferences(keyConfigCheckAvailableSpace, call.arguments as Int?)
+        result.success(null)
+    }
+
+    /**
+     * Store the useCacheDir config in shared preferences
+     */
+    private fun methodConfigUseCacheDir(call: MethodCall, result: Result) {
+        updateSharedPreferences(keyConfigUseCacheDir, call.arguments as Int?)
         result.success(null)
     }
 

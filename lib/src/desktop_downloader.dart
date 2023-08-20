@@ -363,16 +363,16 @@ final class DesktopDownloader extends BaseDownloader {
   @override
   Future<(String, String)> configureItem((String, dynamic) configItem) async {
     switch (configItem) {
-      case ('requestTimeout', Duration? duration):
+      case (Config.requestTimeout, Duration? duration):
         requestTimeout = duration;
 
-      case ('proxy', (String address, int port)):
+      case (Config.proxy, (String address, int port)):
         proxy = {'address': address, 'port': port};
 
-      case ("proxy", false):
+      case (Config.proxy, false):
         proxy = {};
 
-      case ('bypassTLSCertificateValidation', bool bypass):
+      case (Config.bypassTLSCertificateValidation, bool bypass):
         bypassTLSCertificateValidation = bypass;
 
       default:
