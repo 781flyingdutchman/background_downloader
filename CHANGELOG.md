@@ -89,7 +89,7 @@ This will migrate from either Flutter Downloader or the default LocalStore.
 
 Added an optional parameter to the tasksFinished method that allows you to use it the moment you receive a status update for a task, like this:
 ```dart
-void downloadStatusCallback(TaskStatusUpdate update) {
+void downloadStatusCallback(TaskStatusUpdate update) async {
     // process your status update, then check if all tasks are finished
     final bool allTasksFinished = update.status.isFinalState && 
         await FileDownloader().tasksFinished(ignoreTaskId: update.task.taskId) ;
@@ -196,7 +196,7 @@ Fixed a bug on iOS related to NSNull Json decoding
 
 Added an optional parameter to the tasksFinished method that allows you to use it the moment you receive a status update for a task, like this:
 ```dart
-void downloadStatusCallback(TaskStatusUpdate update) {
+void downloadStatusCallback(TaskStatusUpdate update) async {
     // process your status update, then check if all tasks are finished
     final bool allTasksFinished = update.status.isFinalState && 
         await FileDownloader().tasksFinished(ignoreTaskId: update.task.taskId) ;
