@@ -8,13 +8,12 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
-import android.util.Patterns
 import androidx.core.app.ActivityCompat
 import androidx.preference.PreferenceManager
 import androidx.work.*
+import com.bbflight.background_downloader.TaskWorker.Companion.keyEtag
 import com.bbflight.background_downloader.TaskWorker.Companion.keyNotificationConfig
 import com.bbflight.background_downloader.TaskWorker.Companion.keyStartByte
-import com.bbflight.background_downloader.TaskWorker.Companion.keyEtag
 import com.bbflight.background_downloader.TaskWorker.Companion.keyTempFilename
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -34,7 +33,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import java.lang.IllegalArgumentException
 import java.lang.Long.min
+import java.net.MalformedURLException
+import java.net.URL
+import java.net.URLDecoder
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantReadWriteLock
@@ -100,9 +103,18 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         ): Boolean {
             val task = Task(gson.fromJson(taskJsonMapString, jsonMapType))
             Log.i(TAG, "Enqueuing task with id ${task.taskId}")
-            if (!Patterns.WEB_URL.matcher(task.url).matches()) {
-                Log.i(TAG, "Invalid url: ${task.url}")
-                return false
+            // validate the task.url
+            try {
+                URL(task.url);
+                withContext(Dispatchers.IO) {
+                    URLDecoder.decode(task.url, "UTF-8")
+                }
+            } catch (e: MalformedURLException) {
+                Log.i(TAG, "MalformedURLException for taskId ${task.taskId}")
+                return false;
+            } catch (e: IllegalArgumentException) {
+                Log.i(TAG, "Could not url-decode url for taskId ${task.taskId}")
+                return false;
             }
             canceledTaskIds.remove(task.taskId)
             val dataBuilder = Data.Builder().putString(TaskWorker.keyTask, taskJsonMapString)

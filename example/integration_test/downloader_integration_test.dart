@@ -599,6 +599,12 @@ void main() {
           filename: 'test.html');
       expect(await FileDownloader().enqueue(task), isTrue);
       await FileDownloader().cancelTaskWithId(task.taskId);
+      // localhost
+      task = DownloadTask(
+          url: 'http://localhost:8085/something.html',
+          filename: 'test.html');
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await FileDownloader().cancelTaskWithId(task.taskId);
     });
   });
 

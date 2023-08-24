@@ -24,7 +24,7 @@ The following configurations are supported:
   - `(Config.runInForeground, bool activate)` or `(Config.runInForeground, Config.always)` or `(Config.runInForeground, Config.never)` activates or de-activates foreground mode for all tasks
   - `(Config.runInForegroundIfFileLargerThan, int fileSize)` activates foreground mode for downloads/uploads that exceed this file size, expressed in MB
 * Localization
-  - `Config.localize, Map<String, String> translation` localizes the words 'Cancel', 'Pause' and 'Resume' as used in notifications, presented as a map (iOS only, see docs for Android notifications)
+  - `(Config.localize, Map<String, String> translation)` localizes the words 'Cancel', 'Pause' and 'Resume' as used in notifications, presented as a map (iOS only, see docs for Android notifications)
 
 On Android and iOS, most configurations are stored in native 'shared preferences' to ensure that background tasks have access to the configuration. This means that configuration persists across application restarts, and this can lead to some surprising results. For example, if during testing you set a proxy and then remove that configuration line, the proxy configuration is not removed from persistent storage on your test device. You need to explicitly set `('proxy', false)` to remove the stored configuration on that device. 
 
