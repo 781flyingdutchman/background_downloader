@@ -790,6 +790,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                 }
                 
             case UNNotificationDefaultActionIdentifier:
+                // general notification tap (no button)
                 guard
                     let notificationType = userInfo["notificationType"] as? Int
                 else {
@@ -797,22 +798,27 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                     return
                 }
                 _ = postOnBackgroundChannel(method: "notificationTap", task: task, arg: notificationType)
-                if notificationType == NotificationType.complete.rawValue
-                {
-                guard let notificationConfigString = userInfo["notificationConfig"] as? String,
-                      let notificationConfigData = notificationConfigString.data(using: .utf8),
-                      let notificationConfig = try? JSONDecoder().decode(NotificationConfig.self, from: notificationConfigData),
-                      let filePath = getFilePath(for: task)
-                else {
-                    os_log("Could not extract filePath for notification tap on .complete", log: log, type: .info)
-                    return
-                }
-                if notificationConfig.tapOpensFile {
-                    if !doOpenFile(filePath: filePath, mimeType: nil)
-                    {
-                        os_log("Failed to open file on notification tap", log: log, type: .info)
+                // check 'tapOpensfile'
+                if notificationType == NotificationType.complete.rawValue {
+                    guard let notificationConfigString = userInfo["notificationConfig"] as? String,
+                          let notificationConfigData = notificationConfigString.data(using: .utf8),
+                          let notificationConfig = try? JSONDecoder().decode(NotificationConfig.self, from: notificationConfigData),
+                          let filePath = getFilePath(for: task)
+                    else {
+                        os_log("Could not extract filePath for notification tap on .complete", log: log, type: .info)
+                        return
                     }
-                }}
+                    if notificationConfig.tapOpensFile {
+                        if !doOpenFile(filePath: filePath, mimeType: nil)
+                        {
+                            os_log("Failed to open file on notification tap", log: log, type: .info)
+                        }
+                    }
+                }
+                // dismiss notification if it is a 'complete' or 'error' notification
+                if notificationType == NotificationType.complete.rawValue || notificationType == NotificationType.error.rawValue {
+                    UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [response.notification.request.identifier])
+                }
                 
             default:
                 do {}

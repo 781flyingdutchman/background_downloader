@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.preference.PreferenceManager
 import androidx.work.*
 import com.bbflight.background_downloader.TaskWorker.Companion.keyEtag
@@ -33,7 +34,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-import java.lang.IllegalArgumentException
 import java.lang.Long.min
 import java.net.MalformedURLException
 import java.net.URL
@@ -43,7 +43,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
-import kotlin.math.pow
 
 
 /**
@@ -105,16 +104,16 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
             Log.i(TAG, "Enqueuing task with id ${task.taskId}")
             // validate the task.url
             try {
-                URL(task.url);
+                URL(task.url)
                 withContext(Dispatchers.IO) {
                     URLDecoder.decode(task.url, "UTF-8")
                 }
             } catch (e: MalformedURLException) {
                 Log.i(TAG, "MalformedURLException for taskId ${task.taskId}")
-                return false;
+                return false
             } catch (e: IllegalArgumentException) {
                 Log.i(TAG, "Could not url-decode url for taskId ${task.taskId}")
-                return false;
+                return false
             }
             canceledTaskIds.remove(task.taskId)
             val dataBuilder = Data.Builder().putString(TaskWorker.keyTask, taskJsonMapString)
@@ -737,9 +736,10 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
     private fun handleIntent(intent: Intent?): Boolean {
         if (intent != null && intent.action == NotificationRcvr.actionTap) {
             val taskJsonMapString =
-                intent.extras?.getString(NotificationRcvr.bundleTask)
+                intent.extras?.getString(NotificationRcvr.keyTask)
             val notificationTypeOrdinal =
-                intent.getIntExtra(NotificationRcvr.bundleNotificationType, 0)
+                intent.getIntExtra(NotificationRcvr.keyNotificationType, 0)
+            val notificationId = intent.getIntExtra(NotificationRcvr.keyNotificationId, 0)
             CoroutineScope(Dispatchers.Default).launch {
                 var retries = 0
                 var success = false
@@ -761,7 +761,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                         Log.v(TAG, "Exception in handleIntent: $e")
                     }
                     if (!success) {
-                        delay(timeMillis = 100 * 2.0.pow(retries).toLong())
+                        delay(timeMillis = 100L shl (retries))
                         retries++
                     }
                 }
@@ -770,7 +770,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
             if (notificationTypeOrdinal == NotificationType.complete.ordinal) {
                 val task = Task(gson.fromJson(taskJsonMapString, jsonMapType))
                 val notificationConfigJsonString =
-                    intent.extras?.getString(NotificationRcvr.bundleNotificationConfig)
+                    intent.extras?.getString(NotificationRcvr.keyNotificationConfig)
                 val notificationConfig =
                     if (notificationConfigJsonString != null) gson.fromJson(
                         notificationConfigJsonString, NotificationConfig::class.java
@@ -778,6 +778,14 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 if (notificationConfig?.tapOpensFile == true && activity != null) {
                     val filePath = task.filePath(activity!!)
                     doOpenFile(activity!!, filePath, getMimeType(filePath))
+                }
+            }
+            // dismiss notification if it is a 'complete' or 'error' notification
+            if (notificationId != 0 &&
+                (notificationTypeOrdinal == NotificationType.complete.ordinal || notificationTypeOrdinal == NotificationType.error.ordinal)
+            ) {
+                with(NotificationManagerCompat.from(applicationContext)) {
+                    cancel(notificationId)
                 }
             }
             return true

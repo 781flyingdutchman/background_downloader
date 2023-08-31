@@ -29,6 +29,7 @@ import androidx.work.WorkerParameters
 import com.google.gson.Gson
 import kotlinx.coroutines.*
 import java.io.*
+import java.lang.Long.max
 import java.lang.System.currentTimeMillis
 import java.net.HttpURLConnection
 import java.net.InetSocketAddress
@@ -428,6 +429,7 @@ class TaskWorker(
     private var notificationConfig: NotificationConfig? = null
     private var notificationId = 0
     private var notificationProgress = 2.0 // indeterminate
+    private var lastNotificationTime = 0L
 
     private var taskException: TaskException? = null
     private var responseBody: String? = null
@@ -1383,7 +1385,19 @@ class TaskWorker(
                     }
                 }
             } else {
-                notify(notificationId, androidNotification)
+                val now = currentTimeMillis()
+                val timeSinceLastUpdate = now - lastNotificationTime
+                lastNotificationTime = now
+                if (notificationType == NotificationType.running || timeSinceLastUpdate > 2000) {
+                    notify(notificationId, androidNotification)
+                } else {
+                    // to prevent the 'not running' notification getting ignored
+                    // due to too frequent updates, post it with a delay
+                    CoroutineScope(Dispatchers.Main).launch {
+                        delay(2000 - max(timeSinceLastUpdate, 1000L))
+                        notify(notificationId, androidNotification)
+                    }
+                }
             }
         }
     }
@@ -1410,12 +1424,13 @@ class TaskWorker(
             if (tapIntent != null) {
                 tapIntent.apply {
                     action = NotificationRcvr.actionTap
-                    putExtra(NotificationRcvr.bundleTask, taskJsonString)
-                    putExtra(NotificationRcvr.bundleNotificationType, notificationType.ordinal)
+                    putExtra(NotificationRcvr.keyTask, taskJsonString)
+                    putExtra(NotificationRcvr.keyNotificationType, notificationType.ordinal)
                     putExtra(
-                        NotificationRcvr.bundleNotificationConfig,
+                        NotificationRcvr.keyNotificationConfig,
                         notificationConfigJsonString
                     )
+                    putExtra(NotificationRcvr.keyNotificationId, notificationId)
                 }
                 val tapPendingIntent: PendingIntent = PendingIntent.getActivity(
                     applicationContext,
@@ -1430,12 +1445,12 @@ class TaskWorker(
                 NotificationType.running -> {
                     // cancel button when running
                     val cancelOrPauseBundle = Bundle().apply {
-                        putString(NotificationRcvr.bundleTaskId, task.taskId)
+                        putString(NotificationRcvr.keyTaskId, task.taskId)
                     }
                     val cancelIntent =
                         Intent(applicationContext, NotificationRcvr::class.java).apply {
                             action = NotificationRcvr.actionCancelActive
-                            putExtra(NotificationRcvr.extraBundle, cancelOrPauseBundle)
+                            putExtra(NotificationRcvr.keyBundle, cancelOrPauseBundle)
                         }
                     val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
                         applicationContext,
@@ -1454,7 +1469,7 @@ class TaskWorker(
                             applicationContext, NotificationRcvr::class.java
                         ).apply {
                             action = NotificationRcvr.actionPause
-                            putExtra(NotificationRcvr.extraBundle, cancelOrPauseBundle)
+                            putExtra(NotificationRcvr.keyBundle, cancelOrPauseBundle)
                         }
                         val pausePendingIntent: PendingIntent = PendingIntent.getBroadcast(
                             applicationContext,
@@ -1473,16 +1488,16 @@ class TaskWorker(
                 NotificationType.paused -> {
                     // cancel button
                     val cancelBundle = Bundle().apply {
-                        putString(NotificationRcvr.bundleTaskId, task.taskId)
+                        putString(NotificationRcvr.keyTaskId, task.taskId)
                         putString(
-                            NotificationRcvr.bundleTask, taskJsonString
+                            NotificationRcvr.keyTask, taskJsonString
                         )
                     }
                     val cancelIntent = Intent(
                         applicationContext, NotificationRcvr::class.java
                     ).apply {
                         action = NotificationRcvr.actionCancelInactive
-                        putExtra(NotificationRcvr.extraBundle, cancelBundle)
+                        putExtra(NotificationRcvr.keyBundle, cancelBundle)
                     }
                     val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
                         applicationContext,
@@ -1497,12 +1512,12 @@ class TaskWorker(
                     )
                     // resume button
                     val resumeBundle = Bundle().apply {
-                        putString(NotificationRcvr.bundleTaskId, task.taskId)
+                        putString(NotificationRcvr.keyTaskId, task.taskId)
                         putString(
-                            NotificationRcvr.bundleTask, taskJsonString
+                            NotificationRcvr.keyTask, taskJsonString
                         )
                         putString(
-                            NotificationRcvr.bundleNotificationConfig,
+                            NotificationRcvr.keyNotificationConfig,
                             notificationConfigJsonString
                         )
                     }
@@ -1510,7 +1525,7 @@ class TaskWorker(
                         applicationContext, NotificationRcvr::class.java
                     ).apply {
                         action = NotificationRcvr.actionResume
-                        putExtra(NotificationRcvr.extraBundle, resumeBundle)
+                        putExtra(NotificationRcvr.keyBundle, resumeBundle)
                     }
                     val resumePendingIntent: PendingIntent = PendingIntent.getBroadcast(
                         applicationContext,

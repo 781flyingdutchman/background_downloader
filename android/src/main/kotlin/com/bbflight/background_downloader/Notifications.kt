@@ -1,13 +1,10 @@
 package com.bbflight.background_downloader
 
-import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Bundle
 import android.util.Log
 import androidx.annotation.Keep
-import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.work.WorkManager
 import com.bbflight.background_downloader.BackgroundDownloaderPlugin.Companion.TAG
@@ -74,18 +71,19 @@ class NotificationRcvr : BroadcastReceiver() {
         const val actionPause = "com.bbflight.background_downloader.pause"
         const val actionResume = "com.bbflight.background_downloader.resume"
         const val actionTap = "com.bbflight.background_downloader.tap"
-        const val extraBundle = "com.bbflight.background_downloader.bundle"
-        const val bundleTaskId = "com.bbflight.background_downloader.taskId"
-        const val bundleTask = "com.bbflight.background_downloader.task" // as JSON string
-        const val bundleNotificationConfig =
+        const val keyBundle = "com.bbflight.background_downloader.bundle"
+        const val keyTaskId = "com.bbflight.background_downloader.taskId"
+        const val keyTask = "com.bbflight.background_downloader.task" // as JSON string
+        const val keyNotificationConfig =
             "com.bbflight.background_downloader.notificationConfig" // as JSON string
-        const val bundleNotificationType =
+        const val keyNotificationType =
             "com.bbflight.background_downloader.notificationType" // ordinal of enum
+        const val keyNotificationId = "com.bbflight.background_downloader.notificationId"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        val bundle = intent.getBundleExtra(extraBundle)
-        val taskId = bundle?.getString(bundleTaskId)
+        val bundle = intent.getBundleExtra(keyBundle)
+        val taskId = bundle?.getString(keyTaskId)
         if (taskId != null) {
             runBlocking {
                 when (intent.action) {
@@ -96,7 +94,7 @@ class NotificationRcvr : BroadcastReceiver() {
                     }
 
                     actionCancelInactive -> {
-                        val taskJsonString = bundle.getString(bundleTask)
+                        val taskJsonString = bundle.getString(keyTask)
                         if (taskJsonString != null) {
                             val task = Task(
                                 BackgroundDownloaderPlugin.gson.fromJson(
@@ -119,9 +117,9 @@ class NotificationRcvr : BroadcastReceiver() {
                     actionResume -> {
                         val resumeData = BackgroundDownloaderPlugin.localResumeData[taskId]
                         if (resumeData != null) {
-                            val taskJsonString = bundle.getString(bundleTask)
+                            val taskJsonString = bundle.getString(keyTask)
                             val notificationConfigJsonString = bundle.getString(
-                                bundleNotificationConfig
+                                keyNotificationConfig
                             )
                             if (notificationConfigJsonString != null && taskJsonString != null) {
                                 BackgroundDownloaderPlugin.doEnqueue(
@@ -150,4 +148,3 @@ class NotificationRcvr : BroadcastReceiver() {
         }
     }
 }
-
