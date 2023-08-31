@@ -8,7 +8,7 @@ import 'package:mime/mime.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
-import 'desktop_downloader.dart';
+import 'web_downloader.dart' if (dart.library.io) 'desktop_downloader.dart';
 import 'exceptions.dart';
 import 'file_downloader.dart';
 

@@ -7,7 +7,7 @@ import 'package:logging/logging.dart';
 import 'package:collection/collection.dart';
 
 import 'database.dart';
-import 'desktop_downloader.dart';
+import 'web_downloader.dart' if (dart.library.io) 'desktop_downloader.dart';
 import 'exceptions.dart';
 import 'models.dart';
 import 'native_downloader.dart';
@@ -63,13 +63,14 @@ abstract base class BaseDownloader {
 
   factory BaseDownloader.instance(
       PersistentStorage persistentStorage, Database database) {
-    final instance = switch (Platform.operatingSystem) {
-      'android' => AndroidDownloader(),
-      'ios' => IOSDownloader(),
-      'macos' || 'linux' || 'windows' => DesktopDownloader(),
-      final platform =>
-        throw ArgumentError('$platform is not a supported platform')
-    };
+    final instance = Platform.isAndroid
+        ? AndroidDownloader()
+        : Platform.isIOS
+            ? IOSDownloader()
+            : Platform.isLinux || Platform.isMacOS || Platform.isWindows
+                ? DesktopDownloader()
+                : throw ArgumentError(
+                    '${Platform.operatingSystem} is not a supported platform');
     instance._storage = persistentStorage;
     instance.database = database;
     unawaited(instance.initialize());
