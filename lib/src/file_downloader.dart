@@ -8,7 +8,7 @@ import 'package:logging/logging.dart';
 
 import 'base_downloader.dart';
 import 'database.dart';
-import 'desktop_downloader.dart';
+import 'web_downloader.dart' if (dart.library.io) 'desktop_downloader.dart';
 import 'exceptions.dart';
 import 'localstore/localstore.dart';
 import 'models.dart';
