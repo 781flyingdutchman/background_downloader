@@ -2032,20 +2032,15 @@ void main() {
         (widgetTester) async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       final task = DownloadTask(url: 'file://doesNotExist', filename: 'test');
-      if (Platform.isAndroid) {
-        // on Android, enqueue fails immediately
-        expect(await FileDownloader().enqueue(task), equals(false));
+      expect(await FileDownloader().enqueue(task), equals(true));
+      expect(
+          await FileDownloader().cancelTaskWithId(task.taskId), equals(true));
+      await statusCallbackCompleter.future;
+      if (Platform.isIOS) {
+        // cannot avoid fail on iOS
+        expect(lastStatus, equals(TaskStatus.failed));
       } else {
-        expect(await FileDownloader().enqueue(task), equals(true));
-        expect(
-            await FileDownloader().cancelTaskWithId(task.taskId), equals(true));
-        await statusCallbackCompleter.future;
-        if (Platform.isIOS) {
-          // cannot avoid fail on iOS
-          expect(lastStatus, equals(TaskStatus.failed));
-        } else {
-          expect(lastStatus, equals(TaskStatus.canceled));
-        }
+        expect(lastStatus, equals(TaskStatus.canceled));
       }
     });
   });
@@ -2374,7 +2369,6 @@ void main() {
     });
 
     testWidgets('multiple pause and resume', (widgetTester) async {
-      return;
       // Note: this test is flaky as it depends on internet connection
       // speed. If the test fails, it is likely because the task completed
       // before the initial pause command, or did not have time for two

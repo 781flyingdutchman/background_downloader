@@ -1,3 +1,9 @@
+## 7.9.4
+
+Enable compile for Web platform (through stubbing - no actual web functionality).
+
+Automatically dismiss "complete" and "error" notifications when the user taps on the notification.
+
 ## 7.9.3
 
 Bug fix for validating URLs to allow localhost URLs.
