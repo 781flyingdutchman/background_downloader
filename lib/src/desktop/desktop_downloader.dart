@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
 import 'dart:isolate';
-import 'dart:math';
 
 import 'package:async/async.dart';
+import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -13,11 +13,12 @@ import 'package:logging/logging.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
-import 'base_downloader.dart';
-import 'desktop_downloader_isolate.dart';
-import 'exceptions.dart';
-import 'file_downloader.dart';
-import 'models.dart';
+import '../base_downloader.dart';
+import '../chunk.dart';
+import '../exceptions.dart';
+import '../file_downloader.dart';
+import '../models.dart';
+import 'isolate.dart';
 
 const okResponses = [200, 201, 202, 203, 204, 205, 206];
 
@@ -84,18 +85,13 @@ final class DesktopDownloader extends BaseDownloader {
     }
     final isResume = _resume.remove(task) && resumeData != null;
     final filePath = await task.filePath(); // "" for MultiUploadTask
-    final tempFilePath = isResume
-        ? resumeData.tempFilepath // always non-null
-        : path.join((await getTemporaryDirectory()).path,
-            'com.bbflight.background_downloader${Random().nextInt(1 << 32).toString()}');
-    final requiredStartByte =
-        resumeData?.requiredStartByte ?? 0; // start for resume
-    final eTag = resumeData?.eTag;
     // spawn an isolate to do the task
     final receivePort = ReceivePort();
     final errorPort = ReceivePort();
     errorPort.listen((message) {
       final exceptionDescription = (message as List).first as String;
+      final stackTrace = message.last;
+      log.fine('Stack trace: $stackTrace');
       logError(task, exceptionDescription);
       processStatusUpdate(TaskStatusUpdate(
           task, TaskStatus.failed, TaskException(exceptionDescription)));
@@ -114,9 +110,7 @@ final class DesktopDownloader extends BaseDownloader {
     sendPort.send((
       task,
       filePath,
-      tempFilePath,
-      requiredStartByte,
-      eTag,
+      resumeData,
       isResume,
       requestTimeout,
       proxy,
@@ -126,10 +120,13 @@ final class DesktopDownloader extends BaseDownloader {
       // if already registered with null value, cancel immediately
       sendPort.send('cancel');
     }
-    _isolateSendPorts[task] = sendPort; // allows future cancellation
-    // listen for events sent back from the isolate
+    // store the isolate's sendPort so we can send it messages for
+    // cancellation, and for managing parallel downloads
+    _isolateSendPorts[task] = sendPort;
+    // listen for messages sent back from the isolate, until 'done'
     while (await messagesFromIsolate.hasNext) {
       final message = await messagesFromIsolate.next;
+      log.finest('Desktop incoming message from ${task.taskId}: $message');
       switch (message) {
         case 'done':
           receivePort.close();
@@ -141,8 +138,15 @@ final class DesktopDownloader extends BaseDownloader {
             double downloadSpeed,
             Duration timeRemaining
           ):
-          processProgressUpdate(TaskProgressUpdate(
-              task, progress, expectedFileSize, downloadSpeed, timeRemaining));
+          final taskProgressUpdate = TaskProgressUpdate(
+              task, progress, expectedFileSize, downloadSpeed, timeRemaining);
+          if (task.group != BaseDownloader.chunkGroup) {
+            processProgressUpdate(taskProgressUpdate);
+          } else {
+            _log.warning(
+                'Sending $taskProgressUpdate to taskId ${task.metaData}');
+            _parallelTaskSendPort(task.metaData)?.send(taskProgressUpdate);
+          }
 
         case ('taskCanResume', bool taskCanResume):
           setCanResume(task, taskCanResume);
@@ -153,14 +157,38 @@ final class DesktopDownloader extends BaseDownloader {
             TaskException? exception,
             String? responseBody
           ):
-          if (status.isFinalState) {
-            _remove(task);
+          final taskStatusUpdate = TaskStatusUpdate(task, status,
+              status == TaskStatus.failed ? exception : null, responseBody);
+          if (task.group != BaseDownloader.chunkGroup) {
+            if (status.isFinalState) {
+              _remove(task);
+            }
+            processStatusUpdate(taskStatusUpdate);
+          } else {
+            _log.warning(
+                'Sending ${taskStatusUpdate.status} for ${taskStatusUpdate.task.taskId} to taskId ${task.metaData}');
+            _parallelTaskSendPort(task.metaData)?.send(taskStatusUpdate);
           }
-          processStatusUpdate(TaskStatusUpdate(task, status,
-              status == TaskStatus.failed ? exception : null, responseBody));
 
         case ('resumeData', String data, int requiredStartByte, String? eTag):
           setResumeData(ResumeData(task, data, requiredStartByte, eTag));
+
+        // from [ParallelDownloadTask]
+        case ('enqueueChild', DownloadTask childTask):
+          _log.finest('enqueuing $childTask');
+          await FileDownloader().enqueue(childTask);
+
+        // from [ParallelDownloadTask]
+        case ('cancelTasksWithId', List<String> taskIds):
+          _log.finest('canceling ids $taskIds');
+          await FileDownloader().cancelTasksWithIds(taskIds);
+
+        // from [ParallelDownloadTask]
+        case ('pauseTasks', List<DownloadTask> tasks):
+          _log.finest('pausing ${tasks.length} tasks');
+          for (final chunkTask in tasks) {
+            await FileDownloader().pause(chunkTask);
+          }
 
         case ('log', String logMessage):
           _log.finest(logMessage);
@@ -173,6 +201,39 @@ final class DesktopDownloader extends BaseDownloader {
     errorPort.close();
     _isolateSendPorts.remove(task);
   }
+
+  // intercept the status and progress updates for tasks that are 'chunks', i.e.
+  // part of a [ParallelDownloadTask]. Updates for these tasks are sent to the
+  // isolate running the [ParallelDownloadTask] instead
+
+  @override
+  void processStatusUpdate(TaskStatusUpdate update) {
+    // Regular update if task's group is not chunkGroup
+    if (update.task.group != FileDownloader.chunkGroup) {
+      return super.processStatusUpdate(update);
+    }
+    // If chunkGroup, send update to task's parent isolate.
+    // The task's metadata contains taskId of parent
+    _parallelTaskSendPort(update.task.metaData)?.send(update);
+  }
+
+  @override
+  void processProgressUpdate(TaskProgressUpdate update) {
+    // Regular update if task's group is not chunkGroup
+    if (update.task.group != FileDownloader.chunkGroup) {
+      return super.processProgressUpdate(update);
+    }
+    // If chunkGroup, send update to task's parent isolate.
+    // The task's metadata contains taskId of parent
+    _parallelTaskSendPort(update.task.metaData)?.send(update);
+  }
+
+  /// Return the [SendPort] for the [ParallelDownloadTask] represented by [taskId]
+  /// or null if not a [ParallelDownloadTask] or not found
+  SendPort? _parallelTaskSendPort(String taskId) => _isolateSendPorts.entries
+      .firstWhereOrNull((entry) =>
+          entry.key is ParallelDownloadTask && entry.key.taskId == taskId)
+      ?.value;
 
   @override
   Future<int> reset(String group) async {
@@ -257,7 +318,16 @@ final class DesktopDownloader extends BaseDownloader {
   Future<bool> resume(Task task) async {
     if (await super.resume(task)) {
       _resume.add(task);
-      return enqueue(task);
+      if (await enqueue(task)) {
+        if (task is ParallelDownloadTask) {
+          final resumeData = await getResumeData(task.taskId);
+          if (resumeData == null) {
+            return false;
+          }
+          return resumeChunkTasks(task, resumeData);
+        }
+        return true;
+      }
     }
     return false;
   }

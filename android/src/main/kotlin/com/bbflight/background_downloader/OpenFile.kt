@@ -13,7 +13,7 @@ class OpenFileProvider : FileProvider(R.xml.bgd_file_paths)
 fun doOpenFile(activity: Activity, filePath: String, mimeType: String): Boolean {
     val intent = Intent(Intent.ACTION_VIEW)
     try {
-        if (BackgroundDownloaderPlugin.activity != null) {
+        if (BDPlugin.activity != null) {
             val contentUri = getUriForFile(
                 activity,
                 activity.packageName + ".com.bbflight.background_downloader.fileprovider",
@@ -27,7 +27,7 @@ fun doOpenFile(activity: Activity, filePath: String, mimeType: String): Boolean 
             return true
         }
     } catch (e: Exception) {
-        Log.i(BackgroundDownloaderPlugin.TAG, "Failed to open file $filePath: $e")
+        Log.i(BDPlugin.TAG, "Failed to open file $filePath: $e")
     }
     return false
 }

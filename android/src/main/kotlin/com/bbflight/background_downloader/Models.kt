@@ -4,10 +4,12 @@ package com.bbflight.background_downloader
 
 import android.content.Context
 import android.os.Build
-import com.bbflight.background_downloader.BackgroundDownloaderPlugin.Companion.gson
+import com.bbflight.background_downloader.BDPlugin.Companion.gson
 import java.io.File
 import kotlin.io.path.Path
 import kotlin.io.path.pathString
+import kotlin.math.absoluteValue
+import kotlin.random.Random
 
 
 /// Base directory in which files will be stored, based on their relative
@@ -32,31 +34,33 @@ enum class Updates {
 /**
  * The Dart side Task
  *
- * A blend of UploadTask and DownloadTask, with [taskType] indicating what kind
+ * A blend of UploadTask, DownloadTask and ParallelDownloadTask with [taskType] indicating what kind
  * of task this is
  */
 
 class Task(
-    val taskId: String,
+    val taskId: String = "${Random.nextInt().absoluteValue}",
     val url: String,
+    val urls: List<String> = listOf(),
     val filename: String,
     val headers: Map<String, String>,
-    val httpRequestMethod: String,
-    val post: String?,
-    val fileField: String,
-    val mimeType: String,
-    val fields: Map<String, String>,
-    val directory: String,
+    val httpRequestMethod: String = "GET",
+    val chunks: Int = 1,
+    val post: String? = null,
+    val fileField: String = "",
+    val mimeType: String = "",
+    val fields: Map<String, String> = mapOf(),
+    val directory: String = "",
     val baseDirectory: BaseDirectory,
     val group: String,
     val updates: Updates,
-    val requiresWiFi: Boolean,
-    val retries: Int,
-    val retriesRemaining: Int,
-    val allowPause: Boolean,
-    val metaData: String,
-    val creationTime: Long, // untouched, so kept as integer on Android side
-    val taskType: String // distinction between DownloadTask and UploadTask
+    val requiresWiFi: Boolean = false,
+    val retries: Int = 0,
+    var retriesRemaining: Int = 0,
+    val allowPause: Boolean = false,
+    val metaData: String = "",
+    val creationTime: Long = System.currentTimeMillis(), // untouched, so kept as integer on Android side
+    val taskType: String
 ) {
 
     /** Creates object from JsonMap */
@@ -64,9 +68,11 @@ class Task(
     constructor(jsonMap: Map<String, Any>) : this(
         taskId = jsonMap["taskId"] as String? ?: "",
         url = jsonMap["url"] as String? ?: "",
+        urls = jsonMap["urls"] as List<String>? ?: listOf(),
         filename = jsonMap["filename"] as String? ?: "",
         headers = jsonMap["headers"] as Map<String, String>? ?: mutableMapOf<String, String>(),
         httpRequestMethod = jsonMap["httpRequestMethod"] as String? ?: "GET",
+        chunks = (jsonMap["chunks"] as Double? ?: 1).toInt(),
         post = jsonMap["post"] as String?,
         fileField = jsonMap["fileField"] as String? ?: "",
         mimeType = jsonMap["mimeType"] as String? ?: "",
@@ -90,9 +96,11 @@ class Task(
         return mapOf(
             "taskId" to taskId,
             "url" to url,
+            "urls" to urls,
             "filename" to filename,
             "headers" to headers,
             "httpRequestMethod" to httpRequestMethod,
+            "chunks" to chunks,
             "post" to post,
             "fileField" to fileField,
             "mimeType" to mimeType,
@@ -123,9 +131,14 @@ class Task(
                 updates == Updates.statusChangeAndProgressUpdates
     }
 
-    /** True if this task is a DownloadTask */
+    /** True if this task is a DownloadTask or ParallelDownloadTask */
     fun isDownloadTask(): Boolean {
-        return taskType == "DownloadTask"
+        return taskType == "DownloadTask" || taskType == "ParallelDownloadTask"
+    }
+
+    /** True if this task is a ParallelDownloadTask */
+    fun isParallelDownloadTask(): Boolean {
+        return taskType == "ParallelDownloadTask"
     }
 
     /** True if this task is a MultiUploadTask */

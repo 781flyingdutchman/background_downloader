@@ -7,7 +7,7 @@ import android.util.Log
 import androidx.annotation.Keep
 import androidx.core.app.NotificationManagerCompat
 import androidx.work.WorkManager
-import com.bbflight.background_downloader.BackgroundDownloaderPlugin.Companion.TAG
+import com.bbflight.background_downloader.BDPlugin.Companion.TAG
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -88,7 +88,7 @@ class NotificationRcvr : BroadcastReceiver() {
             runBlocking {
                 when (intent.action) {
                     actionCancelActive -> {
-                        BackgroundDownloaderPlugin.cancelActiveTaskWithId(
+                        BDPlugin.cancelActiveTaskWithId(
                             context, taskId, WorkManager.getInstance(context)
                         )
                     }
@@ -97,11 +97,11 @@ class NotificationRcvr : BroadcastReceiver() {
                         val taskJsonString = bundle.getString(keyTask)
                         if (taskJsonString != null) {
                             val task = Task(
-                                BackgroundDownloaderPlugin.gson.fromJson(
-                                    taskJsonString, BackgroundDownloaderPlugin.jsonMapType
+                                BDPlugin.gson.fromJson(
+                                    taskJsonString, BDPlugin.jsonMapType
                                 )
                             )
-                            BackgroundDownloaderPlugin.cancelInactiveTask(context, task)
+                            BDPlugin.cancelInactiveTask(context, task)
                             with(NotificationManagerCompat.from(context)) {
                                 cancel(task.taskId.hashCode())
                             }
@@ -111,32 +111,28 @@ class NotificationRcvr : BroadcastReceiver() {
                     }
 
                     actionPause -> {
-                        BackgroundDownloaderPlugin.pauseTaskWithId(taskId)
+                        BDPlugin.pauseTaskWithId(taskId)
                     }
 
                     actionResume -> {
-                        val resumeData = BackgroundDownloaderPlugin.localResumeData[taskId]
+                        val resumeData = BDPlugin.localResumeData[taskId]
                         if (resumeData != null) {
-                            val taskJsonString = bundle.getString(keyTask)
                             val notificationConfigJsonString = bundle.getString(
                                 keyNotificationConfig
                             )
-                            if (notificationConfigJsonString != null && taskJsonString != null) {
-                                BackgroundDownloaderPlugin.doEnqueue(
+                            if (notificationConfigJsonString != null) {
+                                BDPlugin.doEnqueue(
                                     context,
-                                    taskJsonString,
+                                    resumeData.task,
                                     notificationConfigJsonString,
-                                    resumeData.data,
-                                    resumeData.requiredStartByte,
-                                    resumeData.eTag
-                                )
+                                    resumeData)
                             } else {
-                                BackgroundDownloaderPlugin.cancelActiveTaskWithId(
+                                BDPlugin.cancelActiveTaskWithId(
                                     context, taskId, WorkManager.getInstance(context)
                                 )
                             }
                         } else {
-                            BackgroundDownloaderPlugin.cancelActiveTaskWithId(
+                            BDPlugin.cancelActiveTaskWithId(
                                 context, taskId, WorkManager.getInstance(context)
                             )
                         }

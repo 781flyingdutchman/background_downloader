@@ -12,10 +12,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.preference.PreferenceManager
 import androidx.work.*
-import com.bbflight.background_downloader.TaskWorker.Companion.keyEtag
-import com.bbflight.background_downloader.TaskWorker.Companion.keyNotificationConfig
-import com.bbflight.background_downloader.TaskWorker.Companion.keyStartByte
-import com.bbflight.background_downloader.TaskWorker.Companion.keyTempFilename
+import com.bbflight.background_downloader.TaskWorker.Companion.taskToJsonString
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -51,7 +48,7 @@ import kotlin.concurrent.write
  * Manages the WorkManager task queue and the interface to Dart. Actual work is done in
  * [TaskWorker]
  */
-class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
+class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     PluginRegistry.RequestPermissionsResultListener {
     companion object {
         const val TAG = "BackgroundDownloader"
@@ -76,6 +73,7 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         var activity: Activity? = null
         var canceledTaskIds = HashMap<String, Long>() // <taskId, timeMillis>
         var pausedTaskIds = HashSet<String>() // <taskId>
+        var parallelDownloadTaskWorkers = HashMap<String, ParallelDownloadTaskWorker>()
         var backgroundChannel: MethodChannel? = null
         var backgroundChannelCounter = 0  // reference counter
         var forceFailPostOnBackgroundChannel = false
@@ -93,14 +91,11 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
          */
         suspend fun doEnqueue(
             context: Context,
-            taskJsonMapString: String,
+            task: Task,
             notificationConfigJsonString: String?,
-            tempFilePath: String?,
-            startByte: Long?,
-            eTag: String?,
+            resumeData: ResumeData?,
             initialDelayMillis: Long = 0
         ): Boolean {
-            val task = Task(gson.fromJson(taskJsonMapString, jsonMapType))
             Log.i(TAG, "Enqueuing task with id ${task.taskId}")
             // validate the task.url
             try {
@@ -116,20 +111,25 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 return false
             }
             canceledTaskIds.remove(task.taskId)
-            val dataBuilder = Data.Builder().putString(TaskWorker.keyTask, taskJsonMapString)
+            val dataBuilder = Data.Builder().putString(TaskWorker.keyTask, taskToJsonString(task))
             if (notificationConfigJsonString != null) {
-                dataBuilder.putString(keyNotificationConfig, notificationConfigJsonString)
+                dataBuilder.putString(TaskWorker.keyNotificationConfig, notificationConfigJsonString)
             }
-            if (tempFilePath != null && startByte != null) {
-                dataBuilder.putString(keyTempFilename, tempFilePath)
-                    .putLong(keyStartByte, startByte)
-                    .putString(keyEtag, eTag)
+            if (resumeData != null) {
+                dataBuilder.putString(TaskWorker.keyResumeDataData, resumeData.data)
+                    .putLong(TaskWorker.keyStartByte, resumeData.requiredStartByte)
+                    .putString(TaskWorker.keyETag, resumeData.eTag)
             }
             val data = dataBuilder.build()
             val constraints = Constraints.Builder().setRequiredNetworkType(
                 if (task.requiresWiFi) NetworkType.UNMETERED else NetworkType.CONNECTED
             ).build()
-            val requestBuilder = OneTimeWorkRequestBuilder<TaskWorker>().setInputData(data)
+            val requestBuilder =
+                if (task.isParallelDownloadTask())
+                    OneTimeWorkRequestBuilder<ParallelDownloadTaskWorker>()
+                else if (task.isDownloadTask()) OneTimeWorkRequestBuilder<DownloadTaskWorker>()
+                else OneTimeWorkRequestBuilder<UploadTaskWorker>()
+            requestBuilder.setInputData(data)
                 .setConstraints(constraints).addTag(TAG).addTag("taskId=${task.taskId}")
                 .addTag("group=${task.group}")
             if (initialDelayMillis != 0L) {
@@ -317,13 +317,18 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 "killTaskWithId" -> methodKillTaskWithId(call, result)
                 "taskForId" -> methodTaskForId(call, result)
                 "pause" -> methodPause(call, result)
+                "moveToSharedStorage" -> methodMoveToSharedStorage(call, result)
+                "pathInSharedStorage" -> methodPathInSharedStorage(call, result)
+                "openFile" -> methodOpenFile(call, result)
+                // ParallelDownloadTask child updates
+                "chunkStatusUpdate" -> methodUpdateChunkStatus(call, result)
+                "chunkProgressUpdate" -> methodUpdateChunkProgress(call, result)
+                // internal use
                 "popResumeData" -> methodPopResumeData(result)
                 "popStatusUpdates" -> methodPopStatusUpdates(result)
                 "popProgressUpdates" -> methodPopProgressUpdates(result)
                 "getTaskTimeout" -> methodGetTaskTimeout(result)
-                "moveToSharedStorage" -> methodMoveToSharedStorage(call, result)
-                "pathInSharedStorage" -> methodPathInSharedStorage(call, result)
-                "openFile" -> methodOpenFile(call, result)
+                // configuration
                 "configForegroundFileSize" -> methodConfigForegroundFileSize(call, result)
                 "configProxyAddress" -> methodConfigProxyAddress(call, result)
                 "configProxyPort" -> methodConfigProxyPort(call, result)
@@ -331,7 +336,6 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
                 "configBypassTLSCertificateValidation" -> methodConfigBypassTLSCertificateValidation(
                     result
                 )
-
                 "configCheckAvailableSpace" -> methodConfigCheckAvailableSpace(call, result)
                 "configUseCacheDir" -> methodConfigUseCacheDir(call, result)
                 "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
@@ -354,28 +358,23 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         // by tempFilePath, startByte and eTag if this enqueue is a resume from pause
         val args = call.arguments as List<*>
         val taskJsonMapString = args[0] as String
+        val task = Task(gson.fromJson(taskJsonMapString, jsonMapType))
         val notificationConfigJsonString = args[1] as String?
         val isResume = args.size == 5
-        val startByte: Long?
-        val tempFilePath: String?
-        val eTag: String?
+        val resumeData: ResumeData?
         if (isResume) {
-            tempFilePath = args[2] as String
-            startByte = if (args[3] is Long) args[3] as Long else (args[3] as Int).toLong()
-            eTag = args[4] as String?
+            val startByte = if (args[3] is Long) args[3] as Long else (args[3] as Int).toLong()
+            val eTag = args[4] as String?
+            resumeData = ResumeData(task, args[2] as String, startByte, eTag)
         } else {
-            tempFilePath = null
-            startByte = null
-            eTag = null
+            resumeData = null
         }
         result.success(
             doEnqueue(
                 applicationContext,
-                taskJsonMapString,
+                task,
                 notificationConfigJsonString,
-                tempFilePath,
-                startByte,
-                eTag
+                resumeData,
             )
         )
     }
@@ -613,6 +612,45 @@ class BackgroundDownloaderPlugin : FlutterPlugin, MethodCallHandler, ActivityAwa
         val filePath = args[1] as String? ?: task!!.filePath(applicationContext)
         val mimeType = args[2] as String? ?: getMimeType(filePath)
         result.success(if (activity != null) doOpenFile(activity!!, filePath, mimeType) else false)
+    }
+
+    /**
+     * Update the status of one chunk (part of a ParallelDownloadTask), and returns
+     * the status of the parent task based on the 'sum' of its children, or null
+     * if unchanged
+     *
+     * Arguments are the parent TaskId, chunk taskId, taskStatusOrdinal
+     */
+    private suspend fun methodUpdateChunkStatus(call: MethodCall, result: Result) {
+        val args = call.arguments as List<*>
+        val taskId = args[0] as String
+        val chunkTaskId = args[1] as String
+        val statusOrdinal = args[2] as Int
+        result.success(
+            parallelDownloadTaskWorkers[taskId]?.chunkStatusUpdate(
+                chunkTaskId,
+                TaskStatus.values()[statusOrdinal]
+            )
+        )
+    }
+
+    /**
+     * Update the progress of one chunk (part of a ParallelDownloadTask), and returns
+     * the progress of the parent task based on the average of its children
+     *
+     * Arguments are the parent [TaskId, chunk taskId, progress]
+     */
+    private suspend fun methodUpdateChunkProgress(call: MethodCall, result: Result) {
+        val args = call.arguments as List<*>
+        val taskId = args[0] as String
+        val chunkTaskId = args[1] as String
+        val progress = args[2] as Double
+        result.success(
+            parallelDownloadTaskWorkers[taskId]?.chunkProgressUpdate(
+                chunkTaskId,
+                progress
+            )
+        )
     }
 
     /**
@@ -867,12 +905,12 @@ class ResultHandler(private val completer: CompletableFuture<Boolean>) : Result 
     }
 
     override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
-        Log.i(BackgroundDownloaderPlugin.TAG, "Flutter result error $errorCode: $errorMessage")
+        Log.i(BDPlugin.TAG, "Flutter result error $errorCode: $errorMessage")
         completer.complete(false)
     }
 
     override fun notImplemented() {
-        Log.i(BackgroundDownloaderPlugin.TAG, "Flutter method not implemented")
+        Log.i(BDPlugin.TAG, "Flutter method not implemented")
         completer.complete(false)
     }
 

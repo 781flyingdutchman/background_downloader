@@ -50,7 +50,7 @@ fun acceptUntrustedCertificates() {
         val sslSocketFactory = sslContext.socketFactory
         HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.socketFactory)
         Log.w(
-            BackgroundDownloaderPlugin.TAG, "Bypassing TLS certificate validation\n" +
+            BDPlugin.TAG, "Bypassing TLS certificate validation\n" +
                     "HTTPS calls will NOT check the validity of the TLS certificate."
         )
     } catch (e: Exception) {
@@ -72,13 +72,13 @@ fun insufficientSpace(applicationContext: Context, contentLength: Long): Boolean
         return false
     }
     val checkValue = PreferenceManager.getDefaultSharedPreferences(applicationContext)
-        .getInt(BackgroundDownloaderPlugin.keyConfigCheckAvailableSpace, 0)
+        .getInt(BDPlugin.keyConfigCheckAvailableSpace, 0)
     if (checkValue <= 0) {
         return false
     }
     val path = Environment.getDataDirectory()
     val stat = StatFs(path.path)
     val available = stat.blockSizeLong * stat.availableBlocksLong
-    return available - (BackgroundDownloaderPlugin.remainingBytesToDownload.values.sum()
+    return available - (BDPlugin.remainingBytesToDownload.values.sum()
             + contentLength) < (checkValue.toLong() shl 20)
 }

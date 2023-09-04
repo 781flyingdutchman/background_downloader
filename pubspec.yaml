@@ -38,6 +38,6 @@ flutter:
     platforms:
       android:
         package: com.bbflight.background_downloader
-        pluginClass: BackgroundDownloaderPlugin
+        pluginClass: BDPlugin
       ios:
         pluginClass: BackgroundDownloaderPlugin

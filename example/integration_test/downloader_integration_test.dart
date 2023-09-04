@@ -837,149 +837,6 @@ void main() {
       expect(lastStatus, equals(TaskStatus.notFound));
     });
 
-    testWidgets('MultiUploadTask to and from Json', (widgetTester) async {
-      // try with list of Strings
-      var muTask = MultiUploadTask(
-          taskId: 'task1',
-          url: urlWithContentLength,
-          files: ['f1.txt', 'f2.txt']);
-      expect(muTask.fileFields, equals(['f1', 'f2']));
-      expect(muTask.filenames, equals(['f1.txt', 'f2.txt']));
-      expect(muTask.mimeTypes, equals(['text/plain', 'text/plain']));
-      expect(muTask.fileField, equals('["f1","f2"]')); // json string
-      expect(muTask.filename, equals('["f1.txt","f2.txt"]')); // json string
-      expect(muTask.mimeType,
-          equals('["text/plain","text/plain"]')); // json string
-      var muTask2 = MultiUploadTask.fromJsonMap(muTask.toJsonMap());
-      expect(muTask2.taskId, equals(muTask.taskId));
-      expect(muTask2.fileFields, equals(muTask.fileFields));
-      expect(muTask2.filenames, equals(muTask.filenames));
-      expect(muTask2.mimeTypes, equals(muTask.mimeTypes));
-      expect(muTask2.fileField, equals(muTask.fileField));
-      expect(muTask2.filename, equals(muTask.filename));
-      expect(muTask2.mimeType, equals(muTask.mimeType));
-      // try with list of (String, String)
-      muTask = MultiUploadTask(
-          taskId: 'task2',
-          url: urlWithContentLength,
-          files: [('file1', 'f1.txt'), ('file2', 'f2.txt')]);
-      expect(muTask.fileFields, equals(['file1', 'file2']));
-      expect(muTask.filenames, equals(['f1.txt', 'f2.txt']));
-      expect(muTask.mimeTypes, equals(['text/plain', 'text/plain']));
-      expect(muTask.fileField, equals('["file1","file2"]'));
-      expect(muTask.filename, equals('["f1.txt","f2.txt"]'));
-      expect(muTask.mimeType, equals('["text/plain","text/plain"]'));
-      muTask2 = MultiUploadTask.fromJsonMap(muTask.toJsonMap());
-      expect(muTask2.taskId, equals(muTask.taskId));
-      expect(muTask2.fileFields, equals(muTask.fileFields));
-      expect(muTask2.filenames, equals(muTask.filenames));
-      expect(muTask2.mimeTypes, equals(muTask.mimeTypes));
-      expect(muTask2.fileField, equals(muTask.fileField));
-      expect(muTask2.filename, equals(muTask.filename));
-      expect(muTask2.mimeType, equals(muTask.mimeType));
-      //try with list of (String, String, String)
-      muTask = MultiUploadTask(
-          taskId: 'task3',
-          url: urlWithContentLength,
-          files: [('file1', 'f1.txt', 'text/plain'), ('file2', 'f2')]);
-      expect(muTask.fileFields, equals(['file1', 'file2']));
-      expect(muTask.filenames, equals(['f1.txt', 'f2']));
-      expect(
-          muTask.mimeTypes, equals(['text/plain', 'application/octet-stream']));
-      expect(muTask.fileField, equals('["file1","file2"]'));
-      expect(muTask.filename, equals('["f1.txt","f2"]'));
-      expect(
-          muTask.mimeType, equals('["text/plain","application/octet-stream"]'));
-      muTask2 = MultiUploadTask.fromJsonMap(muTask.toJsonMap());
-      expect(muTask2.taskId, equals(muTask.taskId));
-      expect(muTask2.fileFields, equals(muTask.fileFields));
-      expect(muTask2.filenames, equals(muTask.filenames));
-      expect(muTask2.mimeTypes, equals(muTask.mimeTypes));
-      expect(muTask2.fileField, equals(muTask.fileField));
-      expect(muTask2.filename, equals(muTask.filename));
-      expect(muTask2.mimeType, equals(muTask.mimeType));
-      // check taskType
-      expect(muTask.toJsonMap()['taskType'], equals('MultiUploadTask'));
-    });
-
-    testWidgets('copyWith', (widgetTester) async {
-      final complexTask = DownloadTask(
-          taskId: 'uniqueId',
-          url: postTestUrl,
-          filename: defaultFilename,
-          headers: {'Auth': 'Test'},
-          httpRequestMethod: 'PATCH',
-          post: 'TestPost',
-          directory: 'directory',
-          baseDirectory: BaseDirectory.temporary,
-          group: 'someGroup',
-          updates: Updates.statusAndProgress,
-          requiresWiFi: true,
-          retries: 5,
-          metaData: 'someMetaData');
-      final now = DateTime.now();
-      expect(now.difference(complexTask.creationTime).inMilliseconds,
-          lessThan(100));
-      final task = complexTask.copyWith(); // all the same
-      expect(task.taskId, equals(complexTask.taskId));
-      expect(task.url, equals(complexTask.url));
-      expect(task.filename, equals(complexTask.filename));
-      expect(task.headers, equals(complexTask.headers));
-      expect(task.httpRequestMethod, equals(complexTask.httpRequestMethod));
-      expect(task.post, equals(complexTask.post));
-      expect(task.directory, equals(complexTask.directory));
-      expect(task.baseDirectory, equals(complexTask.baseDirectory));
-      expect(task.group, equals(complexTask.group));
-      expect(task.updates, equals(complexTask.updates));
-      expect(task.requiresWiFi, equals(complexTask.requiresWiFi));
-      expect(task.retries, equals(complexTask.retries));
-      expect(task.retriesRemaining, equals(complexTask.retriesRemaining));
-      expect(task.retriesRemaining, equals(task.retries));
-      expect(task.metaData, equals(complexTask.metaData));
-      expect(task.creationTime, equals(complexTask.creationTime));
-    });
-
-    test('downloadTask url and urlQueryParameters', () {
-      final task0 = DownloadTask(
-          url: 'url with space',
-          filename: defaultFilename,
-          urlQueryParameters: {});
-      expect(task0.url, equals('url with space'));
-      final task1 = DownloadTask(
-          url: 'url',
-          filename: defaultFilename,
-          urlQueryParameters: {'param1': '1', 'param2': 'with space'});
-      expect(task1.url, equals('url?param1=1&param2=with space'));
-      final task2 = DownloadTask(
-          url: 'url?param0=0',
-          filename: defaultFilename,
-          urlQueryParameters: {'param1': '1', 'param2': 'with space'});
-      expect(task2.url, equals('url?param0=0&param1=1&param2=with space'));
-      final task4 =
-          DownloadTask(url: urlWithContentLength, filename: defaultFilename);
-      expect(task4.url, equals(urlWithContentLength));
-    });
-
-    test('downloadTask filename', () {
-      final task0 = DownloadTask(url: workingUrl);
-      expect(task0.filename.isNotEmpty, isTrue);
-      final task1 = DownloadTask(url: workingUrl, filename: defaultFilename);
-      expect(task1.filename, equals(defaultFilename));
-      expect(
-          () => DownloadTask(
-              url: workingUrl, filename: 'somedir/$defaultFilename'),
-          throwsArgumentError);
-    });
-
-    test('downloadTask directory', () {
-      final task0 = DownloadTask(url: workingUrl);
-      expect(task0.directory.isEmpty, isTrue);
-      final task1 = DownloadTask(url: workingUrl, directory: 'testDir');
-      expect(task1.directory, equals('testDir'));
-      expect(() => DownloadTask(url: workingUrl, directory: '/testDir'),
-          throwsArgumentError);
-    });
-
     testWidgets('DownloadTask withSuggestedFilename', (widgetTester) async {
       // delete old downloads
       task = DownloadTask(url: urlWithContentLength, filename: '5MB-test.ZIP');
@@ -2277,7 +2134,7 @@ void main() {
       expect(await FileDownloader().enqueue(task), equals(true));
       await someProgressCompleter.future;
       expect(await FileDownloader().pause(task), isTrue);
-      await Future.delayed(const Duration(milliseconds: 200));
+      await Future.delayed(const Duration(milliseconds: 500));
       expect(lastStatus, equals(TaskStatus.paused));
       // resume
       expect(await FileDownloader().resume(task), isTrue);
@@ -2374,7 +2231,7 @@ void main() {
       // before the initial pause command, or did not have time for two
       // pause/resume cycles -> shorten interval
       var interval = Platform.isAndroid || Platform.isIOS
-          ? const Duration(milliseconds: 750)
+          ? const Duration(milliseconds: 1500)
           : const Duration(milliseconds: 2000);
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       task = DownloadTask(

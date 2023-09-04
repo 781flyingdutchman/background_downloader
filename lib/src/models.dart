@@ -8,9 +8,10 @@ import 'package:mime/mime.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
-import 'web_downloader.dart' if (dart.library.io) 'desktop_downloader.dart';
 import 'exceptions.dart';
 import 'file_downloader.dart';
+import 'web_downloader.dart'
+    if (dart.library.io) 'desktop/desktop_downloader.dart';
 
 final _log = Logger('FileDownloader');
 
@@ -362,8 +363,9 @@ sealed class Task extends Request {
         'DownloadTask' => DownloadTask.fromJsonMap(jsonMap),
         'UploadTask' => UploadTask.fromJsonMap(jsonMap),
         'MultiUploadTask' => MultiUploadTask.fromJsonMap(jsonMap),
+        'ParallelDownloadTask' => ParallelDownloadTask.fromJsonMap(jsonMap),
         _ => throw ArgumentError(
-            'taskType not in [DownloadTask, UploadTask, MultiUploadTask]')
+            'taskType not in [DownloadTask, UploadTask, MultiUploadTask, ParallelDownloadTask]')
       };
 
   /// Returns the absolute path to the file represented by this task
@@ -503,6 +505,7 @@ final class DownloadTask extends Task {
   /// [requiresWiFi] if set, will not start download until WiFi is available.
   /// If not set may start download over cellular network
   /// [retries] if >0 will retry a failed download this many times
+  /// [allowPause] if true, allows pause command
   /// [metaData] user data
   /// [creationTime] time of task creation, 'now' by default.
   DownloadTask(
@@ -526,9 +529,10 @@ final class DownloadTask extends Task {
   /// Creates [DownloadTask] object from JsonMap
   DownloadTask.fromJsonMap(Map<String, dynamic> jsonMap)
       : assert(
-            jsonMap['taskType'] == 'DownloadTask',
+            ['DownloadTask', 'ParallelDownloadTask']
+                .contains(jsonMap['taskType']),
             'The provided JSON map is not'
-            ' a DownloadTask, because key "taskType" is not "DownloadTask".'),
+            ' a DownloadTask, because key "taskType" is not "DownloadTask" or "ParallelDownloadTask".'),
         super.fromJsonMap(jsonMap);
 
   @override
@@ -1026,6 +1030,122 @@ final class MultiUploadTask extends UploadTask {
   String get taskType => 'MultiUploadTask';
 }
 
+final class ParallelDownloadTask extends DownloadTask {
+  /// List of URLs to download the file from
+  final List<String> urls;
+
+  /// Number of chunks per URL
+  final int chunks;
+
+  /// Creates a [ParallelDownloadTask]
+  ///
+  /// A [ParallelDownloadTask] is a [DownloadTask] that downloads the file
+  /// from one or more URLs, and in one or more chunks per URL. The parallel
+  /// download may speed up download from slow or restrictive servers.
+  ///
+  /// [taskId] must be unique. A unique id will be generated if omitted
+  /// [url] properly encoded if necessary, can include query parameters
+  ///   and can be a list of urls, each providing the same file. The same
+  ///   [urlQueryParameters] and [headers] will be applied to all urls in the list
+  /// [urlQueryParameters] may be added and will be appended to the [url], must
+  ///   be properly encoded if necessary
+  /// [filename] of the file to save. If omitted, a random filename will be
+  /// generated
+  /// [headers] an optional map of HTTP request headers
+  /// [httpRequestMethod] the HTTP request method used (e.g. GET)
+  /// [directory] optional directory name, precedes [filename]
+  /// [baseDirectory] one of the base directories, precedes [directory]
+  /// [group] if set allows different callbacks or processing for different
+  /// groups
+  /// [updates] the kind of progress updates requested
+  /// [requiresWiFi] if set, will not start download until WiFi is available.
+  /// If not set may start download over cellular network
+  /// [retries] if >0 will retry a failed download this many times
+  /// [metaData] user data
+  /// [creationTime] time of task creation, 'now' by default.
+  ///
+  /// A [ParallelDownloadTask] cannot be paused or resumed on failure
+  ParallelDownloadTask(
+      {super.taskId,
+      required dynamic url,
+      super.urlQueryParameters,
+      super.filename,
+      super.headers,
+      super.httpRequestMethod,
+      this.chunks = 1,
+      super.directory,
+      super.baseDirectory,
+      super.group,
+      super.updates,
+      super.requiresWiFi,
+      super.retries,
+      super.metaData,
+      super.creationTime})
+      : assert(url is String || url is List<String>,
+            'The `url` parameter must be a string or a list of strings'),
+        assert(url is String || (url is List<String> && url.isNotEmpty),
+            'The list of urls must not be empty'),
+        urls = url is String
+            ? [_urlWithQueryParameters(url, urlQueryParameters)]
+            : List.from(
+                url.map((e) => _urlWithQueryParameters(e, urlQueryParameters))),
+        super(url: url is String ? url : url.first) {
+    retriesRemaining = 0; // chunk tasks will retry instead, based on [retries]
+  }
+
+  /// Creates [ParallelDownloadTask] object from JsonMap
+  ParallelDownloadTask.fromJsonMap(Map<String, dynamic> jsonMap)
+      : assert(
+            jsonMap['taskType'] == 'ParallelDownloadTask',
+            'The provided JSON map is not a ParallelDownloadTask, '
+            'because key "taskType" is not "ParallelDownloadTask".'),
+        urls = List.from(jsonMap['urls'] as List<dynamic>? ?? []),
+        chunks = jsonMap['chunks'] as int? ?? 1,
+        super.fromJsonMap(jsonMap);
+
+  @override
+  Map<String, dynamic> toJsonMap() =>
+      {...super.toJsonMap(), 'urls': urls, 'chunks': chunks};
+
+  @override
+  String get taskType => 'ParallelDownloadTask';
+
+  @override
+  ParallelDownloadTask copyWith(
+          {String? taskId,
+          String? url,
+          String? filename,
+          Map<String, String>? headers,
+          String? httpRequestMethod,
+          Object? post,
+          String? directory,
+          BaseDirectory? baseDirectory,
+          String? group,
+          Updates? updates,
+          bool? requiresWiFi,
+          int? retries,
+          int? retriesRemaining,
+          bool? allowPause,
+          String? metaData,
+          DateTime? creationTime}) =>
+      ParallelDownloadTask(
+          taskId: taskId ?? this.taskId,
+          url: url ?? urls,
+          filename: filename ?? this.filename,
+          headers: headers ?? this.headers,
+          httpRequestMethod: httpRequestMethod ?? this.httpRequestMethod,
+          chunks: chunks,
+          directory: directory ?? this.directory,
+          baseDirectory: baseDirectory ?? this.baseDirectory,
+          group: group ?? this.group,
+          updates: updates ?? this.updates,
+          requiresWiFi: requiresWiFi ?? this.requiresWiFi,
+          retries: retries ?? this.retries,
+          metaData: metaData ?? this.metaData,
+          creationTime: creationTime ?? this.creationTime)
+        ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
+}
+
 /// Return url String composed of the [url] and the
 /// [urlQueryParameters], if given
 String _urlWithQueryParameters(
@@ -1120,6 +1240,14 @@ class TaskStatusUpdate extends TaskUpdate {
         'exception': exception?.toJsonMap(),
         'responseBody': responseBody
       };
+
+  TaskStatusUpdate copyWith(
+          {Task? task,
+          TaskStatus? status,
+          TaskException? exception,
+          String? responseBody}) =>
+      TaskStatusUpdate(task ?? this.task, status ?? this.status,
+          exception ?? this.exception, responseBody ?? this.responseBody);
 }
 
 /// A progress update

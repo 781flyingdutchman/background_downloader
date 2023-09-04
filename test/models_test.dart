@@ -1,152 +1,143 @@
-import 'dart:convert';
-
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-final task = DownloadTask(
-    taskId: 'taskId',
-    url: 'url',
-    urlQueryParameters: {'a': 'b'},
-    filename: 'filename',
-    headers: {'c': 'd'},
-    httpRequestMethod: 'GET',
-    baseDirectory: BaseDirectory.temporary,
-    directory: 'dir',
-    group: 'group',
-    updates: Updates.statusAndProgress,
-    requiresWiFi: true,
-    retries: 5,
-    allowPause: true,
-    metaData: 'metaData',
-    creationTime: DateTime.fromMillisecondsSinceEpoch(1000));
-const downloadTaskJsonString =
-    '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask"}';
-const downloadTaskJsonStringDoubles =
-    '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5.0,"retriesRemaining":5.0,"creationTime":1000.0,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1.0,"group":"group","updates":3.0,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask"}';
+const workingUrl = 'https://google.com';
+const failingUrl = 'https://avmaps-dot-bbflightserver-hrd.appspot'
+    '.com/public/get_current_app_data?key=background_downloader_integration_test';
+const urlWithContentLength = 'https://storage.googleapis'
+    '.com/approachcharts/test/5MB-test.ZIP';
+const urlWithLongContentLength = 'https://storage.googleapis'
+    '.com/approachcharts/test/57MB-test.ZIP';
+const getTestUrl =
+    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_get_data';
+const getRedirectTestUrl =
+    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_get_redirect';
+const postTestUrl =
+    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_post_data';
+const uploadTestUrl =
+    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_upload_file';
+const uploadBinaryTestUrl =
+    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_upload_binary_file';
+const uploadMultiTestUrl =
+    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_multi_upload_file';
+const urlWithContentLengthFileSize = 6207471;
 
-final uploadTask = UploadTask(
-    taskId: 'taskId',
-    url: 'url',
-    urlQueryParameters: {'a': 'b'},
-    filename: 'filename',
-    headers: {'c': 'd'},
-    httpRequestMethod: 'PUT',
-    fileField: 'fileField',
-    fields: {'e': 'f'},
-    baseDirectory: BaseDirectory.temporary,
-    directory: 'dir',
-    group: 'group',
-    updates: Updates.statusAndProgress,
-    requiresWiFi: true,
-    retries: 5,
-    metaData: 'metaData',
-    creationTime: DateTime.fromMillisecondsSinceEpoch(1000));
-const uploadTaskJsonString =
-    '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"PUT","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":false,"metaData":"metaData","fileField":"fileField","mimeType":"application/octet-stream","fields":{"e":"f"},"taskType":"UploadTask"}';
-const uploadTaskJsonStringDoubles =
-    '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"PUT","post":null,"retries":5.0,"retriesRemaining":5.0,"creationTime":1000.0,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1.0,"group":"group","updates":3.0,"requiresWiFi":true,"allowPause":false,"metaData":"metaData","fileField":"fileField","mimeType":"application/octet-stream","fields":{"e":"f"},"taskType":"UploadTask"}';
+const defaultFilename = 'google.html';
+const postFilename = 'post.txt';
+const uploadFilename = 'a_file.txt';
+const uploadFilename2 = 'second_file.txt';
+const largeFilename = '5MB-test.ZIP';
+
+var task = DownloadTask(url: workingUrl, filename: defaultFilename);
+
+var retryTask =
+DownloadTask(url: failingUrl, filename: defaultFilename, retries: 3);
+
+var uploadTask = UploadTask(url: uploadTestUrl, filename: uploadFilename);
+var uploadTaskBinary = uploadTask.copyWith(post: 'binary');
+
 
 void main() {
-  group('JSON conversion', () {
-    test('DownloadTask', () {
-      final task2 = Task.createFromJsonMap(jsonDecode(downloadTaskJsonString));
-      expect(task2, equals(task));
-      expect(jsonEncode(task2.toJsonMap()), equals(downloadTaskJsonString));
-      final task3 =
-          Task.createFromJsonMap(jsonDecode(downloadTaskJsonStringDoubles));
-      expect(jsonEncode(task3.toJsonMap()), equals(downloadTaskJsonString));
-    });
-
-    test('UploadTask', () {
-      final task2 = Task.createFromJsonMap(jsonDecode(uploadTaskJsonString));
-      expect(jsonEncode(task2.toJsonMap()), equals(uploadTaskJsonString));
-      final task3 =
-          Task.createFromJsonMap(jsonDecode(uploadTaskJsonStringDoubles));
-      expect(jsonEncode(task3.toJsonMap()), equals(uploadTaskJsonString));
-    });
-
-    test('TaskStatusUpdate', () {
-      final statusUpdate = TaskStatusUpdate(
-          task, TaskStatus.failed, TaskConnectionException('test'));
-      const expected =
-          '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask","taskStatus":4,"exception":{"type":"TaskConnectionException","description":"test"}}';
-      expect(jsonEncode(statusUpdate.toJsonMap()), equals(expected));
-      final update2 = TaskStatusUpdate.fromJsonMap(jsonDecode(expected));
-      expect(update2.task, equals(statusUpdate.task));
-      expect(update2.status, equals(TaskStatus.failed));
-      expect(update2.exception?.description, equals('test'));
-      expect(update2.exception is TaskConnectionException, isTrue);
-      const withDoubles =
-          '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5.0,"retriesRemaining":5.0,"creationTime":1000.0,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1.0,"group":"group","updates":3.0,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask","taskStatus":4.0,"exception":{"type":"TaskConnectionException","description":"test"}}';
-      expect(
-          jsonEncode(TaskStatusUpdate.fromJsonMap(jsonDecode(withDoubles))
-              .toJsonMap()),
-          equals(expected));
-    });
-
-    test('TaskProgressUpdate', () {
-      final progressUpdate = TaskProgressUpdate(task, 1, 123);
-      const expected =
-          '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask","progress":1.0,"expectedFileSize":123}';
-      expect(jsonEncode(progressUpdate.toJsonMap()), equals(expected));
-      final update2 = TaskProgressUpdate.fromJsonMap(jsonDecode(expected));
-      expect(update2.task, equals(progressUpdate.task));
-      expect(update2.progress, equals(1));
-      expect(update2.expectedFileSize, equals(123));
-      const withDoubles =
-          '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5.0,"retriesRemaining":5.0,"creationTime":1000.0,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1.0,"group":"group","updates":3.0,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask","progress":1,"expectedFileSize":123.0}';
-      expect(
-          jsonEncode(TaskProgressUpdate.fromJsonMap(jsonDecode(withDoubles))
-              .toJsonMap()),
-          equals(expected));
-    });
-
-    test('TaskRecord', () {
-      final taskRecord =
-          TaskRecord(task, TaskStatus.failed, 1, 123, TaskUrlException('test'));
-      const expected =
-          '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask","status":4,"progress":1.0,"expectedFileSize":123,"exception":{"type":"TaskUrlException","description":"test"}}';
-      expect(jsonEncode(taskRecord.toJsonMap()), equals(expected));
-      final update2 = TaskRecord.fromJsonMap(jsonDecode(expected));
-      expect(update2.task, equals(taskRecord.task));
-      expect(update2.status, equals(TaskStatus.failed));
-      expect(update2.exception?.description, equals('test'));
-      expect(update2.exception is TaskUrlException, isTrue);
-      expect(update2.progress, equals(1));
-      expect(update2.expectedFileSize, equals(123));
-      const withDoubles =
-          '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5.0,"retriesRemaining":5.0,"creationTime":1000.0,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask","status":4.0,"progress":1,"expectedFileSize":123.0,"exception":{"type":"TaskUrlException","description":"test"}}';
-      expect(
-          jsonEncode(
-              TaskRecord.fromJsonMap(jsonDecode(withDoubles)).toJsonMap()),
-          equals(expected));
-    });
-
-    test('ResumeData', () {
-      final resumeData = ResumeData(task, 'data', 123, 'tag');
-      const expected =
-          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask"},"data":"data","requiredStartByte":123,"eTag":"tag"}';
-      expect(jsonEncode(resumeData.toJsonMap()), equals(expected));
-      final update2 = ResumeData.fromJsonMap(jsonDecode(expected));
-      expect(update2.task, equals(resumeData.task));
-      expect(update2.data, equals('data'));
-      expect(update2.requiredStartByte, equals(123));
-      expect(update2.eTag, equals('tag'));
-      const withDoubles =
-          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5.0,"retriesRemaining":5.0,"creationTime":1000.0,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1.0,"group":"group","updates":3.0,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask"},"data":"data","requiredStartByte":123.0,"eTag":"tag"}';
-      expect(
-          jsonEncode(
-              ResumeData.fromJsonMap(jsonDecode(withDoubles)).toJsonMap()),
-          equals(expected));
-      final resumeData2 = ResumeData(task, 'data', 123, null);
-      const expected2 =
-          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask"},"data":"data","requiredStartByte":123,"eTag":null}';
-      expect(jsonEncode(resumeData2.toJsonMap()), equals(expected2));
-      final update3 = ResumeData.fromJsonMap(jsonDecode(expected2));
-      expect(update3.task, equals(resumeData.task));
-      expect(update3.data, equals('data'));
-      expect(update3.requiredStartByte, equals(123));
-      expect(update3.eTag, isNull);
-    });
+  test('TaskProgressUpdate', () {
+    final task = DownloadTask(url: 'http://google.com');
+    var update = TaskProgressUpdate(task, 0.1);
+    expect(update.hasExpectedFileSize, isFalse);
+    expect(update.hasNetworkSpeed, isFalse);
+    expect(update.hasTimeRemaining, isFalse);
+    expect(update.networkSpeedAsString, equals('-- MB/s'));
+    expect(update.timeRemainingAsString, equals('--:--'));
+    update =
+        TaskProgressUpdate(task, 0.1, 123, 0.2, const Duration(seconds: 30));
+    expect(update.hasExpectedFileSize, isTrue);
+    expect(update.hasNetworkSpeed, isTrue);
+    expect(update.hasTimeRemaining, isTrue);
+    expect(update.networkSpeedAsString, equals('200 kB/s'));
+    expect(update.timeRemainingAsString, equals('00:30'));
+    update = TaskProgressUpdate(task, 0.1, 123, 2, const Duration(seconds: 90));
+    expect(update.networkSpeedAsString, equals('2 MB/s'));
+    expect(update.timeRemainingAsString, equals('01:30'));
+    update =
+        TaskProgressUpdate(task, 0.1, 123, 1.1, const Duration(seconds: 3610));
+    expect(update.networkSpeedAsString, equals('1 MB/s'));
+    expect(update.timeRemainingAsString, equals('1:00:10'));
   });
+
+  test('copyWith', () async {
+    final complexTask = DownloadTask(
+        taskId: 'uniqueId',
+        url: postTestUrl,
+        filename: defaultFilename,
+        headers: {'Auth': 'Test'},
+        httpRequestMethod: 'PATCH',
+        post: 'TestPost',
+        directory: 'directory',
+        baseDirectory: BaseDirectory.temporary,
+        group: 'someGroup',
+        updates: Updates.statusAndProgress,
+        requiresWiFi: true,
+        retries: 5,
+        metaData: 'someMetaData');
+    final now = DateTime.now();
+    expect(now.difference(complexTask.creationTime).inMilliseconds,
+        lessThan(100));
+    final task = complexTask.copyWith(); // all the same
+    expect(task.taskId, equals(complexTask.taskId));
+    expect(task.url, equals(complexTask.url));
+    expect(task.filename, equals(complexTask.filename));
+    expect(task.headers, equals(complexTask.headers));
+    expect(task.httpRequestMethod, equals(complexTask.httpRequestMethod));
+    expect(task.post, equals(complexTask.post));
+    expect(task.directory, equals(complexTask.directory));
+    expect(task.baseDirectory, equals(complexTask.baseDirectory));
+    expect(task.group, equals(complexTask.group));
+    expect(task.updates, equals(complexTask.updates));
+    expect(task.requiresWiFi, equals(complexTask.requiresWiFi));
+    expect(task.retries, equals(complexTask.retries));
+    expect(task.retriesRemaining, equals(complexTask.retriesRemaining));
+    expect(task.retriesRemaining, equals(task.retries));
+    expect(task.metaData, equals(complexTask.metaData));
+    expect(task.creationTime, equals(complexTask.creationTime));
+  });
+
+  test('downloadTask url and urlQueryParameters', () {
+    final task0 = DownloadTask(
+        url: 'url with space',
+        filename: defaultFilename,
+        urlQueryParameters: {});
+    expect(task0.url, equals('url with space'));
+    final task1 = DownloadTask(
+        url: 'url',
+        filename: defaultFilename,
+        urlQueryParameters: {'param1': '1', 'param2': 'with space'});
+    expect(task1.url, equals('url?param1=1&param2=with space'));
+    final task2 = DownloadTask(
+        url: 'url?param0=0',
+        filename: defaultFilename,
+        urlQueryParameters: {'param1': '1', 'param2': 'with space'});
+    expect(task2.url, equals('url?param0=0&param1=1&param2=with space'));
+    final task4 =
+    DownloadTask(url: urlWithContentLength, filename: defaultFilename);
+    expect(task4.url, equals(urlWithContentLength));
+  });
+
+  test('downloadTask filename', () {
+    final task0 = DownloadTask(url: workingUrl);
+    expect(task0.filename.isNotEmpty, isTrue);
+    final task1 = DownloadTask(url: workingUrl, filename: defaultFilename);
+    expect(task1.filename, equals(defaultFilename));
+    expect(
+            () => DownloadTask(
+            url: workingUrl, filename: 'somedir/$defaultFilename'),
+        throwsArgumentError);
+  });
+
+  test('downloadTask directory', () {
+    final task0 = DownloadTask(url: workingUrl);
+    expect(task0.directory.isEmpty, isTrue);
+    final task1 = DownloadTask(url: workingUrl, directory: 'testDir');
+    expect(task1.directory, equals('testDir'));
+    expect(() => DownloadTask(url: workingUrl, directory: '/testDir'),
+        throwsArgumentError);
+  });
+
 }
