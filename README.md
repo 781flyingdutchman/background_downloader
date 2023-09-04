@@ -50,7 +50,7 @@ final result = await FileDownloader().download(task,
 );
 
 // Act on the result
-switch (result) {
+switch (result.status) {
   case TaskStatus.complete:
     print('Success!');
 
