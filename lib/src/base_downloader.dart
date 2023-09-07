@@ -48,7 +48,7 @@ abstract base class BaseDownloader {
   final notificationConfigs = <TaskNotificationConfig>[];
 
   /// StreamController for [TaskUpdate] updates
-  var updates = StreamController<TaskUpdate>();
+  var updates = StreamController<TaskUpdate>.broadcast();
 
   /// Groups tracked in persistent database
   final trackedGroups = <String?>{};
