@@ -23,7 +23,26 @@ import kotlin.math.absoluteValue
 import kotlin.math.min
 import kotlin.random.Random
 
-
+/**
+/ A ParallelDownloadTask pings the server to get the content-length of the
+/ download, then creates a list of [Chunk]s, each representing a portion
+/ of the download.  Each chunk-task has its group set to 'chunk' and
+/ has the taskId of the parent ParallelDownloadTask in its
+/ [Task.metaData] field.
+/ The isolate sends 'enqueue' messages back to the NativeDownloader to
+/ start each chunk-task, just like any other download task.
+/ Messages with group 'chunk' are intercepted in the NativeDownloader,
+/ where the sendPort for the isolate running the parent task is
+/ looked up, and the update is sent to the isolate via that sendPort.
+/ In the isolate, the update is processed and the new status/progress
+/ of the ParallelDownloadTask is determined. If the status/progress has
+/ changed, an update is sent and the status is processed (e.g., a complete
+/ status triggers the piecing together of the downloaded file from
+/ its chunk pieces).
+/
+/ Similarly, pause and cancel commands are sent to all chunk tasks before
+/ updating the status of the parent ParallelDownloadTask
+ */
 class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: WorkerParameters) :
     TaskWorker(applicationContext, workerParams) {
 
@@ -156,17 +175,16 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
         val chunk = chunks.firstOrNull { it.task.taskId == chunkTaskId }
             ?: return // chunk is not part of this parent task
         val chunkTask = chunk.task
-        Log.w(TAG, "Received $status for ${chunkTask.taskId}")
-
+        Log.wtf(TAG, "Received $status for ${chunkTask.taskId}")
         // first check for fail -> retry
         if (status == TaskStatus.failed && chunkTask.retriesRemaining > 0) {
             chunkTask.retriesRemaining--
-            val waitTime = 2L shl (min(chunkTask.retries - chunkTask.retriesRemaining - 1, 8))
+            val waitTimeSeconds = 2 shl (min(chunkTask.retries - chunkTask.retriesRemaining - 1, 8))
             Log.i(
                 TAG,
-                "Chunk task with taskId ${chunkTask.taskId} failed, waiting ${waitTime / 1000} seconds before retrying. ${chunkTask.retriesRemaining} retries remaining"
+                "Chunk task with taskId ${chunkTask.taskId} failed, waiting $waitTimeSeconds seconds before retrying. ${chunkTask.retriesRemaining} retries remaining"
             )
-            delay(waitTime)
+            delay(waitTimeSeconds * 1000L)
             postOnBackgroundChannel(
                 "enqueueChild",
                 task,
@@ -286,8 +304,12 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
      *
      * Accomplished by sending list of taskIds to cancel to the NativeDownloader
      */
-    private suspend fun cancelAllChunkTasks() {
-        postOnBackgroundChannel("cancelTasksWithId", task, chunks.map { it.task.taskId })
+    suspend fun cancelAllChunkTasks() {
+        postOnBackgroundChannel(
+            "cancelTasksWithId",
+            task,
+            gson.toJson(chunks.map { it.task.taskId })
+        )
     }
 
     /**
@@ -296,6 +318,7 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
      * Accomplished by sending list of tasks to cancel to the NativeDownloader
      */
     private suspend fun pauseAllChunkTasks() {
+        //TODO pause
         postOnBackgroundChannel("pauseTasks", task, chunks.map { gson.toJson(it.task) })
     }
 

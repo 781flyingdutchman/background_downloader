@@ -179,6 +179,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         suspend fun cancelActiveTaskWithId(
             context: Context, taskId: String, workManager: WorkManager
         ): Boolean {
+            // cancel chunk tasks if this is a ParallelDownloadTask
+            parallelDownloadTaskWorkers[taskId]?.cancelAllChunkTasks()
             val workInfos = withContext(Dispatchers.IO) {
                 workManager.getWorkInfosByTag("taskId=$taskId").get()
             }

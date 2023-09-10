@@ -191,6 +191,8 @@ void main() {
       expect(lastStatus, equals(TaskStatus.failed));
     });
 
+    //TODO add 404 test (Not Found)
+
     test('retries - must modify transferBytes to fail', () async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(retryTask), isTrue);
@@ -202,11 +204,13 @@ void main() {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
-      expect(await FileDownloader().enqueue(task.copyWith(updates: Updates.statusAndProgress)), isTrue);
+      expect(await FileDownloader().enqueue(task.copyWith(url: urlWithLongContentLength, updates: Updates.statusAndProgress)), isTrue);
       await someProgressCompleter.future;
+      expect(lastStatus, equals(TaskStatus.running));
       expect(await FileDownloader().cancelTaskWithId(task.taskId), isTrue);
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.canceled));
+      await Future.delayed(const Duration(seconds: 3));
     });
   });
 }

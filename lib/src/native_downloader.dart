@@ -136,7 +136,8 @@ abstract base class NativeDownloader extends BaseDownloader {
           await FileDownloader().enqueue(childTask);
 
         // from ParallelDownloadTask
-        case ('cancelTasksWithId', List<String> taskIds):
+        case ('cancelTasksWithId', String listOfTaskIdsJson):
+          final taskIds = List<String>.from(jsonDecode(listOfTaskIdsJson));
           await FileDownloader().cancelTasksWithIds(taskIds);
 
         //from ParallelDownloadTask
@@ -152,6 +153,7 @@ abstract base class NativeDownloader extends BaseDownloader {
           }
 
         default:
+          log.warning('Background channel: no match for message $message');
           throw StateError('Background channel: no match for message $message');
       }
     });

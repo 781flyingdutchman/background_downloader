@@ -1330,6 +1330,7 @@ class TaskProgressUpdate extends TaskUpdate {
 }
 
 // Progress values representing a status
+const progressRunning = 0.0;
 const progressComplete = 1.0;
 const progressFailed = -1.0;
 const progressCanceled = -2.0;

@@ -27,6 +27,9 @@ import 'isolate.dart';
 /// changed, an update is sent and the status is processed (e.g., a complete
 /// status triggers the piecing together of the downloaded file from
 /// its chunk pieces).
+///
+/// Similarly, pause and cancel commands are sent to all chunk tasks before
+/// updating the status of the parent [ParallelDownloadTask]
 
 late final ParallelDownloadTask parentTask;
 var chunks = <Chunk>[]; // chunks associated with this download

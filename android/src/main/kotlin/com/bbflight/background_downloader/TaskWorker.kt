@@ -87,10 +87,9 @@ open class TaskWorker(
             method: String, task: Task, arg: Any
         ): Boolean {
             val runningOnUIThread = Looper.myLooper() == Looper.getMainLooper()
-            Log.wtf(TAG, "runningOnUIThread = $runningOnUIThread")
             return coroutineScope {
                 val success = CompletableDeferred<Boolean>()
-                val result = Handler(Looper.getMainLooper()).post {
+                Handler(Looper.getMainLooper()).post {
                     try {
                         val argList = mutableListOf<Any>(
                             taskToJsonString(task)
@@ -121,7 +120,6 @@ open class TaskWorker(
                         }
                     }
                 }
-                Log.wtf(TAG, "Result=$result")
                 // don't wait for result of post if running on UI thread -> true
                 return@coroutineScope runningOnUIThread || success.await()
             }
@@ -354,6 +352,7 @@ open class TaskWorker(
     }
 
     lateinit var task: Task
+
     // properties related to pause/resume functionality and progress
     var taskCanResume = false // whether task is able to resume
     var isResume = false // whether task is a resume
@@ -589,6 +588,7 @@ open class TaskWorker(
                             doneCompleter.complete(TaskStatus.failed)
                             break
                         }
+                        delay(10) //TODO remove
                         if (numBytes > 0) {
                             outputStream.write(dataBuffer, 0, numBytes)
                             bytesTotal += numBytes
@@ -653,8 +653,11 @@ open class TaskWorker(
         expectedFileSize: Long,
         task: Task
     ) {
-        //TODO network speed and time remaining appear not to work
         val now = currentTimeMillis()
+        if (task.isParallelDownloadTask()) {
+            // approximate based on aggregate progress
+            bytesTotal = (progress * expectedFileSize).toLong()
+        }
         val timeSinceLastUpdate = now - lastProgressUpdateTime
         lastProgressUpdateTime = now
         val bytesSinceLastUpdate = bytesTotal - bytesTotalAtLastProgressUpdate
@@ -721,7 +724,8 @@ open class TaskWorker(
      * [networkSpeed] and [timeRemaining] are only relevant for [NotificationType.running]
      */
     @SuppressLint("MissingPermission")
-    suspend fun updateNotification(notificationType: NotificationType, progress: Double = 2.0,
+    suspend fun updateNotification(
+        notificationType: NotificationType, progress: Double = 2.0,
         timeRemaining: Long = -1000
     ) {
         val notification = when (notificationType) {
