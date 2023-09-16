@@ -53,7 +53,8 @@ var parallelDownloadContentLength = -1;
 ///
 /// Incoming messages from the [DesktopDownloader] are received in the
 /// [listenToIncomingMessages] function
-Future<void> doParallelDownloadTask(ParallelDownloadTask task,
+Future<void> doParallelDownloadTask(
+    ParallelDownloadTask task,
     String filePath,
     ResumeData? resumeData,
     bool isResume,
@@ -68,7 +69,7 @@ Future<void> doParallelDownloadTask(ParallelDownloadTask task,
       chunks = createChunks(task, response.headers);
       for (var chunk in chunks) {
         // Ask main isolate to enqueue the child task. Updates related to the child
-        // will be sent to this isolate (the child's metaData is the parent taskId).
+        // will be sent to this isolate (the child's metaData contains the parent taskId).
         sendPort.send(('enqueueChild', chunk.task));
       }
       // wait for all chunk tasks to complete
@@ -85,6 +86,8 @@ Future<void> doParallelDownloadTask(ParallelDownloadTask task,
   } else {
     // resume: reconstruct [chunks] and wait for all chunk tasks to complete
     chunks = List.from(jsonDecode(resumeData!.data, reviver: Chunk.reviver));
+    parallelDownloadContentLength = chunks.fold(0,
+        (previousValue, chunk) => previousValue + chunk.to - chunk.from + 1);
     final statusUpdate = await parallelTaskStatusUpdateCompleter.future;
     processStatusUpdateInIsolate(task, statusUpdate.status, sendPort);
   }
@@ -92,8 +95,8 @@ Future<void> doParallelDownloadTask(ParallelDownloadTask task,
 
 /// Process incoming [update] for a chunk, within the [ParallelDownloadTask]
 /// represented by [task]
-Future<void> chunkStatusUpdate(Task task, TaskStatusUpdate update,
-    SendPort sendPort) async {
+Future<void> chunkStatusUpdate(
+    Task task, TaskStatusUpdate update, SendPort sendPort) async {
   final chunkTask = update.task;
   sendPort.send(('log', 'Received ${update.status} for ${chunkTask.taskId}'));
   // first check for fail -> retry
@@ -101,12 +104,11 @@ Future<void> chunkStatusUpdate(Task task, TaskStatusUpdate update,
     chunkTask.decreaseRetriesRemaining();
     final waitTime = Duration(
         seconds:
-        2 << min(chunkTask.retries - chunkTask.retriesRemaining - 1, 8));
+            2 << min(chunkTask.retries - chunkTask.retriesRemaining - 1, 8));
     log.finer(
-        'Chunk task with taskId ${chunkTask.taskId} failed, waiting ${waitTime
-            .inSeconds}'
-            ' seconds before retrying. ${chunkTask.retriesRemaining}'
-            ' retries remaining');
+        'Chunk task with taskId ${chunkTask.taskId} failed, waiting ${waitTime.inSeconds}'
+        ' seconds before retrying. ${chunkTask.retriesRemaining}'
+        ' retries remaining');
     Future.delayed(waitTime, () async {
       // after delay, resume or enqueue task again if it's still waiting
       sendPort.send(('enqueueChild', chunkTask));
@@ -137,7 +139,7 @@ Future<void> chunkStatusUpdate(Task task, TaskStatusUpdate update,
           break;
 
         default:
-        // ignore all other status updates
+          // ignore all other status updates
           break;
       }
     }
@@ -170,17 +172,17 @@ TaskStatusUpdate? updateChunkStatus(TaskStatusUpdate update) {
 /// status updates for the [chunkGroup]
 TaskStatusUpdate? parentTaskStatusUpdate() {
   final failed = chunks.firstWhereOrNull(
-          (chunk) => chunk.statusUpdate.status == TaskStatus.failed);
+      (chunk) => chunk.statusUpdate.status == TaskStatus.failed);
   if (failed != null) {
     return failed.statusUpdate.copyWith(task: parentTask);
   }
   final notFound = chunks.firstWhereOrNull(
-          (chunk) => chunk.statusUpdate.status == TaskStatus.notFound);
+      (chunk) => chunk.statusUpdate.status == TaskStatus.notFound);
   if (notFound != null) {
     return notFound.statusUpdate.copyWith(task: parentTask);
   }
   final allComplete =
-  chunks.every((chunk) => chunk.statusUpdate.status == TaskStatus.complete);
+      chunks.every((chunk) => chunk.statusUpdate.status == TaskStatus.complete);
   if (allComplete) {
     return chunks.first.statusUpdate.copyWith(task: parentTask);
   }
@@ -189,15 +191,19 @@ TaskStatusUpdate? parentTaskStatusUpdate() {
 
 /// Process incoming [update] for a chunk, within the [ParallelDownloadTask]
 /// represented by [task]
-void chunkProgressUpdate(Task task, TaskProgressUpdate update,
-    SendPort sendPort) {
+void chunkProgressUpdate(
+    Task task, TaskProgressUpdate update, SendPort sendPort) {
   // update of child task of a [ParallelDownloadTask], only for regular
   // progress updates
+  final now = DateTime.now();
   if (update.progress > 0 && update.progress < 1) {
-    final newProgressUpdate = updateChunkProgress(update);
-    if (newProgressUpdate != null) {
-      processProgressUpdateInIsolate(task, newProgressUpdate.progress, sendPort,
+    final parentProgressUpdate = updateChunkProgress(update);
+    if (parentProgressUpdate != null &&
+        shouldSendProgressUpdate(parentProgressUpdate.progress, now)) {
+      processProgressUpdateInIsolate(task, parentProgressUpdate.progress, sendPort,
           parallelDownloadContentLength);
+      lastProgressUpdate = parentProgressUpdate.progress;
+      nextProgressUpdateTime = now.add(const Duration(milliseconds: 500));
     }
   }
 }
@@ -226,9 +232,9 @@ TaskProgressUpdate? updateChunkProgress(TaskProgressUpdate update) {
 /// so we just calculate the average progress
 TaskProgressUpdate parentTaskProgress() {
   final avgProgress = chunks.fold(
-      0.0,
+          0.0,
           (previousValue, chunk) =>
-      previousValue + chunk.progressUpdate.progress) /
+              previousValue + chunk.progressUpdate.progress) /
       chunks.length;
   return TaskProgressUpdate(parentTask, avgProgress);
 }
@@ -260,8 +266,7 @@ void cancelAllChunkTasks(SendPort sendPort) {
 /// [DownloadTask]s. This is done in [DesktopDownloader.resume]
 void pauseParallelDownloadTask(ParallelDownloadTask task, SendPort sendPort) {
   pauseAllChunkTasks(sendPort);
-  sendPort.send(
-      ('resumeData', jsonEncode(chunks), -1, null));
+  sendPort.send(('resumeData', jsonEncode(chunks), -1, null));
   parallelTaskStatusUpdateCompleter
       .complete(TaskStatusUpdate(task, TaskStatus.paused));
 }
@@ -292,7 +297,7 @@ Future<TaskStatus> stitchChunks() async {
       final inStream = inFile.openRead();
       final doneCompleter = Completer<bool>();
       subscription = inStream.listen(
-              (bytes) {
+          (bytes) {
             outStream?.add(bytes);
           },
           onDone: () => doneCompleter.complete(true),
@@ -333,8 +338,8 @@ Future<TaskStatus> stitchChunks() async {
 ///
 /// Throws a StateError if any information is missing, which should lead
 /// to a failure of the [ParallelDownloadTask]
-List<Chunk> createChunks(ParallelDownloadTask task,
-    Map<String, String> headers) {
+List<Chunk> createChunks(
+    ParallelDownloadTask task, Map<String, String> headers) {
   final numChunks = task.urls.length * task.chunks;
   final contentLength = int.parse(headers.entries
       .firstWhere((element) => element.key.toLowerCase() == 'content-length')
@@ -344,7 +349,7 @@ List<Chunk> createChunks(ParallelDownloadTask task,
   }
   parallelDownloadContentLength = contentLength;
   headers.entries.firstWhere((element) =>
-  element.key.toLowerCase() == 'accept-ranges' && element.value == 'bytes');
+      element.key.toLowerCase() == 'accept-ranges' && element.value == 'bytes');
   final chunkSize = (contentLength / numChunks).ceil();
   return [
     for (var i = 0; i < numChunks; i++)

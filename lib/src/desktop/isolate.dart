@@ -18,13 +18,12 @@ import 'parallel_download_isolate.dart';
 import 'upload_isolate.dart';
 
 /// global variables, unique to this isolate
-var bytesTotal = 0;
-var startByte = 0;
-String? eTagHeader;
+var bytesTotal = 0; // total bytes read in this download session
+var startByte = 0; // starting position within the original range, used for resume
 var lastProgressUpdateTime = DateTime.fromMillisecondsSinceEpoch(0);
+var nextProgressUpdateTime = DateTime.fromMillisecondsSinceEpoch(0);
 var lastProgressUpdate = 0.0;
 var bytesTotalAtLastProgressUpdate = 0;
-var nextProgressUpdateTime = DateTime.fromMillisecondsSinceEpoch(0);
 
 var networkSpeed = 0.0; // in MB/s
 var isPaused = false;
@@ -187,15 +186,12 @@ Future<TaskStatus> transferBytes(
             (bytesTotal + startByte).toDouble() / (contentLength + startByte),
             0.999);
         final now = DateTime.now();
-        if (contentLength > 0 &&
-            (progress - lastProgressUpdate > 0.02 &&
-                now.isAfter(nextProgressUpdateTime))) {
+        if (contentLength > 0 && shouldSendProgressUpdate(progress, now)) {
           processProgressUpdateInIsolate(
               task, progress, sendPort, contentLength + startByte);
           lastProgressUpdate = progress;
           nextProgressUpdateTime = now.add(const Duration(milliseconds: 500));
         }
-        //throw const FileSystemException('Forced an error'); //TODO remove
       },
       onDone: () => streamResultStatus.complete(TaskStatus.complete),
       onError: (e) {
@@ -376,4 +372,11 @@ Future<String?> responseContent(http.StreamedResponse response) {
         'Could not read response content from httpResponseCode ${response.statusCode}: $e');
     return Future.value(null);
   }
+}
+
+/// Returns true if [currentProgress] > [lastProgressUpdate] + threshold and
+/// [now] > [nextProgressUpdateTime]
+bool shouldSendProgressUpdate(double currentProgress, DateTime now) {
+  return currentProgress - lastProgressUpdate > 0.02 &&
+      now.isAfter(nextProgressUpdateTime);
 }

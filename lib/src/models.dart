@@ -1079,6 +1079,7 @@ final class ParallelDownloadTask extends DownloadTask {
       super.updates,
       super.requiresWiFi,
       super.retries,
+      super.allowPause,
       super.metaData,
       super.creationTime})
       : assert(url is String || url is List<String>,
@@ -1141,6 +1142,7 @@ final class ParallelDownloadTask extends DownloadTask {
           updates: updates ?? this.updates,
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
           retries: retries ?? this.retries,
+          allowPause: allowPause ?? this.allowPause,
           metaData: metaData ?? this.metaData,
           creationTime: creationTime ?? this.creationTime)
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;

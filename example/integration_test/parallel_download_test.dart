@@ -34,6 +34,7 @@ const urlWithContentLength = 'https://storage.googleapis'
 const urlWithLongContentLength = 'https://storage.googleapis'
     '.com/approachcharts/test/57MB-test.ZIP';
 const urlWithContentLengthFileSize = 6207471;
+const urlWithLongContentLengthFileSize = 59673498;
 
 const defaultFilename = '5MB-test.ZIP';
 
@@ -145,7 +146,7 @@ void main() {
   group('Basic', () {
     test('simple enqueue, 2 chunks, 1 url', () async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
-      expect(await FileDownloader().enqueue(task), isTrue);
+      expect(await FileDownloader().enqueue(task.copyWith(url: urlWithContentLength)), isTrue);
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.complete));
       final file = File(await task.filePath());
@@ -172,15 +173,15 @@ void main() {
           taskStatusCallback: statusCallback,
           taskProgressCallback: (update) {
             expect(update.progress, greaterThan(lastProgress));
-            print('Progress #${numProgressUpdates++} = ${update.progress}');
+            print('${DateTime.now()}: Progress #${numProgressUpdates++} = ${update.progress}, ${update.networkSpeedAsString}, ${update.timeRemainingAsString}');
             lastProgress = update.progress;
           });
-      expect(await FileDownloader().enqueue(task.copyWith(updates: Updates.statusAndProgress)), isTrue);
+      expect(await FileDownloader().enqueue(task.copyWith(url: urlWithLongContentLength, updates: Updates.statusAndProgress)), isTrue);
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.complete));
       final file = File(await task.filePath());
       expect(file.existsSync(), isTrue);
-      expect(await file.length(), equals(urlWithContentLengthFileSize));
+      expect(await file.length(), equals(urlWithLongContentLengthFileSize));
       expect(numProgressUpdates, greaterThan(1));
     });
 
@@ -211,6 +212,28 @@ void main() {
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.canceled));
       await Future.delayed(const Duration(seconds: 3));
+    });
+
+    test('pause', () async {
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      task = task.copyWith(url: urlWithLongContentLength, updates: Updates.statusAndProgress, allowPause: true);
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await someProgressCompleter.future;
+      expect(lastStatus, equals(TaskStatus.running));
+      expect(await FileDownloader().pause(task), isTrue);
+      await Future.delayed(const Duration(seconds: 1));
+      expect(lastStatus, equals(TaskStatus.paused));
+      expect(lastProgress, equals(progressPaused));
+      expect(await FileDownloader().resume(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(lastProgress, equals(progressComplete));
+      await Future.delayed(const Duration(seconds: 3));
+      final file = File(await task.filePath());
+      expect(file.existsSync(), isTrue);
+      expect(await file.length(), equals(urlWithLongContentLengthFileSize));
     });
   });
 }

@@ -191,7 +191,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             for (workInfo in workInfos) {
                 if (workInfo.state != WorkInfo.State.SUCCEEDED) {
                     // send cancellation update for tasks that have not yet succeeded
-                    Log.d(TAG, "Canceling active task and sending status update")
                     prefsLock.write {
                         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
                         val tasksMap = getTaskMap(prefs)
@@ -202,7 +201,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                             )
                             TaskWorker.processStatusUpdate(task, TaskStatus.canceled, prefs)
                         } else {
-                            Log.d(TAG, "Could not find taskId $taskId to cancel")
+                            Log.d(TAG, "Could not find task with taskId $taskId to cancel")
                         }
                     }
                 }

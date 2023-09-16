@@ -122,6 +122,9 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                             chunksJsonString,
                             object : TypeToken<List<Chunk>>() {}.type
                         )
+                        parallelDownloadContentLength = chunks.fold(0L) {
+                            acc, chunk ->  acc + chunk.to - chunk.from + 1
+                        }
                     }
                 }
                 testerJob = launch {
@@ -137,16 +140,10 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                         // 'pause' is signalled by adding the taskId to a static list
                         if (BDPlugin.pausedTaskIds.contains(task.taskId)) {
                             pauseAllChunkTasks()
-                            postOnBackgroundChannel("resumeData", task, gson.toJson(chunks))
+                            postOnBackgroundChannel("resumeData", task, gson.toJson(chunks.map { it.toJsonMap }))
                             parallelTaskStatusUpdateCompleter.complete(TaskStatus.paused)
                             break
                         }
-                        //TODO see if we need isTimedOut
-//                    if (isTimedOut && !runInForeground) {
-//                        // special use of .enqueued status, see [processDownload]
-//                        parallelTaskStatusUpdateCompleter.complete(TaskStatus.enqueued)
-//                        break
-//                    }
                         delay(200)
                     }
                 }
@@ -234,8 +231,8 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
             ?: return // chunk is not part of this parent task
         if (progress > 0 && progress < 1) {
             val parentProgress = updateChunkProgress(chunk, progress)
-            if (parentProgress - lastProgressUpdate > 0.02 && System.currentTimeMillis() > nextProgressUpdateTime) {
-                updateProgressAndNotify(progress, parallelDownloadContentLength, task)
+            if (shouldSendProgressUpdate(parentProgress, System.currentTimeMillis())) {
+                updateProgressAndNotify(parentProgress, parallelDownloadContentLength, task)
             }
         }
     }
@@ -315,11 +312,11 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
     /**
      * Pause the tasks associated with each chunk
      *
-     * Accomplished by sending list of tasks to cancel to the NativeDownloader
+     * Accomplished by sending a json ecoded list of tasks to cancel
+     * to the NativeDownloader
      */
     private suspend fun pauseAllChunkTasks() {
-        //TODO pause
-        postOnBackgroundChannel("pauseTasks", task, chunks.map { gson.toJson(it.task) })
+        postOnBackgroundChannel("pauseTasks", task, gson.toJson(chunks.map { it.task.toJsonMap() }))
     }
 
     private suspend fun stitchChunks(): TaskStatus {
@@ -428,11 +425,22 @@ class Chunk( //TODO redo constructor such that it does not store parentTask
         retries = parentTask.retries,
         retriesRemaining = parentTask.retries,
         requiresWiFi = parentTask.requiresWiFi,
-        metaData = parentTask.taskId,
+        metaData = gson.toJson(
+            mapOf("parentTaskId" to parentTask.taskId, "from" to from, "to" to to)),
         taskType = "DownloadTask"
     )
 
     val parentTaskId = task.taskId
     var status = TaskStatus.enqueued
     var progress = 0.0
+
+    fun toJsonMap(): Map<String, Any?> {
+        return mapOf(
+        "parentTaskId" to parentTaskId,
+            "url" to url,
+            "filename" to filename,
+            "from" to from,
+            "to" to to,
+            "statusUpdate" to st
+        )
 }

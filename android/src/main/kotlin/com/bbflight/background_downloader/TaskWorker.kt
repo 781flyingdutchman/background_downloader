@@ -588,7 +588,8 @@ open class TaskWorker(
                             doneCompleter.complete(TaskStatus.failed)
                             break
                         }
-                        delay(10) //TODO remove
+                        //delay(10) //TODO remove delay
+                        //throw IllegalStateException("Forced error") //TODO remove throw
                         if (numBytes > 0) {
                             outputStream.write(dataBuffer, 0, numBytes)
                             bytesTotal += numBytes
@@ -604,7 +605,7 @@ open class TaskWorker(
                             (bytesTotal + startByte).toDouble() / expectedFileSize,
                             0.999
                         )
-                        if (contentLength > 0 && progress - lastProgressUpdate > 0.02 && currentTimeMillis() > nextProgressUpdateTime) {
+                        if (contentLength > 0 && shouldSendProgressUpdate(progress, currentTimeMillis())) {
                             updateProgressAndNotify(progress, expectedFileSize, task)
                         }
                     }
@@ -643,10 +644,20 @@ open class TaskWorker(
     }
 
     /**
+     * Returns true if [currentProgress] > [lastProgressUpdate] + threshold and
+     * [now] > [nextProgressUpdateTime]
+     */
+    open fun shouldSendProgressUpdate(currentProgress: Double, now: Long): Boolean {
+        return currentProgress - lastProgressUpdate > 0.02 &&
+                now > nextProgressUpdateTime
+    }
+
+    /**
      * Calculate network speed and time remaining, then post an update
      * to the Dart side and update the 'running' notification
      *
-     * Mst be called at the appropriate frequency
+     * Mst be called at the appropriate frequency, and will update
+     * [lastProgressUpdate] and [nextProgressUpdateTime]
      */
     suspend fun updateProgressAndNotify(
         progress: Double,
@@ -1074,7 +1085,6 @@ open class TaskWorker(
         }
         return null
     }
-
 
     /**
      * Set the [taskException] variable based on Exception [e]

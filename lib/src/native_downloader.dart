@@ -36,7 +36,7 @@ abstract base class NativeDownloader extends BaseDownloader {
             ? args.getRange(1, args.length).toList(growable: false)
             : args[1]
       );
-      log.severe("Got message for ${task.taskId}: $message");
+      log.severe("Native incoming message for ${task.taskId}: $message");
       switch (message) {
         // simple status update
         case ('statusUpdate', int statusOrdinal):
@@ -46,7 +46,8 @@ abstract base class NativeDownloader extends BaseDownloader {
           } else {
             // this is a chunk task, so pass parent taskId,
             // chunk taskId and status index to native
-            await methodChannel.invokeMethod('chunkStatusUpdate', [task.metaData, task.taskId, status.index]);
+            await methodChannel.invokeMethod('chunkStatusUpdate',
+                [Chunk.getParentTaskId(task), task.taskId, status.index]);
           }
 
         // status update with responseBody, no exception
@@ -59,7 +60,8 @@ abstract base class NativeDownloader extends BaseDownloader {
             // TODO also send response body?
             // this is a chunk task, so pass parent taskId,
             // chunk taskId and status index to native
-            await methodChannel.invokeMethod('chunkStatusUpdate', [task.metaData, task.taskId, status.index]);
+            await methodChannel.invokeMethod('chunkStatusUpdate',
+                [Chunk.getParentTaskId(task), task.taskId, status.index]);
           }
 
         // status update with TaskException and responseBody
@@ -85,7 +87,8 @@ abstract base class NativeDownloader extends BaseDownloader {
           } else {
             // this is a chunk task, so pass parent taskId,
             // chunk taskId and status index to native
-            await methodChannel.invokeMethod('chunkStatusUpdate', [task.metaData, task.taskId, status.index]);
+            await methodChannel.invokeMethod('chunkStatusUpdate',
+                [Chunk.getParentTaskId(task), task.taskId, status.index]);
           }
 
         case (
@@ -107,7 +110,8 @@ abstract base class NativeDownloader extends BaseDownloader {
           } else {
             // this is a chunk task, so pass parent taskId,
             // chunk taskId and progress to native
-            await methodChannel.invokeMethod('chunkProgressUpdate', [task.metaData, task.taskId, progress]);
+            await methodChannel.invokeMethod('chunkProgressUpdate',
+                [Chunk.getParentTaskId(task), task.taskId, progress]);
           }
 
         case ('canResume', bool canResume):
@@ -143,11 +147,12 @@ abstract base class NativeDownloader extends BaseDownloader {
         //from ParallelDownloadTask
         case ('pauseTasks', String listOfTasksJson):
           final listOfTasks = List<DownloadTask>.from(jsonDecode(
-            listOfTasksJson,
-            reviver: (key, value) => key is int
-                ? Task.createFromJsonMap(jsonDecode(value as String))
-                : List<DownloadTask>.from(value as List<dynamic>),
-          ));
+              listOfTasksJson,
+              reviver: (key, value) => switch (key) {
+                    int _ =>
+                      Task.createFromJsonMap(value as Map<String, dynamic>),
+                    _ => value
+                  }));
           for (final chunkTask in listOfTasks) {
             await FileDownloader().pause(chunkTask);
           }
@@ -223,16 +228,17 @@ abstract base class NativeDownloader extends BaseDownloader {
       final taskResumeData = await getResumeData(task.taskId);
       if (taskResumeData != null) {
         final notificationConfig = notificationConfigForTask(task);
-        final enqueueSuccess = await methodChannel.invokeMethod<bool>('enqueue', [
-              jsonEncode(task.toJsonMap()),
-              notificationConfig != null
-                  ? jsonEncode(notificationConfig.toJsonMap())
-                  : null,
-              taskResumeData.data,
-              taskResumeData.requiredStartByte,
-              taskResumeData.eTag
-            ]) ??
-            false;
+        final enqueueSuccess =
+            await methodChannel.invokeMethod<bool>('enqueue', [
+                  jsonEncode(task.toJsonMap()),
+                  notificationConfig != null
+                      ? jsonEncode(notificationConfig.toJsonMap())
+                      : null,
+                  taskResumeData.data,
+                  taskResumeData.requiredStartByte,
+                  taskResumeData.eTag
+                ]) ??
+                false;
         if (enqueueSuccess && task is ParallelDownloadTask) {
           return resumeChunkTasks(task, taskResumeData);
         }

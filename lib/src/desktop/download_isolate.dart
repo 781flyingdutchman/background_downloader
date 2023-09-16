@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
 
+import 'package:background_downloader/src/base_downloader.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -11,6 +13,9 @@ import '../exceptions.dart';
 import '../models.dart';
 import 'desktop_downloader.dart';
 import 'isolate.dart';
+
+var chunkStartByte = 0; // for chunks, the start of the range to download, otherwise 0
+String? eTagHeader;
 
 /// Execute the download task
 ///
@@ -38,7 +43,14 @@ Future<void> doDownloadTask(
   var request = http.Request(task.httpRequestMethod, Uri.parse(task.url));
   request.headers.addAll(task.headers);
   if (isResume) {
-    request.headers['Range'] = 'bytes=$requiredStartByte-';
+    if (task.group != BaseDownloader.chunkGroup) {
+      request.headers['Range'] = 'bytes=$requiredStartByte-';
+    } else {
+      final chunkData = jsonDecode(task.metaData);
+      chunkStartByte = chunkData['from'] as int;
+      final chunkEndByte = chunkData['to'] as int;
+      request.headers['Range'] = 'bytes=${chunkStartByte + requiredStartByte}-$chunkEndByte';
+    }
   }
   if (task.post is String) {
     request.body = task.post!;
@@ -134,6 +146,7 @@ Future<TaskStatus> processOkDownloadResponse(
     http.StreamedResponse response,
     SendPort sendPort) async {
   final contentLength = response.contentLength ?? -1;
+  sendPort.send(('log', 'Content length for ${task.taskId} = $contentLength')); //TODO remove
   isResume = isResume && response.statusCode == 206;
   if (isResume && !await prepareResume(response, tempFilePath)) {
     deleteTempFile(tempFilePath);
@@ -154,6 +167,7 @@ Future<TaskStatus> processOkDownloadResponse(
         final dirPath = p.dirname(filePath);
         Directory(dirPath).createSync(recursive: true);
         File(tempFilePath).copySync(filePath);
+        sendPort.send(('log', 'File size for ${task.taskId} is ${await File(filePath).length()}'));
         resultStatus = TaskStatus.complete;
 
       case TaskStatus.canceled:
@@ -227,15 +241,15 @@ Future<bool> prepareResume(
   final tempFileLength = await tempFile.length();
   log.finest(
       'Resume start=$start, end=$end of total=$total bytes, tempFile = $tempFileLength bytes');
-  if (total != end + 1 || start > tempFileLength) {
-    log.fine('Offered range not feasible: $range');
-    taskException = TaskResumeException('Offered range not feasible: $range');
+  startByte = start - chunkStartByte; // relative to start of range
+  if  (startByte > tempFileLength) {
+    log.fine('Offered range not feasible: $range with startByte $startByte');
+    taskException = TaskResumeException('Offered range not feasible: $range with startByte $startByte');
     return false;
   }
-  startByte = start;
   try {
     final file = await tempFile.open(mode: FileMode.writeOnlyAppend);
-    await file.truncate(start);
+    await file.truncate(startByte);
     file.close();
   } on FileSystemException {
     log.fine('Could not truncate temp file');

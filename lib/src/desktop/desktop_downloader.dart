@@ -132,6 +132,25 @@ final class DesktopDownloader extends BaseDownloader {
           receivePort.close();
 
         case (
+        'statusUpdate',
+        TaskStatus status,
+        TaskException? exception,
+        String? responseBody
+        ):
+          final taskStatusUpdate = TaskStatusUpdate(task, status,
+              status == TaskStatus.failed ? exception : null, responseBody);
+          if (task.group != BaseDownloader.chunkGroup) {
+            if (status.isFinalState) {
+              _remove(task);
+            }
+            processStatusUpdate(taskStatusUpdate);
+          } else {
+            _log.warning(
+                'Sending ${taskStatusUpdate.status} for ${taskStatusUpdate.task.taskId} to taskId ${Chunk.getParentTaskId(task)}');
+            _parallelTaskSendPort(Chunk.getParentTaskId(task))?.send(taskStatusUpdate);
+          }
+
+        case (
             'progressUpdate',
             double progress,
             int expectedFileSize,
@@ -144,31 +163,12 @@ final class DesktopDownloader extends BaseDownloader {
             processProgressUpdate(taskProgressUpdate);
           } else {
             _log.warning(
-                'Sending $taskProgressUpdate to taskId ${task.metaData}');
-            _parallelTaskSendPort(task.metaData)?.send(taskProgressUpdate);
+                'Sending $taskProgressUpdate to taskId ${Chunk.getParentTaskId(task)}');
+            _parallelTaskSendPort(Chunk.getParentTaskId(task))?.send(taskProgressUpdate);
           }
 
         case ('taskCanResume', bool taskCanResume):
           setCanResume(task, taskCanResume);
-
-        case (
-            'statusUpdate',
-            TaskStatus status,
-            TaskException? exception,
-            String? responseBody
-          ):
-          final taskStatusUpdate = TaskStatusUpdate(task, status,
-              status == TaskStatus.failed ? exception : null, responseBody);
-          if (task.group != BaseDownloader.chunkGroup) {
-            if (status.isFinalState) {
-              _remove(task);
-            }
-            processStatusUpdate(taskStatusUpdate);
-          } else {
-            _log.warning(
-                'Sending ${taskStatusUpdate.status} for ${taskStatusUpdate.task.taskId} to taskId ${task.metaData}');
-            _parallelTaskSendPort(task.metaData)?.send(taskStatusUpdate);
-          }
 
         case ('resumeData', String data, int requiredStartByte, String? eTag):
           setResumeData(ResumeData(task, data, requiredStartByte, eTag));
@@ -214,7 +214,7 @@ final class DesktopDownloader extends BaseDownloader {
     }
     // If chunkGroup, send update to task's parent isolate.
     // The task's metadata contains taskId of parent
-    _parallelTaskSendPort(update.task.metaData)?.send(update);
+    _parallelTaskSendPort(Chunk.getParentTaskId(update.task))?.send(update);
   }
 
   @override
@@ -225,7 +225,7 @@ final class DesktopDownloader extends BaseDownloader {
     }
     // If chunkGroup, send update to task's parent isolate.
     // The task's metadata contains taskId of parent
-    _parallelTaskSendPort(update.task.metaData)?.send(update);
+    _parallelTaskSendPort(Chunk.getParentTaskId(update.task))?.send(update);
   }
 
   /// Return the [SendPort] for the [ParallelDownloadTask] represented by [taskId]
