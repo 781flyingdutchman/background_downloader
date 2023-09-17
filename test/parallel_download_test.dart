@@ -93,7 +93,7 @@ void main() {
       'accept-ranges': 'bytes'
     });
     expect(chunks.length, equals(3));
-    expect(chunks.first.size, equals(2069156));
+    expect(chunks.first.to - chunks.first.from, equals(2069156));
     // check progress update
     expect(parentTaskProgress().progress, equals(0.0));
     // fake 50% progress on first chunk (of 3)

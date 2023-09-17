@@ -45,9 +45,6 @@ class Chunk {
     progressUpdate = TaskProgressUpdate(task, 0);
   }
 
-  /// Size of this chunk in bytes
-  int get size => to - from;
-
   /// Creates object from JsonMap
   Chunk.fromJsonMap(Map<String, dynamic> jsonMap)
       : parentTaskId = jsonMap['parentTaskId'],
@@ -90,10 +87,12 @@ class Chunk {
 /// which will also cancel all chunk tasks
 Future<bool> resumeChunkTasks(ParallelDownloadTask task,
     ResumeData resumeData) async {
-  final List<Chunk> chunks = List.from(jsonDecode(resumeData.data,
+  final chunks = List<Chunk>.from(jsonDecode(resumeData.data,
       reviver: Chunk.reviver));
+  print('headers=${chunks.first.task.headers}');
   final results = await Future.wait(
       chunks.map((chunk) => FileDownloader().resume(chunk.task)));
+  print(results);
   if (results.any((result) => result == false)) {
     // cancel [ParallelDownloadTask] if any resume did not succeed.
     // this will also cancel all chunk tasks

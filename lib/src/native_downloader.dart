@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:background_downloader/background_downloader.dart';
+import 'package:background_downloader/src/desktop/isolate.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -44,8 +45,7 @@ abstract base class NativeDownloader extends BaseDownloader {
           if (task.group != BaseDownloader.chunkGroup) {
             processStatusUpdate(TaskStatusUpdate(task, status));
           } else {
-            // this is a chunk task, so pass parent taskId,
-            // chunk taskId and status index to native
+            // this is a chunk task, so pass to native
             await methodChannel.invokeMethod('chunkStatusUpdate',
                 [Chunk.getParentTaskId(task), task.taskId, status.index]);
           }
@@ -57,11 +57,14 @@ abstract base class NativeDownloader extends BaseDownloader {
             processStatusUpdate(
                 TaskStatusUpdate(task, status, null, responseBody));
           } else {
-            // TODO also send response body?
-            // this is a chunk task, so pass parent taskId,
-            // chunk taskId and status index to native
-            await methodChannel.invokeMethod('chunkStatusUpdate',
-                [Chunk.getParentTaskId(task), task.taskId, status.index]);
+            // this is a chunk task, so pass to native
+            await methodChannel.invokeMethod('chunkStatusUpdate', [
+              Chunk.getParentTaskId(task),
+              task.taskId,
+              status.index,
+              null,
+              responseBody
+            ]);
           }
 
         // status update with TaskException and responseBody
@@ -76,19 +79,23 @@ abstract base class NativeDownloader extends BaseDownloader {
             ]
           ):
           final status = TaskStatus.values[statusOrdinal];
+          TaskException? exception;
+          if (status == TaskStatus.failed) {
+            exception = TaskException.fromTypeString(
+                typeString, description, httpResponseCode);
+          }
           if (task.group != BaseDownloader.chunkGroup) {
-            TaskException? exception;
-            if (status == TaskStatus.failed) {
-              exception = TaskException.fromTypeString(
-                  typeString, description, httpResponseCode);
-            }
             processStatusUpdate(
                 TaskStatusUpdate(task, status, exception, responseBody));
           } else {
-            // this is a chunk task, so pass parent taskId,
-            // chunk taskId and status index to native
-            await methodChannel.invokeMethod('chunkStatusUpdate',
-                [Chunk.getParentTaskId(task), task.taskId, status.index]);
+            // this is a chunk task, so pass to native
+            await methodChannel.invokeMethod('chunkStatusUpdate', [
+              Chunk.getParentTaskId(task),
+              task.taskId,
+              status.index,
+              exception?.toJsonMap(),
+              responseBody
+            ]);
           }
 
         case (
@@ -153,8 +160,9 @@ abstract base class NativeDownloader extends BaseDownloader {
                       Task.createFromJsonMap(value as Map<String, dynamic>),
                     _ => value
                   }));
+          print(listOfTasks);
           for (final chunkTask in listOfTasks) {
-            await FileDownloader().pause(chunkTask);
+            print(await FileDownloader().pause(chunkTask));
           }
 
         default:
@@ -239,6 +247,7 @@ abstract base class NativeDownloader extends BaseDownloader {
                   taskResumeData.eTag
                 ]) ??
                 false;
+        print("resume with enqueueSuccess=$enqueueSuccess");
         if (enqueueSuccess && task is ParallelDownloadTask) {
           return resumeChunkTasks(task, taskResumeData);
         }

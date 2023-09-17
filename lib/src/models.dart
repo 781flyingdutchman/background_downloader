@@ -469,7 +469,7 @@ sealed class Task extends Request {
   @override
   String toString() {
     return '$taskType{taskId: $taskId, url: $url, filename: $filename, headers: '
-        '$headers, httpRequestMethod: $httpRequestMethod, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, updates: $updates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, metaData: $metaData}';
+        '$headers, httpRequestMethod: $httpRequestMethod, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, updates: $updates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, allowPause: $allowPause, metaData: $metaData}';
   }
 }
 
@@ -1206,10 +1206,10 @@ sealed class TaskUpdate {
 
   /// Create object from JSON Map
   TaskUpdate.fromJsonMap(Map<String, dynamic> jsonMap)
-      : task = Task.createFromJsonMap(jsonMap);
+      : task = Task.createFromJsonMap(jsonMap['task']);
 
   /// Return JSON Map representing object
-  Map<String, dynamic> toJsonMap() => task.toJsonMap();
+  Map<String, dynamic> toJsonMap() => {'task': task.toJsonMap()};
 }
 
 /// A status update

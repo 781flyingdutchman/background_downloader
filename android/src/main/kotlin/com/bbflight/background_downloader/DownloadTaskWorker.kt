@@ -6,6 +6,8 @@ import android.os.storage.StorageManager
 import android.util.Log
 import androidx.preference.PreferenceManager
 import androidx.work.WorkerParameters
+import com.bbflight.background_downloader.BDPlugin.Companion.gson
+import com.bbflight.background_downloader.BDPlugin.Companion.jsonMapType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.BufferedInputStream
@@ -38,7 +40,15 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
      * */
     override suspend fun connectAndProcess(connection: HttpURLConnection): TaskStatus {
         if (isResume) {
-            connection.setRequestProperty("Range", "bytes=$requiredStartByte-")
+            if (task.group != chunkGroup) {
+                connection.setRequestProperty("Range", "bytes=$requiredStartByte-")
+            } else {
+                // for chunks, set range relative to start of chunk range, encoded in metaData
+                val chunkData: Map<String, Any> = gson.fromJson(task.metaData, jsonMapType)
+                val chunkStartByte: Long = (chunkData["from"] as Double).toLong()
+                val chunkEndByte:Long = (chunkData["to"] as Double).toLong()
+                connection.setRequestProperty("Range", "bytes=${chunkStartByte + requiredStartByte}-$chunkEndByte")
+            }
         }
         val result = super.connectAndProcess(connection)
         if (result == TaskStatus.canceled) {

@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.work.WorkerParameters
 import com.bbflight.background_downloader.BDPlugin.Companion.gson
+import com.bbflight.background_downloader.BDPlugin.Companion.jsonMapType
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -118,12 +119,17 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                         // resume: reconstruct [chunks] and wait for all chunk tasks to complete.
                         // The Dart side will resume each chunk task, so we just wait for the
                         // completer to complete
-                        chunks = gson.fromJson(
+                        val chunksAsJsonList: List<String> = gson.fromJson(
                             chunksJsonString,
-                            object : TypeToken<List<Chunk>>() {}.type
+                            object : TypeToken<List<String>>() {}.type
                         )
-                        parallelDownloadContentLength = chunks.fold(0L) {
-                            acc, chunk ->  acc + chunk.to - chunk.from + 1
+                        Log.wtf(TAG, "chunksAsJsonList=$chunksAsJsonList")
+                        chunks = chunksAsJsonList.map {
+                            Chunk(gson.fromJson(it, jsonMapType))
+                        }
+                        Log.wtf(TAG, "chunks=$chunks")
+                        parallelDownloadContentLength = chunks.fold(0L) { acc, chunk ->
+                            acc + chunk.to - chunk.from + 1
                         }
                     }
                 }
@@ -138,9 +144,14 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                             break
                         }
                         // 'pause' is signalled by adding the taskId to a static list
-                        if (BDPlugin.pausedTaskIds.contains(task.taskId)) {
+                        if (BDPlugin.pausedTaskIds.remove(task.taskId)) {
                             pauseAllChunkTasks()
-                            postOnBackgroundChannel("resumeData", task, gson.toJson(chunks.map { it.toJsonMap }))
+                            // note: each chunk is json encoded separately as a map
+                            postOnBackgroundChannel(
+                                "resumeData",
+                                task,
+                                gson.toJson(chunks.map { gson.toJson(it.toJsonMap()) })
+                            )
                             parallelTaskStatusUpdateCompleter.complete(TaskStatus.paused)
                             break
                         }
@@ -402,45 +413,85 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
     }
 }
 
-class Chunk( //TODO redo constructor such that it does not store parentTask
-    var parentTask: Task,
+@Suppress("UNCHECKED_CAST")
+class Chunk(
+    val parentTaskId: String,
     val url: String,
     val filename: String,
+    val task: Task,
     val from: Long,
     val to: Long
 ) {
-
-    val task = Task(
-        url = url,
-        filename = filename,
-        headers = parentTask.headers + mapOf("Range" to "bytes=$from-$to"),
-        httpRequestMethod = "GET",
-        chunks = 1,
-        post = null,
-        fileField = "",
-        mimeType = "",
-        baseDirectory = BaseDirectory.temporary,
-        group = TaskWorker.chunkGroup,
-        updates = parentTask.updates,
-        retries = parentTask.retries,
-        retriesRemaining = parentTask.retries,
-        requiresWiFi = parentTask.requiresWiFi,
-        metaData = gson.toJson(
-            mapOf("parentTaskId" to parentTask.taskId, "from" to from, "to" to to)),
-        taskType = "DownloadTask"
-    )
-
-    val parentTaskId = task.taskId
     var status = TaskStatus.enqueued
     var progress = 0.0
 
+    /**
+     * Constructor that also creates the [Task] associated with this [Chunk]
+     */
+    constructor(parentTask: Task, url: String, filename: String, from: Long, to: Long) : this(
+        parentTaskId = parentTask.taskId, url, filename,
+        task = Task(
+            url = url,
+            filename = filename,
+            headers = parentTask.headers + mapOf("Range" to "bytes=$from-$to"),
+            httpRequestMethod = "GET",
+            chunks = 1,
+            post = null,
+            fileField = "",
+            mimeType = "",
+            baseDirectory = BaseDirectory.temporary,
+            group = TaskWorker.chunkGroup,
+            updates = parentTask.updates,
+            retries = parentTask.retries,
+            retriesRemaining = parentTask.retries,
+            requiresWiFi = parentTask.requiresWiFi,
+            allowPause = true,
+            metaData = gson.toJson(
+                mapOf("parentTaskId" to parentTask.taskId, "from" to from, "to" to to)
+            ),
+            taskType = "DownloadTask"
+        ), from, to
+    )
+
+    /**
+     * Constructor to create from jsonMap
+     */
+    constructor(jsonMap: Map<String, Any?>) :
+            this(
+                parentTaskId = jsonMap["parentTaskid"] as String? ?: "",
+                url = jsonMap["url"] as String? ?: "",
+                filename = jsonMap["filename"] as String? ?: "",
+                task = Task(jsonMap["task"] as Map<String, Any>),
+                from = (jsonMap["from"] as Double? ?: 0).toLong(),
+                to = (jsonMap["to"] as Double? ?: 0).toLong()
+            ) {
+                status = TaskStatus.values()[((jsonMap["statusUpdate"] as Map<String, Any>)["status"] as Double? ?: 0.0).toInt()]
+        progress = (jsonMap["progressUpdate"] as Map<String, Any>)["progress"] as Double? ?: 0.0
+            }
+
+    /**
+     * Return JSON map representation of this object
+     *
+     * Only used to generate [ResumeData]
+     */
     fun toJsonMap(): Map<String, Any?> {
         return mapOf(
-        "parentTaskId" to parentTaskId,
+            "parentTaskId" to parentTaskId,
             "url" to url,
             "filename" to filename,
             "from" to from,
             "to" to to,
-            "statusUpdate" to st
+            "task" to task.toJsonMap(),
+            "statusUpdate" to mapOf(
+                "task" to task.toJsonMap(),
+                "status" to status.ordinal,
+                "exception" to null,
+                "responseBody" to null
+            ),
+            "progressUpdate" to mapOf(
+                "task" to task.toJsonMap(),
+                "progress" to progress
+            )
         )
+    }
 }

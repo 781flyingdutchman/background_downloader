@@ -46,6 +46,7 @@ Future<void> doDownloadTask(
     if (task.group != BaseDownloader.chunkGroup) {
       request.headers['Range'] = 'bytes=$requiredStartByte-';
     } else {
+      // for chunks, set range relative to start of chunk range, encoded in metaData
       final chunkData = jsonDecode(task.metaData);
       chunkStartByte = chunkData['from'] as int;
       final chunkEndByte = chunkData['to'] as int;

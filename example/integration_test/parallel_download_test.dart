@@ -226,6 +226,7 @@ void main() {
       await Future.delayed(const Duration(seconds: 1));
       expect(lastStatus, equals(TaskStatus.paused));
       expect(lastProgress, equals(progressPaused));
+      await Future.delayed(const Duration(seconds: 2));
       expect(await FileDownloader().resume(task), isTrue);
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.complete));

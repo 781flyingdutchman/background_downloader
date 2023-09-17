@@ -627,6 +627,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val taskId = args[0] as String
         val chunkTaskId = args[1] as String
         val statusOrdinal = args[2] as Int
+        //TODO capture exception and responseBody as optional argument 3 and 4
         result.success(
             parallelDownloadTaskWorkers[taskId]?.chunkStatusUpdate(
                 chunkTaskId,
