@@ -465,9 +465,12 @@ class Chunk(
                 from = (jsonMap["from"] as Double? ?: 0).toLong(),
                 to = (jsonMap["to"] as Double? ?: 0).toLong()
             ) {
-                status = TaskStatus.values()[((jsonMap["statusUpdate"] as Map<String, Any>)["status"] as Double? ?: 0.0).toInt()]
+        // status and progress are fields within statusUpdate and progressUpdate maps
+        status =
+            TaskStatus.values()[((jsonMap["statusUpdate"] as Map<String, Any>)["status"] as Double?
+                ?: 0.0).toInt()]
         progress = (jsonMap["progressUpdate"] as Map<String, Any>)["progress"] as Double? ?: 0.0
-            }
+    }
 
     /**
      * Return JSON map representation of this object

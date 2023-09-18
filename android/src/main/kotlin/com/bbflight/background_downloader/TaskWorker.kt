@@ -354,16 +354,16 @@ open class TaskWorker(
     lateinit var task: Task
 
     // properties related to pause/resume functionality and progress
+    var startByte = 0L // starting position within the original range, used for resume
+    var bytesTotal = 0L // total bytes read in this download session
     var taskCanResume = false // whether task is able to resume
     var isResume = false // whether task is a resume
-    var bytesTotal = 0L
     private var bytesTotalAtLastProgressUpdate = 0L
-    var startByte = 0L
-    var lastProgressUpdateTime = 0L // in millis
-    var lastProgressUpdate = 0.0
-    var nextProgressUpdateTime = 0L
-    var networkSpeed = -1.0 // in MB/s
-    var isTimedOut = false
+    private var lastProgressUpdateTime = 0L // in millis
+    private var lastProgressUpdate = 0.0
+    private var nextProgressUpdateTime = 0L
+    private var networkSpeed = -1.0 // in MB/s
+    private var isTimedOut = false
 
     // properties related to notifications
     var notificationConfigJsonString: String? = null

@@ -30,6 +30,7 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
     private var serverAcceptsRanges = false // if true, send resume data on fail
     private var tempFilePath = ""
     private var requiredStartByte = 0L
+    private var chunkStartByte = 0L // for chunks, the start of the range to download, otherwise 0
 
     private var eTag: String? = null
 
@@ -45,7 +46,7 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
             } else {
                 // for chunks, set range relative to start of chunk range, encoded in metaData
                 val chunkData: Map<String, Any> = gson.fromJson(task.metaData, jsonMapType)
-                val chunkStartByte: Long = (chunkData["from"] as Double).toLong()
+                chunkStartByte = (chunkData["from"] as Double).toLong()
                 val chunkEndByte:Long = (chunkData["to"] as Double).toLong()
                 connection.setRequestProperty("Range", "bytes=${chunkStartByte + requiredStartByte}-$chunkEndByte")
             }
@@ -340,18 +341,18 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
             TAG,
             "Resume start=$start, end=$end of total=$total bytes, tempFile = $tempFileLength bytes"
         )
-        if (total != end + 1 || start > tempFileLength) {
-            Log.i(TAG, "Offered range not feasible: $range")
+        startByte = start - chunkStartByte // relative to start of range
+        if (startByte > tempFileLength) {
+            Log.i(TAG, "Offered range not feasible: $range with startByte $startByte")
             taskException = TaskException(
                 ExceptionType.resume,
-                description = "Offered range not feasible: $range"
+                description = "Offered range not feasible: $range with startByte $startByte"
             )
             return false
         }
-        startByte = start
         // resume possible, set start conditions
         try {
-            RandomAccessFile(tempFilePath, "rw").use { it.setLength(start) }
+            RandomAccessFile(tempFilePath, "rw").use { it.setLength(startByte) }
         } catch (e: IOException) {
             Log.i(TAG, "Could not truncate temp file")
             taskException =
