@@ -129,7 +129,7 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                         }
                         Log.wtf(TAG, "chunks=$chunks")
                         parallelDownloadContentLength = chunks.fold(0L) { acc, chunk ->
-                            acc + chunk.to - chunk.from + 1
+                            acc + chunk.toByte - chunk.fromByte + 1
                         }
                     }
                 }
@@ -340,7 +340,7 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                     outFile.delete()
                 }
                 FileOutputStream(outFile).use { outStream ->
-                    for (chunk in chunks.sortedBy { it.from }) {
+                    for (chunk in chunks.sortedBy { it.fromByte }) {
                         val inFile = File(chunk.task.filePath(applicationContext))
                         if (!inFile.exists()) {
                             throw FileSystemException(inFile, reason = "Missing chunk file")
@@ -390,7 +390,7 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
             .value
             .first().toLong()
         if (contentLength <= 0) {
-            throw IllegalStateException("No content length")
+            throw IllegalStateException("Server does not provide content length - cannot chunk download")
         }
         Log.wtf(TAG, "content length = $contentLength")
         parallelDownloadContentLength = contentLength
@@ -398,7 +398,7 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
             headers.entries
                 .first { it.key?.lowercase(Locale.US) == "accept-ranges" && it.value.first() == "bytes" }
         } catch (e: NoSuchElementException) {
-            throw IllegalStateException("Server does not support ranges")
+            throw IllegalStateException("Server does not accept ranges - cannot chunk download")
         }
         val chunkSize = (contentLength / numChunks) + 1
         return (0 until numChunks).map { i ->
@@ -419,11 +419,23 @@ class Chunk(
     val url: String,
     val filename: String,
     val task: Task,
-    val from: Long,
-    val to: Long
+    val fromByte: Long,
+    val toByte: Long
 ) {
     var status = TaskStatus.enqueued
     var progress = 0.0
+
+    companion object {
+        /**
+         * Returns [Updates] that is based on the [parentTask]
+         */
+        fun updatesBasedOnParent(parentTask: Task) : Updates {
+            return when (parentTask.updates) {
+                Updates.none, Updates.status -> Updates.status
+                Updates.progress, Updates.statusAndProgress -> Updates.statusAndProgress
+            }
+        }
+    }
 
     /**
      * Constructor that also creates the [Task] associated with this [Chunk]
@@ -439,9 +451,9 @@ class Chunk(
             post = null,
             fileField = "",
             mimeType = "",
-            baseDirectory = BaseDirectory.temporary,
+            baseDirectory = BaseDirectory.temporary, //TODO may need different directory
             group = TaskWorker.chunkGroup,
-            updates = parentTask.updates,
+            updates = updatesBasedOnParent(parentTask),
             retries = parentTask.retries,
             retriesRemaining = parentTask.retries,
             requiresWiFi = parentTask.requiresWiFi,
@@ -462,8 +474,8 @@ class Chunk(
                 url = jsonMap["url"] as String? ?: "",
                 filename = jsonMap["filename"] as String? ?: "",
                 task = Task(jsonMap["task"] as Map<String, Any>),
-                from = (jsonMap["from"] as Double? ?: 0).toLong(),
-                to = (jsonMap["to"] as Double? ?: 0).toLong()
+                fromByte = (jsonMap["fromByte"] as Double? ?: 0).toLong(),
+                toByte = (jsonMap["toByte"] as Double? ?: 0).toLong()
             ) {
         // status and progress are fields within statusUpdate and progressUpdate maps
         status =
@@ -482,8 +494,8 @@ class Chunk(
             "parentTaskId" to parentTaskId,
             "url" to url,
             "filename" to filename,
-            "from" to from,
-            "to" to to,
+            "fromByte" to fromByte,
+            "toByte" to toByte,
             "task" to task.toJsonMap(),
             "statusUpdate" to mapOf(
                 "task" to task.toJsonMap(),

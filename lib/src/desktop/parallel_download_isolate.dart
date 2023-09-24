@@ -85,9 +85,9 @@ Future<void> doParallelDownloadTask(
     }
   } else {
     // resume: reconstruct [chunks] and wait for all chunk tasks to complete
-    chunks = List.from(jsonDecode(resumeData!.data, reviver: Chunk.reviver));
+    chunks = List.from(jsonDecode(resumeData!.data, reviver: Chunk.listReviver));
     parallelDownloadContentLength = chunks.fold(0,
-        (previousValue, chunk) => previousValue + chunk.to - chunk.from + 1);
+        (previousValue, chunk) => previousValue + chunk.toByte - chunk.fromByte + 1);
     final statusUpdate = await parallelTaskStatusUpdateCompleter.future;
     processStatusUpdateInIsolate(task, statusUpdate.status, sendPort);
   }
@@ -289,7 +289,7 @@ Future<TaskStatus> stitchChunks() async {
       await outFile.delete();
     }
     outStream = outFile.openWrite();
-    for (final chunk in chunks.sorted((a, b) => a.from - b.from)) {
+    for (final chunk in chunks.sorted((a, b) => a.fromByte - b.fromByte)) {
       final inFile = File(await chunk.task.filePath());
       if (!await inFile.exists()) {
         throw const FileSystemException('Missing chunk file');
@@ -345,11 +345,15 @@ List<Chunk> createChunks(
       .firstWhere((element) => element.key.toLowerCase() == 'content-length')
       .value);
   if (contentLength <= 0) {
-    throw StateError('No content length');
+    throw StateError('Server does not provide content length - cannot chunk download');
   }
   parallelDownloadContentLength = contentLength;
-  headers.entries.firstWhere((element) =>
-      element.key.toLowerCase() == 'accept-ranges' && element.value == 'bytes');
+  try {
+    headers.entries.firstWhere((element) =>
+    element.key.toLowerCase() == 'accept-ranges' && element.value == 'bytes');
+  } on StateError {
+    throw StateError('Server does not accept ranges - cannot chunk download');
+  }
   final chunkSize = (contentLength / numChunks).ceil();
   return [
     for (var i = 0; i < numChunks; i++)
@@ -357,7 +361,7 @@ List<Chunk> createChunks(
           parentTask: task,
           url: task.urls[i % task.urls.length],
           filename: Random().nextInt(1 << 32).toString(),
-          from: i * chunkSize,
-          to: min(i * chunkSize + chunkSize - 1, contentLength - 1))
+          fromByte: i * chunkSize,
+          toByte: min(i * chunkSize + chunkSize - 1, contentLength - 1))
   ];
 }

@@ -26,9 +26,9 @@ enum class BaseDirectory {
 /// Type of updates requested for a group of tasks
 enum class Updates {
     none,  // no status or progress updates
-    statusChange, // only calls upon change in DownloadTaskStatus
-    progressUpdates, // only calls for progress
-    statusChangeAndProgressUpdates // calls also for progress along the way
+    status, // only calls upon change in DownloadTaskStatus
+    progress, // only calls for progress
+    statusAndProgress // calls also for progress along the way
 }
 
 /**
@@ -121,14 +121,14 @@ class Task(
 
     /** True if this task expects to provide progress updates */
     fun providesProgressUpdates(): Boolean {
-        return updates == Updates.progressUpdates ||
-                updates == Updates.statusChangeAndProgressUpdates
+        return updates == Updates.progress ||
+                updates == Updates.statusAndProgress
     }
 
     /** True if this task expects to provide status updates */
     fun providesStatusUpdates(): Boolean {
-        return updates == Updates.statusChange ||
-                updates == Updates.statusChangeAndProgressUpdates
+        return updates == Updates.status ||
+                updates == Updates.statusAndProgress
     }
 
     /** True if this task is a DownloadTask or ParallelDownloadTask */

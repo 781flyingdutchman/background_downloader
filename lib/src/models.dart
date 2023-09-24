@@ -1206,7 +1206,7 @@ sealed class TaskUpdate {
 
   /// Create object from JSON Map
   TaskUpdate.fromJsonMap(Map<String, dynamic> jsonMap)
-      : task = Task.createFromJsonMap(jsonMap['task']);
+      : task = Task.createFromJsonMap(jsonMap['task'] ?? jsonMap);
 
   /// Return JSON Map representing object
   Map<String, dynamic> toJsonMap() => {'task': task.toJsonMap()};

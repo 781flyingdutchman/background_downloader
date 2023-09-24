@@ -10,8 +10,8 @@ class Chunk {
   final String parentTaskId;
   final String url;
   final String filename;
-  final int from; // start byte
-  final int to; // end byte
+  final int fromByte; // start byte
+  final int toByte; // end byte
   final DownloadTask task; // task to download this chunk
 
   // state parameters
@@ -21,26 +21,26 @@ class Chunk {
   /// Define a chunk by its key parameters, in default state
   ///
   /// This also generates the [task] to download this chunk, and that
-  /// task contains the [parentTaskId] and [to] and [from] values of the
+  /// task contains the [parentTaskId] and [toByte] and [fromByte] values of the
   /// chunk in its [Task.metaData] field as a JSON encoded map
   Chunk({required Task parentTask,
     required this.url,
     required this.filename,
-    required this.from,
-    required this.to})
+    required this.fromByte,
+    required this.toByte})
       : parentTaskId = parentTask.taskId,
         task = DownloadTask(
             url: url,
             filename: filename,
-            headers: {...parentTask.headers, 'Range': 'bytes=$from-$to'},
+            headers: {...parentTask.headers, 'Range': 'bytes=$fromByte-$toByte'},
             baseDirectory: BaseDirectory.temporary,
             group: BaseDownloader.chunkGroup,
-            updates: parentTask.updates,
+            updates: updatesBasedOnParent(parentTask),
             retries: parentTask.retries,
             allowPause: parentTask.allowPause,
             requiresWiFi: parentTask.requiresWiFi,
             metaData: jsonEncode(
-                {'parentTaskId': parentTask.taskId, 'from': from, 'to': to})) {
+                {'parentTaskId': parentTask.taskId, 'from': fromByte, 'to': toByte})) {
     statusUpdate = TaskStatusUpdate(task, TaskStatus.enqueued);
     progressUpdate = TaskProgressUpdate(task, 0);
   }
@@ -50,15 +50,16 @@ class Chunk {
       : parentTaskId = jsonMap['parentTaskId'],
         url = jsonMap['url'],
         filename = jsonMap['filename'],
-        from = (jsonMap['from'] as num).toInt(),
-        to = (jsonMap['to'] as num).toInt(),
+        fromByte = (jsonMap['fromByte'] as num).toInt(),
+        toByte = (jsonMap['toByte'] as num).toInt(),
         task = Task.createFromJsonMap(jsonMap['task']) as DownloadTask,
         statusUpdate = TaskStatusUpdate.fromJsonMap(jsonMap['statusUpdate']),
         progressUpdate =
         TaskProgressUpdate.fromJsonMap(jsonMap['progressUpdate']);
 
-  /// Revive Chunk or List<Chunk> from a JSON map in a jsonDecode operation
-  static Object? reviver(Object? key, Object? value) =>
+  /// Revive List<Chunk> from a JSON map in a jsonDecode operation,
+  /// where each element is a map representing the [Chunk]
+  static Object? listReviver(Object? key, Object? value) =>
       key is int ? Chunk.fromJsonMap(jsonDecode(value as String)) : value;
 
   /// Creates JSON map of this object
@@ -67,8 +68,8 @@ class Chunk {
         'parentTaskId': parentTaskId,
         'url': url,
         'filename': filename,
-        'from': from,
-        'to': to,
+        'fromByte': fromByte,
+        'toByte': toByte,
         'task': task.toJsonMap(),
         'statusUpdate': statusUpdate.toJsonMap(),
         'progressUpdate': progressUpdate.toJsonMap()
@@ -80,6 +81,14 @@ class Chunk {
   /// Return the parentTaskId embedded in the metaData of a chunkTask
   static String getParentTaskId(Task task) =>
       jsonDecode(task.metaData)['parentTaskId'] as String;
+
+  /// Return [Updates] that is based on the [parentTask]
+  static Updates updatesBasedOnParent(Task parentTask) =>
+      switch(parentTask.updates) {
+
+        Updates.none || Updates.status => Updates.status,
+        Updates.progress || Updates.statusAndProgress => Updates.statusAndProgress
+      };
 }
 
 /// Resume all chunk tasks associated with this [task], and
@@ -88,7 +97,7 @@ class Chunk {
 Future<bool> resumeChunkTasks(ParallelDownloadTask task,
     ResumeData resumeData) async {
   final chunks = List<Chunk>.from(jsonDecode(resumeData.data,
-      reviver: Chunk.reviver));
+      reviver: Chunk.listReviver));
   print('headers=${chunks.first.task.headers}');
   final results = await Future.wait(
       chunks.map((chunk) => FileDownloader().resume(chunk.task)));

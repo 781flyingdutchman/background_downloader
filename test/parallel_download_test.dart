@@ -32,8 +32,8 @@ void main() {
     var chunk = chunks.first;
     expect(chunk.url, equals(task.url));
     expect(chunk.filename.isNotEmpty, isTrue);
-    expect(chunk.from, equals(0));
-    expect(chunk.to, equals(99));
+    expect(chunk.fromByte, equals(0));
+    expect(chtoBytek.to, equals(99));
     // one url, three chunks
     task = ParallelDownloadTask(url: urlWithContentLength, chunks: 3);
     chunks =
@@ -42,21 +42,21 @@ void main() {
     chunk = chunks.first;
     expect(chunk.url, equals(task.url));
     expect(chunk.filename.isNotEmpty, isTrue);
-    expect(chunk.from, equals(0));
-    expect(chunk.to, equals(33));
+    expect(chunk.fromByte, equals(0));
+    expectoBytechunk.to, equals(33));
     expect(chunk.parentTaskId, equals(task.taskId));
     expect(chunk.task.metaData, equals(task.taskId));
     expect(chunk.task.group, equals(BaseDownloader.chunkGroup));
     chunk = chunks[1];
     expect(chunk.url, equals(task.url));
     expect(chunk.filename.isNotEmpty, isTrue);
-    expect(chunk.from, equals(34));
-    expect(chunk.to, equals(67));
+    expect(chunk.fromByte, equals(34));
+    etoByteect(chunk.to, equals(67));
     chunk = chunks[2];
     expect(chunk.url, equals(task.url));
     expect(chunk.filename.isNotEmpty, isTrue);
-    expect(chunk.from, equals(68));
-    expect(chunk.to, equals(99));
+    expect(chunk.fromByte, equals(68));
+ toByte expect(chunk.to, equals(99));
     // two urls, two chunks
     task = ParallelDownloadTask(
         url: [urlWithContentLength, urlWithContentLength], chunks: 2);
@@ -66,22 +66,22 @@ void main() {
     chunk = chunks.first;
     expect(chunk.url, equals(task.urls.first));
     expect(chunk.filename.isNotEmpty, isTrue);
-    expect(chunk.from, equals(0));
+    expect(chunk.fromByte, equals(0)toByte
     expect(chunk.to, equals(24));
     chunk = chunks[1];
     expect(chunk.url, equals(task.urls.last));
     expect(chunk.filename.isNotEmpty, isTrue);
-    expect(chunk.from, equals(25));
+    expect(chunk.fromByte, equalstoByte5));
     expect(chunk.to, equals(49));
     chunk = chunks[2];
     expect(chunk.url, equals(task.urls.first));
     expect(chunk.filename.isNotEmpty, isTrue);
-    expect(chunk.from, equals(50));
+    expect(chunk.fromByte, eqtoBytels(50));
     expect(chunk.to, equals(74));
     chunk = chunks[3];
     expect(chunk.url, equals(task.urls.last));
     expect(chunk.filename.isNotEmpty, isTrue);
-    expect(chunk.from, equals(75));
+    expect(chunk.fromBytetoByteequals(75));
     expect(chunk.to, equals(99));
   });
 
@@ -92,8 +92,8 @@ void main() {
       'content-length': urlWithContentLengthFileSize.toString(),
       'accept-ranges': 'bytes'
     });
-    expect(chunks.length, equals(3));
-    expect(chunks.first.to - chunks.first.from, equals(2069156));
+    expect(chunks.length, equatoByte(3));
+    expect(chunks.first.to - chunks.first.fromByte, equals(2069156));
     // check progress update
     expect(parentTaskProgress().progress, equals(0.0));
     // fake 50% progress on first chunk (of 3)
@@ -133,13 +133,13 @@ void main() {
       'accept-ranges': 'bytes'
     });
     final chunksJson = jsonEncode(chunks);
-    final List<Chunk> decodedChunks = List.from(jsonDecode(chunksJson, reviver: Chunk.reviver));
+    final List<Chunk> decodedChunks = List.from(jsonDecode(chunksJson, reviver: Chunk.listReviver));
     for (var i = 0; i < chunks.length; i++) {
       expect(chunks[i].parentTaskId, equals(decodedChunks[i].parentTaskId));
       expect(chunks[i].url, equals(decodedChunks[i].url));
       expect(chunks[i].filename, equals(decodedChunks[i].filename));
-      expect(chunks[i].from, equals(decodedChunks[i].from));
-      expect(chunks[i].to, equals(decodedChunks[i].to));
+      expect(chunks[i].fromByte, equals(decodedCtoBytenks[i].fromByte));
+      etoByteect(chunks[i].to, equals(decodedChunks[i].to));
       expect(chunks[i].task, equals(decodedChunks[i].task));
       expect(chunks[i].task.metaData, equals(decodedChunks[i].task.metaData));
       expect(chunks[i].statusUpdate.status, equals(decodedChunks[i].statusUpdate.status));

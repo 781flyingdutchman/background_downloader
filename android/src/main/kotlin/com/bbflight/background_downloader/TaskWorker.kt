@@ -196,8 +196,10 @@ open class TaskWorker(
                 if (!postOnBackgroundChannel("statusUpdate", task, arg)) {
                     // unsuccessful post, so store in local prefs (without exception info)
                     Log.d(TAG, "Could not post status update -> storing locally")
-                    val jsonMap = task.toJsonMap().toMutableMap()
-                    jsonMap["taskStatus"] = status.ordinal // merge into Task JSON
+                    val jsonMap: MutableMap<String, Any?> = mutableMapOf(
+                        Pair("task", task.toJsonMap()),
+                        Pair("taskStatus", status.ordinal)
+                    )
                     storeLocally(
                         BDPlugin.keyStatusUpdateMap, task.taskId, jsonMap,
                         prefs
@@ -277,9 +279,11 @@ open class TaskWorker(
                 ) {
                     // unsuccessful post, so store in local prefs
                     Log.d(TAG, "Could not post progress update -> storing locally")
-                    val jsonMap = task.toJsonMap().toMutableMap()
-                    jsonMap["progress"] = progress // merge into Task JSON
-                    jsonMap["expectedFileSize"] = expectedFileSize
+                    val jsonMap: MutableMap<String, Any?> = mutableMapOf(
+                        Pair("task", task.toJsonMap()),
+                        Pair("progress", progress),
+                        Pair("expectedFileSize", expectedFileSize)
+                    )
                     storeLocally(
                         BDPlugin.keyProgressUpdateMap, task.taskId, jsonMap,
                         prefs
@@ -588,8 +592,6 @@ open class TaskWorker(
                             doneCompleter.complete(TaskStatus.failed)
                             break
                         }
-                        //delay(10) //TODO remove delay
-                        //throw IllegalStateException("Forced error") //TODO remove throw
                         if (numBytes > 0) {
                             outputStream.write(dataBuffer, 0, numBytes)
                             bytesTotal += numBytes
@@ -605,7 +607,11 @@ open class TaskWorker(
                             (bytesTotal + startByte).toDouble() / expectedFileSize,
                             0.999
                         )
-                        if (contentLength > 0 && shouldSendProgressUpdate(progress, currentTimeMillis())) {
+                        if (contentLength > 0 && shouldSendProgressUpdate(
+                                progress,
+                                currentTimeMillis()
+                            )
+                        ) {
                             updateProgressAndNotify(progress, expectedFileSize, task)
                         }
                     }
