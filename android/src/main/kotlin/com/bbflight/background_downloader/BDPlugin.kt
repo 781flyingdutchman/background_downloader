@@ -363,12 +363,12 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val notificationConfigJsonString = args[1] as String?
         val isResume = args.size == 5
         val resumeData: ResumeData?
-        if (isResume) {
+        resumeData = if (isResume) {
             val startByte = if (args[3] is Long) args[3] as Long else (args[3] as Int).toLong()
             val eTag = args[4] as String?
-            resumeData = ResumeData(task, args[2] as String, startByte, eTag)
+            ResumeData(task, args[2] as String, startByte, eTag)
         } else {
-            resumeData = null
+            null
         }
         result.success(
             doEnqueue(
@@ -628,12 +628,11 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val chunkTaskId = args[1] as String
         val statusOrdinal = args[2] as Int
         //TODO capture exception and responseBody as optional argument 3 and 4
-        result.success(
-            parallelDownloadTaskWorkers[taskId]?.chunkStatusUpdate(
-                chunkTaskId,
-                TaskStatus.values()[statusOrdinal]
-            )
+        parallelDownloadTaskWorkers[taskId]?.chunkStatusUpdate(
+            chunkTaskId,
+            TaskStatus.values()[statusOrdinal]
         )
+        result.success(null)
     }
 
     /**
@@ -647,12 +646,11 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val taskId = args[0] as String
         val chunkTaskId = args[1] as String
         val progress = args[2] as Double
-        result.success(
-            parallelDownloadTaskWorkers[taskId]?.chunkProgressUpdate(
-                chunkTaskId,
-                progress
-            )
+        parallelDownloadTaskWorkers[taskId]?.chunkProgressUpdate(
+            chunkTaskId,
+            progress
         )
+        result.success(null)
     }
 
     /**

@@ -19,7 +19,6 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
-import java.util.Locale
 import kotlin.math.absoluteValue
 import kotlin.math.min
 import kotlin.random.Random
@@ -193,11 +192,14 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                 "Chunk task with taskId ${chunkTask.taskId} failed, waiting $waitTimeSeconds seconds before retrying. ${chunkTask.retriesRemaining} retries remaining"
             )
             delay(waitTimeSeconds * 1000L)
-            postOnBackgroundChannel(
-                "enqueueChild",
-                task,
-                gson.toJson(chunk.task.toJsonMap())
-            )
+            if (!postOnBackgroundChannel(
+                    "enqueueChild",
+                    task,
+                    gson.toJson(chunk.task.toJsonMap())
+                )
+            ) {
+                chunkStatusUpdate(chunkTaskId, TaskStatus.failed)
+            }
         } else {
             // no retry
             val newStatusUpdate = updateChunkStatus(chunk, status)
@@ -302,9 +304,8 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
         return chunks.fold(
             0.0
         ) { previousValue, c ->
-            (previousValue + c.progress) /
-                    chunks.size;
-        }
+            previousValue + c.progress
+        } / chunks.size
     }
 
     /**
@@ -330,6 +331,9 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
         postOnBackgroundChannel("pauseTasks", task, gson.toJson(chunks.map { it.task.toJsonMap() }))
     }
 
+    /**
+     * Stitch all chunks together into one file
+     */
     private suspend fun stitchChunks(): TaskStatus {
         withContext(Dispatchers.IO) {
             try {
@@ -392,11 +396,11 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
         if (contentLength <= 0) {
             throw IllegalStateException("Server does not provide content length - cannot chunk download")
         }
-        Log.wtf(TAG, "content length = $contentLength")
+        Log.wtf(TAG, "content length = $contentLength, keys=${headers.keys}")
         parallelDownloadContentLength = contentLength
         try {
             headers.entries
-                .first { it.key?.lowercase(Locale.US) == "accept-ranges" && it.value.first() == "bytes" }
+                .first { (it.key == "accept-ranges" || it.key =="Accept-Ranges") && it.value.first() == "bytes" }
         } catch (e: NoSuchElementException) {
             throw IllegalStateException("Server does not accept ranges - cannot chunk download")
         }
@@ -415,9 +419,9 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
 
 @Suppress("UNCHECKED_CAST")
 class Chunk(
-    val parentTaskId: String,
-    val url: String,
-    val filename: String,
+    private val parentTaskId: String,
+    private val url: String,
+    private val filename: String,
     val task: Task,
     val fromByte: Long,
     val toByte: Long
@@ -429,7 +433,7 @@ class Chunk(
         /**
          * Returns [Updates] that is based on the [parentTask]
          */
-        fun updatesBasedOnParent(parentTask: Task) : Updates {
+        fun updatesBasedOnParent(parentTask: Task): Updates {
             return when (parentTask.updates) {
                 Updates.none, Updates.status -> Updates.status
                 Updates.progress, Updates.statusAndProgress -> Updates.statusAndProgress
@@ -470,18 +474,15 @@ class Chunk(
      */
     constructor(jsonMap: Map<String, Any?>) :
             this(
-                parentTaskId = jsonMap["parentTaskid"] as String? ?: "",
+                parentTaskId = jsonMap["parentTaskId"] as String? ?: "",
                 url = jsonMap["url"] as String? ?: "",
                 filename = jsonMap["filename"] as String? ?: "",
                 task = Task(jsonMap["task"] as Map<String, Any>),
                 fromByte = (jsonMap["fromByte"] as Double? ?: 0).toLong(),
                 toByte = (jsonMap["toByte"] as Double? ?: 0).toLong()
             ) {
-        // status and progress are fields within statusUpdate and progressUpdate maps
-        status =
-            TaskStatus.values()[((jsonMap["statusUpdate"] as Map<String, Any>)["status"] as Double?
-                ?: 0.0).toInt()]
-        progress = (jsonMap["progressUpdate"] as Map<String, Any>)["progress"] as Double? ?: 0.0
+        status = TaskStatus.values()[(jsonMap["status"] as Double? ?: 0.0).toInt()]
+        progress = jsonMap["progress"] as Double? ?: 0.0
     }
 
     /**
@@ -497,16 +498,8 @@ class Chunk(
             "fromByte" to fromByte,
             "toByte" to toByte,
             "task" to task.toJsonMap(),
-            "statusUpdate" to mapOf(
-                "task" to task.toJsonMap(),
-                "status" to status.ordinal,
-                "exception" to null,
-                "responseBody" to null
-            ),
-            "progressUpdate" to mapOf(
-                "task" to task.toJsonMap(),
-                "progress" to progress
-            )
+            "status" to status.ordinal,
+            "progress" to progress
         )
     }
 }

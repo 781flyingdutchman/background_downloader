@@ -15,8 +15,8 @@ class Chunk {
   final DownloadTask task; // task to download this chunk
 
   // state parameters
-  late TaskStatusUpdate statusUpdate;
-  late TaskProgressUpdate progressUpdate;
+  late TaskStatus status;
+  late double progress;
 
   /// Define a chunk by its key parameters, in default state
   ///
@@ -41,8 +41,8 @@ class Chunk {
             requiresWiFi: parentTask.requiresWiFi,
             metaData: jsonEncode(
                 {'parentTaskId': parentTask.taskId, 'from': fromByte, 'to': toByte})) {
-    statusUpdate = TaskStatusUpdate(task, TaskStatus.enqueued);
-    progressUpdate = TaskProgressUpdate(task, 0);
+    status = TaskStatus.enqueued;
+    progress = 0;
   }
 
   /// Creates object from JsonMap
@@ -53,9 +53,8 @@ class Chunk {
         fromByte = (jsonMap['fromByte'] as num).toInt(),
         toByte = (jsonMap['toByte'] as num).toInt(),
         task = Task.createFromJsonMap(jsonMap['task']) as DownloadTask,
-        statusUpdate = TaskStatusUpdate.fromJsonMap(jsonMap['statusUpdate']),
-        progressUpdate =
-        TaskProgressUpdate.fromJsonMap(jsonMap['progressUpdate']);
+        status = TaskStatus.values[(jsonMap['status'] as num).toInt()],
+        progress = (jsonMap['progress'] as num).toDouble();
 
   /// Revive List<Chunk> from a JSON map in a jsonDecode operation,
   /// where each element is a map representing the [Chunk]
@@ -71,8 +70,8 @@ class Chunk {
         'fromByte': fromByte,
         'toByte': toByte,
         'task': task.toJsonMap(),
-        'statusUpdate': statusUpdate.toJsonMap(),
-        'progressUpdate': progressUpdate.toJsonMap()
+        'status': status.index,
+        'progress': progress
       };
 
   /// Creates JSON String of this object

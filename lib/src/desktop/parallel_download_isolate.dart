@@ -85,9 +85,12 @@ Future<void> doParallelDownloadTask(
     }
   } else {
     // resume: reconstruct [chunks] and wait for all chunk tasks to complete
-    chunks = List.from(jsonDecode(resumeData!.data, reviver: Chunk.listReviver));
-    parallelDownloadContentLength = chunks.fold(0,
-        (previousValue, chunk) => previousValue + chunk.toByte - chunk.fromByte + 1);
+    chunks =
+        List.from(jsonDecode(resumeData!.data, reviver: Chunk.listReviver));
+    parallelDownloadContentLength = chunks.fold(
+        0,
+        (previousValue, chunk) =>
+            previousValue + chunk.toByte - chunk.fromByte + 1);
     final statusUpdate = await parallelTaskStatusUpdateCompleter.future;
     processStatusUpdateInIsolate(task, statusUpdate.status, sendPort);
   }
@@ -116,32 +119,32 @@ Future<void> chunkStatusUpdate(
   } else {
     // no retry
     final newStatusUpdate = updateChunkStatus(update);
-    sendPort.send(('log', 'New parent status is ${newStatusUpdate?.status}'));
-    if (newStatusUpdate != null) {
-      switch (newStatusUpdate.status) {
-        case TaskStatus.complete:
-          final result = await stitchChunks();
-          processStatusUpdateInIsolate(task, result, sendPort);
-          break;
+    sendPort.send(('log', 'New parent status is $newStatusUpdate'));
+    switch (newStatusUpdate) {
+      case TaskStatus.complete:
+        final result = await stitchChunks();
+        parallelTaskStatusUpdateCompleter
+            .complete(TaskStatusUpdate(task, result));
+        break;
 
-        case TaskStatus.failed:
-          taskException = update.exception;
-          responseBody = update.responseBody;
-          cancelAllChunkTasks(sendPort);
-          parallelTaskStatusUpdateCompleter
-              .complete(TaskStatusUpdate(task, TaskStatus.failed));
-          break;
+      case TaskStatus.failed:
+        taskException = update.exception;
+        responseBody = update.responseBody;
+        cancelAllChunkTasks(sendPort);
+        parallelTaskStatusUpdateCompleter
+            .complete(TaskStatusUpdate(task, TaskStatus.failed, taskException, responseBody));
+        break;
 
-        case TaskStatus.notFound:
-          cancelAllChunkTasks(sendPort);
-          parallelTaskStatusUpdateCompleter
-              .complete(TaskStatusUpdate(task, TaskStatus.notFound));
-          break;
+      case TaskStatus.notFound:
+        responseBody = update.responseBody;
+        cancelAllChunkTasks(sendPort);
+        parallelTaskStatusUpdateCompleter
+            .complete(TaskStatusUpdate(task, TaskStatus.notFound, null, responseBody));
+        break;
 
-        default:
-          // ignore all other status updates
-          break;
-      }
+      default:
+        // ignore all other status updates, including null
+        break;
     }
   }
 }
@@ -151,40 +154,40 @@ Future<void> chunkStatusUpdate(
 ///
 /// The updates are received from the [DeskTopDownloader], which intercepts
 /// status updates for the [chunkGroup]. Not all regular statuses are passed on
-TaskStatusUpdate? updateChunkStatus(TaskStatusUpdate update) {
+TaskStatus? updateChunkStatus(TaskStatusUpdate update) {
   final chunk = chunks.firstWhereOrNull((chunk) => chunk.task == update.task);
   if (chunk == null) {
     return null; // chunk is not part of this parent task
   }
-  chunk.statusUpdate = update;
-  final newStatusUpdate = parentTaskStatusUpdate();
-  if ((newStatusUpdate != null && newStatusUpdate.status != lastTaskStatus)) {
-    lastTaskStatus = newStatusUpdate.status;
+  chunk.status = update.status;
+  final newStatusUpdate = parentTaskStatus();
+  if ((newStatusUpdate != null && newStatusUpdate != lastTaskStatus)) {
+    lastTaskStatus = newStatusUpdate;
     return newStatusUpdate;
   }
   return null;
 }
 
-/// Returns the [TaskStatusUpdate] for the parent of this chunk, as derived from
+/// Returns the [TaskStatus] for the parent of this chunk, as derived from
 /// the 'sum' of the child tasks, or null if undetermined
 ///
 /// The updates are received from the [DeskTopDownloader], which intercepts
 /// status updates for the [chunkGroup]
-TaskStatusUpdate? parentTaskStatusUpdate() {
-  final failed = chunks.firstWhereOrNull(
-      (chunk) => chunk.statusUpdate.status == TaskStatus.failed);
+TaskStatus? parentTaskStatus() {
+  final failed =
+      chunks.firstWhereOrNull((chunk) => chunk.status == TaskStatus.failed);
   if (failed != null) {
-    return failed.statusUpdate.copyWith(task: parentTask);
+    return TaskStatus.failed;
   }
-  final notFound = chunks.firstWhereOrNull(
-      (chunk) => chunk.statusUpdate.status == TaskStatus.notFound);
+  final notFound =
+      chunks.firstWhereOrNull((chunk) => chunk.status == TaskStatus.notFound);
   if (notFound != null) {
-    return notFound.statusUpdate.copyWith(task: parentTask);
+    return TaskStatus.notFound;
   }
   final allComplete =
-      chunks.every((chunk) => chunk.statusUpdate.status == TaskStatus.complete);
+      chunks.every((chunk) => chunk.status == TaskStatus.complete);
   if (allComplete) {
-    return chunks.first.statusUpdate.copyWith(task: parentTask);
+    return TaskStatus.complete;
   }
   return null;
 }
@@ -199,10 +202,10 @@ void chunkProgressUpdate(
   if (update.progress > 0 && update.progress < 1) {
     final parentProgressUpdate = updateChunkProgress(update);
     if (parentProgressUpdate != null &&
-        shouldSendProgressUpdate(parentProgressUpdate.progress, now)) {
-      processProgressUpdateInIsolate(task, parentProgressUpdate.progress, sendPort,
-          parallelDownloadContentLength);
-      lastProgressUpdate = parentProgressUpdate.progress;
+        shouldSendProgressUpdate(parentProgressUpdate, now)) {
+      processProgressUpdateInIsolate(
+          task, parentProgressUpdate, sendPort, parallelDownloadContentLength);
+      lastProgressUpdate = parentProgressUpdate;
       nextProgressUpdateTime = now.add(const Duration(milliseconds: 500));
     }
   }
@@ -214,29 +217,27 @@ void chunkProgressUpdate(
 /// The updates are received from the [DeskTopDownloader], which intercepts
 /// progress updates for the [chunkGroup].
 /// Only true progress updates (in range 0-1) are passed on to this method
-TaskProgressUpdate? updateChunkProgress(TaskProgressUpdate update) {
+double? updateChunkProgress(TaskProgressUpdate update) {
   final chunk = chunks.firstWhereOrNull((chunk) => chunk.task == update.task);
   if (chunk == null) {
     return null; // chunk is not part of this parent task
   }
-  chunk.progressUpdate = update;
+  chunk.progress = update.progress;
   return parentTaskProgress();
 }
 
-/// Returns the [TaskProgressUpdate] for the parent of this chunk, as derived
+/// Returns the progress for the parent of this chunk, as derived
 /// from the 'sum' of the child tasks
 ///
 /// The updates are received from the [DeskTopDownloader], which intercepts
 /// progress updates for the [chunkGroup].
 /// Only true progress updates (in range 0-1) are passed on to this method,
 /// so we just calculate the average progress
-TaskProgressUpdate parentTaskProgress() {
+double parentTaskProgress() {
   final avgProgress = chunks.fold(
-          0.0,
-          (previousValue, chunk) =>
-              previousValue + chunk.progressUpdate.progress) /
+          0.0, (previousValue, chunk) => previousValue + chunk.progress) /
       chunks.length;
-  return TaskProgressUpdate(parentTask, avgProgress);
+  return avgProgress;
 }
 
 /// Cancel this [ParallelDownloadTask]
@@ -345,12 +346,14 @@ List<Chunk> createChunks(
       .firstWhere((element) => element.key.toLowerCase() == 'content-length')
       .value);
   if (contentLength <= 0) {
-    throw StateError('Server does not provide content length - cannot chunk download');
+    throw StateError(
+        'Server does not provide content length - cannot chunk download');
   }
   parallelDownloadContentLength = contentLength;
   try {
     headers.entries.firstWhere((element) =>
-    element.key.toLowerCase() == 'accept-ranges' && element.value == 'bytes');
+        element.key.toLowerCase() == 'accept-ranges' &&
+        element.value == 'bytes');
   } on StateError {
     throw StateError('Server does not accept ranges - cannot chunk download');
   }

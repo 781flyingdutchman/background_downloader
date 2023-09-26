@@ -149,9 +149,10 @@ void main() {
       expect(await FileDownloader().enqueue(task.copyWith(url: urlWithContentLength)), isTrue);
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.complete));
+      expect(statusCallbackCounter, equals(3));
       final file = File(await task.filePath());
       expect(file.existsSync(), isTrue);
-      expect(await file.length(), equals(urlWithContentLengthFileSize));
+      expect(await fileEqualsTestFile(file), isTrue);
     });
 
     test('simple enqueue, 2 chunks, 2 url', () async {
@@ -161,9 +162,10 @@ void main() {
       expect(await FileDownloader().enqueue(task), isTrue);
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.complete));
+      expect(statusCallbackCounter, equals(3));
       final file = File(await task.filePath());
       expect(file.existsSync(), isTrue);
-      expect(await file.length(), equals(urlWithContentLengthFileSize));
+      expect(await fileEqualsTestFile(file), isTrue);
     });
 
     test('simple enqueue with progress, 2 chunks, 1 url', () async {
@@ -237,4 +239,14 @@ void main() {
       expect(await file.length(), equals(urlWithLongContentLengthFileSize));
     });
   });
+}
+
+
+/// Returns true if the supplied file equals the test file
+Future<bool> fileEqualsTestFile(File file) async {
+  ByteData data = await rootBundle.load("assets/$defaultFilename");
+  final targetData = data.buffer.asUint8List();
+  final fileData = file.readAsBytesSync();
+  print('target= ${targetData.length} and file= ${fileData.length}');
+  return listEquals(targetData, fileData);
 }
