@@ -47,7 +47,7 @@ abstract base class NativeDownloader extends BaseDownloader {
           } else {
             // this is a chunk task, so pass to native
             await methodChannel.invokeMethod('chunkStatusUpdate',
-                [Chunk.getParentTaskId(task), task.taskId, status.index]);
+                [Chunk.getParentTaskId(task), task.taskId, status.index, null, null]);
           }
 
         // status update with responseBody, no exception
@@ -93,7 +93,7 @@ abstract base class NativeDownloader extends BaseDownloader {
               Chunk.getParentTaskId(task),
               task.taskId,
               status.index,
-              exception?.toJsonMap(),
+              exception?.toJson(),
               responseBody
             ]);
           }
@@ -160,11 +160,10 @@ abstract base class NativeDownloader extends BaseDownloader {
                       Task.createFromJsonMap(value as Map<String, dynamic>),
                     _ => value
                   }));
-          print(listOfTasks);
           // execute the pause calls with a delay, to free up the message queue
           Future.delayed(const Duration(milliseconds: 100)).then((_) async {
             for (final chunkTask in listOfTasks) {
-              print(await FileDownloader().pause(chunkTask));
+              await FileDownloader().pause(chunkTask);
             }
           });
 
@@ -250,7 +249,6 @@ abstract base class NativeDownloader extends BaseDownloader {
                   taskResumeData.eTag
                 ]) ??
                 false;
-        print("resume with enqueueSuccess=$enqueueSuccess");
         if (enqueueSuccess && task is ParallelDownloadTask) {
           return resumeChunkTasks(task, taskResumeData);
         }

@@ -194,7 +194,50 @@ void main() {
       expect(lastStatus, equals(TaskStatus.failed));
     });
 
-    //TODO add 404 test (Not Found)
+    testWidgets('no content length', (widgetTester) async {
+      task = task.copyWith(url: 'https://google.com');
+      if (Platform.isIOS) {
+        // different from a normal download task, enqueue fails immediately
+        expect(await FileDownloader().enqueue(task), isFalse);
+      }
+      // as a result, the task fails instead of .notFound, and no responseBody is available
+      final result = await FileDownloader().download(task);
+      expect(result.status, equals(TaskStatus.failed));
+      if (Platform.isIOS) {
+        expect(
+            result.exception?.description.startsWith('Could not enqueue task'),
+            isTrue);
+      }
+      if (Platform.isAndroid || Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
+        expect(
+            result.exception?.description.endsWith('Server does not provide content length - cannot chunk download'),
+            isTrue);
+      }
+      expect(result.responseBody, isNull);
+    });
+
+
+    testWidgets('not found', (widgetTester) async {
+      task = task.copyWith(url: 'https://avmaps-dot-bbflightserver-hrd.appspot.com/something');
+      if (Platform.isIOS) {
+        // different from a normal download task, enqueue fails immediately
+        expect(await FileDownloader().enqueue(task), isFalse);
+      }
+      final result = await FileDownloader().download(task);
+      if (Platform.isIOS) {
+        // as a result, the task fails instead of .notFound, and no responseBody is available
+        expect(result.status, equals(TaskStatus.failed));
+        expect(
+            result.exception?.description.startsWith('Could not enqueue task'),
+            isTrue);
+        expect(result.responseBody, isNull);
+      }
+      if (Platform.isAndroid || Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
+        expect(result.status, equals(TaskStatus.notFound));
+        expect(result.exception, isNull);
+        expect(result.responseBody ?? '', equals(''));
+      }
+    });
 
     test('retries - must modify transferBytes to fail', () async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);

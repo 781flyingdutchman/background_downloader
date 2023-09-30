@@ -77,11 +77,19 @@ Future<void> doParallelDownloadTask(
       processStatusUpdateInIsolate(task, statusUpdate.status, sendPort);
     } else {
       sendPort
-          .send(('log', 'Invalid server response code ${response.statusCode}'));
-      taskException = TaskHttpException(
-          'Invalid server response code ${response.statusCode}',
-          response.statusCode);
-      processStatusUpdateInIsolate(task, TaskStatus.failed, sendPort);
+          .send(('log', 'TaskId ${task.taskId}: Invalid server response code ${response.statusCode}'));
+      // not an OK response
+      responseBody = response.body;
+      if (response.statusCode == 404) {
+        processStatusUpdateInIsolate(task, TaskStatus.notFound, sendPort);
+      } else {
+        taskException = TaskHttpException(
+            responseBody?.isNotEmpty == true
+                ? responseBody!
+                : response.reasonPhrase ?? 'Invalid HTTP Request',
+            response.statusCode);
+        processStatusUpdateInIsolate(task, TaskStatus.failed, sendPort);
+      }
     }
   } else {
     // resume: reconstruct [chunks] and wait for all chunk tasks to complete
@@ -341,30 +349,35 @@ Future<TaskStatus> stitchChunks() async {
 /// to a failure of the [ParallelDownloadTask]
 List<Chunk> createChunks(
     ParallelDownloadTask task, Map<String, String> headers) {
-  final numChunks = task.urls.length * task.chunks;
-  final contentLength = int.parse(headers.entries
-      .firstWhere((element) => element.key.toLowerCase() == 'content-length')
-      .value);
-  if (contentLength <= 0) {
+  try {
+    final numChunks = task.urls.length * task.chunks;
+    final contentLength = int.parse(headers.entries
+        .firstWhere((element) => element.key.toLowerCase() == 'content-length')
+        .value);
+    if (contentLength <= 0) {
+      throw StateError(
+          'Server does not provide content length - cannot chunk download');
+    }
+    parallelDownloadContentLength = contentLength;
+    try {
+      headers.entries.firstWhere((element) =>
+      element.key.toLowerCase() == 'accept-ranges' &&
+          element.value == 'bytes');
+    } on StateError {
+      throw StateError('Server does not accept ranges - cannot chunk download');
+    }
+    final chunkSize = (contentLength / numChunks).ceil();
+    return [
+      for (var i = 0; i < numChunks; i++)
+        Chunk(
+            parentTask: task,
+            url: task.urls[i % task.urls.length],
+            filename: Random().nextInt(1 << 32).toString(),
+            fromByte: i * chunkSize,
+            toByte: min(i * chunkSize + chunkSize - 1, contentLength - 1))
+    ];
+  } on StateError {
     throw StateError(
         'Server does not provide content length - cannot chunk download');
   }
-  parallelDownloadContentLength = contentLength;
-  try {
-    headers.entries.firstWhere((element) =>
-        element.key.toLowerCase() == 'accept-ranges' &&
-        element.value == 'bytes');
-  } on StateError {
-    throw StateError('Server does not accept ranges - cannot chunk download');
-  }
-  final chunkSize = (contentLength / numChunks).ceil();
-  return [
-    for (var i = 0; i < numChunks; i++)
-      Chunk(
-          parentTask: task,
-          url: task.urls[i % task.urls.length],
-          filename: Random().nextInt(1 << 32).toString(),
-          fromByte: i * chunkSize,
-          toByte: min(i * chunkSize + chunkSize - 1, contentLength - 1))
-  ];
 }

@@ -106,13 +106,22 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                                 }
                             }
                         } else {
-                            Log.i(TAG, "Invalid server response code ${connection.responseCode}")
-                            taskException = TaskException(
-                                ExceptionType.httpResponse,
-                                connection.responseCode,
-                                "Invalid server response code ${connection.responseCode}",
+                            // HTTP response code not OK
+                            Log.i(
+                                TAG,
+                                "Response code ${connection.responseCode} for taskId ${task.taskId}"
                             )
-                            parallelTaskStatusUpdateCompleter.complete(TaskStatus.failed)
+                            val errorContent = responseErrorContent(connection)
+                            taskException = TaskException(
+                                ExceptionType.httpResponse, httpResponseCode = connection.responseCode,
+                                description = if (errorContent?.isNotEmpty() == true) errorContent else connection.responseMessage
+                            )
+                            if (connection.responseCode == 404) {
+                                responseBody = errorContent
+                                parallelTaskStatusUpdateCompleter.complete(TaskStatus.notFound)
+                            } else {
+                                parallelTaskStatusUpdateCompleter.complete(TaskStatus.failed)
+                            }
                         }
                     } else {
                         // resume: reconstruct [chunks] and wait for all chunk tasks to complete.
@@ -178,11 +187,10 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
     /**
      * Process incoming [status] update for a chunk with [chunkTaskId]
      */
-    suspend fun chunkStatusUpdate(chunkTaskId: String, status: TaskStatus) {
+    suspend fun chunkStatusUpdate(chunkTaskId: String, status: TaskStatus, taskException: TaskException?, responseBody: String?) {
         val chunk = chunks.firstOrNull { it.task.taskId == chunkTaskId }
             ?: return // chunk is not part of this parent task
         val chunkTask = chunk.task
-        Log.wtf(TAG, "Received $status for ${chunkTask.taskId}")
         // first check for fail -> retry
         if (status == TaskStatus.failed && chunkTask.retriesRemaining > 0) {
             chunkTask.retriesRemaining--
@@ -198,12 +206,11 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                     gson.toJson(chunk.task.toJsonMap())
                 )
             ) {
-                chunkStatusUpdate(chunkTaskId, TaskStatus.failed)
+                chunkStatusUpdate(chunkTaskId, TaskStatus.failed, taskException, responseBody)
             }
         } else {
             // no retry
             val newStatusUpdate = updateChunkStatus(chunk, status)
-            Log.w(TAG, "New parent status is $newStatusUpdate")
             if (newStatusUpdate != null) {
                 when (newStatusUpdate) {
                     TaskStatus.complete -> {
@@ -212,13 +219,14 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                     }
 
                     TaskStatus.failed -> {
-                        taskException =
-                            TaskException(ExceptionType.general, -1, "Chunk failed to download")
+                        this.taskException = taskException
                         cancelAllChunkTasks()
                         parallelTaskStatusUpdateCompleter.complete(TaskStatus.failed)
                     }
 
                     TaskStatus.notFound -> {
+                        this.taskException = taskException
+                        this.responseBody = responseBody
                         cancelAllChunkTasks()
                         parallelTaskStatusUpdateCompleter.complete(TaskStatus.notFound)
                     }
@@ -389,30 +397,34 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
         headers: MutableMap<String, MutableList<String>>
     ): List<Chunk> {
         val numChunks = task.urls.size * task.chunks
-        val contentLength = headers.entries
-            .first { it.key == "content-length" || it.key == "Content-Length" }
-            .value
-            .first().toLong()
-        if (contentLength <= 0) {
-            throw IllegalStateException("Server does not provide content length - cannot chunk download")
-        }
-        Log.wtf(TAG, "content length = $contentLength, keys=${headers.keys}")
-        parallelDownloadContentLength = contentLength
         try {
-            headers.entries
-                .first { (it.key == "accept-ranges" || it.key =="Accept-Ranges") && it.value.first() == "bytes" }
+            val contentLength = headers.entries
+                .first { it.key == "content-length" || it.key == "Content-Length" }
+                .value
+                .first().toLong()
+            if (contentLength <= 0) {
+                throw IllegalStateException("Server does not provide content length - cannot chunk download")
+            }
+            Log.wtf(TAG, "content length = $contentLength, keys=${headers.keys}")
+            parallelDownloadContentLength = contentLength
+            try {
+                headers.entries
+                    .first { (it.key == "accept-ranges" || it.key == "Accept-Ranges") && it.value.first() == "bytes" }
+            } catch (e: NoSuchElementException) {
+                throw IllegalStateException("Server does not accept ranges - cannot chunk download")
+            }
+            val chunkSize = (contentLength / numChunks) + 1
+            return (0 until numChunks).map { i ->
+                Chunk(
+                    parentTask = task,
+                    url = task.urls[i % task.urls.size],
+                    filename = "com.bbflight.background_downloader.${Random.nextInt().absoluteValue}",
+                    from = i * chunkSize,
+                    to = min(i * chunkSize + chunkSize - 1, contentLength - 1)
+                )
+            }
         } catch (e: NoSuchElementException) {
-            throw IllegalStateException("Server does not accept ranges - cannot chunk download")
-        }
-        val chunkSize = (contentLength / numChunks) + 1
-        return (0 until numChunks).map { i ->
-            Chunk(
-                parentTask = task,
-                url = task.urls[i % task.urls.size],
-                filename = "com.bbflight.background_downloader.${Random.nextInt().absoluteValue}",
-                from = i * chunkSize,
-                to = min(i * chunkSize + chunkSize - 1, contentLength - 1)
-            )
+            throw IllegalStateException("Server does not provide content length - cannot chunk download")
         }
     }
 }

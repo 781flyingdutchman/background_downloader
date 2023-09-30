@@ -17,7 +17,11 @@ func scheduleParallelDownload(task: Task, taskDescription: String, baseRequest: 
     if !isResume {
         let dataTask = URLSession.shared.dataTask(with: baseRequest) { (data, response, error) in
             if let httpResponse = response as? HTTPURLResponse, error == nil {
-                if !parallelDownload.start(contentLength: Int64(httpResponse.value(forHTTPHeaderField: "Content-Length") ?? "0") ?? 0) {
+                if httpResponse.statusCode == 404 {
+                    os_log("URL not found for taskId %@", log: log, type: .info, task.taskId)
+                    postResult(result: result, value: false)
+                }
+                else if !parallelDownload.start(contentLength: Int64(httpResponse.value(forHTTPHeaderField: "Content-Length") ?? "0") ?? 0) {
                     os_log("Cannot chunk or enqueue download", log: log, type: .info)
                     postResult(result: result, value: false)
                 } else {
@@ -139,7 +143,7 @@ public class ParallelDownloader: NSObject {
     }
     
     /// Process incoming [status] update for a chunk with [chunkTaskId]
-    func chunkStatusUpdate(chunkTaskId: String, status: TaskStatus) {
+    func chunkStatusUpdate(chunkTaskId: String, status: TaskStatus, taskException: TaskException?, responseBody: String?) {
         guard let chunk = chunks.first(where: { $0.task.taskId == chunkTaskId }) else { return } // chunk is not part of this parent task
         // first check for fail -> retry
         if status == .failed && chunk.task.retriesRemaining > 0 {
@@ -152,7 +156,7 @@ public class ParallelDownloader: NSObject {
                     task: self.parentTask,
                     arg: jsonStringFor(task: chunk.task)!
                 ) {
-                    self.chunkStatusUpdate(chunkTaskId: chunkTaskId, status: .failed)
+                    self.chunkStatusUpdate(chunkTaskId: chunkTaskId, status: .failed, taskException: taskException, responseBody: responseBody)
                 }
             }
         } else {
@@ -166,10 +170,11 @@ public class ParallelDownloader: NSObject {
                         let stitchResult = stitchChunks()
                         finishTask(status: stitchResult)
                     case .failed:
-                        taskException = TaskException(type: ExceptionType.general, description: "Chunk failed to download")
+                        self.taskException = taskException
                         cancelAllChunkTasks()
                         finishTask(status: .failed)
                     case .notFound:
+                        self.responseBody = responseBody
                         cancelAllChunkTasks()
                         finishTask(status: .notFound)
                     default:
@@ -324,7 +329,6 @@ public class ParallelDownloader: NSObject {
         else {
             return false
         }
-        os_log("ChunksData = %@", log: log, type: .info, String(data: chunksData, encoding: .utf8)!)
         if !postOnBackgroundChannel(method: "pauseTasks", task: parentTask, arg: String(data: chunkTasksData, encoding: .utf8)!)
         {
             os_log("Could not pause chunk tasks for taskId %@", log: log, type: .info, parentTask.taskId)

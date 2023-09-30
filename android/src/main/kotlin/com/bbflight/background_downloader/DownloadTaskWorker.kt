@@ -246,7 +246,7 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
             // HTTP response code not OK
             Log.i(
                 TAG,
-                "Response code ${connection.responseCode} for download from  ${task.url} to $filePath"
+                "Response code ${connection.responseCode} for taskId ${task.taskId}"
             )
             val errorContent = responseErrorContent(connection)
             taskException = TaskException(

@@ -439,7 +439,10 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             result(nil)
             return
         }
-        parallelDownloadTask.chunkStatusUpdate(chunkTaskId: chunkTaskId, status: TaskStatus.init(rawValue: statusRawvalue)!)
+        let exceptionJson = args[3] as? String
+        let exception = exceptionJson != nil ? taskException(jsonString: exceptionJson!) : nil
+        let responseBody = args[4] as? String
+        parallelDownloadTask.chunkStatusUpdate(chunkTaskId: chunkTaskId, status: TaskStatus.init(rawValue: statusRawvalue)!, taskException: exception, responseBody: responseBody)
         result(nil)
     }
     
@@ -620,7 +623,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         if Downloader.progressInfo[task.taskId] == nil {
             // first 'didWriteData' call
             // Check if there is enough space
-            if true || insufficientSpace(contentLength: totalBytesExpectedToWrite) { //TODO remove true
+            if insufficientSpace(contentLength: totalBytesExpectedToWrite) {
                 if !Downloader.taskIdsProgrammaticallyCancelled.contains(task.taskId) {
                     os_log("Error for taskId %@: Insufficient space to store the file to be downloaded", log: log, type: .error, task.taskId)
                     processStatusUpdate(task: task, status: .failed, taskException: TaskException(type: .fileSystem, httpResponseCode: -1, description: "Insufficient space to store the file to be downloaded for taskId \(task.taskId)"))

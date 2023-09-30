@@ -72,19 +72,19 @@ enum ExceptionType: String {
     // General error
     general = "TaskException",
     
-
+    
     // Could not save or find file, or create directory
     fileSystem = "TaskFileSystemException",
-
+    
     // URL incorrect
     url = "TaskUrlException",
-
+    
     // Connection problem, eg host not found, timeout
     connection = "TaskConnectionException",
-
+    
     // Could not resume or pause task
     resume = "TaskResumeException",
-
+    
     // Invalid HTTP response
     httpResponse = "TaskHttpException"
 }
@@ -102,4 +102,12 @@ struct TaskException {
     var type: ExceptionType
     var httpResponseCode: Int = -1
     var description: String
+}
+
+func taskException(jsonString: String) -> TaskException {
+    if let jsonMap = try! JSONSerialization.jsonObject(with: jsonString.data(using: .utf8)!, options: []) as? [String: Any] {
+        return TaskException(type: ExceptionType(rawValue: jsonMap["type"] as! String) ?? ExceptionType.general
+, httpResponseCode: jsonMap["httpResponseCode"] as? Int ?? -1, description:  jsonMap["description"] as! String  )
+    }
+    return TaskException(type: .general, description: "Unknown error")
 }
