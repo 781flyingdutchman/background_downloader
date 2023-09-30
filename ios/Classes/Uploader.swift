@@ -25,15 +25,12 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
     var totalBytesWritten: Int64 = 0
     static let boundary = "-----background_downloader-akjhfw281onqciyhnIk"
     let lineFeed = "\r\n"
-    
     let asciiOnly = try! NSRegularExpression(pattern: "^[\\x00-\\x7F]+$")
     let newlineRegExp = try! NSRegularExpression(pattern: "\r\n|\r|\n")
+    let bufferSize = 2 << 13
     
     
-    let bufferSize = 8192
-    
-    
-    /// Initialize an Uploader for this Task and urlSessionTaskIdentifies
+    /// Initialize an Uploader for this Task
     init(task: Task) {
         self.task = task
         outputFilename = NSUUID().uuidString

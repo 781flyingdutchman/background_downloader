@@ -161,9 +161,12 @@ abstract base class NativeDownloader extends BaseDownloader {
                     _ => value
                   }));
           print(listOfTasks);
-          for (final chunkTask in listOfTasks) {
-            print(await FileDownloader().pause(chunkTask));
-          }
+          // execute the pause calls with a delay, to free up the message queue
+          Future.delayed(const Duration(milliseconds: 100)).then((_) async {
+            for (final chunkTask in listOfTasks) {
+              print(await FileDownloader().pause(chunkTask));
+            }
+          });
 
         default:
           log.warning('Background channel: no match for message $message');

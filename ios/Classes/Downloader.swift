@@ -4,7 +4,7 @@ import BackgroundTasks
 import os.log
 import MobileCoreServices
 
-let log = OSLog.init(subsystem: "FileDownloaderPlugin", category: "Downloader")
+let log = OSLog.init(subsystem: "BackgroundDownloader", category: "Downloader")
 
 public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSessionDownloadDelegate, URLSessionDataDelegate, UNUserNotificationCenterDelegate {
     
@@ -41,10 +41,6 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     static var remainingBytesToDownload = [String : Int64]()  // keyed by taskId
     static var responseBodyData = [String: [Data]]() // list of Data objects received for this UploadTask id
     
-    private override init() {
-        super.init()
-    }
-    
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "com.bbflight.background_downloader", binaryMessenger: registrar.messenger())
         backgroundChannel = FlutterMethodChannel(name: "com.bbflight.background_downloader.background", binaryMessenger: registrar.messenger())
@@ -60,56 +56,64 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     /// Handler for Flutter plugin method channel calls
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         switch call.method {
-        case "reset":
-            _Concurrency.Task {
-                await methodReset(call: call, result: result)
-            }
-        case "enqueue":
-            methodEnqueue(call: call, result: result)
-        case "allTasks":
-            _Concurrency.Task {
-                await methodAllTasks(call: call, result: result)
-            }
-        case "cancelTasksWithIds":
-            _Concurrency.Task {
-                await methodCancelTasksWithIds(call: call, result: result)
-            }
-        case "taskForId":
-            _Concurrency.Task {
-                await methodTaskForId(call: call, result: result)
-            }
-        case "pause":
-            _Concurrency.Task {
-                await methodPause(call: call, result: result)
-            }
-        case "popResumeData":
-            methodPopResumeData(result: result)
-        case "popStatusUpdates":
-            methodPopStatusUpdates(result: result)
-        case "popProgressUpdates":
-            methodPopProgressUpdates(result: result)
-        case "moveToSharedStorage":
-            methodMoveToSharedStorage(call: call, result: result)
-        case "pathInSharedStorage":
-            methodPathInSharedStorage(call: call, result: result)
-        case "openFile":
-            methodOpenFile(call: call, result: result)
-        case "configLocalize":
-            methodStoreConfig(key: Downloader.keyConfigLocalize, value: call.arguments, result: result)
-        case "configResourceTimeout":
-            methodStoreConfig(key: Downloader.keyConfigResourceTimeout, value: call.arguments, result: result)
-        case "configRequestTimeout":
-            methodStoreConfig(key: Downloader.keyConfigRequestTimeout, value: call.arguments, result: result)
-        case "configProxyAddress":
-            methodStoreConfig(key: Downloader.keyConfigProxyAdress, value: call.arguments, result: result)
-        case "configProxyPort":
-            methodStoreConfig(key: Downloader.keyConfigProxyPort, value: call.arguments, result: result)
-        case "configCheckAvailableSpace":
-            methodStoreConfig(key: Downloader.keyConfigCheckAvailableSpace, value: call.arguments, result: result)
-        case "forceFailPostOnBackgroundChannel":
-            methodForceFailPostOnBackgroundChannel(call: call, result: result)
-        default:
-            result(FlutterMethodNotImplemented)
+            case "reset":
+                _Concurrency.Task {
+                    await methodReset(call: call, result: result)
+                }
+            case "enqueue":
+                methodEnqueue(call: call, result: result)
+            case "allTasks":
+                _Concurrency.Task {
+                    await methodAllTasks(call: call, result: result)
+                }
+            case "cancelTasksWithIds":
+                _Concurrency.Task {
+                    await methodCancelTasksWithIds(call: call, result: result)
+                }
+            case "taskForId":
+                _Concurrency.Task {
+                    await methodTaskForId(call: call, result: result)
+                }
+            case "pause":
+                _Concurrency.Task {
+                    await methodPause(call: call, result: result)
+                }
+            case "moveToSharedStorage":
+                methodMoveToSharedStorage(call: call, result: result)
+            case "pathInSharedStorage":
+                methodPathInSharedStorage(call: call, result: result)
+            case "openFile":
+                methodOpenFile(call: call, result: result)
+                /// ParallelDownloadTask child updates
+            case "chunkStatusUpdate":
+                methodUpdateChunkStatus(call: call, result: result)
+            case "chunkProgressUpdate":
+                methodUpdateChunkProgress(call: call, result: result)
+                /// internal use
+            case "popResumeData":
+                methodPopResumeData(result: result)
+            case "popStatusUpdates":
+                methodPopStatusUpdates(result: result)
+            case "popProgressUpdates":
+                methodPopProgressUpdates(result: result)
+                /// configuration
+            case "configLocalize":
+                methodStoreConfig(key: Downloader.keyConfigLocalize, value: call.arguments, result: result)
+            case "configResourceTimeout":
+                methodStoreConfig(key: Downloader.keyConfigResourceTimeout, value: call.arguments, result: result)
+            case "configRequestTimeout":
+                methodStoreConfig(key: Downloader.keyConfigRequestTimeout, value: call.arguments, result: result)
+            case "configProxyAddress":
+                methodStoreConfig(key: Downloader.keyConfigProxyAdress, value: call.arguments, result: result)
+            case "configProxyPort":
+                methodStoreConfig(key: Downloader.keyConfigProxyPort, value: call.arguments, result: result)
+            case "configCheckAvailableSpace":
+                methodStoreConfig(key: Downloader.keyConfigCheckAvailableSpace, value: call.arguments, result: result)
+            case "forceFailPostOnBackgroundChannel":
+                methodForceFailPostOnBackgroundChannel(call: call, result: result)
+            default:
+                os_log("Invalid method: %@", log: log, type: .error, call.method)
+                result(FlutterMethodNotImplemented)
         }
     }
     
@@ -164,7 +168,11 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         if task.requiresWiFi {
             baseRequest.allowsCellularAccess = false
         }
-        if isDownloadTask(task: task)
+        if isParallelDownloadTask(task: task) {
+            // ParallelDownloadTask itself is not part of a urlSession, so handled separately
+            baseRequest.httpMethod = "HEAD" // override
+            scheduleParallelDownload(task: task, taskDescription: taskDescription, baseRequest: baseRequest, resumeData: resumeDataAsBase64String, result: result)
+        } else if isDownloadTask(task: task)
         {
             scheduleDownload(task: task, taskDescription: taskDescription, baseRequest: baseRequest, resumeData: resumeData, result: result)
         } else
@@ -267,6 +275,8 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             return taskIds.contains(task.taskId)
         })
         tasksToCancel.forEach({$0.cancel()})
+        // cancel all ParallelDownloadTasks (they would not have shown up in tasksToCancel)
+        taskIds.forEach { ParallelDownloader.downloads[$0]?.cancelTask() }
         result(true)
     }
     
@@ -285,16 +295,37 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     /// If pause is not successful, task will be canceled (attempted)
     private func methodPause(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let taskId = call.arguments as! String
+        os_log("Pause taskId %@", log: log, type: .info, taskId)
         Downloader.urlSession = Downloader.urlSession ?? createUrlSession()
+        Downloader.taskIdsProgrammaticallyCancelled.insert(taskId)
         guard let urlSessionTask = await getUrlSessionTaskWithId(taskId: taskId) as? URLSessionDownloadTask,
               let task = await getTaskWithId(taskId: taskId),
               let resumeData = await urlSessionTask.cancelByProducingResumeData()
         else {
-            os_log("Could not pause task - likely not enqueued yet", log: log, type: .info)
-            result(false)
+            // no regular task found, return if there's no ParalleldownloadTask either
+            Downloader.taskIdsProgrammaticallyCancelled.remove(taskId)
+            if ParallelDownloader.downloads[taskId] == nil {
+                os_log("Could not pause task %@", log: log, type: .info, taskId)
+                result(false)
+            } else {
+                os_log("Pause ParallelDownloadTask %@", log: log, type: .info, taskId)
+                if await ParallelDownloader.downloads[taskId]?.pauseTask() == true {
+                    result(true)
+                } else {
+                    os_log("Could not pause taskId %@", log: log, type: .info, taskId)
+                    result(false)
+                }
+            }
             return
         }
-        result(processResumeData(task: task, resumeData: resumeData))
+        if processResumeData(task: task, resumeData: resumeData) {
+            processStatusUpdate(task: task, status: .paused)
+            os_log("Successfully paused taskId %@", log: log, type: .info, taskId)
+            result(true)
+        } else {
+            os_log("Could not post resume data for taskId %@: task paused but cannot be resumed", log: log, type: .info, taskId)
+            result(false)
+        }
     }
     
     /// Returns a JSON String of a map of [ResumeData], keyed by taskId, that has been stored
@@ -390,6 +421,43 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         let mimeType = args[2] as? String
         success = doOpenFile(filePath: filePath!, mimeType: mimeType)
     }
+    
+     /// Update the status of one chunk (part of a ParallelDownloadTask), and returns
+     /// the status of the parent task based on the 'sum' of its children, or null
+     /// if unchanged
+     ///
+     /// Arguments are the parent TaskId, chunk taskId, taskStatusOrdinal
+    private func methodUpdateChunkStatus(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        let args = call.arguments as! [Any]
+        guard
+            let taskId = args[0] as? String,
+            let chunkTaskId = args[1] as? String,
+            let statusRawvalue = args[2] as? Int,
+            let parallelDownloadTask = ParallelDownloader.downloads[taskId]
+        else {
+            os_log("Could not process chunkStatusUpdate", log: log, type: .info)
+            result(nil)
+            return
+        }
+        parallelDownloadTask.chunkStatusUpdate(chunkTaskId: chunkTaskId, status: TaskStatus.init(rawValue: statusRawvalue)!)
+        result(nil)
+    }
+    
+    private func methodUpdateChunkProgress(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        let args = call.arguments as! [Any]
+        guard
+            let taskId = args[0] as? String,
+            let chunkTaskId = args[1] as? String,
+            let progress = args[2] as? Double,
+            let parallelDownloadTask = ParallelDownloader.downloads[taskId]
+        else {
+            result(nil)
+            return
+        }
+        parallelDownloadTask.chunkProgressUpdate(chunkTaskId: chunkTaskId, progress: progress)
+        result(nil)
+    }
+
     
     /// Store or remove a configuration in shared preferences
     ///
@@ -541,26 +609,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     
     //MARK: URLSessionDownloadTaskDelegate
     
-    /// Calculate progress, network speed and time remaining, and send this at an appropriate
-    /// interval to the Dart side
-    private func updateProgress(task: Task, totalBytesExpected: Int64, totalBytesDone: Int64) {
-        let info = Downloader.progressInfo[task.taskId] ?? (lastProgressUpdateTime: 0.0, lastProgressValue: 0.0, lastTotalBytesDone: 0, lastNetworkSpeed: -1.0)
-        if totalBytesExpected != NSURLSessionTransferSizeUnknown && Date().timeIntervalSince1970 > info.lastProgressUpdateTime + 0.5 {
-            let progress = min(Double(totalBytesDone) / Double(totalBytesExpected), 0.999)
-            if progress - info.lastProgressValue > 0.02 {
-                // calculate network speed and time remaining
-                let now = Date().timeIntervalSince1970
-                let timeSinceLastUpdate = now - info.lastProgressUpdateTime
-                let bytesSinceLastUpdate = totalBytesDone - info.lastTotalBytesDone
-                let currentNetworkSpeed: Double = timeSinceLastUpdate > 3600 ? -1.0 : Double(bytesSinceLastUpdate) / timeSinceLastUpdate / 1000000.0
-                let newNetworkSpeed = info.lastNetworkSpeed == -1.0 ? currentNetworkSpeed : (info.lastNetworkSpeed * 3.0 + currentNetworkSpeed) / 4.0
-                let remainingBytes = (1.0 - progress) * Double(totalBytesExpected)
-                let timeRemaining: TimeInterval = newNetworkSpeed == -1.0 ? -1.0 : (remainingBytes / newNetworkSpeed / 1000000.0)
-                Downloader.progressInfo[task.taskId] = (lastProgressUpdateTime: now, lastProgressValue: progress, lastTotalBytesDone: totalBytesDone, lastNetworkSpeed: newNetworkSpeed)
-                processProgressUpdate(task: task, progress: progress, expectedFileSize: totalBytesExpected, networkSpeed: newNetworkSpeed, timeRemaining: timeRemaining)
-            }
-        }
-    }
+
 
     /// Process taskdelegate progress update for download task
     ///
@@ -571,7 +620,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         if Downloader.progressInfo[task.taskId] == nil {
             // first 'didWriteData' call
             // Check if there is enough space
-            if insufficientSpace(contentLength: totalBytesExpectedToWrite) {
+            if true || insufficientSpace(contentLength: totalBytesExpectedToWrite) { //TODO remove true
                 if !Downloader.taskIdsProgrammaticallyCancelled.contains(task.taskId) {
                     os_log("Error for taskId %@: Insufficient space to store the file to be downloaded", log: log, type: .error, task.taskId)
                     processStatusUpdate(task: task, status: .failed, taskException: TaskException(type: .fileSystem, httpResponseCode: -1, description: "Insufficient space to store the file to be downloaded for taskId \(task.taskId)"))
@@ -864,12 +913,6 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         return URLSession(configuration: config, delegate: Downloader.instance, delegateQueue: nil)
     }
     
-    /// Post result [value] on FlutterResult completer
-    private func postResult(result: FlutterResult?, value: Any) {
-        if result != nil {
-            result!(value)
-        }
-    }
     
     /// Read the contents of a file to a String, or nil if unable
     private func readFile(url: URL) -> String? {

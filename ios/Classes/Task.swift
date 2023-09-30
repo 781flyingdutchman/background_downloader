@@ -2,7 +2,7 @@
 //  Task.swift
 //  background_downloader
 //
-//  Created by Bram on 3/4/23.
+//  Created on 3/4/23.
 //
 
 import Foundation
@@ -10,25 +10,27 @@ import Foundation
 
 /// Partial version of the Dart side DownloadTask, only used for background loading
 struct Task : Codable {
-    var taskId: String
+    var taskId: String = "\(Int.random(in: 1..<(1 << 32)))"
     var url: String
+    var urls: [String]? = []
     var filename: String
-    var headers: [String:String]
-    var httpRequestMethod: String
+    var headers: [String:String] = [:]
+    var httpRequestMethod: String = "GET"
+    var chunks: Int? = 1
     var post: String?
     var fileField: String?
     var mimeType: String?
     var fields: [String:String]?
-    var directory: String
+    var directory: String = ""
     var baseDirectory: Int
     var group: String
     var updates: Int
-    var requiresWiFi: Bool
-    var retries: Int
-    var retriesRemaining: Int
-    var allowPause: Bool
-    var metaData: String
-    var creationTime: Int64
+    var requiresWiFi: Bool = false
+    var retries: Int = 0
+    var retriesRemaining: Int = 0
+    var allowPause: Bool = false
+    var metaData: String = ""
+    var creationTime: Int64 = Int64((Date().timeIntervalSince1970 * 1000.0).rounded())
     var taskType: String
 }
 
@@ -52,7 +54,7 @@ enum Updates: Int {
 }
 
 /// Defines a set of possible states which a [DownloadTask] can be in.
-enum TaskStatus: Int {
+enum TaskStatus: Int, Codable {
     case enqueued,
          running,
          complete,
@@ -98,6 +100,6 @@ enum ExceptionType: String {
 */
 struct TaskException {
     var type: ExceptionType
-    var httpResponseCode: Int
+    var httpResponseCode: Int = -1
     var description: String
 }
