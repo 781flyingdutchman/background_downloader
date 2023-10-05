@@ -8,11 +8,12 @@ import 'package:logging/logging.dart';
 
 import 'base_downloader.dart';
 import 'database.dart';
-import 'web_downloader.dart' if (dart.library.io) 'desktop_downloader.dart';
 import 'exceptions.dart';
 import 'localstore/localstore.dart';
 import 'models.dart';
 import 'persistent_storage.dart';
+import 'web_downloader.dart'
+    if (dart.library.io) 'desktop/desktop_downloader.dart';
 
 /// Provides access to all functions of the plugin in a single place.
 interface class FileDownloader {
@@ -25,6 +26,10 @@ interface class FileDownloader {
   /// Calls to [download], [upload], [downloadBatch] and [uploadBatch] are
   /// monitored 'internally' in this special group
   static const awaitGroup = 'await';
+
+  /// Special group name for tasks that download a chunk, as part of a
+  /// [ParallelDownloadTask]
+  static String get chunkGroup => BaseDownloader.chunkGroup;
 
   /// Database where tracked tasks are stored.
   ///
@@ -510,8 +515,7 @@ interface class FileDownloader {
       taskFutures.add(_enqueueAndAwait(task,
           taskStatusCallback: taskStatusCallback,
           taskProgressCallback: taskProgressCallback));
-      counter++;
-      if (counter % 3 == 0) {
+      if (counter++ % 3 == 0) {
         // To prevent blocking the UI we 'yield' for a few ms after every 3
         // tasks we enqueue
         await Future.delayed(const Duration(milliseconds: 50));

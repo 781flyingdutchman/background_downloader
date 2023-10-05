@@ -16,7 +16,7 @@ Monitor progress by passing an `onProgress` listener, and monitor detailed statu
 
 Optionally, keep track of task status and progress in a persistent [database](#using-the-database-to-track-tasks), and show mobile [notifications](#notifications) to keep the user informed and in control when your app is in the background.
 
-To upload a file, create an [UploadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/UploadTask-class.html) and call `upload`. To make a regular [server request](#server-requests), create a [Request](https://pub.dev/documentation/background_downloader/latest/background_downloader/Request-class.html) and call `request`.
+To upload a file, create an [UploadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/UploadTask-class.html) and call `upload`. To make a regular [server request](#server-requests), create a [Request](https://pub.dev/documentation/background_downloader/latest/background_downloader/Request-class.html) and call `request`. To download in parallel from multiple servers, create a [ParallelDownloadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/ParallelDownloadTask-class.html).
 
 The plugin supports [headers](#headers), [retries](#retries), [requiring WiFi](#requiring-wifi) before starting the up/download, user-defined [metadata](#metadata) and GET, [POST](#post-requests) and other http(s) [requests](#http-request-method), and can be [configured](#configuration) by platform. You can [manage  the tasks in the queue](#managing-tasks-and-the-queue) (e.g. cancel, pause and resume), and have different handlers for updates by [group](#grouping-tasks) of tasks. Downloaded files can be moved to [shared storage](#shared-and-scoped-storage) to make them available outside the app.
 
@@ -191,6 +191,7 @@ FileDownloader().configureNotification(
 - [Notifications](#notifications)
 - [Shared and scoped storage](#shared-and-scoped-storage)
 - [Uploads](#uploads)
+- [Parallel downloads](#parallel-downloads)
 - [Managing tasks in the queue](#managing-tasks-and-the-queue)
   - [Canceling, pausing and resuming tasks](#canceling-pausing-and-resuming-tasks)
   - [Grouping tasks](#grouping-tasks)
@@ -570,6 +571,12 @@ Once the `MultiUpoadTask` is created, the fields `fileFields`, `filenames` and `
 
 Use the `MultiTaskUpload` object in the `upload` and `enqueue` methods as you would a regular `UploadTask`.
 
+## Parallel downloads
+
+Some servers may offer an option to download part of the same file from multiple URLs or have multiple parallel downloads of part of a large file using a single URL. This can speed up the download of large files.  To do this, create a `ParallelDownloadTask` instead of a regular `DownloadTask` and specify `chunks` (the number of pieces you want to break the file into, i.e. the number of downloads that will happen in parallel) and `urls` (as a list of URLs, or just one). For example, if you specify 4 chunks and 2 URLs, then the download will be broken into 4 pieces, two each for each URL.
+
+Note that the implementation of this feature creates a regular `DownloadTask` for each chunk, with the group name 'chunk' which is now a reserved group. You will not get updates for this group, but you will get normal updates (status and/or progress) for the `ParallelDownloadTask`.
+
 ## Managing tasks and the queue
 
 ### Canceling, pausing and resuming tasks
@@ -743,7 +750,7 @@ Several aspects of the downloader can be configured on startup:
 * Setting a proxy
 * Localizing the notification button texts on iOS
 * Bypassing TLS Certificate validation (for debug mode only)
-  
+
 Please read the [configuration document](https://github.com/781flyingdutchman/background_downloader/blob/main/CONFIG.md) for details on how to configure.
 
 ## Limitations

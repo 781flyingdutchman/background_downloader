@@ -22,8 +22,16 @@ func providesStatusUpdates(downloadTask: Task) -> Bool {
 }
 
 /// True if this task is a DownloadTask, false if not
+///
+/// A ParallelDownloadTask is also a DownloadTask
 func isDownloadTask(task: Task) -> Bool {
-    return task.taskType == "DownloadTask"
+    return task.taskType == "DownloadTask" || task.taskType == "ParallelDownloadTask"
+}
+
+/// True if this task is a ParallelDownloadTask, false if not
+func isParallelDownloadTask(task: Task) -> Bool
+{
+    return task.taskType == "ParallelDownloadTask"
 }
 
 /// True if this task is an UploadTask, false if not
@@ -101,6 +109,27 @@ func extractFilesData(task: Task) -> [((String, String, String))] {
         }
     }
     return result
+}
+
+/// Calculate progress, network speed and time remaining, and send this at an appropriate
+/// interval to the Dart side
+func updateProgress(task: Task, totalBytesExpected: Int64, totalBytesDone: Int64) {
+    let info = Downloader.progressInfo[task.taskId] ?? (lastProgressUpdateTime: 0.0, lastProgressValue: 0.0, lastTotalBytesDone: 0, lastNetworkSpeed: -1.0)
+    if totalBytesExpected != NSURLSessionTransferSizeUnknown && Date().timeIntervalSince1970 > info.lastProgressUpdateTime + 0.5 {
+        let progress = min(Double(totalBytesDone) / Double(totalBytesExpected), 0.999)
+        if progress - info.lastProgressValue > 0.02 {
+            // calculate network speed and time remaining
+            let now = Date().timeIntervalSince1970
+            let timeSinceLastUpdate = now - info.lastProgressUpdateTime
+            let bytesSinceLastUpdate = totalBytesDone - info.lastTotalBytesDone
+            let currentNetworkSpeed: Double = timeSinceLastUpdate > 3600 ? -1.0 : Double(bytesSinceLastUpdate) / timeSinceLastUpdate / 1000000.0
+            let newNetworkSpeed = info.lastNetworkSpeed == -1.0 ? currentNetworkSpeed : (info.lastNetworkSpeed * 3.0 + currentNetworkSpeed) / 4.0
+            let remainingBytes = (1.0 - progress) * Double(totalBytesExpected)
+            let timeRemaining: TimeInterval = newNetworkSpeed == -1.0 ? -1.0 : (remainingBytes / newNetworkSpeed / 1000000.0)
+            Downloader.progressInfo[task.taskId] = (lastProgressUpdateTime: now, lastProgressValue: progress, lastTotalBytesDone: totalBytesDone, lastNetworkSpeed: newNetworkSpeed)
+            processProgressUpdate(task: task, progress: progress, expectedFileSize: totalBytesExpected, networkSpeed: newNetworkSpeed, timeRemaining: timeRemaining)
+        }
+    }
 }
 
 
@@ -198,7 +227,7 @@ func processResumeData(task: Task, resumeData: Data) -> Bool {
     if !postOnBackgroundChannel(method: "resumeData", task: task, arg: resumeDataAsBase64String) {
         // store resume data locally
         guard let jsonData = try? JSONEncoder().encode(task),
-              var taskJsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
+              let taskJsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
         else {
             os_log("Could not store resume data locally", log: log, type: .info)
             return false}
@@ -251,7 +280,7 @@ func postOnBackgroundChannel(method: String, task:Task, arg: Any) -> Bool {
         DispatchQueue.main.async {
             channel.invokeMethod(method, arguments: argsList, result: {(r: Any?) -> () in
                 success = !(r is FlutterError)
-                if Downloader.forceFailPostOnBackgroundChannel{
+                if Downloader.forceFailPostOnBackgroundChannel {
                     success = false
                 }
                 dispatchGroup.leave()
@@ -385,3 +414,11 @@ func insufficientSpace(contentLength: Int64) -> Bool {
     // Return true if there is insufficient space to store the file
     return available - (remainingBytesToDownload + contentLength) < checkValue << 20
 }
+
+/// Post result [value] on FlutterResult completer
+func postResult(result: FlutterResult?, value: Any) {
+    if result != nil {
+        result!(value)
+    }
+}
+

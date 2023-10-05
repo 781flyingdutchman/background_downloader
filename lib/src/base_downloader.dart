@@ -2,16 +2,17 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
-import 'package:collection/collection.dart';
 
 import 'database.dart';
-import 'web_downloader.dart' if (dart.library.io) 'desktop_downloader.dart';
 import 'exceptions.dart';
 import 'models.dart';
 import 'native_downloader.dart';
 import 'persistent_storage.dart';
+import 'web_downloader.dart'
+    if (dart.library.io) 'desktop/desktop_downloader.dart';
 
 /// Common download functionality
 ///
@@ -28,6 +29,10 @@ abstract base class BaseDownloader {
   final log = Logger('BaseDownloader');
 
   static const databaseVersion = 1;
+
+  /// Special group name for tasks that download a chunk, as part of a
+  /// [ParallelDownloadTask]
+  static const chunkGroup = 'chunk';
 
   /// Persistent storage
   late final PersistentStorage _storage;
@@ -163,6 +168,9 @@ abstract base class BaseDownloader {
   ///
   /// Matches on task, then on group, then on default
   TaskNotificationConfig? notificationConfigForTask(Task task) {
+    if (task.group == chunkGroup) {
+      return null;
+    }
     return notificationConfigs
             .firstWhereOrNull((config) => config.taskOrGroup == task) ??
         notificationConfigs

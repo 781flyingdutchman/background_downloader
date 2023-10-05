@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 const _exceptions = {
   'TaskException': TaskException.new,
   'TaskFileSystemException': TaskFileSystemException.new,
@@ -52,6 +54,9 @@ base class TaskException implements Exception {
   /// Return JSON Map representing object
   Map<String, dynamic> toJsonMap() =>
       {'type': exceptionType, 'description': description};
+
+  /// Return JSON String representing object
+  String toJson() => jsonEncode(toJsonMap());
 
   @override
   String toString() {

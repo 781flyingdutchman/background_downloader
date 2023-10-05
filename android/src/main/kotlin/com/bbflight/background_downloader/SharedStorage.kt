@@ -10,7 +10,6 @@ import android.util.Log
 import android.webkit.MimeTypeMap
 import androidx.annotation.RequiresApi
 import androidx.loader.content.CursorLoader
-import com.bbflight.background_downloader.BackgroundDownloaderPlugin.Companion.TAG
 import java.io.File
 import java.io.FileInputStream
 import java.io.OutputStream
@@ -41,7 +40,7 @@ fun moveToSharedStorage(
     val file = File(filePath)
     if (!file.exists()) {
         Log.i(
-            BackgroundDownloaderPlugin.TAG,
+            BDPlugin.TAG,
             "File $filePath does not exist -> cannot move to shared storage"
         )
         return null
@@ -61,7 +60,7 @@ fun moveToSharedStorage(
     val uri = try {
         resolver.insert(getMediaStoreUri(destination), contentValues)
     } catch (e: Exception) {
-        Log.i(BackgroundDownloaderPlugin.TAG, "Cannot insert $filePath in MediaStore: $e")
+        Log.i(BDPlugin.TAG, "Cannot insert $filePath in MediaStore: $e")
         return null
     }
     if (uri != null) {
@@ -78,7 +77,7 @@ fun moveToSharedStorage(
             }
         } catch (e: Exception) {
             Log.i(
-                BackgroundDownloaderPlugin.TAG,
+                BDPlugin.TAG,
                 "Error moving file $filePath to shared storage: $e"
             )
         } finally {
@@ -110,7 +109,7 @@ private fun moveToPublicDirectory(
         val file = File(filePath)
         if (!file.exists()) {
             Log.i(
-                BackgroundDownloaderPlugin.TAG,
+                BDPlugin.TAG,
                 "File $filePath does not exist -> cannot move to public directory"
             )
             return null
@@ -145,7 +144,7 @@ private fun moveToPublicDirectory(
         return destinationFile.absolutePath
     } catch (e: Exception) {
         Log.i(
-            BackgroundDownloaderPlugin.TAG,
+            BDPlugin.TAG,
             "Unable to move file $filePath to public directory: $e"
         )
         return null
@@ -268,4 +267,3 @@ private fun pathFromUri(context: Context, uri: Uri): String? {
     cursor.close()
     return result
 }
-
