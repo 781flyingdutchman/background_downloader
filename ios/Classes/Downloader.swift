@@ -151,7 +151,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             postResult(result: result, value: false)
             return
         }
-        isResume = isResume && resumeData != nil
+        isResume = isParallelDownloadTask(task: task) ? isResume : isResume && resumeData != nil
         let verb = isResume ? "Resuming" : "Starting"
         os_log("%@ task with id %@", log: log, type: .info, verb, task.taskId)
         Downloader.urlSession = Downloader.urlSession ?? createUrlSession()
@@ -247,7 +247,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         let tasksToCancel = await getAllUrlSessionTasks(group: group)
         tasksToCancel.forEach({$0.cancel()})
         let numTasks = tasksToCancel.count
-        os_log("reset removed %d unfinished tasks", log: log, type: .info, numTasks)
+        os_log("reset removed %d unfinished tasks", log: log, type: .debug, numTasks)
         result(numTasks)
     }
     
@@ -260,7 +260,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             return
         }
         let tasksAsListOfJsonStrings = urlSessionTasks.filter({ $0.state == .running || $0.state == .suspended }).map({ getTaskFrom(urlSessionTask: $0)}).filter({ $0?.group == group }).map({ jsonStringFor(task: $0!) }).filter({ $0 != nil }) as? [String] ?? []
-        os_log("Returning %d unfinished tasks", log: log, type: .info, tasksAsListOfJsonStrings.count)
+        os_log("Returning %d unfinished tasks", log: log, type: .debug, tasksAsListOfJsonStrings.count)
         result(tasksAsListOfJsonStrings)
     }
     
@@ -295,7 +295,6 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     /// If pause is not successful, task will be canceled (attempted)
     private func methodPause(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let taskId = call.arguments as! String
-        os_log("Pause taskId %@", log: log, type: .info, taskId)
         Downloader.urlSession = Downloader.urlSession ?? createUrlSession()
         Downloader.taskIdsProgrammaticallyCancelled.insert(taskId)
         guard let urlSessionTask = await getUrlSessionTaskWithId(taskId: taskId) as? URLSessionDownloadTask,
@@ -308,8 +307,8 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                 os_log("Could not pause task %@", log: log, type: .info, taskId)
                 result(false)
             } else {
-                os_log("Pause ParallelDownloadTask %@", log: log, type: .info, taskId)
                 if await ParallelDownloader.downloads[taskId]?.pauseTask() == true {
+                    os_log("Paused task with taskId %@", log: log, type: .info, taskId)
                     result(true)
                 } else {
                     os_log("Could not pause taskId %@", log: log, type: .info, taskId)
@@ -320,7 +319,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         }
         if processResumeData(task: task, resumeData: resumeData) {
             processStatusUpdate(task: task, status: .paused)
-            os_log("Successfully paused taskId %@", log: log, type: .info, taskId)
+            os_log("Paused task with taskId %@", log: log, type: .info, taskId)
             result(true)
         } else {
             os_log("Could not post resume data for taskId %@: task paused but cannot be resumed", log: log, type: .info, taskId)

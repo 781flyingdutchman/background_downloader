@@ -86,7 +86,6 @@ public class ParallelDownloader: NSObject {
     ///
     /// Returns false if start was unsuccessful
     public func start(contentLength: Int64) -> Bool {
-        os_log("Found content length %d", log: log, type: .debug, contentLength)
         parallelDownloadContentLength = contentLength
         ParallelDownloader.downloads[parentTask.taskId] = self
         chunks = createChunks(task: parentTask, contentLength: contentLength)
@@ -168,6 +167,9 @@ public class ParallelDownloader: NSObject {
                         processStatusUpdate(task: parentTask, status: .running)
                     case .complete:
                         let stitchResult = stitchChunks()
+                        if stitchResult == TaskStatus.complete {
+                            os_log("Finished task with id %@", log: log, type: .info, parentTask.taskId)
+                        }
                         finishTask(status: stitchResult)
                     case .failed:
                         self.taskException = taskException
