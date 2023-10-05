@@ -14,7 +14,8 @@ import '../models.dart';
 import 'desktop_downloader.dart';
 import 'isolate.dart';
 
-var chunkStartByte = 0; // for chunks, the start of the range to download, otherwise 0
+var chunkStartByte =
+    0; // for chunks, the start of the range to download, otherwise 0
 String? eTagHeader;
 
 /// Execute the download task
@@ -33,7 +34,7 @@ Future<void> doDownloadTask(
   final tempFilePath = isResume && resumeData != null
       ? resumeData.tempFilepath
       : p.join((await getTemporaryDirectory()).path,
-      'com.bbflight.background_downloader${Random().nextInt(1 << 32).toString()}');
+          'com.bbflight.background_downloader${Random().nextInt(1 << 32).toString()}');
   final requiredStartByte =
       resumeData?.requiredStartByte ?? 0; // start for resume
   final eTag = resumeData?.eTag;
@@ -50,7 +51,8 @@ Future<void> doDownloadTask(
       final chunkData = jsonDecode(task.metaData);
       chunkStartByte = chunkData['from'] as int;
       final chunkEndByte = chunkData['to'] as int;
-      request.headers['Range'] = 'bytes=${chunkStartByte + requiredStartByte}-$chunkEndByte';
+      request.headers['Range'] =
+          'bytes=${chunkStartByte + requiredStartByte}-$chunkEndByte';
     }
   }
   if (task.post is String) {
@@ -241,9 +243,10 @@ Future<bool> prepareResume(
   log.finest(
       'Resume start=$start, end=$end of total=$total bytes, tempFile = $tempFileLength bytes');
   startByte = start - chunkStartByte; // relative to start of range
-  if  (startByte > tempFileLength) {
+  if (startByte > tempFileLength) {
     log.fine('Offered range not feasible: $range with startByte $startByte');
-    taskException = TaskResumeException('Offered range not feasible: $range with startByte $startByte');
+    taskException = TaskResumeException(
+        'Offered range not feasible: $range with startByte $startByte');
     return false;
   }
   try {

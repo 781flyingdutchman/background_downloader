@@ -31,11 +31,10 @@ const largeFilename = '5MB-test.ZIP';
 var task = DownloadTask(url: workingUrl, filename: defaultFilename);
 
 var retryTask =
-DownloadTask(url: failingUrl, filename: defaultFilename, retries: 3);
+    DownloadTask(url: failingUrl, filename: defaultFilename, retries: 3);
 
 var uploadTask = UploadTask(url: uploadTestUrl, filename: uploadFilename);
 var uploadTaskBinary = uploadTask.copyWith(post: 'binary');
-
 
 void main() {
   test('TaskProgressUpdate', () {
@@ -78,8 +77,8 @@ void main() {
         retries: 5,
         metaData: 'someMetaData');
     final now = DateTime.now();
-    expect(now.difference(complexTask.creationTime).inMilliseconds,
-        lessThan(100));
+    expect(
+        now.difference(complexTask.creationTime).inMilliseconds, lessThan(100));
     final task = complexTask.copyWith(); // all the same
     expect(task.taskId, equals(complexTask.taskId));
     expect(task.url, equals(complexTask.url));
@@ -116,7 +115,7 @@ void main() {
         urlQueryParameters: {'param1': '1', 'param2': 'with space'});
     expect(task2.url, equals('url?param0=0&param1=1&param2=with space'));
     final task4 =
-    DownloadTask(url: urlWithContentLength, filename: defaultFilename);
+        DownloadTask(url: urlWithContentLength, filename: defaultFilename);
     expect(task4.url, equals(urlWithContentLength));
   });
 
@@ -126,8 +125,8 @@ void main() {
     final task1 = DownloadTask(url: workingUrl, filename: defaultFilename);
     expect(task1.filename, equals(defaultFilename));
     expect(
-            () => DownloadTask(
-            url: workingUrl, filename: 'somedir/$defaultFilename'),
+        () =>
+            DownloadTask(url: workingUrl, filename: 'somedir/$defaultFilename'),
         throwsArgumentError);
   });
 
@@ -139,5 +138,4 @@ void main() {
     expect(() => DownloadTask(url: workingUrl, directory: '/testDir'),
         throwsArgumentError);
   });
-
 }

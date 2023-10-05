@@ -45,7 +45,8 @@ void main() {
     expect(chunk.fromByte, equals(0));
     expect(chunk.toByte, equals(33));
     expect(chunk.parentTaskId, equals(task.taskId));
-    expect(chunk.task.metaData, equals('{"parentTaskId":"${task.taskId}","from":0,"to":33}'));
+    expect(chunk.task.metaData,
+        equals('{"parentTaskId":"${task.taskId}","from":0,"to":33}'));
     expect(chunk.task.group, equals(BaseDownloader.chunkGroup));
     chunk = chunks[1];
     expect(chunk.url, equals(task.url));
@@ -111,7 +112,8 @@ void main() {
             TaskStatusUpdate(chunks.last.task, TaskStatus.complete)),
         isNull);
     expect(
-        updateChunkStatus(TaskStatusUpdate(chunks[1].task, TaskStatus.complete)),
+        updateChunkStatus(
+            TaskStatusUpdate(chunks[1].task, TaskStatus.complete)),
         equals(TaskStatus.complete));
     // check failed
     for (final chunk in chunks) {
@@ -132,7 +134,8 @@ void main() {
       'accept-ranges': 'bytes'
     });
     final chunksJson = jsonEncode(chunks);
-    final List<Chunk> decodedChunks = List.from(jsonDecode(chunksJson, reviver: Chunk.listReviver));
+    final List<Chunk> decodedChunks =
+        List.from(jsonDecode(chunksJson, reviver: Chunk.listReviver));
     for (var i = 0; i < chunks.length; i++) {
       expect(chunks[i].parentTaskId, equals(decodedChunks[i].parentTaskId));
       expect(chunks[i].url, equals(decodedChunks[i].url));
@@ -145,5 +148,4 @@ void main() {
       expect(chunks[i].progress, equals(decodedChunks[i].progress));
     }
   });
-
 }

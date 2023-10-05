@@ -153,8 +153,10 @@ void main() {
           url: [urlWithLongContentLength, urlWithContentLength],
           urlQueryParameters: {'a': 'b'},
           chunks: 5);
-      expect(pdlTask.urls,
-          equals(['$urlWithLongContentLength?a=b', '$urlWithContentLength?a=b']));
+      expect(
+          pdlTask.urls,
+          equals(
+              ['$urlWithLongContentLength?a=b', '$urlWithContentLength?a=b']));
       expect(pdlTask.chunks, equals(5));
       expect(pdlTask.url, equals('$urlWithLongContentLength?a=b'));
       pdlTask2 = ParallelDownloadTask.fromJsonMap(pdlTask.toJsonMap());
@@ -248,7 +250,8 @@ void main() {
     });
 
     test('DownloadTask incoming from Android', () {
-      const incoming = '{"allowPause":false,"baseDirectory": 1,"chunks":1,"creationTime":1694879914883,"directory":"","fields":{},"fileField":"","filename":"com.bbflight.background_downloader.1186323287","group":"chunk","headers":{"Range":"bytes\u003d0-29836749"},"httpRequestMethod":"GET","metaData":"{\\"parentTaskId\\":\\"3069222547\\",\\"from\\":0,\\"to\\":29836749}","mimeType":"","requiresWiFi":false,"retries":0,"retriesRemaining":0,"taskId":"1702658487","taskType":"DownloadTask","updates":2,"url":"https://storage.googleapis.com/approachcharts/test/57MB-test.ZIP","urls":[]}';
+      const incoming =
+          '{"allowPause":false,"baseDirectory": 1,"chunks":1,"creationTime":1694879914883,"directory":"","fields":{},"fileField":"","filename":"com.bbflight.background_downloader.1186323287","group":"chunk","headers":{"Range":"bytes\u003d0-29836749"},"httpRequestMethod":"GET","metaData":"{\\"parentTaskId\\":\\"3069222547\\",\\"from\\":0,\\"to\\":29836749}","mimeType":"","requiresWiFi":false,"retries":0,"retriesRemaining":0,"taskId":"1702658487","taskType":"DownloadTask","updates":2,"url":"https://storage.googleapis.com/approachcharts/test/57MB-test.ZIP","urls":[]}';
       final task = Task.createFromJsonMap(jsonDecode(incoming));
       print(task);
     });

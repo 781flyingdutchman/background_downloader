@@ -146,7 +146,10 @@ void main() {
   group('Basic', () {
     test('simple enqueue, 2 chunks, 1 url', () async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
-      expect(await FileDownloader().enqueue(task.copyWith(url: urlWithContentLength)), isTrue);
+      expect(
+          await FileDownloader()
+              .enqueue(task.copyWith(url: urlWithContentLength)),
+          isTrue);
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.complete));
       expect(statusCallbackCounter, equals(3));
@@ -157,7 +160,9 @@ void main() {
 
     test('simple enqueue, 2 chunks, 2 url', () async {
       task = ParallelDownloadTask(
-          url: [urlWithContentLength, urlWithContentLength], filename: defaultFilename, chunks: 2);
+          url: [urlWithContentLength, urlWithContentLength],
+          filename: defaultFilename,
+          chunks: 2);
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(task), isTrue);
       await statusCallbackCompleter.future;
@@ -175,10 +180,15 @@ void main() {
           taskStatusCallback: statusCallback,
           taskProgressCallback: (update) {
             expect(update.progress, greaterThan(lastProgress));
-            print('${DateTime.now()}: Progress #${numProgressUpdates++} = ${update.progress}, ${update.networkSpeedAsString}, ${update.timeRemainingAsString}');
+            print(
+                '${DateTime.now()}: Progress #${numProgressUpdates++} = ${update.progress}, ${update.networkSpeedAsString}, ${update.timeRemainingAsString}');
             lastProgress = update.progress;
           });
-      expect(await FileDownloader().enqueue(task.copyWith(url: urlWithLongContentLength, updates: Updates.statusAndProgress)), isTrue);
+      expect(
+          await FileDownloader().enqueue(task.copyWith(
+              url: urlWithLongContentLength,
+              updates: Updates.statusAndProgress)),
+          isTrue);
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.complete));
       final file = File(await task.filePath());
@@ -208,17 +218,21 @@ void main() {
             result.exception?.description.startsWith('Could not enqueue task'),
             isTrue);
       }
-      if (Platform.isAndroid || Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
+      if (Platform.isAndroid ||
+          Platform.isLinux ||
+          Platform.isMacOS ||
+          Platform.isWindows) {
         expect(
-            result.exception?.description.endsWith('Server does not provide content length - cannot chunk download'),
+            result.exception?.description.endsWith(
+                'Server does not provide content length - cannot chunk download'),
             isTrue);
       }
       expect(result.responseBody, isNull);
     });
 
-
     testWidgets('not found', (widgetTester) async {
-      task = task.copyWith(url: 'https://avmaps-dot-bbflightserver-hrd.appspot.com/something');
+      task = task.copyWith(
+          url: 'https://avmaps-dot-bbflightserver-hrd.appspot.com/something');
       if (Platform.isIOS) {
         // different from a normal download task, enqueue fails immediately
         expect(await FileDownloader().enqueue(task), isFalse);
@@ -232,7 +246,10 @@ void main() {
             isTrue);
         expect(result.responseBody, isNull);
       }
-      if (Platform.isAndroid || Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
+      if (Platform.isAndroid ||
+          Platform.isLinux ||
+          Platform.isMacOS ||
+          Platform.isWindows) {
         expect(result.status, equals(TaskStatus.notFound));
         expect(result.exception, isNull);
         expect(result.responseBody ?? '', equals(''));
@@ -250,7 +267,11 @@ void main() {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
-      expect(await FileDownloader().enqueue(task.copyWith(url: urlWithLongContentLength, updates: Updates.statusAndProgress)), isTrue);
+      expect(
+          await FileDownloader().enqueue(task.copyWith(
+              url: urlWithLongContentLength,
+              updates: Updates.statusAndProgress)),
+          isTrue);
       await someProgressCompleter.future;
       expect(lastStatus, equals(TaskStatus.running));
       expect(await FileDownloader().cancelTaskWithId(task.taskId), isTrue);
@@ -263,7 +284,10 @@ void main() {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
-      task = task.copyWith(url: urlWithLongContentLength, updates: Updates.statusAndProgress, allowPause: true);
+      task = task.copyWith(
+          url: urlWithLongContentLength,
+          updates: Updates.statusAndProgress,
+          allowPause: true);
       expect(await FileDownloader().enqueue(task), isTrue);
       await someProgressCompleter.future;
       expect(lastStatus, equals(TaskStatus.running));
@@ -283,7 +307,6 @@ void main() {
     });
   });
 }
-
 
 /// Returns true if the supplied file equals the test file
 Future<bool> fileEqualsTestFile(File file) async {

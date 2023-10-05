@@ -131,11 +131,11 @@ final class DesktopDownloader extends BaseDownloader {
           receivePort.close();
 
         case (
-        'statusUpdate',
-        TaskStatus status,
-        TaskException? exception,
-        String? responseBody
-        ):
+            'statusUpdate',
+            TaskStatus status,
+            TaskException? exception,
+            String? responseBody
+          ):
           final taskStatusUpdate = TaskStatusUpdate(task, status,
               status == TaskStatus.failed ? exception : null, responseBody);
           if (task.group != BaseDownloader.chunkGroup) {
@@ -144,7 +144,8 @@ final class DesktopDownloader extends BaseDownloader {
             }
             processStatusUpdate(taskStatusUpdate);
           } else {
-            _parallelTaskSendPort(Chunk.getParentTaskId(task))?.send(taskStatusUpdate);
+            _parallelTaskSendPort(Chunk.getParentTaskId(task))
+                ?.send(taskStatusUpdate);
           }
 
         case (
@@ -159,7 +160,8 @@ final class DesktopDownloader extends BaseDownloader {
           if (task.group != BaseDownloader.chunkGroup) {
             processProgressUpdate(taskProgressUpdate);
           } else {
-            _parallelTaskSendPort(Chunk.getParentTaskId(task))?.send(taskProgressUpdate);
+            _parallelTaskSendPort(Chunk.getParentTaskId(task))
+                ?.send(taskProgressUpdate);
           }
 
         case ('taskCanResume', bool taskCanResume):

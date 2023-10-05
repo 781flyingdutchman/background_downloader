@@ -19,7 +19,8 @@ import 'upload_isolate.dart';
 
 /// global variables, unique to this isolate
 var bytesTotal = 0; // total bytes read in this download session
-var startByte = 0; // starting position within the original range, used for resume
+var startByte =
+    0; // starting position within the original range, used for resume
 var lastProgressUpdateTime = DateTime.fromMillisecondsSinceEpoch(0);
 var nextProgressUpdateTime = DateTime.fromMillisecondsSinceEpoch(0);
 var lastProgressUpdate = 0.0;
@@ -85,13 +86,8 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
           isResume,
           requestTimeout ?? const Duration(seconds: 60),
           sendPort),
-      DownloadTask() => doDownloadTask(
-          task,
-          filePath,
-          resumeData,
-          isResume,
-          requestTimeout ?? const Duration(seconds: 60),
-          sendPort),
+      DownloadTask() => doDownloadTask(task, filePath, resumeData, isResume,
+          requestTimeout ?? const Duration(seconds: 60), sendPort),
       UploadTask() => doUploadTask(task, filePath, sendPort)
     };
   }

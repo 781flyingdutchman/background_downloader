@@ -45,8 +45,13 @@ abstract base class NativeDownloader extends BaseDownloader {
             processStatusUpdate(TaskStatusUpdate(task, status));
           } else {
             // this is a chunk task, so pass to native
-            await methodChannel.invokeMethod('chunkStatusUpdate',
-                [Chunk.getParentTaskId(task), task.taskId, status.index, null, null]);
+            await methodChannel.invokeMethod('chunkStatusUpdate', [
+              Chunk.getParentTaskId(task),
+              task.taskId,
+              status.index,
+              null,
+              null
+            ]);
           }
 
         // status update with responseBody, no exception

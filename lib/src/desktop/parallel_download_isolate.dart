@@ -76,7 +76,8 @@ Future<void> doParallelDownloadTask(
       final statusUpdate = await parallelTaskStatusUpdateCompleter.future;
       processStatusUpdateInIsolate(task, statusUpdate.status, sendPort);
     } else {
-      log.fine('TaskId ${task.taskId}: Invalid server response code ${response.statusCode}');
+      log.fine(
+          'TaskId ${task.taskId}: Invalid server response code ${response.statusCode}');
       // not an OK response
       responseBody = response.body;
       if (response.statusCode == 404) {
@@ -136,15 +137,15 @@ Future<void> chunkStatusUpdate(
         taskException = update.exception;
         responseBody = update.responseBody;
         cancelAllChunkTasks(sendPort);
-        parallelTaskStatusUpdateCompleter
-            .complete(TaskStatusUpdate(task, TaskStatus.failed, taskException, responseBody));
+        parallelTaskStatusUpdateCompleter.complete(TaskStatusUpdate(
+            task, TaskStatus.failed, taskException, responseBody));
         break;
 
       case TaskStatus.notFound:
         responseBody = update.responseBody;
         cancelAllChunkTasks(sendPort);
-        parallelTaskStatusUpdateCompleter
-            .complete(TaskStatusUpdate(task, TaskStatus.notFound, null, responseBody));
+        parallelTaskStatusUpdateCompleter.complete(
+            TaskStatusUpdate(task, TaskStatus.notFound, null, responseBody));
         break;
 
       default:
@@ -358,7 +359,7 @@ List<Chunk> createChunks(
     parallelDownloadContentLength = contentLength;
     try {
       headers.entries.firstWhere((element) =>
-      element.key.toLowerCase() == 'accept-ranges' &&
+          element.key.toLowerCase() == 'accept-ranges' &&
           element.value == 'bytes');
     } on StateError {
       throw StateError('Server does not accept ranges - cannot chunk download');
