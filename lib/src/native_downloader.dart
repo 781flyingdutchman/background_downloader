@@ -37,7 +37,6 @@ abstract base class NativeDownloader extends BaseDownloader {
             ? args.getRange(1, args.length).toList(growable: false)
             : args[1]
       );
-      log.severe("Native incoming message for ${task.taskId}: $message");
       switch (message) {
         // simple status update
         case ('statusUpdate', int statusOrdinal):

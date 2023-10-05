@@ -108,8 +108,6 @@ Future<void> listenToIncomingMessages(
     Task task, StreamQueue messagesToIsolate, SendPort sendPort) async {
   while (await messagesToIsolate.hasNext) {
     final message = await messagesToIsolate.next;
-    sendPort
-        .send(('log', 'Isolate incoming message for ${task.taskId}: $message'));
     switch (message) {
       case 'cancel':
         isCanceled = true; // checked in loop elsewhere
@@ -137,7 +135,6 @@ Future<void> listenToIncomingMessages(
         chunkProgressUpdate(task, update, sendPort);
     }
   }
-  sendPort.send(('log', '${task.taskId} isolate done'));
 }
 
 /// Transfer all bytes from [inStream] to [outStream], expecting [contentLength]

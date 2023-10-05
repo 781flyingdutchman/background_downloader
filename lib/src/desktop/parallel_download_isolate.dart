@@ -76,8 +76,7 @@ Future<void> doParallelDownloadTask(
       final statusUpdate = await parallelTaskStatusUpdateCompleter.future;
       processStatusUpdateInIsolate(task, statusUpdate.status, sendPort);
     } else {
-      sendPort
-          .send(('log', 'TaskId ${task.taskId}: Invalid server response code ${response.statusCode}'));
+      log.fine('TaskId ${task.taskId}: Invalid server response code ${response.statusCode}');
       // not an OK response
       responseBody = response.body;
       if (response.statusCode == 404) {
@@ -109,7 +108,6 @@ Future<void> doParallelDownloadTask(
 Future<void> chunkStatusUpdate(
     Task task, TaskStatusUpdate update, SendPort sendPort) async {
   final chunkTask = update.task;
-  sendPort.send(('log', 'Received ${update.status} for ${chunkTask.taskId}'));
   // first check for fail -> retry
   if (update.status == TaskStatus.failed && chunkTask.retriesRemaining > 0) {
     chunkTask.decreaseRetriesRemaining();
@@ -127,7 +125,6 @@ Future<void> chunkStatusUpdate(
   } else {
     // no retry
     final newStatusUpdate = updateChunkStatus(update);
-    sendPort.send(('log', 'New parent status is $newStatusUpdate'));
     switch (newStatusUpdate) {
       case TaskStatus.complete:
         final result = await stitchChunks();

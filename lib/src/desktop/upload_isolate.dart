@@ -112,7 +112,7 @@ Future<TaskStatus> multipartUpload(
   for (final (fileField, path, mimeType) in filesData) {
     final file = File(path);
     if (!await file.exists()) {
-      log.fine('File to upload does not exist: $path');
+      logError(task, 'File to upload does not exist: $path');
       taskException =
           TaskFileSystemException('File to upload does not exist: $path');
       return TaskStatus.failed;

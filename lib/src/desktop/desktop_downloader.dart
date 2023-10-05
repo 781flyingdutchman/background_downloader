@@ -91,8 +91,8 @@ final class DesktopDownloader extends BaseDownloader {
     errorPort.listen((message) {
       final exceptionDescription = (message as List).first as String;
       final stackTrace = message.last;
-      log.fine('Stack trace: $stackTrace');
       logError(task, exceptionDescription);
+      log.fine('Stack trace: $stackTrace');
       processStatusUpdate(TaskStatusUpdate(
           task, TaskStatus.failed, TaskException(exceptionDescription)));
       receivePort.close(); // also ends listener at the end
@@ -126,7 +126,6 @@ final class DesktopDownloader extends BaseDownloader {
     // listen for messages sent back from the isolate, until 'done'
     while (await messagesFromIsolate.hasNext) {
       final message = await messagesFromIsolate.next;
-      log.finest('Desktop incoming message from ${task.taskId}: $message');
       switch (message) {
         case 'done':
           receivePort.close();
@@ -145,8 +144,6 @@ final class DesktopDownloader extends BaseDownloader {
             }
             processStatusUpdate(taskStatusUpdate);
           } else {
-            _log.warning(
-                'Sending ${taskStatusUpdate.status} for ${taskStatusUpdate.task.taskId} to taskId ${Chunk.getParentTaskId(task)}');
             _parallelTaskSendPort(Chunk.getParentTaskId(task))?.send(taskStatusUpdate);
           }
 
@@ -162,8 +159,6 @@ final class DesktopDownloader extends BaseDownloader {
           if (task.group != BaseDownloader.chunkGroup) {
             processProgressUpdate(taskProgressUpdate);
           } else {
-            _log.warning(
-                'Sending $taskProgressUpdate to taskId ${Chunk.getParentTaskId(task)}');
             _parallelTaskSendPort(Chunk.getParentTaskId(task))?.send(taskProgressUpdate);
           }
 
@@ -175,17 +170,14 @@ final class DesktopDownloader extends BaseDownloader {
 
         // from [ParallelDownloadTask]
         case ('enqueueChild', DownloadTask childTask):
-          _log.finest('enqueuing $childTask');
           await FileDownloader().enqueue(childTask);
 
         // from [ParallelDownloadTask]
         case ('cancelTasksWithId', List<String> taskIds):
-          _log.finest('canceling ids $taskIds');
           await FileDownloader().cancelTasksWithIds(taskIds);
 
         // from [ParallelDownloadTask]
         case ('pauseTasks', List<DownloadTask> tasks):
-          _log.finest('pausing ${tasks.length} tasks');
           for (final chunkTask in tasks) {
             await FileDownloader().pause(chunkTask);
           }

@@ -97,10 +97,8 @@ Future<bool> resumeChunkTasks(ParallelDownloadTask task,
     ResumeData resumeData) async {
   final chunks = List<Chunk>.from(jsonDecode(resumeData.data,
       reviver: Chunk.listReviver));
-  print('headers=${chunks.first.task.headers}');
   final results = await Future.wait(
       chunks.map((chunk) => FileDownloader().resume(chunk.task)));
-  print(results);
   if (results.any((result) => result == false)) {
     // cancel [ParallelDownloadTask] if any resume did not succeed.
     // this will also cancel all chunk tasks

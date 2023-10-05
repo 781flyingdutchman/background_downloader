@@ -147,7 +147,6 @@ Future<TaskStatus> processOkDownloadResponse(
     http.StreamedResponse response,
     SendPort sendPort) async {
   final contentLength = response.contentLength ?? -1;
-  sendPort.send(('log', 'Content length for ${task.taskId} = $contentLength')); //TODO remove
   isResume = isResume && response.statusCode == 206;
   if (isResume && !await prepareResume(response, tempFilePath)) {
     deleteTempFile(tempFilePath);
@@ -168,7 +167,6 @@ Future<TaskStatus> processOkDownloadResponse(
         final dirPath = p.dirname(filePath);
         Directory(dirPath).createSync(recursive: true);
         File(tempFilePath).copySync(filePath);
-        sendPort.send(('log', 'File size for ${task.taskId} is ${await File(filePath).length()}'));
         resultStatus = TaskStatus.complete;
 
       case TaskStatus.canceled:

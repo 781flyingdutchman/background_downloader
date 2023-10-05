@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'dart:convert';
 
 import 'package:background_downloader/background_downloader.dart';
@@ -165,7 +167,7 @@ void main() {
       final statusUpdate = TaskStatusUpdate(
           task, TaskStatus.failed, TaskConnectionException('test'));
       const expected =
-          '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask","taskStatus":4,"exception":{"type":"TaskConnectionException","description":"test"},"responseBody":null}';
+          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask"},"taskStatus":4,"exception":{"type":"TaskConnectionException","description":"test"},"responseBody":null}';
       expect(jsonEncode(statusUpdate.toJsonMap()), equals(expected));
       final update2 = TaskStatusUpdate.fromJsonMap(jsonDecode(expected));
       expect(update2.task, equals(statusUpdate.task));
@@ -183,7 +185,7 @@ void main() {
     test('TaskProgressUpdate', () {
       final progressUpdate = TaskProgressUpdate(task, 1, 123);
       const expected =
-          '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask","progress":1.0,"expectedFileSize":123,"networkSpeed":-1.0,"timeRemaining":-1}';
+          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask"},"progress":1.0,"expectedFileSize":123,"networkSpeed":-1.0,"timeRemaining":-1}';
       expect(jsonEncode(progressUpdate.toJsonMap()), equals(expected));
       final update2 = TaskProgressUpdate.fromJsonMap(jsonDecode(expected));
       expect(update2.task, equals(progressUpdate.task));
@@ -246,7 +248,7 @@ void main() {
     });
 
     test('DownloadTask incoming from Android', () {
-      const incoming = '{"allowPause":false,"baseDirectory":"temporary","chunks":1,"creationTime":1694879914883,"directory":"","fields":{},"fileField":"","filename":"com.bbflight.background_downloader.1186323287","group":"chunk","headers":{"Range":"bytes\u003d0-29836749"},"httpRequestMethod":"GET","metaData":"{\"parentTaskId\":\"3069222547\",\"from\":0,\"to\":29836749}","mimeType":"","requiresWiFi":false,"retries":0,"retriesRemaining":0,"taskId":"1702658487","taskType":"DownloadTask","updates":"statusChangeAndProgressUpdates","url":"https://storage.googleapis.com/approachcharts/test/57MB-test.ZIP","urls":[]}';
+      const incoming = '{"allowPause":false,"baseDirectory": 1,"chunks":1,"creationTime":1694879914883,"directory":"","fields":{},"fileField":"","filename":"com.bbflight.background_downloader.1186323287","group":"chunk","headers":{"Range":"bytes\u003d0-29836749"},"httpRequestMethod":"GET","metaData":"{\\"parentTaskId\\":\\"3069222547\\",\\"from\\":0,\\"to\\":29836749}","mimeType":"","requiresWiFi":false,"retries":0,"retriesRemaining":0,"taskId":"1702658487","taskType":"DownloadTask","updates":2,"url":"https://storage.googleapis.com/approachcharts/test/57MB-test.ZIP","urls":[]}';
       final task = Task.createFromJsonMap(jsonDecode(incoming));
       print(task);
     });

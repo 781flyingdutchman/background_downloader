@@ -63,7 +63,6 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
         runInForeground = notificationConfig?.running != null
         connection.requestMethod = "HEAD"
         val result = super.connectAndProcess(connection)
-        Log.wtf(TAG, "connectAndProcess result = $result")
         BDPlugin.parallelDownloadTaskWorkers.remove(task.taskId)
         return result
     }
@@ -81,11 +80,9 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                         // start the download by creating [Chunk]s and enqueuing chunk tasks
                         if (connection.responseCode in listOf(200, 201, 202, 203, 204, 205, 206)) {
                             chunks = createChunks(task, connection.headerFields)
-                            Log.wtf(TAG, "chunks length = ${chunks.size}")
                             for (chunk in chunks) {
                                 // Ask Dart side to enqueue the child task. Updates related to the child
                                 // will be sent to this (parent) task (the child's metaData is the parent taskId).
-                                Log.wtf(TAG, "enqueuing ${chunk.task.taskId}")
                                 if (!postOnBackgroundChannel(
                                         "enqueueChild",
                                         task,
@@ -131,11 +128,9 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                             chunksJsonString,
                             object : TypeToken<List<String>>() {}.type
                         )
-                        Log.wtf(TAG, "chunksAsJsonList=$chunksAsJsonList")
                         chunks = chunksAsJsonList.map {
                             Chunk(gson.fromJson(it, jsonMapType))
                         }
-                        Log.wtf(TAG, "chunks=$chunks")
                         parallelDownloadContentLength = chunks.fold(0L) { acc, chunk ->
                             acc + chunk.toByte - chunk.fromByte + 1
                         }
@@ -167,7 +162,6 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                     }
                 }
                 // wait for all chunks to finish
-                Log.wtf(TAG, "Waiting")
                 return@withContext parallelTaskStatusUpdateCompleter.await()
             } catch (e: Exception) {
 
@@ -405,7 +399,6 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
             if (contentLength <= 0) {
                 throw IllegalStateException("Server does not provide content length - cannot chunk download")
             }
-            Log.wtf(TAG, "content length = $contentLength, keys=${headers.keys}")
             parallelDownloadContentLength = contentLength
             try {
                 headers.entries
@@ -467,7 +460,7 @@ class Chunk(
             post = null,
             fileField = "",
             mimeType = "",
-            baseDirectory = BaseDirectory.temporary, //TODO may need different directory
+            baseDirectory = BaseDirectory.applicationDocuments,
             group = TaskWorker.chunkGroup,
             updates = updatesBasedOnParent(parentTask),
             retries = parentTask.retries,

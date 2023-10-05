@@ -1053,6 +1053,8 @@ final class ParallelDownloadTask extends DownloadTask {
   /// generated
   /// [headers] an optional map of HTTP request headers
   /// [httpRequestMethod] the HTTP request method used (e.g. GET)
+  /// [chunks] the number of chunks to break the download into, i.e. the
+  ///   number of downloads that will happen in parallel
   /// [directory] optional directory name, precedes [filename]
   /// [baseDirectory] one of the base directories, precedes [directory]
   /// [group] if set allows different callbacks or processing for different
@@ -1061,6 +1063,7 @@ final class ParallelDownloadTask extends DownloadTask {
   /// [requiresWiFi] if set, will not start download until WiFi is available.
   /// If not set may start download over cellular network
   /// [retries] if >0 will retry a failed download this many times
+  /// [allowPause] if true, allows pause command
   /// [metaData] user data
   /// [creationTime] time of task creation, 'now' by default.
   ///
