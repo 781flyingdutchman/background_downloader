@@ -59,6 +59,7 @@ class Task(
     var retriesRemaining: Int = 0,
     val allowPause: Boolean = false,
     val metaData: String = "",
+    val displayName: String = "",
     val creationTime: Long = System.currentTimeMillis(), // untouched, so kept as integer on Android side
     val taskType: String
 ) {
@@ -87,6 +88,7 @@ class Task(
         retriesRemaining = (jsonMap["retriesRemaining"] as Double? ?: 0).toInt(),
         allowPause = (jsonMap["allowPause"] as Boolean? ?: false),
         metaData = jsonMap["metaData"] as String? ?: "",
+        displayName = jsonMap["displayName"] as String? ?: "",
         creationTime = (jsonMap["creationTime"] as Double? ?: 0).toLong(),
         taskType = jsonMap["taskType"] as String? ?: ""
     )
@@ -114,6 +116,7 @@ class Task(
             "retriesRemaining" to retriesRemaining,
             "allowPause" to allowPause,
             "metaData" to metaData,
+            "displayName" to displayName,
             "creationTime" to creationTime,
             "taskType" to taskType
         )
@@ -237,7 +240,7 @@ enum class TaskStatus {
     waitingToRetry,
     paused;
 
-    fun isNotFinalState(): Boolean {
+    private fun isNotFinalState(): Boolean {
         return this == enqueued || this == running || this == waitingToRetry || this == paused
     }
 

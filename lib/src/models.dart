@@ -266,7 +266,7 @@ sealed class Task extends Request {
   /// Identifier for the task - auto generated if omitted
   final String taskId;
 
-  /// Filename of the file to store
+  /// Filename of the file to store - use {filename} in notification
   final String filename;
 
   /// Optional directory, relative to the base directory
@@ -291,8 +291,11 @@ sealed class Task extends Request {
   /// If false, task fails on any issue, and task cannot be paused
   final bool allowPause;
 
-  /// User-defined metadata
+  /// User-defined metadata - use {meteData} in notification
   final String metaData;
+
+  /// Human readable name for this task - use {displayName} in notification
+  final String displayName;
 
   /// Creates a [Task]
   ///
@@ -338,6 +341,7 @@ sealed class Task extends Request {
       this.requiresWiFi = false,
       super.retries,
       this.metaData = '',
+      this.displayName = '',
       this.allowPause = false,
       super.creationTime})
       : taskId = taskId ?? Random().nextInt(1 << 32).toString(),
@@ -408,6 +412,7 @@ sealed class Task extends Request {
       int? retriesRemaining,
       bool? allowPause,
       String? metaData,
+      String? displayName,
       DateTime? creationTime});
 
   /// Creates [Task] object from JsonMap
@@ -425,6 +430,7 @@ sealed class Task extends Request {
         requiresWiFi = jsonMap['requiresWiFi'] ?? false,
         allowPause = jsonMap['allowPause'] ?? false,
         metaData = jsonMap['metaData'] ?? '',
+        displayName = jsonMap['displayName'] ?? '',
         super.fromJsonMap(jsonMap);
 
   /// Creates JSON map of this object
@@ -440,6 +446,7 @@ sealed class Task extends Request {
         'requiresWiFi': requiresWiFi,
         'allowPause': allowPause,
         'metaData': metaData,
+        'displayName': displayName,
         'taskType': taskType
       };
 
@@ -524,6 +531,7 @@ final class DownloadTask extends Task {
       super.retries,
       super.allowPause,
       super.metaData,
+      super.displayName,
       super.creationTime});
 
   /// Creates [DownloadTask] object from JsonMap
@@ -555,6 +563,7 @@ final class DownloadTask extends Task {
           int? retriesRemaining,
           bool? allowPause,
           String? metaData,
+          String? displayName,
           DateTime? creationTime}) =>
       DownloadTask(
           taskId: taskId ?? this.taskId,
@@ -571,6 +580,7 @@ final class DownloadTask extends Task {
           retries: retries ?? this.retries,
           allowPause: allowPause ?? this.allowPause,
           metaData: metaData ?? this.metaData,
+          displayName: displayName ?? this.displayName,
           creationTime: creationTime ?? this.creationTime)
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 
@@ -742,6 +752,7 @@ final class UploadTask extends Task {
       super.requiresWiFi,
       super.retries,
       super.metaData,
+      super.displayName,
       super.creationTime})
       : assert(filename.isNotEmpty, 'A filename is required'),
         assert(post == null || post == 'binary',
@@ -829,6 +840,7 @@ final class UploadTask extends Task {
           int? retriesRemaining,
           bool? allowPause,
           String? metaData,
+          String? displayName,
           DateTime? creationTime}) =>
       UploadTask(
           taskId: taskId ?? this.taskId,
@@ -847,6 +859,7 @@ final class UploadTask extends Task {
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
           retries: retries ?? this.retries,
           metaData: metaData ?? this.metaData,
+          displayName: displayName ?? this.displayName,
           creationTime: creationTime ?? this.creationTime)
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 
@@ -925,6 +938,7 @@ final class MultiUploadTask extends UploadTask {
       super.requiresWiFi,
       super.retries,
       super.metaData,
+      super.displayName,
       super.creationTime})
       : fileFields = files
             .map((e) => switch (e) {
@@ -1003,6 +1017,7 @@ final class MultiUploadTask extends UploadTask {
           int? retriesRemaining,
           bool? allowPause,
           String? metaData,
+          String? displayName,
           DateTime? creationTime}) =>
       MultiUploadTask(
           taskId: taskId ?? this.taskId,
@@ -1018,6 +1033,7 @@ final class MultiUploadTask extends UploadTask {
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
           retries: retries ?? this.retries,
           metaData: metaData ?? this.metaData,
+          displayName: displayName ?? this.displayName,
           creationTime: creationTime ?? this.creationTime)
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 
@@ -1084,6 +1100,7 @@ final class ParallelDownloadTask extends DownloadTask {
       super.retries,
       super.allowPause,
       super.metaData,
+      super.displayName,
       super.creationTime})
       : assert(url is String || url is List<String>,
             'The `url` parameter must be a string or a list of strings'),
@@ -1131,6 +1148,7 @@ final class ParallelDownloadTask extends DownloadTask {
           int? retriesRemaining,
           bool? allowPause,
           String? metaData,
+          String? displayName,
           DateTime? creationTime}) =>
       ParallelDownloadTask(
           taskId: taskId ?? this.taskId,
@@ -1147,6 +1165,7 @@ final class ParallelDownloadTask extends DownloadTask {
           retries: retries ?? this.retries,
           allowPause: allowPause ?? this.allowPause,
           metaData: metaData ?? this.metaData,
+          displayName: displayName ?? this.displayName,
           creationTime: creationTime ?? this.creationTime)
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 }

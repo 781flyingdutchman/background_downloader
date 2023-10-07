@@ -738,7 +738,8 @@ void main() {
           retries: 5,
           allowPause: false,
           // cannot be true if post != null
-          metaData: 'someMetaData');
+          metaData: 'someMetaData',
+          displayName: 'displayName');
       final now = DateTime.now();
       expect(now.difference(complexTask.creationTime).inMilliseconds,
           lessThan(100));
@@ -766,6 +767,7 @@ void main() {
         expect(task.retriesRemaining, equals(complexTask.retriesRemaining));
         expect(task.retriesRemaining, equals(task.retries));
         expect(task.metaData, equals(complexTask.metaData));
+        expect(task.displayName, equals(complexTask.displayName));
         expect(
             task.creationTime
                 .difference(complexTask.creationTime)

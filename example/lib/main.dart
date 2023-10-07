@@ -69,7 +69,7 @@ class _MyAppState extends State<MyApp> {
             running: const TaskNotification('Download {filename}',
                 'File: {filename} - {progress} - speed {networkSpeed} and {timeRemaining} remaining'),
             complete: const TaskNotification(
-                'Download {filename}', 'Download complete'),
+                '{displayName} download {filename}', 'Download complete'),
             error: const TaskNotification(
                 'Download {filename}', 'Download failed'),
             paused: const TaskNotification(
@@ -228,7 +228,8 @@ class _MyAppState extends State<MyApp> {
             baseDirectory: BaseDirectory.applicationDocuments,
             updates: Updates.statusAndProgress,
             allowPause: true,
-            metaData: '<example metaData>');
+            metaData: '<example metaData>',
+            displayName: 'My display name');
         await FileDownloader().enqueue(backgroundDownloadTask!);
         break;
       case ButtonState.cancel:

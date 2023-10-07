@@ -60,9 +60,11 @@ open class TaskWorker(
         const val keyResumeDataData = "tempFilename"
         const val keyStartByte = "startByte"
         const val keyETag = "eTag"
-        const val bufferSize = 8096
+        const val bufferSize = 2 shl 12
+
         const val taskTimeoutMillis = 9 * 60 * 1000L  // 9 minutes
 
+        private val displayNameRegEx = Regex("""\{displayName\}""", RegexOption.IGNORE_CASE)
         private val fileNameRegEx = Regex("""\{filename\}""", RegexOption.IGNORE_CASE)
         private val progressRegEx = Regex("""\{progress\}""", RegexOption.IGNORE_CASE)
         private val networkSpeedRegEx = Regex("""\{networkSpeed\}""", RegexOption.IGNORE_CASE)
@@ -1011,7 +1013,7 @@ open class TaskWorker(
     }
 
     /**
-     * Replace special tokens {filename}, {metadata}, {progress}, {networkSpeed},
+     * Replace special tokens {displayName}, {filename}, {metadata}, {progress}, {networkSpeed},
      * {timeRemaining} with their respective values
      */
     private fun replaceTokens(
@@ -1021,8 +1023,8 @@ open class TaskWorker(
         timeRemaining: Long
     ): String {
         // filename and metadata
-        val output =
-            fileNameRegEx.replace(metaDataRegEx.replace(input, task.metaData), task.filename)
+        val output = displayNameRegEx.replace(fileNameRegEx.replace(metaDataRegEx.replace(input, task.metaData), task.filename), task.displayName)
+
         // progress
         val progressString =
             if (progress in 0.0..1.0) (progress * 100).roundToInt().toString() + "%"
