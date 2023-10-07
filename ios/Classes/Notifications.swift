@@ -115,9 +115,10 @@ func notificationTypeForTaskStatus(status: TaskStatus) -> NotificationType {
     }
 }
 
+let displayNameRegEx = try! NSRegularExpression(pattern: "\\{displayName\\}", options: NSRegularExpression.Options.caseInsensitive)
 let fileNameRegEx = try! NSRegularExpression(pattern: "\\{filename\\}", options: NSRegularExpression.Options.caseInsensitive)
-let progressRegEx = try! NSRegularExpression(pattern: "\\{progress\\}", options: NSRegularExpression.Options.caseInsensitive)
 let metaDataRegEx = try! NSRegularExpression(pattern: "\\{metadata\\}", options: NSRegularExpression.Options.caseInsensitive)
+let progressRegEx = try! NSRegularExpression(pattern: "\\{progress\\}", options: NSRegularExpression.Options.caseInsensitive)
 let networkSpeedRegEx = try! NSRegularExpression(pattern: "\\{networkSpeed\\}", options: NSRegularExpression.Options.caseInsensitive)
 let timeRemainingRegEx = try! NSRegularExpression(pattern: "\\{timeRemaining\\}", options: NSRegularExpression.Options.caseInsensitive)
 
@@ -125,8 +126,9 @@ let timeRemainingRegEx = try! NSRegularExpression(pattern: "\\{timeRemaining\\}"
 func replaceTokens(input: String, task: Task) -> String {
     let inputString = NSMutableString()
     inputString.append(input)
-    metaDataRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: task.metaData)
+    displayNameRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: task.displayName)
     fileNameRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: task.filename)
+    metaDataRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: task.metaData)
     progressRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: "")
     networkSpeedRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: "-- MB/s")
     timeRemainingRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: "--:--")

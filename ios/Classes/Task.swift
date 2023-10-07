@@ -30,6 +30,7 @@ struct Task : Codable {
     var retriesRemaining: Int = 0
     var allowPause: Bool = false
     var metaData: String = ""
+    var displayName: String = ""
     var creationTime: Int64 = Int64((Date().timeIntervalSince1970 * 1000.0).rounded())
     var taskType: String
 }
