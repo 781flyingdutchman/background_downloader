@@ -449,10 +449,11 @@ show for the `running` notification, next to the 'Cancel' button. To open the do
 when the user taps the `complete` notification, add `tapOpensFile: true` to your call to
 `configureNotification`
 
-There are three possible substitutions of the text in the `title` or `body` of a `TaskNotification`:
-* {filename} is replaced with the filename as defined in the `Task`
+There are four possible substitutions of the text in the `title` or `body` of a `TaskNotification`:
+* {filename} is replaced with the `filename` field of the `Task`
+* {displayName} is replaced with the `displayName` field of the `Task`
 * {progress} is substituted by a progress percentage, or '--%' if progress is unknown
-* {metadata} is substituted by the `Task.metaData` field
+* {metadata} is substituted by the `metaData` field of the `Task`
 
 Notifications on iOS follow Apple's [guidelines](https://developer.apple.com/design/human-interface-guidelines/components/system-experiences/notifications/), notably:
 * No progress bar is shown, and the {progress} substitution always substitutes to an empty string. In other words: only a single `running` notification is shown and it is not updated until the download state changes

@@ -1,3 +1,9 @@
+## 7.10.1
+
+Add `displayName` field to `Task` that can be used to store and dsipay a 'human readable' description of the task. It can be displayed in a notification using {displayName}.
+
+Bug fix for regression in compiling for Web platform (through stubbing - no actual web functionality).
+
 ## 7.10.0
 
 Add `ParallelDownloadTask`. Some servers may offer an option to download part of the same file from multiple URLs or have multiple parallel downloads of part of a large file using a single URL. This can speed up the download of large files.  To do this, create a `ParallelDownloadTask` instead of a regular `DownloadTask` and specify `chunks` (the number of pieces you want to break the file into, i.e. the number of downloads that will happen in parallel) and `urls` (as a list of URLs, or just one). For example, if you specify 4 chunks and 2 URLs, then the download will be broken into 4 pieces, two each for each URL.
