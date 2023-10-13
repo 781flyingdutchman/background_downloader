@@ -373,3 +373,21 @@ bool shouldSendProgressUpdate(double currentProgress, DateTime now) {
   return currentProgress - lastProgressUpdate > 0.02 &&
       now.isAfter(nextProgressUpdateTime);
 }
+
+/// Parses the range in a Range header, and returns a Pair representing
+/// the range. The format needs to be "bytes=10-20"
+///
+/// A missing lower range is substituted with 0, and a missing upper
+/// range with null.  If the string cannot be parsed, returns (0, null)
+(int, int?) parseRange(String rangeStr) {
+  final regex = RegExp(r'bytes=(\d*)-(\d*)');
+  final match = regex.firstMatch(rangeStr);
+  if (match == null) {
+    return (0, null);
+  }
+
+  final start = int.tryParse(match.group(1) ?? '') ?? 0;
+  final end = int.tryParse(match.group(2) ?? '');
+  return (start, end);
+}
+

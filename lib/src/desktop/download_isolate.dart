@@ -14,8 +14,7 @@ import '../models.dart';
 import 'desktop_downloader.dart';
 import 'isolate.dart';
 
-var chunkStartByte =
-    0; // for chunks, the start of the range to download, otherwise 0
+var taskRangeStartByte = 0; // Start of the Task's download range
 String? eTagHeader;
 
 /// Execute the download task
@@ -44,16 +43,12 @@ Future<void> doDownloadTask(
   var request = http.Request(task.httpRequestMethod, Uri.parse(task.url));
   request.headers.addAll(task.headers);
   if (isResume) {
-    if (task.group != BaseDownloader.chunkGroup) {
-      request.headers['Range'] = 'bytes=$requiredStartByte-';
-    } else {
-      // for chunks, set range relative to start of chunk range, encoded in metaData
-      final chunkData = jsonDecode(task.metaData);
-      chunkStartByte = chunkData['from'] as int;
-      final chunkEndByte = chunkData['to'] as int;
-      request.headers['Range'] =
-          'bytes=${chunkStartByte + requiredStartByte}-$chunkEndByte';
-    }
+    final taskRangeHeader = task.headers['Range'] ?? '';
+    final taskRange = parseRange(taskRangeHeader);
+    taskRangeStartByte = taskRange.$1;
+    final resumeRange = (taskRangeStartByte + requiredStartByte, taskRange.$2);
+    final newRangeString = 'bytes=${resumeRange.$1}-${resumeRange.$2 ?? ""}';
+    request.headers['Range'] = newRangeString;
   }
   if (task.post is String) {
     request.body = task.post!;
@@ -242,7 +237,7 @@ Future<bool> prepareResume(
   final tempFileLength = await tempFile.length();
   log.finest(
       'Resume start=$start, end=$end of total=$total bytes, tempFile = $tempFileLength bytes');
-  startByte = start - chunkStartByte; // relative to start of range
+  startByte = start - taskRangeStartByte; // relative to start of range
   if (startByte > tempFileLength) {
     log.fine('Offered range not feasible: $range with startByte $startByte');
     taskException = TaskResumeException(
