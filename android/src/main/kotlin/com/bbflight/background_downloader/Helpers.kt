@@ -82,3 +82,19 @@ fun insufficientSpace(applicationContext: Context, contentLength: Long): Boolean
     return available - (BDPlugin.remainingBytesToDownload.values.sum()
             + contentLength) < (checkValue.toLong() shl 20)
 }
+
+/**
+ * Parses the range in a Range header, and returns a Pair representing
+ * the range. The format needs to be "bytes=10-20"
+ *
+ * A missing lower range is substituted with 0L, and a missing upper
+ * range with null.  If the string cannot be parsed, returns (0L, null)
+ */
+fun parseRange(rangeStr: String): Pair<Long, Long?> {
+    val regex = Regex("""bytes=(\d*)-(\d*)""")
+    val match = regex.find(rangeStr) ?: return Pair(0, null)
+    val start = match.groupValues[1].toLongOrNull() ?: 0L
+    val end = match.groupValues[2].toLongOrNull()
+    return Pair(start, end)
+}
+

@@ -291,7 +291,7 @@ sealed class Task extends Request {
   /// If false, task fails on any issue, and task cannot be paused
   final bool allowPause;
 
-  /// User-defined metadata - use {meteData} in notification
+  /// User-defined metadata - use {metaData} in notification
   final String metaData;
 
   /// Human readable name for this task - use {displayName} in notification
@@ -325,6 +325,7 @@ sealed class Task extends Request {
   /// partial transfers. Such failures are typically temporary, eg due to
   /// connectivity issues, and may be resumed when connectivity returns
   /// [metaData] user data
+  /// [displayName] human readable name for this task
   /// [creationTime] time of task creation, 'now' by default.
   Task(
       {String? taskId,
@@ -476,7 +477,7 @@ sealed class Task extends Request {
   @override
   String toString() {
     return '$taskType{taskId: $taskId, url: $url, filename: $filename, headers: '
-        '$headers, httpRequestMethod: $httpRequestMethod, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, updates: $updates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, allowPause: $allowPause, metaData: $metaData}';
+        '$headers, httpRequestMethod: $httpRequestMethod, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, updates: $updates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, allowPause: $allowPause, metaData: $metaData, displayName: $displayName}';
   }
 }
 
@@ -514,6 +515,7 @@ final class DownloadTask extends Task {
   /// [retries] if >0 will retry a failed download this many times
   /// [allowPause] if true, allows pause command
   /// [metaData] user data
+  /// [displayName] human readable name for this task
   /// [creationTime] time of task creation, 'now' by default.
   DownloadTask(
       {super.taskId,
@@ -733,6 +735,7 @@ final class UploadTask extends Task {
   /// If not set may start upload over cellular network
   /// [retries] if >0 will retry a failed upload this many times
   /// [metaData] user data
+  /// [displayName] human readable name for this task
   /// [creationTime] time of task creation, 'now' by default.
   UploadTask(
       {super.taskId,
@@ -922,6 +925,7 @@ final class MultiUploadTask extends UploadTask {
   /// If not set may start upload over cellular network
   /// [retries] if >0 will retry a failed upload this many times
   /// [metaData] user data
+  /// [displayName] human readable name for this task
   /// [creationTime] time of task creation, 'now' by default.
   MultiUploadTask(
       {super.taskId,
@@ -1081,6 +1085,7 @@ final class ParallelDownloadTask extends DownloadTask {
   /// [retries] if >0 will retry a failed download this many times
   /// [allowPause] if true, allows pause command
   /// [metaData] user data
+  /// [displayName] human readable name for this task
   /// [creationTime] time of task creation, 'now' by default.
   ///
   /// A [ParallelDownloadTask] cannot be paused or resumed on failure

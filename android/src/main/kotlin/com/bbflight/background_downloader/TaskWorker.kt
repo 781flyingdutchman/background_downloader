@@ -360,7 +360,7 @@ open class TaskWorker(
     lateinit var task: Task
 
     // properties related to pause/resume functionality and progress
-    var startByte = 0L // starting position within the original range, used for resume
+    var startByte = 0L // actual starting position within the task range, used for resume
     var bytesTotal = 0L // total bytes read in this download session
     var taskCanResume = false // whether task is able to resume
     var isResume = false // whether task is a resume

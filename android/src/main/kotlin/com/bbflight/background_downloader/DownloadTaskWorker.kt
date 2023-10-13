@@ -6,8 +6,6 @@ import android.os.storage.StorageManager
 import android.util.Log
 import androidx.preference.PreferenceManager
 import androidx.work.WorkerParameters
-import com.bbflight.background_downloader.BDPlugin.Companion.gson
-import com.bbflight.background_downloader.BDPlugin.Companion.jsonMapType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.BufferedInputStream
@@ -29,8 +27,8 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
     private var eTagHeader: String? = null
     private var serverAcceptsRanges = false // if true, send resume data on fail
     private var tempFilePath = ""
-    private var requiredStartByte = 0L
-    private var chunkStartByte = 0L // for chunks, the start of the range to download, otherwise 0
+    private var requiredStartByte = 0L // required start byte within the task range
+    private var taskRangeStartByte = 0L // Start of the Task's download range
 
     private var eTag: String? = null
 
@@ -41,15 +39,12 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
      * */
     override suspend fun connectAndProcess(connection: HttpURLConnection): TaskStatus {
         if (isResume) {
-            if (task.group != chunkGroup) {
-                connection.setRequestProperty("Range", "bytes=$requiredStartByte-")
-            } else {
-                // for chunks, set range relative to start of chunk range, encoded in metaData
-                val chunkData: Map<String, Any> = gson.fromJson(task.metaData, jsonMapType)
-                chunkStartByte = (chunkData["from"] as Double).toLong()
-                val chunkEndByte:Long = (chunkData["to"] as Double).toLong()
-                connection.setRequestProperty("Range", "bytes=${chunkStartByte + requiredStartByte}-$chunkEndByte")
-            }
+            val taskRangeHeader = task.headers["Range"] ?: ""
+            val taskRange = parseRange(taskRangeHeader)
+            taskRangeStartByte = taskRange.first
+            val resumeRange = Pair(taskRangeStartByte + requiredStartByte, taskRange.second)
+            val newRangeString = "bytes=${resumeRange.first}-${resumeRange.second ?: ""}"
+            connection.setRequestProperty("Range", newRangeString)
         }
         val result = super.connectAndProcess(connection)
         if (result == TaskStatus.canceled) {
@@ -341,7 +336,7 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
             TAG,
             "Resume start=$start, end=$end of total=$total bytes, tempFile = $tempFileLength bytes"
         )
-        startByte = start - chunkStartByte // relative to start of range
+        startByte = start - taskRangeStartByte // relative to start of range
         if (startByte > tempFileLength) {
             Log.i(TAG, "Offered range not feasible: $range with startByte $startByte")
             taskException = TaskException(

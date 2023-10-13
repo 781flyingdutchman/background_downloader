@@ -607,6 +607,45 @@ void main() {
     });
   });
 
+  group('Range', () {
+    testWidgets('Range header in download request', (widgetTester) async {
+      const rangeStart = 10;
+      const rangeEnd = 1000000;
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback, taskProgressCallback: progressCallback);
+      // full range
+      task = task.copyWith(url: urlWithContentLength, headers: {'Range': 'bytes=$rangeStart-$rangeEnd'}, updates: Updates.statusAndProgress);
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(lastValidExpectedFileSize, equals(rangeEnd - rangeStart + 1));
+      var file = File(await task.filePath());
+      expect(file.lengthSync(), equals(lastValidExpectedFileSize));
+      await file.delete();
+      // reset and range without end
+      statusCallbackCompleter = Completer();
+      lastValidExpectedFileSize = -1;
+      task = task.copyWith(headers: {'Range': 'bytes=$rangeStart-'});
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(lastValidExpectedFileSize, equals(urlWithContentLengthFileSize - rangeStart));
+      file = File(await task.filePath());
+      expect(file.lengthSync(), equals(lastValidExpectedFileSize));
+      await file.delete();
+      // reset and range without start
+      statusCallbackCompleter = Completer();
+      lastValidExpectedFileSize = -1;
+      task = task.copyWith(headers: {'Range': 'bytes=-$rangeEnd'});
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(lastValidExpectedFileSize, equals(rangeEnd));
+      file = File(await task.filePath());
+      expect(file.lengthSync(), equals(lastValidExpectedFileSize));
+      await file.delete();
+    });
+  });
+
   group('Queue and task management', () {
     testWidgets('reset', (widgetTester) async {
       print('Starting reset');
@@ -2277,6 +2316,24 @@ void main() {
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.complete));
       expect(lastProgress, equals(progressComplete));
+    });
+
+    testWidgets('Pause and resume a task with a Range header', (widgetTester) async {
+      const rangeStart = 10;
+      const rangeEnd = 10000000; // 10MB
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback, taskProgressCallback: progressCallback);
+      task = task.copyWith(url: urlWithLongContentLength, headers: {'Range': 'bytes=$rangeStart-$rangeEnd'}, updates: Updates.statusAndProgress, allowPause: true);
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await someProgressCompleter.future;
+      expect(await FileDownloader().pause(task), isTrue);
+      await Future.delayed(const Duration(seconds: 2));
+      expect(await FileDownloader().resume(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(lastValidExpectedFileSize, equals(rangeEnd - rangeStart + 1));
+      var file = File(await task.filePath());
+      expect(file.lengthSync(), equals(lastValidExpectedFileSize));
+      await file.delete();
     });
   });
 
