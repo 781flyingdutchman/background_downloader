@@ -23,6 +23,7 @@ var significantProgressCompleter =
     Completer<void>(); // completes when progress > 0.1
 var lastStatus = TaskStatus.enqueued;
 var lastProgress = -100.0;
+Task? lastTaskWithStatus;
 var lastValidExpectedFileSize = -1;
 var lastValidNetworkSpeed = -1.0;
 var lastValidTimeRemaining = const Duration(seconds: -1);
@@ -65,6 +66,7 @@ var uploadTaskBinary = uploadTask.copyWith(post: 'binary');
 
 void statusCallback(TaskStatusUpdate update) {
   final task = update.task;
+  lastTaskWithStatus = task;
   final status = update.status;
   print('statusCallback for $task with status $status');
   if (update.exception != null) {
@@ -139,6 +141,7 @@ void main() {
     someProgressCompleter = Completer<void>();
     lastStatus = TaskStatus.enqueued;
     lastProgress = 0;
+    lastTaskWithStatus = null;
     lastValidExpectedFileSize = -1;
     lastValidNetworkSpeed = -1.0;
     lastValidTimeRemaining = const Duration(seconds: -1);
@@ -923,6 +926,31 @@ void main() {
       // again with 'unique' should yield (2) filename
       final task5 = await task.withSuggestedFilename(unique: true);
       expect(task5.filename, equals('5MB-test (2).ZIP'));
+    });
+
+    testWidgets('downloadTask with ? for filename', (widgetTester) async {
+      // delete old downloads
+      task = DownloadTask(url: urlWithContentLength, filename: '5MB-test.ZIP');
+      try {
+        File(await task.filePath()).deleteSync();
+      } catch (e) {}
+      task =
+          DownloadTask(url: urlWithContentLength, filename: '5MB-test (1).ZIP');
+      try {
+        File(await task.filePath()).deleteSync();
+      } catch (e) {}
+      task =
+          DownloadTask(url: urlWithContentLength, filename: '5MB-test (2).ZIP');
+      try {
+        File(await task.filePath()).deleteSync();
+      } catch (e) {}
+      task = DownloadTask(url: urlWithContentLength, filename: '?');
+      final result = await FileDownloader().download(task);
+      expect(result.task.filename, equals('5MB-test.ZIP'));
+      final file = File(await result.task.filePath());
+      expect(await file.exists(), isTrue);
+      expect(await file.length(), equals(urlWithContentLengthFileSize));
+      await file.delete();
     });
 
     testWidgets('DownloadTask expectedFileSize', (widgetTester) async {
@@ -2191,6 +2219,33 @@ void main() {
       expect(lastStatus, equals(TaskStatus.complete));
       expect(
           await fileEqualsLargeTestFile(File(await task.filePath())), isTrue);
+    });
+
+    testWidgets('pause and resume task with ? as filename',
+        (widgetTester) async {
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      task = DownloadTask(
+          url: urlWithContentLength,
+          filename: '?',
+          updates: Updates.statusAndProgress,
+          allowPause: true);
+      expect(await FileDownloader().enqueue(task), equals(true));
+      await someProgressCompleter.future;
+      expect(await FileDownloader().pause(task), isTrue);
+      await Future.delayed(const Duration(milliseconds: 500));
+      expect(lastStatus, equals(TaskStatus.paused));
+      print("paused");
+      await Future.delayed(const Duration(seconds: 2));
+      // resume
+      expect(await FileDownloader().resume(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(lastTaskWithStatus, isNotNull);
+      var file = File(await lastTaskWithStatus!.filePath());
+      expect(await fileEqualsLargeTestFile(file), isTrue);
+      await file.delete();
     });
 
     testWidgets('pause and resume with invalid ETag', (widgetTester) async {

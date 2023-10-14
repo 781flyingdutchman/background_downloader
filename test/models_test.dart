@@ -130,6 +130,13 @@ void main() {
         throwsArgumentError);
   });
 
+  test('downloadTask hasFilename and ?', () {
+    final task0 = DownloadTask(url: workingUrl);
+    expect(task0.hasFilename, isTrue);
+    final task1 = DownloadTask(url: workingUrl, filename: '?');
+    expect(task1.hasFilename, isFalse);
+  });
+
   test('downloadTask directory', () {
     final task0 = DownloadTask(url: workingUrl);
     expect(task0.directory.isEmpty, isTrue);

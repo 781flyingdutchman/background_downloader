@@ -124,6 +124,8 @@ final class DesktopDownloader extends BaseDownloader {
     // cancellation, and for managing parallel downloads
     _isolateSendPorts[task] = sendPort;
     // listen for messages sent back from the isolate, until 'done'
+    // note that the task sent by the isolate may have changed. Therefore, we
+    // use updatedTask instead of task from here on
     while (await messagesFromIsolate.hasNext) {
       final message = await messagesFromIsolate.next;
       switch (message) {
@@ -132,35 +134,37 @@ final class DesktopDownloader extends BaseDownloader {
 
         case (
             'statusUpdate',
+            Task updatedTask,
             TaskStatus status,
             TaskException? exception,
             String? responseBody
           ):
-          final taskStatusUpdate = TaskStatusUpdate(task, status,
+          final taskStatusUpdate = TaskStatusUpdate(updatedTask, status,
               status == TaskStatus.failed ? exception : null, responseBody);
-          if (task.group != BaseDownloader.chunkGroup) {
+          if (updatedTask.group != BaseDownloader.chunkGroup) {
             if (status.isFinalState) {
-              _remove(task);
+              _remove(updatedTask);
             }
             processStatusUpdate(taskStatusUpdate);
           } else {
-            _parallelTaskSendPort(Chunk.getParentTaskId(task))
+            _parallelTaskSendPort(Chunk.getParentTaskId(updatedTask))
                 ?.send(taskStatusUpdate);
           }
 
         case (
             'progressUpdate',
+            Task updatedTask,
             double progress,
             int expectedFileSize,
             double downloadSpeed,
             Duration timeRemaining
           ):
-          final taskProgressUpdate = TaskProgressUpdate(
-              task, progress, expectedFileSize, downloadSpeed, timeRemaining);
-          if (task.group != BaseDownloader.chunkGroup) {
+          final taskProgressUpdate = TaskProgressUpdate(updatedTask, progress,
+              expectedFileSize, downloadSpeed, timeRemaining);
+          if (updatedTask.group != BaseDownloader.chunkGroup) {
             processProgressUpdate(taskProgressUpdate);
           } else {
-            _parallelTaskSendPort(Chunk.getParentTaskId(task))
+            _parallelTaskSendPort(Chunk.getParentTaskId(updatedTask))
                 ?.send(taskProgressUpdate);
           }
 

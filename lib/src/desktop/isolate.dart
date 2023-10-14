@@ -231,6 +231,7 @@ void processStatusUpdateInIsolate(
   if (task.providesStatusUpdates || retryNeeded) {
     sendPort.send((
       'statusUpdate',
+      task,
       status,
       status == TaskStatus.failed
           ? taskException ?? TaskException('None')
@@ -272,6 +273,7 @@ void processProgressUpdateInIsolate(
           : Duration(microseconds: (remainingBytes / networkSpeed).round());
       sendPort.send((
         'progressUpdate',
+        task,
         progress,
         expectedFileSize,
         networkSpeed,
@@ -281,6 +283,7 @@ void processProgressUpdateInIsolate(
       // no download speed or time remaining
       sendPort.send((
         'progressUpdate',
+        task,
         progress,
         expectedFileSize,
         -1.0,
