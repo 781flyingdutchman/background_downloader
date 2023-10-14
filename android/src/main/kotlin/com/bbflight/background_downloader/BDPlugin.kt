@@ -65,6 +65,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         const val keyConfigCheckAvailableSpace =
             "com.bbflight.background_downloader.config.checkAvailableSpace"
         const val keyConfigUseCacheDir = "com.bbflight.background_downloader.config.useCacheDir"
+        const val keyConfigUseExternalStorage = "com.bbflight.background_downloader.config.useExternalStorage"
         const val notificationChannel = "background_downloader"
         const val notificationPermissionRequestCode = 373921
         const val externalStoragePermissionRequestCode = 373922
@@ -339,6 +340,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 )
                 "configCheckAvailableSpace" -> methodConfigCheckAvailableSpace(call, result)
                 "configUseCacheDir" -> methodConfigUseCacheDir(call, result)
+                "configUseExternalStorage" -> methodConfigUseExternalStorage(call, result)
                 "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
                     call, result
                 )
@@ -744,6 +746,14 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     }
 
     /**
+     * Store the useExternalStorage config in shared preferences
+     */
+    private fun methodConfigUseExternalStorage(call: MethodCall, result: Result) {
+        updateSharedPreferences(keyConfigUseExternalStorage, call.arguments as Int?)
+        result.success(null)
+    }
+
+    /**
      * Sets or resets flag to force failing posting on background channel
      *
      * For testing only
@@ -767,6 +777,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             }
             apply()
         }
+        Log.d(TAG, "Setting preference key $key to $value")
     }
 
     // ActivityAware implementation to capture Activity context needed for permissions and intents

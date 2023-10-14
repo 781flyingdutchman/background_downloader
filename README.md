@@ -286,6 +286,8 @@ final task = DownloadTask(
 
 The downloader will only store the file upon success (so there will be no partial files saved), and if so, the destination is overwritten if it already exists, and all intermediate directories will be created if needed.
 
+Android has two storage modes: internal and external storage. Read the [configuration document](https://github.com/781flyingdutchman/background_downloader/blob/main/CONFIG.md) for details on how to configure your app to use external storage.
+
 Note: the reason you cannot simply pass a full absolute directory path to the downloader is that the location of the app's documents directory may change between application starts (on iOS), and may therefore fail for downloads that complete while the app is suspended.  You should therefore never store permanently, or hard-code, an absolute path.
 
 If you want the filename to be provided by the server (instead of assigning a value to `filename` yourself), use the following:
@@ -745,12 +747,14 @@ Then do the same thing in macos/Runner/Release.entitlements.
 ## Configuration
 
 Several aspects of the downloader can be configured on startup:
-* Running tasks in 'foreground mode' on Android to allow longer runs
 * Setting the request timeout value and, for iOS only, the 'resourceTimeout'
 * Checking available space before attempting a download
+* On Android, when to use the `cacheDir` for temporary files
 * Setting a proxy
-* Localizing the notification button texts on iOS
-* Bypassing TLS Certificate validation (for debug mode only)
+* Bypassing TLS Certificate validation (for debug mode only, Android and Desktop only)
+* On Android, running tasks in 'foreground mode' to allow longer runs
+* On Android, whether or not to use external storage
+* On iOS, localizing the notification button texts
 
 Please read the [configuration document](https://github.com/781flyingdutchman/background_downloader/blob/main/CONFIG.md) for details on how to configure.
 

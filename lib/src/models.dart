@@ -297,6 +297,8 @@ sealed class Task extends Request {
   /// Human readable name for this task - use {displayName} in notification
   final String displayName;
 
+  static bool useExternalStorage = false; // for Android configuration only
+
   /// Creates a [Task]
   ///
   /// [taskId] must be unique. A unique id will be generated if omitted
@@ -379,19 +381,42 @@ sealed class Task extends Request {
   /// If the task is a MultiUploadTask and no [withFilename] is given,
   /// returns the empty string, as there is no single path that can be
   /// returned.
+  ///
+  /// Throws a FileSystemException if using external storage on Android (via
+  /// configuration at startup), and external storage is not available.
   Future<String> filePath({String? withFilename}) async {
     if (this is MultiUploadTask && withFilename == null) {
       return '';
     }
-    final Directory baseDir = await switch (baseDirectory) {
-      BaseDirectory.applicationDocuments => getApplicationDocumentsDirectory(),
-      BaseDirectory.temporary => getTemporaryDirectory(),
-      BaseDirectory.applicationSupport => getApplicationSupportDirectory(),
-      BaseDirectory.applicationLibrary
+    Directory? externalStorageDirectory;
+    Directory? externalCacheDirectory;
+    if (Task.useExternalStorage) {
+      externalStorageDirectory = await getExternalStorageDirectory();
+      externalCacheDirectory = (await getExternalCacheDirectories())?.first;
+      if (externalStorageDirectory == null || externalCacheDirectory == null) {
+        throw const FileSystemException(
+            'Android external storage is not available');
+      }
+    }
+    final Directory baseDir =
+        switch ((baseDirectory, Task.useExternalStorage)) {
+      (BaseDirectory.applicationDocuments, false) =>
+        await getApplicationDocumentsDirectory(),
+      (BaseDirectory.temporary, false) => await getTemporaryDirectory(),
+      (BaseDirectory.applicationSupport, false) =>
+        await getApplicationSupportDirectory(),
+      (BaseDirectory.applicationLibrary, false)
           when Platform.isMacOS || Platform.isIOS =>
-        getLibraryDirectory(),
-      BaseDirectory.applicationLibrary => Future.value(Directory(
-          path.join((await getApplicationSupportDirectory()).path, 'Library')))
+        await getLibraryDirectory(),
+      (BaseDirectory.applicationLibrary, false) => Directory(
+          path.join((await getApplicationSupportDirectory()).path, 'Library')),
+      // Android only: external storage variants
+      (BaseDirectory.applicationDocuments, true) => externalStorageDirectory!,
+      (BaseDirectory.temporary, true) => externalCacheDirectory!,
+      (BaseDirectory.applicationSupport, true) =>
+        Directory(path.join(externalStorageDirectory!.path, 'Support')),
+      (BaseDirectory.applicationLibrary, true) =>
+        Directory(path.join(externalStorageDirectory!.path, 'Library'))
     };
     return path.join(baseDir.path, directory, withFilename ?? filename);
   }
@@ -1528,11 +1553,12 @@ final class Config {
       'runInForegroundIfFileLargerThan';
   static const localize = 'localize';
   static const useCacheDir = 'useCacheDir';
+  static const useExternalStorage = 'useExternalStorage';
 
   // Config arguments
-  static const always = 'always'; // int 0
-  static const never = 'never'; // int -1
-  static const whenAble = 'whenAble'; // int -2
+  static const always = 'always'; // int 0 on native side
+  static const never = 'never'; // int -1 on native side
+  static const whenAble = 'whenAble'; // int -2 on native side
 
   /// Returns the int equivalent of commonly used String arguments
   ///

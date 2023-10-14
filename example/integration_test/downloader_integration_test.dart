@@ -611,9 +611,14 @@ void main() {
     testWidgets('Range header in download request', (widgetTester) async {
       const rangeStart = 10;
       const rangeEnd = 1000000;
-      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback, taskProgressCallback: progressCallback);
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
       // full range
-      task = task.copyWith(url: urlWithContentLength, headers: {'Range': 'bytes=$rangeStart-$rangeEnd'}, updates: Updates.statusAndProgress);
+      task = task.copyWith(
+          url: urlWithContentLength,
+          headers: {'Range': 'bytes=$rangeStart-$rangeEnd'},
+          updates: Updates.statusAndProgress);
       expect(await FileDownloader().enqueue(task), isTrue);
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.complete));
@@ -628,7 +633,8 @@ void main() {
       expect(await FileDownloader().enqueue(task), isTrue);
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.complete));
-      expect(lastValidExpectedFileSize, equals(urlWithContentLengthFileSize - rangeStart));
+      expect(lastValidExpectedFileSize,
+          equals(urlWithContentLengthFileSize - rangeStart));
       file = File(await task.filePath());
       expect(file.lengthSync(), equals(lastValidExpectedFileSize));
       await file.delete();
@@ -786,6 +792,7 @@ void main() {
           group: complexTask.group, taskStatusCallback: statusCallback);
       expect(await FileDownloader().taskForId(complexTask.taskId), isNull);
       expect(await FileDownloader().enqueue(complexTask), isTrue);
+      print("done with enqueue");
       final task = await FileDownloader().taskForId(complexTask.taskId);
       expect(task is DownloadTask, isTrue);
       expect(task, equals(complexTask));
@@ -2318,11 +2325,18 @@ void main() {
       expect(lastProgress, equals(progressComplete));
     });
 
-    testWidgets('Pause and resume a task with a Range header', (widgetTester) async {
+    testWidgets('Pause and resume a task with a Range header',
+        (widgetTester) async {
       const rangeStart = 10;
       const rangeEnd = 10000000; // 10MB
-      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback, taskProgressCallback: progressCallback);
-      task = task.copyWith(url: urlWithLongContentLength, headers: {'Range': 'bytes=$rangeStart-$rangeEnd'}, updates: Updates.statusAndProgress, allowPause: true);
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      task = task.copyWith(
+          url: urlWithLongContentLength,
+          headers: {'Range': 'bytes=$rangeStart-$rangeEnd'},
+          updates: Updates.statusAndProgress,
+          allowPause: true);
       expect(await FileDownloader().enqueue(task), isTrue);
       await someProgressCompleter.future;
       expect(await FileDownloader().pause(task), isTrue);
@@ -2448,6 +2462,77 @@ void main() {
         success = await FileDownloader().openFile(filePath: newFilename);
         expect(success, isTrue);
       }
+    });
+  });
+
+  group('Directories', () {
+    test('Print directory names', () async {
+      print(
+          'task.baseDirectory is ${task.baseDirectory} and path is ${await task.filePath()}');
+      task = task.copyWith(baseDirectory: BaseDirectory.applicationSupport);
+      print(
+          'task.baseDirectory is ${task.baseDirectory} and path is ${await task.filePath()}');
+      task = task.copyWith(baseDirectory: BaseDirectory.applicationLibrary);
+      print(
+          'task.baseDirectory is ${task.baseDirectory} and path is ${await task.filePath()}');
+      task = task.copyWith(baseDirectory: BaseDirectory.temporary);
+      print(
+          'task.baseDirectory is ${task.baseDirectory} and path is ${await task.filePath()}');
+      if (Platform.isAndroid) {
+        print('Switching to Android external');
+        Task.useExternalStorage = true;
+        task = task.copyWith(baseDirectory: BaseDirectory.applicationDocuments);
+        print(
+            'task.baseDirectory is ${task.baseDirectory} and path is ${await task.filePath()}');
+        task = task.copyWith(baseDirectory: BaseDirectory.applicationSupport);
+        print(
+            'task.baseDirectory is ${task.baseDirectory} and path is ${await task.filePath()}');
+        task = task.copyWith(baseDirectory: BaseDirectory.applicationLibrary);
+        print(
+            'task.baseDirectory is ${task.baseDirectory} and path is ${await task.filePath()}');
+        task = task.copyWith(baseDirectory: BaseDirectory.temporary);
+        print(
+            'task.baseDirectory is ${task.baseDirectory} and path is ${await task.filePath()}');
+        Task.useExternalStorage = false;
+      }
+    });
+
+    testWidgets('Android external storage', (widgetTester) async {
+      // configure use of external storage
+      print(await FileDownloader().configure(
+          androidConfig: (Config.useExternalStorage, Config.always)));
+      var path = await task.filePath();
+      await enqueueAndFileExists(path);
+      expect(lastStatus, equals(TaskStatus.complete));
+      // with subdirectory
+      task = DownloadTask(
+          url: workingUrl, directory: 'test', filename: defaultFilename);
+      path = await task.filePath();
+      await enqueueAndFileExists(path);
+      // cache directory
+      task = DownloadTask(
+          url: workingUrl,
+          filename: defaultFilename,
+          baseDirectory: BaseDirectory.temporary);
+      path = await task.filePath();
+      await enqueueAndFileExists(path);
+      // applicationSupport directory
+      task = DownloadTask(
+          url: workingUrl,
+          filename: defaultFilename,
+          baseDirectory: BaseDirectory.applicationSupport);
+      path = await task.filePath();
+      await enqueueAndFileExists(path);
+      // applicationLibrary directory
+      task = DownloadTask(
+          url: workingUrl,
+          filename: defaultFilename,
+          baseDirectory: BaseDirectory.applicationLibrary);
+      path = await task.filePath();
+      await enqueueAndFileExists(path);
+      // reset use of external storage
+      print(await FileDownloader()
+          .configure(androidConfig: (Config.useExternalStorage, Config.never)));
     });
   });
 

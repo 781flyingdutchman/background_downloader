@@ -427,6 +427,17 @@ final class AndroidDownloader extends NativeDownloader {
         await NativeDownloader.methodChannel
             .invokeMethod('configUseCacheDir', Config.argToInt(whenTo));
 
+      case (Config.useExternalStorage, String whenTo):
+        assert(
+            [Config.never, Config.always].contains(whenTo),
+            '${Config.useExternalStorage} expects one of ${[
+              Config.never,
+              Config.always
+            ]}');
+        await NativeDownloader.methodChannel
+            .invokeMethod('configUseExternalStorage', Config.argToInt(whenTo));
+        Task.useExternalStorage = whenTo == Config.always;
+
       default:
         return (
           configItem.$1,

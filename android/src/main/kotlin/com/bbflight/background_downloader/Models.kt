@@ -3,11 +3,8 @@
 package com.bbflight.background_downloader
 
 import android.content.Context
-import android.os.Build
 import com.bbflight.background_downloader.BDPlugin.Companion.gson
 import java.io.File
-import kotlin.io.path.Path
-import kotlin.io.path.pathString
 import kotlin.math.absoluteValue
 import kotlin.random.Random
 
@@ -162,30 +159,10 @@ class Task(
             return ""
         }
         val filenameToUse = withFilename ?: filename
-        if (Build.VERSION.SDK_INT >= 26) {
-            val baseDirPath = when (baseDirectory) {
-                BaseDirectory.applicationDocuments -> Path(
-                    context.dataDir.path, "app_flutter"
-                ).pathString
-
-                BaseDirectory.temporary -> context.cacheDir.path
-                BaseDirectory.applicationSupport -> context.filesDir.path
-                BaseDirectory.applicationLibrary -> Path(
-                    context.filesDir.path, "Library"
-                ).pathString
-            }
-            val path = Path(baseDirPath, directory)
-            return Path(path.pathString, filenameToUse).pathString
-        } else {
-            val baseDirPath = when (baseDirectory) {
-                BaseDirectory.applicationDocuments -> "${context.dataDir.path}/app_flutter"
-                BaseDirectory.temporary -> context.cacheDir.path
-                BaseDirectory.applicationSupport -> context.filesDir.path
-                BaseDirectory.applicationLibrary -> "${context.filesDir.path}/Library"
-            }
-            return if (directory.isEmpty()) "$baseDirPath/${filenameToUse}" else
-                "$baseDirPath/${directory}/${filenameToUse}"
-        }
+        val baseDirPath = baseDirPath(context, baseDirectory)
+            ?: throw IllegalStateException("External storage is requested but not available")
+        return if (directory.isEmpty()) "$baseDirPath/${filenameToUse}" else
+            "$baseDirPath/${directory}/${filenameToUse}"
     }
 
     /**

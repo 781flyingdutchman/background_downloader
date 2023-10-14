@@ -2,14 +2,18 @@ package com.bbflight.background_downloader
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.Build
 import android.os.Environment
 import android.os.StatFs
 import android.util.Log
 import androidx.preference.PreferenceManager
+import com.bbflight.background_downloader.TaskWorker.Companion.TAG
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
+import kotlin.io.path.Path
+import kotlin.io.path.pathString
 
 
 /**
@@ -96,5 +100,52 @@ fun parseRange(rangeStr: String): Pair<Long, Long?> {
     val start = match.groupValues[1].toLongOrNull() ?: 0L
     val end = match.groupValues[2].toLongOrNull()
     return Pair(start, end)
+}
+
+/**
+ * Return the path to the baseDir for this [baseDirectory], or null if path could not be reached
+ *
+ * Null only happens if external storage is requested but not available
+ */
+fun baseDirPath(context: Context, baseDirectory: BaseDirectory): String? {
+    val useExternalStorage = PreferenceManager.getDefaultSharedPreferences(context).getInt(BDPlugin.keyConfigUseExternalStorage, -1) == 0
+    val baseDirPath: String
+    if (!useExternalStorage) {
+        if (Build.VERSION.SDK_INT >= 26) {
+            baseDirPath = when (baseDirectory) {
+                BaseDirectory.applicationDocuments -> Path(
+                    context.dataDir.path, "app_flutter"
+                ).pathString
+
+                BaseDirectory.temporary -> context.cacheDir.path
+                BaseDirectory.applicationSupport -> context.filesDir.path
+                BaseDirectory.applicationLibrary -> Path(
+                    context.filesDir.path, "Library"
+                ).pathString
+            }
+        } else {
+            baseDirPath = when (baseDirectory) {
+                BaseDirectory.applicationDocuments -> "${context.dataDir.path}/app_flutter"
+                BaseDirectory.temporary -> context.cacheDir.path
+                BaseDirectory.applicationSupport -> context.filesDir.path
+                BaseDirectory.applicationLibrary -> "${context.filesDir.path}/Library"
+            }
+        }
+    } else {
+        // external storage variant
+        val externalStorageDirectory = context.getExternalFilesDir(null)
+        val externalCacheDirectory = context.externalCacheDir
+        if (externalStorageDirectory == null || externalCacheDirectory == null) {
+            Log.e(TAG, "Could not access external storage")
+            return null
+        }
+        baseDirPath = when (baseDirectory) {
+            BaseDirectory.applicationDocuments -> externalStorageDirectory.path
+            BaseDirectory.temporary -> externalCacheDirectory.path
+            BaseDirectory.applicationSupport -> "${externalStorageDirectory.path}/Support"
+            BaseDirectory.applicationLibrary -> "${externalStorageDirectory.path}/Library"
+        }
+    }
+    return baseDirPath
 }
 

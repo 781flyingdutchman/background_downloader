@@ -390,4 +390,3 @@ bool shouldSendProgressUpdate(double currentProgress, DateTime now) {
   final end = int.tryParse(match.group(2) ?? '');
   return (start, end);
 }
-

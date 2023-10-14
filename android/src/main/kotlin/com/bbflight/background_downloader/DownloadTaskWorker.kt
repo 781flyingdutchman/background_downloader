@@ -16,6 +16,7 @@ import java.io.RandomAccessFile
 import java.net.HttpURLConnection
 import java.nio.channels.FileChannel
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import kotlin.random.Random
@@ -93,10 +94,16 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
             }
             // determine tempFile
             val contentLength = connection.contentLengthLong
+            val applicationSupportPath =
+                baseDirPath(applicationContext, BaseDirectory.applicationSupport)
+            val cachePath = baseDirPath(applicationContext, BaseDirectory.temporary)
+            if (applicationSupportPath == null || cachePath == null) {
+                throw IllegalStateException("External storage is requested but not available")
+            }
             val tempDir = when (PreferenceManager.getDefaultSharedPreferences(applicationContext)
                 .getInt(BDPlugin.keyConfigUseCacheDir, -2)) {
-                0 -> applicationContext.cacheDir // 'always'
-                -1 -> applicationContext.filesDir // 'never'
+                0 -> File(cachePath) // 'always'
+                -1 -> File(applicationSupportPath) // 'never'
                 else -> {
                     // 'whenAble' -> determine based on cache quota
                     val storageManager =
@@ -104,14 +111,19 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
                     val cacheQuota = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         storageManager.getCacheQuotaBytes(
                             storageManager.getUuidForPath(
-                                applicationContext.cacheDir
+                                File(cachePath)
                             )
                         )
                     } else {
                         50L shl (20)  // for older OS versions, assume 50MB
                     }
-                    if (contentLength < cacheQuota / 2) applicationContext.cacheDir else applicationContext.filesDir
+                    if (contentLength < cacheQuota / 2) File(cachePath) else File(
+                        applicationSupportPath
+                    )
                 }
+            }
+            if (!tempDir.exists()) {
+                tempDir.mkdirs()
             }
             tempFilePath =
                 tempFilePath.ifEmpty { "${tempDir.absolutePath}/com.bbflight.background_downloader${Random.nextInt()}" }
