@@ -282,21 +282,6 @@ abstract base class NativeDownloader extends BaseDownloader {
   }
 
   @override
-  Future<Duration> getTaskTimeout() async {
-    if (Platform.isAndroid) {
-      final timeoutMillis =
-          await methodChannel.invokeMethod<int>('getTaskTimeout') ?? 0;
-      return Duration(milliseconds: timeoutMillis);
-    }
-    return const Duration(hours: 4); // on iOS, resource timeout
-  }
-
-  @override
-  Future<void> setForceFailPostOnBackgroundChannel(bool value) async {
-    await methodChannel.invokeMethod('forceFailPostOnBackgroundChannel', value);
-  }
-
-  @override
   Future<String?> moveToSharedStorage(String filePath,
           SharedStorage destination, String directory, String? mimeType) =>
       methodChannel.invokeMethod<String?>('moveToSharedStorage',
@@ -317,6 +302,28 @@ abstract base class NativeDownloader extends BaseDownloader {
     ]);
     return result ?? false;
   }
+
+  @override
+  Future<Duration> getTaskTimeout() async {
+    if (Platform.isAndroid) {
+      final timeoutMillis =
+          await methodChannel.invokeMethod<int>('getTaskTimeout') ?? 0;
+      return Duration(milliseconds: timeoutMillis);
+    }
+    return const Duration(hours: 4); // on iOS, resource timeout
+  }
+
+  @override
+  Future<void> setForceFailPostOnBackgroundChannel(bool value) async {
+    await methodChannel.invokeMethod('forceFailPostOnBackgroundChannel', value);
+  }
+
+  @override
+  Future<String> testSuggestedFilename(
+          DownloadTask task, String contentDisposition) async =>
+      await methodChannel.invokeMethod<String>('testSuggestedFilename',
+          [jsonEncode(task.toJsonMap()), contentDisposition]) ??
+      '';
 
   @override
   Future<(String, String)> configureItem((String, dynamic) configItem) async {

@@ -413,14 +413,6 @@ abstract base class BaseDownloader {
     removePausedTask(task.taskId);
   }
 
-  /// Get the duration for a task to timeout - Android only, for testing
-  @visibleForTesting
-  Future<Duration> getTaskTimeout();
-
-  /// Set forceFailPostOnBackgroundChannel for native downloader
-  @visibleForTesting
-  Future<void> setForceFailPostOnBackgroundChannel(bool value);
-
   /// Move the file at [filePath] to the shared storage
   /// [destination] and potential subdirectory [directory]
   ///
@@ -463,6 +455,23 @@ abstract base class BaseDownloader {
     }
   }
 
+  // Testing methods
+
+  /// Get the duration for a task to timeout - Android only, for testing
+  @visibleForTesting
+  Future<Duration> getTaskTimeout();
+
+  /// Set forceFailPostOnBackgroundChannel for native downloader
+  @visibleForTesting
+  Future<void> setForceFailPostOnBackgroundChannel(bool value);
+
+  /// Test suggested filename based on task and content disposition header
+  @visibleForTesting
+  Future<String> testSuggestedFilename(
+      DownloadTask task, String contentDisposition);
+
+  // Helper methods
+
   /// Retrieves modified version of the [originalTask] or null
   ///
   /// See [setModifiedTask]
@@ -480,24 +489,6 @@ abstract base class BaseDownloader {
       await updates.close();
     }
     updates = StreamController();
-  }
-
-  /// Destroy - clears callbacks, updates stream and retry queue
-  ///
-  /// Clears all queues and references without sending cancellation
-  /// messages or status updates
-  @mustCallSuper
-  void destroy() {
-    tasksWaitingToRetry.clear();
-    groupStatusCallbacks.clear();
-    groupProgressCallbacks.clear();
-    notificationConfigs.clear();
-    trackedGroups.clear();
-    canResumeTask.clear();
-    removeResumeData(); // removes all
-    removePausedTask(); // removes all
-    removeModifiedTask(); // removes all
-    resetUpdatesStreamController();
   }
 
   /// Process status update coming from Downloader and emit to listener
@@ -659,5 +650,23 @@ abstract base class BaseDownloader {
             existingRecord?.progress ?? 0, expectedFileSize, taskException));
       }
     }
+  }
+
+  /// Destroy - clears callbacks, updates stream and retry queue
+  ///
+  /// Clears all queues and references without sending cancellation
+  /// messages or status updates
+  @mustCallSuper
+  void destroy() {
+    tasksWaitingToRetry.clear();
+    groupStatusCallbacks.clear();
+    groupProgressCallbacks.clear();
+    notificationConfigs.clear();
+    trackedGroups.clear();
+    canResumeTask.clear();
+    removeResumeData(); // removes all
+    removePausedTask(); // removes all
+    removeModifiedTask(); // removes all
+    resetUpdatesStreamController();
   }
 }

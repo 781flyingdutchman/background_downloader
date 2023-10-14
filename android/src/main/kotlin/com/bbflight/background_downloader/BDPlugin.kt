@@ -65,7 +65,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         const val keyConfigCheckAvailableSpace =
             "com.bbflight.background_downloader.config.checkAvailableSpace"
         const val keyConfigUseCacheDir = "com.bbflight.background_downloader.config.useCacheDir"
-        const val keyConfigUseExternalStorage = "com.bbflight.background_downloader.config.useExternalStorage"
+        const val keyConfigUseExternalStorage =
+            "com.bbflight.background_downloader.config.useExternalStorage"
         const val notificationChannel = "background_downloader"
         const val notificationPermissionRequestCode = 373921
         const val externalStoragePermissionRequestCode = 373922
@@ -114,7 +115,10 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             canceledTaskIds.remove(task.taskId)
             val dataBuilder = Data.Builder().putString(TaskWorker.keyTask, taskToJsonString(task))
             if (notificationConfigJsonString != null) {
-                dataBuilder.putString(TaskWorker.keyNotificationConfig, notificationConfigJsonString)
+                dataBuilder.putString(
+                    TaskWorker.keyNotificationConfig,
+                    notificationConfigJsonString
+                )
             }
             if (resumeData != null) {
                 dataBuilder.putString(TaskWorker.keyResumeDataData, resumeData.data)
@@ -338,12 +342,15 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 "configBypassTLSCertificateValidation" -> methodConfigBypassTLSCertificateValidation(
                     result
                 )
+
                 "configCheckAvailableSpace" -> methodConfigCheckAvailableSpace(call, result)
                 "configUseCacheDir" -> methodConfigUseCacheDir(call, result)
                 "configUseExternalStorage" -> methodConfigUseExternalStorage(call, result)
                 "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
                     call, result
                 )
+
+                "testSuggestedFilename" -> methodTestSuggestedFilename(call, result)
 
                 else -> result.notImplemented()
             }
@@ -757,11 +764,35 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Sets or resets flag to force failing posting on background channel
      *
      * For testing only
+     * Arguments are
+     * - task as Json String
+     * - content disposition, or empty for none
+     *
+     * Returns suggested filename for this task, based on the task & content disposition
      */
     private fun methodForceFailPostOnBackgroundChannel(call: MethodCall, result: Result) {
         forceFailPostOnBackgroundChannel = call.arguments as Boolean
         result.success(null)
     }
+
+    /**
+     * Tests the content-disposition and url translation
+     *
+     * For testing only
+     *
+     */
+    private suspend fun methodTestSuggestedFilename(call: MethodCall, result: Result) {
+        val args = call.arguments as List<*>
+        val taskJsonMapString = args[0] as String
+        val contentDisposition = args[1] as String
+        val task = Task(gson.fromJson(taskJsonMapString, jsonMapType))
+        val h = if (contentDisposition.isNotEmpty()) mutableMapOf(
+            "Content-Disposition" to mutableListOf(contentDisposition)
+        ) else mutableMapOf("" to mutableListOf())
+        val t = task.withSuggestedFilenameFromResponseHeaders(applicationContext, h)
+        result.success(t.filename)
+    }
+
 
     /**
      * Helper function to update or delete the [value] in shared preferences under [key]

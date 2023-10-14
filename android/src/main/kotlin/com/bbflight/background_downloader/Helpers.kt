@@ -8,6 +8,7 @@ import android.os.StatFs
 import android.util.Log
 import androidx.preference.PreferenceManager
 import com.bbflight.background_downloader.TaskWorker.Companion.TAG
+import java.io.File
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
@@ -108,7 +109,8 @@ fun parseRange(rangeStr: String): Pair<Long, Long?> {
  * Null only happens if external storage is requested but not available
  */
 fun baseDirPath(context: Context, baseDirectory: BaseDirectory): String? {
-    val useExternalStorage = PreferenceManager.getDefaultSharedPreferences(context).getInt(BDPlugin.keyConfigUseExternalStorage, -1) == 0
+    val useExternalStorage = PreferenceManager.getDefaultSharedPreferences(context)
+        .getInt(BDPlugin.keyConfigUseExternalStorage, -1) == 0
     val baseDirPath: String
     if (!useExternalStorage) {
         if (Build.VERSION.SDK_INT >= 26) {
@@ -149,3 +151,8 @@ fun baseDirPath(context: Context, baseDirectory: BaseDirectory): String? {
     return baseDirPath
 }
 
+fun getBasenameWithoutExtension(file: File): String {
+    val fileName = file.name
+    val extension = file.extension
+    return fileName.substringBeforeLast(".$extension")
+}

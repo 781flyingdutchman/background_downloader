@@ -888,71 +888,6 @@ void main() {
       expect(lastStatus, equals(TaskStatus.notFound));
     });
 
-    testWidgets('DownloadTask withSuggestedFilename', (widgetTester) async {
-      // delete old downloads
-      task = DownloadTask(url: urlWithContentLength, filename: '5MB-test.ZIP');
-      try {
-        File(await task.filePath()).deleteSync();
-      } catch (e) {}
-      task =
-          DownloadTask(url: urlWithContentLength, filename: '5MB-test (1).ZIP');
-      try {
-        File(await task.filePath()).deleteSync();
-      } catch (e) {}
-      task =
-          DownloadTask(url: urlWithContentLength, filename: '5MB-test (2).ZIP');
-      try {
-        File(await task.filePath()).deleteSync();
-      } catch (e) {}
-      task = DownloadTask(url: urlWithContentLength);
-      final startingFileName = task.filename;
-      final task2 = await task.withSuggestedFilename();
-      expect(task2.filename, isNot(equals(startingFileName)));
-      expect(task2.filename, equals('5MB-test.ZIP'));
-      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
-      expect(await FileDownloader().enqueue(task2), isTrue);
-      await statusCallbackCompleter.future;
-      expect(lastStatus, equals(TaskStatus.complete));
-      // again, should yield same filename
-      final task3 = await task.withSuggestedFilename();
-      expect(task3.filename, equals('5MB-test.ZIP'));
-      // again with 'unique' should yield (1) filename
-      final task4 = await task.withSuggestedFilename(unique: true);
-      expect(task4.filename, equals('5MB-test (1).ZIP'));
-      statusCallbackCompleter = Completer(); // reset
-      expect(await FileDownloader().enqueue(task4), isTrue);
-      await statusCallbackCompleter.future;
-      expect(lastStatus, equals(TaskStatus.complete));
-      // again with 'unique' should yield (2) filename
-      final task5 = await task.withSuggestedFilename(unique: true);
-      expect(task5.filename, equals('5MB-test (2).ZIP'));
-    });
-
-    testWidgets('downloadTask with ? for filename', (widgetTester) async {
-      // delete old downloads
-      task = DownloadTask(url: urlWithContentLength, filename: '5MB-test.ZIP');
-      try {
-        File(await task.filePath()).deleteSync();
-      } catch (e) {}
-      task =
-          DownloadTask(url: urlWithContentLength, filename: '5MB-test (1).ZIP');
-      try {
-        File(await task.filePath()).deleteSync();
-      } catch (e) {}
-      task =
-          DownloadTask(url: urlWithContentLength, filename: '5MB-test (2).ZIP');
-      try {
-        File(await task.filePath()).deleteSync();
-      } catch (e) {}
-      task = DownloadTask(url: urlWithContentLength, filename: '?');
-      final result = await FileDownloader().download(task);
-      expect(result.task.filename, equals('5MB-test.ZIP'));
-      final file = File(await result.task.filePath());
-      expect(await file.exists(), isTrue);
-      expect(await file.length(), equals(urlWithContentLengthFileSize));
-      await file.delete();
-    });
-
     testWidgets('DownloadTask expectedFileSize', (widgetTester) async {
       expect(await task.expectedFileSize(), equals(-1));
       task = DownloadTask(url: urlWithContentLength);
@@ -1212,7 +1147,7 @@ void main() {
     });
 
     testWidgets('onElapsedTime', (widgetTester) async {
-      task = DownloadTask(url: urlWithContentLength);
+      task = DownloadTask(url: urlWithLongContentLength);
       var ticks = 0;
       final result =
           await FileDownloader().download(task, onElapsedTime: (elapsed) {
@@ -2732,6 +2667,95 @@ void main() {
             exception.description.startsWith('File to upload does not exist'),
             isTrue);
       }
+    });
+  });
+
+  group('Content-disposition', () {
+    testWidgets('Various content-dispositions', (widgetTester) async {
+      final downloader = FileDownloader().downloaderForTesting;
+      final entries = {
+        '': task.filename, // no last path segment in www.google.com
+        'Attachment; filename=example.html': 'example.html',
+        'INLINE; FILENAME= "an example.html"': 'an example.html',
+        "attachment;filename*= UTF-8''%e2%82%ac%20rates": '\u20AC rates',
+        "attachment;filename*= utf-8''%e2%82%ac%20rates": '\u20AC rates',
+        'attachment;filename="EURO rates";filename*=utf-8\'\'%e2%82%ac%20rates':
+            'EURO rates'
+      };
+      for (final s in entries.keys) {
+        final r = await downloader.testSuggestedFilename(task, s);
+        print('$s -> $r');
+        expect(r, equals(entries[s]));
+      }
+      task =
+          DownloadTask(url: urlWithContentLength); // has url last path segment
+      expect(await downloader.testSuggestedFilename(task, ''),
+          equals('5MB-test.ZIP'));
+    });
+
+    testWidgets('DownloadTask withSuggestedFilename', (widgetTester) async {
+      // delete old downloads
+      task = DownloadTask(url: urlWithContentLength, filename: '5MB-test.ZIP');
+      try {
+        File(await task.filePath()).deleteSync();
+      } catch (e) {}
+      task =
+          DownloadTask(url: urlWithContentLength, filename: '5MB-test (1).ZIP');
+      try {
+        File(await task.filePath()).deleteSync();
+      } catch (e) {}
+      task =
+          DownloadTask(url: urlWithContentLength, filename: '5MB-test (2).ZIP');
+      try {
+        File(await task.filePath()).deleteSync();
+      } catch (e) {}
+      task = DownloadTask(url: urlWithContentLength);
+      final startingFileName = task.filename;
+      final task2 = await task.withSuggestedFilename();
+      expect(task2.filename, isNot(equals(startingFileName)));
+      expect(task2.filename, equals('5MB-test.ZIP'));
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
+      expect(await FileDownloader().enqueue(task2), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      // again, should yield same filename
+      final task3 = await task.withSuggestedFilename();
+      expect(task3.filename, equals('5MB-test.ZIP'));
+      // again with 'unique' should yield (1) filename
+      final task4 = await task.withSuggestedFilename(unique: true);
+      expect(task4.filename, equals('5MB-test (1).ZIP'));
+      statusCallbackCompleter = Completer(); // reset
+      expect(await FileDownloader().enqueue(task4), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      // again with 'unique' should yield (2) filename
+      final task5 = await task.withSuggestedFilename(unique: true);
+      expect(task5.filename, equals('5MB-test (2).ZIP'));
+    });
+
+    testWidgets('downloadTask with ? for filename', (widgetTester) async {
+      // delete old downloads
+      task = DownloadTask(url: urlWithContentLength, filename: '5MB-test.ZIP');
+      try {
+        File(await task.filePath()).deleteSync();
+      } catch (e) {}
+      task =
+          DownloadTask(url: urlWithContentLength, filename: '5MB-test (1).ZIP');
+      try {
+        File(await task.filePath()).deleteSync();
+      } catch (e) {}
+      task =
+          DownloadTask(url: urlWithContentLength, filename: '5MB-test (2).ZIP');
+      try {
+        File(await task.filePath()).deleteSync();
+      } catch (e) {}
+      task = DownloadTask(url: urlWithContentLength, filename: '?');
+      final result = await FileDownloader().download(task);
+      expect(result.task.filename, equals('5MB-test.ZIP'));
+      final file = File(await result.task.filePath());
+      expect(await file.exists(), isTrue);
+      expect(await file.length(), equals(urlWithContentLengthFileSize));
+      await file.delete();
     });
   });
 }

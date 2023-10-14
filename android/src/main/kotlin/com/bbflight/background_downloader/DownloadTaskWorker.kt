@@ -16,7 +16,6 @@ import java.io.RandomAccessFile
 import java.net.HttpURLConnection
 import java.nio.channels.FileChannel
 import java.nio.file.Files
-import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import kotlin.random.Random
@@ -92,6 +91,17 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
                 )
                 return TaskStatus.failed
             }
+            // if no filename is set, get from headers or url, update task and set new destFilePath
+            var destFilePath = filePath
+            if (!task.hasFilename()) {
+                task = task.withSuggestedFilenameFromResponseHeaders(
+                    applicationContext,
+                    connection.headerFields,
+                    unique = true
+                )
+                val dirName = File(filePath).parent ?: ""
+                destFilePath = "$dirName/${task.filename}"
+            }
             // determine tempFile
             val contentLength = connection.contentLengthLong
             val applicationSupportPath =
@@ -155,7 +165,7 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
             when (transferBytesResult) {
                 TaskStatus.complete -> {
                     // move file from its temp location to the destination
-                    val destFile = File(filePath)
+                    val destFile = File(destFilePath)
                     val dir = destFile.parentFile!!
                     if (!dir.exists()) {
                         dir.mkdirs()
@@ -173,14 +183,14 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
                         deleteTempFile()
                     }
                     Log.i(
-                        TAG, "Successfully downloaded taskId ${task.taskId} to $filePath"
+                        TAG, "Successfully downloaded taskId ${task.taskId} to $destFilePath"
                     )
                     return TaskStatus.complete
                 }
 
                 TaskStatus.canceled -> {
                     deleteTempFile()
-                    Log.i(TAG, "Canceled taskId ${task.taskId} for $filePath")
+                    Log.i(TAG, "Canceled taskId ${task.taskId} for $destFilePath")
                     return TaskStatus.canceled
                 }
 

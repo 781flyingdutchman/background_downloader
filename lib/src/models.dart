@@ -685,39 +685,37 @@ final class DownloadTask extends Task {
           .value;
       // Try filename="filename"
       final plainFilenameRegEx =
-          RegExp(r'filename="?([^"]+)"?.*$', caseSensitive: false);
+          RegExp(r'filename=\s*"?([^"]+)"?.*$', caseSensitive: false);
       var match = plainFilenameRegEx.firstMatch(disposition);
       if (match != null && match.group(1)?.isNotEmpty == true) {
         return uniqueFilename(copyWith(filename: match.group(1)), unique);
       }
       // Try filename*=UTF-8'language'"encodedFilename"
       final encodedFilenameRegEx = RegExp(
-          'filename\\*=([^\']+)\'([^\']*)\'"?([^"]+)"?',
+          'filename\\*=\\s*([^\']+)\'([^\']*)\'"?([^"]+)"?',
           caseSensitive: false);
       match = encodedFilenameRegEx.firstMatch(disposition);
       if (match != null &&
           match.group(1)?.isNotEmpty == true &&
           match.group(3)?.isNotEmpty == true) {
         try {
-          final suggestedFilename = match.group(1) == 'UTF-8'
+          final suggestedFilename = match.group(1)?.toUpperCase() == 'UTF-8'
               ? Uri.decodeComponent(match.group(3)!)
               : match.group(3)!;
           return uniqueFilename(copyWith(filename: suggestedFilename), true);
         } on ArgumentError {
-          _log.finer(
+          _log.finest(
               'Could not interpret suggested filename (UTF-8 url encoded) ${match.group(3)}');
         }
       }
-    } catch (e) {
-      _log.finer('Could not determine suggested filename from server');
-    }
+    } catch (_) {}
+    _log.finest('Could not determine suggested filename from server');
     // Try filename derived from last path segment of the url
     try {
       final suggestedFilename = Uri.parse(url).pathSegments.last;
       return uniqueFilename(copyWith(filename: suggestedFilename), unique);
-    } catch (e) {
-      _log.finer('Could not parse URL pathSegment for suggested filename: $e');
-    }
+    } catch (_) {}
+    _log.finest('Could not parse URL pathSegment for suggested filename');
     // if everything fails, return the task with unchanged filename
     // except for possibly making it unique
     return uniqueFilename(this, unique);

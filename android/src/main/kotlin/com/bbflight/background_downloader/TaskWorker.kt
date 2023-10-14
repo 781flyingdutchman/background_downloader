@@ -1023,7 +1023,14 @@ open class TaskWorker(
         timeRemaining: Long
     ): String {
         // filename and metadata
-        val output = displayNameRegEx.replace(fileNameRegEx.replace(metaDataRegEx.replace(input, task.metaData), task.filename), task.displayName)
+        val output = displayNameRegEx.replace(
+            fileNameRegEx.replace(
+                metaDataRegEx.replace(
+                    input,
+                    task.metaData
+                ), task.filename
+            ), task.displayName
+        )
 
         // progress
         val progressString =

@@ -65,4 +65,10 @@ final class DesktopDownloader extends BaseDownloader {
   Future<void> setForceFailPostOnBackgroundChannel(bool value) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<String> testSuggestedFilename(
+      DownloadTask task, String contentDisposition) {
+    throw UnimplementedError();
+  }
 }

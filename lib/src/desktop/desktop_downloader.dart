@@ -335,14 +335,6 @@ final class DesktopDownloader extends BaseDownloader {
       Future.value({});
 
   @override
-  Future<Duration> getTaskTimeout() => Future.value(const Duration(days: 1));
-
-  @override
-  Future<void> setForceFailPostOnBackgroundChannel(bool value) {
-    throw UnimplementedError();
-  }
-
-  @override
   Future<String?> moveToSharedStorage(String filePath,
       SharedStorage destination, String directory, String? mimeType) async {
     final destDirectoryPath =
@@ -418,6 +410,24 @@ final class DesktopDownloader extends BaseDownloader {
           'openFile command $executable returned exit code ${result.exitCode}');
     }
     return result.exitCode == 0;
+  }
+
+  @override
+  Future<Duration> getTaskTimeout() => Future.value(const Duration(days: 1));
+
+  @override
+  Future<void> setForceFailPostOnBackgroundChannel(bool value) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<String> testSuggestedFilename(
+      DownloadTask task, String contentDisposition) async {
+    final h = contentDisposition.isNotEmpty
+        ? {'Content-disposition': contentDisposition}
+        : <String, String>{};
+    final t = await task.withSuggestedFilenameFromResponseHeaders(h);
+    return t.filename;
   }
 
   @override
