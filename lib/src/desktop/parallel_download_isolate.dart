@@ -349,9 +349,7 @@ List<Chunk> createChunks(
     ParallelDownloadTask task, Map<String, String> headers) {
   try {
     final numChunks = task.urls.length * task.chunks;
-    final contentLength = int.parse(headers.entries
-        .firstWhere((element) => element.key.toLowerCase() == 'content-length')
-        .value);
+    final contentLength = getContentLength(headers, task);
     if (contentLength <= 0) {
       throw StateError(
           'Server does not provide content length - cannot chunk download');

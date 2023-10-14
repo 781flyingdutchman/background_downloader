@@ -151,7 +151,10 @@ Future<TaskStatus> processOkDownloadResponse(
     Duration requestTimeout,
     http.StreamedResponse response,
     SendPort sendPort) async {
-  final contentLength = response.contentLength ?? -1;
+  // contentLength is extracted from response header, and if not available
+  // we attempt to extract from [Task.headers], allowing developer to
+  // set the content length if already known
+  final contentLength = getContentLength(response.headers, downloadTask);
   isResume = isResume && response.statusCode == 206;
   if (isResume && !await prepareResume(response, tempFilePath)) {
     deleteTempFile(tempFilePath);

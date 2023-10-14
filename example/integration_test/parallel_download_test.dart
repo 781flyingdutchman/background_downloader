@@ -158,6 +158,23 @@ void main() {
       expect(await fileEqualsTestFile(file), isTrue);
     });
 
+    test('[*] override content length', () async {
+      // Haven't found a url that does not provide content-length, so
+      // can oly be tested by modifying the source code to ignore the
+      // Content-Length response header and use this one instead
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
+      task = task.copyWith(
+          url: urlWithContentLength,
+          headers: {'Known-Content-Length': '$urlWithContentLengthFileSize'});
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(statusCallbackCounter, equals(3));
+      final file = File(await task.filePath());
+      expect(file.existsSync(), isTrue);
+      expect(await fileEqualsTestFile(file), isTrue);
+    });
+
     test('simple enqueue, 2 chunks, 2 url', () async {
       task = ParallelDownloadTask(
           url: [urlWithContentLength, urlWithContentLength],
@@ -256,7 +273,7 @@ void main() {
       }
     });
 
-    test('retries - must modify transferBytes to fail', () async {
+    test('[*] retries - must modify transferBytes to fail', () async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(retryTask), isTrue);
       await statusCallbackCompleter.future;

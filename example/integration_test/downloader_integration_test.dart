@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' hide equals;
 import 'package:path_provider/path_provider.dart';
+import 'package:background_downloader/src/desktop/isolate.dart';
 
 const def = 'default';
 var statusCallbackCounter = 0;
@@ -607,51 +608,6 @@ void main() {
           url: 'http://localhost:8085/something.html', filename: 'test.html');
       expect(await FileDownloader().enqueue(task), isTrue);
       await FileDownloader().cancelTaskWithId(task.taskId);
-    });
-  });
-
-  group('Range', () {
-    testWidgets('Range header in download request', (widgetTester) async {
-      const rangeStart = 10;
-      const rangeEnd = 1000000;
-      FileDownloader().registerCallbacks(
-          taskStatusCallback: statusCallback,
-          taskProgressCallback: progressCallback);
-      // full range
-      task = task.copyWith(
-          url: urlWithContentLength,
-          headers: {'Range': 'bytes=$rangeStart-$rangeEnd'},
-          updates: Updates.statusAndProgress);
-      expect(await FileDownloader().enqueue(task), isTrue);
-      await statusCallbackCompleter.future;
-      expect(lastStatus, equals(TaskStatus.complete));
-      expect(lastValidExpectedFileSize, equals(rangeEnd - rangeStart + 1));
-      var file = File(await task.filePath());
-      expect(file.lengthSync(), equals(lastValidExpectedFileSize));
-      await file.delete();
-      // reset and range without end
-      statusCallbackCompleter = Completer();
-      lastValidExpectedFileSize = -1;
-      task = task.copyWith(headers: {'Range': 'bytes=$rangeStart-'});
-      expect(await FileDownloader().enqueue(task), isTrue);
-      await statusCallbackCompleter.future;
-      expect(lastStatus, equals(TaskStatus.complete));
-      expect(lastValidExpectedFileSize,
-          equals(urlWithContentLengthFileSize - rangeStart));
-      file = File(await task.filePath());
-      expect(file.lengthSync(), equals(lastValidExpectedFileSize));
-      await file.delete();
-      // reset and range without start
-      statusCallbackCompleter = Completer();
-      lastValidExpectedFileSize = -1;
-      task = task.copyWith(headers: {'Range': 'bytes=-$rangeEnd'});
-      expect(await FileDownloader().enqueue(task), isTrue);
-      await statusCallbackCompleter.future;
-      expect(lastStatus, equals(TaskStatus.complete));
-      expect(lastValidExpectedFileSize, equals(rangeEnd));
-      file = File(await task.filePath());
-      expect(file.lengthSync(), equals(lastValidExpectedFileSize));
-      await file.delete();
     });
   });
 
@@ -1304,7 +1260,7 @@ void main() {
       await FileDownloader().cancelTasksWithIds([retryTask.taskId]);
     });
 
-    testWidgets('resume on failure', (widgetTester) async {
+    testWidgets('[*] resume on failure', (widgetTester) async {
       // this test requires manual failure while the task is downloading
       // and therefore does NOT fail if the task completes normally
       //print(await FileDownloader().configure(iOSConfig: ('resourceTimeout', const Duration(seconds: 15))));
@@ -1339,7 +1295,7 @@ void main() {
       }
     });
 
-    testWidgets('resume on retry', (widgetTester) async {
+    testWidgets('[*] resume on retry', (widgetTester) async {
       // this test requires manual failure while the task is downloading
       // and therefore does NOT fail if the task completes normally
       FileDownloader().registerCallbacks(
@@ -2554,7 +2510,7 @@ void main() {
       Directory(dirname(path)).deleteSync();
     });
 
-    test('try to move text file to images -> error', () async {
+    test('[*] try to move text file to images -> error', () async {
       // Note: this test will fail on Android API below 30, as that API
       // does not have a problem storing a text file in images
       if (Platform.isAndroid) {
@@ -2756,6 +2712,104 @@ void main() {
       expect(await file.exists(), isTrue);
       expect(await file.length(), equals(urlWithContentLengthFileSize));
       await file.delete();
+    });
+  });
+
+  group('Range', () {
+    testWidgets('parseRange', (widgetTester) async {
+      // tested on the native side for Android and iOS
+      if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
+        expect(parseRange('bytes=10-20'), equals((10, 20)));
+        expect(parseRange('bytes=-20'), equals((0, 20)));
+        expect(parseRange('bytes=10-'), equals((10, null)));
+        expect(parseRange(''), equals((0, null)));
+      }
+    });
+
+    testWidgets('getContentLength', (widgetTester) async {
+      // tested on the native side for Android and iOS
+      if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
+        expect(getContentLength({}, task), equals(-1));
+        expect(getContentLength({'Content-Length': '123'}, task), equals(123));
+        expect(getContentLength({'content-length': '123'}, task), equals(123));
+        task = task.copyWith(headers: {'Range': 'bytes=0-20'});
+        expect(getContentLength({}, task), equals(21));
+        task = task.copyWith(headers: {'Known-Content-Length': '456'});
+        expect(getContentLength({}, task), equals(456));
+        task = task.copyWith(
+            headers: {'Range': 'bytes=0-20', 'Known-Content-Length': '456'});
+        expect(getContentLength({}, task), equals(21));
+        expect(getContentLength({'content-length': '123'}, task), equals(123));
+      }
+    });
+
+    testWidgets('Range header in download request', (widgetTester) async {
+      const rangeStart = 10;
+      const rangeEnd = 1000000;
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      // full range
+      task = task.copyWith(
+          url: urlWithContentLength,
+          headers: {'Range': 'bytes=$rangeStart-$rangeEnd'},
+          updates: Updates.statusAndProgress);
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(lastValidExpectedFileSize, equals(rangeEnd - rangeStart + 1));
+      var file = File(await task.filePath());
+      expect(file.lengthSync(), equals(lastValidExpectedFileSize));
+      await file.delete();
+      // reset and range without end
+      statusCallbackCompleter = Completer();
+      lastValidExpectedFileSize = -1;
+      task = task.copyWith(headers: {'Range': 'bytes=$rangeStart-'});
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(lastValidExpectedFileSize,
+          equals(urlWithContentLengthFileSize - rangeStart));
+      file = File(await task.filePath());
+      expect(file.lengthSync(), equals(lastValidExpectedFileSize));
+      await file.delete();
+      // reset and range without start
+      statusCallbackCompleter = Completer();
+      lastValidExpectedFileSize = -1;
+      task = task.copyWith(headers: {'Range': 'bytes=-$rangeEnd'});
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(lastValidExpectedFileSize, equals(rangeEnd));
+      file = File(await task.filePath());
+      expect(file.lengthSync(), equals(lastValidExpectedFileSize));
+      await file.delete();
+    });
+
+    testWidgets('[*] Range or Known-Content-Length in task header',
+        (widgetTester) async {
+      // Haven't found a url that does not provide content-length, so
+      // can oly be tested by modifying the source code to ignore the
+      // Content-Length response header and use this one instead
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      // try with Range header
+      task = task.copyWith(
+          url: urlWithContentLength,
+          headers: {'Range': 'bytes=0-${urlWithContentLengthFileSize - 1}'},
+          updates: Updates.statusAndProgress);
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastValidExpectedFileSize, equals(urlWithContentLengthFileSize));
+      // try with Known-Content-Length header
+      statusCallbackCompleter = Completer();
+      lastValidExpectedFileSize = -1;
+      task = task.copyWith(
+          headers: {'Known-Content-Length': '$urlWithContentLengthFileSize'});
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastValidExpectedFileSize, equals(urlWithContentLengthFileSize));
     });
   });
 }
