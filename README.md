@@ -234,6 +234,8 @@ A [DownloadProgressIndicator](https://pub.dev/documentation/background_downloade
 The widget can be configured to include pause and resume buttons, and to expand to show multiple
 simultaneous downloads, or to collapse and show a file download counter.
 
+To provide progress updates (as a percentage of total file size) the downloader needs to know the size of the file when starting the donwload. Most servers provide this in the "Content-Length" header of their response. If the server does not provide the file size, yet you know the file size (e.g. because you have stored the file on the server yourself), then you can let the downloader know by providing a `{'Range': 'bytes=0-999'}` or a `{'Known-Content-Length': '1000'}` header to the task's `header` field. Both examples are for a content length of 1000 bytes.  The downloader will assume this content length when calculating progress.  
+
 #### Status
 
 If you want to monitor status changes while the download is underway (i.e. not only the final state, which you will receive as the result of the `download` call) you can add a status change callback that takes the status as an argument:
@@ -286,18 +288,26 @@ final task = DownloadTask(
 
 The downloader will only store the file upon success (so there will be no partial files saved), and if so, the destination is overwritten if it already exists, and all intermediate directories will be created if needed.
 
-Android has two storage modes: internal and external storage. Read the [configuration document](https://github.com/781flyingdutchman/background_downloader/blob/main/CONFIG.md) for details on how to configure your app to use external storage.
-
 Note: the reason you cannot simply pass a full absolute directory path to the downloader is that the location of the app's documents directory may change between application starts (on iOS), and may therefore fail for downloads that complete while the app is suspended.  You should therefore never store permanently, or hard-code, an absolute path.
 
-If you want the filename to be provided by the server (instead of assigning a value to `filename` yourself), use the following:
+Android has two storage modes: internal (default) and external storage. Read the [configuration document](https://github.com/781flyingdutchman/background_downloader/blob/main/CONFIG.md) for details on how to configure your app to use external storage instead of the default.
+
+#### Server-suggested filename
+
+If you want the filename to be provided by the server (instead of assigning a value to `filename` yourself), you have two options. The first is to create a `DownloadTask` that pings the server to determine the suggested filename:
 ```dart
 final task = await DownloadTask(url: 'https://google.com')
         .withSuggestedFilename(unique: true);
 ```
-
 The method `withSuggestedFilename` returns a copy of the task it is called on, with the `filename` field modified based on the filename suggested by the server, or the last path segment of the URL, or unchanged if neither is feasible. If `unique` is true, the filename will be modified such that it does not conflict with an existing filename by adding a sequence. For example "file.txt" would become "file (1).txt".
 
+The second approach is to set the `filename` field of the `DownloadTask` to '?', to indicate that you would like the server to suggest the name. In this case, you will receive the name via the task's status and/or progress updates, so you have to be careful _not_ to use the original task's filename, as that will still be '?'. For example:
+```dart
+final task = await DownloadTask(url: 'https://google.com', filename: '?');
+final result = await FileDownloader().download(task);
+print('Suggested filename=${result.task.filename}'); // note we don't use 'task', but 'result.task'
+print('Wrong use filename=${task.filename}'); // this will print '?' as 'task' hasn't changed
+```
 
 ### A batch of files
 

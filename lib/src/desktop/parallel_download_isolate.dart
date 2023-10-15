@@ -352,7 +352,8 @@ List<Chunk> createChunks(
     final contentLength = getContentLength(headers, task);
     if (contentLength <= 0) {
       throw StateError(
-          'Server does not provide content length - cannot chunk download');
+          'Server does not provide content length - cannot chunk download. '
+          'If you know the length, set Range or Known-Content-Length header');
     }
     parallelDownloadContentLength = contentLength;
     try {
@@ -374,6 +375,7 @@ List<Chunk> createChunks(
     ];
   } on StateError {
     throw StateError(
-        'Server does not provide content length - cannot chunk download');
+        'Server does not provide content length - cannot chunk download. '
+        'If you know the length, set Range or Known-Content-Length header');
   }
 }

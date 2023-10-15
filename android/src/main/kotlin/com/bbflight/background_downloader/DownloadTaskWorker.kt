@@ -101,9 +101,10 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
                 )
                 val dirName = File(filePath).parent ?: ""
                 destFilePath = "$dirName/${task.filename}"
+                Log.d(TAG, "Suggested filename for taskId ${task.taskId}: ${task.filename}")
             }
             // determine tempFile
-            val contentLength = connection.contentLengthLong
+            val contentLength = getContentLength(connection.headerFields, task)
             val applicationSupportPath =
                 baseDirPath(applicationContext, BaseDirectory.applicationSupport)
             val cachePath = baseDirPath(applicationContext, BaseDirectory.temporary)

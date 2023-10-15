@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:background_downloader/src/desktop/isolate.dart';
 import 'package:logging/logging.dart';
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as path;
@@ -730,10 +731,7 @@ final class DownloadTask extends Task {
       final response = await DesktopDownloader.httpClient
           .head(Uri.parse(url), headers: headers);
       if ([200, 201, 202, 203, 204, 205, 206].contains(response.statusCode)) {
-        return int.parse(response.headers.entries
-            .firstWhere(
-                (element) => element.key.toLowerCase() == 'content-length')
-            .value);
+        return getContentLength(response.headers, this);
       }
     } catch (e) {
       // no content length available

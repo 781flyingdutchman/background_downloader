@@ -843,13 +843,6 @@ void main() {
       /// which is what the server expects
       expect(lastStatus, equals(TaskStatus.notFound));
     });
-
-    testWidgets('DownloadTask expectedFileSize', (widgetTester) async {
-      expect(await task.expectedFileSize(), equals(-1));
-      task = DownloadTask(url: urlWithContentLength);
-      expect(
-          await task.expectedFileSize(), equals(urlWithContentLengthFileSize));
-    });
   });
 
   group('Convenience downloads', () {
@@ -2715,7 +2708,7 @@ void main() {
     });
   });
 
-  group('Range', () {
+  group('Range and Content-Length headers', () {
     testWidgets('parseRange', (widgetTester) async {
       // tested on the native side for Android and iOS
       if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
@@ -2784,6 +2777,17 @@ void main() {
       file = File(await task.filePath());
       expect(file.lengthSync(), equals(lastValidExpectedFileSize));
       await file.delete();
+    });
+
+    testWidgets('DownloadTask expectedFileSize', (widgetTester) async {
+      expect(await task.expectedFileSize(), equals(-1));
+      task = task.copyWith(headers: {'Range': 'bytes=0-10'});
+      expect(await task.expectedFileSize(), equals(11));
+      task = task.copyWith(headers: {'Known-Content-Length': '100'});
+      expect(await task.expectedFileSize(), equals(100));
+      task = DownloadTask(url: urlWithContentLength);
+      expect(
+          await task.expectedFileSize(), equals(urlWithContentLengthFileSize));
     });
 
     testWidgets('[*] Range or Known-Content-Length in task header',

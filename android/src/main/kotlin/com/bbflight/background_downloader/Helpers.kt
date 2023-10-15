@@ -52,7 +52,6 @@ fun acceptUntrustedCertificates() {
         val sslContext = SSLContext.getInstance("TLS")
         sslContext.init(null, trustAllCerts, java.security.SecureRandom())
         // Create an ssl socket factory with our all-trusting manager
-        val sslSocketFactory = sslContext.socketFactory
         HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.socketFactory)
         Log.w(
             BDPlugin.TAG, "Bypassing TLS certificate validation\n" +
@@ -102,6 +101,39 @@ fun parseRange(rangeStr: String): Pair<Long, Long?> {
     val end = match.groupValues[2].toLongOrNull()
     return Pair(start, end)
 }
+
+/**
+ * Returns the content length extracted from the [responseHeaders], or from
+ * the [task] headers
+ */
+fun getContentLength(responseHeaders: Map<String, List<String>>, task: Task): Long {
+    // if response provides contentLength, return it
+    val contentLength = responseHeaders["Content-Length"]?.get(0)?.toLongOrNull()
+        ?: responseHeaders["content-length"]?.get(0)?.toLongOrNull()
+        ?: -1L
+    if (contentLength != -1L) {
+        return contentLength
+    }
+    // try extracting it from Range header
+    val taskRangeHeader = task.headers["Range"] ?: task.headers["range"] ?: ""
+    val taskRange = parseRange(taskRangeHeader)
+    if (taskRange.second != null) {
+        val rangeLength = taskRange.second!! - taskRange.first + 1L
+        Log.d(TAG, "TaskId ${task.taskId} contentLength set to $rangeLength based on Range header")
+        return rangeLength
+    }
+    // try extracting it from a special "Known-Content-Length" header
+    val knownLength = (task.headers["Known-Content-Length"]?.toLongOrNull()
+        ?: task.headers["known-content-length"]?.toLongOrNull()
+        ?: -1)
+    if (knownLength != -1L) {
+        Log.d(TAG, "TaskId ${task.taskId} contentLength set to $knownLength based on Known-Content-Length header")
+    } else {
+        Log.d(TAG, "TaskId ${task.taskId} contentLength undetermined")
+    }
+    return knownLength
+}
+
 
 /**
  * Return the path to the baseDir for this [baseDirectory], or null if path could not be reached

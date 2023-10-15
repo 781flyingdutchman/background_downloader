@@ -81,6 +81,8 @@ Future<void> doDownloadTask(
                 unique: true);
         // update the filePath by replacing the last segment with the new filename
         filePath = p.join(p.dirname(filePath), downloadTask.filename);
+        log.finest(
+            'Suggested filename for taskId ${task.taskId}: ${task.filename}');
       }
       if (okResponses.contains(response.statusCode)) {
         resultStatus = await processOkDownloadResponse(
