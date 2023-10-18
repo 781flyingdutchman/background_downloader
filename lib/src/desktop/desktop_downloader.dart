@@ -426,7 +426,7 @@ final class DesktopDownloader extends BaseDownloader {
     final h = contentDisposition.isNotEmpty
         ? {'Content-disposition': contentDisposition}
         : <String, String>{};
-    final t = await task.withSuggestedFilenameFromResponseHeaders(h);
+    final t = await taskWithSuggestedFilename(task, h, false);
     return t.filename;
   }
 

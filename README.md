@@ -234,7 +234,7 @@ A [DownloadProgressIndicator](https://pub.dev/documentation/background_downloade
 The widget can be configured to include pause and resume buttons, and to expand to show multiple
 simultaneous downloads, or to collapse and show a file download counter.
 
-To provide progress updates (as a percentage of total file size) the downloader needs to know the size of the file when starting the donwload. Most servers provide this in the "Content-Length" header of their response. If the server does not provide the file size, yet you know the file size (e.g. because you have stored the file on the server yourself), then you can let the downloader know by providing a `{'Range': 'bytes=0-999'}` or a `{'Known-Content-Length': '1000'}` header to the task's `header` field. Both examples are for a content length of 1000 bytes.  The downloader will assume this content length when calculating progress.  
+To provide progress updates (as a percentage of total file size) the downloader needs to know the size of the file when starting the download. Most servers provide this in the "Content-Length" header of their response. If the server does not provide the file size, yet you know the file size (e.g. because you have stored the file on the server yourself), then you can let the downloader know by providing a `{'Range': 'bytes=0-999'}` or a `{'Known-Content-Length': '1000'}` header to the task's `header` field. Both examples are for a content length of 1000 bytes.  The downloader will assume this content length when calculating progress.  
 
 #### Status
 
@@ -299,11 +299,11 @@ If you want the filename to be provided by the server (instead of assigning a va
 final task = await DownloadTask(url: 'https://google.com')
         .withSuggestedFilename(unique: true);
 ```
-The method `withSuggestedFilename` returns a copy of the task it is called on, with the `filename` field modified based on the filename suggested by the server, or the last path segment of the URL, or unchanged if neither is feasible. If `unique` is true, the filename will be modified such that it does not conflict with an existing filename by adding a sequence. For example "file.txt" would become "file (1).txt".
+The method `withSuggestedFilename` returns a copy of the task it is called on, with the `filename` field modified based on the filename suggested by the server, or the last path segment of the URL, or unchanged if neither is feasible (e.g. due to a lack of connection). If `unique` is true, the filename will be modified such that it does not conflict with an existing filename by adding a sequence. For example "file.txt" would become "file (1).txt". You can also supply a `taskWithFilenameBuilder` to suggest the filename yourself, based on response headers.
 
-The second approach is to set the `filename` field of the `DownloadTask` to '?', to indicate that you would like the server to suggest the name. In this case, you will receive the name via the task's status and/or progress updates, so you have to be careful _not_ to use the original task's filename, as that will still be '?'. For example:
+The second approach is to set the `filename` field of the `DownloadTask` to `DownloadTask.suggestedFilename`, to indicate that you would like the server to suggest the name. In this case, you will receive the name via the task's status and/or progress updates, so you have to be careful _not_ to use the original task's filename, as that will still be `DownloadTask.suggestedFilename`. For example:
 ```dart
-final task = await DownloadTask(url: 'https://google.com', filename: '?');
+final task = await DownloadTask(url: 'https://google.com', filename: DownloadTask.suggestedFilename);
 final result = await FileDownloader().download(task);
 print('Suggested filename=${result.task.filename}'); // note we don't use 'task', but 'result.task'
 print('Wrong use filename=${task.filename}'); // this will print '?' as 'task' hasn't changed

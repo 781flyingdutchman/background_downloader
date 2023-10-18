@@ -158,23 +158,6 @@ void main() {
       expect(await fileEqualsTestFile(file), isTrue);
     });
 
-    test('[*] override content length', () async {
-      // Haven't found a url that does not provide content-length, so
-      // can oly be tested by modifying the source code to ignore the
-      // Content-Length response header and use this one instead
-      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
-      task = task.copyWith(
-          url: urlWithContentLength,
-          headers: {'Known-Content-Length': '$urlWithContentLengthFileSize'});
-      expect(await FileDownloader().enqueue(task), isTrue);
-      await statusCallbackCompleter.future;
-      expect(lastStatus, equals(TaskStatus.complete));
-      expect(statusCallbackCounter, equals(3));
-      final file = File(await task.filePath());
-      expect(file.existsSync(), isTrue);
-      expect(await fileEqualsTestFile(file), isTrue);
-    });
-
     test('simple enqueue, 2 chunks, 2 url', () async {
       task = ParallelDownloadTask(
           url: [urlWithContentLength, urlWithContentLength],
@@ -359,9 +342,31 @@ void main() {
       statusCallbackCompleter = Completer();
       lastValidExpectedFileSize = -1;
       task = task.copyWith(taskId: "3", headers: {});
+      if (!Platform.isIOS) {
+        expect(await FileDownloader().enqueue(task), isTrue);
+        await statusCallbackCompleter.future;
+        expect(lastStatus, equals(TaskStatus.failed));
+      } else {
+        // on iOS the task fails at enqueue
+        expect(await FileDownloader().enqueue(task), isFalse);
+      }
+    });
+
+    test('[*] override content length', () async {
+      // Haven't found a url that does not provide content-length, so
+      // can only be tested by modifying the source code to ignore the
+      // Content-Length response header and use this one instead
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
+      task = task.copyWith(
+          url: urlWithContentLength,
+          headers: {'Known-Content-Length': '$urlWithContentLengthFileSize'});
       expect(await FileDownloader().enqueue(task), isTrue);
       await statusCallbackCompleter.future;
-      expect(lastStatus, equals(TaskStatus.failed));
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(statusCallbackCounter, equals(3));
+      final file = File(await task.filePath());
+      expect(file.existsSync(), isTrue);
+      expect(await fileEqualsTestFile(file), isTrue);
     });
   });
 }

@@ -40,6 +40,8 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     static var localResumeData = [String : String]() // locally stored to enable notification resume
     static var remainingBytesToDownload = [String : Int64]()  // keyed by taskId
     static var responseBodyData = [String: [Data]]() // list of Data objects received for this UploadTask id
+    static var tasksWithSuggestedFilename = [String : Task]() // [taskId : Task with suggested filename]
+    static var tasksWithContentLengthOverride = [String : Int64]() // [taskId : Content length]
     
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "com.bbflight.background_downloader", binaryMessenger: registrar.messenger())
@@ -111,6 +113,8 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                 methodStoreConfig(key: Downloader.keyConfigCheckAvailableSpace, value: call.arguments, result: result)
             case "forceFailPostOnBackgroundChannel":
                 methodForceFailPostOnBackgroundChannel(call: call, result: result)
+            case "testSuggestedFilename":
+                methodTestSuggestedFilename(call: call, result: result)
             default:
                 os_log("Invalid method: %@", log: log, type: .error, call.method)
                 result(FlutterMethodNotImplemented)
@@ -484,6 +488,22 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         result(nil)
     }
     
+    /// Tests the content-disposition and url translation
+    ///
+    /// For testing only
+    private func methodTestSuggestedFilename(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        let args = call.arguments as! [Any]
+        guard let taskJsonString = args[0] as? String,
+              let contentDisposition = args[1] as? String,
+              let task = taskFrom(jsonString: taskJsonString) else {
+            result("")
+            return
+        }
+        let resultTask = suggestedFilenameFromResponseHeaders(task: task, responseHeaders: ["Content-Disposition" : contentDisposition], unique: true)
+        result(resultTask.filename)
+    }
+
+    
     
     //MARK: Helpers for Task and urlSessionTask
     
@@ -550,6 +570,9 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             os_log("Could not find task related to urlSessionTask %d", log: log, type: .error, task.taskIdentifier)
             return
         }
+        // clear storage related to this task
+        Downloader.tasksWithSuggestedFilename.removeValue(forKey: task.taskId)
+        Downloader.tasksWithContentLengthOverride.removeValue(forKey: task.taskId)
         let responseBody = getResponseBody(taskId: task.taskId)
         Downloader.responseBodyData.removeValue(forKey: task.taskId)
         Downloader.taskIdsThatCanResume.remove(task.taskId)
@@ -618,9 +641,28 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     /// If the task requires progress updates, provide these at a reasonable interval
     /// If this is the first update for this file, also emit a 'running' status update
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-        guard let task = getTaskFrom(urlSessionTask: downloadTask) else { return }
+        // task is var because the filename can be changed on the first 'didWriteData' call
+        guard var task = getTaskFrom(urlSessionTask: downloadTask) else { return }
         if Downloader.progressInfo[task.taskId] == nil {
             // first 'didWriteData' call
+            let response = downloadTask.response as! HTTPURLResponse
+            // get suggested filename if needed
+            if task.filename == "?" {
+                let newTask = suggestedFilenameFromResponseHeaders(task: task, responseHeaders: response.allHeaderFields)
+                os_log("Suggested task filename for taskId %@ is %@", log: log, type: .info, newTask.taskId, newTask.filename)
+                if newTask.filename != task.filename {
+                    // store for future replacement, and replace now
+                    Downloader.tasksWithSuggestedFilename[newTask.taskId] = newTask
+                    task = newTask
+                }
+            }
+            // obtain content length override, if needed and available
+            if totalBytesExpectedToWrite == -1 {
+                let contentLength = getContentLength(responseHeaders: response.allHeaderFields, task: task)
+                if contentLength != -1 {
+                    Downloader.tasksWithContentLengthOverride[task.taskId] = contentLength
+                }
+            }
             // Check if there is enough space
             if insufficientSpace(contentLength: totalBytesExpectedToWrite) {
                 if !Downloader.taskIdsProgrammaticallyCancelled.contains(task.taskId) {
@@ -649,8 +691,9 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                 updateNotification(task: task, notificationType: .running, notificationConfig: notificationConfig)
             }
         }
-        Downloader.remainingBytesToDownload[task.taskId] = totalBytesExpectedToWrite - totalBytesWritten
-        updateProgress(task: task, totalBytesExpected: totalBytesExpectedToWrite, totalBytesDone: totalBytesWritten)
+        let contentLength = totalBytesExpectedToWrite != -1 ? totalBytesExpectedToWrite : Downloader.tasksWithContentLengthOverride[task.taskId] ?? -1
+        Downloader.remainingBytesToDownload[task.taskId] = contentLength - totalBytesWritten
+        updateProgress(task: task, totalBytesExpected: contentLength, totalBytesDone: totalBytesWritten)
     }
     
     /// Process taskdelegate progress update for upload task
@@ -686,6 +729,8 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         else {
             os_log("Could not find task associated urlSessionTask %d, or did not get HttpResponse", log: log,  type: .info, downloadTask.taskIdentifier)
             return}
+        Downloader.tasksWithSuggestedFilename.removeValue(forKey: task.taskId)
+        Downloader.tasksWithContentLengthOverride.removeValue(forKey: task.taskId)
         let notificationConfig = getNotificationConfigFrom(urlSessionTask: downloadTask)
         if response.statusCode == 404 {
             let responseBody = readFile(url: location)

@@ -2112,7 +2112,7 @@ void main() {
           taskProgressCallback: progressCallback);
       task = DownloadTask(
           url: urlWithContentLength,
-          filename: '?',
+          filename: DownloadTask.suggestedFilename,
           updates: Updates.statusAndProgress,
           allowPause: true);
       expect(await FileDownloader().enqueue(task), equals(true));
@@ -2698,7 +2698,8 @@ void main() {
       try {
         File(await task.filePath()).deleteSync();
       } catch (e) {}
-      task = DownloadTask(url: urlWithContentLength, filename: '?');
+      task = DownloadTask(
+          url: urlWithContentLength, filename: DownloadTask.suggestedFilename);
       final result = await FileDownloader().download(task);
       expect(result.task.filename, equals('5MB-test.ZIP'));
       final file = File(await result.task.filePath());
@@ -2793,7 +2794,7 @@ void main() {
     testWidgets('[*] Range or Known-Content-Length in task header',
         (widgetTester) async {
       // Haven't found a url that does not provide content-length, so
-      // can oly be tested by modifying the source code to ignore the
+      // can only be tested by modifying the source code to ignore the
       // Content-Length response header and use this one instead
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,

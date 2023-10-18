@@ -35,6 +35,129 @@ struct Task : Codable {
     var taskType: String
 }
 
+extension Task {
+    func copyWith(taskId: String? = nil,
+                  url: String? = nil,
+                  urls: [String]? = nil,
+                  filename: String? = nil,
+                  headers: [String:String]? = nil,
+                  httpRequestMethod: String? = nil,
+                  chunks: Int? = nil,
+                  post: String? = nil,
+                  fileField: String? = nil,
+                  mimeType: String? = nil,
+                  fields: [String:String]? = nil,
+                  directory: String? = nil,
+                  baseDirectory: Int? = nil,
+                  group: String? = nil,
+                  updates: Int? = nil,
+                  requiresWiFi: Bool? = nil,
+                  retries: Int? = nil,
+                  retriesRemaining: Int? = nil,
+                  allowPause: Bool? = nil,
+                  metaData: String? = nil,
+                  displayName: String? = nil,
+                  creationTime: Int64? = nil,
+                  taskType: String? = nil) -> Task {
+        
+        var copiedTask = self
+        
+        if let taskId = taskId {
+            copiedTask.taskId = taskId
+        }
+        
+        if let url = url {
+            copiedTask.url = url
+        }
+        
+        if let urls = urls {
+            copiedTask.urls = urls
+        }
+        
+        if let filename = filename {
+            copiedTask.filename = filename
+        }
+        
+        if let headers = headers {
+            copiedTask.headers = headers
+        }
+        
+        if let httpRequestMethod = httpRequestMethod {
+            copiedTask.httpRequestMethod = httpRequestMethod
+        }
+        
+        if let chunks = chunks {
+            copiedTask.chunks = chunks
+        }
+        
+        if let post = post {
+            copiedTask.post = post
+        }
+        
+        if let fileField = fileField {
+            copiedTask.fileField = fileField
+        }
+        
+        if let mimeType = mimeType {
+            copiedTask.mimeType = mimeType
+        }
+        
+        if let fields = fields {
+            copiedTask.fields = fields
+        }
+        
+        if let directory = directory {
+            copiedTask.directory = directory
+        }
+        
+        if let baseDirectory = baseDirectory {
+            copiedTask.baseDirectory = baseDirectory
+        }
+        
+        if let group = group {
+            copiedTask.group = group
+        }
+        
+        if let updates = updates {
+            copiedTask.updates = updates
+        }
+        
+        if let requiresWiFi = requiresWiFi {
+            copiedTask.requiresWiFi = requiresWiFi
+        }
+        
+        if let retries = retries {
+            copiedTask.retries = retries
+        }
+        
+        if let retriesRemaining = retriesRemaining {
+            copiedTask.retriesRemaining = retriesRemaining
+        }
+        
+        if let allowPause = allowPause {
+            copiedTask.allowPause = allowPause
+        }
+        
+        if let metaData = metaData {
+            copiedTask.metaData = metaData
+        }
+        
+        if let displayName = displayName {
+            copiedTask.displayName = displayName
+        }
+        
+        if let creationTime = creationTime {
+            copiedTask.creationTime = creationTime
+        }
+        
+        if let taskType = taskType {
+            copiedTask.taskType = taskType
+        }
+        
+        return copiedTask
+    }
+}
+
 /// Base directory in which files will be stored, based on their relative
 /// path.
 ///

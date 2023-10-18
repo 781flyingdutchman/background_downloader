@@ -76,9 +76,8 @@ Future<void> doDownloadTask(
         throw TaskException('Cannot resume: ETag is not identical, or is weak');
       }
       if (!downloadTask.hasFilename) {
-        downloadTask = await downloadTask
-            .withSuggestedFilenameFromResponseHeaders(response.headers,
-                unique: true);
+        downloadTask = await taskWithSuggestedFilename(
+            downloadTask, response.headers, true);
         // update the filePath by replacing the last segment with the new filename
         filePath = p.join(p.dirname(filePath), downloadTask.filename);
         log.finest(

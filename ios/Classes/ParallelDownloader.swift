@@ -21,9 +21,9 @@ func scheduleParallelDownload(task: Task, taskDescription: String, baseRequest: 
                     os_log("URL not found for taskId %@", log: log, type: .info, task.taskId)
                     postResult(result: result, value: false)
                 }
-                else if !parallelDownload.start(contentLength: Int64(httpResponse.value(forHTTPHeaderField: "Content-Length") ?? "0") ?? 0) {
-                    os_log("Cannot chunk or enqueue download", log: log, type: .info)
-                    postResult(result: result, value: false)
+                else if !parallelDownload.start(contentLengthFromHeader: Int64(httpResponse.value(forHTTPHeaderField: "Content-Length") ?? "-1") ?? -1, responseHeaders: httpResponse.allHeaderFields ) {
+                        os_log("Cannot chunk or enqueue download", log: log, type: .info)
+                        postResult(result: result, value: false)
                 } else {
                     processStatusUpdate(task: task, status: TaskStatus.enqueued)
                     postResult(result: result, value: true)
@@ -85,10 +85,12 @@ public class ParallelDownloader: NSObject {
     /// the
     ///
     /// Returns false if start was unsuccessful
-    public func start(contentLength: Int64) -> Bool {
-        parallelDownloadContentLength = contentLength
+    public func start(contentLengthFromHeader: Int64, responseHeaders: [AnyHashable: Any]) -> Bool {
+        parallelDownloadContentLength = contentLengthFromHeader > 0 ?
+            contentLengthFromHeader :
+            getContentLength(responseHeaders: responseHeaders, task: self.parentTask)
         ParallelDownloader.downloads[parentTask.taskId] = self
-        chunks = createChunks(task: parentTask, contentLength: contentLength)
+        chunks = createChunks(task: parentTask, contentLength: parallelDownloadContentLength)
         let success = !chunks.isEmpty && enqueueChunkTasks()
         if !success {
             ParallelDownloader.downloads.removeValue(forKey: parentTask.taskId)

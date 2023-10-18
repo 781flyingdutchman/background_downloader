@@ -78,6 +78,183 @@ func getFilePath(for task: Task, withFilename: String? = nil) -> String? {
     return directory.appendingPathComponent(withFilename ?? task.filename).path
 }
 
+//extension StringProtocol {
+//    func index<S: StringProtocol>(of string: S, options: String.CompareOptions = []) -> Index? {
+//        range(of: string, options: options)?.lowerBound
+//    }
+//    func endIndex<S: StringProtocol>(of string: S, options: String.CompareOptions = []) -> Index? {
+//        range(of: string, options: options)?.upperBound
+//    }
+//    func indices<S: StringProtocol>(of string: S, options: String.CompareOptions = []) -> [Index] {
+//        ranges(of: string, options: options).map(\.lowerBound)
+//    }
+//    func ranges<S: StringProtocol>(of string: S, options: String.CompareOptions = []) -> [Range<Index>] {
+//        var result: [Range<Index>] = []
+//        var startIndex = self.startIndex
+//        while startIndex < endIndex,
+//              let range = self[startIndex...]
+//            .range(of: string, options: options) {
+//            result.append(range)
+//            startIndex = range.lowerBound < range.upperBound ? range.upperBound :
+//            index(range.lowerBound, offsetBy: 1, limitedBy: endIndex) ?? endIndex
+//        }
+//        return result
+//    }
+//}
+
+func stripFileExtension ( _ filename: String ) -> String {
+    var components = filename.components(separatedBy: ".")
+    guard components.count > 1 else { return filename }
+    components.removeLast()
+    return components.joined(separator: ".")
+}
+
+/**
+ * Returns a copy of the task with the [Task.filename] property changed
+ * to the filename suggested by the server, or derived from the url, or
+ * unchanged.
+ *
+ * If [unique] is true, the filename is guaranteed not to already exist. This
+ * is accomplished by adding a suffix to the suggested filename with a number,
+ * e.g. "data (2).txt"
+ *
+ * The server-suggested filename is obtained from the  [responseHeaders] entry
+ * "Content-Disposition"
+ */
+func suggestedFilenameFromResponseHeaders(
+    task: Task,
+    responseHeaders: [AnyHashable: Any],
+    unique: Bool = false
+) -> Task {
+    if let disposition = responseHeaders["Content-Disposition"] as? String {
+        let range = NSMakeRange(0, disposition.utf16.count)
+        // Try filename="filename"
+        let plainFilenameRegEx = try! NSRegularExpression(pattern: #"filename=\s*"?([^"]+)"?.*$"#, options: .caseInsensitive)
+        if let match = plainFilenameRegEx.firstMatch(in: disposition, options: [], range: range) {
+            let filename = String(disposition[Range(match.range(at: 1), in: disposition)!])
+            return uniqueFilename(task: task.copyWith(filename: filename), unique: unique)
+        }
+        
+        // Try filename*=UTF-8'language'"encodedFilename"
+        let encodedFilenameRegEx = try! NSRegularExpression(pattern: #"filename\*=\s*([^']+)'([^']*)'"?([^"]+)"?"#, options: .caseInsensitive)
+        if let match = encodedFilenameRegEx.firstMatch(in: disposition, options: [], range: range) {
+            let encoding = String(disposition[Range(match.range(at: 1), in: disposition)!]).uppercased()
+            let filename = String(disposition[Range(match.range(at: 3), in: disposition)!])
+            if encoding == "UTF-8" {
+                if let decodedFilename = filename.removingPercentEncoding {
+                    return uniqueFilename(task: task.copyWith(filename: decodedFilename), unique: unique)
+                } else {
+                    os_log("Could not interpret suggested filename (UTF-8 url encoded)", log: log, type: .debug)
+                }
+            } else {
+                return uniqueFilename(task: task.copyWith(filename: filename), unique: unique)
+            }
+        }
+    }
+    os_log("Could not determine suggested filename from server", log: log, type: .debug)
+    // Try filename derived from last path segment of the url
+    if let uri = URL(string: task.url) {
+        let suggestedFilename = uri.lastPathComponent
+        if !suggestedFilename.isEmpty {
+            return uniqueFilename(task: task.copyWith(filename: suggestedFilename), unique: unique)
+        }
+    }
+    os_log("Could not parse URL pathSegment for suggested filename", log: log, type: .debug)
+    // if everything fails, return the task with unchanged filename
+    // except for possibly making it unique
+    return uniqueFilename(task: task, unique: unique)
+}
+
+/// Returns [Task] with a filename similar to the one
+/// supplied, but unused.
+///
+/// If [unique], filename will sequence up in "filename (8).txt" format,
+/// otherwise returns the [task]
+func uniqueFilename(task: Task, unique: Bool) -> Task {
+    if !unique {
+        return task
+    }
+    let sequenceRegEx = try! NSRegularExpression(pattern: #"\((\d+)\)\.?[^.]*$"#)
+    let extensionRegEx = try! NSRegularExpression(pattern: #"\.[^.]*$"#)
+    var newTask = task
+    guard let filePath = getFilePath(for: task) else {
+        return task
+    }
+    var exists = FileManager.default.fileExists(atPath: filePath)
+    
+    while exists {
+        let range = NSMakeRange(0, newTask.filename.utf16.count)
+        let extMatch = extensionRegEx.firstMatch(in: newTask.filename, options: [], range: range)
+        let extString = extMatch != nil ? String(newTask.filename[Range(extMatch!.range, in: newTask.filename)!]) : ""
+        let seqMatch = sequenceRegEx.firstMatch(in: newTask.filename, options: [], range: range)
+        let seqString = seqMatch != nil ? String(newTask.filename[Range(seqMatch!.range, in: newTask.filename)!]) : ""
+        let newSequence = seqString.isEmpty ? 1 : Int(seqString)! + 1
+        
+        let newFilename: String
+        if seqMatch == nil {
+            let baseNameWithoutExtension = stripFileExtension(newTask.filename)
+            newFilename = "\(baseNameWithoutExtension) (\(newSequence))\(extString)"
+        } else {
+            let startOfSeq = seqMatch!.range.location
+            let index = newTask.filename.index(newTask.filename.startIndex, offsetBy: startOfSeq)
+            newFilename = "\(newTask.filename.prefix(upTo: index)) (\(newSequence))\(extString)"
+        }
+        newTask = newTask.copyWith(filename: newFilename)
+        guard let filePath = getFilePath(for: task) else {
+            return task
+        }
+        exists = FileManager.default.fileExists(atPath: filePath)
+    }
+    return newTask
+}
+
+/**
+ * Parses the range in a Range header, and returns a Pair representing
+ * the range. The format needs to be "bytes=10-20"
+ *
+ * A missing lower range is substituted with 0L, and a missing upper
+ * range with null.  If the string cannot be parsed, returns (0L, null)
+ */
+func parseRange(rangeStr: String) -> (Int64, Int64?) {
+    let regex = try! NSRegularExpression(pattern: #"bytes=(\d*)-(\d*)"#)
+    let range = NSMakeRange(0, rangeStr.utf16.count)
+    if let match = regex.firstMatch(in: rangeStr, options: [], range: range) {
+        let start = Int64(String(rangeStr[Range(match.range(at: 1), in: rangeStr)!]))
+        let end = Int64(String(rangeStr[Range(match.range(at: 2), in: rangeStr)!]))
+        return (start!, end!)
+    } else {
+        return (0, nil)
+    }
+}
+
+/// Returns the content length extracted from the [responseHeaders], or from
+/// the [task] headers
+func getContentLength(responseHeaders: [AnyHashable: Any], task: Task) -> Int64 {
+    // On iOS, the header has already been parsed for Content-Length so we don't need to
+    // repeat that here
+    // try extracting it from Range header
+    let taskRangeHeader = task.headers["Range"] ?? ""
+    let taskRange = parseRange(rangeStr: taskRangeHeader)
+    if let end = taskRange.1 {
+        var rangeLength = end - taskRange.0 + 1
+        os_log("TaskId %@ contentLength set to %d based on Range header", log: log, type: .info, task.taskId, rangeLength)
+        return rangeLength
+    }
+    
+    // try extracting it from a special "Known-Content-Length" header
+    let knownLength = Int64(task.headers["Known-Content-Length"] ?? "-1") ?? -1
+    if knownLength != -1 {
+        os_log("TaskId %@ contentLength set to %d based on Known-Content-Length header", log: log, type: .info, task.taskId, knownLength)
+    } else {
+        os_log("TaskId %@ contentLength undetermined", log: log, type: .info, task.taskId)
+    }
+    return knownLength
+}
+
+
+
+
+
 /// Returns a list of fileData elements, one for each file to upload.
 /// Each element is a triple containing fileField, full filePath, mimeType
 ///
@@ -318,13 +495,18 @@ func taskFrom(jsonString: String) -> Task? {
 }
 
 /// Return the task corresponding to the URLSessionTask, or nil if it cannot be matched
+///
+/// If possible, the task returned contains the suggested filename
 func getTaskFrom(urlSessionTask: URLSessionTask) -> Task? {
     guard let jsonData = getTaskJsonStringFrom(urlSessionTask: urlSessionTask)?.data(using: .utf8)
     else {
         return nil
     }
     let decoder = JSONDecoder()
-    return try? decoder.decode(Task.self, from: jsonData)
+    if let task = try? decoder.decode(Task.self, from: jsonData) {
+        return Downloader.tasksWithSuggestedFilename[task.taskId] ?? task
+    }
+    return nil
 }
 
 /// Returns the taskJsonString contained in the urlSessionTask

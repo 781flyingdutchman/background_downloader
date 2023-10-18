@@ -619,107 +619,29 @@ final class DownloadTask extends Task {
   /// If [unique] is true, the filename is guaranteed not to already exist. This
   /// is accomplished by adding a suffix to the suggested filename with a number,
   /// e.g. "data (2).txt"
+  /// If a [taskWithFilenameBuilder] is supplied, this is the function called to
+  /// convert the task, response headers and [unique] values into a new [DownloadTask]
+  /// with the suggested filename. By default, [taskWithSuggestedFilename] is used,
+  /// which parses the Content-Disposition according to RFC6266, or takes the last
+  /// path segment of the URL, or leaves the filename unchanged
   ///
   /// The suggested filename is obtained by making a HEAD request to the url
   /// represented by the [DownloadTask], including urlQueryParameters and headers
-  Future<DownloadTask> withSuggestedFilename({unique = false}) async {
+  Future<DownloadTask> withSuggestedFilename(
+      {unique = false,
+      Future<DownloadTask> Function(
+              DownloadTask task, Map<String, String> headers, bool unique)
+          taskWithFilenameBuilder = taskWithSuggestedFilename}) async {
     try {
       final response = await DesktopDownloader.httpClient
           .head(Uri.parse(url), headers: headers);
       if ([200, 201, 202, 203, 204, 205, 206].contains(response.statusCode)) {
-        return withSuggestedFilenameFromResponseHeaders(response.headers,
-            unique: unique);
+        return taskWithFilenameBuilder(this, response.headers, unique);
       }
     } catch (e) {
       _log.finer('Error connecting to server');
     }
-    return withSuggestedFilenameFromResponseHeaders({}, unique: unique);
-  }
-
-  /// Returns a copy of the task with the [Task.filename] property changed
-  /// to the filename suggested by the server, or derived from the url, or
-  /// unchanged.
-  ///
-  /// If [unique] is true, the filename is guaranteed not to already exist. This
-  /// is accomplished by adding a suffix to the suggested filename with a number,
-  /// e.g. "data (2).txt"
-  ///
-  /// The server-suggested filename is obtained from the  [responseHeaders] entry
-  /// "Content-Disposition"
-  Future<DownloadTask> withSuggestedFilenameFromResponseHeaders(
-      Map<String, String> responseHeaders,
-      {bool unique = false}) {
-    /// Returns [DownloadTask] with a filename similar to the one
-    /// supplied, but unused.
-    ///
-    /// If [unique], filename will sequence up in "filename (8).txt" format,
-    /// otherwise returns the [task]
-    Future<DownloadTask> uniqueFilename(DownloadTask task, bool unique) async {
-      if (!unique) {
-        return task;
-      }
-      final sequenceRegEx = RegExp(r'\((\d+)\)\.?[^.]*$');
-      final extensionRegEx = RegExp(r'\.[^.]*$');
-      var newTask = task;
-      var filePath = await newTask.filePath();
-      var exists = await File(filePath).exists();
-      while (exists) {
-        final extension =
-            extensionRegEx.firstMatch(newTask.filename)?.group(0) ?? '';
-        final match = sequenceRegEx.firstMatch(newTask.filename);
-        final newSequence = int.parse(match?.group(1) ?? "0") + 1;
-        final newFilename = match == null
-            ? '${path.basenameWithoutExtension(newTask.filename)} ($newSequence)$extension'
-            : '${newTask.filename.substring(0, match.start - 1)} ($newSequence)$extension';
-        newTask = newTask.copyWith(filename: newFilename);
-        filePath = await newTask.filePath();
-        exists = await File(filePath).exists();
-      }
-      return newTask;
-    }
-
-    // start of main method
-    try {
-      final disposition = responseHeaders.entries
-          .firstWhere(
-              (element) => element.key.toLowerCase() == 'content-disposition')
-          .value;
-      // Try filename="filename"
-      final plainFilenameRegEx =
-          RegExp(r'filename=\s*"?([^"]+)"?.*$', caseSensitive: false);
-      var match = plainFilenameRegEx.firstMatch(disposition);
-      if (match != null && match.group(1)?.isNotEmpty == true) {
-        return uniqueFilename(copyWith(filename: match.group(1)), unique);
-      }
-      // Try filename*=UTF-8'language'"encodedFilename"
-      final encodedFilenameRegEx = RegExp(
-          'filename\\*=\\s*([^\']+)\'([^\']*)\'"?([^"]+)"?',
-          caseSensitive: false);
-      match = encodedFilenameRegEx.firstMatch(disposition);
-      if (match != null &&
-          match.group(1)?.isNotEmpty == true &&
-          match.group(3)?.isNotEmpty == true) {
-        try {
-          final suggestedFilename = match.group(1)?.toUpperCase() == 'UTF-8'
-              ? Uri.decodeComponent(match.group(3)!)
-              : match.group(3)!;
-          return uniqueFilename(copyWith(filename: suggestedFilename), true);
-        } on ArgumentError {
-          _log.finest(
-              'Could not interpret suggested filename (UTF-8 url encoded) ${match.group(3)}');
-        }
-      }
-    } catch (_) {}
-    _log.finest('Could not determine suggested filename from server');
-    // Try filename derived from last path segment of the url
-    try {
-      final suggestedFilename = Uri.parse(url).pathSegments.last;
-      return uniqueFilename(copyWith(filename: suggestedFilename), unique);
-    } catch (_) {}
-    _log.finest('Could not parse URL pathSegment for suggested filename');
-    // if everything fails, return the task with unchanged filename
-    // except for possibly making it unique
-    return uniqueFilename(this, unique);
+    return taskWithFilenameBuilder(this, {}, unique);
   }
 
   /// Return the expected file size for this task, or -1 if unknown
@@ -739,7 +661,11 @@ final class DownloadTask extends Task {
     return -1;
   }
 
-  bool get hasFilename => filename != '?';
+  /// Constant used with `filename` field to indicate server suggestion requested
+  static const suggestedFilename = '?';
+
+  /// True if this task has a filename, or false if set to `suggest`
+  bool get hasFilename => filename != suggestedFilename;
 }
 
 /// Information related to an upload task
@@ -1592,4 +1518,92 @@ final class Config {
     }
     return value;
   }
+}
+
+// helper function for DownloadTask
+
+/// Returns a copy of the [task] with the [Task.filename] property changed
+/// to the filename suggested by the server, or derived from the url, or
+/// unchanged.
+///
+/// If [unique] is true, the filename is guaranteed not to already exist. This
+/// is accomplished by adding a suffix to the suggested filename with a number,
+/// e.g. "data (2).txt"
+///
+/// The server-suggested filename is obtained from the  [responseHeaders] entry
+/// "Content-Disposition" according to RFC6266, or the last path segment of the
+/// URL, or leaves the filename unchanged
+Future<DownloadTask> taskWithSuggestedFilename(
+    DownloadTask task, Map<String, String> responseHeaders, bool unique) {
+  /// Returns [DownloadTask] with a filename similar to the one
+  /// supplied, but unused.
+  ///
+  /// If [unique], filename will sequence up in "filename (8).txt" format,
+  /// otherwise returns the [task]
+  Future<DownloadTask> uniqueFilename(DownloadTask task, bool unique) async {
+    if (!unique) {
+      return task;
+    }
+    final sequenceRegEx = RegExp(r'\((\d+)\)\.?[^.]*$');
+    final extensionRegEx = RegExp(r'\.[^.]*$');
+    var newTask = task;
+    var filePath = await newTask.filePath();
+    var exists = await File(filePath).exists();
+    while (exists) {
+      final extension =
+          extensionRegEx.firstMatch(newTask.filename)?.group(0) ?? '';
+      final match = sequenceRegEx.firstMatch(newTask.filename);
+      final newSequence = int.parse(match?.group(1) ?? "0") + 1;
+      final newFilename = match == null
+          ? '${path.basenameWithoutExtension(newTask.filename)} ($newSequence)$extension'
+          : '${newTask.filename.substring(0, match.start - 1)} ($newSequence)$extension';
+      newTask = newTask.copyWith(filename: newFilename);
+      filePath = await newTask.filePath();
+      exists = await File(filePath).exists();
+    }
+    return newTask;
+  }
+
+  // start of main function
+  try {
+    final disposition = responseHeaders.entries
+        .firstWhere(
+            (element) => element.key.toLowerCase() == 'content-disposition')
+        .value;
+    // Try filename="filename"
+    final plainFilenameRegEx =
+        RegExp(r'filename=\s*"?([^"]+)"?.*$', caseSensitive: false);
+    var match = plainFilenameRegEx.firstMatch(disposition);
+    if (match != null && match.group(1)?.isNotEmpty == true) {
+      return uniqueFilename(task.copyWith(filename: match.group(1)), unique);
+    }
+    // Try filename*=UTF-8'language'"encodedFilename"
+    final encodedFilenameRegEx = RegExp(
+        'filename\\*=\\s*([^\']+)\'([^\']*)\'"?([^"]+)"?',
+        caseSensitive: false);
+    match = encodedFilenameRegEx.firstMatch(disposition);
+    if (match != null &&
+        match.group(1)?.isNotEmpty == true &&
+        match.group(3)?.isNotEmpty == true) {
+      try {
+        final suggestedFilename = match.group(1)?.toUpperCase() == 'UTF-8'
+            ? Uri.decodeComponent(match.group(3)!)
+            : match.group(3)!;
+        return uniqueFilename(task.copyWith(filename: suggestedFilename), true);
+      } on ArgumentError {
+        _log.finest(
+            'Could not interpret suggested filename (UTF-8 url encoded) ${match.group(3)}');
+      }
+    }
+  } catch (_) {}
+  _log.finest('Could not determine suggested filename from server');
+  // Try filename derived from last path segment of the url
+  try {
+    final suggestedFilename = Uri.parse(task.url).pathSegments.last;
+    return uniqueFilename(task.copyWith(filename: suggestedFilename), unique);
+  } catch (_) {}
+  _log.finest('Could not parse URL pathSegment for suggested filename');
+  // if everything fails, return the task with unchanged filename
+  // except for possibly making it unique
+  return uniqueFilename(task, unique);
 }
