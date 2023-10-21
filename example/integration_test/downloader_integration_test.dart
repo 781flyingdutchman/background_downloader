@@ -2817,6 +2817,34 @@ void main() {
       expect(lastValidExpectedFileSize, equals(urlWithContentLengthFileSize));
     });
   });
+
+  group('Priority', () {
+    testWidgets('High priority', (widgetTester) async {
+      task = task.copyWith(priority: 0);
+      final result = await FileDownloader().download(task);
+      expect(result.status, equals(TaskStatus.complete));
+    });
+  });
+
+  testWidgets('One high priority task', (widgetTester) async {
+    final tasks = <DownloadTask>[];
+    for (var n = 1; n < 20; n++) {
+      final downloadTask = DownloadTask(url: urlWithContentLength);
+      print('Adding task with id ${downloadTask.taskId}');
+      tasks.add(downloadTask);
+    }
+    final batchFuture = FileDownloader().downloadBatch(tasks);
+    await Future.delayed(const Duration(seconds: 1));
+    var priorityTask = DownloadTask(url: urlWithContentLength, priority: 0);
+    print('PriorityTask taskId = ${priorityTask.taskId}');
+    final result = await FileDownloader().download(priorityTask);
+    expect(result.status, equals(TaskStatus.complete));
+    final endOfHighPriority = DateTime.now();
+    await batchFuture;
+    final elapsedTime = DateTime.now().difference(endOfHighPriority);
+    print('Elapsed time after high priority download = $elapsedTime');
+    expect(elapsedTime.inSeconds, greaterThan(1));
+  });
 }
 
 /// Helper: make sure [task] is set as desired, and this will enqueue, wait for

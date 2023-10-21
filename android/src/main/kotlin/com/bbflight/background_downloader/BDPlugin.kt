@@ -140,6 +140,9 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             if (initialDelayMillis != 0L) {
                 requestBuilder.setInitialDelay(initialDelayMillis, TimeUnit.MILLISECONDS)
             }
+            if (task.priority < 5) {
+                requestBuilder.setExpedited(policy = OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            }
             val workManager = WorkManager.getInstance(context)
             val operation = workManager.enqueue(requestBuilder.build())
             try {
@@ -371,8 +374,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val task = Task(gson.fromJson(taskJsonMapString, jsonMapType))
         val notificationConfigJsonString = args[1] as String?
         val isResume = args.size == 5
-        val resumeData: ResumeData?
-        resumeData = if (isResume) {
+        val resumeData: ResumeData? = if (isResume) {
             val startByte = if (args[3] is Long) args[3] as Long else (args[3] as Int).toLong()
             val eTag = args[4] as String?
             ResumeData(task, args[2] as String, startByte, eTag)

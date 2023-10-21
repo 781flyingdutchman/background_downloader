@@ -263,7 +263,7 @@ final _startsWithPathSeparator = RegExp(r'^[/\\]');
 ///
 /// An equality test on a [Task] is a test on the [taskId]
 /// only - all other fields are ignored in that test
-sealed class Task extends Request {
+sealed class Task extends Request implements Comparable {
   /// Identifier for the task - auto generated if omitted
   final String taskId;
 
@@ -291,6 +291,12 @@ sealed class Task extends Request {
   /// connectivity issues, and may be resumed when connectivity returns.
   /// If false, task fails on any issue, and task cannot be paused
   final bool allowPause;
+
+  /// Priority of this task, relative to other tasks.
+  /// Range 0 <= priority <= 10 with 0 being the highest priority.
+  /// Not all platforms will have the same actual granularity, and how
+  /// priority is considered is inconsistent across platforms.
+  final int priority;
 
   /// User-defined metadata - use {metaData} in notification
   final String metaData;
@@ -327,6 +333,7 @@ sealed class Task extends Request {
   /// when some but not all bytes have transferred, provided the server supports
   /// partial transfers. Such failures are typically temporary, eg due to
   /// connectivity issues, and may be resumed when connectivity returns
+  /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5
   /// [metaData] user data
   /// [displayName] human readable name for this task
   /// [creationTime] time of task creation, 'now' by default.
@@ -347,6 +354,7 @@ sealed class Task extends Request {
       this.metaData = '',
       this.displayName = '',
       this.allowPause = false,
+      this.priority = 5,
       super.creationTime})
       : taskId = taskId ?? Random().nextInt(1 << 32).toString(),
         filename = filename ?? Random().nextInt(1 << 32).toString() {
@@ -362,6 +370,9 @@ sealed class Task extends Request {
     }
     if (allowPause && post != null) {
       throw ArgumentError('Tasks that can pause must be GET requests');
+    }
+    if (priority < 0 || priority > 10) {
+      throw ArgumentError('Priority must be 0 <= priority <= 10');
     }
   }
 
@@ -438,6 +449,7 @@ sealed class Task extends Request {
       int? retries,
       int? retriesRemaining,
       bool? allowPause,
+      int? priority,
       String? metaData,
       String? displayName,
       DateTime? creationTime});
@@ -456,6 +468,7 @@ sealed class Task extends Request {
         updates = Updates.values[(jsonMap['updates'] as num?)?.toInt() ?? 0],
         requiresWiFi = jsonMap['requiresWiFi'] ?? false,
         allowPause = jsonMap['allowPause'] ?? false,
+        priority = (jsonMap['updates'] as num?)?.toInt() ?? 5,
         metaData = jsonMap['metaData'] ?? '',
         displayName = jsonMap['displayName'] ?? '',
         super.fromJsonMap(jsonMap);
@@ -472,6 +485,7 @@ sealed class Task extends Request {
         'updates': updates.index, // stored as int
         'requiresWiFi': requiresWiFi,
         'allowPause': allowPause,
+        'priority': priority,
         'metaData': metaData,
         'displayName': displayName,
         'taskType': taskType
@@ -501,9 +515,24 @@ sealed class Task extends Request {
   int get hashCode => taskId.hashCode;
 
   @override
+  /// Returns this.priority - other.priority if not the same
+  /// Returns this.creationTime - other.creationTime if priorities the same
+  /// Returns 0 if other is not a [Task]
+  int compareTo(other) {
+    if (other is Task) {
+      final diff = priority - other.priority;
+      if (diff != 0) {
+        return diff;
+      }
+      return creationTime.difference(other.creationTime).inMicroseconds;
+    }
+    return 0;
+  }
+
+  @override
   String toString() {
     return '$taskType{taskId: $taskId, url: $url, filename: $filename, headers: '
-        '$headers, httpRequestMethod: $httpRequestMethod, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, updates: $updates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, allowPause: $allowPause, metaData: $metaData, displayName: $displayName}';
+        '$headers, httpRequestMethod: $httpRequestMethod, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, updates: $updates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, allowPause: $allowPause, priority: $priority, metaData: $metaData, displayName: $displayName}';
   }
 }
 
@@ -540,6 +569,7 @@ final class DownloadTask extends Task {
   /// If not set may start download over cellular network
   /// [retries] if >0 will retry a failed download this many times
   /// [allowPause] if true, allows pause command
+  /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5
   /// [metaData] user data
   /// [displayName] human readable name for this task
   /// [creationTime] time of task creation, 'now' by default.
@@ -558,6 +588,7 @@ final class DownloadTask extends Task {
       super.requiresWiFi,
       super.retries,
       super.allowPause,
+      super.priority,
       super.metaData,
       super.displayName,
       super.creationTime});
@@ -590,6 +621,7 @@ final class DownloadTask extends Task {
           int? retries,
           int? retriesRemaining,
           bool? allowPause,
+          int? priority,
           String? metaData,
           String? displayName,
           DateTime? creationTime}) =>
@@ -607,6 +639,7 @@ final class DownloadTask extends Task {
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
           retries: retries ?? this.retries,
           allowPause: allowPause ?? this.allowPause,
+          priority: priority ?? this.priority,
           metaData: metaData ?? this.metaData,
           displayName: displayName ?? this.displayName,
           creationTime: creationTime ?? this.creationTime)
@@ -705,6 +738,7 @@ final class UploadTask extends Task {
   /// [updates] the kind of progress updates requested
   /// [requiresWiFi] if set, will not start upload until WiFi is available.
   /// If not set may start upload over cellular network
+  /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5
   /// [retries] if >0 will retry a failed upload this many times
   /// [metaData] user data
   /// [displayName] human readable name for this task
@@ -726,6 +760,7 @@ final class UploadTask extends Task {
       super.updates,
       super.requiresWiFi,
       super.retries,
+      super.priority,
       super.metaData,
       super.displayName,
       super.creationTime})
@@ -814,6 +849,7 @@ final class UploadTask extends Task {
           int? retries,
           int? retriesRemaining,
           bool? allowPause,
+          int? priority,
           String? metaData,
           String? displayName,
           DateTime? creationTime}) =>
@@ -832,6 +868,7 @@ final class UploadTask extends Task {
           group: group ?? this.group,
           updates: updates ?? this.updates,
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
+          priority: priority ?? this.priority,
           retries: retries ?? this.retries,
           metaData: metaData ?? this.metaData,
           displayName: displayName ?? this.displayName,
@@ -895,6 +932,7 @@ final class MultiUploadTask extends UploadTask {
   /// [updates] the kind of progress updates requested
   /// [requiresWiFi] if set, will not start upload until WiFi is available.
   /// If not set may start upload over cellular network
+  /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5
   /// [retries] if >0 will retry a failed upload this many times
   /// [metaData] user data
   /// [displayName] human readable name for this task
@@ -912,6 +950,7 @@ final class MultiUploadTask extends UploadTask {
       super.group,
       super.updates,
       super.requiresWiFi,
+      super.priority,
       super.retries,
       super.metaData,
       super.displayName,
@@ -989,6 +1028,7 @@ final class MultiUploadTask extends UploadTask {
           String? group,
           Updates? updates,
           bool? requiresWiFi,
+          int? priority,
           int? retries,
           int? retriesRemaining,
           bool? allowPause,
@@ -1007,6 +1047,7 @@ final class MultiUploadTask extends UploadTask {
           group: group ?? this.group,
           updates: updates ?? this.updates,
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
+          priority: priority ?? this.priority,
           retries: retries ?? this.retries,
           metaData: metaData ?? this.metaData,
           displayName: displayName ?? this.displayName,
@@ -1056,6 +1097,7 @@ final class ParallelDownloadTask extends DownloadTask {
   /// If not set may start download over cellular network
   /// [retries] if >0 will retry a failed download this many times
   /// [allowPause] if true, allows pause command
+  /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5
   /// [metaData] user data
   /// [displayName] human readable name for this task
   /// [creationTime] time of task creation, 'now' by default.
@@ -1076,6 +1118,7 @@ final class ParallelDownloadTask extends DownloadTask {
       super.requiresWiFi,
       super.retries,
       super.allowPause,
+      super.priority,
       super.metaData,
       super.displayName,
       super.creationTime})
@@ -1124,6 +1167,7 @@ final class ParallelDownloadTask extends DownloadTask {
           int? retries,
           int? retriesRemaining,
           bool? allowPause,
+          int? priority,
           String? metaData,
           String? displayName,
           DateTime? creationTime}) =>
@@ -1141,6 +1185,7 @@ final class ParallelDownloadTask extends DownloadTask {
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
           retries: retries ?? this.retries,
           allowPause: allowPause ?? this.allowPause,
+          priority: priority ?? this.priority,
           metaData: metaData ?? this.metaData,
           displayName: displayName ?? this.displayName,
           creationTime: creationTime ?? this.creationTime)

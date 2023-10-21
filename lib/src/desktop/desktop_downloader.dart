@@ -31,7 +31,7 @@ final class DesktopDownloader extends BaseDownloader {
   static final _log = Logger('DesktopDownloader');
   final maxConcurrent = 5;
   static final DesktopDownloader _singleton = DesktopDownloader._internal();
-  final _queue = Queue<Task>();
+  final _queue = PriorityQueue<Task>();
   final _running = Queue<Task>(); // subset that is running
   final _resume = <Task>{};
   final _isolateSendPorts =
@@ -103,6 +103,7 @@ final class DesktopDownloader extends BaseDownloader {
           TaskException('Could not obtain rootIsolateToken')));
       return;
     }
+    log.finer('${isResume ? "Resuming" : "Starting"} taskId ${task.taskId}');
     await Isolate.spawn(doTask, (rootIsolateToken, receivePort.sendPort),
         onError: errorPort.sendPort);
     final messagesFromIsolate = StreamQueue<dynamic>(receivePort);
@@ -236,8 +237,9 @@ final class DesktopDownloader extends BaseDownloader {
   @override
   Future<int> reset(String group) async {
     final retryAndPausedTaskCount = await super.reset(group);
-    final inQueueIds =
-        _queue.where((task) => task.group == group).map((task) => task.taskId);
+    final inQueueIds = _queue.unorderedElements
+        .where((task) => task.group == group)
+        .map((task) => task.taskId);
     final runningIds = _running
         .where((task) => task.group == group)
         .map((task) => task.taskId);
@@ -253,7 +255,8 @@ final class DesktopDownloader extends BaseDownloader {
       String group, bool includeTasksWaitingToRetry) async {
     final retryAndPausedTasks =
         await super.allTasks(group, includeTasksWaitingToRetry);
-    final inQueue = _queue.where((task) => task.group == group);
+    final inQueue =
+        _queue.unorderedElements.where((task) => task.group == group);
     final running = _running.where((task) => task.group == group);
     return [...retryAndPausedTasks, ...inQueue, ...running];
   }
@@ -263,7 +266,7 @@ final class DesktopDownloader extends BaseDownloader {
   /// Returns true if all cancellations were successful
   @override
   Future<bool> cancelPlatformTasksWithIds(List<String> taskIds) async {
-    final inQueue = _queue
+    final inQueue = _queue.unorderedElements
         .where((task) => taskIds.contains(task.taskId))
         .toList(growable: false);
     for (final task in inQueue) {
@@ -295,7 +298,9 @@ final class DesktopDownloader extends BaseDownloader {
       return _running.where((task) => task.taskId == taskId).first;
     } on StateError {
       try {
-        return _queue.where((task) => task.taskId == taskId).first;
+        return _queue.unorderedElements
+            .where((task) => task.taskId == taskId)
+            .first;
       } on StateError {
         return null;
       }
