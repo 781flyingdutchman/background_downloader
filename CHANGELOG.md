@@ -1,3 +1,7 @@
+## 7.11.1
+
+Fix #164 for progress updates for uploads.
+
 ## 7.11.0
 
 ### Android external storage

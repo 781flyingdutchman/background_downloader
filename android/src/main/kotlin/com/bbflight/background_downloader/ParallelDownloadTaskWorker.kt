@@ -244,7 +244,7 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
      * Process incoming [progress] update for a chunk with [chunkTaskId].
      *
      * Recalculates overall task progress (based on the average of the chunk
-     * task progress) and sends an updatre to the Dart isde and updates the
+     * task progress) and sends an update to the Dart side and updates the
      * notification at the appropriate interval
      */
     suspend fun chunkProgressUpdate(chunkTaskId: String, progress: Double) {
@@ -332,7 +332,7 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
     /**
      * Pause the tasks associated with each chunk
      *
-     * Accomplished by sending a json ecoded list of tasks to cancel
+     * Accomplished by sending a json decoded list of tasks to cancel
      * to the NativeDownloader
      */
     private suspend fun pauseAllChunkTasks() {
@@ -397,7 +397,7 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
      * [parallelDownloadContentLength] to the total length of the download
      *
      * Throws a IllegalStateException if any information is missing, which should lead
-     * to a failure of the [ParallelDownloadTask]
+     * to a failure of the ParallelDownloadTask
      */
     private fun createChunks(
         task: Task,

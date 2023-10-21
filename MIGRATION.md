@@ -10,13 +10,15 @@ Key differences with Flutter Downloader:
 * Every download or upload task is an object (e.g. `DownloadTask`) that defines how the task needs to be executed. The object is passed back to you when you receive status and progress updates, and is the key object in the downloader
 * When you define a task, a few things are quite different:
   - You set your filepath **not** as an absolute path, but as a combination of a `baseDirectory` (an enum), a `subdirectory` (a String) and a `filename` (a String)
-  - If you want the filename to be provided by the server, call `withSuggestedFilename` on the task you define, before starting the download
+  - If you want the filename to be provided by the server, call `withSuggestedFilename` on the task you define, before starting the download. Alternatively, set the `filename` field of the task to `DownloadTask.suggestedFilename`, but you'll have to get the _actual_ filename from the task provided to you in status or progress updates. Task fields are final, so the task where you set the filename to `DownloadTask.suggestedFilename` will never change.
   - By default, a task only generates status updates, not progress updates. If you want both, set the task's `updates` field to `Updates.statusAndProgress`
   - You can only download to an app-specific directory (one of the `BaseDirectory` values). _After_ download completes, you can move a file to shared storage, such as the Android Downloads directory, using `moveToSharedStorage`
-* Callbacks _can_ be registered, just like with Flutter Downloader, but prefer using `FileDownloader().updates.listen` and listen to updates in a more Flutter-like way
+* Callbacks _can_ be registered, just like with Flutter Downloader, but prefer using `FileDownloader().updates.listen` and listen to updates in a more Flutter-like way. Note that you should only listen to this updates stream once, so you need to create a singleton object (or BLOC) where this happens. If you try to listen only on certain pages/screens in your app you will miss updates, leading to inconsistent state
 * You can `enqueue` a task, like with Flutter Downloader, but you can also call `result = await FileDownloader().download(task)` and wait for a download to complete with a result
 * Notifications work very differently. You have to configure notifications (for all tasks, a group, or one specific task) before calling `enqueue` or `download`
 * By default, there is no database where task status is maintained, as you get status updates along the way. If you do want to track tasks, call `trackTasks`, and use the `database` field to query the database. There are different options for the backing database, and migration from the Flutter Downloader database is partially supported, see [below](#sqlite-persistent-storage).
+* On Android, you can choose to use external storage instead of the default internal storage. This is a configuration, and can only be set at the application level, so you either use internal or external storage for all downloads and uploads. See the [configuration document](https://github.com/781flyingdutchman/background_downloader/blob/main/CONFIG.md) for important details and limitations.
+* 
 
 ## Migration of the persistent storage used in background_downloader
 

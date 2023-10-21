@@ -224,7 +224,7 @@ void main() {
           Platform.isWindows) {
         expect(
             result.exception?.description.endsWith(
-                'Server does not provide content length - cannot chunk download'),
+                'Server does not provide content length - cannot chunk download. If you know the length, set Range or Known-Content-Length header'),
             isTrue);
       }
       expect(result.responseBody, isNull);
