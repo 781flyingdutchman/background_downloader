@@ -29,7 +29,7 @@ const okResponses = [200, 201, 202, 203, 204, 205, 206];
 /// WorkManager as there is on iOS and Android
 final class DesktopDownloader extends BaseDownloader {
   static final _log = Logger('DesktopDownloader');
-  final maxConcurrent = 5;
+  final maxConcurrent = 10;
   static final DesktopDownloader _singleton = DesktopDownloader._internal();
   final _queue = PriorityQueue<Task>();
   final _running = Queue<Task>(); // subset that is running

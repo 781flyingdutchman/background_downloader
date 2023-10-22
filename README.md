@@ -18,7 +18,7 @@ Optionally, keep track of task status and progress in a persistent [database](#u
 
 To upload a file, create an [UploadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/UploadTask-class.html) and call `upload`. To make a regular [server request](#server-requests), create a [Request](https://pub.dev/documentation/background_downloader/latest/background_downloader/Request-class.html) and call `request`. To download in parallel from multiple servers, create a [ParallelDownloadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/ParallelDownloadTask-class.html).
 
-The plugin supports [headers](#headers), [retries](#retries), [requiring WiFi](#requiring-wifi) before starting the up/download, user-defined [metadata](#metadata) and GET, [POST](#post-requests) and other http(s) [requests](#http-request-method), and can be [configured](#configuration) by platform. You can [manage  the tasks in the queue](#managing-tasks-and-the-queue) (e.g. cancel, pause and resume), and have different handlers for updates by [group](#grouping-tasks) of tasks. Downloaded files can be moved to [shared storage](#shared-and-scoped-storage) to make them available outside the app.
+The plugin supports [headers](#headers), [retries](#retries), [priority](#priority), [requiring WiFi](#requiring-wifi) before starting the up/download, user-defined [metadata and display name](#metadata-and-displayname) and GET, [POST](#post-requests) and other http(s) [requests](#http-request-method), and can be [configured](#configuration) by platform. You can [manage  the tasks in the queue](#managing-tasks-and-the-queue) (e.g. cancel, pause and resume), and have different handlers for updates by [group](#grouping-tasks) of tasks. Downloaded files can be moved to [shared storage](#shared-and-scoped-storage) to make them available outside the app.
 
 No setup is required for [Android](#android) (except when using notifications), Windows and Linux, and only minimal [setup for iOS](#ios) and [MacOS](#macos).
 
@@ -195,6 +195,7 @@ FileDownloader().configureNotification(
 - [Managing tasks in the queue](#managing-tasks-and-the-queue)
   - [Canceling, pausing and resuming tasks](#canceling-pausing-and-resuming-tasks)
   - [Grouping tasks](#grouping-tasks)
+  - [Task queues](#task-queues)
 - [Server requests](#server-requests)
 - [Optional parameters](#optional-parameters)
 - [Initial setup](#initial-setup)
@@ -645,7 +646,38 @@ If you listen to the `updates` stream instead of using callbacks, you can test f
 
 Note: tasks that are started using `download`, `upload`, `batchDownload` or `batchUpload` (where you `await` a result instead of `enqueue`ing a task) are assigned a special group name `FileDownloader.awaitGroup`, as callbacks for these tasks are handled within the `FileDownloader`, and will therefore not show up in your listener or callback.
 
+### Task queues
+Once you `enqueue` a task with the `FileDownloader` it is added to an internal queue that is managed by the native platform you're running on (e.g. Android). Once enqueued, you have limited control over the execution order, the number of tasks running in parallel, etc, because all that is managed by the platform.  If you want more control over the queue, you need to add a `TaskQueue`.
 
+The `MemoryTaskQueue` bundled with the `background_downloader` allows:
+* pacing the rate of enqueueing tasks, based on `minInterval`, to avoid 'choking' the FileDownloader when adding a large number of tasks
+* managing task priorities while waiting in the queue, such that higher priority tasks are enqueued before lower priority ones, even if they are added later
+* managing the total number of tasks running concurrently, by setting `maxConcurrent`
+* managing the number of tasks that talk to the same host concurrently, by setting `maxConcurrentByHost`
+* managing the number of tasks running that are in the same `Task.group`, by setting `maxConcurrentByGroup`
+
+A `TaskQueue` conceptually sits 'before' the FileDownloader's queue, and the `TaskQueue` makes the call to `FileDownloader().enqueue`. To use it, add it to the `FileDownloader` and instead of enqueuing tasks with the `FileDownloader`, you now `add` tasks to the queue:
+```dart
+final tq = MemoryTaskQueue();
+tq.maxConcurrent = 5; // no more than 5 tasks active at any one time
+tq.maxConcurrentByHost = 2; // no more than two tasks talking to the same host at the same time
+tq.maxConcurrentByGroup = 3; // no more than three tasks from the same group active at the same time
+FileDownloader().add(tq); // 'connects' the TaskQueue to the FileDownloader
+FileDownloader().updates.listen((update) { // listen to updates as per usual
+  print("Received update for ${update.task.taskId}: $update")
+}
+for (var n = 0; n < 100; n++) {
+  task = DownloadTask(url: workingUrl, metData: 'task #$n'); // define task
+  tq.add(task); // add to queue. The queue makes the FileDownloader().enqueue call
+}
+```
+
+Because it is possible that an error occurs when the taskQueue eventually actually enqueues the task with the FileDownloader, you can listen to the `enqueueErrors` stream for tasks that failed to enqueue.
+
+A common use for the `MemoryTaskQueue` is enqueueing a large number of tasks. This can 'choke' the downloader if done in a loop, but is easy to do when adding all tasks to a queue. The `minInterval` field of the `MemoryTaskQueue` ensures that the tasks are fed to the `FileDownloader` at a rate that does not grind your app to a halt.
+
+The default `TaskQueue` is the `MemoryTaskQueue` which, as the  name suggests, keeps everything in memory. This is fine for most situations, but be aware that the queue may get dropped if the OS aggressively moves the app to the background. Tasks still waiting in the queue will not be enqueued, and will therefore be lost. If you want a `TaskQueue` with more persistence, or add different prioritzation and concurrency roles, then subclass the `MemoryTaskQueue` and add your own persistence or logic.
+In addition, if your app is supended by the OS due to resource constraints, tasks waiting in the queue will not be enqueued to the native platform and will not run in the background. TaskQueues are therefore best for situations where you expect the queue to be emptied while the app is still in the foreground.
 
 ## Server requests
 
@@ -695,9 +727,13 @@ Note that certain failures can be resumed, and retries will therefore attempt to
 
 If the `requiresWiFi` field of a `Task` is set to true, the task won't start unless a WiFi network is available. By default `requiresWiFi` is false, and downloads/uploads will use the cellular (or metered) network if WiFi is not available, which may incur cost.
 
-#### Metadata
+#### Priority
 
-`metaData` can be added to a `Task`. It is ignored by the downloader but may be helpful when receiving an update about the task.
+The `priority` field must be 0 <= priority <= 10 with 0 being the highest priority, and defaults to 5. On Desktop and iOS all priority levels are supported. On Android, priority levels <5 are handled as 'expedited', and >=5 is handled as a normal task.
+
+#### Metadata and displayName
+
+`metaData` and `displayName` can be added to a `Task`. They are ignored by the downloader but may be helpful when receiving an update about the task, and can be shown in notifications using `{metaData}` or `{displayName}`.
 
 ### UploadTask
 

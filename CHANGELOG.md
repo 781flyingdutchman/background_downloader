@@ -1,3 +1,41 @@
+## 7.12.0
+
+### Task priority levels
+
+The `Task.priority` field must be 0 <= priority <= 10 with 0 being the highest priority, and defaults to 5. On Desktop and iOS all priority levels are supported. On Android, priority levels <5 are handled as 'expedited', and >=5 is handled as a normal task.
+
+### Task queues
+
+Once you `enqueue` a task with the `FileDownloader` it is added to an internal queue that is managed by the native platform you're running on (e.g. Android). Once enqueued, you have limited control over the execution order, the number of tasks running in parallel, etc, because all that is managed by the platform.  If you want more control over the queue, you need to add a `TaskQueue`.
+
+The `MemoryTaskQueue` bundled with the `background_downloader` allows:
+* pacing the rate of enqueueing tasks, based on `minInterval`, to avoid 'choking' the FileDownloader when adding a large number of tasks
+* managing task priorities while waiting in the queue, such that higher priority tasks are enqueued before lower priority ones
+* managing the total number of tasks running concurrently, by setting `maxConcurrent`
+* managing the number of tasks that talk to the same host concurrently, by setting `maxConcurrentByHost`
+* managing the number of tasks running that are in the same `Task.group`, by setting `maxConcurrentByGroup`
+
+A `TaskQueue` conceptually sits 'before' the FileDownloader's queue. To use it, add it to the `FileDownloader` and instead of enqueuing tasks with the `FileDownloader`, you now `add` tasks to the queue:
+```dart
+final tq = MemoryTaskQueue();
+tq.maxConcurrentByHost = 2; // no more than two tasks talking to the same host at the same time
+tq.maxConcurrent = 5; // no more than 5 tasks active at any one time
+FileDownloader().add(tq); // 'connects' the TaskQueue to the FileDownloader
+FileDownloader().updates.listen((update) { // listen to updates as per usual
+  print("Received update for ${update.task.taskId}: $update")
+}
+for (var n = 0; n < 100; n++) {
+  task = DownloadTask(url: workingUrl, metData: 'task #$n'); // define task
+  tq.add(task); // add to queue. The queue makes the FileDownloader().enqueue call
+}
+```
+
+Because it is possible that an error occurs when the taskQueue eventually actually enqueues the task with the FileDownloader, you can listen to the `enqueueErrors` stream for tasks that failed to enqueue.
+
+The default `TaskQueue` is the `MemoryTaskQueue` which, as the  name suggests, keeps everything in memory. This is fine for most situations, but be aware that the queue may get dropped if the OS aggressively moves the app to the background. Tasks still waiting in the queue will not be enqueued, and will therefore be lost. If you want a `TaskQueue` with more persistence, subclass the `MemoryTaskQueue` and add persistence.
+In addition, if your app is supended by the OS due to resource constraints, tasks waiting in the queue will not be enqueued to the native platform and will not run in the background. TaskQueues are therefore best for situations where you expect the queue to be emptied while the app is still in the foreground.
+
+
 ## 7.11.1
 
 Fix #164 for progress updates for uploads.

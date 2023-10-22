@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:background_downloader/src/queue/task_queue.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
@@ -184,6 +185,20 @@ interface class FileDownloader {
     }
     return this;
   }
+
+  /// Adds the [taskQueue] to this downloader
+  ///
+  /// Every [TaskQueue] will receive [TaskQueue.taskFinished] for
+  /// every task that has reached a final state
+  void addTaskQueue(TaskQueue taskQueue) =>
+      _downloader.taskQueues.add(taskQueue);
+
+  /// Removes [taskQueue] and return true if successful
+  bool removeTaskQueue(TaskQueue taskQueue) =>
+      _downloader.taskQueues.remove(taskQueue);
+
+  /// List of connected [TaskQueue]s
+  List<TaskQueue> get taskQueues => _downloader.taskQueues;
 
   /// Enqueue a new [Task]
   ///

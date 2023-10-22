@@ -2818,32 +2818,57 @@ void main() {
     });
   });
 
-  group('Priority', () {
+  group('Priority and TaskQueue', () {
     testWidgets('High priority', (widgetTester) async {
       task = task.copyWith(priority: 0);
       final result = await FileDownloader().download(task);
       expect(result.status, equals(TaskStatus.complete));
     });
-  });
 
-  testWidgets('One high priority task', (widgetTester) async {
-    final tasks = <DownloadTask>[];
-    for (var n = 1; n < 20; n++) {
-      final downloadTask = DownloadTask(url: urlWithContentLength);
-      print('Adding task with id ${downloadTask.taskId}');
-      tasks.add(downloadTask);
-    }
-    final batchFuture = FileDownloader().downloadBatch(tasks);
-    await Future.delayed(const Duration(seconds: 1));
-    var priorityTask = DownloadTask(url: urlWithContentLength, priority: 0);
-    print('PriorityTask taskId = ${priorityTask.taskId}');
-    final result = await FileDownloader().download(priorityTask);
-    expect(result.status, equals(TaskStatus.complete));
-    final endOfHighPriority = DateTime.now();
-    await batchFuture;
-    final elapsedTime = DateTime.now().difference(endOfHighPriority);
-    print('Elapsed time after high priority download = $elapsedTime');
-    expect(elapsedTime.inSeconds, greaterThan(1));
+    testWidgets('One high priority task among regular ones',
+        (widgetTester) async {
+      final tasks = <DownloadTask>[];
+      for (var n = 1; n < 20; n++) {
+        final downloadTask = DownloadTask(url: urlWithContentLength);
+        print('Adding task with id ${downloadTask.taskId}');
+        tasks.add(downloadTask);
+      }
+      final batchFuture = FileDownloader().downloadBatch(tasks);
+      await Future.delayed(const Duration(seconds: 1));
+      var priorityTask = DownloadTask(url: urlWithContentLength, priority: 0);
+      print('PriorityTask taskId = ${priorityTask.taskId}');
+      final result = await FileDownloader().download(priorityTask);
+      expect(result.status, equals(TaskStatus.complete));
+      final endOfHighPriority = DateTime.now();
+      await batchFuture;
+      final elapsedTime = DateTime.now().difference(endOfHighPriority);
+      print('Elapsed time after high priority download = $elapsedTime');
+      expect(elapsedTime.inSeconds, greaterThan(1));
+    });
+
+    testWidgets('TaskQueue', (widgetTester) async {
+      final completer = Completer<bool>();
+      final tasks = <Task>{};
+      FileDownloader().registerCallbacks(taskStatusCallback: (update) {
+        if (update.status == TaskStatus.complete) {
+          tasks.remove(update.task);
+          if (tasks.isEmpty) {
+            completer.complete(true);
+          }
+        } else if (update.status.isFinalState) {
+          completer.complete(false); // error
+        }
+      });
+      final tq = MemoryTaskQueue();
+      tq.maxConcurrent = 2;
+      FileDownloader().addTaskQueue(tq);
+      for (var n = 0; n < 10; n++) {
+        var downloadTask = DownloadTask(url: urlWithContentLength);
+        tasks.add(downloadTask);
+        tq.add(downloadTask);
+      }
+      expect(await completer.future, isTrue);
+    });
   });
 }
 

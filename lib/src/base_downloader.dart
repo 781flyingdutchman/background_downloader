@@ -11,6 +11,7 @@ import 'exceptions.dart';
 import 'models.dart';
 import 'native_downloader.dart';
 import 'persistent_storage.dart';
+import 'queue/task_queue.dart';
 import 'web_downloader.dart'
     if (dart.library.io) 'desktop/desktop_downloader.dart';
 
@@ -63,6 +64,9 @@ abstract base class BaseDownloader {
 
   /// Flag indicating we have retrieved missed data
   var _retrievedLocallyStoredData = false;
+
+  /// Connected TaskQueues that will receive a signal upon task completion
+  final taskQueues = <TaskQueue>[];
 
   BaseDownloader();
 
@@ -536,6 +540,9 @@ abstract base class BaseDownloader {
         setPausedTask(task);
       }
       if (update.status.isFinalState) {
+        for (var taskQueue in taskQueues) {
+          taskQueue.taskFinished(task);
+        }
         removeModifiedTask(task);
         _clearPauseResumeInfo(task);
       }

@@ -236,6 +236,10 @@ base class Request {
   /// Decrease [retriesRemaining] by one
   void decreaseRetriesRemaining() => retriesRemaining--;
 
+  /// Hostname represented by the url. Throws [FormatException] if url cannot
+  /// be parsed, and returns empty string if no host in url
+  String get hostName => Uri.parse(url).host;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -515,6 +519,7 @@ sealed class Task extends Request implements Comparable {
   int get hashCode => taskId.hashCode;
 
   @override
+
   /// Returns this.priority - other.priority if not the same
   /// Returns this.creationTime - other.creationTime if priorities the same
   /// Returns 0 if other is not a [Task]
