@@ -11,7 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' hide equals;
 import 'package:path_provider/path_provider.dart';
-import 'package:background_downloader/src/desktop/isolate.dart';
+import 'package:background_downloader/src/utils.dart';
 
 const def = 'default';
 var statusCallbackCounter = 0;

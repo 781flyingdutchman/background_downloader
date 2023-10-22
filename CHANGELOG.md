@@ -1,3 +1,7 @@
+## 7.12.1
+
+Bug fix for web compilation
+
 ## 7.12.0
 
 ### Task priority levels
@@ -18,12 +22,13 @@ The `MemoryTaskQueue` bundled with the `background_downloader` allows:
 A `TaskQueue` conceptually sits 'before' the FileDownloader's queue. To use it, add it to the `FileDownloader` and instead of enqueuing tasks with the `FileDownloader`, you now `add` tasks to the queue:
 ```dart
 final tq = MemoryTaskQueue();
-tq.maxConcurrentByHost = 2; // no more than two tasks talking to the same host at the same time
 tq.maxConcurrent = 5; // no more than 5 tasks active at any one time
+tq.maxConcurrentByHost = 2; // no more than two tasks talking to the same host at the same time
+tq.maxConcurrentByGroup = 3; // no more than three tasks from the same group active at the same time
 FileDownloader().add(tq); // 'connects' the TaskQueue to the FileDownloader
 FileDownloader().updates.listen((update) { // listen to updates as per usual
-  print("Received update for ${update.task.taskId}: $update")
-}
+  print('Received update for ${update.task.taskId}: $update')
+});
 for (var n = 0; n < 100; n++) {
   task = DownloadTask(url: workingUrl, metData: 'task #$n'); // define task
   tq.add(task); // add to queue. The queue makes the FileDownloader().enqueue call
@@ -113,7 +118,7 @@ Tasks can only resume if the ETag header provided by the server is strong, and e
 
 ### Configuration
 
-Add configuration of the downloader for several aspect:
+Add configuration of the downloader for several aspects:
 * Running tasks in 'foreground mode' on Android to allow longer runs and prevent the OS killing some tasks when the app is in the background
 * Setting the request timeout value and, for iOS only, the 'resourceTimeout'
 * Checking available space before attempting a download

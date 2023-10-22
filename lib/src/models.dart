@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:background_downloader/src/desktop/isolate.dart';
 import 'package:logging/logging.dart';
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as path;
@@ -11,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'exceptions.dart';
 import 'file_downloader.dart';
+import 'utils.dart';
 import 'web_downloader.dart'
     if (dart.library.io) 'desktop/desktop_downloader.dart';
 

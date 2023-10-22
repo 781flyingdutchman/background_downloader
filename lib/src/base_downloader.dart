@@ -542,7 +542,7 @@ abstract base class BaseDownloader {
       if (update.status.isFinalState) {
         for (var taskQueue in taskQueues) {
           taskQueue.taskFinished(task);
-        }
+        } //TODO should this also run in states like .paused?
         removeModifiedTask(task);
         _clearPauseResumeInfo(task);
       }

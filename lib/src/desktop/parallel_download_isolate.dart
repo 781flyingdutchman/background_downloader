@@ -9,6 +9,7 @@ import 'package:collection/collection.dart';
 import '../chunk.dart';
 import '../exceptions.dart';
 import '../models.dart';
+import '../utils.dart';
 import 'desktop_downloader.dart';
 import 'isolate.dart';
 

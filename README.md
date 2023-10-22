@@ -664,8 +664,8 @@ tq.maxConcurrentByHost = 2; // no more than two tasks talking to the same host a
 tq.maxConcurrentByGroup = 3; // no more than three tasks from the same group active at the same time
 FileDownloader().add(tq); // 'connects' the TaskQueue to the FileDownloader
 FileDownloader().updates.listen((update) { // listen to updates as per usual
-  print("Received update for ${update.task.taskId}: $update")
-}
+  print('Received update for ${update.task.taskId}: $update')
+});
 for (var n = 0; n < 100; n++) {
   task = DownloadTask(url: workingUrl, metData: 'task #$n'); // define task
   tq.add(task); // add to queue. The queue makes the FileDownloader().enqueue call
