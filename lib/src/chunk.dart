@@ -42,6 +42,7 @@ class Chunk {
             updates: updatesBasedOnParent(parentTask),
             retries: parentTask.retries,
             allowPause: parentTask.allowPause,
+            priority: parentTask.priority,
             requiresWiFi: parentTask.requiresWiFi,
             metaData: jsonEncode({
               'parentTaskId': parentTask.taskId,

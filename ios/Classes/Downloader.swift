@@ -195,6 +195,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         }
         let urlSessionDownloadTask = resumeData == nil ? Downloader.urlSession!.downloadTask(with: request) : Downloader.urlSession!.downloadTask(withResumeData: resumeData!)
         urlSessionDownloadTask.taskDescription = taskDescription
+        urlSessionDownloadTask.priority = 1 - Float(task.priority) / 10
         urlSessionDownloadTask.resume()
         processStatusUpdate(task: task, status: TaskStatus.enqueued)
         postResult(result: result, value: true)
@@ -220,6 +221,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             request.setValue("attachment; filename=\"\(task.filename)\"", forHTTPHeaderField: "Content-Disposition")
             let urlSessionUploadTask = Downloader.urlSession!.uploadTask(with: request, fromFile: filePath)
             urlSessionUploadTask.taskDescription = taskDescription
+            urlSessionUploadTask.priority = 1 - Float(task.priority) / 10
             urlSessionUploadTask.resume()
         }
         else {
@@ -236,6 +238,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
             let urlSessionUploadTask = Downloader.urlSession!.uploadTask(with: request, fromFile: uploader.outputFileUrl())
             urlSessionUploadTask.taskDescription = taskDescription
+            urlSessionUploadTask.priority = Float(task.priority) / 10
             Downloader.uploaderForUrlSessionTaskIdentifier[urlSessionUploadTask.taskIdentifier] = uploader
             urlSessionUploadTask.resume()
         }

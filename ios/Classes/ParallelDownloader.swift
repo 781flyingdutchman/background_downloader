@@ -33,6 +33,7 @@ func scheduleParallelDownload(task: Task, taskDescription: String, baseRequest: 
                 postResult(result: result, value: false)
             }
         }
+        dataTask.priority = 1 - Float(task.priority) / 10
         dataTask.resume()
     } else {
         // resume
@@ -231,11 +232,11 @@ public class ParallelDownloader: NSObject {
      /// The updates are received from the NativeDownloader, which intercepts
      /// status updates for the chunkGroup
     private func parentTaskStatus() -> TaskStatus? {
-        if let failed = chunks.first(where: { $0.status == .failed }) {
+        if chunks.first(where: { $0.status == .failed }) != nil {
             return .failed
         }
         
-        if let notFound = chunks.first(where: { $0.status == .notFound }) {
+        if chunks.first(where: { $0.status == .notFound }) != nil {
             return .notFound
         }
         
@@ -392,7 +393,7 @@ public class Chunk: NSObject, Codable {
         let jsonEncoder = JSONEncoder()
         let data = try? jsonEncoder.encode(["parentTaskId": self.parentTaskId, "from": String(fromByte), "to": String(toByte)])
         let metaData = data != nil ? String(data: data!, encoding: .utf8) ?? "" : ""
-        self.task = Task(url: url, filename: filename, headers: headers, baseDirectory: BaseDirectory.temporary.rawValue, group: chunkGroup, updates: Chunk.updatesBasedOnParent(parentTask), retries: parentTask.retries, retriesRemaining: parentTask.retries, allowPause: parentTask.allowPause, metaData: metaData, taskType: "DownloadTask")
+        self.task = Task(url: url, filename: filename, headers: headers, baseDirectory: BaseDirectory.temporary.rawValue, group: chunkGroup, updates: Chunk.updatesBasedOnParent(parentTask), retries: parentTask.retries, retriesRemaining: parentTask.retries, allowPause: parentTask.allowPause, priority: parentTask.priority, metaData: metaData, taskType: "DownloadTask")
     }
     
     

@@ -476,7 +476,8 @@ class Chunk(
             retries = parentTask.retries,
             retriesRemaining = parentTask.retries,
             requiresWiFi = parentTask.requiresWiFi,
-            allowPause = true,
+            allowPause = parentTask.allowPause,
+            priority = parentTask.priority,
             metaData = gson.toJson(
                 mapOf("parentTaskId" to parentTask.taskId, "from" to from, "to" to to)
             ),

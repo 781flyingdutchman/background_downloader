@@ -29,6 +29,7 @@ struct Task : Codable {
     var retries: Int = 0
     var retriesRemaining: Int = 0
     var allowPause: Bool = false
+    var priority: Int = 5
     var metaData: String = ""
     var displayName: String = ""
     var creationTime: Int64 = Int64((Date().timeIntervalSince1970 * 1000.0).rounded())
@@ -55,6 +56,7 @@ extension Task {
                   retries: Int? = nil,
                   retriesRemaining: Int? = nil,
                   allowPause: Bool? = nil,
+                  priority: Int? = nil,
                   metaData: String? = nil,
                   displayName: String? = nil,
                   creationTime: Int64? = nil,
@@ -136,6 +138,10 @@ extension Task {
         
         if let allowPause = allowPause {
             copiedTask.allowPause = allowPause
+        }
+        
+        if let priority = priority {
+            copiedTask.priority = priority
         }
         
         if let metaData = metaData {
