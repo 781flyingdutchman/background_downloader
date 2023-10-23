@@ -5,6 +5,8 @@
 
 This version requires Dart 3. If you need support for Dart 2 please use version `^6.1.1`, which will be maintained until the end of 2023.
 
+If you want a 'lite' version, without references to the `sqflite` package, use branch [V7-lite](https://github.com/781flyingdutchman/background_downloader/tree/V7-lite) of the repo.
+
 ---
 
 **If you are migrating from Flutter Downloader, please read the [migration document](https://github.com/781flyingdutchman/background_downloader/blob/main/MIGRATION.md)**

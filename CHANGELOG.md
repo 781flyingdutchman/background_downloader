@@ -1,3 +1,7 @@
+## 7.12.2
+
+Minor improvements to `TaskQueue` and `MemoryTaskQueue`
+
 ## 7.12.1
 
 Bug fix for web compilation
