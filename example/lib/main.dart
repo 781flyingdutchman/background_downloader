@@ -38,17 +38,6 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    // By default the downloader uses a modified version of the Localstore package
-    // to persistently store data. You can provide an alternative persistent
-    // storage backing that implements the [PersistentStorage] interface. You
-    // must initialize the FileDownloader by passing that alternative storage
-    // object on the first call to FileDownloader.
-    // As an example, this example app has implemented a backing using
-    // the sqflite package (works for Android/iOS only).
-    // To try that SQLite version, uncomment the following line, which
-    // will initialize the downloader with the SQLite storage solution.
-    // FileDownloader(persistentStorage: SqlitePersistentStorage());
-
     // optional: configure the downloader with platform specific settings,
     // see CONFIG.md
     FileDownloader().configure(globalConfig: [

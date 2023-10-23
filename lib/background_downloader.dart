@@ -5,5 +5,4 @@ export 'src/database.dart';
 export 'src/persistent_storage.dart'
     show PersistentStorage, PersistentStorageMigrator;
 export 'src/progress_widget.dart';
-export 'src/sqlite_storage.dart' show SqlitePersistentStorage;
 export 'src/queue/task_queue.dart';

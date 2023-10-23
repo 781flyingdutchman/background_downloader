@@ -9,7 +9,6 @@ import 'package:path_provider/path_provider.dart';
 import 'database.dart';
 import 'localstore/localstore.dart';
 import 'models.dart';
-import 'sqlite_storage.dart';
 
 /// Interface for the persistent storage used to back the downloader
 ///
@@ -357,7 +356,6 @@ class PersistentStorageMigrator {
           String persistentStorageName, PersistentStorage toStorage) =>
       switch (persistentStorageName.toLowerCase().replaceAll('_', '')) {
         'localstore' => _migrateFromLocalStore(toStorage),
-        'flutterdownloader' => _migrateFromFlutterDownloader(toStorage),
         _ => Future.value(false)
       };
 
@@ -426,25 +424,6 @@ class PersistentStorageMigrator {
           log.fine('Error deleting collection path $collectionPath: $e');
         }
       }
-      return true; // we migrated a database
-    }
-    return false; // we did not migrate a database
-  }
-
-  /// Attempt to migrate from FlutterDownloader
-  ///
-  /// Return true if successful. Successful migration removes the original
-  /// data
-  Future<bool> _migrateFromFlutterDownloader(
-      PersistentStorage toStorage) async {
-    if (!(Platform.isAndroid || Platform.isIOS)) {
-      return false;
-    }
-    final fdl = Platform.isAndroid
-        ? FlutterDownloaderPersistentStorageAndroid()
-        : FlutterDownloaderPersistentStorageIOS();
-    if (await _migrateFromPersistentStorage(fdl, toStorage)) {
-      await fdl.removeDatabase();
       return true; // we migrated a database
     }
     return false; // we did not migrate a database
