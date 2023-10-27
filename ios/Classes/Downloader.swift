@@ -384,7 +384,12 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             result(nil)
             return
         }
-        result(moveToSharedStorage(filePath: filePath, destination: destination, directory: directory))
+        moveToSharedStorage(
+            filePath: filePath,
+            destination: destination,
+            directory: directory,
+            complete: { (_ path: String?) in result(path) }
+        )
     }
 
     /// Returns path to file in a SharedStorage destination, or null
