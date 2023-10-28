@@ -238,6 +238,10 @@ abstract base class NativeDownloader extends BaseDownloader {
   @override
   Future<bool> resume(Task task) async {
     if (await super.resume(task)) {
+      task = awaitTasks.containsKey(task)
+          ? awaitTasks.keys
+              .firstWhere((awaitTask) => awaitTask.taskId == task.taskId)
+          : task;
       final taskResumeData = await getResumeData(task.taskId);
       if (taskResumeData != null) {
         final notificationConfig = notificationConfigForTask(task);

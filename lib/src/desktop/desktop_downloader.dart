@@ -320,6 +320,10 @@ final class DesktopDownloader extends BaseDownloader {
   @override
   Future<bool> resume(Task task) async {
     if (await super.resume(task)) {
+      task = awaitTasks.containsKey(task)
+          ? awaitTasks.keys
+              .firstWhere((awaitTask) => awaitTask.taskId == task.taskId)
+          : task;
       _resume.add(task);
       if (await enqueue(task)) {
         if (task is ParallelDownloadTask) {

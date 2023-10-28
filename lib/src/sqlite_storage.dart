@@ -135,10 +135,6 @@ class SqlitePersistentStorage implements PersistentStorage {
   }
 
   @override
-  Future<void> removeModifiedTask(String? taskId) =>
-      _remove(modifiedTasksTable, taskId);
-
-  @override
   Future<void> removePausedTask(String? taskId) =>
       _remove(pausedTasksTable, taskId);
 
@@ -149,16 +145,6 @@ class SqlitePersistentStorage implements PersistentStorage {
   @override
   Future<void> removeTaskRecord(String? taskId) =>
       _remove(taskRecordsTable, taskId);
-
-  @override
-  Future<List<Task>> retrieveAllModifiedTasks() async {
-    final result = await db.query(modifiedTasksTable,
-        columns: [objectColumn], where: null);
-    return result
-        .map((e) =>
-            Task.createFromJsonMap(jsonDecode(e[objectColumn] as String)))
-        .toList(growable: false);
-  }
 
   @override
   Future<List<Task>> retrieveAllPausedTasks() async {
@@ -188,19 +174,6 @@ class SqlitePersistentStorage implements PersistentStorage {
         .map((e) =>
             TaskRecord.fromJsonMap(jsonDecode(e[objectColumn] as String)))
         .toList(growable: false);
-  }
-
-  @override
-  Future<Task?> retrieveModifiedTask(String taskId) async {
-    final result = await db.query(modifiedTasksTable,
-        columns: [objectColumn],
-        where: '$taskIdColumn = ?',
-        whereArgs: [taskId]);
-    if (result.isEmpty) {
-      return null;
-    }
-    return Task.createFromJsonMap(
-        jsonDecode(result.first[objectColumn] as String));
   }
 
   @override
@@ -273,10 +246,6 @@ class SqlitePersistentStorage implements PersistentStorage {
                 (DateTime.now().millisecondsSinceEpoch / 1000).floor()
           },
           conflictAlgorithm: sql.ConflictAlgorithm.replace);
-
-  @override
-  Future<void> storeModifiedTask(Task task) =>
-      store(modifiedTasksTable, task.taskId, task.toJsonMap());
 
   @override
   Future<void> storePausedTask(Task task) =>
@@ -431,9 +400,6 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
   }
 
   @override
-  Future<List<Task>> retrieveAllModifiedTasks() => Future.value([]);
-
-  @override
   Future<List<Task>> retrieveAllPausedTasks() => Future.value([]);
 
   @override
@@ -502,11 +468,6 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
   // the rest of the interface is not implemented, as it is never called
 
   @override
-  Future<void> removeModifiedTask(String? taskId) {
-    throw UnimplementedError();
-  }
-
-  @override
   Future<void> removePausedTask(String? taskId) {
     throw UnimplementedError();
   }
@@ -522,11 +483,6 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
   }
 
   @override
-  Future<Task?> retrieveModifiedTask(String taskId) {
-    throw UnimplementedError();
-  }
-
-  @override
   Future<Task?> retrievePausedTask(String taskId) {
     throw UnimplementedError();
   }
@@ -538,11 +494,6 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
 
   @override
   Future<TaskRecord?> retrieveTaskRecord(String taskId) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<void> storeModifiedTask(Task task) {
     throw UnimplementedError();
   }
 
