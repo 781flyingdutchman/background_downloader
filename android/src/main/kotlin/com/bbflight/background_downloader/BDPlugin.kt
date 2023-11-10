@@ -140,7 +140,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             if (initialDelayMillis != 0L) {
                 requestBuilder.setInitialDelay(initialDelayMillis, TimeUnit.MILLISECONDS)
             }
-            if (task.priority < 5) {
+            if (task.priority < 5 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 requestBuilder.setExpedited(policy = OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             }
             val workManager = WorkManager.getInstance(context)
