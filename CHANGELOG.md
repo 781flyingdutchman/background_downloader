@@ -1,3 +1,12 @@
+## 7.12.3
+
+Issue #189 related to resume on Android versions prior to S, and to expediting a task prior to S
+
+See https://stackoverflow.com/a/68468786/4172761
+
+Fixes issue with parsing priority from JSON
+Fixes issue with setting expedited for Android versions prior to S. This effectively ignores priority (expedited) scheduling for tasks prior to Android S and defaults to normal. 
+
 ## 7.12.2
 
 Minor improvements to `TaskQueue` and `MemoryTaskQueue`
