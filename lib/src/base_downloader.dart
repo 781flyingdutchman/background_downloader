@@ -540,11 +540,11 @@ abstract base class BaseDownloader {
         setPausedTask(task);
       }
       if (update.status.isFinalState) {
-        for (var taskQueue in taskQueues) {
-          taskQueue.taskFinished(task);
-        } //TODO should this also run in states like .paused?
         removeModifiedTask(task);
         _clearPauseResumeInfo(task);
+      }
+      if (update.status.isFinalState || update.status == TaskStatus.paused) {
+        notifyTaskQueues(task);
       }
       _emitStatusUpdate(update);
     }
@@ -552,7 +552,25 @@ abstract base class BaseDownloader {
 
   /// Process progress update coming from Downloader to client listener
   void processProgressUpdate(TaskProgressUpdate update) {
+    switch (update.progress) {
+      case progressComplete:
+      case progressFailed:
+      case progressNotFound:
+      case progressCanceled:
+      case progressPaused:
+        notifyTaskQueues(update.task);
+
+      default:
+      // no-op
+    }
     _emitProgressUpdate(update);
+  }
+
+  /// Notify all [taskQueues] that this task has finished
+  void notifyTaskQueues(Task task) {
+    for (var taskQueue in taskQueues) {
+      taskQueue.taskFinished(task);
+    }
   }
 
   /// Process user tapping on a notification

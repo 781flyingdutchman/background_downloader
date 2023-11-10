@@ -36,7 +36,8 @@ class MemoryTaskQueue implements TaskQueue {
   /// message loop when adding many tasks
   Duration minInterval = const Duration(milliseconds: 20);
 
-  final _enqueuedTasks = <Task>{}; // by TaskId
+  /// Set of tasks that have been enqueued with the FileDownloader
+  final enqueued = <Task>{}; // by TaskId
 
   var _readyForEnqueue = Completer();
 
@@ -62,6 +63,29 @@ class MemoryTaskQueue implements TaskQueue {
   /// with the [FileDownloader]
   void removeAll() => waiting.removeAll();
 
+  /// remove all waiting tasks matching [taskIds]. Does not affect tasks already enqueued
+  /// with the [FileDownloader]
+  void removeTasksWithIds(List<String> taskIds) {
+    for (final taskId in taskIds) {
+      final match = waiting.unorderedElements
+          .firstWhereOrNull((task) => task.taskId == taskId);
+      if (match != null) {
+        waiting.remove(match);
+      }
+    }
+  }
+
+  /// remove all waiting tasks in [group]. Does not affect tasks already enqueued
+  /// with the [FileDownloader]
+  void removeTasksWithGroup(String group) {
+    final tasksToRemove = waiting.unorderedElements
+        .where((task) => task.group == group)
+        .toList(growable: false);
+    for (final task in tasksToRemove) {
+      waiting.remove(task);
+    }
+  }
+
   /// Remove [task] from the queue. Does not affect tasks already enqueued
   /// with the [FileDownloader]
   void remove(Task task) => waiting.remove(task);
@@ -69,9 +93,18 @@ class MemoryTaskQueue implements TaskQueue {
   /// Reset the state of the [TaskQueue].
   ///
   /// Clears the [waiting] queue and resets active tasks to 0
-  void reset() {
-    removeAll();
-    _enqueuedTasks.clear();
+  void reset({String? group}) {
+    if (group == null) {
+      removeAll();
+      enqueued.clear();
+    } else {
+      removeTasksWithGroup(group);
+      final tasksToRemove =
+          enqueued.where((task) => task.group != group).toList(growable: false);
+      for (final task in tasksToRemove) {
+        enqueued.remove(task);
+      }
+    }
   }
 
   /// Advance the queue if possible and ready, no-op if not
@@ -86,7 +119,7 @@ class MemoryTaskQueue implements TaskQueue {
         return;
       }
       _readyForEnqueue = Completer();
-      _enqueuedTasks.add(task);
+      enqueued.add(task);
       enqueue(task).then((success) async {
         if (!success) {
           _log.warning(
@@ -129,25 +162,26 @@ class MemoryTaskQueue implements TaskQueue {
   Future<bool> enqueue(Task task) => FileDownloader().enqueue(task);
 
   /// Task has finished, so remove from active and advance the queue to the
-  /// next task
+  /// next task if the task was indeed managed by this queue
   @override
   void taskFinished(Task task) {
-    _enqueuedTasks.remove(task);
-    advanceQueue();
+    if (enqueued.remove(task)) {
+      advanceQueue();
+    }
   }
 
   /// Number of active tasks, i.e. enqueued with the FileDownloader and
   /// not yet finished
-  int get numActive => _enqueuedTasks.length;
+  int get numActive => enqueued.length;
 
   /// Returns number of tasks active with this host name
-  int numActiveWithHostname(String hostname) => _enqueuedTasks.fold(
+  int numActiveWithHostname(String hostname) => enqueued.fold(
       0,
       (previousValue, task) =>
           task.hostName == hostname ? previousValue + 1 : previousValue);
 
   /// Returns number of tasks active with this group
-  int numActiveWithGroup(String group) => _enqueuedTasks.fold(
+  int numActiveWithGroup(String group) => enqueued.fold(
       0,
       (previousValue, task) =>
           task.group == group ? previousValue + 1 : previousValue);
@@ -157,6 +191,11 @@ class MemoryTaskQueue implements TaskQueue {
 
   /// Number of tasks waiting to be enqueued
   int get numWaiting => waiting.length;
+
+  /// Number of tasks waiting to be enqueued in [group]
+  int numWaitingWithGroup(String group) => waiting.unorderedElements
+      .where((element) => element.group == group)
+      .length;
 
   /// Stream with [Task]s that failed to enqueue correctly
   Stream<Task> get enqueueErrors => _enqueueErrorsStreamController.stream;

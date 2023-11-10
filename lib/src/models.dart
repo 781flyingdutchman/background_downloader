@@ -472,7 +472,7 @@ sealed class Task extends Request implements Comparable {
         updates = Updates.values[(jsonMap['updates'] as num?)?.toInt() ?? 0],
         requiresWiFi = jsonMap['requiresWiFi'] ?? false,
         allowPause = jsonMap['allowPause'] ?? false,
-        priority = (jsonMap['updates'] as num?)?.toInt() ?? 5,
+        priority = (jsonMap['priority'] as num?)?.toInt() ?? 5,
         metaData = jsonMap['metaData'] ?? '',
         displayName = jsonMap['displayName'] ?? '',
         super.fromJsonMap(jsonMap);
