@@ -543,14 +543,32 @@ interface class FileDownloader {
   /// [complete] is the notification used when the task completed
   /// [error] is the notification used when something went wrong,
   /// including pause, failed and notFound status
+  /// [progressBar] if set will show a progress bar
+  /// [tapOpensFile] if set will attempt to open the file when the [complete]
+  ///     notification is tapped
+  /// [notificationGroup] if set will group all notifications with the same
+  ///    [notificationGroup] and change the progress bar to number of finished
+  ///    tasks versus total number of tasks in the [notificationGroup].
+  ///    Use {numFinished} and {numTotal} tokens in the [TaskNotification.title]
+  ///    and [TaskNotification.body] to substitute. Task-specific substitutions
+  ///    such as {filename} are not valid when using [notificationGroup].
+  ///    The [notificationGroup] is considered [complete] when there are no
+  ///    more tasks running within that group, and at that point the
+  ///    [complete] notification is shown (if configured). If any task in the
+  ///    [notificationGroup] fails, the [error] notification is shown.
+  ///    The first character of the [notificationGroup] cannot be '*'.
   ///
   /// The [TaskNotification] is the actual notification shown for a [Task], and
   /// [body] and [title] may contain special strings to substitute display values:
-  /// {filename] to insert the filename
+  /// {filename} to insert the [Task.filename]
+  /// {metaData} to insert the [Task.metaData]
+  /// {displayName} to insert the [Task.displayName]
   /// {progress} to insert progress in %
   /// {networkSpeed} to insert the network speed in MB/s or kB/s, or '--' if N/A
   /// {timeRemaining} to insert the estimated time remaining to complete the task
   ///   in HH:MM:SS or MM:SS or --:-- if N/A
+  /// {numFinished} to insert the number of finished tasks in a notificationGroup
+  /// {numTotal} to insert the number of tasks in a notificationGroup
   ///
   /// Actual appearance of notification is dependent on the platform, e.g.
   /// on iOS {progress} is not available and ignored
@@ -562,7 +580,8 @@ interface class FileDownloader {
       TaskNotification? error,
       TaskNotification? paused,
       bool progressBar = false,
-      bool tapOpensFile = false}) {
+      bool tapOpensFile = false,
+      String notificationGroup = ''}) {
     _downloader.notificationConfigs.add(TaskNotificationConfig(
         taskOrGroup: task,
         running: running,
@@ -570,7 +589,8 @@ interface class FileDownloader {
         error: error,
         paused: paused,
         progressBar: progressBar,
-        tapOpensFile: tapOpensFile));
+        tapOpensFile: tapOpensFile,
+        notificationGroup: notificationGroup));
     return this;
   }
 
@@ -584,14 +604,32 @@ interface class FileDownloader {
   /// [complete] is the notification used when the task completed
   /// [error] is the notification used when something went wrong,
   /// including pause, failed and notFound status
+  /// [progressBar] if set will show a progress bar
+  /// [tapOpensFile] if set will attempt to open the file when the [complete]
+  ///     notification is tapped
+  /// [notificationGroup] if set will group all notifications with the same
+  ///    [notificationGroup] and change the progress bar to number of finished
+  ///    tasks versus total number of tasks in the [notificationGroup].
+  ///    Use {numFinished} and {numTotal} tokens in the [TaskNotification.title]
+  ///    and [TaskNotification.body] to substitute. Task-specific substitutions
+  ///    such as {filename} are not valid when using [notificationGroup].
+  ///    The [notificationGroup] is considered [complete] when there are no
+  ///    more tasks running within that group, and at that point the
+  ///    [complete] notification is shown (if configured). If any task in the
+  ///    [notificationGroup] fails, the [error] notification is shown.
+  ///    The first character of the [notificationGroup] cannot be '*'.
   ///
   /// The [TaskNotification] is the actual notification shown for a [Task], and
   /// [body] and [title] may contain special strings to substitute display values:
-  /// {filename] to insert the filename
+  /// {filename} to insert the [Task.filename]
+  /// {metaData} to insert the [Task.metaData]
+  /// {displayName} to insert the [Task.displayName]
   /// {progress} to insert progress in %
   /// {networkSpeed} to insert the network speed in MB/s or kB/s, or '--' if N/A
   /// {timeRemaining} to insert the estimated time remaining to complete the task
   ///   in HH:MM:SS or MM:SS or --:-- if N/A
+  /// {numFinished} to insert the number of finished tasks in a notificationGroup
+  /// {numTotal} to insert the number of tasks in a notificationGroup
   ///
   /// Actual appearance of notification is dependent on the platform, e.g.
   /// on iOS {progress} is not available and ignored
@@ -603,7 +641,8 @@ interface class FileDownloader {
       TaskNotification? error,
       TaskNotification? paused,
       bool progressBar = false,
-      bool tapOpensFile = false}) {
+      bool tapOpensFile = false,
+      String notificationGroup = ''}) {
     _downloader.notificationConfigs.add(TaskNotificationConfig(
         taskOrGroup: group,
         running: running,
@@ -611,14 +650,12 @@ interface class FileDownloader {
         error: error,
         paused: paused,
         progressBar: progressBar,
-        tapOpensFile: tapOpensFile));
+        tapOpensFile: tapOpensFile,
+        notificationGroup: notificationGroup));
     return this;
   }
 
   /// Configure default task notification
-  ///
-  /// This is the notification configuration used for tasks that do not
-  /// match a task-specific or group-specific notification configuration
   ///
   /// The configuration determines what notifications are shown,
   /// whether a progress bar is shown (Android only), and whether tapping
@@ -628,14 +665,32 @@ interface class FileDownloader {
   /// [complete] is the notification used when the task completed
   /// [error] is the notification used when something went wrong,
   /// including pause, failed and notFound status
+  /// [progressBar] if set will show a progress bar
+  /// [tapOpensFile] if set will attempt to open the file when the [complete]
+  ///     notification is tapped
+  /// [notificationGroup] if set will group all notifications with the same
+  ///    [notificationGroup] and change the progress bar to number of finished
+  ///    tasks versus total number of tasks in the [notificationGroup].
+  ///    Use {numFinished} and {numTotal} tokens in the [TaskNotification.title]
+  ///    and [TaskNotification.body] to substitute. Task-specific substitutions
+  ///    such as {filename} are not valid when using [notificationGroup].
+  ///    The [notificationGroup] is considered [complete] when there are no
+  ///    more tasks running within that group, and at that point the
+  ///    [complete] notification is shown (if configured). If any task in the
+  ///    [notificationGroup] fails, the [error] notification is shown.
+  ///    The first character of the [notificationGroup] cannot be '*'.
   ///
   /// The [TaskNotification] is the actual notification shown for a [Task], and
   /// [body] and [title] may contain special strings to substitute display values:
-  /// {filename] to insert the filename
+  /// {filename} to insert the [Task.filename]
+  /// {metaData} to insert the [Task.metaData]
+  /// {displayName} to insert the [Task.displayName]
   /// {progress} to insert progress in %
   /// {networkSpeed} to insert the network speed in MB/s or kB/s, or '--' if N/A
   /// {timeRemaining} to insert the estimated time remaining to complete the task
   ///   in HH:MM:SS or MM:SS or --:-- if N/A
+  /// {numFinished} to insert the number of finished tasks in a notificationGroup
+  /// {numTotal} to insert the number of tasks in a notificationGroup
   ///
   /// Actual appearance of notification is dependent on the platform, e.g.
   /// on iOS {progress} is not available and ignored
@@ -647,7 +702,8 @@ interface class FileDownloader {
       TaskNotification? error,
       TaskNotification? paused,
       bool progressBar = false,
-      bool tapOpensFile = false}) {
+      bool tapOpensFile = false,
+      String notificationGroup = ''}) {
     _downloader.notificationConfigs.add(TaskNotificationConfig(
         taskOrGroup: null,
         running: running,
@@ -655,7 +711,8 @@ interface class FileDownloader {
         error: error,
         paused: paused,
         progressBar: progressBar,
-        tapOpensFile: tapOpensFile));
+        tapOpensFile: tapOpensFile,
+        notificationGroup: notificationGroup));
     return this;
   }
 

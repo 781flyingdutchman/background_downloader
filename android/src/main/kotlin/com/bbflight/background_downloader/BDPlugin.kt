@@ -76,6 +76,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         var canceledTaskIds = HashMap<String, Long>() // <taskId, timeMillis>
         var pausedTaskIds = HashSet<String>() // <taskId>
         var parallelDownloadTaskWorkers = HashMap<String, ParallelDownloadTaskWorker>()
+        var notificationGroups = HashMap<String, NotificationGroup>()
         var backgroundChannel: MethodChannel? = null
         var backgroundChannelCounter = 0  // reference counter
         var forceFailPostOnBackgroundChannel = false
@@ -177,6 +178,17 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 editor.apply()
             }
             return true
+        }
+
+        /** cancel tasks with [taskIds] and return true if successful */
+        suspend fun cancelTasksWithIds(context: Context, taskIds: Iterable<String>): Boolean {
+            val workManager = WorkManager.getInstance(context)
+            Log.v(TAG, "Canceling taskIds $taskIds")
+            var success = true
+            for (taskId in taskIds) {
+                success = success && cancelActiveTaskWithId(context, taskId, workManager)
+            }
+            return success
         }
 
         /**
@@ -446,13 +458,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private suspend fun methodCancelTasksWithIds(call: MethodCall, result: Result) {
         @Suppress("UNCHECKED_CAST") val taskIds = call.arguments as List<String>
-        val workManager = WorkManager.getInstance(applicationContext)
-        Log.v(TAG, "Canceling taskIds $taskIds")
-        var success = true
-        for (taskId in taskIds) {
-            success = success && cancelActiveTaskWithId(applicationContext, taskId, workManager)
-        }
-        result.success(success)
+        result.success(cancelTasksWithIds(applicationContext, taskIds))
     }
 
     /**
@@ -823,8 +829,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private fun handleIntent(intent: Intent?): Boolean {
         if (intent != null && intent.action == NotificationRcvr.actionTap) {
-            val taskJsonMapString =
-                intent.extras?.getString(NotificationRcvr.keyTask)
+            val taskJsonMapString = intent.getStringExtra(NotificationRcvr.keyTask)
             val notificationTypeOrdinal =
                 intent.getIntExtra(NotificationRcvr.keyNotificationType, 0)
             val notificationId = intent.getIntExtra(NotificationRcvr.keyNotificationId, 0)

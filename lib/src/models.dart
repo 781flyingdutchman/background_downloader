@@ -1474,6 +1474,20 @@ final class TaskNotification {
 /// [complete] is the notification used when the task completed
 /// [error] is the notification used when something went wrong,
 /// including pause, failed and notFound status
+/// [progressBar] if set will show a progress bar
+/// [tapOpensFile] if set will attempt to open the file when the [complete]
+///     notification is tapped
+/// [notificationGroup] if set will group all notifications with the same
+///    [notificationGroup] and change the progress bar to number of finished
+///    tasks versus total number of tasks in the [notificationGroup].
+///    Use {finished} and {total} tokens in the [TaskNotification.title] and
+///    [TaskNotification.body] to substitute. Task-specific substitutions
+///    such as {filename} are not valid.
+///    The [notificationGroup] is considered [complete] when there are no
+///    more tasks running within that group, and at that point the
+///    [complete] notification is shown (if configured). If any task in the
+///    [notificationGroup] fails, the [error] notification is shown.
+///    The first character of the [notificationGroup] cannot be '*'.
 final class TaskNotificationConfig {
   final dynamic taskOrGroup;
   final TaskNotification? running;
@@ -1482,6 +1496,7 @@ final class TaskNotificationConfig {
   final TaskNotification? paused;
   final bool progressBar;
   final bool tapOpensFile;
+  final String notificationGroup;
 
   /// Create notification configuration that determines what notifications are shown,
   /// whether a progress bar is shown (Android only), and whether tapping
@@ -1490,7 +1505,21 @@ final class TaskNotificationConfig {
   /// [running] is the notification used while the task is in progress
   /// [complete] is the notification used when the task completed
   /// [error] is the notification used when something went wrong,
-  /// including pause, failed and notFound status
+  /// including pause, failed and notFound status.
+  /// [progressBar] if set will show a progress bar
+  /// [tapOpensFile] if set will attempt to open the file when the [complete]
+  ///     notification is tapped
+  /// [notificationGroup] if set will group all notifications with the same
+  ///    [notificationGroup] and change the progress bar to number of finished
+  ///    tasks versus total number of tasks in the [notificationGroup].
+  ///    Use {finished} and {total} tokens in the [TaskNotification.title] and
+  ///    [TaskNotification.body] to substitute. Task-specific substitutions
+  ///    such as {filename} are not valid.
+  ///    The [notificationGroup] is considered [complete] when there are no
+  ///    more tasks running within that group, and at that point the
+  ///    [complete] notification is shown (if configured). If any task in the
+  ///    [notificationGroup] fails, the [error] notification is shown.
+  ///    The first character of the [notificationGroup] cannot be '*'.
   TaskNotificationConfig(
       {this.taskOrGroup,
       this.running,
@@ -1498,7 +1527,8 @@ final class TaskNotificationConfig {
       this.error,
       this.paused,
       this.progressBar = false,
-      this.tapOpensFile = false}) {
+      this.tapOpensFile = false,
+      this.notificationGroup = ''}) {
     assert(
         running != null || complete != null || error != null || paused != null,
         'At least one notification must be set');
@@ -1512,7 +1542,8 @@ final class TaskNotificationConfig {
         'error': error?.toJsonMap(),
         'paused': paused?.toJsonMap(),
         'progressBar': progressBar,
-        'tapOpensFile': tapOpensFile
+        'tapOpensFile': tapOpensFile,
+        'notificationGroup': notificationGroup
       };
 }
 
