@@ -156,6 +156,7 @@ fun baseDirPath(context: Context, baseDirectory: BaseDirectory): String? {
                 BaseDirectory.applicationLibrary -> Path(
                     context.filesDir.path, "Library"
                 ).pathString
+                BaseDirectory.root -> ""
             }
         } else {
             baseDirPath = when (baseDirectory) {
@@ -163,6 +164,7 @@ fun baseDirPath(context: Context, baseDirectory: BaseDirectory): String? {
                 BaseDirectory.temporary -> context.cacheDir.path
                 BaseDirectory.applicationSupport -> context.filesDir.path
                 BaseDirectory.applicationLibrary -> "${context.filesDir.path}/Library"
+                BaseDirectory.root -> ""
             }
         }
     } else {
@@ -178,6 +180,7 @@ fun baseDirPath(context: Context, baseDirectory: BaseDirectory): String? {
             BaseDirectory.temporary -> externalCacheDirectory.path
             BaseDirectory.applicationSupport -> "${externalStorageDirectory.path}/Support"
             BaseDirectory.applicationLibrary -> "${externalStorageDirectory.path}/Library"
+            BaseDirectory.root -> ""
         }
     }
     return baseDirPath

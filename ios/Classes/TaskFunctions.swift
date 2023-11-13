@@ -78,30 +78,6 @@ func getFilePath(for task: Task, withFilename: String? = nil) -> String? {
     return directory.appendingPathComponent(withFilename ?? task.filename).path
 }
 
-//extension StringProtocol {
-//    func index<S: StringProtocol>(of string: S, options: String.CompareOptions = []) -> Index? {
-//        range(of: string, options: options)?.lowerBound
-//    }
-//    func endIndex<S: StringProtocol>(of string: S, options: String.CompareOptions = []) -> Index? {
-//        range(of: string, options: options)?.upperBound
-//    }
-//    func indices<S: StringProtocol>(of string: S, options: String.CompareOptions = []) -> [Index] {
-//        ranges(of: string, options: options).map(\.lowerBound)
-//    }
-//    func ranges<S: StringProtocol>(of string: S, options: String.CompareOptions = []) -> [Range<Index>] {
-//        var result: [Range<Index>] = []
-//        var startIndex = self.startIndex
-//        while startIndex < endIndex,
-//              let range = self[startIndex...]
-//            .range(of: string, options: options) {
-//            result.append(range)
-//            startIndex = range.lowerBound < range.upperBound ? range.upperBound :
-//            index(range.lowerBound, offsetBy: 1, limitedBy: endIndex) ?? endIndex
-//        }
-//        return result
-//    }
-//}
-
 func stripFileExtension ( _ filename: String ) -> String {
     var components = filename.components(separatedBy: ".")
     guard components.count > 1 else { return filename }
@@ -538,27 +514,33 @@ func getNotificationConfigJsonStringFrom(urlSessionTask: URLSessionTask) -> Stri
 ///
 /// This is made up of the baseDirectory and the directory fields of the Task
 func directoryForTask(task: Task) throws ->  URL {
-    var dir: FileManager.SearchPathDirectory
-    switch task.baseDirectory {
-    case 0:
-        dir = .documentDirectory
-    case 1:
-        dir = .cachesDirectory
-    case 2:
-        dir = .applicationSupportDirectory
-    case 3:
-        dir = .libraryDirectory
-    default:
-        dir = .documentDirectory
+    let documentsURL: URL
+    if task.baseDirectory != BaseDirectory.root.rawValue {
+        var dir: FileManager.SearchPathDirectory
+        switch task.baseDirectory {
+            case 0:
+                dir = .documentDirectory
+            case 1:
+                dir = .cachesDirectory
+            case 2:
+                dir = .applicationSupportDirectory
+            case 3:
+                dir = .libraryDirectory
+            default:
+                dir = .documentDirectory
+        }
+        documentsURL =
+        try FileManager.default.url(for: dir,
+                                    in: .userDomainMask,
+                                    appropriateFor: nil,
+                                    create: false)
+    } else {
+        documentsURL = URL(fileURLWithPath: "/")
     }
-    let documentsURL =
-    try FileManager.default.url(for: dir,
-                                in: .userDomainMask,
-                                appropriateFor: nil,
-                                create: false)
     return task.directory.isEmpty
-    ? documentsURL
-    : documentsURL.appendingPathComponent(task.directory)
+        ? documentsURL
+        : documentsURL.appendingPathComponent(task.directory)
+    
 }
 
 /**

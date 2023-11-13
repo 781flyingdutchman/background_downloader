@@ -172,7 +172,8 @@ enum BaseDirectory: Int {
     case applicationDocuments, // getApplicationDocumentsDirectory()
          temporary, // getTemporaryDirectory()
          applicationSupport, // getApplicationSupportDirectory()
-         applicationLibrary // getLibraryDirectory()
+         applicationLibrary, // getLibraryDirectory()
+         root // system root
 }
 
 /// Type of  updates requested for a group of downloads

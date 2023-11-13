@@ -31,7 +31,8 @@ enum class BaseDirectory {
     applicationDocuments,  // getApplicationDocumentsDirectory()
     temporary,  // getTemporaryDirectory()
     applicationSupport, // getApplicationSupportDirectory()
-    applicationLibrary // getApplicationSupportDirectory() subdir "Library"
+    applicationLibrary, // getApplicationSupportDirectory() subdir "Library"
+    root // system root directory
 }
 
 private class BaseDirectorySerializer: EnumAsIntSerializer<BaseDirectory>(

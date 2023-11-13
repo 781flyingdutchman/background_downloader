@@ -104,7 +104,15 @@ enum BaseDirectory {
   /// As returned by getApplicationLibrary() on iOS. For other platforms
   /// this resolves to the subdirectory 'Library' created in the directory
   /// returned by getApplicationSupportDirectory()
-  applicationLibrary
+  applicationLibrary,
+
+  /// System root directory. This allows you to set a path to any directory
+  /// via [Task.directory]. Only use this if you are certain that this
+  /// path is stable. on iOS and Android, references to paths within
+  /// the application's directory structure are *not* stable, and you
+  /// should use [applicationDocuments], [applicationSupport] or
+  /// [applicationLibrary] instead to avoid errors.
+  root
 }
 
 /// Type of updates requested for a task or group of tasks
@@ -431,6 +439,7 @@ sealed class Task extends Request implements Comparable {
         await getLibraryDirectory(),
       (BaseDirectory.applicationLibrary, false) => Directory(
           path.join((await getApplicationSupportDirectory()).path, 'Library')),
+      (BaseDirectory.root, _) => Directory('/'),
       // Android only: external storage variants
       (BaseDirectory.applicationDocuments, true) => externalStorageDirectory!,
       (BaseDirectory.temporary, true) => externalCacheDirectory!,
