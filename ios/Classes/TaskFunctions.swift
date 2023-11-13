@@ -236,7 +236,7 @@ func getContentLength(responseHeaders: [AnyHashable: Any], task: Task) -> Int64 
     let taskRangeHeader = task.headers["Range"] ?? ""
     let taskRange = parseRange(rangeStr: taskRangeHeader)
     if let end = taskRange.1 {
-        var rangeLength = end - taskRange.0 + 1
+        let rangeLength = end - taskRange.0 + 1
         os_log("TaskId %@ contentLength set to %d based on Range header", log: log, type: .info, task.taskId, rangeLength)
         return rangeLength
     }
@@ -291,7 +291,7 @@ func extractFilesData(task: Task) -> [((String, String, String))] {
 /// Calculate progress, network speed and time remaining, and send this at an appropriate
 /// interval to the Dart side
 func updateProgress(task: Task, totalBytesExpected: Int64, totalBytesDone: Int64) {
-    let info = Downloader.progressInfo[task.taskId] ?? (lastProgressUpdateTime: 0.0, lastProgressValue: 0.0, lastTotalBytesDone: 0, lastNetworkSpeed: -1.0)
+    let info = BDPlugin.progressInfo[task.taskId] ?? (lastProgressUpdateTime: 0.0, lastProgressValue: 0.0, lastTotalBytesDone: 0, lastNetworkSpeed: -1.0)
     if totalBytesExpected != NSURLSessionTransferSizeUnknown && Date().timeIntervalSince1970 > info.lastProgressUpdateTime + 0.5 {
         let progress = min(Double(totalBytesDone) / Double(totalBytesExpected), 0.999)
         if progress - info.lastProgressValue > 0.02 {
@@ -303,7 +303,7 @@ func updateProgress(task: Task, totalBytesExpected: Int64, totalBytesDone: Int64
             let newNetworkSpeed = info.lastNetworkSpeed == -1.0 ? currentNetworkSpeed : (info.lastNetworkSpeed * 3.0 + currentNetworkSpeed) / 4.0
             let remainingBytes = (1.0 - progress) * Double(totalBytesExpected)
             let timeRemaining: TimeInterval = newNetworkSpeed == -1.0 ? -1.0 : (remainingBytes / newNetworkSpeed / 1000000.0)
-            Downloader.progressInfo[task.taskId] = (lastProgressUpdateTime: now, lastProgressValue: progress, lastTotalBytesDone: totalBytesDone, lastNetworkSpeed: newNetworkSpeed)
+            BDPlugin.progressInfo[task.taskId] = (lastProgressUpdateTime: now, lastProgressValue: progress, lastTotalBytesDone: totalBytesDone, lastNetworkSpeed: newNetworkSpeed)
             processProgressUpdate(task: task, progress: progress, expectedFileSize: totalBytesExpected, networkSpeed: newNetworkSpeed, timeRemaining: timeRemaining)
         }
     }
@@ -354,14 +354,14 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
                 os_log("Could not store status update locally", log: log, type: .debug)
                 return }
             jsonObject["taskStatus"] = status.rawValue
-            storeLocally(prefsKey: Downloader.keyStatusUpdateMap, taskId: task.taskId, item: jsonObject)
+            storeLocally(prefsKey: BDPlugin.keyStatusUpdateMap, taskId: task.taskId, item: jsonObject)
         }
     }
     if isFinalState(status: status) {
         // remove references to this task that are no longer needed
-        Downloader.progressInfo.removeValue(forKey: task.taskId)
-        Downloader.localResumeData.removeValue(forKey: task.taskId)
-        Downloader.remainingBytesToDownload.removeValue(forKey: task.taskId)
+        BDPlugin.progressInfo.removeValue(forKey: task.taskId)
+        BDPlugin.localResumeData.removeValue(forKey: task.taskId)
+        BDPlugin.remainingBytesToDownload.removeValue(forKey: task.taskId)
     }
 }
 
@@ -380,7 +380,7 @@ func processProgressUpdate(task: Task, progress: Double, expectedFileSize: Int64
                 return }
             jsonObject["progress"] = progress
             jsonObject["expectedFileSize"] = expectedFileSize
-            storeLocally(prefsKey: Downloader.keyProgressUpdateMap, taskId: task.taskId, item: jsonObject)
+            storeLocally(prefsKey: BDPlugin.keyProgressUpdateMap, taskId: task.taskId, item: jsonObject)
         }
     }
 }
@@ -400,7 +400,7 @@ func processCanResume(task: Task, taskCanResume: Bool) {
 /// Sends the data via the background channel to Dart
 func processResumeData(task: Task, resumeData: Data) -> Bool {
     let resumeDataAsBase64String = resumeData.base64EncodedString()
-    Downloader.localResumeData[task.taskId] = resumeDataAsBase64String
+    BDPlugin.localResumeData[task.taskId] = resumeDataAsBase64String
     if !postOnBackgroundChannel(method: "resumeData", task: task, arg: resumeDataAsBase64String) {
         // store resume data locally
         guard let jsonData = try? JSONEncoder().encode(task),
@@ -412,14 +412,14 @@ func processResumeData(task: Task, resumeData: Data) -> Bool {
             "task": taskJsonObject,
             "data": resumeDataAsBase64String
         ] as [String : Any]
-        storeLocally(prefsKey: Downloader.keyResumeDataMap, taskId: task.taskId, item: resumeDataMap)
+        storeLocally(prefsKey: BDPlugin.keyResumeDataMap, taskId: task.taskId, item: resumeDataMap)
     }
     return true
 }
 
 /// Return the background channel for cummincation to Dart side, or nil
 func getBackgroundChannel() -> FlutterMethodChannel? {
-    guard let channel = Downloader.backgroundChannel else {
+    guard let channel = BDPlugin.backgroundChannel else {
         os_log("Could not find background channel", log: log, type: .error)
         return nil
     }
@@ -430,7 +430,7 @@ func getBackgroundChannel() -> FlutterMethodChannel? {
 ///
 /// [arg] can be a list or a single variable
 func postOnBackgroundChannel(method: String, task:Task, arg: Any) -> Bool {
-    guard let channel = Downloader.backgroundChannel else {
+    guard let channel = BDPlugin.backgroundChannel else {
         os_log("Could not find background channel", log: log, type: .error)
         return false
     }
@@ -457,7 +457,7 @@ func postOnBackgroundChannel(method: String, task:Task, arg: Any) -> Bool {
         DispatchQueue.main.async {
             channel.invokeMethod(method, arguments: argsList, result: {(r: Any?) -> () in
                 success = !(r is FlutterError)
-                if Downloader.forceFailPostOnBackgroundChannel {
+                if BDPlugin.forceFailPostOnBackgroundChannel {
                     success = false
                 }
                 dispatchGroup.leave()
@@ -504,7 +504,7 @@ func getTaskFrom(urlSessionTask: URLSessionTask) -> Task? {
     }
     let decoder = JSONDecoder()
     if let task = try? decoder.decode(Task.self, from: jsonData) {
-        return Downloader.tasksWithSuggestedFilename[task.taskId] ?? task
+        return BDPlugin.tasksWithSuggestedFilename[task.taskId] ?? task
     }
     return nil
 }
@@ -582,7 +582,7 @@ func insufficientSpace(contentLength: Int64) -> Bool {
     guard contentLength > 0 else {
         return false
     }
-    let checkValue = UserDefaults.standard.integer(forKey: Downloader.keyConfigCheckAvailableSpace)
+    let checkValue = UserDefaults.standard.integer(forKey: BDPlugin.keyConfigCheckAvailableSpace)
     guard
         // Check if the configCheckAvailableSpace preference is set and is positive
         checkValue > 0,
@@ -592,7 +592,7 @@ func insufficientSpace(contentLength: Int64) -> Bool {
         return false
     }
     // Calculate the total remaining bytes to download
-    let remainingBytesToDownload = Downloader.remainingBytesToDownload.values.reduce(0, +)
+    let remainingBytesToDownload = BDPlugin.remainingBytesToDownload.values.reduce(0, +)
     // Return true if there is insufficient space to store the file
     return available - (remainingBytesToDownload + contentLength) < checkValue << 20
 }

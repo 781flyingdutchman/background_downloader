@@ -48,9 +48,9 @@ enum NotificationCategory : String, CaseIterable {
 let ourCategories = NotificationCategory.allCases.map { $0.rawValue }
 
 func updateNotification(task: Task, notificationType: NotificationType, notificationConfig: NotificationConfig?) {
-    if !Downloader.haveregisteredNotificationCategories {
+    if !BDPlugin.haveregisteredNotificationCategories {
         registerNotificationCategories()
-        Downloader.haveregisteredNotificationCategories = true
+        BDPlugin.haveregisteredNotificationCategories = true
     }
     let center = UNUserNotificationCenter.current()
     center.getNotificationSettings { settings in
@@ -95,7 +95,7 @@ func updateNotification(task: Task, notificationType: NotificationType, notifica
 func addNotificationActions(task: Task, notificationType: NotificationType, content: UNMutableNotificationContent, notificationConfig: NotificationConfig) {
     switch notificationType {
     case .running:
-        content.categoryIdentifier = Downloader.taskIdsThatCanResume.contains(task.taskId) && notificationConfig.paused != nil ? NotificationCategory.runningWithPause.rawValue : NotificationCategory.runningWithoutPause.rawValue
+        content.categoryIdentifier = BDPlugin.taskIdsThatCanResume.contains(task.taskId) && notificationConfig.paused != nil ? NotificationCategory.runningWithPause.rawValue : NotificationCategory.runningWithoutPause.rawValue
     case .paused:
         content.categoryIdentifier = NotificationCategory.paused.rawValue
     case .complete:
@@ -139,7 +139,7 @@ func replaceTokens(input: String, task: Task) -> String {
 func registerNotificationCategories() {
     // get values from shared preferences
     let defaults = UserDefaults.standard
-    let localize = defaults.dictionary(forKey: Downloader.keyConfigLocalize)
+    let localize = defaults.dictionary(forKey: BDPlugin.keyConfigLocalize)
 
     // define the actions
     let cancelAction = UNNotificationAction(identifier: "cancel_action",
