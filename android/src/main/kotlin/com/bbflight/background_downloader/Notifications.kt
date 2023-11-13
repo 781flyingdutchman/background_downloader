@@ -1,13 +1,28 @@
 package com.bbflight.background_downloader
 
+import android.Manifest
+import android.annotation.SuppressLint
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Bundle
 import android.util.Log
 import androidx.annotation.Keep
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.work.ForegroundInfo
 import androidx.work.WorkManager
 import com.bbflight.background_downloader.BDPlugin.Companion.TAG
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlin.math.roundToInt
 
@@ -220,86 +235,557 @@ class NotificationRcvr : BroadcastReceiver() {
     }
 }
 
-/**
- * Returns the notificationType related to this [status]
- */
-fun notificationTypeForTaskStatus(status: TaskStatus): NotificationType {
-    return when (status) {
-        TaskStatus.enqueued, TaskStatus.running -> NotificationType.running
-        TaskStatus.complete -> NotificationType.complete
-        TaskStatus.paused -> NotificationType.paused
-        else -> NotificationType.error
-    }
-}
+object NotificationService {
 
-// RegExes for token replacement
-private val displayNameRegEx = Regex("""\{displayName\}""", RegexOption.IGNORE_CASE)
-private val fileNameRegEx = Regex("""\{filename\}""", RegexOption.IGNORE_CASE)
-private val progressRegEx = Regex("""\{progress\}""", RegexOption.IGNORE_CASE)
-private val networkSpeedRegEx = Regex("""\{networkSpeed\}""", RegexOption.IGNORE_CASE)
-private val timeRemainingRegEx = Regex("""\{timeRemaining\}""", RegexOption.IGNORE_CASE)
-private val metaDataRegEx = Regex("""\{metadata\}""", RegexOption.IGNORE_CASE)
-private val numFinishedRegEx = Regex("""\{numFinished\}""", RegexOption.IGNORE_CASE)
-private val numTotalRegEx = Regex("""\{numTotal\}""", RegexOption.IGNORE_CASE)
+    private var createdNotificationChannel = false
 
-
-/**
- * Replace special tokens {displayName}, {filename}, {metadata}, {progress}, {networkSpeed},
- * {timeRemaining}, {numFinished} and {numTotal} with their respective values.
- */
-fun replaceTokens(
-    input: String,
-    task: Task,
-    progress: Double,
-    networkSpeed: Double = -1.0,
-    timeRemaining: Long? = null,
-    notificationGroup: NotificationGroup? = null
-): String {
-    // filename and metadata
-    val output = displayNameRegEx.replace(
-        fileNameRegEx.replace(
-            metaDataRegEx.replace(
-                input,
-                task.metaData
-            ), task.filename
-        ), task.displayName
-    )
-
-    // progress
-    val progressString =
-        if (progress in 0.0..1.0) (progress * 100).roundToInt().toString() + "%"
-        else ""
-    val output2 = progressRegEx.replace(output, progressString)
-    // download speed
-    val networkSpeedString =
-        if (networkSpeed <= 0.0) "-- MB/s" else if (networkSpeed > 1) "${networkSpeed.roundToInt()} MB/s" else "${(networkSpeed * 1000).roundToInt()} kB/s"
-    val output3 = networkSpeedRegEx.replace(output2, networkSpeedString)
-    // time remaining
-    var output4 = output3
-    if (timeRemaining != null) {
-        val hours = timeRemaining.div(3600000L)
-        val minutes = (timeRemaining.mod(3600000L)).div(60000L)
-        val seconds = (timeRemaining.mod(60000L)).div(1000L)
-        val timeRemainingString = if (timeRemaining < 0) "--:--" else if (hours > 0)
-            String.format(
-                "%02d:%02d:%02d",
-                hours,
-                minutes,
-                seconds
-            ) else
-            String.format(
-                "%02d:%02d",
-                minutes,
-                seconds
+    /**
+     * Create the notification channel to use for download notifications
+     */
+    private fun createNotificationChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name =
+                context.getString(R.string.bg_downloader_notification_channel_name)
+            val descriptionText = context.getString(
+                R.string.bg_downloader_notification_channel_description
             )
-        output4 = timeRemainingRegEx.replace(output3, timeRemainingString)
+            val importance = NotificationManager.IMPORTANCE_LOW
+            val channel = NotificationChannel(
+                BDPlugin.notificationChannel, name, importance
+            ).apply {
+                description = descriptionText
+            }
+            // Register the channel with the system
+            val notificationManager: NotificationManager = context.getSystemService(
+                Context.NOTIFICATION_SERVICE
+            ) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+        createdNotificationChannel = true
     }
-    return if (notificationGroup != null) {
-        numFinishedRegEx.replace(
-            numTotalRegEx.replace(output4, "${notificationGroup.numTotal}"),
-            "${notificationGroup.numFinished}"
+
+    /**
+     * Create or update the notification for this [task], associated with this [notificationType]
+     * and [progress]
+     *
+     * [notificationType] determines the type of notification, and whether absence of one will
+     * cancel the notification
+     * The [progress] field is only relevant for [NotificationType.running]. If progress is
+     * negative no progress bar will be shown. If progress > 1 an indeterminate progress bar
+     * will be shown
+     * [networkSpeed] and [timeRemaining] are only relevant for [NotificationType.running]
+     */
+    @SuppressLint("MissingPermission")
+    suspend fun updateNotification(
+        taskWorker: TaskWorker,
+        notificationType: NotificationType,
+        progress: Double = 2.0,
+        timeRemaining: Long = -1000
+    ) {
+        val notificationGroupName = taskWorker.notificationConfig?.notificationGroup
+        if (notificationGroupName?.isNotEmpty() == true) {
+            updateNotificationGroup(taskWorker, notificationGroupName, notificationType)
+            return
+        }
+        // regular notification
+        val notification = when (notificationType) {
+            NotificationType.running -> taskWorker.notificationConfig?.running
+            NotificationType.complete -> taskWorker.notificationConfig?.complete
+            NotificationType.error -> taskWorker.notificationConfig?.error
+            NotificationType.paused -> taskWorker.notificationConfig?.paused
+        }
+        val removeNotification = when (notificationType) {
+            NotificationType.running -> false
+            else -> notification == null
+        }
+        if (removeNotification) {
+            if (taskWorker.notificationId != 0) {
+                with(NotificationManagerCompat.from(taskWorker.applicationContext)) {
+                    cancel(taskWorker.notificationId)
+                }
+            }
+            return
+        }
+        if (notification == null) {
+            return
+        }
+        // need to show a notification
+        if (!createdNotificationChannel) {
+            createNotificationChannel(taskWorker.applicationContext)
+        }
+        if (taskWorker.notificationId == 0) {
+            taskWorker.notificationId = taskWorker.task.taskId.hashCode()
+        }
+        val iconDrawable = when (notificationType) {
+            NotificationType.running -> if (taskWorker.task.isDownloadTask()) R.drawable.outline_file_download_24 else R.drawable.outline_file_upload_24
+            NotificationType.complete -> R.drawable.outline_download_done_24
+            NotificationType.error -> R.drawable.outline_error_outline_24
+            NotificationType.paused -> R.drawable.outline_pause_24
+        }
+        val builder = NotificationCompat.Builder(
+            taskWorker.applicationContext, BDPlugin.notificationChannel
+        ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
+        // use stored progress if notificationType is .paused
+        taskWorker.notificationProgress =
+            if (notificationType == NotificationType.paused) taskWorker.notificationProgress else progress
+        // title and body interpolation of {filename}, {progress} and {metadata}
+        val title = replaceTokens(
+            notification.title,
+            taskWorker.task,
+            taskWorker.notificationProgress,
+            networkSpeed = taskWorker.networkSpeed,
+            timeRemaining = timeRemaining
         )
-    } else {
-        output4
+        if (title.isNotEmpty()) {
+            builder.setContentTitle(title)
+        }
+        val body = replaceTokens(
+            notification.body,
+            taskWorker.task,
+            taskWorker.notificationProgress,
+            networkSpeed = taskWorker.networkSpeed,
+            timeRemaining = timeRemaining
+        )
+        if (body.isNotEmpty()) {
+            builder.setContentText(body)
+        }
+        // progress bar
+        val progressBar =
+            taskWorker.notificationConfig?.progressBar ?: false && (notificationType == NotificationType.running || notificationType == NotificationType.paused)
+        if (progressBar && taskWorker.notificationProgress >= 0) {
+            if (taskWorker.notificationProgress <= 1) {
+                builder.setProgress(100, (taskWorker.notificationProgress * 100).roundToInt(), false)
+            } else { // > 1 means indeterminate
+                builder.setProgress(100, 0, true)
+            }
+        }
+        addNotificationActions(taskWorker, notificationType, builder)
+        displayNotification(taskWorker, builder, notificationType)
     }
+
+    /**
+     * Update notification for group [notificationGroupName] and type
+     * [notificationType].
+     *
+     * A group notification aggregates the state of all tasks in a group and
+     * presents a notification based on that value
+     */
+    private suspend fun updateNotificationGroup(
+        taskWorker: TaskWorker,
+        notificationGroupName: String,
+        notificationType: NotificationType
+    ) {
+        val notificationGroup =
+            BDPlugin.notificationGroups[notificationGroupName] ?: NotificationGroup(
+                notificationGroupName
+            )
+        val stateChange = notificationGroup.update(taskWorker.task, notificationType)
+        if (stateChange) {
+            // need to update the group notification
+            val notification =
+                if (notificationGroup.complete) taskWorker.notificationConfig?.complete else taskWorker.notificationConfig?.running
+            if (notificationGroup.complete) {
+                BDPlugin.notificationGroups.remove(notificationGroupName)
+            } else {
+                BDPlugin.notificationGroups[notificationGroupName] = notificationGroup
+            }
+            val removeNotification = when (notificationType) {
+                NotificationType.running -> false
+                else -> notification == null
+            }
+            if (removeNotification) {
+                with(NotificationManagerCompat.from(taskWorker.applicationContext)) {
+                    cancel(notificationGroup.notificationId)
+                }
+                return
+            }
+            if (notification == null) {
+                return
+            }
+            // need to show a notification
+            if (!createdNotificationChannel) {
+                createNotificationChannel(taskWorker.applicationContext)
+            }
+            taskWorker.notificationId = notificationGroup.notificationId
+            val iconDrawable = when (notificationType) {
+                NotificationType.running -> if (taskWorker.task.isDownloadTask()) R.drawable.outline_file_download_24 else R.drawable.outline_file_upload_24
+                NotificationType.complete -> R.drawable.outline_download_done_24
+                else -> R.drawable.outline_error_outline_24
+            }
+            val builder = NotificationCompat.Builder(
+                taskWorker.applicationContext, BDPlugin.notificationChannel
+            ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
+            taskWorker.notificationProgress = notificationGroup.progress
+            // title and body interpolation of tokens
+            val title = replaceTokens(
+                notification.title,
+                taskWorker.task,
+                taskWorker.notificationProgress,
+                notificationGroup = notificationGroup
+            )
+            if (title.isNotEmpty()) {
+                builder.setContentTitle(title)
+            }
+            val body = replaceTokens(
+                notification.body,
+                taskWorker.task,
+                taskWorker.notificationProgress,
+                notificationGroup = notificationGroup
+            )
+            if (body.isNotEmpty()) {
+                builder.setContentText(body)
+            }
+            // progress bar
+            val progressBar =
+                taskWorker.notificationConfig?.progressBar ?: false && (notificationType == NotificationType.running)
+            if (progressBar && taskWorker.notificationProgress >= 0) {
+                if (taskWorker.notificationProgress <= 1) {
+                    builder.setProgress(100, (taskWorker.notificationProgress * 100).roundToInt(), false)
+                } else { // > 1 means indeterminate
+                    builder.setProgress(100, 0, true)
+                }
+            }
+            addGroupNotificationActions(taskWorker, notificationType, notificationGroup, builder)
+            if (notificationType == NotificationType.running) {
+                displayNotification(taskWorker, builder, notificationType)
+            } else {
+                CoroutineScope(Dispatchers.Main).launch {
+                    delay(1000)
+                    displayNotification(taskWorker, builder, notificationType)
+                }
+            }
+        }
+    }
+
+    /**
+     * Display the notification presented by the [builder], for this
+     * [notificationType]
+     *
+     * Checks for permissions, and if necessary asks for it
+     */
+    @SuppressLint("MissingPermission")
+    private suspend fun displayNotification(
+        taskWorker: TaskWorker,
+        builder: NotificationCompat.Builder,
+        notificationType: NotificationType
+    ) {
+        with(NotificationManagerCompat.from(taskWorker.applicationContext)) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                // On Android 33+, check/ask for permission
+                if (ActivityCompat.checkSelfPermission(
+                        taskWorker.applicationContext, Manifest.permission.POST_NOTIFICATIONS
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    if (BDPlugin.requestingNotificationPermission) {
+                        return  // don't ask twice
+                    }
+                    BDPlugin.requestingNotificationPermission = true
+                    BDPlugin.activity?.requestPermissions(
+                        arrayOf(
+                            Manifest.permission.POST_NOTIFICATIONS
+                        ), BDPlugin.notificationPermissionRequestCode
+                    )
+                    return
+                }
+            }
+            val androidNotification = builder.build()
+            if (taskWorker.runInForeground) {
+                if (notificationType == NotificationType.running) {
+                    taskWorker.setForeground(ForegroundInfo(taskWorker.notificationId, androidNotification))
+                } else {
+                    // to prevent the 'not running' notification getting killed as the foreground
+                    // process is terminated, this notification is shown regularly, but with
+                    // a delay
+                    CoroutineScope(Dispatchers.Main).launch {
+                        delay(200)
+                        notify(taskWorker.notificationId, androidNotification)
+                    }
+                }
+            } else {
+                val now = System.currentTimeMillis()
+                val timeSinceLastUpdate = now - taskWorker.lastNotificationTime
+                taskWorker.lastNotificationTime = now
+                if (notificationType == NotificationType.running || timeSinceLastUpdate > 2000) {
+                    notify(taskWorker.notificationId, androidNotification)
+                } else {
+                    // to prevent the 'not running' notification getting ignored
+                    // due to too frequent updates, post it with a delay
+                    CoroutineScope(Dispatchers.Main).launch {
+                        delay(2000 - java.lang.Long.max(timeSinceLastUpdate, 1000L))
+                        notify(taskWorker.notificationId, androidNotification)
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Add action to notification via buttons or tap
+     *
+     * Which button(s) depends on the [notificationType], and the actions require
+     * access to [task] and the [builder]
+     */
+    private fun addNotificationActions(
+        taskWorker: TaskWorker,
+        notificationType: NotificationType, builder: NotificationCompat.Builder
+    ) {
+        val activity = BDPlugin.activity
+        if (activity != null) {
+            val taskJsonString = BDPlugin.gson.toJson(
+                taskWorker.task.toJsonMap()
+            )
+            // add tap action for all notifications
+            val tapIntent =
+                taskWorker.applicationContext.packageManager.getLaunchIntentForPackage(
+                    taskWorker.applicationContext.packageName
+                )
+            if (tapIntent != null) {
+                tapIntent.apply {
+                    action = NotificationRcvr.actionTap
+                    putExtra(NotificationRcvr.keyTask, taskJsonString)
+                    putExtra(NotificationRcvr.keyNotificationType, notificationType.ordinal)
+                    putExtra(
+                        NotificationRcvr.keyNotificationConfig,
+                        taskWorker.notificationConfigJsonString
+                    )
+                    putExtra(NotificationRcvr.keyNotificationId, taskWorker.notificationId)
+                }
+                val tapPendingIntent: PendingIntent = PendingIntent.getActivity(
+                    taskWorker.applicationContext,
+                    taskWorker.notificationId,
+                    tapIntent,
+                    PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                builder.setContentIntent(tapPendingIntent)
+            }
+            // add buttons depending on notificationType
+            when (notificationType) {
+                NotificationType.running -> {
+                    // cancel button when running
+                    val cancelOrPauseBundle = Bundle().apply {
+                        putString(NotificationRcvr.keyTaskId, taskWorker.task.taskId)
+                    }
+                    val cancelIntent =
+                        Intent(taskWorker.applicationContext, NotificationRcvr::class.java).apply {
+                            action = NotificationRcvr.actionCancelActive
+                            putExtra(NotificationRcvr.keyBundle, cancelOrPauseBundle)
+                        }
+                    val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
+                        taskWorker.applicationContext,
+                        taskWorker.notificationId,
+                        cancelIntent,
+                        PendingIntent.FLAG_IMMUTABLE
+                    )
+                    builder.addAction(
+                        R.drawable.outline_cancel_24,
+                        activity.getString(R.string.bg_downloader_cancel),
+                        cancelPendingIntent
+                    )
+                    if (taskWorker.taskCanResume && (taskWorker.notificationConfig?.paused != null)) {
+                        // pause button when running and paused notification configured
+                        val pauseIntent = Intent(
+                            taskWorker.applicationContext, NotificationRcvr::class.java
+                        ).apply {
+                            action = NotificationRcvr.actionPause
+                            putExtra(NotificationRcvr.keyBundle, cancelOrPauseBundle)
+                        }
+                        val pausePendingIntent: PendingIntent = PendingIntent.getBroadcast(
+                            taskWorker.applicationContext,
+                            taskWorker.notificationId,
+                            pauseIntent,
+                            PendingIntent.FLAG_IMMUTABLE
+                        )
+                        builder.addAction(
+                            R.drawable.outline_pause_24,
+                            activity.getString(R.string.bg_downloader_pause),
+                            pausePendingIntent
+                        )
+                    }
+                }
+
+                NotificationType.paused -> {
+                    // cancel button
+                    val cancelBundle = Bundle().apply {
+                        putString(NotificationRcvr.keyTaskId, taskWorker.task.taskId)
+                        putString(
+                            NotificationRcvr.keyTask, taskJsonString
+                        )
+                    }
+                    val cancelIntent = Intent(
+                        taskWorker.applicationContext, NotificationRcvr::class.java
+                    ).apply {
+                        action = NotificationRcvr.actionCancelInactive
+                        putExtra(NotificationRcvr.keyBundle, cancelBundle)
+                    }
+                    val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
+                        taskWorker.applicationContext,
+                        taskWorker.notificationId,
+                        cancelIntent,
+                        PendingIntent.FLAG_IMMUTABLE
+                    )
+                    builder.addAction(
+                        R.drawable.outline_cancel_24,
+                        activity.getString(R.string.bg_downloader_cancel),
+                        cancelPendingIntent
+                    )
+                    // resume button
+                    val resumeBundle = Bundle().apply {
+                        putString(NotificationRcvr.keyTaskId, taskWorker.task.taskId)
+                        putString(
+                            NotificationRcvr.keyTask, taskJsonString
+                        )
+                        putString(
+                            NotificationRcvr.keyNotificationConfig,
+                            taskWorker.notificationConfigJsonString
+                        )
+                    }
+                    val resumeIntent = Intent(
+                        taskWorker.applicationContext, NotificationRcvr::class.java
+                    ).apply {
+                        action = NotificationRcvr.actionResume
+                        putExtra(NotificationRcvr.keyBundle, resumeBundle)
+                    }
+                    val resumePendingIntent: PendingIntent = PendingIntent.getBroadcast(
+                        taskWorker.applicationContext,
+                        taskWorker.notificationId,
+                        resumeIntent,
+                        PendingIntent.FLAG_IMMUTABLE
+                    )
+                    builder.addAction(
+                        R.drawable.outline_play_arrow_24,
+                        activity.getString(R.string.bg_downloader_resume),
+                        resumePendingIntent
+                    )
+                }
+
+                NotificationType.complete -> {}
+                NotificationType.error -> {}
+            }
+        }
+    }
+
+    /**
+     * Add action to notificationGroup notification via buttons or tap
+     *
+     * Which button(s) depends on the [notificationType], and the actions require
+     * access to [notificationGroup] and the [builder]
+     */
+    private fun addGroupNotificationActions(
+        taskWorker: TaskWorker,
+        notificationType: NotificationType,
+        notificationGroup: NotificationGroup,
+        builder: NotificationCompat.Builder
+    ) {
+        val activity = BDPlugin.activity
+        if (activity != null) {
+            // add cancel button for running notification
+            if (notificationType == NotificationType.running) {
+                // cancel button when running
+                val cancelOrPauseBundle = Bundle().apply {
+                    putString(NotificationRcvr.keyNotificationGroupName, notificationGroup.name)
+                }
+                val cancelIntent =
+                    Intent(taskWorker.applicationContext, NotificationRcvr::class.java).apply {
+                        action = NotificationRcvr.actionCancelActive
+                        putExtra(NotificationRcvr.keyBundle, cancelOrPauseBundle)
+                    }
+                val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
+                    taskWorker.applicationContext,
+                    notificationGroup.notificationId,
+                    cancelIntent,
+                    PendingIntent.FLAG_IMMUTABLE
+                )
+                builder.addAction(
+                    R.drawable.outline_cancel_24,
+                    activity.getString(R.string.bg_downloader_cancel),
+                    cancelPendingIntent
+                )
+            }
+        }
+    }
+
+    /**
+     * Returns the notificationType related to this [status]
+     */
+    fun notificationTypeForTaskStatus(status: TaskStatus): NotificationType {
+        return when (status) {
+            TaskStatus.enqueued, TaskStatus.running -> NotificationType.running
+            TaskStatus.complete -> NotificationType.complete
+            TaskStatus.paused -> NotificationType.paused
+            else -> NotificationType.error
+        }
+    }
+
+    // RegExes for token replacement
+    private val displayNameRegEx = Regex("""\{displayName\}""", RegexOption.IGNORE_CASE)
+    private val fileNameRegEx = Regex("""\{filename\}""", RegexOption.IGNORE_CASE)
+    private val progressRegEx = Regex("""\{progress\}""", RegexOption.IGNORE_CASE)
+    private val networkSpeedRegEx = Regex("""\{networkSpeed\}""", RegexOption.IGNORE_CASE)
+    private val timeRemainingRegEx = Regex("""\{timeRemaining\}""", RegexOption.IGNORE_CASE)
+    private val metaDataRegEx = Regex("""\{metadata\}""", RegexOption.IGNORE_CASE)
+    private val numFinishedRegEx = Regex("""\{numFinished\}""", RegexOption.IGNORE_CASE)
+    private val numTotalRegEx = Regex("""\{numTotal\}""", RegexOption.IGNORE_CASE)
+
+
+    /**
+     * Replace special tokens {displayName}, {filename}, {metadata}, {progress}, {networkSpeed},
+     * {timeRemaining}, {numFinished} and {numTotal} with their respective values.
+     */
+    fun replaceTokens(
+        input: String,
+        task: Task,
+        progress: Double,
+        networkSpeed: Double = -1.0,
+        timeRemaining: Long? = null,
+        notificationGroup: NotificationGroup? = null
+    ): String {
+        // filename and metadata
+        val output = displayNameRegEx.replace(
+            fileNameRegEx.replace(
+                metaDataRegEx.replace(
+                    input,
+                    task.metaData
+                ), task.filename
+            ), task.displayName
+        )
+
+        // progress
+        val progressString =
+            if (progress in 0.0..1.0) (progress * 100).roundToInt().toString() + "%"
+            else ""
+        val output2 = progressRegEx.replace(output, progressString)
+        // download speed
+        val networkSpeedString =
+            if (networkSpeed <= 0.0) "-- MB/s" else if (networkSpeed > 1) "${networkSpeed.roundToInt()} MB/s" else "${(networkSpeed * 1000).roundToInt()} kB/s"
+        val output3 = networkSpeedRegEx.replace(output2, networkSpeedString)
+        // time remaining
+        var output4 = output3
+        if (timeRemaining != null) {
+            val hours = timeRemaining.div(3600000L)
+            val minutes = (timeRemaining.mod(3600000L)).div(60000L)
+            val seconds = (timeRemaining.mod(60000L)).div(1000L)
+            val timeRemainingString = if (timeRemaining < 0) "--:--" else if (hours > 0)
+                String.format(
+                    "%02d:%02d:%02d",
+                    hours,
+                    minutes,
+                    seconds
+                ) else
+                String.format(
+                    "%02d:%02d",
+                    minutes,
+                    seconds
+                )
+            output4 = timeRemainingRegEx.replace(output3, timeRemainingString)
+        }
+        return if (notificationGroup != null) {
+            numFinishedRegEx.replace(
+                numTotalRegEx.replace(output4, "${notificationGroup.numTotal}"),
+                "${notificationGroup.numFinished}"
+            )
+        } else {
+            output4
+        }
+    }
+
 }
