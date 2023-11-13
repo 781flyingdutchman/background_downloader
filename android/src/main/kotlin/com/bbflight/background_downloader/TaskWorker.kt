@@ -400,7 +400,7 @@ open class TaskWorker(
             if (!isResume) {
                 processProgressUpdate(task, 0.0, prefs)
             }
-            NotificationService.updateNotification(this@TaskWorker, NotificationService.notificationTypeForTaskStatus(TaskStatus.running))
+            NotificationService.updateNotification(this@TaskWorker, TaskStatus.running)
             val status = doTask()
             withContext(NonCancellable) {
                 // NonCancellable to make sure we complete the status and notification
@@ -413,7 +413,7 @@ open class TaskWorker(
                     responseBody,
                     applicationContext
                 )
-                NotificationService.updateNotification(this@TaskWorker, NotificationService.notificationTypeForTaskStatus(status))
+                NotificationService.updateNotification(this@TaskWorker, status)
             }
         }
         return Result.success()
@@ -673,13 +673,12 @@ open class TaskWorker(
         )
         NotificationService.updateNotification(
             this,
-            NotificationService.notificationTypeForTaskStatus(TaskStatus.running),
+            TaskStatus.running,
             progress, timeRemaining
         )
         lastProgressUpdate = progress
         nextProgressUpdateTime = currentTimeMillis() + 500
     }
-
 
 
     /**

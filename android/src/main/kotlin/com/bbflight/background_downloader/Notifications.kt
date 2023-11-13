@@ -15,6 +15,7 @@ import android.util.Log
 import androidx.annotation.Keep
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationCompat.Builder
 import androidx.core.app.NotificationManagerCompat
 import androidx.work.ForegroundInfo
 import androidx.work.WorkManager
@@ -24,6 +25,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import java.util.LinkedList
 import kotlin.math.roundToInt
 
 /**
@@ -61,9 +64,7 @@ class NotificationConfig(
     val notificationGroup: String
 ) {
     override fun toString(): String {
-        return "NotificationConfig(running=$running, complete=$complete, error=$error, " +
-                "paused=$paused, progressBar=$progressBar, tapOpensFile=$tapOpensFile, " +
-                "notificationGroup=$notificationGroup)"
+        return "NotificationConfig(running=$running, complete=$complete, error=$error, paused=$paused, progressBar=$progressBar, tapOpensFile=$tapOpensFile, notificationGroup=$notificationGroup)"
     }
 }
 
@@ -225,8 +226,7 @@ class NotificationRcvr : BroadcastReceiver() {
                 val notificationGroup = BDPlugin.notificationGroups[notificationGroupName]
                 if (notificationGroup != null) {
                     runBlocking {
-                        BDPlugin.cancelTasksWithIds(
-                            context,
+                        BDPlugin.cancelTasksWithIds(context,
                             notificationGroup.runningTasks.map { task -> task.taskId })
                     }
                 }
@@ -235,53 +235,41 @@ class NotificationRcvr : BroadcastReceiver() {
     }
 }
 
+/**
+ * Singleton service to manage notifications
+ */
 object NotificationService {
-
+    private var queue =
+        LinkedList<Triple<TaskWorker, NotificationType, Builder>>() //TODO check if this is the right type
+    private var lastNotificationTime: Long = 0
     private var createdNotificationChannel = false
 
     /**
-     * Create the notification channel to use for download notifications
-     */
-    private fun createNotificationChannel(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name =
-                context.getString(R.string.bg_downloader_notification_channel_name)
-            val descriptionText = context.getString(
-                R.string.bg_downloader_notification_channel_description
-            )
-            val importance = NotificationManager.IMPORTANCE_LOW
-            val channel = NotificationChannel(
-                BDPlugin.notificationChannel, name, importance
-            ).apply {
-                description = descriptionText
-            }
-            // Register the channel with the system
-            val notificationManager: NotificationManager = context.getSystemService(
-                Context.NOTIFICATION_SERVICE
-            ) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
-        }
-        createdNotificationChannel = true
-    }
-
-    /**
-     * Create or update the notification for this [task], associated with this [notificationType]
-     * and [progress]
+     * Create or update the notification for this [taskWorker], associated with this [taskStatus]
+     * [progress] and [timeRemaining]
      *
-     * [notificationType] determines the type of notification, and whether absence of one will
+     * [taskStatus] determines the type of notification, and whether absence of one will
      * cancel the notification
      * The [progress] field is only relevant for [NotificationType.running]. If progress is
      * negative no progress bar will be shown. If progress > 1 an indeterminate progress bar
      * will be shown
-     * [networkSpeed] and [timeRemaining] are only relevant for [NotificationType.running]
+     * [timeRemaining] is only relevant for [NotificationType.running]
+     *
+     * If this notification is part of a group, then the notification will be built
+     * using [updateNotificationGroup] and enqueued to avoid overloading the
+     * notification system.
+     *
+     * For normal notification, the caller must throttle the notifications to a
+     * reasonable rate
      */
     @SuppressLint("MissingPermission")
     suspend fun updateNotification(
         taskWorker: TaskWorker,
-        notificationType: NotificationType,
+        taskStatus: TaskStatus,
         progress: Double = 2.0,
         timeRemaining: Long = -1000
     ) {
+        val notificationType = notificationTypeForTaskStatus(taskStatus)
         val notificationGroupName = taskWorker.notificationConfig?.notificationGroup
         if (notificationGroupName?.isNotEmpty() == true) {
             updateNotificationGroup(taskWorker, notificationGroupName, notificationType)
@@ -322,7 +310,7 @@ object NotificationService {
             NotificationType.error -> R.drawable.outline_error_outline_24
             NotificationType.paused -> R.drawable.outline_pause_24
         }
-        val builder = NotificationCompat.Builder(
+        val builder = Builder(
             taskWorker.applicationContext, BDPlugin.notificationChannel
         ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
         // use stored progress if notificationType is .paused
@@ -354,40 +342,39 @@ object NotificationService {
             taskWorker.notificationConfig?.progressBar ?: false && (notificationType == NotificationType.running || notificationType == NotificationType.paused)
         if (progressBar && taskWorker.notificationProgress >= 0) {
             if (taskWorker.notificationProgress <= 1) {
-                builder.setProgress(100, (taskWorker.notificationProgress * 100).roundToInt(), false)
+                builder.setProgress(
+                    100, (taskWorker.notificationProgress * 100).roundToInt(), false
+                )
             } else { // > 1 means indeterminate
                 builder.setProgress(100, 0, true)
             }
         }
         addNotificationActions(taskWorker, notificationType, builder)
-        displayNotification(taskWorker, builder, notificationType)
+        displayNotification(taskWorker, notificationType, builder)
     }
 
     /**
-     * Update notification for group [notificationGroupName] and type
-     * [notificationType].
+     * Update notification for this [taskWorker] in group
+     * [notificationGroupName] and type [notificationType].
      *
      * A group notification aggregates the state of all tasks in a group and
      * presents a notification based on that value
      */
     private suspend fun updateNotificationGroup(
-        taskWorker: TaskWorker,
-        notificationGroupName: String,
-        notificationType: NotificationType
+        taskWorker: TaskWorker, notificationGroupName: String, notificationType: NotificationType
     ) {
         val notificationGroup =
             BDPlugin.notificationGroups[notificationGroupName] ?: NotificationGroup(
                 notificationGroupName
             )
         val stateChange = notificationGroup.update(taskWorker.task, notificationType)
+        BDPlugin.notificationGroups[notificationGroupName] = notificationGroup
         if (stateChange) {
             // need to update the group notification
             val notification =
                 if (notificationGroup.complete) taskWorker.notificationConfig?.complete else taskWorker.notificationConfig?.running
             if (notificationGroup.complete) {
                 BDPlugin.notificationGroups.remove(notificationGroupName)
-            } else {
-                BDPlugin.notificationGroups[notificationGroupName] = notificationGroup
             }
             val removeNotification = when (notificationType) {
                 NotificationType.running -> false
@@ -412,25 +399,19 @@ object NotificationService {
                 NotificationType.complete -> R.drawable.outline_download_done_24
                 else -> R.drawable.outline_error_outline_24
             }
-            val builder = NotificationCompat.Builder(
+            val builder = Builder(
                 taskWorker.applicationContext, BDPlugin.notificationChannel
             ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
-            taskWorker.notificationProgress = notificationGroup.progress
             // title and body interpolation of tokens
+            val progress = notificationGroup.progress
             val title = replaceTokens(
-                notification.title,
-                taskWorker.task,
-                taskWorker.notificationProgress,
-                notificationGroup = notificationGroup
+                notification.title, taskWorker.task, progress, notificationGroup = notificationGroup
             )
             if (title.isNotEmpty()) {
                 builder.setContentTitle(title)
             }
             val body = replaceTokens(
-                notification.body,
-                taskWorker.task,
-                taskWorker.notificationProgress,
-                notificationGroup = notificationGroup
+                notification.body, taskWorker.task, progress, notificationGroup = notificationGroup
             )
             if (body.isNotEmpty()) {
                 builder.setContentText(body)
@@ -438,84 +419,15 @@ object NotificationService {
             // progress bar
             val progressBar =
                 taskWorker.notificationConfig?.progressBar ?: false && (notificationType == NotificationType.running)
-            if (progressBar && taskWorker.notificationProgress >= 0) {
+            if (progressBar && progress >= 0) {
                 if (taskWorker.notificationProgress <= 1) {
-                    builder.setProgress(100, (taskWorker.notificationProgress * 100).roundToInt(), false)
+                    builder.setProgress(100, (progress * 100).roundToInt(), false)
                 } else { // > 1 means indeterminate
                     builder.setProgress(100, 0, true)
                 }
             }
             addGroupNotificationActions(taskWorker, notificationType, notificationGroup, builder)
-            if (notificationType == NotificationType.running) {
-                displayNotification(taskWorker, builder, notificationType)
-            } else {
-                CoroutineScope(Dispatchers.Main).launch {
-                    delay(1000)
-                    displayNotification(taskWorker, builder, notificationType)
-                }
-            }
-        }
-    }
-
-    /**
-     * Display the notification presented by the [builder], for this
-     * [notificationType]
-     *
-     * Checks for permissions, and if necessary asks for it
-     */
-    @SuppressLint("MissingPermission")
-    private suspend fun displayNotification(
-        taskWorker: TaskWorker,
-        builder: NotificationCompat.Builder,
-        notificationType: NotificationType
-    ) {
-        with(NotificationManagerCompat.from(taskWorker.applicationContext)) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                // On Android 33+, check/ask for permission
-                if (ActivityCompat.checkSelfPermission(
-                        taskWorker.applicationContext, Manifest.permission.POST_NOTIFICATIONS
-                    ) != PackageManager.PERMISSION_GRANTED
-                ) {
-                    if (BDPlugin.requestingNotificationPermission) {
-                        return  // don't ask twice
-                    }
-                    BDPlugin.requestingNotificationPermission = true
-                    BDPlugin.activity?.requestPermissions(
-                        arrayOf(
-                            Manifest.permission.POST_NOTIFICATIONS
-                        ), BDPlugin.notificationPermissionRequestCode
-                    )
-                    return
-                }
-            }
-            val androidNotification = builder.build()
-            if (taskWorker.runInForeground) {
-                if (notificationType == NotificationType.running) {
-                    taskWorker.setForeground(ForegroundInfo(taskWorker.notificationId, androidNotification))
-                } else {
-                    // to prevent the 'not running' notification getting killed as the foreground
-                    // process is terminated, this notification is shown regularly, but with
-                    // a delay
-                    CoroutineScope(Dispatchers.Main).launch {
-                        delay(200)
-                        notify(taskWorker.notificationId, androidNotification)
-                    }
-                }
-            } else {
-                val now = System.currentTimeMillis()
-                val timeSinceLastUpdate = now - taskWorker.lastNotificationTime
-                taskWorker.lastNotificationTime = now
-                if (notificationType == NotificationType.running || timeSinceLastUpdate > 2000) {
-                    notify(taskWorker.notificationId, androidNotification)
-                } else {
-                    // to prevent the 'not running' notification getting ignored
-                    // due to too frequent updates, post it with a delay
-                    CoroutineScope(Dispatchers.Main).launch {
-                        delay(2000 - java.lang.Long.max(timeSinceLastUpdate, 1000L))
-                        notify(taskWorker.notificationId, androidNotification)
-                    }
-                }
-            }
+            addToQueue(taskWorker, notificationType, builder) // shows notification
         }
     }
 
@@ -523,11 +435,10 @@ object NotificationService {
      * Add action to notification via buttons or tap
      *
      * Which button(s) depends on the [notificationType], and the actions require
-     * access to [task] and the [builder]
+     * access to [taskWorker] and the [builder]
      */
     private fun addNotificationActions(
-        taskWorker: TaskWorker,
-        notificationType: NotificationType, builder: NotificationCompat.Builder
+        taskWorker: TaskWorker, notificationType: NotificationType, builder: Builder
     ) {
         val activity = BDPlugin.activity
         if (activity != null) {
@@ -535,10 +446,9 @@ object NotificationService {
                 taskWorker.task.toJsonMap()
             )
             // add tap action for all notifications
-            val tapIntent =
-                taskWorker.applicationContext.packageManager.getLaunchIntentForPackage(
-                    taskWorker.applicationContext.packageName
-                )
+            val tapIntent = taskWorker.applicationContext.packageManager.getLaunchIntentForPackage(
+                taskWorker.applicationContext.packageName
+            )
             if (tapIntent != null) {
                 tapIntent.apply {
                     action = NotificationRcvr.actionTap
@@ -674,20 +584,20 @@ object NotificationService {
         taskWorker: TaskWorker,
         notificationType: NotificationType,
         notificationGroup: NotificationGroup,
-        builder: NotificationCompat.Builder
+        builder: Builder
     ) {
         val activity = BDPlugin.activity
         if (activity != null) {
             // add cancel button for running notification
             if (notificationType == NotificationType.running) {
                 // cancel button when running
-                val cancelOrPauseBundle = Bundle().apply {
+                val cancelBundle = Bundle().apply {
                     putString(NotificationRcvr.keyNotificationGroupName, notificationGroup.name)
                 }
                 val cancelIntent =
                     Intent(taskWorker.applicationContext, NotificationRcvr::class.java).apply {
                         action = NotificationRcvr.actionCancelActive
-                        putExtra(NotificationRcvr.keyBundle, cancelOrPauseBundle)
+                        putExtra(NotificationRcvr.keyBundle, cancelBundle)
                     }
                 val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
                     taskWorker.applicationContext,
@@ -704,10 +614,135 @@ object NotificationService {
         }
     }
 
+    /** Add display notification request to the queue, and start the
+     * queue if needed
+     */
+    private suspend fun addToQueue(
+        taskWorker: TaskWorker, notificationType: NotificationType, builder: Builder
+    ) {
+        queue.add(Triple(taskWorker, notificationType, builder))
+        if (queue.size == 1) {
+            startQueue()
+        }
+    }
+
+    /**
+     * Start the queue to process group notifications
+     *
+     * Should only be called if queue length == 1
+     */
+    private suspend fun startQueue() {
+        withContext(Dispatchers.Default) {
+            launch {
+                var queueEmpty = false
+                while (!queueEmpty) {
+                    val now = System.currentTimeMillis()
+                    val elapsed = now - lastNotificationTime
+                    if (elapsed < 250) {
+                        delay(250 - elapsed)
+                    }
+                    val item = queue.remove()
+                    queueEmpty = queue.isEmpty()
+                    displayNotification(item.first, item.second, item.third)
+                    lastNotificationTime = System.currentTimeMillis()
+                }
+            }
+        }
+    }
+
+    /**
+     * Display the notification presented by the [builder], for this
+     * [notificationType]
+     *
+     * Checks for permissions, and if necessary asks for it
+     */
+    @SuppressLint("MissingPermission")
+    private suspend fun displayNotification(
+        taskWorker: TaskWorker, notificationType: NotificationType, builder: Builder
+    ) {
+        with(NotificationManagerCompat.from(taskWorker.applicationContext)) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                // On Android 33+, check/ask for permission
+                if (ActivityCompat.checkSelfPermission(
+                        taskWorker.applicationContext, Manifest.permission.POST_NOTIFICATIONS
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    if (BDPlugin.requestingNotificationPermission) {
+                        return  // don't ask twice
+                    }
+                    BDPlugin.requestingNotificationPermission = true
+                    BDPlugin.activity?.requestPermissions(
+                        arrayOf(
+                            Manifest.permission.POST_NOTIFICATIONS
+                        ), BDPlugin.notificationPermissionRequestCode
+                    )
+                    return
+                }
+            }
+            val androidNotification = builder.build()
+            if (taskWorker.runInForeground) {
+                if (notificationType == NotificationType.running) {
+                    taskWorker.setForeground(
+                        ForegroundInfo(
+                            taskWorker.notificationId, androidNotification
+                        )
+                    )
+                } else {
+                    // to prevent the 'not running' notification getting killed as the foreground
+                    // process is terminated, this notification is shown regularly, but with
+                    // a delay
+                    CoroutineScope(Dispatchers.Main).launch {
+                        delay(200)
+                        notify(taskWorker.notificationId, androidNotification)
+                    }
+                }
+            } else {
+                val now = System.currentTimeMillis()
+                val timeSinceLastUpdate = now - taskWorker.lastNotificationTime
+                taskWorker.lastNotificationTime = now
+                if (notificationType == NotificationType.running || timeSinceLastUpdate > 2000) {
+                    notify(taskWorker.notificationId, androidNotification)
+                } else {
+                    // to prevent the 'not running' notification getting ignored
+                    // due to too frequent updates, post it with a delay
+                    CoroutineScope(Dispatchers.Main).launch {
+                        delay(2000 - java.lang.Long.max(timeSinceLastUpdate, 1000L))
+                        notify(taskWorker.notificationId, androidNotification)
+                    }
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Create the notification channel to use for download notifications
+     */
+    private fun createNotificationChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = context.getString(R.string.bg_downloader_notification_channel_name)
+            val descriptionText = context.getString(
+                R.string.bg_downloader_notification_channel_description
+            )
+            val importance = NotificationManager.IMPORTANCE_LOW
+            val channel = NotificationChannel(
+                BDPlugin.notificationChannel, name, importance
+            ).apply {
+                description = descriptionText
+            }
+            // Register the channel with the system
+            val notificationManager: NotificationManager = context.getSystemService(
+                Context.NOTIFICATION_SERVICE
+            ) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+        createdNotificationChannel = true
+    }
+
     /**
      * Returns the notificationType related to this [status]
      */
-    fun notificationTypeForTaskStatus(status: TaskStatus): NotificationType {
+    private fun notificationTypeForTaskStatus(status: TaskStatus): NotificationType {
         return when (status) {
             TaskStatus.enqueued, TaskStatus.running -> NotificationType.running
             TaskStatus.complete -> NotificationType.complete
@@ -731,7 +766,7 @@ object NotificationService {
      * Replace special tokens {displayName}, {filename}, {metadata}, {progress}, {networkSpeed},
      * {timeRemaining}, {numFinished} and {numTotal} with their respective values.
      */
-    fun replaceTokens(
+    private fun replaceTokens(
         input: String,
         task: Task,
         progress: Double,
@@ -743,8 +778,7 @@ object NotificationService {
         val output = displayNameRegEx.replace(
             fileNameRegEx.replace(
                 metaDataRegEx.replace(
-                    input,
-                    task.metaData
+                    input, task.metaData
                 ), task.filename
             ), task.displayName
         )
@@ -764,17 +798,11 @@ object NotificationService {
             val hours = timeRemaining.div(3600000L)
             val minutes = (timeRemaining.mod(3600000L)).div(60000L)
             val seconds = (timeRemaining.mod(60000L)).div(1000L)
-            val timeRemainingString = if (timeRemaining < 0) "--:--" else if (hours > 0)
-                String.format(
-                    "%02d:%02d:%02d",
-                    hours,
-                    minutes,
-                    seconds
-                ) else
-                String.format(
-                    "%02d:%02d",
-                    minutes,
-                    seconds
+            val timeRemainingString =
+                if (timeRemaining < 0) "--:--" else if (hours > 0) String.format(
+                    "%02d:%02d:%02d", hours, minutes, seconds
+                ) else String.format(
+                    "%02d:%02d", minutes, seconds
                 )
             output4 = timeRemainingRegEx.replace(output3, timeRemainingString)
         }
@@ -787,5 +815,4 @@ object NotificationService {
             output4
         }
     }
-
 }
