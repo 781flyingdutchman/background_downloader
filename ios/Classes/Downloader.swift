@@ -303,13 +303,11 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     private func methodPause(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let taskId = call.arguments as! String
         Downloader.urlSession = Downloader.urlSession ?? createUrlSession()
-        Downloader.taskIdsProgrammaticallyCancelled.insert(taskId)
         guard let urlSessionTask = await getUrlSessionTaskWithId(taskId: taskId) as? URLSessionDownloadTask,
               let task = await getTaskWithId(taskId: taskId),
               let resumeData = await urlSessionTask.cancelByProducingResumeData()
         else {
             // no regular task found, return if there's no ParalleldownloadTask either
-            Downloader.taskIdsProgrammaticallyCancelled.remove(taskId)
             if ParallelDownloader.downloads[taskId] == nil {
                 os_log("Could not pause task %@", log: log, type: .info, taskId)
                 result(false)
@@ -325,8 +323,6 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             return
         }
         if processResumeData(task: task, resumeData: resumeData) {
-            processStatusUpdate(task: task, status: .paused)
-            os_log("Paused task with taskId %@", log: log, type: .info, taskId)
             result(true)
         } else {
             os_log("Could not post resume data for taskId %@: task paused but cannot be resumed", log: log, type: .info, taskId)
