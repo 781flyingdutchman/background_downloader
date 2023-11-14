@@ -11,8 +11,9 @@ import androidx.preference.PreferenceManager
 import androidx.work.CoroutineWorker
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.bbflight.background_downloader.BDPlugin.Companion.gson
 import kotlinx.coroutines.*
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.io.*
 import java.lang.System.currentTimeMillis
 import java.net.HttpURLConnection
@@ -24,6 +25,7 @@ import java.util.*
 import kotlin.concurrent.schedule
 import kotlin.concurrent.write
 import java.lang.Double.min as doubleMin
+
 
 
 /***
@@ -49,7 +51,7 @@ open class TaskWorker(
 
         /** Converts [Task] to JSON string representation */
         fun taskToJsonString(task: Task): String {
-            return gson.toJson(task.toJsonMap())
+            return Json.encodeToString(task)
         }
 
         /**
@@ -172,7 +174,7 @@ open class TaskWorker(
                     // unsuccessful post, so store in local prefs (without exception info)
                     Log.d(TAG, "Could not post status update -> storing locally")
                     val jsonMap: MutableMap<String, Any?> = mutableMapOf(
-                        Pair("task", task.toJsonMap()),
+                        Pair("task", Json.encodeToString(task)),
                         Pair("taskStatus", status.ordinal)
                     )
                     storeLocally(
@@ -208,7 +210,7 @@ open class TaskWorker(
                     val editor = prefs.edit()
                     editor.putString(
                         BDPlugin.keyTasksMap,
-                        gson.toJson(tasksMap)
+                        Json.encodeToString(tasksMap)
                     )
                     editor.apply()
                 }
@@ -255,7 +257,7 @@ open class TaskWorker(
                     // unsuccessful post, so store in local prefs
                     Log.d(TAG, "Could not post progress update -> storing locally")
                     val jsonMap: MutableMap<String, Any?> = mutableMapOf(
-                        Pair("task", task.toJsonMap()),
+                        Pair("task", Json.encodeToString(task)),
                         Pair("progress", progress),
                         Pair("expectedFileSize", expectedFileSize)
                     )
@@ -315,14 +317,12 @@ open class TaskWorker(
         ) {
             BDPlugin.prefsLock.write {
                 // add the data to a map keyed by taskId
-                val jsonString = prefs.getString(prefsKey, "{}")
-                val mapByTaskId = gson.fromJson<Map<String, Any>>(
-                    jsonString, BDPlugin.jsonMapType
-                ).toMutableMap()
+                val jsonString = prefs.getString(prefsKey, "{}") as String
+                val mapByTaskId = Json.decodeFromString<MutableMap<String, Any>>(jsonString)
                 mapByTaskId[taskId] = item
                 val editor = prefs.edit()
                 editor.putString(
-                    prefsKey, gson.toJson(mapByTaskId)
+                    prefsKey, Json.encodeToString(mapByTaskId)
                 )
                 editor.apply()
             }
@@ -380,13 +380,11 @@ open class TaskWorker(
                 isTimedOut =
                     true // triggers .failed in [TransferBytes] method if not runInForeground
             }
-            task = Task(
-                gson.fromJson(inputData.getString(keyTask), BDPlugin.jsonMapType)
-            )
+            task = Json.decodeFromString(inputData.getString(keyTask)!!)
             notificationConfigJsonString = inputData.getString(keyNotificationConfig)
             notificationConfig =
-                if (notificationConfigJsonString != null) gson.fromJson(
-                    notificationConfigJsonString, NotificationConfig::class.java
+                if (notificationConfigJsonString != null) Json.decodeFromString(
+                    notificationConfigJsonString!!
                 ) else null
             canRunInForeground = runInForegroundFileSize >= 0 &&
                     notificationConfig?.running != null // must have notification
@@ -731,8 +729,6 @@ open class TaskWorker(
 fun getTaskMap(prefs: SharedPreferences): MutableMap<String, Any> {
     val jsonString = prefs.getString(
         BDPlugin.keyTasksMap, "{}"
-    )
-    return gson.fromJson<Map<String, Any>>(
-        jsonString, BDPlugin.jsonMapType
-    ).toMutableMap()
+    ) as String
+    return Json.decodeFromString(jsonString)
 }

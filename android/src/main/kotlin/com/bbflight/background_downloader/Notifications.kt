@@ -27,6 +27,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import kotlinx.coroutines.withContext
 import java.util.LinkedList
 import kotlin.math.roundToInt
@@ -40,7 +43,7 @@ import kotlin.math.roundToInt
  * Actual appearance of notification is dependent on the platform, e.g.
  * on iOS {progress} and progressBar are not available and ignored
  */
-@Keep
+@Serializable
 class TaskNotification(val title: String, val body: String) {
     override fun toString(): String {
         return "Notification(title='$title', body='$body')"
@@ -55,7 +58,7 @@ class TaskNotification(val title: String, val body: String) {
  * [error] is the notification used when something went wrong,
  * including pause, failed and notFound status
  */
-@Keep
+@Serializable
 class NotificationConfig(
     val running: TaskNotification?,
     val complete: TaskNotification?,
@@ -185,11 +188,7 @@ class NotificationRcvr : BroadcastReceiver() {
                     actionCancelInactive -> {
                         val taskJsonString = bundle.getString(keyTask)
                         if (taskJsonString != null) {
-                            val task = Task(
-                                BDPlugin.gson.fromJson(
-                                    taskJsonString, BDPlugin.jsonMapType
-                                )
-                            )
+                            val task = Json.decodeFromString<Task>(taskJsonString)
                             BDPlugin.cancelInactiveTask(context, task)
                             with(NotificationManagerCompat.from(context)) {
                                 cancel(task.taskId.hashCode())
@@ -485,9 +484,7 @@ object NotificationService {
     ) {
         val activity = BDPlugin.activity
         if (activity != null) {
-            val taskJsonString = BDPlugin.gson.toJson(
-                taskWorker.task.toJsonMap()
-            )
+            val taskJsonString = Json.encodeToString(taskWorker.task)
             // add tap action for all notifications
             val tapIntent = taskWorker.applicationContext.packageManager.getLaunchIntentForPackage(
                 taskWorker.applicationContext.packageName

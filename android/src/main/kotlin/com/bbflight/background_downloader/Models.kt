@@ -5,10 +5,12 @@ package com.bbflight.background_downloader
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import com.bbflight.background_downloader.BDPlugin.Companion.gson
 import com.bbflight.background_downloader.TaskWorker.Companion.TAG
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.io.File
 import java.net.URLDecoder
 import kotlin.math.absoluteValue
@@ -19,6 +21,7 @@ import kotlin.random.Random
 /// path.
 ///
 /// These correspond to the directories provided by the path_provider package
+@Serializable
 enum class BaseDirectory {
     applicationDocuments,  // getApplicationDocumentsDirectory()
     temporary,  // getTemporaryDirectory()
@@ -27,6 +30,7 @@ enum class BaseDirectory {
 }
 
 /// Type of updates requested for a group of tasks
+@Serializable
 enum class Updates {
     none,  // no status or progress updates
     status, // only calls upon change in DownloadTaskStatus
@@ -40,7 +44,7 @@ enum class Updates {
  * A blend of UploadTask, DownloadTask and ParallelDownloadTask with [taskType] indicating what kind
  * of task this is
  */
-
+@Serializable
 class Task(
     val taskId: String = "${Random.nextInt().absoluteValue}",
     val url: String,
@@ -68,65 +72,65 @@ class Task(
     val taskType: String
 ) {
 
-    /** Creates object from JsonMap */
-    @Suppress("UNCHECKED_CAST")
-    constructor(jsonMap: Map<String, Any>) : this(
-        taskId = jsonMap["taskId"] as String? ?: "",
-        url = jsonMap["url"] as String? ?: "",
-        urls = jsonMap["urls"] as List<String>? ?: listOf(),
-        filename = jsonMap["filename"] as String? ?: "",
-        headers = jsonMap["headers"] as Map<String, String>? ?: mutableMapOf<String, String>(),
-        httpRequestMethod = jsonMap["httpRequestMethod"] as String? ?: "GET",
-        chunks = (jsonMap["chunks"] as Double? ?: 1).toInt(),
-        post = jsonMap["post"] as String?,
-        fileField = jsonMap["fileField"] as String? ?: "",
-        mimeType = jsonMap["mimeType"] as String? ?: "",
-        fields = jsonMap["fields"] as Map<String, String>? ?: mutableMapOf<String, String>(),
-        directory = jsonMap["directory"] as String? ?: "",
-        baseDirectory = BaseDirectory.values()[(jsonMap["baseDirectory"] as Double?
-            ?: 0).toInt()],
-        group = jsonMap["group"] as String? ?: "",
-        updates = Updates.values()[(jsonMap["updates"] as Double? ?: 0).toInt()],
-        requiresWiFi = jsonMap["requiresWiFi"] as Boolean? ?: false,
-        retries = (jsonMap["retries"] as Double? ?: 0).toInt(),
-        retriesRemaining = (jsonMap["retriesRemaining"] as Double? ?: 0).toInt(),
-        allowPause = (jsonMap["allowPause"] as Boolean? ?: false),
-        priority = (jsonMap["priority"] as Double? ?: 5).toInt(),
-        metaData = jsonMap["metaData"] as String? ?: "",
-        displayName = jsonMap["displayName"] as String? ?: "",
-        creationTime = (jsonMap["creationTime"] as Double? ?: 0).toLong(),
-        taskType = jsonMap["taskType"] as String? ?: ""
-    )
-
-    /** Creates JSON map of this object */
-    fun toJsonMap(): Map<String, Any?> {
-        return mapOf(
-            "taskId" to taskId,
-            "url" to url,
-            "urls" to urls,
-            "filename" to filename,
-            "headers" to headers,
-            "httpRequestMethod" to httpRequestMethod,
-            "chunks" to chunks,
-            "post" to post,
-            "fileField" to fileField,
-            "mimeType" to mimeType,
-            "fields" to fields,
-            "directory" to directory,
-            "baseDirectory" to baseDirectory.ordinal, // stored as int
-            "group" to group,
-            "updates" to updates.ordinal,
-            "requiresWiFi" to requiresWiFi,
-            "retries" to retries,
-            "retriesRemaining" to retriesRemaining,
-            "allowPause" to allowPause,
-            "priority" to priority,
-            "metaData" to metaData,
-            "displayName" to displayName,
-            "creationTime" to creationTime,
-            "taskType" to taskType
-        )
-    }
+//    /** Creates object from JsonMap */
+//    @Suppress("UNCHECKED_CAST")
+//    constructor(jsonMap: Map<String, Any>) : this(
+//        taskId = jsonMap["taskId"] as String? ?: "",
+//        url = jsonMap["url"] as String? ?: "",
+//        urls = jsonMap["urls"] as List<String>? ?: listOf(),
+//        filename = jsonMap["filename"] as String? ?: "",
+//        headers = jsonMap["headers"] as Map<String, String>? ?: mutableMapOf<String, String>(),
+//        httpRequestMethod = jsonMap["httpRequestMethod"] as String? ?: "GET",
+//        chunks = (jsonMap["chunks"] as Double? ?: 1).toInt(),
+//        post = jsonMap["post"] as String?,
+//        fileField = jsonMap["fileField"] as String? ?: "",
+//        mimeType = jsonMap["mimeType"] as String? ?: "",
+//        fields = jsonMap["fields"] as Map<String, String>? ?: mutableMapOf<String, String>(),
+//        directory = jsonMap["directory"] as String? ?: "",
+//        baseDirectory = BaseDirectory.values()[(jsonMap["baseDirectory"] as Double?
+//            ?: 0).toInt()],
+//        group = jsonMap["group"] as String? ?: "",
+//        updates = Updates.values()[(jsonMap["updates"] as Double? ?: 0).toInt()],
+//        requiresWiFi = jsonMap["requiresWiFi"] as Boolean? ?: false,
+//        retries = (jsonMap["retries"] as Double? ?: 0).toInt(),
+//        retriesRemaining = (jsonMap["retriesRemaining"] as Double? ?: 0).toInt(),
+//        allowPause = (jsonMap["allowPause"] as Boolean? ?: false),
+//        priority = (jsonMap["priority"] as Double? ?: 5).toInt(),
+//        metaData = jsonMap["metaData"] as String? ?: "",
+//        displayName = jsonMap["displayName"] as String? ?: "",
+//        creationTime = (jsonMap["creationTime"] as Double? ?: 0).toLong(),
+//        taskType = jsonMap["taskType"] as String? ?: ""
+//    )
+//
+//    /** Creates JSON map of this object */
+//    fun toJsonMap(): Map<String, Any?> {
+//        return mapOf(
+//            "taskId" to taskId,
+//            "url" to url,
+//            "urls" to urls,
+//            "filename" to filename,
+//            "headers" to headers,
+//            "httpRequestMethod" to httpRequestMethod,
+//            "chunks" to chunks,
+//            "post" to post,
+//            "fileField" to fileField,
+//            "mimeType" to mimeType,
+//            "fields" to fields,
+//            "directory" to directory,
+//            "baseDirectory" to baseDirectory.ordinal, // stored as int
+//            "group" to group,
+//            "updates" to updates.ordinal,
+//            "requiresWiFi" to requiresWiFi,
+//            "retries" to retries,
+//            "retriesRemaining" to retriesRemaining,
+//            "allowPause" to allowPause,
+//            "priority" to priority,
+//            "metaData" to metaData,
+//            "displayName" to displayName,
+//            "creationTime" to creationTime,
+//            "taskType" to taskType
+//        )
+//    }
 
     /**
      * Returns a copy of the [Task] with optional changes to specific fields
@@ -345,9 +349,9 @@ class Task(
      * to form a full file path
      */
     fun extractFilesData(context: Context): List<Triple<String, String, String>> {
-        val fileFields = gson.fromJson(fileField, Array<String>::class.java).asList()
-        val filenames = gson.fromJson(filename, Array<String>::class.java).asList()
-        val mimeTypes = gson.fromJson(mimeType, Array<String>::class.java).asList()
+        val fileFields = Json.decodeFromString<List<String>>(fileField)
+        val filenames = Json.decodeFromString<List<String>>(filename)
+        val mimeTypes = Json.decodeFromString<List<String>>(mimeType)
         val result = ArrayList<Triple<String, String, String>>()
         for (i in fileFields.indices) {
             if (File(filenames[i]).exists()) {
@@ -396,6 +400,7 @@ class Task(
  *
  * Must match the Dart equivalent enum, as value are passed as ordinal/index integer
  */
+@Serializable
 enum class TaskStatus {
     enqueued,
     running,
@@ -419,7 +424,7 @@ enum class TaskStatus {
 class ResumeData(val task: Task, val data: String, val requiredStartByte: Long, val eTag: String?) {
     fun toJsonMap(): MutableMap<String, Any?> {
         return mutableMapOf(
-            "task" to task.toJsonMap(),
+            "task" to Json.encodeToString(task),
             "data" to data,
             "requiredStartByte" to requiredStartByte,
             "eTag" to eTag

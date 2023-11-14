@@ -3,6 +3,7 @@ package com.bbflight.background_downloader
 import android.content.Context
 import androidx.core.app.NotificationManagerCompat
 import androidx.work.WorkerParameters
+import kotlinx.serialization.json.Json
 
 /**
  * Worker that updates the notification for a task, given a
@@ -25,14 +26,10 @@ class UpdateNotificationWorker(applicationContext: Context, workerParams: Worker
     }
 
     override suspend fun doWork(): Result {
-        task = Task(
-            BDPlugin.gson.fromJson(inputData.getString(keyTask), BDPlugin.jsonMapType)
-        )
+        task = Json.decodeFromString(inputData.getString(keyTask)!!)
         notificationConfigJsonString = inputData.getString(keyNotificationConfig)
         notificationConfig =
-            if (notificationConfigJsonString != null) BDPlugin.gson.fromJson(
-                notificationConfigJsonString, NotificationConfig::class.java
-            ) else null
+            if (notificationConfigJsonString != null) Json.decodeFromString(notificationConfigJsonString!!) else null
         val taskStatusOrdinal = inputData.getInt(keyTaskStatusOrdinal, -1)
         notificationId = task.taskId.hashCode()
         if (taskStatusOrdinal == -1) {

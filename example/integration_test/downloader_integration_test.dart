@@ -736,7 +736,7 @@ void main() {
           baseDirectory: BaseDirectory.temporary,
           group: 'someGroup',
           updates: Updates.statusAndProgress,
-          requiresWiFi: true,
+          requiresWiFi: false,
           retries: 5,
           allowPause: false,
           // cannot be true if post != null
