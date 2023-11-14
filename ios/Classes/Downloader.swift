@@ -238,7 +238,7 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
             let urlSessionUploadTask = Downloader.urlSession!.uploadTask(with: request, fromFile: uploader.outputFileUrl())
             urlSessionUploadTask.taskDescription = taskDescription
-            urlSessionUploadTask.priority = Float(task.priority) / 10
+            urlSessionUploadTask.priority = 1 - Float(task.priority) / 10
             Downloader.uploaderForUrlSessionTaskIdentifier[urlSessionUploadTask.taskIdentifier] = uploader
             urlSessionUploadTask.resume()
         }
@@ -277,11 +277,11 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
     private func methodCancelTasksWithIds(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let taskIds = call.arguments as! [String]
         os_log("Canceling taskIds %@", log: log, type: .info, taskIds)
-        let tasksToCancel = await getAllUrlSessionTasks().filter({
+        let urlSessionTasksToCancel = await getAllUrlSessionTasks().filter({
             guard let task = getTaskFrom(urlSessionTask: $0) else { return false }
             return taskIds.contains(task.taskId)
         })
-        tasksToCancel.forEach({$0.cancel()})
+        urlSessionTasksToCancel.forEach({$0.cancel()})
         // cancel all ParallelDownloadTasks (they would not have shown up in tasksToCancel)
         taskIds.forEach { ParallelDownloader.downloads[$0]?.cancelTask() }
         result(true)
