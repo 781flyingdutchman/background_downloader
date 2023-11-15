@@ -48,8 +48,7 @@ import kotlin.concurrent.write
  * Manages the WorkManager task queue and the interface to Dart. Actual work is done in
  * [TaskWorker]
  */
-class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
-    PluginRegistry.RequestPermissionsResultListener {
+class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,PluginRegistry.RequestPermissionsResultListener {
     companion object {
         const val TAG = "BackgroundDownloader"
         const val keyTasksMap = "com.bbflight.background_downloader.taskMap"
@@ -76,8 +75,10 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         var canceledTaskIds = HashMap<String, Long>() // <taskId, timeMillis>
         var pausedTaskIds = HashSet<String>() // <taskId>
         var parallelDownloadTaskWorkers = HashMap<String, ParallelDownloadTaskWorker>()
-        var backgroundChannel: MethodChannel? = null
-        var backgroundChannelCounter = 0  // reference counter
+
+        var bgChannelsByContext: HashMap<String,MethodChannel> = HashMap()
+        var bgChannelsByTask: HashMap<String,MethodChannel> = HashMap()
+
         var forceFailPostOnBackgroundChannel = false
         val prefsLock = ReentrantReadWriteLock()
         val gson = Gson()
@@ -96,7 +97,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             task: Task,
             notificationConfigJsonString: String?,
             resumeData: ResumeData?,
-            initialDelayMillis: Long = 0
+            initialDelayMillis: Long = 0,
         ): Boolean {
             Log.i(TAG, "Enqueuing task with id ${task.taskId}")
             // validate the task.url
@@ -125,6 +126,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     .putLong(TaskWorker.keyStartByte, resumeData.requiredStartByte)
                     .putString(TaskWorker.keyETag, resumeData.eTag)
             }
+
             val data = dataBuilder.build()
             val constraints = Constraints.Builder().setRequiredNetworkType(
                 if (task.requiresWiFi) NetworkType.UNMETERED else NetworkType.CONNECTED
@@ -176,6 +178,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 editor.putString(keyTasksMap, gson.toJson(tasksMap))
                 editor.apply()
             }
+
             return true
         }
 
@@ -258,28 +261,23 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private var pauseReceiver: NotificationRcvr? = null
     private var resumeReceiver: NotificationRcvr? = null
     private var scope: CoroutineScope? = null
-
+    private var contextID : String = ""
     /**
      * Attaches the plugin to the Flutter engine and performs initialization
      */
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
+        //flutterPluginBinding.applicationContext
         // create channels and handler
-        backgroundChannelCounter++
-        if (backgroundChannel == null) {
-            // only set background channel once, as it has to be static field
-            // and per https://github.com/firebase/flutterfire/issues/9689 other
-            // plugins can create multiple instances of the plugin
-            backgroundChannel = MethodChannel(
-                flutterPluginBinding.binaryMessenger,
-                "com.bbflight.background_downloader.background"
-            )
-        }
+
         channel = MethodChannel(
             flutterPluginBinding.binaryMessenger, "com.bbflight.background_downloader"
         )
         channel?.setMethodCallHandler(this)
         // set context and register notification broadcast receivers
         applicationContext = flutterPluginBinding.applicationContext
+        //simple context ID generation
+        contextID = System.currentTimeMillis().toString();
+        bgChannelsByContext[contextID] =  MethodChannel(flutterPluginBinding.binaryMessenger,"com.bbflight.background_downloader.background");
         // clear expired items
         val workManager = WorkManager.getInstance(applicationContext)
         val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
@@ -301,10 +299,10 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel?.setMethodCallHandler(null)
         channel = null
-        backgroundChannelCounter--
-        if (backgroundChannelCounter == 0) {
-            backgroundChannel = null
-        }
+
+        //we do need to clear anything actually?
+        bgChannelsByTask.remove(contextID)
+
         if (pauseReceiver != null) {
             applicationContext.unregisterReceiver(pauseReceiver)
             pauseReceiver = null
@@ -378,16 +376,19 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             val startByte = if (args[3] is Long) args[3] as Long else (args[3] as Int).toLong()
             val eTag = args[4] as String?
             ResumeData(task, args[2] as String, startByte, eTag)
-        } else {
+        }
+        else {
             null
         }
+
+        bgChannelsByTask[task.taskId] = bgChannelsByContext[contextID]!!;
         result.success(
             doEnqueue(
                 applicationContext,
                 task,
                 notificationConfigJsonString,
                 resumeData,
-            )
+                )
         )
     }
 
@@ -833,6 +834,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 var success = false
                 while (retries < 5 && !success) {
                     try {
+                        var backgroundChannel : MethodChannel? = bgChannelsByContext[contextID];
+
                         if (backgroundChannel != null && scope != null) {
                             val resultCompleter = CompletableFuture<Boolean>()
                             val resultHandler = ResultHandler(resultCompleter)

@@ -26,6 +26,7 @@ import androidx.work.ForegroundInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.bbflight.background_downloader.BDPlugin.Companion.gson
+import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.*
 import java.io.*
 import java.lang.Long.max
@@ -101,6 +102,7 @@ open class TaskWorker(
                         } else {
                             argList.add(arg)
                         }
+                        /**
                         if (BDPlugin.backgroundChannel != null) {
                             BDPlugin.backgroundChannel?.invokeMethod(
                                 method, argList
@@ -108,7 +110,13 @@ open class TaskWorker(
                             if (!BDPlugin.forceFailPostOnBackgroundChannel) {
                                 success.complete(true)
                             }
-                        } else {
+                        }
+                        **/
+                         var channel :MethodChannel? = BDPlugin.bgChannelsByTask[task.taskId];
+                        if(channel != null){
+                            channel?.invokeMethod(method, argList)
+                        }
+                        else {
                             Log.i(TAG, "Could not post $method to background channel")
                         }
                     } catch (e: Exception) {
