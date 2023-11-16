@@ -371,6 +371,24 @@ class Task(
         return "Task(taskId='$taskId', url='$url', filename='$filename', headers=$headers, httpRequestMethod=$httpRequestMethod, post=$post, fileField='$fileField', mimeType='$mimeType', fields=$fields, directory='$directory', baseDirectory=$baseDirectory, group='$group', updates=$updates, requiresWiFi=$requiresWiFi, retries=$retries, retriesRemaining=$retriesRemaining, allowPause=$allowPause, metaData='$metaData', creationTime=$creationTime, taskType='$taskType')"
     }
 
+    /**
+     * An equality test on a [Task] is a test on the [taskId] only
+     */
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as Task
+
+        if (taskId != other.taskId) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        return taskId.hashCode()
+    }
+
 
 }
 

@@ -35,7 +35,6 @@ open class TaskWorker(
     applicationContext: Context, workerParams: WorkerParameters
 ) : CoroutineWorker(applicationContext, workerParams) {
 
-    @Suppress("RegExpRedundantEscape")
     companion object {
         const val TAG = "TaskWorker"
         const val chunkGroup = "chunk"
@@ -413,7 +412,10 @@ open class TaskWorker(
                     responseBody,
                     applicationContext
                 )
-                NotificationService.updateNotification(this@TaskWorker, status)
+                if (status != TaskStatus.failed || task.retriesRemaining == 0) {
+                    // update only if not failed, or no retries remaining
+                    NotificationService.updateNotification(this@TaskWorker, status)
+                }
             }
         }
         return Result.success()

@@ -17,7 +17,9 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationCompat.Builder
 import androidx.core.app.NotificationManagerCompat
+import androidx.work.Data
 import androidx.work.ForegroundInfo
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.bbflight.background_downloader.BDPlugin.Companion.TAG
 import kotlinx.coroutines.CoroutineScope
@@ -72,7 +74,8 @@ class NotificationConfig(
  * Data associated with a notificationGroup
  */
 class NotificationGroup(
-    val name: String
+    val name: String,
+    val notificationConfig: NotificationConfig
 ) {
     private var notifications = HashMap<Task, NotificationType>()
 
@@ -90,13 +93,24 @@ class NotificationGroup(
 
     /** Number of "finished" notifications in this group.
      *
-     * A "finished" notification is one that is not "running",
-     * so includes complete, error, paused
+     * A "finished" notification is one that is not .running,
+     * so includes .complete, .error, .paused
      * */
     val numFinished get() = notifications.filter { (_, v) -> v != NotificationType.running }.size
 
-    /** True if all notifications in this group are finished */
-    val complete get() = numTotal == numFinished
+    /** Number of "failed" notifications in this group.
+     *
+     * A "failed" notification is one of type .error
+     * */
+    val numFailed get() = notifications.filter { (_, v) -> v == NotificationType.error }.size
+
+    /** True if all tasks finished, regardless of outcome */
+    val isFinished get() = numFinished == numTotal
+
+    /**
+     * Return true if this group has an error
+     */
+    val hasError get() = numFailed > 0
 
     /** Returns a Set of running tasks in this notificationGroup */
     val runningTasks
@@ -110,7 +124,7 @@ class NotificationGroup(
      * State is determined by the number of finished notifications
      * and the number of total notifications
      */
-    private val groupState get() = 10000 * numTotal + numFinished
+    private val groupState get() = 1000 * numTotal + numFinished
 
     /** Update a [task] and [notificationType] to this group,
      * and return True if this led to change in [groupState]
@@ -223,7 +237,8 @@ class NotificationRcvr : BroadcastReceiver() {
             val notificationGroupName = bundle?.getString(keyNotificationGroupName)
             if (notificationGroupName != null) {
                 // cancel all tasks associated with this group that have not yet completed
-                val notificationGroup = BDPlugin.notificationGroups[notificationGroupName]
+                val notificationGroup =
+                    NotificationService.notificationGroups[notificationGroupName]
                 if (notificationGroup != null) {
                     runBlocking {
                         BDPlugin.cancelTasksWithIds(context,
@@ -239,10 +254,41 @@ class NotificationRcvr : BroadcastReceiver() {
  * Singleton service to manage notifications
  */
 object NotificationService {
+    var notificationGroups = HashMap<String, NotificationGroup>()
+
+    const val notificationPermissionRequestCode = 373921
+    private const val notificationChannelId = "background_downloader"
+
     private var queue =
-        LinkedList<Triple<TaskWorker, NotificationType, Builder>>() //TODO check if this is the right type
+        LinkedList<NotificationData>()
     private var lastNotificationTime: Long = 0
     private var createdNotificationChannel = false
+
+    /**
+     * Creates an [UpdateNotificationWorker] to update the notification associated with
+     * this task
+     *
+     * This is used when we do not have access to the [TaskWorker] object, i.e.
+     * when called from outside an actively running worker.
+     */
+    fun createUpdateNotificationWorker(
+        context: Context,
+        taskJsonMapString: String,
+        notificationConfigJsonString: String?,
+        taskStatusOrdinal: Int?
+    ) {
+        // create dummy TaskWorker
+        val requestBuilder = OneTimeWorkRequestBuilder<UpdateNotificationWorker>()
+        val dataBuilder =
+            Data.Builder().putString(TaskWorker.keyTask, taskJsonMapString)
+                .putString(TaskWorker.keyNotificationConfig, notificationConfigJsonString)
+        if (taskStatusOrdinal != null) {
+            dataBuilder.putInt(UpdateNotificationWorker.keyTaskStatusOrdinal, taskStatusOrdinal)
+        }
+        requestBuilder.setInputData(dataBuilder.build())
+        val workManager = WorkManager.getInstance(context)
+        workManager.enqueue(requestBuilder.build())
+    }
 
     /**
      * Create or update the notification for this [taskWorker], associated with this [taskStatus]
@@ -282,27 +328,14 @@ object NotificationService {
             NotificationType.error -> taskWorker.notificationConfig?.error
             NotificationType.paused -> taskWorker.notificationConfig?.paused
         }
-        val removeNotification = when (notificationType) {
-            NotificationType.running -> false
-            else -> notification == null
-        }
-        if (removeNotification) {
-            if (taskWorker.notificationId != 0) {
-                with(NotificationManagerCompat.from(taskWorker.applicationContext)) {
-                    cancel(taskWorker.notificationId)
-                }
-            }
-            return
-        }
         if (notification == null) {
+            addToNotificationQueue(taskWorker) // removes notification
             return
         }
         // need to show a notification
+        taskWorker.notificationId = taskWorker.task.taskId.hashCode()
         if (!createdNotificationChannel) {
             createNotificationChannel(taskWorker.applicationContext)
-        }
-        if (taskWorker.notificationId == 0) {
-            taskWorker.notificationId = taskWorker.task.taskId.hashCode()
         }
         val iconDrawable = when (notificationType) {
             NotificationType.running -> if (taskWorker.task.isDownloadTask()) R.drawable.outline_file_download_24 else R.drawable.outline_file_upload_24
@@ -311,7 +344,7 @@ object NotificationService {
             NotificationType.paused -> R.drawable.outline_pause_24
         }
         val builder = Builder(
-            taskWorker.applicationContext, BDPlugin.notificationChannel
+            taskWorker.applicationContext, notificationChannelId
         ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
         // use stored progress if notificationType is .paused
         taskWorker.notificationProgress =
@@ -350,7 +383,7 @@ object NotificationService {
             }
         }
         addNotificationActions(taskWorker, notificationType, builder)
-        displayNotification(taskWorker, notificationType, builder)
+        addToNotificationQueue(taskWorker, notificationType, builder)
     }
 
     /**
@@ -364,70 +397,80 @@ object NotificationService {
         taskWorker: TaskWorker, notificationGroupName: String, notificationType: NotificationType
     ) {
         val notificationGroup =
-            BDPlugin.notificationGroups[notificationGroupName] ?: NotificationGroup(
-                notificationGroupName
+            notificationGroups[notificationGroupName] ?: NotificationGroup(
+                notificationGroupName, taskWorker.notificationConfig!!
             )
         val stateChange = notificationGroup.update(taskWorker.task, notificationType)
-        BDPlugin.notificationGroups[notificationGroupName] = notificationGroup
+        notificationGroups[notificationGroupName] = notificationGroup
         if (stateChange) {
             // need to update the group notification
-            val notification =
-                if (notificationGroup.complete) taskWorker.notificationConfig?.complete else taskWorker.notificationConfig?.running
-            if (notificationGroup.complete) {
-                BDPlugin.notificationGroups.remove(notificationGroupName)
-            }
-            val removeNotification = when (notificationType) {
-                NotificationType.running -> false
-                else -> notification == null
-            }
-            if (removeNotification) {
-                with(NotificationManagerCompat.from(taskWorker.applicationContext)) {
-                    cancel(notificationGroup.notificationId)
-                }
-                return
-            }
-            if (notification == null) {
-                return
-            }
-            // need to show a notification
-            if (!createdNotificationChannel) {
-                createNotificationChannel(taskWorker.applicationContext)
-            }
             taskWorker.notificationId = notificationGroup.notificationId
-            val iconDrawable = when (notificationType) {
-                NotificationType.running -> if (taskWorker.task.isDownloadTask()) R.drawable.outline_file_download_24 else R.drawable.outline_file_upload_24
-                NotificationType.complete -> R.drawable.outline_download_done_24
-                else -> R.drawable.outline_error_outline_24
+            val hasError = notificationGroup.hasError
+            val isFinished = notificationGroup.isFinished
+            val notification = if (isFinished) {
+                if (hasError) notificationGroup.notificationConfig.error else notificationGroup.notificationConfig.complete
+            } else notificationGroup.notificationConfig.running
+            if (notification == null) {
+                addToNotificationQueue(taskWorker) // removes notification
+            } else {
+                // need to show a notification
+                if (!createdNotificationChannel) {
+                    createNotificationChannel(taskWorker.applicationContext)
+                }
+                val iconDrawable = if (isFinished) {
+                    if (hasError) R.drawable.outline_error_outline_24 else R.drawable.outline_download_done_24
+                } else {
+                    if (taskWorker.task.isDownloadTask()) R.drawable.outline_file_download_24 else R.drawable.outline_file_upload_24
+                }
+                val builder = Builder(
+                    taskWorker.applicationContext, notificationChannelId
+                ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
+                // title and body interpolation of tokens
+                val progress = notificationGroup.progress
+                val title = replaceTokens(
+                    notification.title,
+                    taskWorker.task,
+                    progress,
+                    notificationGroup = notificationGroup
+                )
+                if (title.isNotEmpty()) {
+                    builder.setContentTitle(title)
+                }
+                val body = replaceTokens(
+                    notification.body,
+                    taskWorker.task,
+                    progress,
+                    notificationGroup = notificationGroup
+                )
+                if (body.isNotEmpty()) {
+                    builder.setContentText(body)
+                }
+                // progress bar
+                val progressBar =
+                    notificationGroup.notificationConfig.progressBar && (notification == notificationGroup.notificationConfig.running)
+                if (progressBar && progress >= 0) {
+                    if (progress <= 1) {
+                        builder.setProgress(100, (progress * 100).roundToInt(), false)
+                    } else { // > 1 means indeterminate
+                        builder.setProgress(100, 0, true)
+                    }
+                }
+                if (!isFinished) {
+                    addCancelActionToNotificationGroup(taskWorker, notificationGroup, builder)
+                }
+                addToNotificationQueue(taskWorker, notificationType, builder) // shows notification
             }
-            val builder = Builder(
-                taskWorker.applicationContext, BDPlugin.notificationChannel
-            ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
-            // title and body interpolation of tokens
-            val progress = notificationGroup.progress
-            val title = replaceTokens(
-                notification.title, taskWorker.task, progress, notificationGroup = notificationGroup
-            )
-            if (title.isNotEmpty()) {
-                builder.setContentTitle(title)
-            }
-            val body = replaceTokens(
-                notification.body, taskWorker.task, progress, notificationGroup = notificationGroup
-            )
-            if (body.isNotEmpty()) {
-                builder.setContentText(body)
-            }
-            // progress bar
-            val progressBar =
-                taskWorker.notificationConfig?.progressBar ?: false && (notificationType == NotificationType.running)
-            if (progressBar && progress >= 0) {
-                if (taskWorker.notificationProgress <= 1) {
-                    builder.setProgress(100, (progress * 100).roundToInt(), false)
-                } else { // > 1 means indeterminate
-                    builder.setProgress(100, 0, true)
+            if (isFinished) {
+                // remove only if not re-activated within 5 seconds
+                withContext(Dispatchers.Default) {
+                    launch {
+                        delay(5000)
+                        if (notificationGroup.isFinished) {
+                            notificationGroups.remove(notificationGroupName)
+                        }
+                    }
                 }
             }
-            addGroupNotificationActions(taskWorker, notificationType, notificationGroup, builder)
-            addToQueue(taskWorker, notificationType, builder) // shows notification
         }
     }
 
@@ -575,78 +618,35 @@ object NotificationService {
     }
 
     /**
-     * Add action to notificationGroup notification via buttons or tap
-     *
-     * Which button(s) depends on the [notificationType], and the actions require
-     * access to [notificationGroup] and the [builder]
+     * Add Cancel action to notificationGroup notification
      */
-    private fun addGroupNotificationActions(
+    private fun addCancelActionToNotificationGroup(
         taskWorker: TaskWorker,
-        notificationType: NotificationType,
         notificationGroup: NotificationGroup,
         builder: Builder
     ) {
         val activity = BDPlugin.activity
         if (activity != null) {
             // add cancel button for running notification
-            if (notificationType == NotificationType.running) {
-                // cancel button when running
-                val cancelBundle = Bundle().apply {
-                    putString(NotificationRcvr.keyNotificationGroupName, notificationGroup.name)
-                }
-                val cancelIntent =
-                    Intent(taskWorker.applicationContext, NotificationRcvr::class.java).apply {
-                        action = NotificationRcvr.actionCancelActive
-                        putExtra(NotificationRcvr.keyBundle, cancelBundle)
-                    }
-                val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
-                    taskWorker.applicationContext,
-                    notificationGroup.notificationId,
-                    cancelIntent,
-                    PendingIntent.FLAG_IMMUTABLE
-                )
-                builder.addAction(
-                    R.drawable.outline_cancel_24,
-                    activity.getString(R.string.bg_downloader_cancel),
-                    cancelPendingIntent
-                )
+            val cancelBundle = Bundle().apply {
+                putString(NotificationRcvr.keyNotificationGroupName, notificationGroup.name)
             }
-        }
-    }
-
-    /** Add display notification request to the queue, and start the
-     * queue if needed
-     */
-    private suspend fun addToQueue(
-        taskWorker: TaskWorker, notificationType: NotificationType, builder: Builder
-    ) {
-        queue.add(Triple(taskWorker, notificationType, builder))
-        if (queue.size == 1) {
-            startQueue()
-        }
-    }
-
-    /**
-     * Start the queue to process group notifications
-     *
-     * Should only be called if queue length == 1
-     */
-    private suspend fun startQueue() {
-        withContext(Dispatchers.Default) {
-            launch {
-                var queueEmpty = false
-                while (!queueEmpty) {
-                    val now = System.currentTimeMillis()
-                    val elapsed = now - lastNotificationTime
-                    if (elapsed < 250) {
-                        delay(250 - elapsed)
-                    }
-                    val item = queue.remove()
-                    queueEmpty = queue.isEmpty()
-                    displayNotification(item.first, item.second, item.third)
-                    lastNotificationTime = System.currentTimeMillis()
+            val cancelIntent =
+                Intent(taskWorker.applicationContext, NotificationRcvr::class.java).apply {
+                    action = NotificationRcvr.actionCancelActive
+                    putExtra(NotificationRcvr.keyBundle, cancelBundle)
                 }
-            }
+            val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
+                taskWorker.applicationContext,
+                notificationGroup.notificationId,
+                cancelIntent,
+                PendingIntent.FLAG_IMMUTABLE
+            )
+            builder.addAction(
+                R.drawable.outline_cancel_24,
+                activity.getString(R.string.bg_downloader_cancel),
+                cancelPendingIntent
+            )
         }
     }
 
@@ -674,7 +674,7 @@ object NotificationService {
                     BDPlugin.activity?.requestPermissions(
                         arrayOf(
                             Manifest.permission.POST_NOTIFICATIONS
-                        ), BDPlugin.notificationPermissionRequestCode
+                        ), notificationPermissionRequestCode
                     )
                     return
                 }
@@ -726,7 +726,7 @@ object NotificationService {
             )
             val importance = NotificationManager.IMPORTANCE_LOW
             val channel = NotificationChannel(
-                BDPlugin.notificationChannel, name, importance
+                notificationChannelId, name, importance
             ).apply {
                 description = descriptionText
             }
@@ -759,6 +759,7 @@ object NotificationService {
     private val timeRemainingRegEx = Regex("""\{timeRemaining\}""", RegexOption.IGNORE_CASE)
     private val metaDataRegEx = Regex("""\{metadata\}""", RegexOption.IGNORE_CASE)
     private val numFinishedRegEx = Regex("""\{numFinished\}""", RegexOption.IGNORE_CASE)
+    private val numFailedRegEx = Regex("""\{numFailed\}""", RegexOption.IGNORE_CASE)
     private val numTotalRegEx = Regex("""\{numTotal\}""", RegexOption.IGNORE_CASE)
 
 
@@ -807,12 +808,81 @@ object NotificationService {
             output4 = timeRemainingRegEx.replace(output3, timeRemainingString)
         }
         return if (notificationGroup != null) {
-            numFinishedRegEx.replace(
-                numTotalRegEx.replace(output4, "${notificationGroup.numTotal}"),
-                "${notificationGroup.numFinished}"
+            numFailedRegEx.replace(
+                numFinishedRegEx.replace(
+                    numTotalRegEx.replace(output4, "${notificationGroup.numTotal}"),
+                    "${notificationGroup.numFinished}"
+                ), "${notificationGroup.numFailed}"
             )
         } else {
             output4
         }
     }
+
+    /** Add display notification request to the queue, and start the
+     * queue if needed
+     */
+    private suspend fun addToNotificationQueue(
+        taskWorker: TaskWorker, notificationType: NotificationType? = null, builder: Builder? = null
+    ) {
+        queue.add(NotificationData(taskWorker, notificationType, builder))
+        if (queue.size == 1) {
+            startQueue()
+        }
+    }
+
+    /**
+     * Start the queue to process group notifications, until the queue is empty
+     *
+     * Should only be called if queue length == 1
+     */
+    private suspend fun startQueue() {
+        withContext(Dispatchers.Default) {
+            launch {
+                var queueIsEmpty = false
+                while (!queueIsEmpty) {
+                    val now = System.currentTimeMillis()
+                    val elapsed = now - lastNotificationTime
+                    if (elapsed < 200) {
+                        delay(200 - elapsed)
+                    }
+                    val notificationData = queue.remove()
+                    queueIsEmpty = queue.isEmpty()
+                    if (notificationData.notificationType != null && notificationData.builder != null) {
+                        displayNotification(
+                            notificationData.taskWorker,
+                            notificationData.notificationType,
+                            notificationData.builder
+                        )
+                    } else {
+                        // remove the notification
+                        with(NotificationManagerCompat.from(notificationData.taskWorker.applicationContext)) {
+                            cancel(notificationData.taskWorker.notificationId)
+                        }
+                    }
+                    lastNotificationTime = System.currentTimeMillis()
+                }
+            }
+        }
+    }
+
+    /**
+     * Return the [NotificationGroup] this [taskId] belongs to, or
+     * null if not part of a [NotificationGroup]
+     */
+    fun notificationGroupWithTaskId(taskId: String): NotificationGroup? {
+        for (group in notificationGroups.values) {
+            if (group.runningTasks.any { task -> task.taskId == taskId }) {
+                return group
+            }
+        }
+        return null
+    }
 }
+
+/** Holds data required to construct a notification */
+data class NotificationData(
+    val taskWorker: TaskWorker,
+    val notificationType: NotificationType?,
+    val builder: Builder?
+)

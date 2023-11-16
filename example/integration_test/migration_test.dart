@@ -34,15 +34,12 @@ void main() {
     testWidgets('migrate from LocalStore', (widgetTester) async {
       final store = LocalStorePersistentStorage();
       await store.initialize();
-      await store.removeModifiedTask(null);
       await store.removePausedTask(null);
       await store.removeResumeData(null);
       await store.removeTaskRecord(null);
-      expect(await store.retrieveAllModifiedTasks(), isEmpty);
       expect(await store.retrieveAllPausedTasks(), isEmpty);
       expect(await store.retrieveAllResumeData(), isEmpty);
       expect(await store.retrieveAllTaskRecords(), isEmpty);
-      await store.storeModifiedTask(task);
       await store.storePausedTask(task2);
       await store.storeResumeData(resumeData);
       await store.storeTaskRecord(record);
@@ -55,7 +52,6 @@ void main() {
       final sql = SqlitePersistentStorage(migrationOptions: ['local_store']);
       await sql.initialize();
       // after migration, expect data is in sql storage
-      expect((await sql.retrieveAllModifiedTasks()).first, equals(task));
       expect((await sql.retrieveAllPausedTasks()).first, equals(task2));
       expect((await sql.retrieveAllResumeData()).first.taskId,
           equals(task.taskId));
@@ -64,7 +60,6 @@ void main() {
       // and expect original data is gone
       final store2 =
           LocalStorePersistentStorage(); // new to prevent cached values
-      expect(await store2.retrieveAllModifiedTasks(), isEmpty);
       expect(await store2.retrieveAllPausedTasks(), isEmpty);
       expect(await store2.retrieveAllResumeData(), isEmpty);
       expect(await store2.retrieveAllTaskRecords(), isEmpty);
@@ -121,7 +116,6 @@ void main() {
       // delete LocalStore database
       final store = LocalStorePersistentStorage();
       await store.initialize();
-      await store.removeModifiedTask(null);
       await store.removePausedTask(null);
       await store.removeResumeData(null);
       await store.removeTaskRecord(null);
@@ -138,7 +132,6 @@ void main() {
           migrationOptions: ['local_store', 'flutter_downloader']);
       await sql.initialize();
       // after migration, expect no data is in sql storage
-      expect(await sql.retrieveAllModifiedTasks(), isEmpty);
       expect(await sql.retrieveAllPausedTasks(), isEmpty);
       expect(await sql.retrieveAllResumeData(), isEmpty);
       expect(await sql.retrieveAllTaskRecords(), isEmpty);

@@ -331,13 +331,17 @@ abstract base class BaseDownloader {
     tasksWaitingToRetry.removeWhere((task) => task.group == group);
     final pausedTasks = await getPausedTasks();
     var pausedCount = 0;
-    for (var task in pausedTasks) {
+    for (final task in pausedTasks) {
       if (task.group == group) {
         await removePausedTask(task.taskId);
         pausedCount++;
       }
     }
-    return retryCount + pausedCount;
+    final awaitTasksToRemove = awaitTasks.keys.where((task) => task.group == group);
+    for (final task in awaitTasksToRemove) {
+      awaitTasks.remove(task);
+    }
+    return retryCount + pausedCount + awaitTasksToRemove.length;
   }
 
   /// Returns a list of all tasks in progress, matching [group]
@@ -369,6 +373,7 @@ abstract base class BaseDownloader {
       tasksWaitingToRetry.remove(task);
       processStatusUpdate(TaskStatusUpdate(task, TaskStatus.canceled));
       processProgressUpdate(TaskProgressUpdate(task, progressCanceled));
+      updateNotification(task, null); // remove notification
     }
     final remainingTaskIds = taskIds
         .where((taskId) => !matchingTaskIdsWaitingToRetry.contains(taskId));
@@ -412,6 +417,7 @@ abstract base class BaseDownloader {
         }
         processStatusUpdate(TaskStatusUpdate(task, TaskStatus.canceled));
         processProgressUpdate(TaskProgressUpdate(task, progressCanceled));
+        updateNotification(task, null); // remove notification
       }
     }
   }
@@ -755,6 +761,11 @@ abstract base class BaseDownloader {
       }
     }
   }
+
+  /// Update or remove notification for task
+  ///
+  /// If [taskStatusOrNull] is null, removes notification
+  void updateNotification(Task task, TaskStatus? taskStatusOrNull) {}
 
   /// Internal callback function for [awaitTasks] that passes the update
   /// on to different callbacks
