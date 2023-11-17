@@ -80,6 +80,8 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
                 _Concurrency.Task {
                     await methodPause(call: call, result: result)
                 }
+            case "updateNotification":
+                methodUpdateNotification(call: call, result: result)
             case "moveToSharedStorage":
                 methodMoveToSharedStorage(call: call, result: result)
             case "pathInSharedStorage":
@@ -327,6 +329,30 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
         } else {
             os_log("Could not post resume data for taskId %@: task paused but cannot be resumed", log: log, type: .info, taskId)
             result(false)
+        }
+    }
+    
+    /// Update the notification for this task
+    /// Args are:
+    /// - task
+    /// - notificationConfig - cannot be null
+    /// - taskStatus as ordinal in TaskStatus enum. If null, delete the notification
+    private func methodUpdateNotification(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        let args = call.arguments as! [Any]
+        let taskJsonString = args[0] as! String
+        let notificationConfigJsonString = args[1] as! String
+        let taskStatusOrdinal = args[2] as? Int
+        guard let task = taskFrom(jsonString: taskJsonString),
+              let notificationConfig = notificationConfigFrom(jsonString: notificationConfigJsonString)
+        else {
+            os_log("Cannot decode Task or NotificationConfig", log: log)
+            return
+        }
+        if (taskStatusOrdinal == nil) {
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [task.taskId])
+        } else {
+            let notificationType = notificationTypeForTaskStatus(status: TaskStatus(rawValue: taskStatusOrdinal!)!)
+            updateNotification(task: task, notificationType: notificationType, notificationConfig: notificationConfig)
         }
     }
     
@@ -741,7 +767,10 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             os_log("TaskId %@ returned response code %d", log: log,  type: .info, task.taskId, response.statusCode)
             let responseBody = readFile(url: location)
             processStatusUpdate(task: task, status: TaskStatus.failed, taskException: TaskException(type: .httpResponse, httpResponseCode: response.statusCode, description: responseBody?.isEmpty == false ? responseBody! : HTTPURLResponse.localizedString(forStatusCode: response.statusCode)))
-            updateNotification(task: task, notificationType: .error, notificationConfig: notificationConfig)
+            if task.retriesRemaining == 0 {
+                // update only if no retries remaining, otherwise keep notification alive
+                updateNotification(task: task, notificationType: .error, notificationConfig: notificationConfig)
+            }
             return
         }
         do {
@@ -749,7 +778,10 @@ public class Downloader: NSObject, FlutterPlugin, URLSessionDelegate, URLSession
             var taskException: TaskException? = nil
             defer {
                 processStatusUpdate(task: task, status: finalStatus, taskException: taskException)
-                updateNotification(task: task, notificationType: notificationTypeForTaskStatus(status: finalStatus), notificationConfig: notificationConfig)
+                if finalStatus != TaskStatus.failed || task.retriesRemaining == 0 {
+                    // update only if not failed, or no retries remaining
+                    updateNotification(task: task, notificationType: notificationTypeForTaskStatus(status: finalStatus), notificationConfig: notificationConfig)
+                }
             }
             let directory = try directoryForTask(task: task)
             do
