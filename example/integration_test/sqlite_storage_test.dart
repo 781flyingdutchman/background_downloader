@@ -153,13 +153,6 @@ void main() {
     testWidgets('Other types', (widgetTester) async {
       final sql = SqlitePersistentStorage();
       await sql.initialize();
-      // ModifiedTask
-      await sql.removeModifiedTask(null);
-      expect(await sql.retrieveAllModifiedTasks(), isEmpty);
-      await sql.storeModifiedTask(task);
-      expect(await sql.retrieveModifiedTask(task.taskId), equals(task));
-      expect(await sql.retrieveModifiedTask(task2.taskId), isNull);
-      await sql.removeModifiedTask(null);
       // PausedTask
       await sql.removePausedTask(null);
       expect(await sql.retrieveAllPausedTasks(), isEmpty);
@@ -180,15 +173,14 @@ void main() {
     testWidgets('purge old records', (widgetTester) async {
       final sql = SqlitePersistentStorage();
       await sql.initialize();
-      // ModifiedTask
-      await sql.removeModifiedTask(null);
-      expect(await sql.retrieveAllModifiedTasks(), isEmpty);
-      await sql.storeModifiedTask(task);
-      expect(await sql.retrieveModifiedTask(task.taskId), equals(task));
+      await sql.removePausedTask(null);
+      expect(await sql.retrieveAllPausedTasks(), isEmpty);
+      await sql.storePausedTask(task);
+      expect(await sql.retrievePausedTask(task.taskId), equals(task));
       await sql.purgeOldRecords();
-      expect(await sql.retrieveModifiedTask(task.taskId), equals(task));
+      expect(await sql.retrievePausedTask(task.taskId), equals(task));
       await sql.purgeOldRecords(age: const Duration(seconds: -10));
-      expect(await sql.retrieveModifiedTask(task.taskId), isNull);
+      expect(await sql.retrievePausedTask(task.taskId), isNull);
     });
   });
 }

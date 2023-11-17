@@ -238,6 +238,10 @@ abstract base class NativeDownloader extends BaseDownloader {
   @override
   Future<bool> resume(Task task) async {
     if (await super.resume(task)) {
+      task = awaitTasks.containsKey(task)
+          ? awaitTasks.keys
+              .firstWhere((awaitTask) => awaitTask.taskId == task.taskId)
+          : task;
       final taskResumeData = await getResumeData(task.taskId);
       if (taskResumeData != null) {
         final notificationConfig = notificationConfigForTask(task);
@@ -259,6 +263,19 @@ abstract base class NativeDownloader extends BaseDownloader {
       }
     }
     return false;
+  }
+
+  @override
+  void updateNotification(Task task, TaskStatus? taskStatusOrNull) {
+    final notificationConfig = notificationConfigForTask(task);
+    final taskStatusOrdinal = taskStatusOrNull?.index;
+    methodChannel.invokeMethod('updateNotification', [
+      jsonEncode(task.toJsonMap()),
+      notificationConfig != null
+          ? jsonEncode(notificationConfig.toJsonMap())
+          : null,
+      taskStatusOrdinal
+    ]);
   }
 
   /// Retrieve data that was not delivered to Dart, as a Map keyed by taskId

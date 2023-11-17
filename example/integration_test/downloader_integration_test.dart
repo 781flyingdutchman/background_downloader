@@ -115,7 +115,6 @@ void main() {
       print('${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
     });
     await FileDownloader().reset();
-    await FileDownloader().reset(group: FileDownloader.awaitGroup);
     await FileDownloader().reset(group: 'someGroup');
     // recreate the tasks
     task = DownloadTask(url: workingUrl, filename: defaultFilename);
@@ -157,7 +156,6 @@ void main() {
 
   tearDown(() async {
     await FileDownloader().reset();
-    await FileDownloader().reset(group: FileDownloader.awaitGroup);
     await FileDownloader().reset(group: 'someGroup');
     FileDownloader().destroy();
     if (Platform.isAndroid || Platform.isIOS) {

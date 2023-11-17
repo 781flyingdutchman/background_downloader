@@ -9,7 +9,7 @@ import Foundation
 
 
 /// Partial version of the Dart side DownloadTask, only used for background loading
-struct Task : Codable {
+struct Task : Codable, Hashable {
     var taskId: String = "\(Int.random(in: 1..<(1 << 32)))"
     var url: String
     var urls: [String]? = []

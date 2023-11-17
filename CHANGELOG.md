@@ -1,3 +1,12 @@
+## 8.0.0
+
+* removed all references to `awaitGroup` as the logic for the convenience methods has changed
+* if you use a convenience function, your task _must_ generate status updates (by setting the `updates` field to `Updates.status` - the default - or `Updates.statusAndProgress`)
+* if you use convenience function and specify a progress callback, your task _must_ also generate status updates (by setting the `updates` field to `Updates.statusAndProgress`)
+* [maybe] iOS photos library
+* [maybe] notification groups
+* Removed all references to `modifiedTasks` in `PersistentStorage` interface
+
 ## 7.12.3
 
 Issue #189 related to resume on Android versions prior to S, and to expediting a task prior to S

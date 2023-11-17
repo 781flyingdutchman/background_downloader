@@ -48,18 +48,6 @@ abstract interface class PersistentStorage {
   /// Remove paused [Task] with [taskId] from storage. If null, remove all
   Future<void> removePausedTask(String? taskId);
 
-  /// Store a modified [task], keyed by taskId
-  Future<void> storeModifiedTask(Task task);
-
-  /// Retrieve modified [Task] with [taskId], or null if not found
-  Future<Task?> retrieveModifiedTask(String taskId);
-
-  /// Retrieve all modified [Task]
-  Future<List<Task>> retrieveAllModifiedTasks();
-
-  /// Remove modified [Task] with [taskId] from storage. If null, remove all
-  Future<void> removeModifiedTask(String? taskId);
-
   /// Store [ResumeData], keyed by its taskId
   Future<void> storeResumeData(ResumeData resumeData);
 
@@ -104,7 +92,6 @@ class LocalStorePersistentStorage implements PersistentStorage {
   static const taskRecordsPath = 'backgroundDownloaderTaskRecords';
   static const resumeDataPath = 'backgroundDownloaderResumeData';
   static const pausedTasksPath = 'backgroundDownloaderPausedTasks';
-  static const modifiedTasksPath = 'backgroundDownloaderModifiedTasks';
   static const metaDataCollection = 'backgroundDownloaderDatabase';
 
   /// Stores [JsonMap] formatted [document] in [collection] keyed under [identifier]
@@ -144,10 +131,6 @@ class LocalStorePersistentStorage implements PersistentStorage {
       id?.replaceAll(_illegalPathCharacters, '_');
 
   @override
-  Future<void> removeModifiedTask(String? taskId) =>
-      remove(modifiedTasksPath, _safeIdOrNull(taskId));
-
-  @override
   Future<void> removePausedTask(String? taskId) =>
       remove(pausedTasksPath, _safeIdOrNull(taskId));
 
@@ -158,14 +141,6 @@ class LocalStorePersistentStorage implements PersistentStorage {
   @override
   Future<void> removeTaskRecord(String? taskId) =>
       remove(taskRecordsPath, _safeIdOrNull(taskId));
-
-  @override
-  Future<List<Task>> retrieveAllModifiedTasks() async {
-    final jsonMaps = await retrieveAll(modifiedTasksPath);
-    return jsonMaps.values
-        .map((e) => Task.createFromJsonMap(e))
-        .toList(growable: false);
-  }
 
   @override
   Future<List<Task>> retrieveAllPausedTasks() async {
@@ -192,14 +167,6 @@ class LocalStorePersistentStorage implements PersistentStorage {
   }
 
   @override
-  Future<Task?> retrieveModifiedTask(String taskId) async {
-    return switch (await retrieve(modifiedTasksPath, _safeId(taskId))) {
-      var jsonMap? => Task.createFromJsonMap(jsonMap),
-      _ => null
-    };
-  }
-
-  @override
   Future<Task?> retrievePausedTask(String taskId) async {
     return switch (await retrieve(pausedTasksPath, _safeId(taskId))) {
       var jsonMap? => Task.createFromJsonMap(jsonMap),
@@ -222,10 +189,6 @@ class LocalStorePersistentStorage implements PersistentStorage {
       _ => null
     };
   }
-
-  @override
-  Future<void> storeModifiedTask(Task task) =>
-      store(task.toJsonMap(), modifiedTasksPath, _safeId(task.taskId));
 
   @override
   Future<void> storePausedTask(Task task) =>
@@ -270,7 +233,6 @@ class LocalStorePersistentStorage implements PersistentStorage {
         for (String path in [
           resumeDataPath,
           pausedTasksPath,
-          modifiedTasksPath,
           taskRecordsPath
         ]) {
           try {
@@ -375,10 +337,6 @@ class PersistentStorageMigrator {
       await toStorage.storePausedTask(pausedTask);
       migratedSomething = true;
     }
-    for (final modifiedTask in await fromStorage.retrieveAllModifiedTasks()) {
-      await toStorage.storeModifiedTask(modifiedTask);
-      migratedSomething = true;
-    }
     for (final resumeData in await fromStorage.retrieveAllResumeData()) {
       await toStorage.storeResumeData(resumeData);
       migratedSomething = true;
@@ -412,7 +370,6 @@ class PersistentStorageMigrator {
       for (String collectionPath in [
         LocalStorePersistentStorage.resumeDataPath,
         LocalStorePersistentStorage.pausedTasksPath,
-        LocalStorePersistentStorage.modifiedTasksPath,
         LocalStorePersistentStorage.taskRecordsPath,
         LocalStorePersistentStorage.metaDataCollection
       ]) {

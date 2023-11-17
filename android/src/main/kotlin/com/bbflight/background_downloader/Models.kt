@@ -53,7 +53,7 @@ class Task(
     val fileField: String = "",
     val mimeType: String = "",
     val fields: Map<String, String> = mapOf(),
-    val directory: String = "",
+    private val directory: String = "",
     val baseDirectory: BaseDirectory,
     val group: String,
     val updates: Updates,
@@ -64,7 +64,7 @@ class Task(
     val priority: Int = 5,
     val metaData: String = "",
     val displayName: String = "",
-    val creationTime: Long = System.currentTimeMillis(), // untouched, so kept as integer on Android side
+    private val creationTime: Long = System.currentTimeMillis(), // untouched, so kept as integer on Android side
     val taskType: String
 ) {
 
@@ -208,7 +208,7 @@ class Task(
     }
 
     /** True if this task is a MultiUploadTask */
-    fun isMultiUploadTask(): Boolean {
+    private fun isMultiUploadTask(): Boolean {
         return taskType == "MultiUploadTask"
     }
 
@@ -369,6 +369,24 @@ class Task(
 
     override fun toString(): String {
         return "Task(taskId='$taskId', url='$url', filename='$filename', headers=$headers, httpRequestMethod=$httpRequestMethod, post=$post, fileField='$fileField', mimeType='$mimeType', fields=$fields, directory='$directory', baseDirectory=$baseDirectory, group='$group', updates=$updates, requiresWiFi=$requiresWiFi, retries=$retries, retriesRemaining=$retriesRemaining, allowPause=$allowPause, metaData='$metaData', creationTime=$creationTime, taskType='$taskType')"
+    }
+
+    /**
+     * An equality test on a [Task] is a test on the [taskId] only
+     */
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as Task
+
+        if (taskId != other.taskId) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        return taskId.hashCode()
     }
 
 
