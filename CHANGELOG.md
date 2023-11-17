@@ -1,11 +1,44 @@
 ## 8.0.0
 
+### Introduce notification groups ******groupNotification*****
+If you download or upload multiple files simultaneously, you may not want a notification for every task, but one notification representing the group of tasks.  To do this, set the `notificationGroup` field in a `notificationConfig` and use that configuration for all tasks in this group. It is easiest to combine this with the `group` field of the task, e.g.:
+```dart
+FileDownloader.configureNotificationForGroup('bunchOfFiles',
+            running: const TaskNotification(
+                '{numFinished} out of {numTotal}', 'Progress = {progress}'),
+            complete:
+                const TaskNotification("Done!", "Loaded {numTotal} files"),
+            error: const TaskNotification(
+                'Error', '{numFailed}/{numTotal} failed'),
+            progressBar: true,
+            notificationGroup: 'myNotificationGroup');
+            
+// start every task like this
+await FileDownloader().enqueue(DownloadTask(
+            url: 'https://your_url.com',
+            filename: 'your_filename',
+            group: 'bunchOfFiles'));
+```
+
+All tasks in group `bunchOfFiles` will now use the notification group configuration named `myNotificationGroup`.
+
+### Removal of `awaitGroup`
 * removed all references to `awaitGroup` as the logic for the convenience methods has changed
 * if you use a convenience function, your task _must_ generate status updates (by setting the `updates` field to `Updates.status` - the default - or `Updates.statusAndProgress`)
 * if you use convenience function and specify a progress callback, your task _must_ also generate status updates (by setting the `updates` field to `Updates.statusAndProgress`)
+
+
 * [maybe] iOS photos library
-* [maybe] notification groups
+* notification groups
 * Removed all references to `modifiedTasks` in `PersistentStorage` interface
+
+Bug fixes:
+* 'pause' notification issue on iOS
+* priority for multi-part file uploads
+* issue #194 (remove notification when canceling a paused task)
+
+Code refactoring to improve readability
+
 
 ## 7.12.3
 

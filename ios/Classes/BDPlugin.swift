@@ -8,7 +8,7 @@ let log = OSLog.init(subsystem: "BackgroundDownloader", category: "Downloader")
 
 /// Main Downloader plugin object, handles incoming methodCalls
 public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate {
-    
+
     static let instance = BDPlugin()
     
     public static var defaultResourceTimeout = 4 * 60 * 60.0 // in seconds
@@ -80,6 +80,8 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                 _Concurrency.Task {
                     await methodPause(call: call, result: result)
                 }
+            case "updateNotification":
+                methodUpdateNotification(call: call, result: result)
             case "moveToSharedStorage":
                 methodMoveToSharedStorage(call: call, result: result)
             case "pathInSharedStorage":
@@ -333,6 +335,31 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             result(false)
         }
     }
+    
+    /// Update the notification for this task
+    /// Args are:
+    /// - task
+    /// - notificationConfig - cannot be null
+    /// - taskStatus as ordinal in TaskStatus enum. If null, delete the notification
+    private func methodUpdateNotification(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        let args = call.arguments as! [Any]
+        let taskJsonString = args[0] as! String
+        let notificationConfigJsonString = args[1] as! String
+        let taskStatusOrdinal = args[2] as? Int
+        guard let task = taskFrom(jsonString: taskJsonString),
+              let notificationConfig = notificationConfigFrom(jsonString: notificationConfigJsonString)
+        else {
+            os_log("Cannot decode Task or NotificationConfig", log: log)
+            return
+        }
+        if (taskStatusOrdinal == nil) {
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [task.taskId])
+        } else {
+            let notificationType = notificationTypeForTaskStatus(status: TaskStatus(rawValue: taskStatusOrdinal!)!)
+            updateNotification(task: task, notificationType: notificationType, notificationConfig: notificationConfig)
+        }
+    }
+
     
     /// Returns a JSON String of a map of [ResumeData], keyed by taskId, that has been stored
     /// in local shared preferences because they could not be delivered to the Dart side.

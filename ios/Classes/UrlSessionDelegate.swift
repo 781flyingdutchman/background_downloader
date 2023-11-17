@@ -213,7 +213,10 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             os_log("TaskId %@ returned response code %d", log: log,  type: .info, task.taskId, response.statusCode)
             let responseBody = readFile(url: location)
             processStatusUpdate(task: task, status: TaskStatus.failed, taskException: TaskException(type: .httpResponse, httpResponseCode: response.statusCode, description: responseBody?.isEmpty == false ? responseBody! : HTTPURLResponse.localizedString(forStatusCode: response.statusCode)))
-            updateNotification(task: task, notificationType: .error, notificationConfig: notificationConfig)
+            if task.retriesRemaining == 0 {
+                // update notification only if no retries remaining
+                updateNotification(task: task, notificationType: .error, notificationConfig: notificationConfig)
+            }
             return
         }
         do {
@@ -221,7 +224,10 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             var taskException: TaskException? = nil
             defer {
                 processStatusUpdate(task: task, status: finalStatus, taskException: taskException)
-                updateNotification(task: task, notificationType: notificationTypeForTaskStatus(status: finalStatus), notificationConfig: notificationConfig)
+                if finalStatus != TaskStatus.failed || task.retriesRemaining == 0 {
+                    // update notification only if not failed, or no retries remaining
+                    updateNotification(task: task, notificationType: notificationTypeForTaskStatus(status: finalStatus), notificationConfig: notificationConfig)
+                }
             }
             let directory = try directoryForTask(task: task)
             do

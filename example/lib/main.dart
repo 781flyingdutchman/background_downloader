@@ -75,6 +75,15 @@ class _MyAppState extends State<MyApp> {
             paused: const TaskNotification(
                 'Download {filename}', 'Paused with metadata {metadata}'),
             progressBar: true)
+        .configureNotificationForGroup('bunch',
+            running: const TaskNotification(
+                '{numFinished} out of {numTotal}', 'Progress = {progress}'),
+            complete:
+                const TaskNotification("Done!", "Loaded {numTotal} files"),
+            error: const TaskNotification(
+                'Error', '{numFailed}/{numTotal} failed'),
+            progressBar: false,
+            notificationGroup: 'notGroup')
         .configureNotification(
             // for the 'Download & Open' dog picture
             // which uses 'download' which is not the .defaultGroup
@@ -227,6 +236,7 @@ class _MyAppState extends State<MyApp> {
             directory: 'my/directory',
             baseDirectory: BaseDirectory.applicationDocuments,
             updates: Updates.statusAndProgress,
+            retries: 3,
             allowPause: true,
             metaData: '<example metaData>',
             displayName: 'My display name');
@@ -290,8 +300,9 @@ class _MyAppState extends State<MyApp> {
             url:
                 'https://storage.googleapis.com/approachcharts/test/5MB-test.ZIP',
             filename: 'File_${Random().nextInt(1000)}',
+            group: 'bunch',
             updates: Updates.progress)); // must provide progress updates!
-        await Future.delayed(const Duration(milliseconds: 100));
+        await Future.delayed(const Duration(milliseconds: 500));
       }
       setState(() {
         loadABunchInProgress = false;

@@ -268,14 +268,13 @@ abstract base class NativeDownloader extends BaseDownloader {
   @override
   void updateNotification(Task task, TaskStatus? taskStatusOrNull) {
     final notificationConfig = notificationConfigForTask(task);
-    final taskStatusOrdinal = taskStatusOrNull?.index;
-    methodChannel.invokeMethod('updateNotification', [
-      jsonEncode(task.toJsonMap()),
-      notificationConfig != null
-          ? jsonEncode(notificationConfig.toJsonMap())
-          : null,
-      taskStatusOrdinal
-    ]);
+    if (notificationConfig != null) {
+      methodChannel.invokeMethod('updateNotification', [
+        jsonEncode(task.toJsonMap()),
+        jsonEncode(notificationConfig.toJsonMap()),
+        taskStatusOrNull?.index
+      ]);
+    }
   }
 
   /// Retrieve data that was not delivered to Dart, as a Map keyed by taskId

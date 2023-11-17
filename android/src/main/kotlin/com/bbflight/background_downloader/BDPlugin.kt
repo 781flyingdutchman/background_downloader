@@ -531,13 +531,13 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      *
      * Args are:
      * - task
-     * - notificationConfig - cannot be null
+     * - notificationConfig (cannot be null)
      * - taskStatus as ordinal in TaskStatus enum. If null, delete the notification
      */
     private fun methodUpdateNotification(call: MethodCall, result: Result) {
         val args = call.arguments as List<*>
         val taskJsonMapString = args[0] as String
-        val notificationConfigJsonString = args[1] as String?
+        val notificationConfigJsonString = args[1] as String
         val taskStatusOrdinal = args[2] as Int?
         NotificationService.createUpdateNotificationWorker(
             applicationContext,

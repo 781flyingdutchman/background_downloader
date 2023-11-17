@@ -2216,6 +2216,7 @@ void main() {
       // speed. If the test fails, it is likely because the task completed
       // before the initial pause command, or did not have time for two
       // pause/resume cycles -> shorten interval
+      //return; //TODO remove
       var interval = Platform.isAndroid || Platform.isIOS
           ? const Duration(milliseconds: 1500)
           : const Duration(milliseconds: 2000);

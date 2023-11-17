@@ -163,7 +163,7 @@ func updateNotification(task: Task, notificationType: NotificationType, notifica
     let notificationCenter = UNUserNotificationCenter.current()
     notificationCenter.getNotificationSettings { settings in
         guard (settings.authorizationStatus == .authorized) else { return }
-        if notificationConfig?.notificationGroup.isEmpty == true {
+        if notificationConfig?.notificationGroup.isEmpty ?? true {
             // regular notification
             var notification: NotificationContents?
             switch notificationType {
