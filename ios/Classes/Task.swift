@@ -195,6 +195,25 @@ enum TaskStatus: Int, Codable {
          paused
 }
 
+/** Holds data associated with a task status update, for local storage */
+struct TaskStatusUpdate: Encodable {
+    var task: Task
+    var taskStatus: TaskStatus
+}
+
+/** Holds data associated with a task progress update, for local storage */
+struct TaskProgressUpdate: Encodable {
+    var task: Task
+    var progress: Double
+    var expectedFileSize: Int64
+}
+
+/** Holds data associated with a resume, for local storage */
+struct ResumeData: Encodable {
+    var task: Task
+    var data: String
+}
+
 /// The type of [TaskException]
 enum ExceptionType: String {
     case

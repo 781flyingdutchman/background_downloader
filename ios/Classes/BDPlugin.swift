@@ -13,9 +13,9 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     
     public static var defaultResourceTimeout = 4 * 60 * 60.0 // in seconds
     public static var defaultRequestTimeout = 60.0 // in seconds
-    public static var keyResumeDataMap = "com.bbflight.background_downloader.resumeDataMap"
-    public static var keyStatusUpdateMap = "com.bbflight.background_downloader.statusUpdateMap"
-    public static var keyProgressUpdateMap = "com.bbflight.background_downloader.progressUpdateMap"
+    public static var keyResumeDataMap = "com.bbflight.background_downloader.resumeDataMap.v2"
+    public static var keyStatusUpdateMap = "com.bbflight.background_downloader.statusUpdateMap.v2"
+    public static var keyProgressUpdateMap = "com.bbflight.background_downloader.progressUpdateMap.v2"
     public static var keyConfigLocalize = "com.bbflight.background_downloader.config.localize"
     public static var keyConfigResourceTimeout = "com.bbflight.background_downloader.config.resourceTimeout"
     public static var keyConfigRequestTimeout = "com.bbflight.background_downloader.config.requestTimeout"
@@ -161,11 +161,19 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         let verb = isResume ? "Resuming" : "Starting"
         os_log("%@ task with id %@", log: log, type: .info, verb, task.taskId)
         UrlSessionDelegate.createUrlSession()
-        guard let url = URL(string: task.url) else {
+        let url: URL?
+        if #available(iOS 17.0, *) {
+            url = URL(string: task.url, encodingInvalidCharacters: false)
+        } else {
+            url = URL(string: task.url)
+        }
+        guard let url = url else
+        {
             os_log("Invalid url: %@", log: log, type: .info, task.url)
             postResult(result: result, value: false)
             return
         }
+        os_log("Url: %@", log: log, type: .info, url.absoluteString) //TODO remove
         var baseRequest = URLRequest(url: url)
         baseRequest.httpMethod = task.httpRequestMethod
         for (key, value) in task.headers {

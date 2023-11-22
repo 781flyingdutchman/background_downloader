@@ -67,14 +67,12 @@ public class ParallelDownloader: NSObject {
         ParallelDownloader.downloads[parentTask.taskId] = self
         let decoder = JSONDecoder()
         guard
-            let stringList = try? decoder.decode([String].self, from: resumeData.data(using: .utf8)!)
+            let chunkList = try? decoder.decode([Chunk].self, from: resumeData.data(using: .utf8)!)
         else {
             os_log("Could not decode resumeData for taskid %@", log: log, type: .info, parentTask.taskId)
             return false
         }
-        let decodedChunks = try? stringList.map({chunkJson in
-            try decoder.decode(Chunk.self, from: chunkJson.data(using: .utf8)!)})
-        chunks = decodedChunks!
+        chunks = chunkList
         parallelDownloadContentLength = chunks.reduce(0, { partialResult, chunk in
             partialResult + chunk.toByte - chunk.fromByte + 1
         })
@@ -326,11 +324,8 @@ public class ParallelDownloader: NSObject {
         let encoder = JSONEncoder()
         guard
             let chunkTasksData = try? encoder.encode(chunks.map({ chunk in
-                chunk.task
-            })),
-            let chunksData = try? encoder.encode(chunks.map({ chunk in
-                try? String(data: encoder.encode(chunk), encoding: .utf8)
-            }))
+                chunk.task })),
+            let chunksData = try? encoder.encode(chunks)
         else {
             return false
         }

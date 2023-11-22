@@ -348,13 +348,11 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
             : [status.rawValue, responseBody] as [Any?]
         if !postOnBackgroundChannel(method: "statusUpdate", task: task, arg: arg) {
             // store update locally as a merged task/status JSON string, without error info
-            guard let jsonData = try? JSONEncoder().encode(task),
-                  var jsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
+            guard let jsonData = try? JSONEncoder().encode(TaskStatusUpdate(task: task, taskStatus: status))
             else {
                 os_log("Could not store status update locally", log: log, type: .debug)
                 return }
-            jsonObject["taskStatus"] = status.rawValue
-            storeLocally(prefsKey: BDPlugin.keyStatusUpdateMap, taskId: task.taskId, item: jsonObject)
+            storeLocally(prefsKey: BDPlugin.keyStatusUpdateMap, taskId: task.taskId, item: jsonData)
         }
     }
     if isFinalState(status: status) {
@@ -373,14 +371,11 @@ func processProgressUpdate(task: Task, progress: Double, expectedFileSize: Int64
     if providesProgressUpdates(task: task) {
         if (!postOnBackgroundChannel(method: "progressUpdate", task: task, arg: [progress, expectedFileSize, networkSpeed, Int(timeRemaining * 1000.0)] as [Any])) {
             // store update locally as a merged task/progress JSON string
-            guard let jsonData = try? JSONEncoder().encode(task),
-                  var jsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
+            guard let jsonData = try? JSONEncoder().encode(TaskProgressUpdate(task: task, progress: progress, expectedFileSize: expectedFileSize))
             else {
                 os_log("Could not store progress update locally", log: log, type: .info)
                 return }
-            jsonObject["progress"] = progress
-            jsonObject["expectedFileSize"] = expectedFileSize
-            storeLocally(prefsKey: BDPlugin.keyProgressUpdateMap, taskId: task.taskId, item: jsonObject)
+            storeLocally(prefsKey: BDPlugin.keyProgressUpdateMap, taskId: task.taskId, item: jsonData)
         }
     }
 }
@@ -403,16 +398,11 @@ func processResumeData(task: Task, resumeData: Data) -> Bool {
     BDPlugin.localResumeData[task.taskId] = resumeDataAsBase64String
     if !postOnBackgroundChannel(method: "resumeData", task: task, arg: resumeDataAsBase64String) {
         // store resume data locally
-        guard let jsonData = try? JSONEncoder().encode(task),
-              let taskJsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
+        guard let jsonData = try? JSONEncoder().encode(ResumeData(task: task, data: resumeDataAsBase64String))
         else {
             os_log("Could not store resume data locally", log: log, type: .info)
             return false}
-        let resumeDataMap = [
-            "task": taskJsonObject,
-            "data": resumeDataAsBase64String
-        ] as [String : Any]
-        storeLocally(prefsKey: BDPlugin.keyResumeDataMap, taskId: task.taskId, item: resumeDataMap)
+        storeLocally(prefsKey: BDPlugin.keyResumeDataMap, taskId: task.taskId, item: jsonData)
     }
     return true
 }
@@ -469,11 +459,13 @@ func postOnBackgroundChannel(method: String, task:Task, arg: Any) -> Bool {
 }
 
 /// Store the [item] in preferences under [prefsKey], keyed by [taskId]
+///
+/// [item] is a JsonEncoded Data object
 func storeLocally(prefsKey: String, taskId: String,
-                  item: [String:Any]) {
+                  item: Data) {
     let defaults = UserDefaults.standard
-    var map: [String:Any] = defaults.dictionary(forKey: prefsKey) ?? [:]
-    map[taskId] = item
+    var map = defaults.dictionary(forKey: prefsKey) ?? [:]
+    map[taskId] = String(data: item, encoding: .utf8)
     defaults.set(map, forKey: prefsKey)
 }
 
