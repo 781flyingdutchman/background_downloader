@@ -391,6 +391,12 @@ sealed class Task extends Request implements Comparable {
             'taskType not in [DownloadTask, UploadTask, MultiUploadTask, ParallelDownloadTask]')
       };
 
+  /// Create a new [Task] subclass from provided [taskJson] string
+  factory Task.createFromJson(String taskJson) {
+    final jsonMap = jsonDecode(taskJson) as Map<String, dynamic>;
+    return Task.createFromJsonMap(jsonMap);
+  }
+
   /// Returns the absolute path to the file represented by this task
   /// based on the [Task.filename] (default) or [withFilename]
   ///
@@ -1283,6 +1289,9 @@ class TaskStatusUpdate extends TaskUpdate {
         responseBody = jsonMap['responseBody'],
         super.fromJsonMap(jsonMap);
 
+  /// Create object from JSON
+  factory TaskStatusUpdate.fromJson(String json) => TaskStatusUpdate.fromJsonMap(jsonDecode(json));
+
   /// Return JSON Map representing object
   @override
   Map<String, dynamic> toJsonMap() => {
@@ -1337,6 +1346,9 @@ class TaskProgressUpdate extends TaskUpdate {
         timeRemaining = Duration(
             seconds: (jsonMap['timeRemaining'] as num?)?.toInt() ?? -1),
         super.fromJsonMap(jsonMap);
+
+  /// Create object from JSON
+  factory TaskProgressUpdate.fromJson(String json) => TaskProgressUpdate.fromJsonMap(jsonDecode(json));
 
   /// Return JSON Map representing object
   @override
@@ -1406,6 +1418,9 @@ class ResumeData {
         requiredStartByte =
             (jsonMap['requiredStartByte'] as num?)?.toInt() ?? 0,
         eTag = jsonMap['eTag'] as String?;
+
+  /// Create object from JSON
+  factory ResumeData.fromJson(String json) => ResumeData.fromJsonMap(jsonDecode(json));
 
   /// Return JSON Map representing object
   Map<String, dynamic> toJsonMap() => {

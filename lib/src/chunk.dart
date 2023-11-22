@@ -61,13 +61,15 @@ class Chunk {
         fromByte = (jsonMap['fromByte'] as num).toInt(),
         toByte = (jsonMap['toByte'] as num).toInt(),
         task = Task.createFromJsonMap(jsonMap['task']) as DownloadTask,
-        status = TaskStatus.values[(jsonMap['status'] as num).toInt()],
-        progress = (jsonMap['progress'] as num).toDouble();
+        status = TaskStatus.values[(jsonMap['status'] as num? ?? 0).toInt()],
+        progress = (jsonMap['progress'] as num? ?? 0.0).toDouble();
+
+  factory Chunk.fromJson(String json) => Chunk.fromJsonMap(jsonDecode(json));
 
   /// Revive List<Chunk> from a JSON map in a jsonDecode operation,
   /// where each element is a map representing the [Chunk]
   static Object? listReviver(Object? key, Object? value) =>
-      key is int ? Chunk.fromJsonMap(jsonDecode(value as String)) : value;
+      key is int ? Chunk.fromJsonMap(value as Map<String, dynamic>) : value;
 
   /// Creates JSON map of this object
   Map<String, dynamic> toJsonMap() => {

@@ -144,7 +144,6 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                         // 'pause' is signalled by adding the taskId to a static list
                         if (BDPlugin.pausedTaskIds.remove(task.taskId)) {
                             pauseAllChunkTasks()
-                            // note: each chunk is json encoded separately as a map
                             postOnBackgroundChannel(
                                 "resumeData",
                                 task,
@@ -427,17 +426,16 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
 }
 
 @Serializable
-class Chunk(
+class Chunk private constructor(
     private val parentTaskId: String,
     private val url: String,
     private val filename: String,
     val task: Task,
     val fromByte: Long,
-    val toByte: Long
+    val toByte: Long,
+    var status: TaskStatus = TaskStatus.enqueued,
+    var progress: Double = 0.0
 ) {
-    var status = TaskStatus.enqueued
-    var progress = 0.0
-
     companion object {
         /**
          * Returns [Updates] that is based on the [parentTask]
@@ -454,7 +452,9 @@ class Chunk(
      * Constructor that also creates the [Task] associated with this [Chunk]
      */
     constructor(parentTask: Task, url: String, filename: String, from: Long, to: Long) : this(
-        parentTaskId = parentTask.taskId, url, filename,
+        parentTaskId = parentTask.taskId,
+        url,
+        filename,
         task = Task(
             url = url,
             filename = filename,
@@ -472,42 +472,14 @@ class Chunk(
             requiresWiFi = parentTask.requiresWiFi,
             allowPause = parentTask.allowPause,
             priority = parentTask.priority,
-            metaData = Json.encodeToString(mapOf("parentTaskId" to parentTask.taskId, "from" to from, "to" to to)),
+            metaData = Json.encodeToString(ChunkTaskMetaData(parentTask.taskId, from, to)),
             taskType = "DownloadTask"
-        ), from, to
+        ),
+        from,
+        to
     )
-
-//    /**
-//     * Constructor to create from jsonMap
-//     */
-//    constructor(jsonMap: Map<String, Any?>) :
-//            this(
-//                parentTaskId = jsonMap["parentTaskId"] as String? ?: "",
-//                url = jsonMap["url"] as String? ?: "",
-//                filename = jsonMap["filename"] as String? ?: "",
-//                task = Task(jsonMap["task"] as Map<String, Any>),
-//                fromByte = (jsonMap["fromByte"] as Double? ?: 0).toLong(),
-//                toByte = (jsonMap["toByte"] as Double? ?: 0).toLong()
-//            ) {
-//        status = TaskStatus.values()[(jsonMap["status"] as Double? ?: 0.0).toInt()]
-//        progress = jsonMap["progress"] as Double? ?: 0.0
-//    }
-//
-//    /**
-//     * Return JSON map representation of this object
-//     *
-//     * Only used to generate [ResumeData]
-//     */
-//    fun toJsonMap(): Map<String, Any?> {
-//        return mapOf(
-//            "parentTaskId" to parentTaskId,
-//            "url" to url,
-//            "filename" to filename,
-//            "fromByte" to fromByte,
-//            "toByte" to toByte,
-//            "task" to task.toJsonMap(),
-//            "status" to status.ordinal,
-//            "progress" to progress
-//        )
-//    }
 }
+
+@Serializable
+/// Holder for metaData for [Task] related to a [Chunk]
+data class ChunkTaskMetaData(val parentTaskId: String, val from: Long, val to: Long)

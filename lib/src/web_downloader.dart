@@ -57,7 +57,7 @@ final class DesktopDownloader extends BaseDownloader {
   }
 
   @override
-  Future<Map<String, dynamic>> popUndeliveredData(Undelivered dataType) {
+  Future<Map<String, String>> popUndeliveredData(Undelivered dataType) {
     throw UnimplementedError();
   }
 

@@ -226,7 +226,7 @@ abstract base class NativeDownloader extends BaseDownloader {
     final jsonString =
         await methodChannel.invokeMethod<String>('taskForId', taskId);
     if (jsonString != null) {
-      return Task.createFromJsonMap(jsonDecode(jsonString));
+      return Task.createFromJson(jsonString);
     }
     return null;
   }
@@ -286,7 +286,7 @@ abstract base class NativeDownloader extends BaseDownloader {
   /// StatusUpdates has a mixed Task & TaskStatus json representation 'taskStatus'
   /// ProgressUpdates has a mixed Task & double json representation 'progress'
   @override
-  Future<Map<String, dynamic>> popUndeliveredData(Undelivered dataType) async {
+  Future<Map<String, String>> popUndeliveredData(Undelivered dataType) async {
     final String jsonMapString = await switch (dataType) {
       Undelivered.resumeData => methodChannel.invokeMethod('popResumeData'),
       Undelivered.statusUpdates =>
@@ -294,7 +294,7 @@ abstract base class NativeDownloader extends BaseDownloader {
       Undelivered.progressUpdates =>
         methodChannel.invokeMethod('popProgressUpdates')
     };
-    return jsonDecode(jsonMapString);
+    return Map.from(jsonDecode(jsonMapString));
   }
 
   @override

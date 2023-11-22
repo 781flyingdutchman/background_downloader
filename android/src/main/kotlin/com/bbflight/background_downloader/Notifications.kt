@@ -27,10 +27,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.coroutines.withContext
 import java.util.LinkedList
 import kotlin.math.roundToInt
 
@@ -272,15 +272,15 @@ object NotificationService {
      */
     fun createUpdateNotificationWorker(
         context: Context,
-        taskJsonMapString: String,
-        notificationConfigJsonString: String?,
+        taskJson: String,
+        notificationConfigJson: String?,
         taskStatusOrdinal: Int?
     ) {
         // create dummy TaskWorker
         val requestBuilder = OneTimeWorkRequestBuilder<UpdateNotificationWorker>()
         val dataBuilder =
-            Data.Builder().putString(TaskWorker.keyTask, taskJsonMapString)
-                .putString(TaskWorker.keyNotificationConfig, notificationConfigJsonString)
+            Data.Builder().putString(TaskWorker.keyTask, taskJson)
+                .putString(TaskWorker.keyNotificationConfig, notificationConfigJson)
         if (taskStatusOrdinal != null) {
             dataBuilder.putInt(UpdateNotificationWorker.keyTaskStatusOrdinal, taskStatusOrdinal)
         }

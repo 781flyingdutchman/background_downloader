@@ -27,7 +27,6 @@ import kotlin.concurrent.write
 import java.lang.Double.min as doubleMin
 
 
-
 /***
  * The worker to execute one task
  *
@@ -173,12 +172,10 @@ open class TaskWorker(
                 if (!postOnBackgroundChannel("statusUpdate", task, arg)) {
                     // unsuccessful post, so store in local prefs (without exception info)
                     Log.d(TAG, "Could not post status update -> storing locally")
-                    val jsonMap: MutableMap<String, Any?> = mutableMapOf(
-                        Pair("task", Json.encodeToString(task)),
-                        Pair("taskStatus", status.ordinal)
-                    )
                     storeLocally(
-                        BDPlugin.keyStatusUpdateMap, task.taskId, jsonMap,
+                        BDPlugin.keyStatusUpdateMap,
+                        task.taskId,
+                        Json.encodeToString(TaskStatusUpdate(task, status)),
                         prefs
                     )
                 }
@@ -256,13 +253,8 @@ open class TaskWorker(
                 ) {
                     // unsuccessful post, so store in local prefs
                     Log.d(TAG, "Could not post progress update -> storing locally")
-                    val jsonMap: MutableMap<String, Any?> = mutableMapOf(
-                        Pair("task", Json.encodeToString(task)),
-                        Pair("progress", progress),
-                        Pair("expectedFileSize", expectedFileSize)
-                    )
                     storeLocally(
-                        BDPlugin.keyProgressUpdateMap, task.taskId, jsonMap,
+                        BDPlugin.keyProgressUpdateMap, task.taskId, Json.encodeToString(TaskProgressUpdate(task, progress, expectedFileSize)),
                         prefs
                     )
                 }
@@ -300,7 +292,7 @@ open class TaskWorker(
                 storeLocally(
                     BDPlugin.keyResumeDataMap,
                     resumeData.task.taskId,
-                    resumeData.toJsonMap(),
+                    Json.encodeToString(resumeData),
                     prefs
                 )
             }
@@ -312,13 +304,13 @@ open class TaskWorker(
         private fun storeLocally(
             prefsKey: String,
             taskId: String,
-            item: MutableMap<String, Any?>,
+            item: String,
             prefs: SharedPreferences
         ) {
             BDPlugin.prefsLock.write {
                 // add the data to a map keyed by taskId
                 val jsonString = prefs.getString(prefsKey, "{}") as String
-                val mapByTaskId = Json.decodeFromString<MutableMap<String, Any>>(jsonString)
+                val mapByTaskId = Json.decodeFromString<MutableMap<String, String>>(jsonString)
                 mapByTaskId[taskId] = item
                 val editor = prefs.edit()
                 editor.putString(
@@ -726,9 +718,7 @@ open class TaskWorker(
 }
 
 /** Return the map of tasks stored in preferences */
-fun getTaskMap(prefs: SharedPreferences): MutableMap<String, Any> {
-    val jsonString = prefs.getString(
-        BDPlugin.keyTasksMap, "{}"
-    ) as String
-    return Json.decodeFromString(jsonString)
+fun getTaskMap(prefs: SharedPreferences): MutableMap<String, Task> {
+    val tasksMapJson = prefs.getString(BDPlugin.keyTasksMap, "{}") ?: "{}"
+    return Json.decodeFromString(tasksMapJson)
 }

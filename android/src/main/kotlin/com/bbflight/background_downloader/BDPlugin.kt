@@ -54,8 +54,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         const val TAG = "BackgroundDownloader"
         const val keyTasksMap = "com.bbflight.background_downloader.taskMap.v2"
         const val keyResumeDataMap = "com.bbflight.background_downloader.resumeDataMap.v2"
-        const val keyStatusUpdateMap = "com.bbflight.background_downloader.statusUpdateMap"
-        const val keyProgressUpdateMap = "com.bbflight.background_downloader.progressUpdateMap"
+        const val keyStatusUpdateMap = "com.bbflight.background_downloader.statusUpdateMap.v2"
+        const val keyProgressUpdateMap = "com.bbflight.background_downloader.progressUpdateMap.v2"
         const val keyConfigForegroundFileSize =
             "com.bbflight.background_downloader.config.foregroundFileSize"
         const val keyConfigProxyAddress = "com.bbflight.background_downloader.config.proxyAddress"
@@ -165,7 +165,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             prefsLock.write {
                 val prefs = PreferenceManager.getDefaultSharedPreferences(context)
                 val tasksMap = getTaskMap(prefs)
-                tasksMap[task.taskId] = Json.encodeToString(task)
+                tasksMap[task.taskId] = task
                 val editor = prefs.edit()
                 editor.putString(keyTasksMap, Json.encodeToString(tasksMap))
                 editor.apply()
@@ -208,38 +208,27 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     prefsLock.write {
                         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
                         val tasksMap = getTaskMap(prefs)
-                        val taskJsonMap = tasksMap[taskId] as String?
-                        if (taskJsonMap != null) {
-                            val taskJsonMapString = tasksMap[taskId] as String?
-                            if (taskJsonMapString != null) {
-                                val task: Task
-                                try {
-                                    task = Json.decodeFromString(taskJsonMap)
-                                    TaskWorker.processStatusUpdate(task, TaskStatus.canceled, prefs)
-                                } catch (e: IllegalArgumentException) {
-                                    Log.d(TAG, "Could not decode task from $taskJsonMap")
-                                    return false
+                        val task = tasksMap[taskId]
+                        if (task != null) {
+                            TaskWorker.processStatusUpdate(task, TaskStatus.canceled, prefs)
+                            // remove outstanding notification for task or group
+                            val notificationGroup =
+                                NotificationService.notificationGroupWithTaskId(taskId)
+                            with(NotificationManagerCompat.from(context)) {
+                                if (notificationGroup == null) {
+                                    cancel(task.taskId.hashCode())
+                                } else {
+                                    // update notification for group
+                                    NotificationService.createUpdateNotificationWorker(
+                                        context,
+                                        Json.encodeToString(task),
+                                        Json.encodeToString(notificationGroup.notificationConfig),
+                                        TaskStatus.canceled.ordinal
+                                    )
                                 }
-                                TaskWorker.processStatusUpdate(task, TaskStatus.canceled, prefs)
-                                // remove outstanding notification for task or group
-                                val notificationGroup =
-                                    NotificationService.notificationGroupWithTaskId(taskId)
-                                with(NotificationManagerCompat.from(context)) {
-                                    if (notificationGroup == null) {
-                                        cancel(task.taskId.hashCode())
-                                    } else {
-                                        // update notification for group
-                                        NotificationService.createUpdateNotificationWorker(
-                                            context,
-                                            taskJsonMapString,
-                                            Json.encodeToString(notificationGroup.notificationConfig),
-                                            TaskStatus.canceled.ordinal
-                                        )
-                                    }
-                                }
-                            } else {
-                                Log.d(TAG, "Could not find task with taskId $taskId to cancel")
                             }
+                        } else {
+                            Log.d(TAG, "Could not find task with taskId $taskId to cancel")
                         }
                     }
                 }
@@ -458,9 +447,9 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 val tags = workInfo.tags.filter { it.contains("taskId=") }
                 if (tags.isNotEmpty()) {
                     val taskId = tags.first().substring(7)
-                    val taskAsJsonString = tasksMap[taskId]
-                    if (taskAsJsonString != null) {
-                        tasksAsListOfJsonStrings.add(taskAsJsonString as String)
+                    val task = tasksMap[taskId]
+                    if (task != null) {
+                        tasksAsListOfJsonStrings.add(Json.encodeToString(task))
                     }
                 }
             }
@@ -512,7 +501,12 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         prefsLock.read {
             val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
             val tasksMap = getTaskMap(prefs)
-            result.success(tasksMap[taskId]) //TODO now returns task as JsonString, not a map
+            val task = tasksMap[taskId]
+            if (task != null) {
+                result.success(Json.encodeToString(tasksMap[taskId]))
+            } else {
+                result.success(null)
+            }
         }
     }
 
@@ -558,7 +552,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         popLocalStorage(
             keyResumeDataMap,
             result
-        ) //TODO resumeData's task is now stored as JsonString
+        )
     }
 
     /**
@@ -580,7 +574,10 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     }
 
     /**
-     * Pops and returns locally stored map for this key as a JSON String, via the FlutterResult
+     * Pops and returns locally stored data for this key as a JSON String, via the FlutterResult
+     *
+     * The Json string represents a Map, keyed by TaskId, where each item is a Json representation
+     * of the object stored, e.g. a [TaskStatusUpdate]
      */
     private fun popLocalStorage(prefsKey: String, result: Result) {
         prefsLock.write {
@@ -689,7 +686,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val exceptionJson = args[3] as String?
         val exception = if (exceptionJson != null) {
             TaskException(
-                Json.decodeFromString<Map<String, Any>>(exceptionJson))
+                Json.decodeFromString<Map<String, Any>>(exceptionJson)
+            )
         } else null
         val responseBody = args[4] as String?
         parallelDownloadTaskWorkers[taskId]?.chunkStatusUpdate(

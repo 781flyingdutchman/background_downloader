@@ -164,28 +164,23 @@ abstract base class BaseDownloader {
 
   /// Retrieve data that was stored locally because it could not be
   /// delivered to the downloader
-  Future<void> retrieveLocallyStoredData() async {
+  Future<void> retrieveLocallyStoredData() async { //TODO fix iOS side
     if (!_retrievedLocallyStoredData) {
       final resumeDataMap = await popUndeliveredData(Undelivered.resumeData);
-      for (var taskId in resumeDataMap.keys) {
-        // map is <taskId, ResumeData>
-        final resumeData = ResumeData.fromJsonMap(resumeDataMap[taskId]);
+      for (var json in resumeDataMap.values) {
+        final resumeData = ResumeData.fromJson(json);
         await setResumeData(resumeData);
         await setPausedTask(resumeData.task);
       }
       final statusUpdateMap =
           await popUndeliveredData(Undelivered.statusUpdates);
-      for (var taskId in statusUpdateMap.keys) {
-        // map is <taskId, Task/TaskStatus> where TaskStatus is added to Task JSON
-        final payload = statusUpdateMap[taskId];
-        processStatusUpdate(TaskStatusUpdate.fromJsonMap(payload));
+      for (var json in statusUpdateMap.values) {
+        processStatusUpdate(TaskStatusUpdate.fromJson(json));
       }
       final progressUpdateMap =
           await popUndeliveredData(Undelivered.progressUpdates);
-      for (var taskId in progressUpdateMap.keys) {
-        // map is <taskId, Task/progress> where progress is added to Task JSON
-        final payload = progressUpdateMap[taskId];
-        processProgressUpdate(TaskProgressUpdate.fromJsonMap(payload));
+      for (var json in progressUpdateMap.values) {
+        processProgressUpdate(TaskProgressUpdate.fromJson(json));
       }
       _retrievedLocallyStoredData = true;
     }
@@ -337,7 +332,7 @@ abstract base class BaseDownloader {
         pausedCount++;
       }
     }
-    final awaitTasksToRemove = awaitTasks.keys.where((task) => task.group == group);
+    final awaitTasksToRemove = awaitTasks.keys.where((task) => task.group == group).toList();
     for (final task in awaitTasksToRemove) {
       awaitTasks.remove(task);
     }
@@ -543,7 +538,7 @@ abstract base class BaseDownloader {
       _storage.removePausedTask(taskId);
 
   /// Retrieve data that was not delivered to Dart
-  Future<Map<String, dynamic>> popUndeliveredData(Undelivered dataType);
+  Future<Map<String, String>> popUndeliveredData(Undelivered dataType);
 
   /// Clear pause and resume info associated with this [task]
   void _clearPauseResumeInfo(Task task) {
