@@ -629,7 +629,7 @@ To cancel, pause or resume a task, call:
 
 
 To manage or query the queue of waiting or running tasks, call:
-* `reset` to reset the downloader, which cancels all ongoing download tasks
+* `reset` to reset the downloader, which cancels all ongoing download tasks (may not yield proper status updates)
 * `allTaskIds` to get a list of `taskId` values of all tasks currently active (i.e. not in a final state). You can exclude tasks waiting for retries by setting `includeTasksWaitingToRetry` to `false`. Note that paused tasks are not included in this list
 * `allTasks` to get a list of all tasks currently active (i.e. not in a final state). You can exclude tasks waiting for retries by setting `includeTasksWaitingToRetry` to `false`. Note that paused tasks are not included in this list
 * `taskForId` to get the `Task` for the given `taskId`, or `null` if not found.

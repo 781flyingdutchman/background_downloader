@@ -210,20 +210,20 @@ base class Request {
     }
   }
 
-  /// Creates object from JsonMap
-  Request.fromJsonMap(Map<String, dynamic> jsonMap)
-      : url = jsonMap['url'] ?? '',
-        headers = Map<String, String>.from(jsonMap['headers'] ?? {}),
-        httpRequestMethod = jsonMap['httpRequestMethod'] as String? ??
-            (jsonMap['post'] == null ? 'GET' : 'POST'),
-        post = jsonMap['post'] as String?,
-        retries = (jsonMap['retries'] as num?)?.toInt() ?? 0,
-        retriesRemaining = (jsonMap['retriesRemaining'] as num?)?.toInt() ?? 0,
+  /// Creates object from [json]
+  Request.fromJson(Map<String, dynamic> json)
+      : url = json['url'] ?? '',
+        headers = Map<String, String>.from(json['headers'] ?? {}),
+        httpRequestMethod = json['httpRequestMethod'] as String? ??
+            (json['post'] == null ? 'GET' : 'POST'),
+        post = json['post'] as String?,
+        retries = (json['retries'] as num?)?.toInt() ?? 0,
+        retriesRemaining = (json['retriesRemaining'] as num?)?.toInt() ?? 0,
         creationTime = DateTime.fromMillisecondsSinceEpoch(
-            (jsonMap['creationTime'] as num?)?.toInt() ?? 0);
+            (json['creationTime'] as num?)?.toInt() ?? 0);
 
   /// Creates JSON map of this object
-  Map<String, dynamic> toJsonMap() => {
+  Map<String, dynamic> toJson() => {
         'url': url,
         'headers': headers,
         'httpRequestMethod': httpRequestMethod,
@@ -380,21 +380,20 @@ sealed class Task extends Request implements Comparable {
     }
   }
 
-  /// Create a new [Task] subclass from the provided [jsonMap]
-  factory Task.createFromJsonMap(Map<String, dynamic> jsonMap) =>
-      switch (jsonMap['taskType']) {
-        'DownloadTask' => DownloadTask.fromJsonMap(jsonMap),
-        'UploadTask' => UploadTask.fromJsonMap(jsonMap),
-        'MultiUploadTask' => MultiUploadTask.fromJsonMap(jsonMap),
-        'ParallelDownloadTask' => ParallelDownloadTask.fromJsonMap(jsonMap),
+  /// Create a new [Task] subclass from the provided [json]
+  factory Task.createFromJson(Map<String, dynamic> json) =>
+      switch (json['taskType']) {
+        'DownloadTask' => DownloadTask.fromJson(json),
+        'UploadTask' => UploadTask.fromJson(json),
+        'MultiUploadTask' => MultiUploadTask.fromJson(json),
+        'ParallelDownloadTask' => ParallelDownloadTask.fromJson(json),
         _ => throw ArgumentError(
             'taskType not in [DownloadTask, UploadTask, MultiUploadTask, ParallelDownloadTask]')
       };
 
-  /// Create a new [Task] subclass from provided [taskJson] string
-  factory Task.createFromJson(String taskJson) {
-    final jsonMap = jsonDecode(taskJson) as Map<String, dynamic>;
-    return Task.createFromJsonMap(jsonMap);
+  /// Create a new [Task] subclass from provided [jsonString]
+  factory Task.createFromJsonString(String jsonString) {
+    return Task.createFromJson(jsonDecode(jsonString));
   }
 
   /// Returns the absolute path to the file represented by this task
@@ -467,26 +466,26 @@ sealed class Task extends Request implements Comparable {
   /// Creates [Task] object from JsonMap
   ///
   /// Only used by subclasses. Use [createFromJsonMap] to create a properly
-  /// subclassed [Task] from the [jsonMap]
-  Task.fromJsonMap(Map<String, dynamic> jsonMap)
-      : taskId = jsonMap['taskId'] ?? '',
-        filename = jsonMap['filename'] ?? '',
-        directory = jsonMap['directory'] ?? '',
+  /// subclassed [Task] from the [json]
+  Task.fromJson(Map<String, dynamic> json)
+      : taskId = json['taskId'] ?? '',
+        filename = json['filename'] ?? '',
+        directory = json['directory'] ?? '',
         baseDirectory = BaseDirectory
-            .values[(jsonMap['baseDirectory'] as num?)?.toInt() ?? 0],
-        group = jsonMap['group'] ?? FileDownloader.defaultGroup,
-        updates = Updates.values[(jsonMap['updates'] as num?)?.toInt() ?? 0],
-        requiresWiFi = jsonMap['requiresWiFi'] ?? false,
-        allowPause = jsonMap['allowPause'] ?? false,
-        priority = (jsonMap['priority'] as num?)?.toInt() ?? 5,
-        metaData = jsonMap['metaData'] ?? '',
-        displayName = jsonMap['displayName'] ?? '',
-        super.fromJsonMap(jsonMap);
+            .values[(json['baseDirectory'] as num?)?.toInt() ?? 0],
+        group = json['group'] ?? FileDownloader.defaultGroup,
+        updates = Updates.values[(json['updates'] as num?)?.toInt() ?? 0],
+        requiresWiFi = json['requiresWiFi'] ?? false,
+        allowPause = json['allowPause'] ?? false,
+        priority = (json['priority'] as num?)?.toInt() ?? 5,
+        metaData = json['metaData'] ?? '',
+        displayName = json['displayName'] ?? '',
+        super.fromJson(json);
 
   /// Creates JSON map of this object
   @override
-  Map<String, dynamic> toJsonMap() => {
-        ...super.toJsonMap(),
+  Map<String, dynamic> toJson() => {
+        ...super.toJson(),
         'taskId': taskId,
         'filename': filename,
         'directory': directory,
@@ -604,14 +603,14 @@ final class DownloadTask extends Task {
       super.displayName,
       super.creationTime});
 
-  /// Creates [DownloadTask] object from JsonMap
-  DownloadTask.fromJsonMap(Map<String, dynamic> jsonMap)
+  /// Creates [DownloadTask] object from [json]
+  DownloadTask.fromJson(Map<String, dynamic> json)
       : assert(
             ['DownloadTask', 'ParallelDownloadTask']
-                .contains(jsonMap['taskType']),
+                .contains(json['taskType']),
             'The provided JSON map is not'
             ' a DownloadTask, because key "taskType" is not "DownloadTask" or "ParallelDownloadTask".'),
-        super.fromJsonMap(jsonMap);
+        super.fromJson(json);
 
   @override
   String get taskType => 'DownloadTask';
@@ -789,16 +788,16 @@ final class UploadTask extends Task {
             post: post,
             allowPause: false);
 
-  /// Creates [UploadTask] object from JsonMap
-  UploadTask.fromJsonMap(Map<String, dynamic> jsonMap)
+  /// Creates [UploadTask] object from [json]
+  UploadTask.fromJson(Map<String, dynamic> json)
       : assert(
-            ['UploadTask', 'MultiUploadTask'].contains(jsonMap['taskType']),
+            ['UploadTask', 'MultiUploadTask'].contains(json['taskType']),
             'The provided JSON map is not an UploadTask, '
             'because key "taskType" is not "UploadTask" or "MultiUploadTask.'),
-        fileField = jsonMap['fileField'] ?? 'file',
-        mimeType = jsonMap['mimeType'] ?? 'application/octet-stream',
-        fields = Map<String, String>.from(jsonMap['fields'] ?? {}),
-        super.fromJsonMap(jsonMap);
+        fileField = json['fileField'] ?? 'file',
+        mimeType = json['mimeType'] ?? 'application/octet-stream',
+        fields = Map<String, String>.from(json['fields'] ?? {}),
+        super.fromJson(json);
 
   /// Returns a list of fileData elements, one for each file to upload.
   /// Each element is a triple containing fileField, full filePath, mimeType
@@ -831,8 +830,8 @@ final class UploadTask extends Task {
   }
 
   @override
-  Map<String, dynamic> toJsonMap() => {
-        ...super.toJsonMap(),
+  Map<String, dynamic> toJson() => {
+        ...super.toJson(),
         'fileField': fileField,
         'mimeType': mimeType,
         'fields': fields
@@ -1009,19 +1008,19 @@ final class MultiUploadTask extends UploadTask {
   @override
   String get mimeType => jsonEncode(mimeTypes);
 
-  /// Creates [MultiUploadTask] object from JsonMap
-  MultiUploadTask.fromJsonMap(Map<String, dynamic> jsonMap)
+  /// Creates [MultiUploadTask] object from [json]
+  MultiUploadTask.fromJson(Map<String, dynamic> json)
       : assert(
-            jsonMap['taskType'] == 'MultiUploadTask',
+            json['taskType'] == 'MultiUploadTask',
             'The provided JSON map is not'
             ' a MultiUploadTask, because key "taskType" is not "MultiUploadTask".'),
         fileFields =
-            List.from(jsonDecode(jsonMap['fileField'] as String? ?? '[]')),
+            List.from(jsonDecode(json['fileField'] as String? ?? '[]')),
         filenames =
-            List.from(jsonDecode(jsonMap['filename'] as String? ?? '[]')),
+            List.from(jsonDecode(json['filename'] as String? ?? '[]')),
         mimeTypes =
-            List.from(jsonDecode(jsonMap['mimeType'] as String? ?? '[]')),
-        super.fromJsonMap(jsonMap);
+            List.from(jsonDecode(json['mimeType'] as String? ?? '[]')),
+        super.fromJson(json);
 
   @override
   MultiUploadTask copyWith(
@@ -1145,19 +1144,19 @@ final class ParallelDownloadTask extends DownloadTask {
     retriesRemaining = 0; // chunk tasks will retry instead, based on [retries]
   }
 
-  /// Creates [ParallelDownloadTask] object from JsonMap
-  ParallelDownloadTask.fromJsonMap(Map<String, dynamic> jsonMap)
+  /// Creates [ParallelDownloadTask] object from [json]
+  ParallelDownloadTask.fromJson(Map<String, dynamic> json)
       : assert(
-            jsonMap['taskType'] == 'ParallelDownloadTask',
+            json['taskType'] == 'ParallelDownloadTask',
             'The provided JSON map is not a ParallelDownloadTask, '
             'because key "taskType" is not "ParallelDownloadTask".'),
-        urls = List.from(jsonMap['urls'] as List<dynamic>? ?? []),
-        chunks = jsonMap['chunks'] as int? ?? 1,
-        super.fromJsonMap(jsonMap);
+        urls = List.from(json['urls'] as List<dynamic>? ?? []),
+        chunks = json['chunks'] as int? ?? 1,
+        super.fromJson(json);
 
   @override
-  Map<String, dynamic> toJsonMap() =>
-      {...super.toJsonMap(), 'urls': urls, 'chunks': chunks};
+  Map<String, dynamic> toJson() =>
+      {...super.toJson(), 'urls': urls, 'chunks': chunks};
 
   @override
   String get taskType => 'ParallelDownloadTask';
@@ -1259,12 +1258,12 @@ sealed class TaskUpdate {
 
   const TaskUpdate(this.task);
 
-  /// Create object from JSON Map
-  TaskUpdate.fromJsonMap(Map<String, dynamic> jsonMap)
-      : task = Task.createFromJsonMap(jsonMap['task'] ?? jsonMap);
+  /// Create object from [json]
+  TaskUpdate.fromJson(Map<String, dynamic> json)
+      : task = Task.createFromJson(json['task'] ?? json);
 
   /// Return JSON Map representing object
-  Map<String, dynamic> toJsonMap() => {'task': task.toJsonMap()};
+  Map<String, dynamic> toJson() => {'task': task.toJson()};
 }
 
 /// A status update
@@ -1279,25 +1278,25 @@ class TaskStatusUpdate extends TaskUpdate {
   const TaskStatusUpdate(super.task, this.status,
       [this.exception, this.responseBody]);
 
-  /// Create object from JSON Map
-  TaskStatusUpdate.fromJsonMap(Map<String, dynamic> jsonMap)
+  /// Create object from [json]
+  TaskStatusUpdate.fromJson(Map<String, dynamic> json)
       : status =
-            TaskStatus.values[(jsonMap['taskStatus'] as num?)?.toInt() ?? 0],
-        exception = jsonMap['exception'] != null
-            ? TaskException.fromJsonMap(jsonMap['exception'])
+            TaskStatus.values[(json['taskStatus'] as num?)?.toInt() ?? 0],
+        exception = json['exception'] != null
+            ? TaskException.fromJson(json['exception'])
             : null,
-        responseBody = jsonMap['responseBody'],
-        super.fromJsonMap(jsonMap);
+        responseBody = json['responseBody'],
+        super.fromJson(json);
 
-  /// Create object from JSON
-  factory TaskStatusUpdate.fromJson(String json) => TaskStatusUpdate.fromJsonMap(jsonDecode(json));
+  /// Create object from [jsonString]
+  factory TaskStatusUpdate.fromJsonString(String jsonString) => TaskStatusUpdate.fromJson(jsonDecode(jsonString));
 
   /// Return JSON Map representing object
   @override
-  Map<String, dynamic> toJsonMap() => {
-        ...super.toJsonMap(),
+  Map<String, dynamic> toJson() => {
+        ...super.toJson(),
         'taskStatus': status.index,
-        'exception': exception?.toJsonMap(),
+        'exception': exception?.toJson(),
         'responseBody': responseBody
       };
 
@@ -1338,22 +1337,22 @@ class TaskProgressUpdate extends TaskUpdate {
       this.networkSpeed = -1,
       this.timeRemaining = const Duration(seconds: -1)]);
 
-  /// Create object from JSON Map
-  TaskProgressUpdate.fromJsonMap(Map<String, dynamic> jsonMap)
-      : progress = (jsonMap['progress'] as num?)?.toDouble() ?? progressFailed,
-        expectedFileSize = (jsonMap['expectedFileSize'] as num?)?.toInt() ?? -1,
-        networkSpeed = (jsonMap['networkSpeed'] as num?)?.toDouble() ?? -1,
+  /// Create object from [json]
+  TaskProgressUpdate.fromJson(Map<String, dynamic> json)
+      : progress = (json['progress'] as num?)?.toDouble() ?? progressFailed,
+        expectedFileSize = (json['expectedFileSize'] as num?)?.toInt() ?? -1,
+        networkSpeed = (json['networkSpeed'] as num?)?.toDouble() ?? -1,
         timeRemaining = Duration(
-            seconds: (jsonMap['timeRemaining'] as num?)?.toInt() ?? -1),
-        super.fromJsonMap(jsonMap);
+            seconds: (json['timeRemaining'] as num?)?.toInt() ?? -1),
+        super.fromJson(json);
 
-  /// Create object from JSON
-  factory TaskProgressUpdate.fromJson(String json) => TaskProgressUpdate.fromJsonMap(jsonDecode(json));
+  /// Create object from [jsonString]
+  factory TaskProgressUpdate.fromJsonString(String jsonString) => TaskProgressUpdate.fromJson(jsonDecode(jsonString));
 
   /// Return JSON Map representing object
   @override
-  Map<String, dynamic> toJsonMap() => {
-        ...super.toJsonMap(),
+  Map<String, dynamic> toJson() => {
+        ...super.toJson(),
         'progress': progress,
         'expectedFileSize': expectedFileSize,
         'networkSpeed': networkSpeed,
@@ -1411,20 +1410,20 @@ class ResumeData {
   const ResumeData(this.task, this.data,
       [this.requiredStartByte = 0, this.eTag]);
 
-  /// Create object from JSON Map
-  ResumeData.fromJsonMap(Map<String, dynamic> jsonMap)
-      : task = Task.createFromJsonMap(jsonMap['task']),
-        data = jsonMap['data'] as String,
+  /// Create object from [json]
+  ResumeData.fromJson(Map<String, dynamic> json)
+      : task = Task.createFromJson(json['task']),
+        data = json['data'] as String,
         requiredStartByte =
-            (jsonMap['requiredStartByte'] as num?)?.toInt() ?? 0,
-        eTag = jsonMap['eTag'] as String?;
+            (json['requiredStartByte'] as num?)?.toInt() ?? 0,
+        eTag = json['eTag'] as String?;
 
-  /// Create object from JSON
-  factory ResumeData.fromJson(String json) => ResumeData.fromJsonMap(jsonDecode(json));
+  /// Create object from [jsonString]
+  factory ResumeData.fromJsonString(String jsonString) => ResumeData.fromJson(jsonDecode(jsonString));
 
   /// Return JSON Map representing object
-  Map<String, dynamic> toJsonMap() => {
-        'task': task.toJsonMap(),
+  Map<String, dynamic> toJson() => {
+        'task': task.toJson(),
         'data': data,
         'requiredStartByte': requiredStartByte,
         'eTag': eTag
@@ -1478,7 +1477,7 @@ final class TaskNotification {
   const TaskNotification(this.title, this.body);
 
   /// Return JSON Map representing object
-  Map<String, dynamic> toJsonMap() => {"title": title, "body": body};
+  Map<String, dynamic> toJson() => {"title": title, "body": body};
 }
 
 /// Notification configuration object
@@ -1551,11 +1550,11 @@ final class TaskNotificationConfig {
 
   /// Return JSON Map representing object, excluding the [taskOrGroup] field,
   /// as the JSON map is only required to pass along the config with a task
-  Map<String, dynamic> toJsonMap() => {
-        'running': running?.toJsonMap(),
-        'complete': complete?.toJsonMap(),
-        'error': error?.toJsonMap(),
-        'paused': paused?.toJsonMap(),
+  Map<String, dynamic> toJson() => {
+        'running': running?.toJson(),
+        'complete': complete?.toJson(),
+        'error': error?.toJson(),
+        'paused': paused?.toJson(),
         'progressBar': progressBar,
         'tapOpensFile': tapOpensFile,
         'notificationGroup': notificationGroup

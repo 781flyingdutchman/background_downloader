@@ -617,7 +617,7 @@ void main() {
       expect(await FileDownloader().enqueue(task), isTrue);
       expect(await FileDownloader().reset(group: 'non-default'), equals(0));
       expect(await FileDownloader().reset(), equals(1));
-      await statusCallbackCompleter.future;
+      await Future.delayed(const Duration(seconds: 1));
       // on iOS, the quick cancellation may not yield a 'running' state
       expect(statusCallbackCounter, lessThanOrEqualTo(3));
       expect(lastStatus, equals(TaskStatus.canceled));

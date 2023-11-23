@@ -167,20 +167,20 @@ abstract base class BaseDownloader {
   Future<void> retrieveLocallyStoredData() async { //TODO fix iOS side
     if (!_retrievedLocallyStoredData) {
       final resumeDataMap = await popUndeliveredData(Undelivered.resumeData);
-      for (var json in resumeDataMap.values) {
-        final resumeData = ResumeData.fromJson(json);
+      for (var jsonString in resumeDataMap.values) {
+        final resumeData = ResumeData.fromJsonString(jsonString);
         await setResumeData(resumeData);
         await setPausedTask(resumeData.task);
       }
       final statusUpdateMap =
           await popUndeliveredData(Undelivered.statusUpdates);
-      for (var json in statusUpdateMap.values) {
-        processStatusUpdate(TaskStatusUpdate.fromJson(json));
+      for (var jsonString in statusUpdateMap.values) {
+        processStatusUpdate(TaskStatusUpdate.fromJsonString(jsonString));
       }
       final progressUpdateMap =
           await popUndeliveredData(Undelivered.progressUpdates);
-      for (var json in progressUpdateMap.values) {
-        processProgressUpdate(TaskProgressUpdate.fromJson(json));
+      for (var jsonString in progressUpdateMap.values) {
+        processProgressUpdate(TaskProgressUpdate.fromJsonString(jsonString));
       }
       _retrievedLocallyStoredData = true;
     }

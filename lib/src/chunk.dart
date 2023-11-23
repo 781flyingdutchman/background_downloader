@@ -53,38 +53,33 @@ class Chunk {
     progress = 0;
   }
 
-  /// Creates object from JsonMap
-  Chunk.fromJsonMap(Map<String, dynamic> jsonMap)
-      : parentTaskId = jsonMap['parentTaskId'],
-        url = jsonMap['url'],
-        filename = jsonMap['filename'],
-        fromByte = (jsonMap['fromByte'] as num).toInt(),
-        toByte = (jsonMap['toByte'] as num).toInt(),
-        task = Task.createFromJsonMap(jsonMap['task']) as DownloadTask,
-        status = TaskStatus.values[(jsonMap['status'] as num? ?? 0).toInt()],
-        progress = (jsonMap['progress'] as num? ?? 0.0).toDouble();
-
-  factory Chunk.fromJson(String json) => Chunk.fromJsonMap(jsonDecode(json));
+  /// Creates object from [json]
+  Chunk.fromJson(Map<String, dynamic> json)
+      : parentTaskId = json['parentTaskId'],
+        url = json['url'],
+        filename = json['filename'],
+        fromByte = (json['fromByte'] as num).toInt(),
+        toByte = (json['toByte'] as num).toInt(),
+        task = Task.createFromJson(json['task']) as DownloadTask,
+        status = TaskStatus.values[(json['status'] as num? ?? 0).toInt()],
+        progress = (json['progress'] as num? ?? 0.0).toDouble();
 
   /// Revive List<Chunk> from a JSON map in a jsonDecode operation,
   /// where each element is a map representing the [Chunk]
   static Object? listReviver(Object? key, Object? value) =>
-      key is int ? Chunk.fromJsonMap(value as Map<String, dynamic>) : value;
+      key is int ? Chunk.fromJson(value as Map<String, dynamic>) : value;
 
   /// Creates JSON map of this object
-  Map<String, dynamic> toJsonMap() => {
+  Map<String, dynamic> toJson() => {
         'parentTaskId': parentTaskId,
         'url': url,
         'filename': filename,
         'fromByte': fromByte,
         'toByte': toByte,
-        'task': task.toJsonMap(),
+        'task': task.toJson(),
         'status': status.index,
         'progress': progress
       };
-
-  /// Creates JSON String of this object
-  String toJson() => jsonEncode(toJsonMap());
 
   /// Return the parentTaskId embedded in the metaData of a chunkTask
   static String getParentTaskId(Task task) =>

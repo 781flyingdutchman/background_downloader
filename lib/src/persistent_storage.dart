@@ -19,8 +19,8 @@ import 'sqlite_storage.dart';
 /// - modified [Task]s, keyed by taskId
 /// - [ResumeData], keyed by taskId
 ///
-/// Each of the objects has a toJsonMap method and can be created using
-/// fromJsonMap (use .createFromJsonMap for [Task] objects)
+/// Each of the objects has a toJson method and can be created using
+/// fromJson (use .createFromJson for [Task] objects)
 ///
 /// Also defined methods to allow migration from one database version to another
 abstract interface class PersistentStorage {
@@ -146,7 +146,7 @@ class LocalStorePersistentStorage implements PersistentStorage {
   Future<List<Task>> retrieveAllPausedTasks() async {
     final jsonMaps = await retrieveAll(pausedTasksPath);
     return jsonMaps.values
-        .map((e) => Task.createFromJsonMap(e))
+        .map((e) => Task.createFromJson(e))
         .toList(growable: false);
   }
 
@@ -154,7 +154,7 @@ class LocalStorePersistentStorage implements PersistentStorage {
   Future<List<ResumeData>> retrieveAllResumeData() async {
     final jsonMaps = await retrieveAll(resumeDataPath);
     return jsonMaps.values
-        .map((e) => ResumeData.fromJsonMap(e))
+        .map((e) => ResumeData.fromJson(e))
         .toList(growable: false);
   }
 
@@ -162,14 +162,14 @@ class LocalStorePersistentStorage implements PersistentStorage {
   Future<List<TaskRecord>> retrieveAllTaskRecords() async {
     final jsonMaps = await retrieveAll(taskRecordsPath);
     return jsonMaps.values
-        .map((e) => TaskRecord.fromJsonMap(e))
+        .map((e) => TaskRecord.fromJson(e))
         .toList(growable: false);
   }
 
   @override
   Future<Task?> retrievePausedTask(String taskId) async {
     return switch (await retrieve(pausedTasksPath, _safeId(taskId))) {
-      var jsonMap? => Task.createFromJsonMap(jsonMap),
+      var json? => Task.createFromJson(json),
       _ => null
     };
   }
@@ -177,7 +177,7 @@ class LocalStorePersistentStorage implements PersistentStorage {
   @override
   Future<ResumeData?> retrieveResumeData(String taskId) async {
     return switch (await retrieve(resumeDataPath, _safeId(taskId))) {
-      var jsonMap? => ResumeData.fromJsonMap(jsonMap),
+      var json? => ResumeData.fromJson(json),
       _ => null
     };
   }
@@ -185,22 +185,22 @@ class LocalStorePersistentStorage implements PersistentStorage {
   @override
   Future<TaskRecord?> retrieveTaskRecord(String taskId) async {
     return switch (await retrieve(taskRecordsPath, _safeId(taskId))) {
-      var jsonMap? => TaskRecord.fromJsonMap(jsonMap),
+      var json? => TaskRecord.fromJson(json),
       _ => null
     };
   }
 
   @override
   Future<void> storePausedTask(Task task) =>
-      store(task.toJsonMap(), pausedTasksPath, _safeId(task.taskId));
+      store(task.toJson(), pausedTasksPath, _safeId(task.taskId));
 
   @override
   Future<void> storeResumeData(ResumeData resumeData) =>
-      store(resumeData.toJsonMap(), resumeDataPath, _safeId(resumeData.taskId));
+      store(resumeData.toJson(), resumeDataPath, _safeId(resumeData.taskId));
 
   @override
   Future<void> storeTaskRecord(TaskRecord record) =>
-      store(record.toJsonMap(), taskRecordsPath, _safeId(record.taskId));
+      store(record.toJson(), taskRecordsPath, _safeId(record.taskId));
 
   @override
   Future<(String, int)> get storedDatabaseVersion async {

@@ -173,7 +173,6 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             postResult(result: result, value: false)
             return
         }
-        os_log("Url: %@", log: log, type: .info, url.absoluteString) //TODO remove
         var baseRequest = URLRequest(url: url)
         baseRequest.httpMethod = task.httpRequestMethod
         for (key, value) in task.headers {

@@ -29,7 +29,7 @@ abstract base class NativeDownloader extends BaseDownloader {
     // on the method
     _backgroundChannel.setMethodCallHandler((call) async {
       final args = call.arguments as List<dynamic>;
-      final task = Task.createFromJsonMap(jsonDecode(args.first as String));
+      final task = Task.createFromJson(jsonDecode(args.first as String));
       final message = (
         call.method,
         args.length > 2
@@ -96,7 +96,7 @@ abstract base class NativeDownloader extends BaseDownloader {
               Chunk.getParentTaskId(task),
               task.taskId,
               status.index,
-              exception?.toJson(),
+              exception?.toJsonString(),
               responseBody
             ]);
           }
@@ -146,7 +146,7 @@ abstract base class NativeDownloader extends BaseDownloader {
         // from ParallelDownloadTask
         case ('enqueueChild', String childTaskJsonString):
           final childTask =
-              Task.createFromJsonMap(jsonDecode(childTaskJsonString));
+              Task.createFromJson(jsonDecode(childTaskJsonString));
           await FileDownloader().enqueue(childTask);
 
         // from ParallelDownloadTask
@@ -160,7 +160,7 @@ abstract base class NativeDownloader extends BaseDownloader {
               listOfTasksJson,
               reviver: (key, value) => switch (key) {
                     int _ =>
-                      Task.createFromJsonMap(value as Map<String, dynamic>),
+                      Task.createFromJson(value as Map<String, dynamic>),
                     _ => value
                   }));
           // execute the pause calls with a delay, to free up the message queue
@@ -182,9 +182,9 @@ abstract base class NativeDownloader extends BaseDownloader {
     super.enqueue(task);
     final notificationConfig = notificationConfigForTask(task);
     return await methodChannel.invokeMethod<bool>('enqueue', [
-          jsonEncode(task.toJsonMap()),
+          jsonEncode(task.toJson()),
           notificationConfig != null
-              ? jsonEncode(notificationConfig.toJsonMap())
+              ? jsonEncode(notificationConfig.toJson())
               : null,
         ]) ??
         false;
@@ -207,7 +207,7 @@ abstract base class NativeDownloader extends BaseDownloader {
         await methodChannel.invokeMethod<List<dynamic>?>('allTasks', group) ??
             [];
     final tasks = result
-        .map((e) => Task.createFromJsonMap(jsonDecode(e as String)))
+        .map((e) => Task.createFromJson(jsonDecode(e as String)))
         .toList();
     return [...retryAndPausedTasks, ...tasks];
   }
@@ -226,7 +226,7 @@ abstract base class NativeDownloader extends BaseDownloader {
     final jsonString =
         await methodChannel.invokeMethod<String>('taskForId', taskId);
     if (jsonString != null) {
-      return Task.createFromJson(jsonString);
+      return Task.createFromJsonString(jsonString);
     }
     return null;
   }
@@ -247,9 +247,9 @@ abstract base class NativeDownloader extends BaseDownloader {
         final notificationConfig = notificationConfigForTask(task);
         final enqueueSuccess =
             await methodChannel.invokeMethod<bool>('enqueue', [
-                  jsonEncode(task.toJsonMap()),
+                  jsonEncode(task.toJson()),
                   notificationConfig != null
-                      ? jsonEncode(notificationConfig.toJsonMap())
+                      ? jsonEncode(notificationConfig.toJson())
                       : null,
                   taskResumeData.data,
                   taskResumeData.requiredStartByte,
@@ -270,8 +270,8 @@ abstract base class NativeDownloader extends BaseDownloader {
     final notificationConfig = notificationConfigForTask(task);
     if (notificationConfig != null) {
       methodChannel.invokeMethod('updateNotification', [
-        jsonEncode(task.toJsonMap()),
-        jsonEncode(notificationConfig.toJsonMap()),
+        jsonEncode(task.toJson()),
+        jsonEncode(notificationConfig.toJson()),
         taskStatusOrNull?.index
       ]);
     }
@@ -287,14 +287,14 @@ abstract base class NativeDownloader extends BaseDownloader {
   /// ProgressUpdates has a mixed Task & double json representation 'progress'
   @override
   Future<Map<String, String>> popUndeliveredData(Undelivered dataType) async {
-    final String jsonMapString = await switch (dataType) {
+    final String jsonString = await switch (dataType) {
       Undelivered.resumeData => methodChannel.invokeMethod('popResumeData'),
       Undelivered.statusUpdates =>
         methodChannel.invokeMethod('popStatusUpdates'),
       Undelivered.progressUpdates =>
         methodChannel.invokeMethod('popProgressUpdates')
     };
-    return Map.from(jsonDecode(jsonMapString));
+    return Map.from(jsonDecode(jsonString));
   }
 
   @override
@@ -312,7 +312,7 @@ abstract base class NativeDownloader extends BaseDownloader {
   @override
   Future<bool> openFile(Task? task, String? filePath, String? mimeType) async {
     final result = await methodChannel.invokeMethod<bool>('openFile', [
-      task != null ? jsonEncode(task.toJsonMap()) : null,
+      task != null ? jsonEncode(task.toJson()) : null,
       filePath,
       mimeType
     ]);
@@ -338,7 +338,7 @@ abstract base class NativeDownloader extends BaseDownloader {
   Future<String> testSuggestedFilename(
           DownloadTask task, String contentDisposition) async =>
       await methodChannel.invokeMethod<String>('testSuggestedFilename',
-          [jsonEncode(task.toJsonMap()), contentDisposition]) ??
+          [jsonEncode(task.toJson()), contentDisposition]) ??
       '';
 
   @override

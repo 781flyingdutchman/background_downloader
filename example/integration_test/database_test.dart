@@ -56,7 +56,7 @@ void main() {
     expect(records.values.length, equals(1));
     final storedRecordJsonMap = records.values.first;
     expect(storedRecordJsonMap, isNotNull);
-    final storedRecord = TaskRecord.fromJsonMap(storedRecordJsonMap);
+    final storedRecord = TaskRecord.fromJson(storedRecordJsonMap);
     expect(storedRecord, equals(record));
     await database.updateRecord(record2);
     final records2 = await db.retrieveAll(tasksPath);
