@@ -27,7 +27,7 @@ struct NotificationConfig : Codable {
     let paused: NotificationContents?
     let progressBar: Bool
     let tapOpensFile: Bool
-    let notificationGroup: String
+    let groupNotificationId: String
 }
 
 enum NotificationType : Int {
@@ -37,7 +37,7 @@ enum NotificationType : Int {
          paused
 }
 
-class NotificationGroup {
+class GroupNotification {
     let name: String
     let notificationConfig: NotificationConfig
 
@@ -52,7 +52,7 @@ class NotificationGroup {
     /// NotificationId derived from group name
     var notificationId: String {
         get {
-            return "notificationGroup:\(name)"
+            return "groupNotification:\(name)"
         }
     }
 
@@ -163,7 +163,7 @@ func updateNotification(task: Task, notificationType: NotificationType, notifica
     let notificationCenter = UNUserNotificationCenter.current()
     notificationCenter.getNotificationSettings { settings in
         guard (settings.authorizationStatus == .authorized) else { return }
-        if notificationConfig?.notificationGroup.isEmpty ?? true {
+        if notificationConfig?.groupNotificationId.isEmpty ?? true {
             // regular notification
             var notification: NotificationContents?
             switch notificationType {
@@ -196,13 +196,13 @@ func updateNotification(task: Task, notificationType: NotificationType, notifica
                 }
             }
         } else {
-            // notification group
-            updateNotificationGroup(task: task, notificationType: notificationType, notificationConfig: notificationConfig!)
+            // group notification
+            updateGroupNotification(task: task, notificationType: notificationType, notificationConfig: notificationConfig!)
         }
     }
 }
 
-var notificationGroups: [String : NotificationGroup] = [:]
+var groupNotifications: [String : GroupNotification] = [:]
 
 /**
  * Update notification for this [taskWorker] in group
@@ -211,29 +211,29 @@ var notificationGroups: [String : NotificationGroup] = [:]
  * A group notification aggregates the state of all tasks in a group and
  * presents a notification based on that value
  */
-private func updateNotificationGroup(
+private func updateGroupNotification(
     task: Task,
     notificationType: NotificationType,
     notificationConfig: NotificationConfig
 ) {
-    let notificationGroupName = notificationConfig.notificationGroup
-    var notificationGroup = notificationGroups[notificationGroupName] ?? NotificationGroup(name: notificationGroupName, notificationConfig: notificationConfig)
-    let stateChange = notificationGroup.update(task: task, notificationType: notificationType)
-    notificationGroups[notificationGroupName] = notificationGroup
+    let groupNotificationId = notificationConfig.groupNotificationId
+    var groupNotification = groupNotifications[groupNotificationId] ?? GroupNotification(name: groupNotificationId, notificationConfig: notificationConfig)
+    let stateChange = groupNotification.update(task: task, notificationType: notificationType)
+    groupNotifications[groupNotificationId] = groupNotification
     if stateChange {
         // need to update the group notification
         let notificationCenter = UNUserNotificationCenter.current()
-        let hasError = notificationGroup.hasError
-        let isFinished = notificationGroup.isFinished
+        let hasError = groupNotification.hasError
+        let isFinished = groupNotification.isFinished
         var notification: NotificationContents?
         if isFinished {
             if hasError {
-                notification = notificationGroup.notificationConfig.error
+                notification = groupNotification.notificationConfig.error
             } else {
-                notification = notificationGroup.notificationConfig.complete
+                notification = groupNotification.notificationConfig.complete
             }
         } else {
-            notification = notificationGroup.notificationConfig.running
+            notification = groupNotification.notificationConfig.running
         }
         guard let notification = notification else
         {
@@ -243,12 +243,12 @@ private func updateNotificationGroup(
         }
         // need to show a notification
         let content = UNMutableNotificationContent()
-        content.title = replaceTokens(input: notification.title, task: task, progress: notificationGroup.progress, notificationGroup: notificationGroup)
-        content.body = replaceTokens(input: notification.body, task: task, progress: notificationGroup.progress, notificationGroup: notificationGroup)
+        content.title = replaceTokens(input: notification.title, task: task, progress: groupNotification.progress, notificationGroup: groupNotification)
+        content.body = replaceTokens(input: notification.body, task: task, progress: groupNotification.progress, notificationGroup: groupNotification)
         if !isFinished {
             addCancelActionToNotificationGroup(content: content)
         }
-        let request = UNNotificationRequest(identifier: notificationGroup.notificationId,
+        let request = UNNotificationRequest(identifier: groupNotification.notificationId,
                                             content: content, trigger: nil)
         notificationCenter.add(request) { (error) in
             if error != nil {
@@ -258,8 +258,8 @@ private func updateNotificationGroup(
         if isFinished {
             // remove only if not re-activated within 5 seconds
             DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(5)) {
-                if notificationGroup.isFinished {
-                    notificationGroups.removeValue(forKey: notificationGroupName)
+                if groupNotification.isFinished {
+                    groupNotifications.removeValue(forKey: groupNotificationId)
                 }
             }
         }
@@ -310,7 +310,7 @@ let numFailedRegEx = try! NSRegularExpression(pattern: "\\{numFailed\\}", option
 let numTotalRegEx = try! NSRegularExpression(pattern: "\\{numTotal\\}", options: NSRegularExpression.Options.caseInsensitive)
 
 /// Replace special tokens {filename} and {metadata} with their respective values
-func replaceTokens(input: String, task: Task, progress: Double? = nil, notificationGroup: NotificationGroup? = nil) -> String {
+func replaceTokens(input: String, task: Task, progress: Double? = nil, notificationGroup: GroupNotification? = nil) -> String {
     let inputString = NSMutableString()
     inputString.append(input)
     displayNameRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: task.displayName)

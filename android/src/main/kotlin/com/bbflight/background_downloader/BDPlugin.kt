@@ -213,7 +213,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                             TaskWorker.processStatusUpdate(task, TaskStatus.canceled, prefs)
                             // remove outstanding notification for task or group
                             val notificationGroup =
-                                NotificationService.notificationGroupWithTaskId(taskId)
+                                NotificationService.groupNotificationWithTaskId(taskId)
                             with(NotificationManagerCompat.from(context)) {
                                 if (notificationGroup == null) {
                                     cancel(task.taskId.hashCode())

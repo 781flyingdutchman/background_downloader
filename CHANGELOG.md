@@ -1,17 +1,17 @@
 ## 8.0.0
 
-### Introduce notification groups ******groupNotification*****
-If you download or upload multiple files simultaneously, you may not want a notification for every task, but one notification representing the group of tasks.  To do this, set the `notificationGroup` field in a `notificationConfig` and use that configuration for all tasks in this group. It is easiest to combine this with the `group` field of the task, e.g.:
+### Introduce groupNotification
+If you download or upload multiple files simultaneously, you may not want a notification for every task, but one notification representing the group of tasks.  To do this, set the `groupNotificationId` field in a `notificationConfig` and use that configuration for all tasks in this group. It is easiest to combine this with the `group` field of the task, e.g.:
 ```dart
 FileDownloader.configureNotificationForGroup('bunchOfFiles',
             running: const TaskNotification(
                 '{numFinished} out of {numTotal}', 'Progress = {progress}'),
             complete:
-                const TaskNotification("Done!", "Loaded {numTotal} files"),
+                const TaskNotification('Done!', 'Loaded {numTotal} files'),
             error: const TaskNotification(
                 'Error', '{numFailed}/{numTotal} failed'),
             progressBar: true,
-            notificationGroup: 'myNotificationGroup');
+            groupNotificationId: 'myNotificationGroup');
             
 // start every task like this
 await FileDownloader().enqueue(DownloadTask(
@@ -20,7 +20,7 @@ await FileDownloader().enqueue(DownloadTask(
             group: 'bunchOfFiles'));
 ```
 
-All tasks in group `bunchOfFiles` will now use the notification group configuration named `myNotificationGroup`.
+All tasks in group `bunchOfFiles` will now use the notification group configuration with ID `myNotificationGroup`.
 
 ### Removal of `awaitGroup`
 * removed all references to `awaitGroup` as the logic for the convenience methods has changed

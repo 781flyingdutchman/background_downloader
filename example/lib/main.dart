@@ -83,7 +83,7 @@ class _MyAppState extends State<MyApp> {
             error: const TaskNotification(
                 'Error', '{numFailed}/{numTotal} failed'),
             progressBar: false,
-            notificationGroup: 'notGroup')
+            groupNotificationId: 'notGroup')
         .configureNotification(
             // for the 'Download & Open' dog picture
             // which uses 'download' which is not the .defaultGroup

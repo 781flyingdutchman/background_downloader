@@ -471,8 +471,8 @@ sealed class Task extends Request implements Comparable {
       : taskId = json['taskId'] ?? '',
         filename = json['filename'] ?? '',
         directory = json['directory'] ?? '',
-        baseDirectory = BaseDirectory
-            .values[(json['baseDirectory'] as num?)?.toInt() ?? 0],
+        baseDirectory =
+            BaseDirectory.values[(json['baseDirectory'] as num?)?.toInt() ?? 0],
         group = json['group'] ?? FileDownloader.defaultGroup,
         updates = Updates.values[(json['updates'] as num?)?.toInt() ?? 0],
         requiresWiFi = json['requiresWiFi'] ?? false,
@@ -606,8 +606,7 @@ final class DownloadTask extends Task {
   /// Creates [DownloadTask] object from [json]
   DownloadTask.fromJson(Map<String, dynamic> json)
       : assert(
-            ['DownloadTask', 'ParallelDownloadTask']
-                .contains(json['taskType']),
+            ['DownloadTask', 'ParallelDownloadTask'].contains(json['taskType']),
             'The provided JSON map is not'
             ' a DownloadTask, because key "taskType" is not "DownloadTask" or "ParallelDownloadTask".'),
         super.fromJson(json);
@@ -1016,10 +1015,8 @@ final class MultiUploadTask extends UploadTask {
             ' a MultiUploadTask, because key "taskType" is not "MultiUploadTask".'),
         fileFields =
             List.from(jsonDecode(json['fileField'] as String? ?? '[]')),
-        filenames =
-            List.from(jsonDecode(json['filename'] as String? ?? '[]')),
-        mimeTypes =
-            List.from(jsonDecode(json['mimeType'] as String? ?? '[]')),
+        filenames = List.from(jsonDecode(json['filename'] as String? ?? '[]')),
+        mimeTypes = List.from(jsonDecode(json['mimeType'] as String? ?? '[]')),
         super.fromJson(json);
 
   @override
@@ -1280,8 +1277,7 @@ class TaskStatusUpdate extends TaskUpdate {
 
   /// Create object from [json]
   TaskStatusUpdate.fromJson(Map<String, dynamic> json)
-      : status =
-            TaskStatus.values[(json['taskStatus'] as num?)?.toInt() ?? 0],
+      : status = TaskStatus.values[(json['taskStatus'] as num?)?.toInt() ?? 0],
         exception = json['exception'] != null
             ? TaskException.fromJson(json['exception'])
             : null,
@@ -1289,7 +1285,8 @@ class TaskStatusUpdate extends TaskUpdate {
         super.fromJson(json);
 
   /// Create object from [jsonString]
-  factory TaskStatusUpdate.fromJsonString(String jsonString) => TaskStatusUpdate.fromJson(jsonDecode(jsonString));
+  factory TaskStatusUpdate.fromJsonString(String jsonString) =>
+      TaskStatusUpdate.fromJson(jsonDecode(jsonString));
 
   /// Return JSON Map representing object
   @override
@@ -1342,12 +1339,13 @@ class TaskProgressUpdate extends TaskUpdate {
       : progress = (json['progress'] as num?)?.toDouble() ?? progressFailed,
         expectedFileSize = (json['expectedFileSize'] as num?)?.toInt() ?? -1,
         networkSpeed = (json['networkSpeed'] as num?)?.toDouble() ?? -1,
-        timeRemaining = Duration(
-            seconds: (json['timeRemaining'] as num?)?.toInt() ?? -1),
+        timeRemaining =
+            Duration(seconds: (json['timeRemaining'] as num?)?.toInt() ?? -1),
         super.fromJson(json);
 
   /// Create object from [jsonString]
-  factory TaskProgressUpdate.fromJsonString(String jsonString) => TaskProgressUpdate.fromJson(jsonDecode(jsonString));
+  factory TaskProgressUpdate.fromJsonString(String jsonString) =>
+      TaskProgressUpdate.fromJson(jsonDecode(jsonString));
 
   /// Return JSON Map representing object
   @override
@@ -1414,12 +1412,12 @@ class ResumeData {
   ResumeData.fromJson(Map<String, dynamic> json)
       : task = Task.createFromJson(json['task']),
         data = json['data'] as String,
-        requiredStartByte =
-            (json['requiredStartByte'] as num?)?.toInt() ?? 0,
+        requiredStartByte = (json['requiredStartByte'] as num?)?.toInt() ?? 0,
         eTag = json['eTag'] as String?;
 
   /// Create object from [jsonString]
-  factory ResumeData.fromJsonString(String jsonString) => ResumeData.fromJson(jsonDecode(jsonString));
+  factory ResumeData.fromJsonString(String jsonString) =>
+      ResumeData.fromJson(jsonDecode(jsonString));
 
   /// Return JSON Map representing object
   Map<String, dynamic> toJson() => {
@@ -1491,17 +1489,17 @@ final class TaskNotification {
 /// [progressBar] if set will show a progress bar
 /// [tapOpensFile] if set will attempt to open the file when the [complete]
 ///     notification is tapped
-/// [notificationGroup] if set will group all notifications with the same
-///    [notificationGroup] and change the progress bar to number of finished
-///    tasks versus total number of tasks in the [notificationGroup].
+/// [groupNotificationId] if set will group all notifications with the same
+///    [groupNotificationId] and change the progress bar to number of finished
+///    tasks versus total number of tasks in the groupNotification.
 ///    Use {finished} and {total} tokens in the [TaskNotification.title] and
 ///    [TaskNotification.body] to substitute. Task-specific substitutions
 ///    such as {filename} are not valid.
-///    The [notificationGroup] is considered [complete] when there are no
+///    The groupNotification is considered [complete] when there are no
 ///    more tasks running within that group, and at that point the
 ///    [complete] notification is shown (if configured). If any task in the
-///    [notificationGroup] fails, the [error] notification is shown.
-///    The first character of the [notificationGroup] cannot be '*'.
+///    groupNotification fails, the [error] notification is shown.
+///    The first character of the [groupNotificationId] cannot be '*'.
 final class TaskNotificationConfig {
   final dynamic taskOrGroup;
   final TaskNotification? running;
@@ -1510,7 +1508,7 @@ final class TaskNotificationConfig {
   final TaskNotification? paused;
   final bool progressBar;
   final bool tapOpensFile;
-  final String notificationGroup;
+  final String groupNotificationId;
 
   /// Create notification configuration that determines what notifications are shown,
   /// whether a progress bar is shown (Android only), and whether tapping
@@ -1519,21 +1517,21 @@ final class TaskNotificationConfig {
   /// [running] is the notification used while the task is in progress
   /// [complete] is the notification used when the task completed
   /// [error] is the notification used when something went wrong,
-  /// including pause, failed and notFound status.
+  /// including pause, failed and notFound status
   /// [progressBar] if set will show a progress bar
   /// [tapOpensFile] if set will attempt to open the file when the [complete]
   ///     notification is tapped
-  /// [notificationGroup] if set will group all notifications with the same
-  ///    [notificationGroup] and change the progress bar to number of finished
-  ///    tasks versus total number of tasks in the [notificationGroup].
-  ///    Use {finished} and {total} tokens in the [TaskNotification.title] and
-  ///    [TaskNotification.body] to substitute. Task-specific substitutions
+  /// [groupNotificationId] if set will group all notifications with the same
+  ///    [groupNotificationId] and change the progress bar to number of finished
+  ///    tasks versus total number of tasks in the groupNotification.
+  ///    Use {numFinished}, {numFailed} and {numTotal} tokens in the [TaskNotification.title]
+  ///    and [TaskNotification.body] to substitute. Task-specific substitutions
   ///    such as {filename} are not valid.
-  ///    The [notificationGroup] is considered [complete] when there are no
+  ///    The groupNotification is considered [complete] when there are no
   ///    more tasks running within that group, and at that point the
   ///    [complete] notification is shown (if configured). If any task in the
-  ///    [notificationGroup] fails, the [error] notification is shown.
-  ///    The first character of the [notificationGroup] cannot be '*'.
+  ///    groupNotification fails, the [error] notification is shown.
+  ///    The first character of the [groupNotificationId] cannot be '*'.
   TaskNotificationConfig(
       {this.taskOrGroup,
       this.running,
@@ -1542,7 +1540,7 @@ final class TaskNotificationConfig {
       this.paused,
       this.progressBar = false,
       this.tapOpensFile = false,
-      this.notificationGroup = ''}) {
+      this.groupNotificationId = ''}) {
     assert(
         running != null || complete != null || error != null || paused != null,
         'At least one notification must be set');
@@ -1557,7 +1555,7 @@ final class TaskNotificationConfig {
         'paused': paused?.toJson(),
         'progressBar': progressBar,
         'tapOpensFile': tapOpensFile,
-        'notificationGroup': notificationGroup
+        'groupNotificationId': groupNotificationId
       };
 }
 

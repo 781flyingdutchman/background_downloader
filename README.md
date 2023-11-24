@@ -482,17 +482,17 @@ When attempting to show its first notification, the downloader will ask the user
 
 ### Notification groups
 
-If you download or upload multiple files simultaneously, you may not want a notification for every task, but one notification representing the group of tasks.  To do this, set the `notificationGroup` field in a `notificationConfig` and use that configuration for all tasks in this group. It is easiest to combine this with the `group` field of the task, e.g.:
+If you download or upload multiple files simultaneously, you may not want a notification for every task, but one notification representing the group of tasks.  To do this, set the `groupNotificationId` field in a `notificationConfig` and use that configuration for all tasks in this group. It is easiest to combine this with the `group` field of the task, e.g.:
 ```dart
 FileDownloader.configureNotificationForGroup('bunchOfFiles',
             running: const TaskNotification(
                 '{numFinished} out of {numTotal}', 'Progress = {progress}'),
             complete:
-                const TaskNotification("Done!", "Loaded {numTotal} files"),
+                const TaskNotification('Done!', 'Loaded {numTotal} files'),
             error: const TaskNotification(
                 'Error', '{numFailed}/{numTotal} failed'),
             progressBar: true,
-            notificationGroup: 'myNotificationGroup');
+            groupNotificationId: 'myNotificationGroup');
             
 // start every task like this
 await FileDownloader().enqueue(DownloadTask(
@@ -501,7 +501,7 @@ await FileDownloader().enqueue(DownloadTask(
             group: 'bunchOfFiles'));
 ```
 
-All tasks in group `bunchOfFiles` will now use the notification group configuration named `myNotificationGroup`.
+All tasks in group `bunchOfFiles` will now use the notification group configuration with ID `myNotificationGroup`.
 
 ### Tapping a notification
 To respond to the user tapping a notification, register a callback that takes `Task` and `NotificationType` as parameters:

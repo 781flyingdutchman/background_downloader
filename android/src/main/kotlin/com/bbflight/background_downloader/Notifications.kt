@@ -66,24 +66,24 @@ class NotificationConfig(
     val paused: TaskNotification?,
     val progressBar: Boolean,
     val tapOpensFile: Boolean,
-    val notificationGroup: String
+    val groupNotificationId: String
 ) {
     override fun toString(): String {
-        return "NotificationConfig(running=$running, complete=$complete, error=$error, paused=$paused, progressBar=$progressBar, tapOpensFile=$tapOpensFile, notificationGroup=$notificationGroup)"
+        return "NotificationConfig(running=$running, complete=$complete, error=$error, paused=$paused, progressBar=$progressBar, tapOpensFile=$tapOpensFile, groupNotificationId=$groupNotificationId)"
     }
 }
 
 /**
- * Data associated with a notificationGroup
+ * Data associated with a groupNotification
  */
-class NotificationGroup(
+class GroupNotification(
     val name: String,
     val notificationConfig: NotificationConfig
 ) {
     private var notifications = HashMap<Task, NotificationType>()
 
     /** NotificationId derived from group name */
-    val notificationId get() = "notificationGroup$name".hashCode()
+    val notificationId get() = "groupNotification$name".hashCode()
 
     /** Total number of notifications in this group */
     val numTotal get() = notifications.size
@@ -115,7 +115,7 @@ class NotificationGroup(
      */
     val hasError get() = numFailed > 0
 
-    /** Returns a Set of running tasks in this notificationGroup */
+    /** Returns a Set of running tasks in this groupNotification */
     val runningTasks
         get() = notifications.filter { (_, notificationType) ->
             notificationType == NotificationType.running
@@ -164,8 +164,8 @@ class NotificationRcvr : BroadcastReceiver() {
         const val keyBundle = "com.bbflight.background_downloader.bundle"
         const val keyTaskId = "com.bbflight.background_downloader.taskId"
         const val keyTask = "com.bbflight.background_downloader.task" // as JSON string
-        const val keyNotificationGroupName =
-            "com.bbflight.background_downloader.notificationGroupName"
+        const val keyGroupNotificationName =
+            "com.bbflight.background_downloader.groupNotificationName"
         const val keyNotificationConfig =
             "com.bbflight.background_downloader.notificationConfig" // as JSON string
         const val keyNotificationType =
@@ -233,15 +233,15 @@ class NotificationRcvr : BroadcastReceiver() {
         } else {
             // no taskId -> groupNotification, and can only be a cancel action so
             // no need to check
-            val notificationGroupName = bundle?.getString(keyNotificationGroupName)
-            if (notificationGroupName != null) {
+            val groupNotificationName = bundle?.getString(keyGroupNotificationName)
+            if (groupNotificationName != null) {
                 // cancel all tasks associated with this group that have not yet completed
-                val notificationGroup =
-                    NotificationService.notificationGroups[notificationGroupName]
-                if (notificationGroup != null) {
+                val groupNotification =
+                    NotificationService.groupNotifications[groupNotificationName]
+                if (groupNotification != null) {
                     runBlocking {
                         BDPlugin.cancelTasksWithIds(context,
-                            notificationGroup.runningTasks.map { task -> task.taskId })
+                            groupNotification.runningTasks.map { task -> task.taskId })
                     }
                 }
             }
@@ -253,7 +253,7 @@ class NotificationRcvr : BroadcastReceiver() {
  * Singleton service to manage notifications
  */
 object NotificationService {
-    var notificationGroups = HashMap<String, NotificationGroup>()
+    var groupNotifications = HashMap<String, GroupNotification>()
 
     const val notificationPermissionRequestCode = 373921
     private const val notificationChannelId = "background_downloader"
@@ -301,7 +301,7 @@ object NotificationService {
      * [timeRemaining] is only relevant for [NotificationType.running]
      *
      * If this notification is part of a group, then the notification will be built
-     * using [updateNotificationGroup] and enqueued to avoid overloading the
+     * using [updateGroupNotification] and enqueued to avoid overloading the
      * notification system.
      *
      * For normal notification, the caller must throttle the notifications to a
@@ -315,9 +315,9 @@ object NotificationService {
         timeRemaining: Long = -1000
     ) {
         val notificationType = notificationTypeForTaskStatus(taskStatus)
-        val notificationGroupName = taskWorker.notificationConfig?.notificationGroup
-        if (notificationGroupName?.isNotEmpty() == true) {
-            updateNotificationGroup(taskWorker, notificationGroupName, notificationType)
+        val groupNotificationId = taskWorker.notificationConfig?.groupNotificationId
+        if (groupNotificationId?.isNotEmpty() == true) {
+            updateGroupNotification(taskWorker, groupNotificationId, notificationType)
             return
         }
         // regular notification
@@ -387,28 +387,28 @@ object NotificationService {
 
     /**
      * Update notification for this [taskWorker] in group
-     * [notificationGroupName] and type [notificationType].
+     * [groupNotificationId] and type [notificationType].
      *
      * A group notification aggregates the state of all tasks in a group and
      * presents a notification based on that value
      */
-    private suspend fun updateNotificationGroup(
-        taskWorker: TaskWorker, notificationGroupName: String, notificationType: NotificationType
+    private suspend fun updateGroupNotification(
+        taskWorker: TaskWorker, groupNotificationId: String, notificationType: NotificationType
     ) {
-        val notificationGroup =
-            notificationGroups[notificationGroupName] ?: NotificationGroup(
-                notificationGroupName, taskWorker.notificationConfig!!
+        val groupNotification =
+            groupNotifications[groupNotificationId] ?: GroupNotification(
+                groupNotificationId, taskWorker.notificationConfig!!
             )
-        val stateChange = notificationGroup.update(taskWorker.task, notificationType)
-        notificationGroups[notificationGroupName] = notificationGroup
+        val stateChange = groupNotification.update(taskWorker.task, notificationType)
+        groupNotifications[groupNotificationId] = groupNotification
         if (stateChange) {
             // need to update the group notification
-            taskWorker.notificationId = notificationGroup.notificationId
-            val hasError = notificationGroup.hasError
-            val isFinished = notificationGroup.isFinished
+            taskWorker.notificationId = groupNotification.notificationId
+            val hasError = groupNotification.hasError
+            val isFinished = groupNotification.isFinished
             val notification = if (isFinished) {
-                if (hasError) notificationGroup.notificationConfig.error else notificationGroup.notificationConfig.complete
-            } else notificationGroup.notificationConfig.running
+                if (hasError) groupNotification.notificationConfig.error else groupNotification.notificationConfig.complete
+            } else groupNotification.notificationConfig.running
             if (notification == null) {
                 addToNotificationQueue(taskWorker) // removes notification
             } else {
@@ -425,12 +425,12 @@ object NotificationService {
                     taskWorker.applicationContext, notificationChannelId
                 ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
                 // title and body interpolation of tokens
-                val progress = notificationGroup.progress
+                val progress = groupNotification.progress
                 val title = replaceTokens(
                     notification.title,
                     taskWorker.task,
                     progress,
-                    notificationGroup = notificationGroup
+                    groupNotification = groupNotification
                 )
                 if (title.isNotEmpty()) {
                     builder.setContentTitle(title)
@@ -439,14 +439,14 @@ object NotificationService {
                     notification.body,
                     taskWorker.task,
                     progress,
-                    notificationGroup = notificationGroup
+                    groupNotification = groupNotification
                 )
                 if (body.isNotEmpty()) {
                     builder.setContentText(body)
                 }
                 // progress bar
                 val progressBar =
-                    notificationGroup.notificationConfig.progressBar && (notification == notificationGroup.notificationConfig.running)
+                    groupNotification.notificationConfig.progressBar && (notification == groupNotification.notificationConfig.running)
                 if (progressBar && progress >= 0) {
                     if (progress <= 1) {
                         builder.setProgress(100, (progress * 100).roundToInt(), false)
@@ -455,7 +455,7 @@ object NotificationService {
                     }
                 }
                 if (!isFinished) {
-                    addCancelActionToNotificationGroup(taskWorker, notificationGroup, builder)
+                    addCancelActionToGroupNotification(taskWorker, groupNotification, builder)
                 }
                 addToNotificationQueue(taskWorker, notificationType, builder) // shows notification
             }
@@ -464,8 +464,8 @@ object NotificationService {
                 withContext(Dispatchers.Default) {
                     launch {
                         delay(5000)
-                        if (notificationGroup.isFinished) {
-                            notificationGroups.remove(notificationGroupName)
+                        if (groupNotification.isFinished) {
+                            groupNotifications.remove(groupNotificationId)
                         }
                     }
                 }
@@ -615,18 +615,18 @@ object NotificationService {
     }
 
     /**
-     * Add Cancel action to notificationGroup notification
+     * Add Cancel action to groupNotification notification
      */
-    private fun addCancelActionToNotificationGroup(
+    private fun addCancelActionToGroupNotification(
         taskWorker: TaskWorker,
-        notificationGroup: NotificationGroup,
+        groupNotification: GroupNotification,
         builder: Builder
     ) {
         val activity = BDPlugin.activity
         if (activity != null) {
             // add cancel button for running notification
             val cancelBundle = Bundle().apply {
-                putString(NotificationRcvr.keyNotificationGroupName, notificationGroup.name)
+                putString(NotificationRcvr.keyGroupNotificationName, groupNotification.name)
             }
             val cancelIntent =
                 Intent(taskWorker.applicationContext, NotificationRcvr::class.java).apply {
@@ -635,7 +635,7 @@ object NotificationService {
                 }
             val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
                 taskWorker.applicationContext,
-                notificationGroup.notificationId,
+                groupNotification.notificationId,
                 cancelIntent,
                 PendingIntent.FLAG_IMMUTABLE
             )
@@ -770,7 +770,7 @@ object NotificationService {
         progress: Double,
         networkSpeed: Double = -1.0,
         timeRemaining: Long? = null,
-        notificationGroup: NotificationGroup? = null
+        groupNotification: GroupNotification? = null
     ): String {
         // filename and metadata
         val output = displayNameRegEx.replace(
@@ -804,12 +804,12 @@ object NotificationService {
                 )
             output4 = timeRemainingRegEx.replace(output3, timeRemainingString)
         }
-        return if (notificationGroup != null) {
+        return if (groupNotification != null) {
             numFailedRegEx.replace(
                 numFinishedRegEx.replace(
-                    numTotalRegEx.replace(output4, "${notificationGroup.numTotal}"),
-                    "${notificationGroup.numFinished}"
-                ), "${notificationGroup.numFailed}"
+                    numTotalRegEx.replace(output4, "${groupNotification.numTotal}"),
+                    "${groupNotification.numFinished}"
+                ), "${groupNotification.numFailed}"
             )
         } else {
             output4
@@ -864,11 +864,11 @@ object NotificationService {
     }
 
     /**
-     * Return the [NotificationGroup] this [taskId] belongs to, or
-     * null if not part of a [NotificationGroup]
+     * Return the [GroupNotification] this [taskId] belongs to, or
+     * null if not part of a [GroupNotification]
      */
-    fun notificationGroupWithTaskId(taskId: String): NotificationGroup? {
-        for (group in notificationGroups.values) {
+    fun groupNotificationWithTaskId(taskId: String): GroupNotification? {
+        for (group in groupNotifications.values) {
             if (group.runningTasks.any { task -> task.taskId == taskId }) {
                 return group
             }
