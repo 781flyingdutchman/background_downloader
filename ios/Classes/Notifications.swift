@@ -156,12 +156,13 @@ let ourCategories = NotificationCategory.allCases.map { $0.rawValue }
 
 /// Update notification for this [task], based on [notificationType] and [notificationConfig]
 func updateNotification(task: Task, notificationType: NotificationType, notificationConfig: NotificationConfig?) {
-    if !BDPlugin.haveregisteredNotificationCategories {
-        registerNotificationCategories()
-        BDPlugin.haveregisteredNotificationCategories = true
-    }
-    let notificationCenter = UNUserNotificationCenter.current()
-    notificationCenter.getNotificationSettings { settings in
+    _Concurrency.Task { @MainActor in // run using concurrency on main thread
+        if !BDPlugin.haveregisteredNotificationCategories {
+            registerNotificationCategories()
+            BDPlugin.haveregisteredNotificationCategories = true
+        }
+        let notificationCenter = UNUserNotificationCenter.current()
+        let settings = await notificationCenter.notificationSettings()
         guard (settings.authorizationStatus == .authorized) else { return }
         if notificationConfig?.groupNotificationId.isEmpty ?? true {
             // regular notification
@@ -190,17 +191,18 @@ func updateNotification(task: Task, notificationType: NotificationType, notifica
             addNotificationActions(task: task, notificationType: notificationType, content: content, notificationConfig: notificationConfig!)
             let request = UNNotificationRequest(identifier: task.taskId,
                                                 content: content, trigger: nil)
-            notificationCenter.add(request) { (error) in
-                if error != nil {
-                    os_log("Notification error %@", log: log, type: .info, error!.localizedDescription)
-                }
+            do {
+                try await notificationCenter.add(request)
+            } catch {
+                os_log("Notification error %@", log: log, type: .info, error.localizedDescription)
             }
         } else {
             // group notification
-            updateGroupNotification(task: task, notificationType: notificationType, notificationConfig: notificationConfig!)
+            await updateGroupNotification(task: task, notificationType: notificationType, notificationConfig: notificationConfig!)
         }
     }
 }
+
 
 var groupNotifications: [String : GroupNotification] = [:]
 
@@ -215,7 +217,7 @@ private func updateGroupNotification(
     task: Task,
     notificationType: NotificationType,
     notificationConfig: NotificationConfig
-) {
+) async {
     let groupNotificationId = notificationConfig.groupNotificationId
     var groupNotification = groupNotifications[groupNotificationId] ?? GroupNotification(name: groupNotificationId, notificationConfig: notificationConfig)
     let stateChange = groupNotification.update(task: task, notificationType: notificationType)
@@ -245,22 +247,30 @@ private func updateGroupNotification(
         let content = UNMutableNotificationContent()
         content.title = replaceTokens(input: notification.title, task: task, progress: groupNotification.progress, notificationGroup: groupNotification)
         content.body = replaceTokens(input: notification.body, task: task, progress: groupNotification.progress, notificationGroup: groupNotification)
-        if !isFinished {
-            addCancelActionToNotificationGroup(content: content)
+        // check if the notification title or body have changed relative to what may
+        // already be delivered, to avoid flashing notifications without change
+        let existingNotifications = await notificationCenter.deliveredNotifications()
+        let previousNotification = existingNotifications.filter { 
+            $0.request.identifier == groupNotification.notificationId
         }
-        let request = UNNotificationRequest(identifier: groupNotification.notificationId,
-                                            content: content, trigger: nil)
-        notificationCenter.add(request) { (error) in
-            if error != nil {
-                os_log("Notification error %@", log: log, type: .info, error!.localizedDescription)
+        if previousNotification.isEmpty || previousNotification.first?.request.content.title != content.title || previousNotification.first?.request.content.body != content.body
+        {
+            if !isFinished {
+                addCancelActionToNotificationGroup(content: content)
+            }
+            let request = UNNotificationRequest(identifier: groupNotification.notificationId,
+                                                content: content, trigger: nil)
+            do {
+                try await notificationCenter.add(request)
+            } catch {
+                os_log("Notification error %@", log: log, type: .info, error.localizedDescription)
             }
         }
         if isFinished {
             // remove only if not re-activated within 5 seconds
-            DispatchQueue.global().asyncAfter(deadline: .now() + .seconds(5)) {
-                if groupNotification.isFinished {
-                    groupNotifications.removeValue(forKey: groupNotificationId)
-                }
+            try? await _Concurrency.Task.sleep(nanoseconds: 5_000_000_000)
+            if groupNotification.isFinished {
+                groupNotifications.removeValue(forKey: groupNotificationId)
             }
         }
     }
