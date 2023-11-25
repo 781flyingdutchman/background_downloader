@@ -135,10 +135,6 @@ class SqlitePersistentStorage implements PersistentStorage {
   }
 
   @override
-  Future<void> removeModifiedTask(String? taskId) =>
-      _remove(modifiedTasksTable, taskId);
-
-  @override
   Future<void> removePausedTask(String? taskId) =>
       _remove(pausedTasksTable, taskId);
 
@@ -151,22 +147,12 @@ class SqlitePersistentStorage implements PersistentStorage {
       _remove(taskRecordsTable, taskId);
 
   @override
-  Future<List<Task>> retrieveAllModifiedTasks() async {
-    final result = await db.query(modifiedTasksTable,
-        columns: [objectColumn], where: null);
-    return result
-        .map((e) =>
-            Task.createFromJsonMap(jsonDecode(e[objectColumn] as String)))
-        .toList(growable: false);
-  }
-
-  @override
   Future<List<Task>> retrieveAllPausedTasks() async {
     final result =
         await db.query(pausedTasksTable, columns: [objectColumn], where: null);
     return result
         .map((e) =>
-            Task.createFromJsonMap(jsonDecode(e[objectColumn] as String)))
+            Task.createFromJson(jsonDecode(e[objectColumn] as String)))
         .toList(growable: false);
   }
 
@@ -176,7 +162,7 @@ class SqlitePersistentStorage implements PersistentStorage {
         await db.query(resumeDataTable, columns: [objectColumn], where: null);
     return result
         .map((e) =>
-            ResumeData.fromJsonMap(jsonDecode(e[objectColumn] as String)))
+            ResumeData.fromJson(jsonDecode(e[objectColumn] as String)))
         .toList(growable: false);
   }
 
@@ -186,21 +172,8 @@ class SqlitePersistentStorage implements PersistentStorage {
         await db.query(taskRecordsTable, columns: [objectColumn], where: null);
     return result
         .map((e) =>
-            TaskRecord.fromJsonMap(jsonDecode(e[objectColumn] as String)))
+            TaskRecord.fromJson(jsonDecode(e[objectColumn] as String)))
         .toList(growable: false);
-  }
-
-  @override
-  Future<Task?> retrieveModifiedTask(String taskId) async {
-    final result = await db.query(modifiedTasksTable,
-        columns: [objectColumn],
-        where: '$taskIdColumn = ?',
-        whereArgs: [taskId]);
-    if (result.isEmpty) {
-      return null;
-    }
-    return Task.createFromJsonMap(
-        jsonDecode(result.first[objectColumn] as String));
   }
 
   @override
@@ -212,7 +185,7 @@ class SqlitePersistentStorage implements PersistentStorage {
     if (result.isEmpty) {
       return null;
     }
-    return Task.createFromJsonMap(
+    return Task.createFromJson(
         jsonDecode(result.first[objectColumn] as String));
   }
 
@@ -225,7 +198,7 @@ class SqlitePersistentStorage implements PersistentStorage {
     if (result.isEmpty) {
       return null;
     }
-    return ResumeData.fromJsonMap(
+    return ResumeData.fromJson(
         jsonDecode(result.first[objectColumn] as String));
   }
 
@@ -254,37 +227,33 @@ class SqlitePersistentStorage implements PersistentStorage {
         columns: [objectColumn], where: where, whereArgs: whereArgs);
     return result
         .map((e) =>
-            TaskRecord.fromJsonMap(jsonDecode(e[objectColumn] as String)))
+            TaskRecord.fromJson(jsonDecode(e[objectColumn] as String)))
         .toList(growable: false);
   }
 
-  /// Convenience method to store a jsonMap under the [objectColumn], keyed
+  /// Convenience method to store a json as a String under the [objectColumn], keyed
   /// by [taskId], with 'modified' set to seconds since epoch.
   ///
   /// Inserts or updates
   Future<void> store(
-          String table, String taskId, Map<String, dynamic> jsonMap) =>
+          String table, String taskId, Map<String, dynamic> json) =>
       db.insert(
           table,
           {
             taskIdColumn: taskId,
-            objectColumn: jsonEncode(jsonMap),
+            objectColumn: jsonEncode(json),
             modifiedColumn:
                 (DateTime.now().millisecondsSinceEpoch / 1000).floor()
           },
           conflictAlgorithm: sql.ConflictAlgorithm.replace);
 
   @override
-  Future<void> storeModifiedTask(Task task) =>
-      store(modifiedTasksTable, task.taskId, task.toJsonMap());
-
-  @override
   Future<void> storePausedTask(Task task) =>
-      store(pausedTasksTable, task.taskId, task.toJsonMap());
+      store(pausedTasksTable, task.taskId, task.toJson());
 
   @override
   Future<void> storeResumeData(ResumeData resumeData) =>
-      store(resumeDataTable, resumeData.taskId, resumeData.toJsonMap());
+      store(resumeDataTable, resumeData.taskId, resumeData.toJson());
 
   @override
   Future<void> storeTaskRecord(TaskRecord record) async {
@@ -301,7 +270,7 @@ class SqlitePersistentStorage implements PersistentStorage {
               (task.creationTime.millisecondsSinceEpoch / 1000).floor(),
           'status': record.status.index,
           'progress': record.progress,
-          objectColumn: jsonEncode(record.toJsonMap())
+          objectColumn: jsonEncode(record.toJson())
         },
         conflictAlgorithm: sql.ConflictAlgorithm.replace);
   }
@@ -431,9 +400,6 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
   }
 
   @override
-  Future<List<Task>> retrieveAllModifiedTasks() => Future.value([]);
-
-  @override
   Future<List<Task>> retrieveAllPausedTasks() => Future.value([]);
 
   @override
@@ -502,11 +468,6 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
   // the rest of the interface is not implemented, as it is never called
 
   @override
-  Future<void> removeModifiedTask(String? taskId) {
-    throw UnimplementedError();
-  }
-
-  @override
   Future<void> removePausedTask(String? taskId) {
     throw UnimplementedError();
   }
@@ -522,11 +483,6 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
   }
 
   @override
-  Future<Task?> retrieveModifiedTask(String taskId) {
-    throw UnimplementedError();
-  }
-
-  @override
   Future<Task?> retrievePausedTask(String taskId) {
     throw UnimplementedError();
   }
@@ -538,11 +494,6 @@ abstract class FlutterDownloaderPersistentStorage implements PersistentStorage {
 
   @override
   Future<TaskRecord?> retrieveTaskRecord(String taskId) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<void> storeModifiedTask(Task task) {
     throw UnimplementedError();
   }
 

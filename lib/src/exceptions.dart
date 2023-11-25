@@ -23,17 +23,17 @@ base class TaskException implements Exception {
 
   String get exceptionType => 'TaskException';
 
-  /// Create object from JSON Map
-  factory TaskException.fromJsonMap(Map<String, dynamic> jsonMap) {
-    final typeString = jsonMap['type'] as String? ?? 'TaskException';
+  /// Create object from [json]
+  factory TaskException.fromJson(Map<String, dynamic> json) {
+    final typeString = json['type'] as String? ?? 'TaskException';
     final exceptionType = _exceptions[typeString];
-    final description = jsonMap['description'] as String? ?? '';
+    final description = json['description'] as String? ?? '';
     if (exceptionType != null) {
       if (typeString != 'TaskHttpException') {
         return exceptionType(description);
       } else {
         final httpResponseCode =
-            (jsonMap['httpResponseCode'] as num?)?.toInt() ?? -1;
+            (json['httpResponseCode'] as num?)?.toInt() ?? -1;
         return exceptionType(description, httpResponseCode);
       }
     }
@@ -52,11 +52,11 @@ base class TaskException implements Exception {
   }
 
   /// Return JSON Map representing object
-  Map<String, dynamic> toJsonMap() =>
+  Map<String, dynamic> toJson() =>
       {'type': exceptionType, 'description': description};
 
   /// Return JSON String representing object
-  String toJson() => jsonEncode(toJsonMap());
+  String toJsonString() => jsonEncode(toJson());
 
   @override
   String toString() {
@@ -110,8 +110,8 @@ final class TaskHttpException extends TaskException {
   String get exceptionType => 'TaskHttpException';
 
   @override
-  Map<String, dynamic> toJsonMap() =>
-      {...super.toJsonMap(), 'httpResponseCode': httpResponseCode};
+  Map<String, dynamic> toJson() =>
+      {...super.toJson(), 'httpResponseCode': httpResponseCode};
 
   @override
   String toString() {

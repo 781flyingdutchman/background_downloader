@@ -19,8 +19,8 @@ import 'sqlite_storage.dart';
 /// - modified [Task]s, keyed by taskId
 /// - [ResumeData], keyed by taskId
 ///
-/// Each of the objects has a toJsonMap method and can be created using
-/// fromJsonMap (use .createFromJsonMap for [Task] objects)
+/// Each of the objects has a toJson method and can be created using
+/// fromJson (use .createFromJson for [Task] objects)
 ///
 /// Also defined methods to allow migration from one database version to another
 abstract interface class PersistentStorage {
@@ -47,18 +47,6 @@ abstract interface class PersistentStorage {
 
   /// Remove paused [Task] with [taskId] from storage. If null, remove all
   Future<void> removePausedTask(String? taskId);
-
-  /// Store a modified [task], keyed by taskId
-  Future<void> storeModifiedTask(Task task);
-
-  /// Retrieve modified [Task] with [taskId], or null if not found
-  Future<Task?> retrieveModifiedTask(String taskId);
-
-  /// Retrieve all modified [Task]
-  Future<List<Task>> retrieveAllModifiedTasks();
-
-  /// Remove modified [Task] with [taskId] from storage. If null, remove all
-  Future<void> removeModifiedTask(String? taskId);
 
   /// Store [ResumeData], keyed by its taskId
   Future<void> storeResumeData(ResumeData resumeData);
@@ -104,7 +92,6 @@ class LocalStorePersistentStorage implements PersistentStorage {
   static const taskRecordsPath = 'backgroundDownloaderTaskRecords';
   static const resumeDataPath = 'backgroundDownloaderResumeData';
   static const pausedTasksPath = 'backgroundDownloaderPausedTasks';
-  static const modifiedTasksPath = 'backgroundDownloaderModifiedTasks';
   static const metaDataCollection = 'backgroundDownloaderDatabase';
 
   /// Stores [JsonMap] formatted [document] in [collection] keyed under [identifier]
@@ -144,10 +131,6 @@ class LocalStorePersistentStorage implements PersistentStorage {
       id?.replaceAll(_illegalPathCharacters, '_');
 
   @override
-  Future<void> removeModifiedTask(String? taskId) =>
-      remove(modifiedTasksPath, _safeIdOrNull(taskId));
-
-  @override
   Future<void> removePausedTask(String? taskId) =>
       remove(pausedTasksPath, _safeIdOrNull(taskId));
 
@@ -160,18 +143,10 @@ class LocalStorePersistentStorage implements PersistentStorage {
       remove(taskRecordsPath, _safeIdOrNull(taskId));
 
   @override
-  Future<List<Task>> retrieveAllModifiedTasks() async {
-    final jsonMaps = await retrieveAll(modifiedTasksPath);
-    return jsonMaps.values
-        .map((e) => Task.createFromJsonMap(e))
-        .toList(growable: false);
-  }
-
-  @override
   Future<List<Task>> retrieveAllPausedTasks() async {
     final jsonMaps = await retrieveAll(pausedTasksPath);
     return jsonMaps.values
-        .map((e) => Task.createFromJsonMap(e))
+        .map((e) => Task.createFromJson(e))
         .toList(growable: false);
   }
 
@@ -179,7 +154,7 @@ class LocalStorePersistentStorage implements PersistentStorage {
   Future<List<ResumeData>> retrieveAllResumeData() async {
     final jsonMaps = await retrieveAll(resumeDataPath);
     return jsonMaps.values
-        .map((e) => ResumeData.fromJsonMap(e))
+        .map((e) => ResumeData.fromJson(e))
         .toList(growable: false);
   }
 
@@ -187,22 +162,14 @@ class LocalStorePersistentStorage implements PersistentStorage {
   Future<List<TaskRecord>> retrieveAllTaskRecords() async {
     final jsonMaps = await retrieveAll(taskRecordsPath);
     return jsonMaps.values
-        .map((e) => TaskRecord.fromJsonMap(e))
+        .map((e) => TaskRecord.fromJson(e))
         .toList(growable: false);
-  }
-
-  @override
-  Future<Task?> retrieveModifiedTask(String taskId) async {
-    return switch (await retrieve(modifiedTasksPath, _safeId(taskId))) {
-      var jsonMap? => Task.createFromJsonMap(jsonMap),
-      _ => null
-    };
   }
 
   @override
   Future<Task?> retrievePausedTask(String taskId) async {
     return switch (await retrieve(pausedTasksPath, _safeId(taskId))) {
-      var jsonMap? => Task.createFromJsonMap(jsonMap),
+      var json? => Task.createFromJson(json),
       _ => null
     };
   }
@@ -210,7 +177,7 @@ class LocalStorePersistentStorage implements PersistentStorage {
   @override
   Future<ResumeData?> retrieveResumeData(String taskId) async {
     return switch (await retrieve(resumeDataPath, _safeId(taskId))) {
-      var jsonMap? => ResumeData.fromJsonMap(jsonMap),
+      var json? => ResumeData.fromJson(json),
       _ => null
     };
   }
@@ -218,26 +185,22 @@ class LocalStorePersistentStorage implements PersistentStorage {
   @override
   Future<TaskRecord?> retrieveTaskRecord(String taskId) async {
     return switch (await retrieve(taskRecordsPath, _safeId(taskId))) {
-      var jsonMap? => TaskRecord.fromJsonMap(jsonMap),
+      var json? => TaskRecord.fromJson(json),
       _ => null
     };
   }
 
   @override
-  Future<void> storeModifiedTask(Task task) =>
-      store(task.toJsonMap(), modifiedTasksPath, _safeId(task.taskId));
-
-  @override
   Future<void> storePausedTask(Task task) =>
-      store(task.toJsonMap(), pausedTasksPath, _safeId(task.taskId));
+      store(task.toJson(), pausedTasksPath, _safeId(task.taskId));
 
   @override
   Future<void> storeResumeData(ResumeData resumeData) =>
-      store(resumeData.toJsonMap(), resumeDataPath, _safeId(resumeData.taskId));
+      store(resumeData.toJson(), resumeDataPath, _safeId(resumeData.taskId));
 
   @override
   Future<void> storeTaskRecord(TaskRecord record) =>
-      store(record.toJsonMap(), taskRecordsPath, _safeId(record.taskId));
+      store(record.toJson(), taskRecordsPath, _safeId(record.taskId));
 
   @override
   Future<(String, int)> get storedDatabaseVersion async {
@@ -270,7 +233,6 @@ class LocalStorePersistentStorage implements PersistentStorage {
         for (String path in [
           resumeDataPath,
           pausedTasksPath,
-          modifiedTasksPath,
           taskRecordsPath
         ]) {
           try {
@@ -375,10 +337,6 @@ class PersistentStorageMigrator {
       await toStorage.storePausedTask(pausedTask);
       migratedSomething = true;
     }
-    for (final modifiedTask in await fromStorage.retrieveAllModifiedTasks()) {
-      await toStorage.storeModifiedTask(modifiedTask);
-      migratedSomething = true;
-    }
     for (final resumeData in await fromStorage.retrieveAllResumeData()) {
       await toStorage.storeResumeData(resumeData);
       migratedSomething = true;
@@ -412,7 +370,6 @@ class PersistentStorageMigrator {
       for (String collectionPath in [
         LocalStorePersistentStorage.resumeDataPath,
         LocalStorePersistentStorage.pausedTasksPath,
-        LocalStorePersistentStorage.modifiedTasksPath,
         LocalStorePersistentStorage.taskRecordsPath,
         LocalStorePersistentStorage.metaDataCollection
       ]) {

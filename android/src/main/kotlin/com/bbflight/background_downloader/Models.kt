@@ -5,10 +5,17 @@ package com.bbflight.background_downloader
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import com.bbflight.background_downloader.BDPlugin.Companion.gson
 import com.bbflight.background_downloader.TaskWorker.Companion.TAG
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.Json
 import java.io.File
 import java.net.URLDecoder
 import kotlin.math.absoluteValue
@@ -19,14 +26,23 @@ import kotlin.random.Random
 /// path.
 ///
 /// These correspond to the directories provided by the path_provider package
+@Serializable(with = BaseDirectorySerializer::class)
 enum class BaseDirectory {
     applicationDocuments,  // getApplicationDocumentsDirectory()
     temporary,  // getTemporaryDirectory()
     applicationSupport, // getApplicationSupportDirectory()
-    applicationLibrary // getApplicationSupportDirectory() subdir "Library"
+    applicationLibrary, // getApplicationSupportDirectory() subdir "Library"
+    root // system root directory
 }
 
+private class BaseDirectorySerializer: EnumAsIntSerializer<BaseDirectory>(
+    "BaseDirectory",
+    { it.ordinal },
+    { v -> BaseDirectory.values().first { it.ordinal == v } }
+)
+
 /// Type of updates requested for a group of tasks
+@Serializable(with = UpdatesSerializer::class)
 enum class Updates {
     none,  // no status or progress updates
     status, // only calls upon change in DownloadTaskStatus
@@ -34,13 +50,19 @@ enum class Updates {
     statusAndProgress // calls also for progress along the way
 }
 
+private class UpdatesSerializer: EnumAsIntSerializer<Updates>(
+    "Updates",
+    { it.ordinal },
+    { v -> Updates.values().first { it.ordinal == v } }
+)
+
 /**
  * The Dart side Task
  *
  * A blend of UploadTask, DownloadTask and ParallelDownloadTask with [taskType] indicating what kind
  * of task this is
  */
-
+@Serializable
 class Task(
     val taskId: String = "${Random.nextInt().absoluteValue}",
     val url: String,
@@ -53,7 +75,7 @@ class Task(
     val fileField: String = "",
     val mimeType: String = "",
     val fields: Map<String, String> = mapOf(),
-    val directory: String = "",
+    private val directory: String = "",
     val baseDirectory: BaseDirectory,
     val group: String,
     val updates: Updates,
@@ -64,74 +86,14 @@ class Task(
     val priority: Int = 5,
     val metaData: String = "",
     val displayName: String = "",
-    val creationTime: Long = System.currentTimeMillis(), // untouched, so kept as integer on Android side
+    private val creationTime: Long = System.currentTimeMillis(), // untouched, so kept as integer on Android side
     val taskType: String
 ) {
-
-    /** Creates object from JsonMap */
-    @Suppress("UNCHECKED_CAST")
-    constructor(jsonMap: Map<String, Any>) : this(
-        taskId = jsonMap["taskId"] as String? ?: "",
-        url = jsonMap["url"] as String? ?: "",
-        urls = jsonMap["urls"] as List<String>? ?: listOf(),
-        filename = jsonMap["filename"] as String? ?: "",
-        headers = jsonMap["headers"] as Map<String, String>? ?: mutableMapOf<String, String>(),
-        httpRequestMethod = jsonMap["httpRequestMethod"] as String? ?: "GET",
-        chunks = (jsonMap["chunks"] as Double? ?: 1).toInt(),
-        post = jsonMap["post"] as String?,
-        fileField = jsonMap["fileField"] as String? ?: "",
-        mimeType = jsonMap["mimeType"] as String? ?: "",
-        fields = jsonMap["fields"] as Map<String, String>? ?: mutableMapOf<String, String>(),
-        directory = jsonMap["directory"] as String? ?: "",
-        baseDirectory = BaseDirectory.values()[(jsonMap["baseDirectory"] as Double?
-            ?: 0).toInt()],
-        group = jsonMap["group"] as String? ?: "",
-        updates = Updates.values()[(jsonMap["updates"] as Double? ?: 0).toInt()],
-        requiresWiFi = jsonMap["requiresWiFi"] as Boolean? ?: false,
-        retries = (jsonMap["retries"] as Double? ?: 0).toInt(),
-        retriesRemaining = (jsonMap["retriesRemaining"] as Double? ?: 0).toInt(),
-        allowPause = (jsonMap["allowPause"] as Boolean? ?: false),
-        priority = (jsonMap["priority"] as Double? ?: 5).toInt(),
-        metaData = jsonMap["metaData"] as String? ?: "",
-        displayName = jsonMap["displayName"] as String? ?: "",
-        creationTime = (jsonMap["creationTime"] as Double? ?: 0).toLong(),
-        taskType = jsonMap["taskType"] as String? ?: ""
-    )
-
-    /** Creates JSON map of this object */
-    fun toJsonMap(): Map<String, Any?> {
-        return mapOf(
-            "taskId" to taskId,
-            "url" to url,
-            "urls" to urls,
-            "filename" to filename,
-            "headers" to headers,
-            "httpRequestMethod" to httpRequestMethod,
-            "chunks" to chunks,
-            "post" to post,
-            "fileField" to fileField,
-            "mimeType" to mimeType,
-            "fields" to fields,
-            "directory" to directory,
-            "baseDirectory" to baseDirectory.ordinal, // stored as int
-            "group" to group,
-            "updates" to updates.ordinal,
-            "requiresWiFi" to requiresWiFi,
-            "retries" to retries,
-            "retriesRemaining" to retriesRemaining,
-            "allowPause" to allowPause,
-            "priority" to priority,
-            "metaData" to metaData,
-            "displayName" to displayName,
-            "creationTime" to creationTime,
-            "taskType" to taskType
-        )
-    }
 
     /**
      * Returns a copy of the [Task] with optional changes to specific fields
      */
-    fun copyWith(
+    private fun copyWith(
         taskId: String? = null,
         url: String? = null,
         urls: List<String>? = null,
@@ -208,7 +170,7 @@ class Task(
     }
 
     /** True if this task is a MultiUploadTask */
-    fun isMultiUploadTask(): Boolean {
+    private fun isMultiUploadTask(): Boolean {
         return taskType == "MultiUploadTask"
     }
 
@@ -345,9 +307,9 @@ class Task(
      * to form a full file path
      */
     fun extractFilesData(context: Context): List<Triple<String, String, String>> {
-        val fileFields = gson.fromJson(fileField, Array<String>::class.java).asList()
-        val filenames = gson.fromJson(filename, Array<String>::class.java).asList()
-        val mimeTypes = gson.fromJson(mimeType, Array<String>::class.java).asList()
+        val fileFields = Json.decodeFromString<List<String>>(fileField)
+        val filenames = Json.decodeFromString<List<String>>(filename)
+        val mimeTypes = Json.decodeFromString<List<String>>(mimeType)
         val result = ArrayList<Triple<String, String, String>>()
         for (i in fileFields.indices) {
             if (File(filenames[i]).exists()) {
@@ -371,6 +333,24 @@ class Task(
         return "Task(taskId='$taskId', url='$url', filename='$filename', headers=$headers, httpRequestMethod=$httpRequestMethod, post=$post, fileField='$fileField', mimeType='$mimeType', fields=$fields, directory='$directory', baseDirectory=$baseDirectory, group='$group', updates=$updates, requiresWiFi=$requiresWiFi, retries=$retries, retriesRemaining=$retriesRemaining, allowPause=$allowPause, metaData='$metaData', creationTime=$creationTime, taskType='$taskType')"
     }
 
+    /**
+     * An equality test on a [Task] is a test on the [taskId] only
+     */
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as Task
+
+        if (taskId != other.taskId) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        return taskId.hashCode()
+    }
+
 
 }
 
@@ -378,6 +358,7 @@ class Task(
  *
  * Must match the Dart equivalent enum, as value are passed as ordinal/index integer
  */
+@Serializable(with = TaskStatusSerializer::class)
 enum class TaskStatus {
     enqueued,
     running,
@@ -397,18 +378,23 @@ enum class TaskStatus {
     }
 }
 
-/// Holds data associated with a resume
-class ResumeData(val task: Task, val data: String, val requiredStartByte: Long, val eTag: String?) {
-    fun toJsonMap(): MutableMap<String, Any?> {
-        return mutableMapOf(
-            "task" to task.toJsonMap(),
-            "data" to data,
-            "requiredStartByte" to requiredStartByte,
-            "eTag" to eTag
-        )
-    }
-}
+private class TaskStatusSerializer: EnumAsIntSerializer<TaskStatus>(
+    "TaskStatus",
+    { it.ordinal },
+    { v -> TaskStatus.values().first { it.ordinal == v } }
+)
 
+@Serializable
+/** Holds data associated with a task status update, for local storage */
+data class TaskStatusUpdate(val task: Task, val taskStatus: TaskStatus)
+
+@Serializable
+/** Holds data associated with a task progress update, for local storage */
+data class TaskProgressUpdate(val task: Task, val progress: Double, val expectedFileSize: Long)
+
+/// Holds data associated with a resume
+@Serializable
+data class ResumeData(val task: Task, val data: String, val requiredStartByte: Long, val eTag: String?)
 
 /**
  * The type of a [TaskException]
@@ -466,4 +452,26 @@ class TaskException(
         }, httpResponseCode = (jsonMap["httpResponseCode"] as Double? ?: -1).toInt(),
         description = jsonMap["description"] as String? ?: ""
     )
+}
+
+/**
+ * Serializer for enums, such that they are encoded as an Int representing
+ * the ordinal (index) of the value, instead of the String representation of
+ * the value.
+ */
+open class EnumAsIntSerializer<T:Enum<*>>(
+    serialName: String,
+    val serialize: (v: T) -> Int,
+    val deserialize: (v: Int) -> T
+) : KSerializer<T> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor(serialName, PrimitiveKind.INT)
+
+    override fun serialize(encoder: Encoder, value: T) {
+        encoder.encodeInt(serialize(value))
+    }
+
+    override fun deserialize(decoder: Decoder): T {
+        val v = decoder.decodeInt()
+        return deserialize(v)
+    }
 }

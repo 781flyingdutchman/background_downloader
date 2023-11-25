@@ -5,13 +5,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:background_downloader/background_downloader.dart';
+import 'package:background_downloader/src/utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' hide equals;
 import 'package:path_provider/path_provider.dart';
-import 'package:background_downloader/src/utils.dart';
 
 const def = 'default';
 var statusCallbackCounter = 0;
@@ -115,7 +115,6 @@ void main() {
       print('${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
     });
     await FileDownloader().reset();
-    await FileDownloader().reset(group: FileDownloader.awaitGroup);
     await FileDownloader().reset(group: 'someGroup');
     // recreate the tasks
     task = DownloadTask(url: workingUrl, filename: defaultFilename);
@@ -157,7 +156,6 @@ void main() {
 
   tearDown(() async {
     await FileDownloader().reset();
-    await FileDownloader().reset(group: FileDownloader.awaitGroup);
     await FileDownloader().reset(group: 'someGroup');
     FileDownloader().destroy();
     if (Platform.isAndroid || Platform.isIOS) {
@@ -285,6 +283,18 @@ void main() {
           filename: defaultFilename,
           baseDirectory: BaseDirectory.applicationLibrary);
       path = await task.filePath();
+      await enqueueAndFileExists(path);
+      // root directory: same destination as applicationLibrary, using
+      // the 'directory' field
+      final dir = dirname(path).substring(1); // strip leading path separator
+      final oldPath = path;
+      task = DownloadTask(
+          url: workingUrl,
+          filename: defaultFilename,
+          baseDirectory: BaseDirectory.root,
+          directory: dir);
+      path = await task.filePath();
+      expect(path, equals(oldPath));
       await enqueueAndFileExists(path);
 
       // test url with encoded parameter
@@ -619,7 +629,7 @@ void main() {
       expect(await FileDownloader().enqueue(task), isTrue);
       expect(await FileDownloader().reset(group: 'non-default'), equals(0));
       expect(await FileDownloader().reset(), equals(1));
-      await statusCallbackCompleter.future;
+      await Future.delayed(const Duration(seconds: 1));
       // on iOS, the quick cancellation may not yield a 'running' state
       expect(statusCallbackCounter, lessThanOrEqualTo(3));
       expect(lastStatus, equals(TaskStatus.canceled));
@@ -738,7 +748,7 @@ void main() {
           baseDirectory: BaseDirectory.temporary,
           group: 'someGroup',
           updates: Updates.statusAndProgress,
-          requiresWiFi: true,
+          requiresWiFi: false,
           retries: 5,
           allowPause: false,
           // cannot be true if post != null
@@ -2218,6 +2228,7 @@ void main() {
       // speed. If the test fails, it is likely because the task completed
       // before the initial pause command, or did not have time for two
       // pause/resume cycles -> shorten interval
+      //return; //TODO remove
       var interval = Platform.isAndroid || Platform.isIOS
           ? const Duration(milliseconds: 1500)
           : const Duration(milliseconds: 2000);

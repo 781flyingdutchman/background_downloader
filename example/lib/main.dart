@@ -75,6 +75,15 @@ class _MyAppState extends State<MyApp> {
             paused: const TaskNotification(
                 'Download {filename}', 'Paused with metadata {metadata}'),
             progressBar: true)
+        .configureNotificationForGroup('bunch',
+            running: const TaskNotification(
+                '{numFinished} out of {numTotal}', 'Progress = {progress}'),
+            complete:
+                const TaskNotification("Done!", "Loaded {numTotal} files"),
+            error: const TaskNotification(
+                'Error', '{numFailed}/{numTotal} failed'),
+            progressBar: false,
+            groupNotificationId: 'notGroup')
         .configureNotification(
             // for the 'Download & Open' dog picture
             // which uses 'download' which is not the .defaultGroup
@@ -113,6 +122,15 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      theme: ThemeData(
+        useMaterial3: true,
+
+        // Define the default brightness and colors.
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.purple,
+          brightness: Brightness.light,
+        ),
+      ),
       home: Scaffold(
           appBar: AppBar(
             title: const Text('background_downloader example app'),
@@ -145,10 +163,6 @@ class _MyAppState extends State<MyApp> {
                   onPressed: processButtonPress,
                   child: Text(
                     buttonTexts[buttonState.index],
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineMedium
-                        ?.copyWith(color: Colors.white),
                   ),
                 )),
                 Padding(
@@ -163,45 +177,30 @@ class _MyAppState extends State<MyApp> {
                 const Divider(
                   height: 30,
                   thickness: 5,
-                  color: Colors.grey,
+                  color: Colors.blueGrey,
                 ),
                 Center(
                     child: ElevatedButton(
                         onPressed:
                             loadAndOpenInProgress ? null : processLoadAndOpen,
-                        child: Text(
+                        child: const Text(
                           'Load & Open',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineMedium
-                              ?.copyWith(color: Colors.white),
                         ))),
                 Center(
                     child: Text(
                   loadAndOpenInProgress ? 'Busy' : '',
-                  style: Theme.of(context).textTheme.headlineSmall,
                 )),
                 const Divider(
                   height: 30,
                   thickness: 5,
-                  color: Colors.grey,
+                  color: Colors.blueGrey,
                 ),
                 Center(
                     child: ElevatedButton(
                         onPressed:
                             loadABunchInProgress ? null : processLoadABunch,
-                        child: Text(
-                          'Load a bunch',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineMedium
-                              ?.copyWith(color: Colors.white),
-                        ))),
-                Center(
-                    child: Text(
-                  loadABunchInProgress ? 'Enqueueing' : '',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                )),
+                        child: const Text('Load a bunch'))),
+                Center(child: Text(loadABunchInProgress ? 'Enqueueing' : '')),
               ],
             ),
           )),
@@ -227,6 +226,7 @@ class _MyAppState extends State<MyApp> {
             directory: 'my/directory',
             baseDirectory: BaseDirectory.applicationDocuments,
             updates: Updates.statusAndProgress,
+            retries: 3,
             allowPause: true,
             metaData: '<example metaData>',
             displayName: 'My display name');
@@ -290,8 +290,9 @@ class _MyAppState extends State<MyApp> {
             url:
                 'https://storage.googleapis.com/approachcharts/test/5MB-test.ZIP',
             filename: 'File_${Random().nextInt(1000)}',
+            group: 'bunch',
             updates: Updates.progress)); // must provide progress updates!
-        await Future.delayed(const Duration(milliseconds: 100));
+        await Future.delayed(const Duration(milliseconds: 500));
       }
       setState(() {
         loadABunchInProgress = false;

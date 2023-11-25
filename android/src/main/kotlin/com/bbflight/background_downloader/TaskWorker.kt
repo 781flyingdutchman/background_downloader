@@ -2,34 +2,20 @@
 
 package com.bbflight.background_downloader
 
-import android.Manifest
-import android.annotation.SuppressLint
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Context.NOTIFICATION_SERVICE
-import android.content.Intent
 import android.content.SharedPreferences
-import android.content.pm.PackageManager
-import android.os.Build
-import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import androidx.core.app.ActivityCompat
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import androidx.preference.PreferenceManager
 import androidx.work.CoroutineWorker
-import androidx.work.ForegroundInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.bbflight.background_downloader.BDPlugin.Companion.gson
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.*
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.io.*
-import java.lang.Long.max
 import java.lang.System.currentTimeMillis
 import java.net.HttpURLConnection
 import java.net.InetSocketAddress
@@ -39,7 +25,6 @@ import java.net.URL
 import java.util.*
 import kotlin.concurrent.schedule
 import kotlin.concurrent.write
-import kotlin.math.roundToInt
 import java.lang.Double.min as doubleMin
 
 
@@ -52,7 +37,6 @@ open class TaskWorker(
     applicationContext: Context, workerParams: WorkerParameters
 ) : CoroutineWorker(applicationContext, workerParams) {
 
-    @Suppress("RegExpRedundantEscape")
     companion object {
         const val TAG = "TaskWorker"
         const val chunkGroup = "chunk"
@@ -65,19 +49,9 @@ open class TaskWorker(
 
         const val taskTimeoutMillis = 9 * 60 * 1000L  // 9 minutes
 
-        private val displayNameRegEx = Regex("""\{displayName\}""", RegexOption.IGNORE_CASE)
-        private val fileNameRegEx = Regex("""\{filename\}""", RegexOption.IGNORE_CASE)
-        private val progressRegEx = Regex("""\{progress\}""", RegexOption.IGNORE_CASE)
-        private val networkSpeedRegEx = Regex("""\{networkSpeed\}""", RegexOption.IGNORE_CASE)
-        private val timeRemainingRegEx = Regex("""\{timeRemaining\}""", RegexOption.IGNORE_CASE)
-        private val metaDataRegEx = Regex("""\{metadata\}""", RegexOption.IGNORE_CASE)
-
-        private var createdNotificationChannel = false
-
-
         /** Converts [Task] to JSON string representation */
         fun taskToJsonString(task: Task): String {
-            return gson.toJson(task.toJsonMap())
+            return Json.encodeToString(task)
         }
 
         /**
@@ -206,12 +180,10 @@ open class TaskWorker(
                 if (!postOnBackgroundChannel("statusUpdate", task, arg)) {
                     // unsuccessful post, so store in local prefs (without exception info)
                     Log.d(TAG, "Could not post status update -> storing locally")
-                    val jsonMap: MutableMap<String, Any?> = mutableMapOf(
-                        Pair("task", task.toJsonMap()),
-                        Pair("taskStatus", status.ordinal)
-                    )
                     storeLocally(
-                        BDPlugin.keyStatusUpdateMap, task.taskId, jsonMap,
+                        BDPlugin.keyStatusUpdateMap,
+                        task.taskId,
+                        Json.encodeToString(TaskStatusUpdate(task, status)),
                         prefs
                     )
                 }
@@ -243,7 +215,7 @@ open class TaskWorker(
                     val editor = prefs.edit()
                     editor.putString(
                         BDPlugin.keyTasksMap,
-                        gson.toJson(tasksMap)
+                        Json.encodeToString(tasksMap)
                     )
                     editor.apply()
                 }
@@ -289,13 +261,8 @@ open class TaskWorker(
                 ) {
                     // unsuccessful post, so store in local prefs
                     Log.d(TAG, "Could not post progress update -> storing locally")
-                    val jsonMap: MutableMap<String, Any?> = mutableMapOf(
-                        Pair("task", task.toJsonMap()),
-                        Pair("progress", progress),
-                        Pair("expectedFileSize", expectedFileSize)
-                    )
                     storeLocally(
-                        BDPlugin.keyProgressUpdateMap, task.taskId, jsonMap,
+                        BDPlugin.keyProgressUpdateMap, task.taskId, Json.encodeToString(TaskProgressUpdate(task, progress, expectedFileSize)),
                         prefs
                     )
                 }
@@ -333,7 +300,7 @@ open class TaskWorker(
                 storeLocally(
                     BDPlugin.keyResumeDataMap,
                     resumeData.task.taskId,
-                    resumeData.toJsonMap(),
+                    Json.encodeToString(resumeData),
                     prefs
                 )
             }
@@ -345,19 +312,17 @@ open class TaskWorker(
         private fun storeLocally(
             prefsKey: String,
             taskId: String,
-            item: MutableMap<String, Any?>,
+            item: String,
             prefs: SharedPreferences
         ) {
             BDPlugin.prefsLock.write {
                 // add the data to a map keyed by taskId
-                val jsonString = prefs.getString(prefsKey, "{}")
-                val mapByTaskId = gson.fromJson<Map<String, Any>>(
-                    jsonString, BDPlugin.jsonMapType
-                ).toMutableMap()
+                val jsonString = prefs.getString(prefsKey, "{}") as String
+                val mapByTaskId = Json.decodeFromString<MutableMap<String, String>>(jsonString)
                 mapByTaskId[taskId] = item
                 val editor = prefs.edit()
                 editor.putString(
-                    prefsKey, gson.toJson(mapByTaskId)
+                    prefsKey, Json.encodeToString(mapByTaskId)
                 )
                 editor.apply()
             }
@@ -376,15 +341,15 @@ open class TaskWorker(
     private var lastProgressUpdateTime = 0L // in millis
     private var lastProgressUpdate = 0.0
     private var nextProgressUpdateTime = 0L
-    private var networkSpeed = -1.0 // in MB/s
+    var networkSpeed = -1.0 // in MB/s
     private var isTimedOut = false
 
     // properties related to notifications
     var notificationConfigJsonString: String? = null
     var notificationConfig: NotificationConfig? = null
-    private var notificationId = 0
-    private var notificationProgress = 2.0 // indeterminate
-    private var lastNotificationTime = 0L
+    var notificationId = 0
+    var notificationProgress = 2.0 // indeterminate
+    var lastNotificationTime = 0L
 
     var taskException: TaskException? = null
     var responseBody: String? = null
@@ -415,13 +380,11 @@ open class TaskWorker(
                 isTimedOut =
                     true // triggers .failed in [TransferBytes] method if not runInForeground
             }
-            task = Task(
-                gson.fromJson(inputData.getString(keyTask), BDPlugin.jsonMapType)
-            )
+            task = Json.decodeFromString(inputData.getString(keyTask)!!)
             notificationConfigJsonString = inputData.getString(keyNotificationConfig)
             notificationConfig =
-                if (notificationConfigJsonString != null) gson.fromJson(
-                    notificationConfigJsonString, NotificationConfig::class.java
+                if (notificationConfigJsonString != null) Json.decodeFromString(
+                    notificationConfigJsonString!!
                 ) else null
             canRunInForeground = runInForegroundFileSize >= 0 &&
                     notificationConfig?.running != null // must have notification
@@ -434,7 +397,7 @@ open class TaskWorker(
             if (!isResume) {
                 processProgressUpdate(task, 0.0, prefs)
             }
-            updateNotification(notificationTypeForTaskStatus(TaskStatus.running))
+            NotificationService.updateNotification(this@TaskWorker, TaskStatus.running)
             val status = doTask()
             withContext(NonCancellable) {
                 // NonCancellable to make sure we complete the status and notification
@@ -447,7 +410,10 @@ open class TaskWorker(
                     responseBody,
                     applicationContext
                 )
-                updateNotification(notificationTypeForTaskStatus(status))
+                if (status != TaskStatus.failed || task.retriesRemaining == 0) {
+                    // update only if not failed, or no retries remaining
+                    NotificationService.updateNotification(this@TaskWorker, status)
+                }
             }
         }
         return Result.success()
@@ -705,380 +671,15 @@ open class TaskWorker(
             networkSpeed,
             timeRemaining
         )
-        updateNotification(
-            notificationTypeForTaskStatus(TaskStatus.running),
+        NotificationService.updateNotification(
+            this,
+            TaskStatus.running,
             progress, timeRemaining
         )
         lastProgressUpdate = progress
         nextProgressUpdateTime = currentTimeMillis() + 500
     }
 
-
-    /**
-     * Create the notification channel to use for download notifications
-     */
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name =
-                applicationContext.getString(R.string.bg_downloader_notification_channel_name)
-            val descriptionText = applicationContext.getString(
-                R.string.bg_downloader_notification_channel_description
-            )
-            val importance = NotificationManager.IMPORTANCE_LOW
-            val channel = NotificationChannel(
-                BDPlugin.notificationChannel, name, importance
-            ).apply {
-                description = descriptionText
-            }
-            // Register the channel with the system
-            val notificationManager: NotificationManager = applicationContext.getSystemService(
-                NOTIFICATION_SERVICE
-            ) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
-        }
-        createdNotificationChannel = true
-    }
-
-    /**
-     * Create or update the notification for this [task], associated with this [notificationType]
-     * and [progress]
-     *
-     * [notificationType] determines the type of notification, and whether absence of one will
-     * cancel the notification
-     * The [progress] field is only relevant for [NotificationType.running]. If progress is
-     * negative no progress bar will be shown. If progress > 1 an indeterminate progress bar
-     * will be shown
-     * [networkSpeed] and [timeRemaining] are only relevant for [NotificationType.running]
-     */
-    @SuppressLint("MissingPermission")
-    suspend fun updateNotification(
-        notificationType: NotificationType, progress: Double = 2.0,
-        timeRemaining: Long = -1000
-    ) {
-        val notification = when (notificationType) {
-            NotificationType.running -> notificationConfig?.running
-            NotificationType.complete -> notificationConfig?.complete
-            NotificationType.error -> notificationConfig?.error
-            NotificationType.paused -> notificationConfig?.paused
-        }
-        val removeNotification = when (notificationType) {
-            NotificationType.running -> false
-            else -> notification == null
-        }
-        if (removeNotification) {
-            if (notificationId != 0) {
-                with(NotificationManagerCompat.from(applicationContext)) {
-                    cancel(notificationId)
-                }
-            }
-            return
-        }
-        if (notification == null) {
-            return
-        }
-        // need to show a notification
-        if (!createdNotificationChannel) {
-            createNotificationChannel()
-        }
-        if (notificationId == 0) {
-            notificationId = task.taskId.hashCode()
-        }
-        val iconDrawable = when (notificationType) {
-            NotificationType.running -> if (task.isDownloadTask()) R.drawable.outline_file_download_24 else R.drawable.outline_file_upload_24
-            NotificationType.complete -> R.drawable.outline_download_done_24
-            NotificationType.error -> R.drawable.outline_error_outline_24
-            NotificationType.paused -> R.drawable.outline_pause_24
-        }
-        val builder = NotificationCompat.Builder(
-            applicationContext, BDPlugin.notificationChannel
-        ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
-        // use stored progress if notificationType is .paused
-        notificationProgress =
-            if (notificationType == NotificationType.paused) notificationProgress else progress
-        // title and body interpolation of {filename}, {progress} and {metadata}
-        val title = replaceTokens(
-            notification.title,
-            task,
-            notificationProgress,
-            timeRemaining
-        )
-        if (title.isNotEmpty()) {
-            builder.setContentTitle(title)
-        }
-        val body = replaceTokens(
-            notification.body,
-            task,
-            notificationProgress,
-            timeRemaining
-        )
-        if (body.isNotEmpty()) {
-            builder.setContentText(body)
-        }
-        // progress bar
-        val progressBar =
-            notificationConfig?.progressBar ?: false && (notificationType == NotificationType.running || notificationType == NotificationType.paused)
-        if (progressBar && notificationProgress >= 0) {
-            if (notificationProgress <= 1) {
-                builder.setProgress(100, (notificationProgress * 100).roundToInt(), false)
-            } else { // > 1 means indeterminate
-                builder.setProgress(100, 0, true)
-            }
-        }
-        // action buttons
-        addNotificationActions(notificationType, task, builder)
-        with(NotificationManagerCompat.from(applicationContext)) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                // On Android 33+, check/ask for permission
-                if (ActivityCompat.checkSelfPermission(
-                        applicationContext, Manifest.permission.POST_NOTIFICATIONS
-                    ) != PackageManager.PERMISSION_GRANTED
-                ) {
-                    if (BDPlugin.requestingNotificationPermission) {
-                        return  // don't ask twice
-                    }
-                    BDPlugin.requestingNotificationPermission = true
-                    BDPlugin.activity?.requestPermissions(
-                        arrayOf(
-                            Manifest.permission.POST_NOTIFICATIONS
-                        ), BDPlugin.notificationPermissionRequestCode
-                    )
-                    return
-                }
-            }
-            val androidNotification = builder.build()
-            if (runInForeground) {
-                if (notificationType == NotificationType.running) {
-                    setForeground(ForegroundInfo(notificationId, androidNotification))
-                } else {
-                    // to prevent the 'not running' notification getting killed as the foreground
-                    // process is terminated, this notification is shown regularly, but with
-                    // a delay
-                    CoroutineScope(Dispatchers.Main).launch {
-                        delay(200)
-                        notify(notificationId, androidNotification)
-                    }
-                }
-            } else {
-                val now = currentTimeMillis()
-                val timeSinceLastUpdate = now - lastNotificationTime
-                lastNotificationTime = now
-                if (notificationType == NotificationType.running || timeSinceLastUpdate > 2000) {
-                    notify(notificationId, androidNotification)
-                } else {
-                    // to prevent the 'not running' notification getting ignored
-                    // due to too frequent updates, post it with a delay
-                    CoroutineScope(Dispatchers.Main).launch {
-                        delay(2000 - max(timeSinceLastUpdate, 1000L))
-                        notify(notificationId, androidNotification)
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * Add action to notification via buttons or tap
-     *
-     * Which button(s) depends on the [notificationType], and the actions require
-     * access to [task] and the [builder]
-     */
-    private fun addNotificationActions(
-        notificationType: NotificationType, task: Task, builder: NotificationCompat.Builder
-    ) {
-        val activity = BDPlugin.activity
-        if (activity != null) {
-            val taskJsonString = gson.toJson(
-                task.toJsonMap()
-            )
-            // add tap action for all notifications
-            val tapIntent =
-                applicationContext.packageManager.getLaunchIntentForPackage(
-                    applicationContext.packageName
-                )
-            if (tapIntent != null) {
-                tapIntent.apply {
-                    action = NotificationRcvr.actionTap
-                    putExtra(NotificationRcvr.keyTask, taskJsonString)
-                    putExtra(NotificationRcvr.keyNotificationType, notificationType.ordinal)
-                    putExtra(
-                        NotificationRcvr.keyNotificationConfig,
-                        notificationConfigJsonString
-                    )
-                    putExtra(NotificationRcvr.keyNotificationId, notificationId)
-                }
-                val tapPendingIntent: PendingIntent = PendingIntent.getActivity(
-                    applicationContext,
-                    notificationId,
-                    tapIntent,
-                    PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-                builder.setContentIntent(tapPendingIntent)
-            }
-            // add buttons depending on notificationType
-            when (notificationType) {
-                NotificationType.running -> {
-                    // cancel button when running
-                    val cancelOrPauseBundle = Bundle().apply {
-                        putString(NotificationRcvr.keyTaskId, task.taskId)
-                    }
-                    val cancelIntent =
-                        Intent(applicationContext, NotificationRcvr::class.java).apply {
-                            action = NotificationRcvr.actionCancelActive
-                            putExtra(NotificationRcvr.keyBundle, cancelOrPauseBundle)
-                        }
-                    val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
-                        applicationContext,
-                        notificationId,
-                        cancelIntent,
-                        PendingIntent.FLAG_IMMUTABLE
-                    )
-                    builder.addAction(
-                        R.drawable.outline_cancel_24,
-                        activity.getString(R.string.bg_downloader_cancel),
-                        cancelPendingIntent
-                    )
-                    if (taskCanResume && (notificationConfig?.paused != null)) {
-                        // pause button when running and paused notification configured
-                        val pauseIntent = Intent(
-                            applicationContext, NotificationRcvr::class.java
-                        ).apply {
-                            action = NotificationRcvr.actionPause
-                            putExtra(NotificationRcvr.keyBundle, cancelOrPauseBundle)
-                        }
-                        val pausePendingIntent: PendingIntent = PendingIntent.getBroadcast(
-                            applicationContext,
-                            notificationId,
-                            pauseIntent,
-                            PendingIntent.FLAG_IMMUTABLE
-                        )
-                        builder.addAction(
-                            R.drawable.outline_pause_24,
-                            activity.getString(R.string.bg_downloader_pause),
-                            pausePendingIntent
-                        )
-                    }
-                }
-
-                NotificationType.paused -> {
-                    // cancel button
-                    val cancelBundle = Bundle().apply {
-                        putString(NotificationRcvr.keyTaskId, task.taskId)
-                        putString(
-                            NotificationRcvr.keyTask, taskJsonString
-                        )
-                    }
-                    val cancelIntent = Intent(
-                        applicationContext, NotificationRcvr::class.java
-                    ).apply {
-                        action = NotificationRcvr.actionCancelInactive
-                        putExtra(NotificationRcvr.keyBundle, cancelBundle)
-                    }
-                    val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
-                        applicationContext,
-                        notificationId,
-                        cancelIntent,
-                        PendingIntent.FLAG_IMMUTABLE
-                    )
-                    builder.addAction(
-                        R.drawable.outline_cancel_24,
-                        activity.getString(R.string.bg_downloader_cancel),
-                        cancelPendingIntent
-                    )
-                    // resume button
-                    val resumeBundle = Bundle().apply {
-                        putString(NotificationRcvr.keyTaskId, task.taskId)
-                        putString(
-                            NotificationRcvr.keyTask, taskJsonString
-                        )
-                        putString(
-                            NotificationRcvr.keyNotificationConfig,
-                            notificationConfigJsonString
-                        )
-                    }
-                    val resumeIntent = Intent(
-                        applicationContext, NotificationRcvr::class.java
-                    ).apply {
-                        action = NotificationRcvr.actionResume
-                        putExtra(NotificationRcvr.keyBundle, resumeBundle)
-                    }
-                    val resumePendingIntent: PendingIntent = PendingIntent.getBroadcast(
-                        applicationContext,
-                        notificationId,
-                        resumeIntent,
-                        PendingIntent.FLAG_IMMUTABLE
-                    )
-                    builder.addAction(
-                        R.drawable.outline_play_arrow_24,
-                        activity.getString(R.string.bg_downloader_resume),
-                        resumePendingIntent
-                    )
-                }
-
-                NotificationType.complete -> {}
-                NotificationType.error -> {}
-            }
-        }
-    }
-
-    /**
-     * Replace special tokens {displayName}, {filename}, {metadata}, {progress}, {networkSpeed},
-     * {timeRemaining} with their respective values
-     */
-    private fun replaceTokens(
-        input: String,
-        task: Task,
-        progress: Double,
-        timeRemaining: Long
-    ): String {
-        // filename and metadata
-        val output = displayNameRegEx.replace(
-            fileNameRegEx.replace(
-                metaDataRegEx.replace(
-                    input,
-                    task.metaData
-                ), task.filename
-            ), task.displayName
-        )
-
-        // progress
-        val progressString =
-            if (progress in 0.0..1.0) (progress * 100).roundToInt().toString() + "%"
-            else ""
-        val output2 = progressRegEx.replace(output, progressString)
-        // download speed
-        val networkSpeedString =
-            if (networkSpeed <= 0.0) "-- MB/s" else if (networkSpeed > 1) "${networkSpeed.roundToInt()} MB/s" else "${(networkSpeed * 1000).roundToInt()} kB/s"
-        val output3 = networkSpeedRegEx.replace(output2, networkSpeedString)
-        // time remaining
-        val hours = timeRemaining.div(3600000L)
-        val minutes = (timeRemaining.mod(3600000L)).div(60000L)
-        val seconds = (timeRemaining.mod(60000L)).div(1000L)
-        val timeRemainingString = if (timeRemaining < 0) "--:--" else if (hours > 0)
-            String.format(
-                "%02d:%02d:%02d",
-                hours,
-                minutes,
-                seconds
-            ) else
-            String.format(
-                "%02d:%02d",
-                minutes,
-                seconds
-            )
-        return timeRemainingRegEx.replace(output3, timeRemainingString)
-    }
-
-    /**
-     * Returns the notificationType related to this [status]
-     */
-    private fun notificationTypeForTaskStatus(status: TaskStatus): NotificationType {
-        return when (status) {
-            TaskStatus.enqueued, TaskStatus.running -> NotificationType.running
-            TaskStatus.complete -> NotificationType.complete
-            TaskStatus.paused -> NotificationType.paused
-            else -> NotificationType.error
-        }
-    }
 
     /**
      * Determine if this task should run in the foreground
@@ -1125,11 +726,7 @@ open class TaskWorker(
 }
 
 /** Return the map of tasks stored in preferences */
-fun getTaskMap(prefs: SharedPreferences): MutableMap<String, Any> {
-    val jsonString = prefs.getString(
-        BDPlugin.keyTasksMap, "{}"
-    )
-    return gson.fromJson<Map<String, Any>>(
-        jsonString, BDPlugin.jsonMapType
-    ).toMutableMap()
+fun getTaskMap(prefs: SharedPreferences): MutableMap<String, Task> {
+    val tasksMapJson = prefs.getString(BDPlugin.keyTasksMap, "{}") ?: "{}"
+    return Json.decodeFromString(tasksMapJson)
 }

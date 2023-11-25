@@ -291,7 +291,7 @@ final task = DownloadTask(
 
 The downloader will only store the file upon success (so there will be no partial files saved), and if so, the destination is overwritten if it already exists, and all intermediate directories will be created if needed.
 
-Note: the reason you cannot simply pass a full absolute directory path to the downloader is that the location of the app's documents directory may change between application starts (on iOS), and may therefore fail for downloads that complete while the app is suspended.  You should therefore never store permanently, or hard-code, an absolute path.
+You can also pass an absolute path to the downloader by using `BaseDirectory.root` combined with the path in `directory`. This allows you to reach any file destination on your platform. However, be careful: the reason you should not normally do this (and use e.g. `BaseDirectory.applicationDocuments` instead) is that the location of the app's documents directory may change between application starts (on iOS, and on Android in some cases), and may therefore fail for downloads that complete while the app is suspended.  You should therefore never store permanently, or hard-code, an absolute path, unless you are absolutely sure that that path is 'stable'.
 
 Android has two storage modes: internal (default) and external storage. Read the [configuration document](https://github.com/781flyingdutchman/background_downloader/blob/main/CONFIG.md) for details on how to configure your app to use external storage instead of the default.
 
@@ -478,8 +478,32 @@ While notifications are possible on desktop platforms, there is no true backgrou
 
 The `configureNotification` call configures notification behavior for all download tasks. You can specify a separate configuration for a `group` of tasks by calling `configureNotificationForGroup` and for a single task by calling `configureNotificationForTask`. A `Task` configuration overrides a `group` configuration, which overrides the default configuration.
 
-When attempting to show its first notification, the downloader will ask the user for permission to show notifications (platform version dependent) and abide by the user choice. For Android, starting with API 33, you need to add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />` to your app's `AndroidManifest.xml`. Also on Android you can localize the button text by overriding string resources `bg_downloader_cancel`, `bg_downloader_pause`, `bg_downloader_resume` and descriptions `bg_downloader_notification_channel_name`, `bg_downloader_notification_channel_description`. Localization on iOS can be done through [configuration](#configuration).
+When attempting to show its first notification, the downloader will ask the user for permission to show notifications (platform version dependent) and abide by the user choice. For Android, starting with API 33, you need to add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />` to your app's `AndroidManifest.xml`. Also on Android you can localize the button text by overriding string resources `bg_downloader_cancel`, `bg_downloader_pause`, `bg_downloader_resume` and descriptions `bg_downloader_notification_channel_name`, `bg_downloader_notification_channel_description`. Localization on iOS can be done through [configuration](#configuration).  If you need more sophisticated permission handling, then use a package like [flutter_local_notifications](https://pub.dev/packages/flutter_local_notifications).
 
+### Grouping notifications
+
+If you download or upload multiple files simultaneously, you may not want a notification for every task, but one notification representing the group of tasks.  To do this, set the `groupNotificationId` field in a `notificationConfig` and use that configuration for all tasks in this group. It is easiest to combine this with the `group` field of the task, e.g.:
+```dart
+FileDownloader.configureNotificationForGroup('bunchOfFiles', // refers to the Task.group field
+            running: const TaskNotification(
+                '{numFinished} out of {numTotal}', 'Progress = {progress}'),
+            complete:
+                const TaskNotification('Done!', 'Loaded {numTotal} files'),
+            error: const TaskNotification(
+                'Error', '{numFailed}/{numTotal} failed'),
+            progressBar: true,
+            groupNotificationId: 'myGroupNotification'); // unique ID for notification group
+            
+// start every task like this
+await FileDownloader().enqueue(DownloadTask(
+            url: 'https://your_url.com',
+            filename: 'your_filename',
+            group: 'bunchOfFiles'));
+```
+
+All tasks in group `bunchOfFiles` will now use the notification group configuration with ID `myNotificationGroup`. Any other task that uses a configuration with `groupNotificationId` set to 'myGroupNotification' will also be added to that group notification.
+
+### Tapping a notification
 To respond to the user tapping a notification, register a callback that takes `Task` and `NotificationType` as parameters:
 
 ```dart
@@ -490,8 +514,6 @@ void myNotificationTapCallback(Task task, NotificationType notificationType) {
   print('Tapped notification $notificationType for taskId ${task.taskId}');
 }
 ```
-
-Note that convenience methods that `await` a result, such as `download` (but not `enqueue`), use the default `taskNotificationTapCallback` you register, even though those tasks are in the `awaitGroup`, because that behavior is more in line with expectations. If you need a separate callback for the `awaitGroup`, then set it _after_ setting the default callback. You set the default callback by omitting the `group` parameter in the `registerCallbacks` call.
 
 ### Opening a downloaded file
 
@@ -607,13 +629,13 @@ To cancel, pause or resume a task, call:
 
 
 To manage or query the queue of waiting or running tasks, call:
-* `reset` to reset the downloader, which cancels all ongoing download tasks
+* `reset` to reset the downloader, which cancels all ongoing download tasks (may not yield proper status updates)
 * `allTaskIds` to get a list of `taskId` values of all tasks currently active (i.e. not in a final state). You can exclude tasks waiting for retries by setting `includeTasksWaitingToRetry` to `false`. Note that paused tasks are not included in this list
 * `allTasks` to get a list of all tasks currently active (i.e. not in a final state). You can exclude tasks waiting for retries by setting `includeTasksWaitingToRetry` to `false`. Note that paused tasks are not included in this list
 * `taskForId` to get the `Task` for the given `taskId`, or `null` if not found.
 * `tasksFinished` to check if all tasks have finished (successfully or otherwise)
 
-Each of these methods accept a `group` parameter that targets the method to a specific group. If tasks are enqueued with a `group` other than default, calling any of these methods without a group parameter will not affect/include those tasks - only the default tasks. In particular, this may affect tasks started using a method like `download`, which changes the task's group to `FileDownloader.awaitGroup`.
+Each of these methods accept a `group` parameter that targets the method to a specific group. If tasks are enqueued with a `group` other than default, calling any of these methods without a group parameter will not affect/include those tasks - only the default tasks.
 
 **NOTE:** Only tasks that are active (ie. not in a final state) are guaranteed to be returned or counted, but returning a task does not guarantee that it is active.
 This means that if you check `tasksFinished` when processing a task update, the task you received an update for may still show as 'active', even though it just finished, and result in `false` being returned. To fix this, pass that task's taskId as `ignoreTaskId` to the `tasksFinished` call, and it will be ignored for the purpose of testing if all tasks are finished: 
@@ -645,8 +667,6 @@ final successFullyEnqueued = await FileDownloader().enqueue(task);
 The methods `registerCallBacks`, `unregisterCallBacks`, `reset`, `allTaskIds`, `allTasks` and `tasksFinished` all take an optional `group` parameter to target tasks in a specific group. Note that if tasks are enqueued with a `group` other than default, calling any of these methods without a group parameter will not affect/include those tasks - only the default tasks.
 
 If you listen to the `updates` stream instead of using callbacks, you can test for the task's `group` field in your listener, and process the update differently for different groups.
-
-Note: tasks that are started using `download`, `upload`, `batchDownload` or `batchUpload` (where you `await` a result instead of `enqueue`ing a task) are assigned a special group name `FileDownloader.awaitGroup`, as callbacks for these tasks are handled within the `FileDownloader`, and will therefore not show up in your listener or callback.
 
 ### Task queues
 Once you `enqueue` a task with the `FileDownloader` it is added to an internal queue that is managed by the native platform you're running on (e.g. Android). Once enqueued, you have limited control over the execution order, the number of tasks running in parallel, etc, because all that is managed by the platform.  If you want more control over the queue, you need to add a `TaskQueue`.

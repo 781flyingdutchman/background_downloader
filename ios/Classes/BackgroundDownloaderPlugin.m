@@ -10,6 +10,6 @@
 
 @implementation BackgroundDownloaderPlugin
 + (void)registerWithRegistrar:(NSObject<FlutterPluginRegistrar>*)registrar {
-  [Downloader registerWithRegistrar:registrar];
+  [BDPlugin registerWithRegistrar:registrar];
 }
 @end

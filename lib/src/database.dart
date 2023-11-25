@@ -134,28 +134,28 @@ final class TaskRecord {
   /// Returns the record id, which is the [task]'s [Task.taskId]
   String get taskId => task.taskId;
 
-  /// Create [TaskRecord] from a JSON map
-  TaskRecord.fromJsonMap(Map<String, dynamic> jsonMap)
-      : task = Task.createFromJsonMap(jsonMap),
+  /// Create [TaskRecord] from [json]
+  TaskRecord.fromJson(Map<String, dynamic> json)
+      : task = Task.createFromJson(json),
         status = TaskStatus.values[
-            (jsonMap['status'] as num?)?.toInt() ?? TaskStatus.failed.index],
-        progress = (jsonMap['progress'] as num?)?.toDouble() ?? progressFailed,
-        expectedFileSize = (jsonMap['expectedFileSize'] as num?)?.toInt() ?? -1,
-        exception = jsonMap['exception'] == null
+            (json['status'] as num?)?.toInt() ?? TaskStatus.failed.index],
+        progress = (json['progress'] as num?)?.toDouble() ?? progressFailed,
+        expectedFileSize = (json['expectedFileSize'] as num?)?.toInt() ?? -1,
+        exception = json['exception'] == null
             ? null
-            : TaskException.fromJsonMap(jsonMap['exception']);
+            : TaskException.fromJson(json['exception']);
 
   /// Returns JSON map representation of this [TaskRecord]
   ///
   /// Note the [status], [progress] and [exception] fields are merged into
   /// the JSON map representation of the [task]
-  Map<String, dynamic> toJsonMap() {
-    final jsonMap = task.toJsonMap();
-    jsonMap['status'] = status.index;
-    jsonMap['progress'] = progress;
-    jsonMap['expectedFileSize'] = expectedFileSize;
-    jsonMap['exception'] = exception?.toJsonMap();
-    return jsonMap;
+  Map<String, dynamic> toJson() {
+    final json = task.toJson();
+    json['status'] = status.index;
+    json['progress'] = progress;
+    json['expectedFileSize'] = expectedFileSize;
+    json['exception'] = exception?.toJson();
+    return json;
   }
 
   /// Copy with optional replacements. [exception] is always copied

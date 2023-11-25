@@ -3,9 +3,6 @@ package com.bbflight.background_downloader
 import android.content.Context
 import android.util.Log
 import androidx.work.WorkerParameters
-import com.bbflight.background_downloader.BDPlugin.Companion.gson
-import com.bbflight.background_downloader.BDPlugin.Companion.jsonMapType
-import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -15,6 +12,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -86,7 +86,7 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                                 if (!postOnBackgroundChannel(
                                         "enqueueChild",
                                         task,
-                                        gson.toJson(chunk.task.toJsonMap())
+                                        Json.encodeToString(chunk.task)
                                     )
                                 ) {
                                     // failed to enqueue child
@@ -125,13 +125,7 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                         // resume: reconstruct [chunks] and wait for all chunk tasks to complete.
                         // The Dart side will resume each chunk task, so we just wait for the
                         // completer to complete
-                        val chunksAsJsonList: List<String> = gson.fromJson(
-                            chunksJsonString,
-                            object : TypeToken<List<String>>() {}.type
-                        )
-                        chunks = chunksAsJsonList.map {
-                            Chunk(gson.fromJson(it, jsonMapType))
-                        }
+                        chunks = Json.decodeFromString(chunksJsonString)
                         parallelDownloadContentLength = chunks.fold(0L) { acc, chunk ->
                             acc + chunk.toByte - chunk.fromByte + 1
                         }
@@ -150,11 +144,10 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                         // 'pause' is signalled by adding the taskId to a static list
                         if (BDPlugin.pausedTaskIds.remove(task.taskId)) {
                             pauseAllChunkTasks()
-                            // note: each chunk is json encoded separately as a map
                             postOnBackgroundChannel(
                                 "resumeData",
                                 task,
-                                gson.toJson(chunks.map { gson.toJson(it.toJsonMap()) })
+                                Json.encodeToString(chunks)
                             )
                             parallelTaskStatusUpdateCompleter.complete(TaskStatus.paused)
                             break
@@ -203,7 +196,7 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
             if (!postOnBackgroundChannel(
                     "enqueueChild",
                     task,
-                    gson.toJson(chunk.task.toJsonMap())
+                    Json.encodeToString(chunk.task)
                 )
             ) {
                 chunkStatusUpdate(chunkTaskId, TaskStatus.failed, taskException, responseBody)
@@ -325,7 +318,7 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
         postOnBackgroundChannel(
             "cancelTasksWithId",
             task,
-            gson.toJson(chunks.map { it.task.taskId })
+            Json.encodeToString(chunks.map { it.task.taskId })
         )
     }
 
@@ -336,7 +329,7 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
      * to the NativeDownloader
      */
     private suspend fun pauseAllChunkTasks() {
-        postOnBackgroundChannel("pauseTasks", task, gson.toJson(chunks.map { it.task.toJsonMap() }))
+        postOnBackgroundChannel("pauseTasks", task, Json.encodeToString(chunks.map { it.task }))
     }
 
     /**
@@ -432,18 +425,17 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
     }
 }
 
-@Suppress("UNCHECKED_CAST")
-class Chunk(
+@Serializable
+class Chunk private constructor(
     private val parentTaskId: String,
     private val url: String,
     private val filename: String,
     val task: Task,
     val fromByte: Long,
-    val toByte: Long
+    val toByte: Long,
+    var status: TaskStatus = TaskStatus.enqueued,
+    var progress: Double = 0.0
 ) {
-    var status = TaskStatus.enqueued
-    var progress = 0.0
-
     companion object {
         /**
          * Returns [Updates] that is based on the [parentTask]
@@ -460,7 +452,9 @@ class Chunk(
      * Constructor that also creates the [Task] associated with this [Chunk]
      */
     constructor(parentTask: Task, url: String, filename: String, from: Long, to: Long) : this(
-        parentTaskId = parentTask.taskId, url, filename,
+        parentTaskId = parentTask.taskId,
+        url,
+        filename,
         task = Task(
             url = url,
             filename = filename,
@@ -478,44 +472,14 @@ class Chunk(
             requiresWiFi = parentTask.requiresWiFi,
             allowPause = parentTask.allowPause,
             priority = parentTask.priority,
-            metaData = gson.toJson(
-                mapOf("parentTaskId" to parentTask.taskId, "from" to from, "to" to to)
-            ),
+            metaData = Json.encodeToString(ChunkTaskMetaData(parentTask.taskId, from, to)),
             taskType = "DownloadTask"
-        ), from, to
+        ),
+        from,
+        to
     )
-
-    /**
-     * Constructor to create from jsonMap
-     */
-    constructor(jsonMap: Map<String, Any?>) :
-            this(
-                parentTaskId = jsonMap["parentTaskId"] as String? ?: "",
-                url = jsonMap["url"] as String? ?: "",
-                filename = jsonMap["filename"] as String? ?: "",
-                task = Task(jsonMap["task"] as Map<String, Any>),
-                fromByte = (jsonMap["fromByte"] as Double? ?: 0).toLong(),
-                toByte = (jsonMap["toByte"] as Double? ?: 0).toLong()
-            ) {
-        status = TaskStatus.values()[(jsonMap["status"] as Double? ?: 0.0).toInt()]
-        progress = jsonMap["progress"] as Double? ?: 0.0
-    }
-
-    /**
-     * Return JSON map representation of this object
-     *
-     * Only used to generate [ResumeData]
-     */
-    fun toJsonMap(): Map<String, Any?> {
-        return mapOf(
-            "parentTaskId" to parentTaskId,
-            "url" to url,
-            "filename" to filename,
-            "fromByte" to fromByte,
-            "toByte" to toByte,
-            "task" to task.toJsonMap(),
-            "status" to status.ordinal,
-            "progress" to progress
-        )
-    }
 }
+
+@Serializable
+/// Holder for metaData for [Task] related to a [Chunk]
+data class ChunkTaskMetaData(val parentTaskId: String, val from: Long, val to: Long)

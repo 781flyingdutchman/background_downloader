@@ -13,8 +13,6 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.preference.PreferenceManager
 import androidx.work.*
 import com.bbflight.background_downloader.TaskWorker.Companion.taskToJsonString
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -31,6 +29,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.lang.Long.min
 import java.net.MalformedURLException
 import java.net.URL
@@ -51,10 +51,10 @@ import kotlin.concurrent.write
 class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,PluginRegistry.RequestPermissionsResultListener {
     companion object {
         const val TAG = "BackgroundDownloader"
-        const val keyTasksMap = "com.bbflight.background_downloader.taskMap"
-        const val keyResumeDataMap = "com.bbflight.background_downloader.resumeDataMap"
-        const val keyStatusUpdateMap = "com.bbflight.background_downloader.statusUpdateMap"
-        const val keyProgressUpdateMap = "com.bbflight.background_downloader.progressUpdateMap"
+        const val keyTasksMap = "com.bbflight.background_downloader.taskMap.v2"
+        const val keyResumeDataMap = "com.bbflight.background_downloader.resumeDataMap.v2"
+        const val keyStatusUpdateMap = "com.bbflight.background_downloader.statusUpdateMap.v2"
+        const val keyProgressUpdateMap = "com.bbflight.background_downloader.progressUpdateMap.v2"
         const val keyConfigForegroundFileSize =
             "com.bbflight.background_downloader.config.foregroundFileSize"
         const val keyConfigProxyAddress = "com.bbflight.background_downloader.config.proxyAddress"
@@ -66,8 +66,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,PluginRegistry.
         const val keyConfigUseCacheDir = "com.bbflight.background_downloader.config.useCacheDir"
         const val keyConfigUseExternalStorage =
             "com.bbflight.background_downloader.config.useExternalStorage"
-        const val notificationChannel = "background_downloader"
-        const val notificationPermissionRequestCode = 373921
         const val externalStoragePermissionRequestCode = 373922
 
         @SuppressLint("StaticFieldLeak")
@@ -81,8 +79,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,PluginRegistry.
 
         var forceFailPostOnBackgroundChannel = false
         val prefsLock = ReentrantReadWriteLock()
-        val gson = Gson()
-        val jsonMapType = object : TypeToken<Map<String, Any>>() {}.type
         var requestingNotificationPermission = false
         var externalStoragePermissionCompleter = CompletableFuture<Boolean>()
         var localResumeData = HashMap<String, ResumeData>() // for pause notifications
@@ -170,16 +166,25 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,PluginRegistry.
             // store Task in persistent storage, as Json representation keyed by taskId
             prefsLock.write {
                 val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-                val jsonString = prefs.getString(keyTasksMap, "{}")
-                val tasksMap =
-                    gson.fromJson<Map<String, Any>>(jsonString, jsonMapType).toMutableMap()
-                tasksMap[task.taskId] = gson.toJson(task.toJsonMap())
+                val tasksMap = getTaskMap(prefs)
+                tasksMap[task.taskId] = task
                 val editor = prefs.edit()
-                editor.putString(keyTasksMap, gson.toJson(tasksMap))
+                editor.putString(keyTasksMap, Json.encodeToString(tasksMap))
                 editor.apply()
             }
 
             return true
+        }
+
+        /** cancel tasks with [taskIds] and return true if successful */
+        suspend fun cancelTasksWithIds(context: Context, taskIds: Iterable<String>): Boolean {
+            val workManager = WorkManager.getInstance(context)
+            Log.v(TAG, "Canceling taskIds $taskIds")
+            var success = true
+            for (taskId in taskIds) {
+                success = success && cancelActiveTaskWithId(context, taskId, workManager)
+            }
+            return success
         }
 
         /**
@@ -202,29 +207,43 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,PluginRegistry.
             for (workInfo in workInfos) {
                 if (workInfo.state != WorkInfo.State.SUCCEEDED) {
                     // send cancellation update for tasks that have not yet succeeded
+                    // and remove associated notification
                     prefsLock.write {
                         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
                         val tasksMap = getTaskMap(prefs)
-                        val taskJsonMap = tasksMap[taskId] as String?
-                        if (taskJsonMap != null) {
-                            val task = Task(
-                                gson.fromJson(taskJsonMap, jsonMapType)
-                            )
+                        val task = tasksMap[taskId]
+                        if (task != null) {
                             TaskWorker.processStatusUpdate(task, TaskStatus.canceled, prefs)
+                            // remove outstanding notification for task or group
+                            val notificationGroup =
+                                NotificationService.groupNotificationWithTaskId(taskId)
+                            with(NotificationManagerCompat.from(context)) {
+                                if (notificationGroup == null) {
+                                    cancel(task.taskId.hashCode())
+                                } else {
+                                    // update notification for group
+                                    NotificationService.createUpdateNotificationWorker(
+                                        context,
+                                        Json.encodeToString(task),
+                                        Json.encodeToString(notificationGroup.notificationConfig),
+                                        TaskStatus.canceled.ordinal
+                                    )
+                                }
+                            }
                         } else {
                             Log.d(TAG, "Could not find task with taskId $taskId to cancel")
                         }
                     }
                 }
-            }
-            val operation = workManager.cancelAllWorkByTag("taskId=$taskId")
-            try {
-                withContext(Dispatchers.IO) {
-                    operation.result.get()
+                val operation = workManager.cancelAllWorkByTag("taskId=$taskId")
+                try {
+                    withContext(Dispatchers.IO) {
+                        operation.result.get()
+                    }
+                } catch (e: Throwable) {
+                    Log.w(TAG, "Unable to cancel taskId $taskId in operation: $operation")
+                    return false
                 }
-            } catch (e: Throwable) {
-                Log.w(TAG, "Unable to cancel taskId $taskId in operation: $operation")
-                return false
             }
             return true
         }
@@ -324,6 +343,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,PluginRegistry.
                 "killTaskWithId" -> methodKillTaskWithId(call, result)
                 "taskForId" -> methodTaskForId(call, result)
                 "pause" -> methodPause(call, result)
+                "updateNotification" -> methodUpdateNotification(call, result)
                 "moveToSharedStorage" -> methodMoveToSharedStorage(call, result)
                 "pathInSharedStorage" -> methodPathInSharedStorage(call, result)
                 "openFile" -> methodOpenFile(call, result)
@@ -369,7 +389,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,PluginRegistry.
         // by tempFilePath, startByte and eTag if this enqueue is a resume from pause
         val args = call.arguments as List<*>
         val taskJsonMapString = args[0] as String
-        val task = Task(gson.fromJson(taskJsonMapString, jsonMapType))
+        val task = Json.decodeFromString<Task>(taskJsonMapString)
         val notificationConfigJsonString = args[1] as String?
         val isResume = args.size == 5
         val resumeData: ResumeData? = if (isResume) {
@@ -423,15 +443,14 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,PluginRegistry.
         val tasksAsListOfJsonStrings = mutableListOf<String>()
         prefsLock.read {
             val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
-            val jsonString = prefs.getString(keyTasksMap, "{}")
-            val tasksMap = gson.fromJson<Map<String, Any>>(jsonString, jsonMapType)
+            val tasksMap = getTaskMap(prefs)
             for (workInfo in workInfos) {
                 val tags = workInfo.tags.filter { it.contains("taskId=") }
                 if (tags.isNotEmpty()) {
                     val taskId = tags.first().substring(7)
-                    val taskAsJsonString = tasksMap[taskId]
-                    if (taskAsJsonString != null) {
-                        tasksAsListOfJsonStrings.add(taskAsJsonString as String)
+                    val task = tasksMap[taskId]
+                    if (task != null) {
+                        tasksAsListOfJsonStrings.add(Json.encodeToString(task))
                     }
                 }
             }
@@ -447,13 +466,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,PluginRegistry.
      */
     private suspend fun methodCancelTasksWithIds(call: MethodCall, result: Result) {
         @Suppress("UNCHECKED_CAST") val taskIds = call.arguments as List<String>
-        val workManager = WorkManager.getInstance(applicationContext)
-        Log.v(TAG, "Canceling taskIds $taskIds")
-        var success = true
-        for (taskId in taskIds) {
-            success = success && cancelActiveTaskWithId(applicationContext, taskId, workManager)
-        }
-        result.success(success)
+        result.success(cancelTasksWithIds(applicationContext, taskIds))
     }
 
     /**
@@ -488,9 +501,13 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,PluginRegistry.
         Log.v(TAG, "Returning task for taskId $taskId")
         prefsLock.read {
             val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
-            val jsonString = prefs.getString(keyTasksMap, "{}")
-            val tasksMap = gson.fromJson<Map<String, Any>>(jsonString, jsonMapType).toMutableMap()
-            result.success(tasksMap[taskId])
+            val tasksMap = getTaskMap(prefs)
+            val task = tasksMap[taskId]
+            if (task != null) {
+                result.success(Json.encodeToString(tasksMap[taskId]))
+            } else {
+                result.success(null)
+            }
         }
     }
 
@@ -505,12 +522,38 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,PluginRegistry.
     }
 
     /**
+     * Update the notification for this task
+     *
+     * Args are:
+     * - task
+     * - notificationConfig (cannot be null)
+     * - taskStatus as ordinal in TaskStatus enum. If null, delete the notification
+     */
+    private fun methodUpdateNotification(call: MethodCall, result: Result) {
+        val args = call.arguments as List<*>
+        val taskJsonMapString = args[0] as String
+        val notificationConfigJsonString = args[1] as String
+        val taskStatusOrdinal = args[2] as Int?
+        NotificationService.createUpdateNotificationWorker(
+            applicationContext,
+            taskJsonMapString,
+            notificationConfigJsonString,
+            taskStatusOrdinal
+        )
+        result.success(null)
+    }
+
+
+    /**
      * Returns a JSON String of a map of [ResumeData], keyed by taskId, that has been stored
      * in local shared preferences because they could not be delivered to the Dart side.
      * Local storage of this map is then cleared
      */
     private fun methodPopResumeData(result: Result) {
-        popLocalStorage(keyResumeDataMap, result)
+        popLocalStorage(
+            keyResumeDataMap,
+            result
+        )
     }
 
     /**
@@ -532,7 +575,10 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,PluginRegistry.
     }
 
     /**
-     * Pops and returns locally stored map for this key as a JSON String, via the FlutterResult
+     * Pops and returns locally stored data for this key as a JSON String, via the FlutterResult
+     *
+     * The Json string represents a Map, keyed by TaskId, where each item is a Json representation
+     * of the object stored, e.g. a [TaskStatusUpdate]
      */
     private fun popLocalStorage(prefsKey: String, result: Result) {
         prefsLock.write {
@@ -619,9 +665,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,PluginRegistry.
     private fun methodOpenFile(call: MethodCall, result: Result) {
         val args = call.arguments as List<*>
         val taskJsonMapString = args[0] as String?
-        val task = if (taskJsonMapString != null) Task(
-            Gson().fromJson(taskJsonMapString, jsonMapType)
-        ) else null
+        val task =
+            if (taskJsonMapString != null) Json.decodeFromString<Task>(taskJsonMapString) else null
         val filePath = args[1] as String? ?: task!!.filePath(applicationContext)
         val mimeType = args[2] as String? ?: getMimeType(filePath)
         result.success(if (activity != null) doOpenFile(activity!!, filePath, mimeType) else false)
@@ -641,7 +686,9 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,PluginRegistry.
         val statusOrdinal = args[2] as Int
         val exceptionJson = args[3] as String?
         val exception = if (exceptionJson != null) {
-            TaskException(gson.fromJson(exceptionJson, jsonMapType) as Map<String, Any?>)
+            TaskException(
+                Json.decodeFromString<Map<String, Any>>(exceptionJson)
+            )
         } else null
         val responseBody = args[4] as String?
         parallelDownloadTaskWorkers[taskId]?.chunkStatusUpdate(
@@ -788,7 +835,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,PluginRegistry.
         val args = call.arguments as List<*>
         val taskJsonMapString = args[0] as String
         val contentDisposition = args[1] as String
-        val task = Task(gson.fromJson(taskJsonMapString, jsonMapType))
+        val task = Json.decodeFromString<Task>(taskJsonMapString)
         val h = if (contentDisposition.isNotEmpty()) mutableMapOf(
             "Content-Disposition" to mutableListOf(contentDisposition)
         ) else mutableMapOf("" to mutableListOf())
@@ -824,8 +871,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,PluginRegistry.
      */
     private fun handleIntent(intent: Intent?): Boolean {
         if (intent != null && intent.action == NotificationRcvr.actionTap) {
-            val taskJsonMapString =
-                intent.extras?.getString(NotificationRcvr.keyTask)
+            val taskJsonMapString = intent.getStringExtra(NotificationRcvr.keyTask)
             val notificationTypeOrdinal =
                 intent.getIntExtra(NotificationRcvr.keyNotificationType, 0)
             val notificationId = intent.getIntExtra(NotificationRcvr.keyNotificationId, 0)
@@ -859,13 +905,14 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,PluginRegistry.
             }
             // check for 'tapOpensFile'
             if (notificationTypeOrdinal == NotificationType.complete.ordinal) {
-                val task = Task(gson.fromJson(taskJsonMapString, jsonMapType))
+                val task = Json.decodeFromString<Task>(taskJsonMapString!!)
                 val notificationConfigJsonString =
                     intent.extras?.getString(NotificationRcvr.keyNotificationConfig)
                 val notificationConfig =
-                    if (notificationConfigJsonString != null) gson.fromJson(
-                        notificationConfigJsonString, NotificationConfig::class.java
-                    ) else null
+                    if (notificationConfigJsonString != null) Json.decodeFromString<NotificationConfig>(
+                        notificationConfigJsonString
+                    )
+                    else null
                 if (notificationConfig?.tapOpensFile == true && activity != null) {
                     val filePath = task.filePath(activity!!)
                     doOpenFile(activity!!, filePath, getMimeType(filePath))
@@ -930,7 +977,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,PluginRegistry.
         val granted =
             (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)
         return when (requestCode) {
-            notificationPermissionRequestCode -> {
+            NotificationService.notificationPermissionRequestCode -> {
                 requestingNotificationPermission = false
                 true
             }

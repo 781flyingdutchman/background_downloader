@@ -1,3 +1,49 @@
+## 8.0.0
+
+### Introduce groupNotification
+
+If you download or upload multiple files simultaneously, you may not want a notification for every task, but one notification representing the group of tasks.  To do this, set the `groupNotificationId` field in a `notificationConfig` and use that configuration for all tasks in this group. It is easiest to combine this with the `group` field of the task, e.g.:
+```dart
+FileDownloader.configureNotificationForGroup('bunchOfFiles',
+            running: const TaskNotification(
+                '{numFinished} out of {numTotal}', 'Progress = {progress}'),
+            complete:
+                const TaskNotification('Done!', 'Loaded {numTotal} files'),
+            error: const TaskNotification(
+                'Error', '{numFailed}/{numTotal} failed'),
+            progressBar: true,
+            groupNotificationId: 'myGroupNotification');
+            
+// start every task like this
+await FileDownloader().enqueue(DownloadTask(
+            url: 'https://your_url.com',
+            filename: 'your_filename',
+            group: 'bunchOfFiles'));
+```
+
+All tasks in group `bunchOfFiles` will now use the notification group configuration with ID `myNotificationGroup`.
+
+### Add `BaseDirectory.root`
+
+You can now pass an absolute path to the downloader by using `BaseDirectory.root` combined with the path in `directory`. This allows you to reach any file destination on your platform. However, be careful: the reason you should not normally do this (and use e.g. `BaseDirectory.applicationDocuments` instead) is that the location of the app's documents directory may change between application starts (on iOS, and on Android in some cases), and may therefore fail for downloads that complete while the app is suspended.  You should therefore never store permanently, or hard-code, an absolute path, unless you are absolutely sure that that path is 'stable'.
+
+### Removal of `awaitGroup`
+* removed all references to `awaitGroup` as the logic for the convenience methods has changed
+* if you use a convenience function, your task _must_ generate status updates (by setting the `updates` field to `Updates.status` - the default - or `Updates.statusAndProgress`)
+* if you use convenience function and specify a progress callback, your task _must_ also generate status updates (by setting the `updates` field to `Updates.statusAndProgress`)
+
+
+* [maybe] iOS photos library
+* Removed all references to `modifiedTasks` in `PersistentStorage` interface
+
+Bug fixes:
+* 'pause' notification issue on iOS
+* priority for multi-part file uploads
+* issue #194 (remove notification when canceling a paused task)
+
+Code refactoring to improve readability
+
+
 ## 7.12.3
 
 Issue #189 related to resume on Android versions prior to S, and to expediting a task prior to S

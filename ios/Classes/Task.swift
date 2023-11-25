@@ -9,7 +9,7 @@ import Foundation
 
 
 /// Partial version of the Dart side DownloadTask, only used for background loading
-struct Task : Codable {
+struct Task : Codable, Hashable {
     var taskId: String = "\(Int.random(in: 1..<(1 << 32)))"
     var url: String
     var urls: [String]? = []
@@ -172,7 +172,8 @@ enum BaseDirectory: Int {
     case applicationDocuments, // getApplicationDocumentsDirectory()
          temporary, // getTemporaryDirectory()
          applicationSupport, // getApplicationSupportDirectory()
-         applicationLibrary // getLibraryDirectory()
+         applicationLibrary, // getLibraryDirectory()
+         root // system root
 }
 
 /// Type of  updates requested for a group of downloads
@@ -193,6 +194,25 @@ enum TaskStatus: Int, Codable {
          canceled,
          waitingToRetry,
          paused
+}
+
+/** Holds data associated with a task status update, for local storage */
+struct TaskStatusUpdate: Encodable {
+    var task: Task
+    var taskStatus: TaskStatus
+}
+
+/** Holds data associated with a task progress update, for local storage */
+struct TaskProgressUpdate: Encodable {
+    var task: Task
+    var progress: Double
+    var expectedFileSize: Int64
+}
+
+/** Holds data associated with a resume, for local storage */
+struct ResumeData: Encodable {
+    var task: Task
+    var data: String
 }
 
 /// The type of [TaskException]
