@@ -291,7 +291,7 @@ final task = DownloadTask(
 
 The downloader will only store the file upon success (so there will be no partial files saved), and if so, the destination is overwritten if it already exists, and all intermediate directories will be created if needed.
 
-Note: the reason you cannot simply pass a full absolute directory path to the downloader is that the location of the app's documents directory may change between application starts (on iOS), and may therefore fail for downloads that complete while the app is suspended.  You should therefore never store permanently, or hard-code, an absolute path.
+You can also pass an absolute path to the downloader by using `BaseDirectory.root` combined with the path in `directory`. This allows you to reach any file destination on your platform. However, be careful: the reason you should not normally do this (and use e.g. `BaseDirectory.applicationDocuments` instead) is that the location of the app's documents directory may change between application starts (on iOS, and on Android in some cases), and may therefore fail for downloads that complete while the app is suspended.  You should therefore never store permanently, or hard-code, an absolute path, unless you are absolutely sure that that path is 'stable'.
 
 Android has two storage modes: internal (default) and external storage. Read the [configuration document](https://github.com/781flyingdutchman/background_downloader/blob/main/CONFIG.md) for details on how to configure your app to use external storage instead of the default.
 
@@ -480,11 +480,11 @@ The `configureNotification` call configures notification behavior for all downlo
 
 When attempting to show its first notification, the downloader will ask the user for permission to show notifications (platform version dependent) and abide by the user choice. For Android, starting with API 33, you need to add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />` to your app's `AndroidManifest.xml`. Also on Android you can localize the button text by overriding string resources `bg_downloader_cancel`, `bg_downloader_pause`, `bg_downloader_resume` and descriptions `bg_downloader_notification_channel_name`, `bg_downloader_notification_channel_description`. Localization on iOS can be done through [configuration](#configuration).  If you need more sophisticated permission handling, then use a package like [flutter_local_notifications](https://pub.dev/packages/flutter_local_notifications).
 
-### Notification groups
+### Grouping notifications
 
 If you download or upload multiple files simultaneously, you may not want a notification for every task, but one notification representing the group of tasks.  To do this, set the `groupNotificationId` field in a `notificationConfig` and use that configuration for all tasks in this group. It is easiest to combine this with the `group` field of the task, e.g.:
 ```dart
-FileDownloader.configureNotificationForGroup('bunchOfFiles',
+FileDownloader.configureNotificationForGroup('bunchOfFiles', // refers to the Task.group field
             running: const TaskNotification(
                 '{numFinished} out of {numTotal}', 'Progress = {progress}'),
             complete:
@@ -492,7 +492,7 @@ FileDownloader.configureNotificationForGroup('bunchOfFiles',
             error: const TaskNotification(
                 'Error', '{numFailed}/{numTotal} failed'),
             progressBar: true,
-            groupNotificationId: 'myNotificationGroup');
+            groupNotificationId: 'myGroupNotification'); // unique ID for notification group
             
 // start every task like this
 await FileDownloader().enqueue(DownloadTask(
@@ -501,7 +501,7 @@ await FileDownloader().enqueue(DownloadTask(
             group: 'bunchOfFiles'));
 ```
 
-All tasks in group `bunchOfFiles` will now use the notification group configuration with ID `myNotificationGroup`.
+All tasks in group `bunchOfFiles` will now use the notification group configuration with ID `myNotificationGroup`. Any other task that uses a configuration with `groupNotificationId` set to 'myGroupNotification' will also be added to that group notification.
 
 ### Tapping a notification
 To respond to the user tapping a notification, register a callback that takes `Task` and `NotificationType` as parameters:

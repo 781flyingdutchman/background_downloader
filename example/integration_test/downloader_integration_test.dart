@@ -5,13 +5,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:background_downloader/background_downloader.dart';
+import 'package:background_downloader/src/utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' hide equals;
 import 'package:path_provider/path_provider.dart';
-import 'package:background_downloader/src/utils.dart';
 
 const def = 'default';
 var statusCallbackCounter = 0;
@@ -283,6 +283,18 @@ void main() {
           filename: defaultFilename,
           baseDirectory: BaseDirectory.applicationLibrary);
       path = await task.filePath();
+      await enqueueAndFileExists(path);
+      // root directory: same destination as applicationLibrary, using
+      // the 'directory' field
+      final dir = dirname(path).substring(1); // strip leading path separator
+      final oldPath = path;
+      task = DownloadTask(
+          url: workingUrl,
+          filename: defaultFilename,
+          baseDirectory: BaseDirectory.root,
+          directory: dir);
+      path = await task.filePath();
+      expect(path, equals(oldPath));
       await enqueueAndFileExists(path);
 
       // test url with encoded parameter
