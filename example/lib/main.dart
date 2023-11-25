@@ -122,6 +122,15 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      theme: ThemeData(
+        useMaterial3: true,
+
+        // Define the default brightness and colors.
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.purple,
+          brightness: Brightness.light,
+        ),
+      ),
       home: Scaffold(
           appBar: AppBar(
             title: const Text('background_downloader example app'),
@@ -154,10 +163,6 @@ class _MyAppState extends State<MyApp> {
                   onPressed: processButtonPress,
                   child: Text(
                     buttonTexts[buttonState.index],
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineMedium
-                        ?.copyWith(color: Colors.white),
                   ),
                 )),
                 Padding(
@@ -172,45 +177,30 @@ class _MyAppState extends State<MyApp> {
                 const Divider(
                   height: 30,
                   thickness: 5,
-                  color: Colors.grey,
+                  color: Colors.blueGrey,
                 ),
                 Center(
                     child: ElevatedButton(
                         onPressed:
                             loadAndOpenInProgress ? null : processLoadAndOpen,
-                        child: Text(
+                        child: const Text(
                           'Load & Open',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineMedium
-                              ?.copyWith(color: Colors.white),
                         ))),
                 Center(
                     child: Text(
                   loadAndOpenInProgress ? 'Busy' : '',
-                  style: Theme.of(context).textTheme.headlineSmall,
                 )),
                 const Divider(
                   height: 30,
                   thickness: 5,
-                  color: Colors.grey,
+                  color: Colors.blueGrey,
                 ),
                 Center(
                     child: ElevatedButton(
                         onPressed:
                             loadABunchInProgress ? null : processLoadABunch,
-                        child: Text(
-                          'Load a bunch',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineMedium
-                              ?.copyWith(color: Colors.white),
-                        ))),
-                Center(
-                    child: Text(
-                  loadABunchInProgress ? 'Enqueueing' : '',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                )),
+                        child: const Text('Load a bunch'))),
+                Center(child: Text(loadABunchInProgress ? 'Enqueueing' : '')),
               ],
             ),
           )),
