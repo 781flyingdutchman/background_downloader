@@ -28,20 +28,24 @@ All tasks in group `bunchOfFiles` will now use the notification group configurat
 You can now pass an absolute path to the downloader by using `BaseDirectory.root` combined with the path in `directory`. This allows you to reach any file destination on your platform. However, be careful: the reason you should not normally do this (and use e.g. `BaseDirectory.applicationDocuments` instead) is that the location of the app's documents directory may change between application starts (on iOS, and on Android in some cases), and may therefore fail for downloads that complete while the app is suspended.  You should therefore never store permanently, or hard-code, an absolute path, unless you are absolutely sure that that path is 'stable'.
 
 ### Removal of `awaitGroup`
-* removed all references to `awaitGroup` as the logic for the convenience methods has changed
-* if you use a convenience function, your task _must_ generate status updates (by setting the `updates` field to `Updates.status` - the default - or `Updates.statusAndProgress`)
-* if you use convenience function and specify a progress callback, your task _must_ also generate status updates (by setting the `updates` field to `Updates.statusAndProgress`)
-
-
-* [maybe] iOS photos library
+* Removed all references to `awaitGroup` as the logic for the convenience methods has changed
 * Removed all references to `modifiedTasks` in `PersistentStorage` interface
+* If you use a convenience function, your task _must_ generate status updates (by setting the `updates` field to `Updates.status` - the default - or `Updates.statusAndProgress`)
+* If you use convenience function and specify a progress callback, your task _must_ also generate status updates (by setting the `updates` field to `Updates.statusAndProgress`)
 
-Bug fixes:
-* 'pause' notification issue on iOS
-* priority for multi-part file uploads
-* issue #194 (remove notification when canceling a paused task)
+### Use iOS Photos Library for .videos and .images SharedStorage destinations
 
-Code refactoring to improve readability
+Previously, .images and .video destinations were 'faked' on iOS. With this change, when calling `moveToSharedStorage`, the file is added to the Photos Library (provided the user grants that permission).
+
+For .images and .video, you need user permission to add to the Photos Library, which requires you to set the `NSPhotoLibraryAddUsageDescription` key in `Info.plist`. The returned String is _not_ a `filePath`, but a unique identifier. If you only want to add the file to the Photos Library you can ignore this identifier. If you want to actually get access to the file (and `filePath`) in the Photos Library, then the user needs to grant an additional 'modify' permission, which requires you to set the `NSPhotoLibraryUsageDescription` in `Info.plist`. To get the actual `filePath`, call `pathInSharedStorage` and pass the identifier obtained via the call to `moveToSharedStorage` as the `filePath` parameter.
+The reason for this two-step approach is that typically you only want to add to the library, which does not require the user to give access to their entire photos library (required to get the `filePath`).
+
+
+### Bug fixes and other improvements
+* Fixes Pause notification issue on iOS
+* Fixes issue with priority for multi-part file uploads
+* Fixes issue #194 (remove notification when canceling a paused task)
+* Refactors code to improve readability
 
 
 ## 7.12.3

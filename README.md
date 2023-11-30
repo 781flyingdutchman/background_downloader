@@ -1,13 +1,6 @@
 # A background file downloader and uploader for iOS, Android, MacOS, Windows and Linux
 
 ---
-**NOTE**
-
-This version requires Dart 3. If you need support for Dart 2 please use version `^6.1.1`, which will be maintained until the end of 2023.
-
-If you want a 'lite' version, without references to the `sqflite` package, use branch [V7-lite](https://github.com/781flyingdutchman/background_downloader/tree/V7-lite) of the repo.
-
----
 
 **If you are migrating from Flutter Downloader, please read the [migration document](https://github.com/781flyingdutchman/background_downloader/blob/main/MIGRATION.md)**
 
@@ -553,8 +546,8 @@ if (newFilePath == null) {
 
 Because the behavior is very platform-specific, not all `SharedStorage` destinations have the same result. The options are:
 * `.downloads` - implemented on all platforms, but 'faked' on iOS: files in this directory are not accessible to other users
-* `.images` - implemented on Android and iOS only, and 'faked' on iOS: files in this directory are not accessible to other users
-* `.video` - implemented on Android and iOS only, and 'faked' on iOS: files in this directory are not accessible to other users
+* `.images` - implemented on Android and iOS only. On iOS, this moves the image to the Photos Library and returns an identifier instead of a filePath - see below
+* `.video` - implemented on Android and iOS only. On iOS, this moves the video to the Photos Library and returns an identifier instead of a filePath - see below
 * `.audio` - implemented on Android and iOS only, and 'faked' on iOS: files in this directory are not accessible to other users
 * `.files` - implemented on Android only
 * `.external` - implemented on Android only
@@ -569,7 +562,20 @@ If the file already exists in shared storage, then on iOS and desktop it will be
 whereas on Android API 29+ a new file will be created with an indexed name (e.g. 'myFile (1).txt').
 
 __On MacOS:__ For the `.downloads` to work you need to enable App Sandbox entitlements and set the key `com.apple.security.files.downloads.read-write` to true.  
+
 __On Android:__ Depending on what `SharedStorage` destination you move a file to, and depending on the OS version your app runs on, you _may_ require extra permissions `WRITE_EXTERNAL_STORAGE` and/or `READ_EXTERNAL_STORAGE` . See [here](https://medium.com/androiddevelopers/android-11-storage-faq-78cefea52b7c) for details on the new scoped storage rules starting with Android API version 30, which is what the plugin is using.
+
+__On iOS:__ For `.images` and `.video` SharedStorage destinations, you need user permission to add to the Photos Library, which requires you to set the `NSPhotoLibraryAddUsageDescription` key in `Info.plist`. The returned String is _not_ a `filePath`, but a unique identifier. If you only want to add the file to the Photos Library you can ignore this identifier. If you want to actually get access to the file (and `filePath`) in the Photos Library, then the user needs to grant an additional 'modify' permission, which requires you to set the `NSPhotoLibraryUsageDescription` in `Info.plist`. To get the actual `filePath`, call `pathInSharedStorage` and pass the identifier obtained via the call to `moveToSharedStorage` as the `filePath` parameter:
+```dart
+final identifier = await FileDownloader().moveToSharedStorage(task, SharedStorage.images);
+if (identifier != null) {
+  final path = await FileDownloader().pathInSharedStorage(identifier, SharedStorage.images);
+  debugPrint('iOS path to dog picture in Photos Library = ${path ?? "permission denied"}');
+} else {
+  debugPrint('Could not add file to Photos Library, likely because permission denied');
+}
+```
+The reason for this two-step approach is that typically you only want to add to the library, which does not require the user to give access to their entire photos library (required to get the `filePath`).
 
 ### Path to file in shared storage
 
@@ -587,6 +593,8 @@ __On iOS:__ To make files visible in the Files browser, do not move them to shar
 <true/>
 ```
 This will make all files in your app's `Documents` directory visible to the Files browser.
+
+See `moveToSharedStorage` above for the special handling of `.video` and `.images` destinations on iOS.
 
 ## Uploads
 

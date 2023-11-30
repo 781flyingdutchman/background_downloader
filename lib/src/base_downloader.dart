@@ -332,7 +332,8 @@ abstract base class BaseDownloader {
         pausedCount++;
       }
     }
-    final awaitTasksToRemove = awaitTasks.keys.where((task) => task.group == group).toList();
+    final awaitTasksToRemove =
+        awaitTasks.keys.where((task) => task.group == group).toList();
     for (final task in awaitTasksToRemove) {
       awaitTasks.remove(task);
     }

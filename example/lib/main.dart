@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:background_downloader/background_downloader.dart';
@@ -274,6 +275,16 @@ class _MyAppState extends State<MyApp> {
       });
       await FileDownloader().download(task);
       await FileDownloader().openFile(task: task);
+      if (Platform.isIOS) {
+        // add to photos library and print path
+        final identifier = await FileDownloader().moveToSharedStorage(task, SharedStorage.images);
+        if (identifier != null) {
+          final path = await FileDownloader().pathInSharedStorage(identifier, SharedStorage.images);
+          debugPrint('iOS path to dog picture in Photos Library = ${path ?? "permission denied"}');
+        } else {
+          debugPrint('Could not add file to Photos Library, likely because permission denied');
+        }
+      }
       setState(() {
         loadAndOpenInProgress = false;
       });

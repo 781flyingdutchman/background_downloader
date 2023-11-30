@@ -7,6 +7,8 @@
 
 import Foundation
 import os.log
+import Photos
+import Combine
 
 public enum SharedStorage: Int {
     case downloads,
@@ -17,22 +19,178 @@ public enum SharedStorage: Int {
          external
 }
 
+/// Check and if necessary ask for Photos access permission
+///
+/// if [addOnly] is true, requests .addOnly permission, otherwise requests
+/// full .readWrite permission.
+///
+/// .addOnly requires the "NSPhotoLibraryAddUsageDescription" to be set in Info.plist
+/// .readWrite requires the "NSPhotoLibraryUsageDescription" to be set in Info.plist
+/// Prior to iOS 14, use NSPhotoLibraryUsageDescription
+///
+/// Returns true if granted
+public func photosAccessAuthorized(addOnly: Bool) async -> Bool {
+    var authStatus: PHAuthorizationStatus
+    if #available(iOS 14, *) {
+        authStatus = PHPhotoLibrary.authorizationStatus(for: addOnly ? .addOnly : .readWrite)
+    } else {
+        authStatus = PHPhotoLibrary.authorizationStatus()
+    }
+    if (authStatus == PHAuthorizationStatus.authorized) {
+        return true
+    }
+    if (authStatus != PHAuthorizationStatus.notDetermined) {
+        return false
+    }
+    // request permission
+    if #available(iOS 14, *) {
+        authStatus = await PHPhotoLibrary.requestAuthorization(for: addOnly ? .addOnly : .readWrite)
+    } else {
+        authStatus = await withCheckedContinuation { continuation in
+            PHPhotoLibrary.requestAuthorization {status in
+                continuation.resume(returning: status)
+            }
+        }
+    }
+    if (authStatus == PHAuthorizationStatus.authorized) {
+        return true
+    }
+    return false
+}
+
 /// Move file at [filePath] to shared storage [destination] with optional [directory]
-public func moveToSharedStorage(filePath: String, destination: SharedStorage, directory: String) -> String? {
+public func moveToSharedStorage(filePath: String, destination: SharedStorage, directory: String) async -> String? {
     guard FileManager().fileExists(atPath: filePath)
     else {
         os_log("Cannot move to shared storage: file %@ does not exist", log: log, type: .error, filePath)
         return nil
     }
+    switch destination {
+        case .images, .video:
+            return await moveToPhotoLibrary(filePath: filePath, destination: destination)
+    default:
+        return moveToFakeSharedStorage(filePath: filePath, destination: destination, directory: directory)
+    }
+}
+
+/// Saves the file at [filePath] to the photolibrary [destination] and removes the original
+///
+/// The returned path is the 'localId'
+private func moveToPhotoLibrary(filePath: String, destination: SharedStorage) async -> String? {
+    var localId: String?
+    guard await photosAccessAuthorized(addOnly: true) else {
+        os_log("Cannot move to shared storage: permission to add to photos library denied by user", log: log, type: .info)
+        return nil
+    }
+    guard let fileURL = URL(string: filePath) else {
+        os_log("filePath invalid: %@", log: log, type: .info, filePath)
+        return nil
+    }
+    let result = await withCheckedContinuation { continuation in
+        PHPhotoLibrary.shared().performChanges({
+            let assetChangeRequest = destination == .video ? PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: fileURL) :
+                PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: fileURL)
+            localId = assetChangeRequest?.placeholderForCreatedAsset?.localIdentifier
+        })
+        { (success, error: Error?) in
+            guard success, let unwrappedId = localId else {
+                if let unwrappedError = error {
+                    os_log("Could not save to Photos Library: %@", log: log, type: .info, String(describing: unwrappedError))
+                }
+                continuation.resume(returning: "")
+                return
+            }
+            try? FileManager.default.removeItem(at: fileURL)
+            continuation.resume(returning: unwrappedId)
+        }
+    }
+    return result.isEmpty ? nil : result
+}
+
+/// Returns the path to the file at [filePath] in shared storage [destination] subdir [directory], or null
+public func pathInSharedStorage(filePath: String, destination: SharedStorage, directory: String) async -> String? {
+    if destination == .images || destination == .video {
+        return await pathInPhotoLibrary(localId: filePath, destination: destination)
+    }
+    // regular 'faked' sharedStorage
+    guard let directory = try? directoryForSharedStorage(destination: destination, directory: directory) else {
+        os_log("Cannot determine path in shared storage: no permission for directory %@", log: log, type: .info, directory)
+        return nil
+    }
+    let destUrl = directory.appendingPathComponent((filePath as NSString).lastPathComponent)
+    return destUrl.path
+}
+
+/// Returns the file path associated with the [localId] in the Photos library
+///
+/// This requires .readWrite PhotoLibrary access, and therefore the filepath is NOT returned
+/// when moving a photo or video to the PhotoLibrary using [moveToSharedStorage].
+/// Instead, the local identifier is returned, and if the full file path is required, this identifier needs to
+/// be passed to the [pathInSharedStorage] call
+///
+/// Returns the path to the photo/video asset, or nil if unsuccessful
+public func pathInPhotoLibrary(localId: String, destination: SharedStorage) async -> String? {
+    guard await photosAccessAuthorized(addOnly: false) else {
+        os_log("Cannot get path in shared storage: permission to access photos library denied by user", log: log, type: .info)
+        return nil
+    }
+    let assetResult = PHAsset.fetchAssets(withLocalIdentifiers: [localId], options: nil)
+    guard let asset = assetResult.firstObject else {
+        os_log("Photos asset not found", log: log, type: .info)
+        return nil
+    }
+    let result = await withCheckedContinuation { continuation in
+        asset.requestContentEditingInput(with: nil, completionHandler: { input, _ in
+            if (destination == .video) {
+                if let urlAsset = input?.audiovisualAsset as? AVURLAsset {
+                    continuation.resume(returning: urlAsset.url.path)
+                } else {
+                    continuation.resume(returning: "")
+                }
+            } else {
+                continuation.resume(returning: input?.fullSizeImageURL?.path ?? "")
+            }
+        })
+    }
+    return result.isEmpty ? nil : result
+}
+
+
+/// Returns the URL of the directory associated with the [destination] and [directory], or nil
+public func directoryForSharedStorage(destination: SharedStorage, directory: String) throws ->  URL? {
+    var dir: String
+    switch destination {
+        case .downloads:
+            dir = "Downloads"
+        case .audio:
+            dir = "Music"
+        case .images, .video:
+            os_log("Destination .images and .video should use PhotoLibrary functions", log: log, type: .error)
+            return nil
+        case .files, .external:
+            os_log("Destination .files and .external are not supported on iOS", log: log, type: .info)
+            return nil
+            
+    }
+    let documentsURL =
+        try? FileManager.default.url(for: FileManager.SearchPathDirectory.documentDirectory,
+                                 in: .userDomainMask,
+                                 appropriateFor: nil,
+                                 create: true)
+    return directory.isEmpty
+        ? documentsURL?.appendingPathComponent(dir)
+        : documentsURL?.appendingPathComponent(dir).appendingPathComponent(directory)
+}
+
+private func moveToFakeSharedStorage(filePath: String, destination: SharedStorage, directory: String) -> String? {
     let fileUrl = NSURL(fileURLWithPath: filePath)
     guard let directory = try? directoryForSharedStorage(destination: destination, directory: directory) else {
         os_log("Cannot move to shared storage: no permission for directory %@", log: log, type: .error, directory)
         return nil
     }
     if !FileManager.default.fileExists(atPath: directory.path) {
-        do
-        {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories:  true)
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         } catch {
             os_log("Cannot move to shared storage: failed to create directory %@: %@", log: log, type: .error, directory.path, error.localizedDescription)
             return nil
@@ -50,42 +208,4 @@ public func moveToSharedStorage(filePath: String, destination: SharedStorage, di
     }
     os_log("Moved from %@ to %@", log: log, type: .info, fileUrl, destUrl.path)
     return destUrl.path
-}
-
-/// Returns the path to the file at [filePath] in shared storage [destination] subdir [directory], or null
-public func pathInSharedStorage(filePath: String, destination: SharedStorage, directory: String) -> String? {
-    guard let directory = try? directoryForSharedStorage(destination: destination, directory: directory) else {
-        os_log("Cannot determine path in shared storage: no permission for directory %@", log: log, type: .info, directory)
-        return nil
-    }
-    let destUrl = directory.appendingPathComponent((filePath as NSString).lastPathComponent)
-    return destUrl.path
-}
-
-
-/// Returns the URL of the directory associated with the [destination] and [directory], or nil
-public func directoryForSharedStorage(destination: SharedStorage, directory: String) throws ->  URL? {
-    var dir: String
-    switch destination {
-    case .downloads:
-        dir = "Downloads"
-    case .images:
-        dir = "Pictures"
-    case .video:
-        dir = "Movies"
-    case .audio:
-        dir = "Music"
-    case .files, .external:
-        os_log("Destination .files and .external are not supported on iOS", log: log, type: .info)
-        return nil
-        
-    }
-    let documentsURL =
-        try? FileManager.default.url(for: FileManager.SearchPathDirectory.documentDirectory,
-                                 in: .userDomainMask,
-                                 appropriateFor: nil,
-                                 create: true)
-    return directory.isEmpty
-        ? documentsURL?.appendingPathComponent(dir)
-        : documentsURL?.appendingPathComponent(dir).appendingPathComponent(directory)
 }

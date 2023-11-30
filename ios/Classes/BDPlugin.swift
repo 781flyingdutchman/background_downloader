@@ -83,9 +83,13 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             case "updateNotification":
                 methodUpdateNotification(call: call, result: result)
             case "moveToSharedStorage":
-                methodMoveToSharedStorage(call: call, result: result)
+                _Concurrency.Task {
+                    await methodMoveToSharedStorage(call: call, result: result)
+                }
             case "pathInSharedStorage":
-                methodPathInSharedStorage(call: call, result: result)
+                _Concurrency.Task {
+                    await methodPathInSharedStorage(call: call, result: result)
+                }
             case "openFile":
                 methodOpenFile(call: call, result: result)
                 /// ParallelDownloadTask child updates
@@ -408,7 +412,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     /// Moves a file represented by the first argument to a SharedStorage destination
     ///
     /// Results in the new filePath if successful, or nil
-    private func methodMoveToSharedStorage(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    private func methodMoveToSharedStorage(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let args = call.arguments as! [Any]
         guard
             let filePath = args[0] as? String,
@@ -418,11 +422,11 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             result(nil)
             return
         }
-        result(moveToSharedStorage(filePath: filePath, destination: destination, directory: directory))
+        result(await moveToSharedStorage(filePath: filePath, destination: destination, directory: directory))
     }
 
     /// Returns path to file in a SharedStorage destination, or null
-    private func methodPathInSharedStorage(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    private func methodPathInSharedStorage(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let args = call.arguments as! [Any]
         guard
             let filePath = args[0] as? String,
@@ -432,7 +436,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             result(nil)
             return
         }
-        result(pathInSharedStorage(filePath: filePath, destination: destination, directory: directory))
+        result(await pathInSharedStorage(filePath: filePath, destination: destination, directory: directory))
     }
 
     

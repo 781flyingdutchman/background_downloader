@@ -750,6 +750,18 @@ interface class FileDownloader {
   ///
   /// Returns the path to the stored file, or null if not successful
   ///
+  /// NOTE: on iOS, using [destination] [SharedStorage.images] or
+  /// [SharedStorage.video] adds the photo or video file to the Photos
+  /// library. This requires the user to grant permission, and requires the
+  /// "NSPhotoLibraryAddUsageDescription" key to be set in Info.plist. The
+  /// returned value is NOT a filePath but an identifier. If the full filepath
+  /// is required, follow the [moveToSharedStorage] call with a call to
+  /// [pathInSharedStorage], passing the identifier obtained from the call
+  /// to [moveToSharedStorage] as the filePath parameter. This requires the user to
+  /// grant additional permissions, and requires the "NSPhotoLibraryUsageDescription"
+  /// key to be set in Info.plist. The returned value is the actual file path
+  /// of the photo or video in the Photos Library.
+  ///
   /// Platform-dependent, not consistent across all platforms
   Future<String?> moveToSharedStorage(
     DownloadTask task,
@@ -766,6 +778,17 @@ interface class FileDownloader {
   /// [filePath] extension
   ///
   /// Returns the path to the stored file, or null if not successful
+  /// NOTE: on iOS, using [destination] [SharedStorage.images] or
+  /// [SharedStorage.video] adds the photo or video file to the Photos
+  /// library. This requires the user to grant permission, and requires the
+  /// "NSPhotoLibraryAddUsageDescription" key to be set in Info.plist. The
+  /// returned value is NOT a filePath but an identifier. If the full filepath
+  /// is required, follow the [moveToSharedStorage] call with a call to
+  /// [pathInSharedStorage], passing the identifier obtained from the call
+  /// to [moveToSharedStorage] as the filePath parameter. This requires the user to
+  /// grant additional permissions, and requires the "NSPhotoLibraryUsageDescription"
+  /// key to be set in Info.plist. The returned value is the actual file path
+  /// of the photo or video in the Photos Library.
   ///
   /// Platform-dependent, not consistent across all platforms
   Future<String?> moveFileToSharedStorage(
@@ -782,6 +805,9 @@ interface class FileDownloader {
   /// destination.
   ///
   /// Returns the path to the stored file, or null if not successful
+  ///
+  /// See the documentation for [moveToSharedStorage] for special use case
+  /// on iOS for .images and .video
   ///
   /// Platform-dependent, not consistent across all platforms
   Future<String?> pathInSharedStorage(
