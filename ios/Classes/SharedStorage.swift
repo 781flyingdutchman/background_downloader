@@ -24,35 +24,27 @@ public enum SharedStorage: Int {
 /// if [addOnly] is true, requests .addOnly permission, otherwise requests
 /// full .readWrite permission.
 ///
+/// Returns true if granted
+
 /// .addOnly requires the "NSPhotoLibraryAddUsageDescription" to be set in Info.plist
 /// .readWrite requires the "NSPhotoLibraryUsageDescription" to be set in Info.plist
 /// Prior to iOS 14, use NSPhotoLibraryUsageDescription
 ///
-/// Returns true if granted
+/// This functionality is the default functionality. You can manage permissions more
+/// granularly (and, for instance, ask the appropriate permission ahead of time) by
+/// using the FiledDownloader().permissions methods
 public func photosAccessAuthorized(addOnly: Bool) async -> Bool {
-    var authStatus: PHAuthorizationStatus
-    if #available(iOS 14, *) {
-        authStatus = PHPhotoLibrary.authorizationStatus(for: addOnly ? .addOnly : .readWrite)
-    } else {
-        authStatus = PHPhotoLibrary.authorizationStatus()
-    }
-    if (authStatus == PHAuthorizationStatus.authorized) {
+    let permissionType: PermissionType = addOnly ? .iosAddToPhotoLibrary : .iosChangePhotoLibrary
+    var authStatus = await getPermissionStatus(for: permissionType)
+    if (authStatus == .granted) {
         return true
     }
-    if (authStatus != PHAuthorizationStatus.notDetermined) {
+    if (authStatus != .undetermined) {
         return false
     }
     // request permission
-    if #available(iOS 14, *) {
-        authStatus = await PHPhotoLibrary.requestAuthorization(for: addOnly ? .addOnly : .readWrite)
-    } else {
-        authStatus = await withCheckedContinuation { continuation in
-            PHPhotoLibrary.requestAuthorization {status in
-                continuation.resume(returning: status)
-            }
-        }
-    }
-    if (authStatus == PHAuthorizationStatus.authorized) {
+    authStatus = await requestPermission(for: permissionType)
+    if (authStatus == .granted) {
         return true
     }
     return false

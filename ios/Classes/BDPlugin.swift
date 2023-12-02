@@ -57,92 +57,83 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     
     /// Handler for Flutter plugin method channel calls
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-        switch call.method {
-            case "reset":
-                _Concurrency.Task {
+        _Concurrency.Task { // to allow async/await
+            switch call.method {
+                case "reset":
                     await methodReset(call: call, result: result)
-                }
-            case "enqueue":
-                methodEnqueue(call: call, result: result)
-            case "allTasks":
-                _Concurrency.Task {
+                case "enqueue":
+                    await methodEnqueue(call: call, result: result)
+                case "allTasks":
                     await methodAllTasks(call: call, result: result)
-                }
-            case "cancelTasksWithIds":
-                _Concurrency.Task {
+                case "cancelTasksWithIds":
                     await methodCancelTasksWithIds(call: call, result: result)
-                }
-            case "taskForId":
-                _Concurrency.Task {
+                case "taskForId":
                     await methodTaskForId(call: call, result: result)
-                }
-            case "pause":
-                _Concurrency.Task {
+                case "pause":
                     await methodPause(call: call, result: result)
-                }
-            case "updateNotification":
-                methodUpdateNotification(call: call, result: result)
-            case "moveToSharedStorage":
-                _Concurrency.Task {
+                case "updateNotification":
+                    methodUpdateNotification(call: call, result: result)
+                case "moveToSharedStorage":
                     await methodMoveToSharedStorage(call: call, result: result)
-                }
-            case "pathInSharedStorage":
-                _Concurrency.Task {
+                case "pathInSharedStorage":
                     await methodPathInSharedStorage(call: call, result: result)
-                }
-            case "openFile":
-                methodOpenFile(call: call, result: result)
-                /// ParallelDownloadTask child updates
-            case "chunkStatusUpdate":
-                methodUpdateChunkStatus(call: call, result: result)
-            case "chunkProgressUpdate":
-                methodUpdateChunkProgress(call: call, result: result)
-                /// internal use
-            case "popResumeData":
-                methodPopResumeData(result: result)
-            case "popStatusUpdates":
-                methodPopStatusUpdates(result: result)
-            case "popProgressUpdates":
-                methodPopProgressUpdates(result: result)
-                /// configuration
-            case "configLocalize":
-                methodStoreConfig(key: BDPlugin.keyConfigLocalize, value: call.arguments, result: result)
-            case "configResourceTimeout":
-                methodStoreConfig(key: BDPlugin.keyConfigResourceTimeout, value: call.arguments, result: result)
-            case "configRequestTimeout":
-                methodStoreConfig(key: BDPlugin.keyConfigRequestTimeout, value: call.arguments, result: result)
-            case "configProxyAddress":
-                methodStoreConfig(key: BDPlugin.keyConfigProxyAdress, value: call.arguments, result: result)
-            case "configProxyPort":
-                methodStoreConfig(key: BDPlugin.keyConfigProxyPort, value: call.arguments, result: result)
-            case "configCheckAvailableSpace":
-                methodStoreConfig(key: BDPlugin.keyConfigCheckAvailableSpace, value: call.arguments, result: result)
-            case "forceFailPostOnBackgroundChannel":
-                methodForceFailPostOnBackgroundChannel(call: call, result: result)
-            case "testSuggestedFilename":
-                methodTestSuggestedFilename(call: call, result: result)
-            default:
-                os_log("Invalid method: %@", log: log, type: .error, call.method)
-                result(FlutterMethodNotImplemented)
+                case "openFile":
+                    methodOpenFile(call: call, result: result)
+                    /// ParallelDownloadTask child updates
+                case "chunkStatusUpdate":
+                    methodUpdateChunkStatus(call: call, result: result)
+                case "chunkProgressUpdate":
+                    methodUpdateChunkProgress(call: call, result: result)
+                    /// internal use
+                case "popResumeData":
+                    methodPopResumeData(result: result)
+                case "popStatusUpdates":
+                    methodPopStatusUpdates(result: result)
+                case "popProgressUpdates":
+                    methodPopProgressUpdates(result: result)
+                    /// Permissions
+                case "permissionStatus":
+                    await methodPermissionStatus(call: call, result: result)
+                case "requestPermission":
+                    await methodRequestPermission(call: call, result: result)
+                    /// configuration
+                case "configLocalize":
+                    methodStoreConfig(key: BDPlugin.keyConfigLocalize, value: call.arguments, result: result)
+                case "configResourceTimeout":
+                    methodStoreConfig(key: BDPlugin.keyConfigResourceTimeout, value: call.arguments, result: result)
+                case "configRequestTimeout":
+                    methodStoreConfig(key: BDPlugin.keyConfigRequestTimeout, value: call.arguments, result: result)
+                case "configProxyAddress":
+                    methodStoreConfig(key: BDPlugin.keyConfigProxyAdress, value: call.arguments, result: result)
+                case "configProxyPort":
+                    methodStoreConfig(key: BDPlugin.keyConfigProxyPort, value: call.arguments, result: result)
+                case "configCheckAvailableSpace":
+                    methodStoreConfig(key: BDPlugin.keyConfigCheckAvailableSpace, value: call.arguments, result: result)
+                case "forceFailPostOnBackgroundChannel":
+                    methodForceFailPostOnBackgroundChannel(call: call, result: result)
+                case "testSuggestedFilename":
+                    methodTestSuggestedFilename(call: call, result: result)
+                default:
+                    os_log("Invalid method: %@", log: log, type: .error, call.method)
+                    result(FlutterMethodNotImplemented)
+            }
         }
     }
     
     /// Starts the download for one task, passed as map of values representing a Task
     ///
     /// Returns true if successful, but will emit a status update that the background task is running
-    private func methodEnqueue(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    private func methodEnqueue(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let args = call.arguments as! [Any]
         let taskJsonString = args[0] as! String
         let notificationConfigJsonString = args[1] as? String
         if notificationConfigJsonString != nil  && BDPlugin.haveNotificationPermission == nil {
             // check (or ask) if we have permission to send notifications
-            let center = UNUserNotificationCenter.current()
-            center.requestAuthorization(options: [.alert]) { granted, error in
-                if let error = error {
-                    os_log("Error obtaining notification authorization: %@", log: log, type: .error, error.localizedDescription)
-                }
-                BDPlugin.haveNotificationPermission = granted
+            var auth = await getPermissionStatus(for: .notifications)
+            if (auth == .undetermined) {
+                auth = await requestPermission(for: .notifications)
             }
+            BDPlugin.haveNotificationPermission = auth == .granted
         }
         let isResume = args.count == 5
         let resumeDataAsBase64String = isResume
@@ -517,6 +508,22 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         }
         result(nil)
     }
+
+    /// Return the authorization status of a permission, passed as the rawValue of the
+    /// [Permissionequest] enum
+    private func methodPermissionStatus(call: FlutterMethodCall, result: @escaping FlutterResult) async {
+        let permissionType = PermissionType(rawValue: call.arguments as! Int)!
+        let status = await getPermissionStatus(for: permissionType)
+        result(status.rawValue)
+    }
+    
+    /// Request this permission, passed as the rawValue of the [Permissionequest] enum
+    private func methodRequestPermission(call: FlutterMethodCall, result: @escaping FlutterResult) async {
+        let permissionType = PermissionType(rawValue: call.arguments as! Int)!
+        let status = await requestPermission(for: permissionType)
+        result(status.rawValue)
+    }
+
     
     /// Sets or resets flag to force failing posting on background channel
     ///

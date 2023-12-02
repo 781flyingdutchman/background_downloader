@@ -184,8 +184,8 @@ class _MyAppState extends State<MyApp> {
                     child: ElevatedButton(
                         onPressed:
                             loadAndOpenInProgress ? null : processLoadAndOpen,
-                        child: const Text(
-                          'Load & Open',
+                        child: Text(
+                          Platform.isIOS ? 'Load, open and add' : 'Load & Open',
                         ))),
                 Center(
                     child: Text(
@@ -277,6 +277,12 @@ class _MyAppState extends State<MyApp> {
       await FileDownloader().openFile(task: task);
       if (Platform.isIOS) {
         // add to photos library and print path
+        // the example shows the default approach, which will trigger two permission requests:
+        // one for adding to the album (triggered by moveToSharedStorage) and
+        // one for getting the path (triggered by pathInSharedStorage).
+        // If you need the path, ask full permissions beforehand by calling
+        // final auth = await FileDownloader().permissions.request(PermissionType.iosChangePhotoLibrary);
+        // and only proceed if you get .granted. Uncomment the line above to see the difference
         final identifier = await FileDownloader().moveToSharedStorage(task, SharedStorage.images);
         if (identifier != null) {
           final path = await FileDownloader().pathInSharedStorage(identifier, SharedStorage.images);

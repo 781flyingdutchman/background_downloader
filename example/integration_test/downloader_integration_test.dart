@@ -2543,7 +2543,12 @@ void main() {
     });
 
     test('move file to shared storage - all types', () async {
-      for (var destination in SharedStorage.values) {
+      // test skips .images and .video for iOS as that blocks on permission
+      final valuesToTest = Platform.isIOS
+          ? SharedStorage.values.where((element) =>
+              element != SharedStorage.video && element != SharedStorage.images)
+          : SharedStorage.values;
+      for (var destination in valuesToTest) {
         await FileDownloader().download(task);
         var filePath = await task.filePath();
         expect(File(filePath).existsSync(), isTrue);
@@ -2573,9 +2578,7 @@ void main() {
         print('Path in shared storage for $destination is $path');
         if (Platform.isAndroid ||
             destination == SharedStorage.downloads ||
-            (Platform.isIOS &&
-                destination != SharedStorage.files &&
-                destination != SharedStorage.external)) {
+            (Platform.isIOS && destination == SharedStorage.audio)) {
           expect(path, isNotNull);
           expect(File(filePath).existsSync(), isFalse);
           expect(File(path!).existsSync(), isTrue);

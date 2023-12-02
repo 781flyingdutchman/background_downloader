@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:background_downloader/src/permissions.dart';
 import 'package:background_downloader/src/queue/task_queue.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -31,6 +32,14 @@ interface class FileDownloader {
   /// Activate tracking by calling [trackTasks], and access the records in the
   /// database via this [database] object.
   late final Database database;
+
+  /// Permissions authorization interface
+  ///
+  /// Use [Permissions.status] to get the authorization status for a permission
+  /// Use [Permissions.request] to request a permission
+  /// Use [Permissions.shouldShowRationale] to determine if an educational
+  /// rationale for this permission should be shown
+  Permissions get permissions => _downloader.permissionsService;
 
   late final BaseDownloader _downloader;
 

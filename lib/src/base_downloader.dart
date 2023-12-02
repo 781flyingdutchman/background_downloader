@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:background_downloader/src/permissions.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
@@ -90,6 +91,8 @@ abstract base class BaseDownloader {
 
   /// Connected TaskQueues that will receive a signal upon task completion
   final taskQueues = <TaskQueue>[];
+
+  final permissionsService = PermissionsService.instance();
 
   BaseDownloader();
 

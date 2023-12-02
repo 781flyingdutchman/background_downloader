@@ -170,6 +170,9 @@ abstract base class NativeDownloader extends BaseDownloader {
             }
           });
 
+        case ('permissionRequestResponse', int response):
+          permissionsService.processResponse(response);
+
         default:
           log.warning('Background channel: no match for message $message');
           throw StateError('Background channel: no match for message $message');
