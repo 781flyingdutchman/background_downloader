@@ -29,7 +29,6 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                                         lastTotalBytesDone: Int64,
                                         lastNetworkSpeed: Double)]() // time, bytes, speed
     static var uploaderForUrlSessionTaskIdentifier = [Int:Uploader]() // maps from UrlSessionTask TaskIdentifier
-    static var haveNotificationPermission: Bool?
     static var haveregisteredNotificationCategories = false
     static var taskIdsThatCanResume = Set<String>() // taskIds that can resume
     static var taskIdsProgrammaticallyCancelled = Set<String>() // skips error handling for these tasks
@@ -57,7 +56,8 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     
     /// Handler for Flutter plugin method channel calls
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-        _Concurrency.Task { // to allow async/await
+        _Concurrency.Task { @MainActor () -> Void in
+            // to allow async/await
             switch call.method {
                 case "reset":
                     await methodReset(call: call, result: result)
@@ -110,7 +110,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                 case "configCheckAvailableSpace":
                     methodStoreConfig(key: BDPlugin.keyConfigCheckAvailableSpace, value: call.arguments, result: result)
                 case "platformVersion":
-                    result(await UIDevice.current.systemVersion)
+                    result(UIDevice.current.systemVersion)
                 case "forceFailPostOnBackgroundChannel":
                     methodForceFailPostOnBackgroundChannel(call: call, result: result)
                 case "testSuggestedFilename":
@@ -129,14 +129,6 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         let args = call.arguments as! [Any]
         let taskJsonString = args[0] as! String
         let notificationConfigJsonString = args[1] as? String
-        if notificationConfigJsonString != nil  && BDPlugin.haveNotificationPermission == nil {
-            // check (or ask) if we have permission to send notifications
-            var auth = await getPermissionStatus(for: .notifications)
-            if (auth == .undetermined) {
-                auth = await requestPermission(for: .notifications)
-            }
-            BDPlugin.haveNotificationPermission = auth == .granted
-        }
         let isResume = args.count == 5
         let resumeDataAsBase64String = isResume
             ? args[2] as? String ?? ""

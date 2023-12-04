@@ -157,13 +157,14 @@ let ourCategories = NotificationCategory.allCases.map { $0.rawValue }
 /// Update notification for this [task], based on [notificationType] and [notificationConfig]
 func updateNotification(task: Task, notificationType: NotificationType, notificationConfig: NotificationConfig?) {
     _Concurrency.Task { @MainActor in // run using concurrency on main thread
+        if (await getPermissionStatus(for: .notifications)) != .granted {
+            return
+        }
         if !BDPlugin.haveregisteredNotificationCategories {
             registerNotificationCategories()
             BDPlugin.haveregisteredNotificationCategories = true
         }
         let notificationCenter = UNUserNotificationCenter.current()
-        let settings = await notificationCenter.notificationSettings()
-        guard (settings.authorizationStatus == .authorized) else { return }
         if notificationConfig?.groupNotificationId.isEmpty ?? true {
             // regular notification
             var notification: NotificationContents?

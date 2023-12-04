@@ -19,9 +19,9 @@ public enum SharedStorage: Int {
          external
 }
 
-/// Check and if necessary ask for Photos access permission
+/// Check if photos permissions have been granted
 ///
-/// if [addOnly] is true, requests .addOnly permission, otherwise requests
+/// if [addOnly] is true, checks .addOnly permission, otherwise checks
 /// full .readWrite permission.
 ///
 /// Returns true if granted
@@ -29,21 +29,9 @@ public enum SharedStorage: Int {
 /// .addOnly requires the "NSPhotoLibraryAddUsageDescription" to be set in Info.plist
 /// .readWrite requires the "NSPhotoLibraryUsageDescription" to be set in Info.plist
 /// Prior to iOS 14, use NSPhotoLibraryUsageDescription
-///
-/// This functionality is the default functionality. You can manage permissions more
-/// granularly (and, for instance, ask the appropriate permission ahead of time) by
-/// using the FiledDownloader().permissions methods
 public func photosAccessAuthorized(addOnly: Bool) async -> Bool {
     let permissionType: PermissionType = addOnly ? .iosAddToPhotoLibrary : .iosChangePhotoLibrary
     var authStatus = await getPermissionStatus(for: permissionType)
-    if (authStatus == .granted) {
-        return true
-    }
-    if (authStatus != .undetermined) {
-        return false
-    }
-    // request permission
-    authStatus = await requestPermission(for: permissionType)
     if (authStatus == .granted) {
         return true
     }

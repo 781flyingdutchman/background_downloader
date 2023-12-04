@@ -1,5 +1,52 @@
 ## 8.0.0
 
+### Permissions
+
+BREAKING: permissions are no longer automatically requested. You need to explicitly check, and if necessary ask for permissions ahead of calling methods that use them.
+
+User permissions may be needed to display notifications, to move files to external storage (on Android) and to add images or video to the iOS Photo Library. These permissions should be checked and if needed requested before executing those operations.
+
+You can use a package like [permission_handler](https://pub.dev/packages/permission_handler), or use the `FileDownloader().permissions` object, which has three methods:
+* `status`: returns a `PermissionsStatus`. On Android this is either `granted` or `denied`. If you have not asked for permission yet, then Android returns `denied` and iOS returns `.undetermined`. iOS can also return `.partial`
+* `request`: to request the actual permission. Only do this if you have confirmed that the permission is not already `granted` and only request one permission at a time
+* `shouldShowRationale`: for Android only, if `true` you should show a UI element (e.g. a dialog) to explain to the user why this permission is necessary
+
+All three methods take one `PermissionType` parameter, e.g. `PermissionType.notifications`.
+
+For example, to request permissions for notifications:
+```dart
+var status = await FileDownloader().permissions.status(permissionType);
+if (status != PermissionStatus.granted) {
+  if (await FileDownloader().permissions.shouldShowRationale(permissionType)) {
+    await showRationaleDialog(permissionType); // Show a dialog with rationale
+  }
+  status = await FileDownloader().permissions.request(permissionType);
+  debugPrint('Permission for $permissionType was $status');
+}
+```
+
+The downloader will check permission status before each action, e.g. will not show notifications unless permissions for notifications have been granted.
+
+Note that permissions are very platform and version dependent, e.g. notification permissions on Android are only required as of API 33, and iOS 14 introduced new Photo Library permissions. If you want to get into details, you can determine the platform version you're running by calling `await FileDownloader().platformVersion()`.
+
+### Use iOS Photos Library for .videos and .images SharedStorage destinations
+
+BREAKING: Previously, .images and .video destinations were 'faked' on iOS. With this change, when calling `moveToSharedStorage`, the file is added to the Photos Library (provided the user grants that permission).
+
+For `.images` and `.video` SharedStorage destinations, you need user permission to add to the Photos Library, which requires you to set the `NSPhotoLibraryAddUsageDescription` key in `Info.plist`. The returned String is _not_ a `filePath`, but a unique identifier. If you only want to add the file to the Photos Library you can ignore this identifier. If you want to actually get access to the file (and `filePath`) in the Photos Library, then the user needs to grant an additional 'modify' permission, which requires you to set the `NSPhotoLibraryUsageDescription` in `Info.plist`. To get the actual `filePath`, call `pathInSharedStorage` and pass the identifier obtained via the call to `moveToSharedStorage` as the `filePath` parameter:
+```dart
+// assume we have permission
+final identifier = await FileDownloader().moveToSharedStorage(task, SharedStorage.images);
+if (identifier != null) {
+  final path = await FileDownloader().pathInSharedStorage(identifier, SharedStorage.images);
+  debugPrint('iOS path to dog picture in Photos Library = ${path ?? "permission denied"}');
+} else {
+  debugPrint('Could not add file to Photos Library, likely because permission denied');
+}
+```
+The reason for this two-step approach is that typically you only want to add to the library (requires `PermissionType.iosAddToPhotoLibrary`), which does not require the user to give read/write access to their entire photos library (`PermissionType.iosChangePhotoLibrary`, required to get the `filePath`).
+
+
 ### Introduce groupNotification
 
 If you download or upload multiple files simultaneously, you may not want a notification for every task, but one notification representing the group of tasks.  To do this, set the `groupNotificationId` field in a `notificationConfig` and use that configuration for all tasks in this group. It is easiest to combine this with the `group` field of the task, e.g.:
@@ -27,20 +74,14 @@ All tasks in group `bunchOfFiles` will now use the notification group configurat
 
 You can now pass an absolute path to the downloader by using `BaseDirectory.root` combined with the path in `directory`. This allows you to reach any file destination on your platform. However, be careful: the reason you should not normally do this (and use e.g. `BaseDirectory.applicationDocuments` instead) is that the location of the app's documents directory may change between application starts (on iOS, and on Android in some cases), and may therefore fail for downloads that complete while the app is suspended.  You should therefore never store permanently, or hard-code, an absolute path, unless you are absolutely sure that that path is 'stable'.
 
-### Removal of `awaitGroup`
+### Remove `awaitGroup`
 * Removed all references to `awaitGroup` as the logic for the convenience methods has changed
 * Removed all references to `modifiedTasks` in `PersistentStorage` interface
 * If you use a convenience function, your task _must_ generate status updates (by setting the `updates` field to `Updates.status` - the default - or `Updates.statusAndProgress`)
 * If you use convenience function and specify a progress callback, your task _must_ also generate status updates (by setting the `updates` field to `Updates.statusAndProgress`)
 
-### Use iOS Photos Library for .videos and .images SharedStorage destinations
 
-Previously, .images and .video destinations were 'faked' on iOS. With this change, when calling `moveToSharedStorage`, the file is added to the Photos Library (provided the user grants that permission).
-
-For .images and .video, you need user permission to add to the Photos Library, which requires you to set the `NSPhotoLibraryAddUsageDescription` key in `Info.plist`. The returned String is _not_ a `filePath`, but a unique identifier. If you only want to add the file to the Photos Library you can ignore this identifier. If you want to actually get access to the file (and `filePath`) in the Photos Library, then the user needs to grant an additional 'modify' permission, which requires you to set the `NSPhotoLibraryUsageDescription` in `Info.plist`. To get the actual `filePath`, call `pathInSharedStorage` and pass the identifier obtained via the call to `moveToSharedStorage` as the `filePath` parameter.
-The reason for this two-step approach is that typically you only want to add to the library, which does not require the user to give access to their entire photos library (required to get the `filePath`).
-
-### Added platformVersion method
+### Add platformVersion method
 Return the platform version as a String:
 * On Android this is the API integer, e.g. "33"
 * On iOS this is the iOS version, e.g. "16.1"

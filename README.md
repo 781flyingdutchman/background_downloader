@@ -567,6 +567,7 @@ __On Android:__ Depending on what `SharedStorage` destination you move a file to
 
 __On iOS:__ For `.images` and `.video` SharedStorage destinations, you need user permission to add to the Photos Library, which requires you to set the `NSPhotoLibraryAddUsageDescription` key in `Info.plist`. The returned String is _not_ a `filePath`, but a unique identifier. If you only want to add the file to the Photos Library you can ignore this identifier. If you want to actually get access to the file (and `filePath`) in the Photos Library, then the user needs to grant an additional 'modify' permission, which requires you to set the `NSPhotoLibraryUsageDescription` in `Info.plist`. To get the actual `filePath`, call `pathInSharedStorage` and pass the identifier obtained via the call to `moveToSharedStorage` as the `filePath` parameter:
 ```dart
+// assume we have permission
 final identifier = await FileDownloader().moveToSharedStorage(task, SharedStorage.images);
 if (identifier != null) {
   final path = await FileDownloader().pathInSharedStorage(identifier, SharedStorage.images);
@@ -575,7 +576,7 @@ if (identifier != null) {
   debugPrint('Could not add file to Photos Library, likely because permission denied');
 }
 ```
-The reason for this two-step approach is that typically you only want to add to the library, which does not require the user to give access to their entire photos library (required to get the `filePath`).
+The reason for this two-step approach is that typically you only want to add to the library (requires `PermissionType.iosAddToPhotoLibrary`), which does not require the user to give read/write access to their entire photos library (`PermissionType.iosChangePhotoLibrary`, required to get the `filePath`).
 
 ### Path to file in shared storage
 
@@ -595,6 +596,33 @@ __On iOS:__ To make files visible in the Files browser, do not move them to shar
 This will make all files in your app's `Documents` directory visible to the Files browser.
 
 See `moveToSharedStorage` above for the special handling of `.video` and `.images` destinations on iOS.
+
+## Permissions and platform version
+
+User permissions may be needed to display notifications, to move files to external storage (on Android) and to add images or video to the iOS Photo Library. These permissions should be checked and if needed requested before executing those operations.
+
+You can use a package like [permission_handler](https://pub.dev/packages/permission_handler), or use the `FileDownloader().permissions` object, which has three methods:
+* `status`: returns a `PermissionsStatus`. On Android this is either `granted` or `denied`. If you have not asked for permission yet, then Android returns `denied` and iOS returns `.undetermined`. iOS can also return `.partial`
+* `request`: to request the actual permission. Only do this if you have confirmed that the permission is not already `granted`
+* `shouldShowRationale`: for Android only, if `true` you should show a UI element (e.g. a dialog) to explain to the user why this permission is necessary
+
+All three methods take one `PermissionType` parameter, e.g. `PermissionType.notifications`.
+
+For example, to request permissions for notifications:
+```dart
+var status = await FileDownloader().permissions.status(permissionType);
+if (status != PermissionStatus.granted) {
+  if (await FileDownloader().permissions.shouldShowRationale(permissionType)) {
+    await showRationaleDialog(permissionType); // Show a dialog with rationale
+  }
+  status = await FileDownloader().permissions.request(permissionType);
+  debugPrint('Permission for $permissionType was $status');
+}
+```
+
+The downloader will check permission status before each action, e.g. will not show notifications unless permissions for notifications have been granted.
+
+Note that permissions are very platform and version dependent, e.g. notification permissions on Android are only required as of API 33, and iOS 14 introduced new Photo Library permissions. If you want to get into details, you can determine the platform version you're running by calling `await FileDownloader().platformVersion()`.
 
 ## Uploads
 
