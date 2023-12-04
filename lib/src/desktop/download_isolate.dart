@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../exceptions.dart';
 import '../models.dart';
+import '../task.dart';
 import '../utils.dart';
 import 'desktop_downloader.dart';
 import 'isolate.dart';

@@ -10,6 +10,7 @@ import 'database.dart';
 import 'localstore/localstore.dart';
 import 'models.dart';
 import 'sqlite_storage.dart';
+import 'task.dart';
 
 /// Interface for the persistent storage used to back the downloader
 ///

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'base_downloader.dart';
 import 'file_downloader.dart';
 import 'models.dart';
+import 'task.dart';
 
 /// Class representing a chunk of a download and its status
 class Chunk {

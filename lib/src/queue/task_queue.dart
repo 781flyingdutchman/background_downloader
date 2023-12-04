@@ -4,7 +4,7 @@ import 'package:collection/collection.dart';
 import 'package:logging/logging.dart';
 
 import '../file_downloader.dart';
-import '../models.dart';
+import '../task.dart';
 
 /// Interface allowing the [FileDownloader] to signal finished tasks to
 /// a [TaskQueue]

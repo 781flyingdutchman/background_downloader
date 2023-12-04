@@ -2,13 +2,17 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'base_downloader.dart';
 import 'chunk.dart';
+import 'exceptions.dart';
+import 'file_downloader.dart';
+import 'models.dart';
+import 'permissions.dart';
+import 'task.dart';
 
 /// Implementation of download functionality for native platforms
 ///

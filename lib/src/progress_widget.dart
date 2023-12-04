@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import 'file_downloader.dart';
 import 'models.dart';
+import 'task.dart';
 
 /// Progress indicator for use with the [FileDownloader]
 ///

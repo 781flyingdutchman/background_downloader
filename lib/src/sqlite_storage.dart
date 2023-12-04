@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'database.dart';
 import 'models.dart';
 import 'persistent_storage.dart';
+import 'task.dart';
 
 /// [PersistentStorage] to back the database in the downloader, using
 /// an SQLite database as its own backend

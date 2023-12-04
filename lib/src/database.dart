@@ -4,6 +4,7 @@ import 'base_downloader.dart';
 import 'exceptions.dart';
 import 'models.dart';
 import 'persistent_storage.dart';
+import 'task.dart';
 
 /// Persistent database used for tracking task status and progress.
 ///

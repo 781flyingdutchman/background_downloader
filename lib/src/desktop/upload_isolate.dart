@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 
 import '../models.dart';
+import '../task.dart';
 import 'desktop_downloader.dart';
 import 'isolate.dart';
 

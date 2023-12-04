@@ -1,6 +1,6 @@
 import 'package:logging/logging.dart';
 
-import 'models.dart';
+import 'task.dart';
 
 final _log = Logger('FileDownloader');
 

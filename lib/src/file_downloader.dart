@@ -13,6 +13,7 @@ import 'database.dart';
 import 'localstore/localstore.dart';
 import 'models.dart';
 import 'persistent_storage.dart';
+import 'task.dart';
 import 'web_downloader.dart'
     if (dart.library.io) 'desktop/desktop_downloader.dart';
 

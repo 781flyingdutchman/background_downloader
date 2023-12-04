@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import 'base_downloader.dart';
 import 'models.dart';
+import 'task.dart';
 
 /// This is a non-functional stub
 ///

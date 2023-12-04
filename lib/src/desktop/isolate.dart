@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 
 import '../models.dart';
+import '../task.dart';
 import 'desktop_downloader.dart';
 import 'download_isolate.dart';
 import 'parallel_download_isolate.dart';

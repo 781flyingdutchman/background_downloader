@@ -18,6 +18,7 @@ import '../chunk.dart';
 import '../exceptions.dart';
 import '../file_downloader.dart';
 import '../models.dart';
+import '../task.dart';
 import 'isolate.dart';
 
 const okResponses = [200, 201, 202, 203, 204, 205, 206];
