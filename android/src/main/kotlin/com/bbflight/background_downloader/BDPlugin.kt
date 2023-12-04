@@ -1004,7 +1004,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     override fun onRequestPermissionsResult(
         requestCode: Int, permissions: Array<out String>, grantResults: IntArray
     ): Boolean {
-        Log.wtf(TAG, "Received onRequestPermissionsResult") //TODO remove
         return PermissionsService.onRequestPermissionsResult(requestCode, permissions, grantResults)
     }
 }

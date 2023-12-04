@@ -6,7 +6,6 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
-import android.util.Log
 import androidx.core.app.ActivityCompat
 
 enum class PermissionType {
@@ -103,13 +102,11 @@ class PermissionsService {
                         if (BDPlugin.activity == null) {
                             return false
                         }
-                        Log.wtf(TAG, "Requesting permission")
                         ActivityCompat.requestPermissions(
                             BDPlugin.activity!!,
                             arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
                             requestCode
                         )
-                        Log.wtf(TAG, "Requested permission")
                         // completer will be completed via [onRequestPermissionsResult]
                         return true
 
@@ -152,7 +149,6 @@ class PermissionsService {
         ): Boolean {
             val granted =
                 (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)
-            Log.wtf(TAG, "onRequestPermissionsResult $granted for requestCode $requestCode")
             return when (requestCode) {
                 baseRequestCode + PermissionType.notifications.ordinal,
                 baseRequestCode + PermissionType.androidExternalStorage.ordinal-> {
