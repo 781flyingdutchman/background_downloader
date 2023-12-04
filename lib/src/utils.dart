@@ -1,8 +1,21 @@
+import 'dart:io';
+
 import 'package:logging/logging.dart';
 
 import 'task.dart';
 
 final _log = Logger('FileDownloader');
+
+/// Return url String composed of the [url] and the
+/// [urlQueryParameters], if given
+String urlWithQueryParameters(
+    String url, Map<String, String>? urlQueryParameters) {
+  if (urlQueryParameters == null || urlQueryParameters.isEmpty) {
+    return url;
+  }
+  final separator = url.contains('?') ? '&' : '?';
+  return '$url$separator${urlQueryParameters.entries.map((e) => '${e.key}=${e.value}').join('&')}';
+}
 
 /// Parses the range in a Range header, and returns a Pair representing
 /// the range. The format needs to be "bytes=10-20"

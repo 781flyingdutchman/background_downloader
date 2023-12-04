@@ -755,7 +755,17 @@ If provided, these parameters (presented as a `Map<String, String>`) will be app
 
 #### Headers
 
-Optionally, `headers` can be added to the `Task`, which will be added to the HTTP request. This may be useful for authentication, for example.
+Optionally, `headers` can be added to a `Request` or `Task`, which will be added to the HTTP request. This may be useful for authentication, or for cookies. For example:
+```dart
+final loginResponse = await FileDownloader()
+   .request(Request(url: 'https://server.com/login', headers: {'Auth': 'Token'}));
+const downloadUrl = 'https://server.com/download';
+// pass the cookies from the 'set-cookie' response header to the server
+final task = DownloadTask(url: downloadUrl, headers: {
+  'Auth': 'Token',
+  ...Request.cookieHeader(loginResponse.headers['set-cookie'], downloadUrl)
+});
+```
 
 
 #### HTTP request method

@@ -20,7 +20,6 @@ final _log = Logger('FileDownloader');
 ///
 /// An equality test on a [Request] is an equality test on the [url]
 base class Request {
-
   final validHttpMethods = ['GET', 'POST', 'HEAD', 'PUT', 'DELETE', 'PATCH'];
 
   /// String representation of the url, urlEncoded
@@ -70,7 +69,7 @@ base class Request {
       post,
       this.retries = 0,
       DateTime? creationTime})
-      : url = _urlWithQueryParameters(url, urlQueryParameters),
+      : url = urlWithQueryParameters(url, urlQueryParameters),
         httpRequestMethod =
             httpRequestMethod?.toUpperCase() ?? (post == null ? 'GET' : 'POST'),
         post = post is Uint8List ? String.fromCharCodes(post) : post,
@@ -107,6 +106,56 @@ base class Request {
         'retriesRemaining': retriesRemaining,
         'creationTime': creationTime.millisecondsSinceEpoch
       };
+
+  /// The regex pattern to split the cookies in `set-cookie`.
+  static final _regexSplitSetCookies = RegExp(',(?=[^ ])');
+
+  /// Returns the cookie header appropriate for this [request],
+  /// taken from the [cookies] list.
+  ///
+  /// [cookies] can be a List<Cookie> or the 'set-cookie' header value
+  ///
+  /// The returned map is the 'Cookie:' header, with the
+  /// value=name; value2=name2 as the value.
+  static Map<String, String> cookieHeader(dynamic cookies, String url) {
+    final Uri uri;
+    try {
+      uri = Uri.parse(url);
+    } catch (e) {
+      _log.fine('Invalid url: $url error: $e');
+      return {};
+    }
+    final List<Cookie> cookieList = switch (cookies) {
+      String _ => cookiesFromSetCookie(cookies),
+      List<Cookie> _ => cookies,
+      _ =>
+        throw ArgumentError('cookies parameter must be a String or a List<Cookie>')
+    };
+    final validCookies = cookieList.where((cookie) =>
+        (cookie.maxAge == null || cookie.maxAge! > 0) &&
+        (cookie.domain == null || uri.host.endsWith(cookie.domain!)) &&
+        (cookie.path == null || uri.path.startsWith(cookie.path!)) &&
+        (cookie.expires == null || cookie.expires!.isAfter(DateTime.now())) &&
+        (!cookie.secure || uri.scheme == 'https'));
+    final cookieHeaderValue = validCookies
+        .map((c) => c.name.isNotEmpty ? '${c.name}=${c.value}' : c.value)
+        .join('; ');
+    return cookieHeaderValue.isNotEmpty ? {'Cookie': cookieHeaderValue} : {};
+  }
+
+  /// Returns a list of Cookies extracted from the [setCookie] string,
+  /// which is the value of the 'set-cookie' header of a server response
+  ///
+  /// Based on https://github.com/dart-lang/http/pull/688/files
+  static List<Cookie> cookiesFromSetCookie(String setCookie) {
+    final cookies = <Cookie>[];
+    if (setCookie.isNotEmpty) {
+      for (final cookie in setCookie.split(_regexSplitSetCookies)) {
+        cookies.add(Cookie.fromSetCookieValue(cookie));
+      }
+    }
+    return cookies;
+  }
 
   /// Decrease [retriesRemaining] by one
   void decreaseRetriesRemaining() => retriesRemaining--;
@@ -1010,9 +1059,9 @@ final class ParallelDownloadTask extends DownloadTask {
         assert(url is String || (url is List<String> && url.isNotEmpty),
             'The list of urls must not be empty'),
         urls = url is String
-            ? [_urlWithQueryParameters(url, urlQueryParameters)]
+            ? [urlWithQueryParameters(url, urlQueryParameters)]
             : List.from(
-                url.map((e) => _urlWithQueryParameters(e, urlQueryParameters))),
+                url.map((e) => urlWithQueryParameters(e, urlQueryParameters))),
         super(url: url is String ? url : url.first) {
     retriesRemaining = 0; // chunk tasks will retry instead, based on [retries]
   }
@@ -1073,15 +1122,4 @@ final class ParallelDownloadTask extends DownloadTask {
           displayName: displayName ?? this.displayName,
           creationTime: creationTime ?? this.creationTime)
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
-}
-
-/// Return url String composed of the [url] and the
-/// [urlQueryParameters], if given
-String _urlWithQueryParameters(
-    String url, Map<String, String>? urlQueryParameters) {
-  if (urlQueryParameters == null || urlQueryParameters.isEmpty) {
-    return url;
-  }
-  final separator = url.contains('?') ? '&' : '?';
-  return '$url$separator${urlQueryParameters.entries.map((e) => '${e.key}=${e.value}').join('&')}';
 }

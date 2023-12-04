@@ -596,18 +596,11 @@ Future<DownloadTask> taskWithSuggestedFilename(
         .firstWhere(
             (element) => element.key.toLowerCase() == 'content-disposition')
         .value;
-    // Try filename="filename"
-    final plainFilenameRegEx =
-        RegExp(r'filename=\s*"?([^"]+)"?.*$', caseSensitive: false);
-    var match = plainFilenameRegEx.firstMatch(disposition);
-    if (match != null && match.group(1)?.isNotEmpty == true) {
-      return uniqueFilename(task.copyWith(filename: match.group(1)), unique);
-    }
     // Try filename*=UTF-8'language'"encodedFilename"
     final encodedFilenameRegEx = RegExp(
         'filename\\*=\\s*([^\']+)\'([^\']*)\'"?([^"]+)"?',
         caseSensitive: false);
-    match = encodedFilenameRegEx.firstMatch(disposition);
+    var match = encodedFilenameRegEx.firstMatch(disposition);
     if (match != null &&
         match.group(1)?.isNotEmpty == true &&
         match.group(3)?.isNotEmpty == true) {
@@ -620,6 +613,13 @@ Future<DownloadTask> taskWithSuggestedFilename(
         _log.finest(
             'Could not interpret suggested filename (UTF-8 url encoded) ${match.group(3)}');
       }
+    }
+    // Try filename="filename"
+    final plainFilenameRegEx =
+    RegExp(r'filename=\s*"?([^"]+)"?.*$', caseSensitive: false);
+    match = plainFilenameRegEx.firstMatch(disposition);
+    if (match != null && match.group(1)?.isNotEmpty == true) {
+      return uniqueFilename(task.copyWith(filename: match.group(1)), unique);
     }
   } catch (_) {}
   _log.finest('Could not determine suggested filename from server');

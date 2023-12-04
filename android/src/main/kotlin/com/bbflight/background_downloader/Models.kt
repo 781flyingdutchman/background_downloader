@@ -249,22 +249,15 @@ class Task(
             val disposition = (responseHeaders["Content-Disposition"]
                 ?: responseHeaders["content-disposition"])?.get(0)
             if (disposition != null) {
-                // Try filename="filename"
-                val plainFilenameRegEx =
-                    Regex("""filename=\s*"?([^"]+)"?.*$""", RegexOption.IGNORE_CASE)
-                var match = plainFilenameRegEx.find(disposition)
-                if (match != null && match.groupValues[1].isNotEmpty()) {
-                    return uniqueFilename(this.copyWith(filename = match.groupValues[1]), unique)
-                }
                 // Try filename*=UTF-8'language'"encodedFilename"
                 val encodedFilenameRegEx =
                     Regex("""filename\*=\s*([^']+)'([^']*)'"?([^"]+)"?""", RegexOption.IGNORE_CASE)
-                match = encodedFilenameRegEx.find(disposition)
+                var match = encodedFilenameRegEx.find(disposition)
                 if (match != null && match.groupValues[1].isNotEmpty() && match.groupValues[3].isNotEmpty()) {
                     try {
                         val suggestedFilename = if (match.groupValues[1].uppercase() == "UTF-8") {
                             withContext(Dispatchers.IO) {
-                                URLDecoder.decode(match.groupValues[3], "UTF-8")
+                                URLDecoder.decode(match!!.groupValues[3], "UTF-8")
                             }
                         } else {
                             match.groupValues[3]
@@ -276,6 +269,13 @@ class Task(
                             "Could not interpret suggested filename (UTF-8 url encoded) ${match.groupValues[3]}"
                         )
                     }
+                }
+                // Try filename="filename"
+                val plainFilenameRegEx =
+                    Regex("""filename=\s*"?([^"]+)"?.*$""", RegexOption.IGNORE_CASE)
+                match = plainFilenameRegEx.find(disposition)
+                if (match != null && match.groupValues[1].isNotEmpty()) {
+                    return uniqueFilename(this.copyWith(filename = match.groupValues[1]), unique)
                 }
             }
         } catch (_: Throwable) {

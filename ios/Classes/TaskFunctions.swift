@@ -104,13 +104,6 @@ func suggestedFilenameFromResponseHeaders(
 ) -> Task {
     if let disposition = responseHeaders["Content-Disposition"] as? String {
         let range = NSMakeRange(0, disposition.utf16.count)
-        // Try filename="filename"
-        let plainFilenameRegEx = try! NSRegularExpression(pattern: #"filename=\s*"?([^"]+)"?.*$"#, options: .caseInsensitive)
-        if let match = plainFilenameRegEx.firstMatch(in: disposition, options: [], range: range) {
-            let filename = String(disposition[Range(match.range(at: 1), in: disposition)!])
-            return uniqueFilename(task: task.copyWith(filename: filename), unique: unique)
-        }
-        
         // Try filename*=UTF-8'language'"encodedFilename"
         let encodedFilenameRegEx = try! NSRegularExpression(pattern: #"filename\*=\s*([^']+)'([^']*)'"?([^"]+)"?"#, options: .caseInsensitive)
         if let match = encodedFilenameRegEx.firstMatch(in: disposition, options: [], range: range) {
@@ -125,6 +118,12 @@ func suggestedFilenameFromResponseHeaders(
             } else {
                 return uniqueFilename(task: task.copyWith(filename: filename), unique: unique)
             }
+        }
+        // Try filename="filename"
+        let plainFilenameRegEx = try! NSRegularExpression(pattern: #"filename=\s*"?([^"]+)"?.*$"#, options: .caseInsensitive)
+        if let match = plainFilenameRegEx.firstMatch(in: disposition, options: [], range: range) {
+            let filename = String(disposition[Range(match.range(at: 1), in: disposition)!])
+            return uniqueFilename(task: task.copyWith(filename: filename), unique: unique)
         }
     }
     os_log("Could not determine suggested filename from server", log: log, type: .debug)

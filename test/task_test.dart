@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -144,5 +146,94 @@ void main() {
     expect(task1.directory, equals('testDir'));
     expect(() => DownloadTask(url: workingUrl, directory: '/testDir'),
         throwsArgumentError);
+  });
+
+  test('cookieHeader', () async {
+    // test that the right cookies are included/excluded, based on cookie
+    // settings and the url
+    var url = 'https://www.google.com/test/something';
+    var c = Cookie('name', 'value');
+    expect(Request.cookieHeader([c], url), equals({'Cookie': 'name=value'}));
+    var c2 = Cookie('name2', 'value2');
+    expect(Request.cookieHeader([c, c2], url),
+        equals({'Cookie': 'name=value; name2=value2'}));
+    var c3 = Cookie('', 'value3');
+    expect(Request.cookieHeader([c, c2, c3], url),
+        equals({'Cookie': 'name=value; name2=value2; value3'}));
+    c.maxAge = 0;
+    expect(Request.cookieHeader([c], url), equals({}));
+    c.maxAge = 1;
+    expect(Request.cookieHeader([c], url), equals({'Cookie': 'name=value'}));
+    c.domain = 'notGoogle';
+    expect(Request.cookieHeader([c], url), equals({}));
+    c.domain = 'google.com';
+    expect(Request.cookieHeader([c], url), equals({'Cookie': 'name=value'}));
+    c.path = '/notTest';
+    expect(Request.cookieHeader([c], url), equals({}));
+    c.path = '/test';
+    expect(Request.cookieHeader([c], url), equals({'Cookie': 'name=value'}));
+    c.expires = DateTime.now().subtract(const Duration(seconds: 1));
+    expect(Request.cookieHeader([c], url), equals({}));
+    c.expires = DateTime.now().add(const Duration(seconds: 1));
+    expect(Request.cookieHeader([c], url), equals({'Cookie': 'name=value'}));
+    await Future.delayed(const Duration(milliseconds: 1100)); // let expire
+    expect(Request.cookieHeader([c], url), equals({}));
+    c.expires = null;
+    c.secure = true;
+    expect(Request.cookieHeader([c], 'http://www.google.com/test/something'),
+        equals({}));
+    expect(Request.cookieHeader([c], url), equals({'Cookie': 'name=value'}));
+    // test creation of a task with this
+    final task = DownloadTask(url: url, headers: {
+      'Auth': 'Token',
+      ...Request.cookieHeader([c, c2, c3], url)
+    });
+    expect(
+        task.headers,
+        equals(
+            {'Auth': 'Token', 'Cookie': 'name=value; name2=value2; value3'}));
+    // test with cookies as a String
+    const setCookie = 'name=value,name2=value2';
+    expect(Request.cookieHeader(setCookie, url),
+        equals({'Cookie': 'name=value; name2=value2'}));
+    // test with cookies as an illegal type
+    expect(() => Request.cookieHeader(1, url), throwsArgumentError);
+
+    final loginResponse = await FileDownloader()
+        .request(Request(url: 'https://server.com/login', headers: {'Auth': 'Token'}));
+    const downloadUrl = 'https://server.com/download';
+    final task2 = DownloadTask(url: downloadUrl, headers: {
+      'Auth': 'Token',
+      ...Request.cookieHeader(loginResponse.headers['set-cookie'], url)
+    });
+  });
+
+  test('cookiesFromSetCookie', () {
+    // based on https://github.com/dart-lang/http/pull/688/files
+    const setCookie =
+        'AWSALB=AWSALB_TEST; Expires=Tue, 26 Apr 2022 00:26:55 GMT; Path=/,AWSALBCORS=AWSALBCORS_TEST; Expires=Tue, 26 Apr 2022 00:26:55 GMT; Path=/; SameSite=None; Secure,jwt_token=JWT_TEST; Domain=.test.com; Max-Age=31536000; Path=/; expires=Wed, 19-Apr-2023 00:26:55 GMT; SameSite=lax; Secure,csrf_token=CSRF_TOKEN_TEST_1; Domain=.test.com; Max-Age=31536000; Path=/; expires=Wed, 19-Apr-2023 00:26:55 GMT,csrf_token=CSRF_TOKEN_TEST_2; Domain=.test.com; Max-Age=31536000; Path=/; expires=Wed, 19-Apr-2023 00:26:55 GMT,wuuid=WUUID_TEST';
+    final cookies = Request.cookiesFromSetCookie(setCookie);
+    for (final cookie in cookies) {
+      expect(
+          cookie.name,
+          anyOf([
+            'AWSALB',
+            'AWSALBCORS',
+            'jwt_token',
+            'csrf_token',
+            'wuuid',
+            'csrf_token'
+          ]));
+      expect(
+          cookie.value,
+          anyOf([
+            'AWSALB_TEST',
+            'AWSALBCORS_TEST',
+            'JWT_TEST',
+            'CSRF_TOKEN_TEST_1',
+            'CSRF_TOKEN_TEST_2',
+            'WUUID_TEST'
+          ]));
+    }
   });
 }
