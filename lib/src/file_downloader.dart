@@ -838,6 +838,13 @@ interface class FileDownloader {
     return _downloader.openFile(task, filePath, mimeType);
   }
 
+  /// Return the platform version as a String
+  ///
+  /// On Android this is the API integer, e.g. "33"
+  /// On iOS this is the iOS version, e.g. "16.1"
+  /// On desktop this is a description of the OS version, not parsable
+  Future<String> platformVersion() => _downloader.platformVersion();
+
   /// Closes the [updates] stream and re-initializes the [StreamController]
   /// such that the stream can be listened to again
   Future<void> resetUpdates() => _downloader.resetUpdatesStreamController();

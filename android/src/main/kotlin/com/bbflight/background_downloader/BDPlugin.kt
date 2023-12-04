@@ -1,14 +1,11 @@
 package com.bbflight.background_downloader
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
-import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.preference.PreferenceManager
 import androidx.work.*
@@ -67,7 +64,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         const val keyConfigUseCacheDir = "com.bbflight.background_downloader.config.useCacheDir"
         const val keyConfigUseExternalStorage =
             "com.bbflight.background_downloader.config.useExternalStorage"
-        const val externalStoragePermissionRequestCode = 373922
 
         @SuppressLint("StaticFieldLeak")
         var activity: Activity? = null
@@ -78,8 +74,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         var backgroundChannelCounter = 0  // reference counter
         var forceFailPostOnBackgroundChannel = false
         val prefsLock = ReentrantReadWriteLock()
-        var requestingNotificationPermission = false
-        var externalStoragePermissionCompleter = CompletableFuture<Boolean>()
         var localResumeData = HashMap<String, ResumeData>() // for pause notifications
         var remainingBytesToDownload = HashMap<String, Long>()
         var haveLoggedProxyMessage = false
@@ -352,6 +346,10 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 // ParallelDownloadTask child updates
                 "chunkStatusUpdate" -> methodUpdateChunkStatus(call, result)
                 "chunkProgressUpdate" -> methodUpdateChunkProgress(call, result)
+                // Permissions
+                "permissionStatus" -> methodPermissionStatus(call, result)
+                "requestPermission" -> methodRequestPermission(call, result)
+                "shouldShowPermissionRationale" -> methodShouldShowPermissionRationale(call, result)
                 // internal use
                 "popResumeData" -> methodPopResumeData(result)
                 "popStatusUpdates" -> methodPopStatusUpdates(result)
@@ -369,12 +367,12 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 "configCheckAvailableSpace" -> methodConfigCheckAvailableSpace(call, result)
                 "configUseCacheDir" -> methodConfigUseCacheDir(call, result)
                 "configUseExternalStorage" -> methodConfigUseExternalStorage(call, result)
+                "platformVersion" -> methodPlatformVersion(result)
                 "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
                     call, result
                 )
 
                 "testSuggestedFilename" -> methodTestSuggestedFilename(call, result)
-
                 else -> result.notImplemented()
             }
         }
@@ -606,34 +604,24 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val directory = args[2] as String
         val mimeType = args[3] as String?
         // first check and potentially ask for permissions
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q && ActivityCompat.checkSelfPermission(
-                applicationContext, Manifest.permission.WRITE_EXTERNAL_STORAGE
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            if (activity != null) {
-                activity?.requestPermissions(
-                    arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
-                    externalStoragePermissionRequestCode
-                )
-                externalStoragePermissionCompleter.thenApplyAsync {
-                    result.success(
-                        moveToSharedStorage(
-                            applicationContext, filePath, destination, directory, mimeType
-                        )
-                    )
-                }
-                return
-            }
-        }
-        result.success(
-            moveToSharedStorage(
-                applicationContext,
-                filePath,
-                destination,
-                directory,
-                mimeType
-            )
+        val status = PermissionsService.getPermissionStatus(
+            applicationContext,
+            PermissionType.androidExternalStorage
         )
+        if (status == PermissionStatus.granted) {
+            result.success(
+                moveToSharedStorage(
+                    applicationContext,
+                    filePath,
+                    destination,
+                    directory,
+                    mimeType
+                )
+            )
+        } else {
+            Log.i(TAG, "No permission to move to shared storage")
+            result.success(false)
+        }
     }
 
     /**
@@ -715,6 +703,39 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             progress
         )
         result.success(null)
+    }
+
+    /**
+     * Return [PermissionStatus] for this [PermissionType]
+     */
+    private fun methodPermissionStatus(call: MethodCall, result: Result) {
+        val permissionType = PermissionType.values()[call.arguments as Int]
+        result.success(
+            PermissionsService.getPermissionStatus(
+                applicationContext,
+                permissionType
+            ).ordinal
+        )
+    }
+
+    /**
+     * Request permission for this [PermissionType]
+     *
+     * Returns true if request was submitted successfully, and the
+     * Flutter side should wait for completion via the background
+     * channel method "permissionRequestResult"
+     */
+    private fun methodRequestPermission(call: MethodCall, result: Result) {
+        val permissionType = PermissionType.values()[call.arguments as Int]
+        result.success(PermissionsService.requestPermission(permissionType))
+    }
+
+    /**
+     * Returns true if you should show a rationale for this [PermissionType]
+     */
+    private fun methodShouldShowPermissionRationale(call: MethodCall, result: Result) {
+        val permissionType = PermissionType.values()[call.arguments as Int]
+        result.success(PermissionsService.shouldShowRequestPermissionRationale(permissionType))
     }
 
     /**
@@ -810,6 +831,14 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     }
 
     /**
+     * Return the Android API version integer as a String
+     */
+    private fun methodPlatformVersion(result: Result) {
+        result.success("${Build.VERSION.SDK_INT}")
+    }
+
+
+    /**
      * Sets or resets flag to force failing posting on background channel
      *
      * For testing only
@@ -841,7 +870,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val t = task.withSuggestedFilenameFromResponseHeaders(applicationContext, h)
         result.success(t.filename)
     }
-
 
     /**
      * Helper function to update or delete the [value] in shared preferences under [key]
@@ -968,26 +996,16 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         scope = null
     }
 
+    /**
+     * Receives onRequestPermissionsResult and passes this to the
+     * [PermissionsService]
+     */
+
     override fun onRequestPermissionsResult(
         requestCode: Int, permissions: Array<out String>, grantResults: IntArray
     ): Boolean {
-        val granted =
-            (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)
-        return when (requestCode) {
-            NotificationService.notificationPermissionRequestCode -> {
-                requestingNotificationPermission = false
-                true
-            }
-
-            externalStoragePermissionRequestCode -> {
-                externalStoragePermissionCompleter.complete(granted)
-                true
-            }
-
-            else -> {
-                false
-            }
-        }
+        Log.wtf(TAG, "Received onRequestPermissionsResult") //TODO remove
+        return PermissionsService.onRequestPermissionsResult(requestCode, permissions, grantResults)
     }
 }
 

@@ -40,6 +40,11 @@ Previously, .images and .video destinations were 'faked' on iOS. With this chang
 For .images and .video, you need user permission to add to the Photos Library, which requires you to set the `NSPhotoLibraryAddUsageDescription` key in `Info.plist`. The returned String is _not_ a `filePath`, but a unique identifier. If you only want to add the file to the Photos Library you can ignore this identifier. If you want to actually get access to the file (and `filePath`) in the Photos Library, then the user needs to grant an additional 'modify' permission, which requires you to set the `NSPhotoLibraryUsageDescription` in `Info.plist`. To get the actual `filePath`, call `pathInSharedStorage` and pass the identifier obtained via the call to `moveToSharedStorage` as the `filePath` parameter.
 The reason for this two-step approach is that typically you only want to add to the library, which does not require the user to give access to their entire photos library (required to get the `filePath`).
 
+### Added platformVersion method
+Return the platform version as a String:
+* On Android this is the API integer, e.g. "33"
+* On iOS this is the iOS version, e.g. "16.1"
+* On desktop this is a description of the OS version, not parsable
 
 ### Bug fixes and other improvements
 * Fixes Pause notification issue on iOS

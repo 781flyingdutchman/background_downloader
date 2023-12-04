@@ -1,6 +1,5 @@
 package com.bbflight.background_downloader
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -8,12 +7,10 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.annotation.Keep
-import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationCompat.Builder
 import androidx.core.app.NotificationManagerCompat
@@ -255,11 +252,9 @@ class NotificationRcvr : BroadcastReceiver() {
 object NotificationService {
     var groupNotifications = HashMap<String, GroupNotification>()
 
-    const val notificationPermissionRequestCode = 373921
     private const val notificationChannelId = "background_downloader"
 
-    private var queue =
-        LinkedList<NotificationData>()
+    private var queue = LinkedList<NotificationData>()
     private var lastNotificationTime: Long = 0
     private var createdNotificationChannel = false
 
@@ -660,19 +655,11 @@ object NotificationService {
         with(NotificationManagerCompat.from(taskWorker.applicationContext)) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 // On Android 33+, check/ask for permission
-                if (ActivityCompat.checkSelfPermission(
-                        taskWorker.applicationContext, Manifest.permission.POST_NOTIFICATIONS
-                    ) != PackageManager.PERMISSION_GRANTED
-                ) {
-                    if (BDPlugin.requestingNotificationPermission) {
-                        return  // don't ask twice
-                    }
-                    BDPlugin.requestingNotificationPermission = true
-                    BDPlugin.activity?.requestPermissions(
-                        arrayOf(
-                            Manifest.permission.POST_NOTIFICATIONS
-                        ), notificationPermissionRequestCode
-                    )
+                val status = PermissionsService.getPermissionStatus(
+                    taskWorker.applicationContext,
+                    PermissionType.notifications
+                )
+                if (status != PermissionStatus.granted) {
                     return
                 }
             }

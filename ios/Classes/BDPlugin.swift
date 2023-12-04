@@ -109,6 +109,8 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                     methodStoreConfig(key: BDPlugin.keyConfigProxyPort, value: call.arguments, result: result)
                 case "configCheckAvailableSpace":
                     methodStoreConfig(key: BDPlugin.keyConfigCheckAvailableSpace, value: call.arguments, result: result)
+                case "platformVersion":
+                    result(await UIDevice.current.systemVersion)
                 case "forceFailPostOnBackgroundChannel":
                     methodForceFailPostOnBackgroundChannel(call: call, result: result)
                 case "testSuggestedFilename":

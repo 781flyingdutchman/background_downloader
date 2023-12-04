@@ -7,17 +7,26 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets('permission status', (widgetTester) async {
-    for (var type in PermissionType.values) {
-      final status = await FileDownloader().permissions.status(type);
-      switch (type) {
+    for (var permissionType in PermissionType.values) {
+      final status = await FileDownloader().permissions.status(permissionType);
+      print('Permission $permissionType was $status');
+      switch (permissionType) {
         case PermissionType.notifications:
-          if (Platform.isIOS || Platform.isAndroid) {
+          if (Platform.isIOS) {
             expect(status, equals(PermissionStatus.undetermined));
+          } else if (Platform.isAndroid) {
+            final androidVersion = await getAndroidVersion();
+            expect(status, equals(androidVersion < 33 ? PermissionStatus.granted : PermissionStatus.denied));
           } else {
             expect(status, equals(PermissionStatus.granted));
           }
         case PermissionType.androidExternalStorage:
-          expect(true, isTrue); //TODO
+          if (Platform.isAndroid) {
+            final androidVersion = await getAndroidVersion();
+            expect(status, equals(androidVersion < 29 ? PermissionStatus.denied : PermissionStatus.granted));
+          } else {
+            expect(status, equals(PermissionStatus.granted));
+          }
         case PermissionType.iosAddToPhotoLibrary:
         if (Platform.isIOS) {
           expect(status, equals(PermissionStatus.undetermined));
@@ -35,30 +44,34 @@ void main() {
   });
 
   testWidgets('request permission', (widgetTester) async {
+    // Requires manual approval of permission request, therefore
+    // are are expected to be granted.
+    // Make test fail by denying certain permissions
     for (var permissionType in PermissionType.values) {
       final status = await FileDownloader().permissions.request(permissionType);
+      print('Permission $permissionType was $status');
       switch (permissionType) {
         case PermissionType.notifications:
-          if (Platform.isIOS || Platform.isAndroid) {
-            expect(status, equals(PermissionStatus.granted));
+          if (Platform.isAndroid) {
+            final androidVersion = await getAndroidVersion();
+            expect(status, equals(androidVersion < 33 ? PermissionStatus.requestError : PermissionStatus.granted));
           } else {
             expect(status, equals(PermissionStatus.granted));
           }
         case PermissionType.androidExternalStorage:
-          expect(true, isTrue); //TODO
+          if (Platform.isAndroid) {
+            final androidVersion = await getAndroidVersion();
+            expect(status, equals(androidVersion > 29 ? PermissionStatus.requestError : PermissionStatus.granted));
+          } else {
+            expect(status, equals(PermissionStatus.granted));
+          }
         case PermissionType.iosAddToPhotoLibrary:
-          if (Platform.isIOS) {
             expect(status, equals(PermissionStatus.granted));
-          } else {
-            expect(status, equals(PermissionStatus.granted));
-          }
         case PermissionType.iosChangePhotoLibrary:
-          if (Platform.isIOS) {
             expect(status, equals(PermissionStatus.granted));
-          } else {
-            expect(status, equals(PermissionStatus.granted));
-          }
       }
     }
   });
 }
+
+Future<int> getAndroidVersion() async => int.parse(await FileDownloader().platformVersion());

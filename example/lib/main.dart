@@ -219,6 +219,7 @@ class _MyAppState extends State<MyApp> {
     switch (buttonState) {
       case ButtonState.download:
         // start download
+        await getPermission(PermissionType.notifications);
         backgroundDownloadTask = DownloadTask(
             url: downloadWithError
                 ? 'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/get_current_app_data' // returns 403 status code
@@ -265,6 +266,7 @@ class _MyAppState extends State<MyApp> {
   /// Loads a JPG of a dog and launches viewer using [openFile]
   Future<void> processLoadAndOpen() async {
     if (!loadAndOpenInProgress) {
+      await getPermission(PermissionType.notifications);
       var task = DownloadTask(
           url:
               'https://i2.wp.com/www.skiptomylou.org/wp-content/uploads/2019/06/dog-drawing.jpg',
@@ -302,6 +304,7 @@ class _MyAppState extends State<MyApp> {
       setState(() {
         loadABunchInProgress = true;
       });
+      await getPermission(PermissionType.notifications);
       for (var i = 0; i < 5; i++) {
         await FileDownloader().enqueue(DownloadTask(
             url:
@@ -314,6 +317,18 @@ class _MyAppState extends State<MyApp> {
       setState(() {
         loadABunchInProgress = false;
       });
+    }
+  }
+
+  /// Attempt to get permissions if not already granted
+  Future<void> getPermission(PermissionType permissionType) async {
+    var status = await FileDownloader().permissions.status(permissionType);
+    if (status != PermissionStatus.granted) {
+      if (await FileDownloader().permissions.shouldShowRationale(permissionType)) {
+        debugPrint('Showing some rationale');
+      }
+      status = await FileDownloader().permissions.request(permissionType);
+      debugPrint('Permission for $permissionType was $status');
     }
   }
 }

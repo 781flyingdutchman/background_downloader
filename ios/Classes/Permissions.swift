@@ -24,6 +24,8 @@ public enum PermissionStatus: Int {
          requestError }
 
 /// Get current permission status for this [request]
+///
+/// Unknown permissions resturn .granted
 public func getPermissionStatus(for permissionType: PermissionType) async -> PermissionStatus {
     if permissionType == .notifications {
         let center = UNUserNotificationCenter.current()
@@ -64,10 +66,12 @@ public func getPermissionStatus(for permissionType: PermissionType) async -> Per
                 return .partial
         }
     }
-    return .requestError
+    return .granted
 }
 
 /// Request permission from user and return the [PermissionResult]
+///
+/// Unknown permissions are granted
 public func requestPermission(for permissionType: PermissionType) async -> PermissionStatus {
     if permissionType == .notifications {
         let center = UNUserNotificationCenter.current()
@@ -102,6 +106,6 @@ public func requestPermission(for permissionType: PermissionType) async -> Permi
                 return .partial
         }
     }
-    return .requestError
+    return .granted
 
 }

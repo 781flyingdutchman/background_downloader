@@ -578,6 +578,9 @@ abstract base class BaseDownloader {
   /// Precondition: either task or filename is not null
   Future<bool> openFile(Task? task, String? filePath, String? mimeType);
 
+  /// Return the platform version as a String
+  Future<String> platformVersion() => Future.value(Platform.operatingSystemVersion);
+
   // Testing methods
 
   /// Get the duration for a task to timeout - Android only, for testing

@@ -30,7 +30,7 @@ abstract interface class Permissions {
   Future<bool> shouldShowRationale(PermissionType permissionType);
 }
 
-/// Basic implementation of the Permission
+/// Basic implementation of the PermissionsService
 base class PermissionsService implements Permissions {
   final log = Logger("PermissionService");
 
@@ -60,14 +60,12 @@ base class PermissionsService implements Permissions {
   Future<PermissionStatus> status(PermissionType permissionType) =>
       Future.value(PermissionStatus.granted);
 
-  /// Process the response to a request
-  ///
-  /// Responses are sent to the downloader, and from there are sent here for processing
-  void processResponse(int response) {}
+  /// Process the permissionRequest result sent from the native side
+  /// (Android only)
+  void onPermissionRequestResult(PermissionStatus permissionStatus) {}
 }
 
 final class IOSPermissionsService extends PermissionsService {
-
   IOSPermissionsService();
 
   @override
@@ -87,37 +85,44 @@ final class IOSPermissionsService extends PermissionsService {
         ? PermissionStatus.values[result]
         : PermissionStatus.requestError;
   }
-
 }
 
 final class AndroidPermissionsService extends IOSPermissionsService {
-  var permissionStatusCompleter = Completer<PermissionStatus>();
+  Completer<PermissionStatus>? permissionStatusCompleter;
 
   @override
   Future<PermissionStatus> request(PermissionType permissionType) async {
-    permissionStatusCompleter = Completer();
-    final callResult = await NativeDownloader.methodChannel
-        .invokeMethod<bool>('requestPermission', permissionType.index);
-    if (callResult == null || callResult == false) {
+    if (![PermissionType.notifications, PermissionType.androidExternalStorage].contains(permissionType)) {
+      return PermissionStatus.granted;
+    }
+    if (permissionStatusCompleter != null) {
+      log.warning(
+          'Permission request already in progress - failing this one immediately');
       return PermissionStatus.requestError;
     }
-    return permissionStatusCompleter
-        .future; // to be completed via [processResponse]
+    permissionStatusCompleter = Completer();
+    final waitForCompletion = await NativeDownloader.methodChannel
+        .invokeMethod<bool>('requestPermission', permissionType.index);
+    if (waitForCompletion == true) {
+      return permissionStatusCompleter!.future;
+    } else {
+      log.warning(
+          'Failure to request for permission - was it already granted?');
+      permissionStatusCompleter = null;
+      return PermissionStatus.requestError;
+    }
   }
 
   @override
   Future<bool> shouldShowRationale(PermissionType permissionType) async {
-    final result = await NativeDownloader.methodChannel
-        .invokeMethod<bool>('shouldShowPermissionRationale', permissionType.index);
+    final result = await NativeDownloader.methodChannel.invokeMethod<bool>(
+        'shouldShowPermissionRationale', permissionType.index);
     return result ?? false;
   }
 
   @override
-  void processResponse(int response) {
-    if (!permissionStatusCompleter.isCompleted) {
-      permissionStatusCompleter.complete(PermissionStatus.values[response]);
-    }
-    log.severe('Simultaneous permissions requests will lead to errors');
+  void onPermissionRequestResult(PermissionStatus permissionStatus) {
+    permissionStatusCompleter?.complete(permissionStatus);
+    permissionStatusCompleter = null;
   }
-
 }

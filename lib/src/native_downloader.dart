@@ -26,10 +26,13 @@ abstract base class NativeDownloader extends BaseDownloader {
     // listen to the background channel, receiving updates on download status
     // or progress.
     // First argument is the Task as JSON string, next argument(s) depends
-    // on the method
+    // on the method.
+    //
+    // If the task JsonString is empty, a dummy task will be created
     _backgroundChannel.setMethodCallHandler((call) async {
       final args = call.arguments as List<dynamic>;
-      final task = Task.createFromJson(jsonDecode(args.first as String));
+      var taskJsonString = args.first as String;
+      final task = taskJsonString.isNotEmpty ? Task.createFromJson(jsonDecode(taskJsonString)) : DownloadTask(url: 'url');
       final message = (
         call.method,
         args.length > 2
@@ -154,7 +157,7 @@ abstract base class NativeDownloader extends BaseDownloader {
           final taskIds = List<String>.from(jsonDecode(listOfTaskIdsJson));
           await FileDownloader().cancelTasksWithIds(taskIds);
 
-        //from ParallelDownloadTask
+        // from ParallelDownloadTask
         case ('pauseTasks', String listOfTasksJson):
           final listOfTasks = List<DownloadTask>.from(jsonDecode(
               listOfTasksJson,
@@ -170,8 +173,9 @@ abstract base class NativeDownloader extends BaseDownloader {
             }
           });
 
-        case ('permissionRequestResponse', int response):
-          permissionsService.processResponse(response);
+        // for permission request results
+        case ('permissionRequestResult', int statusOrdinal):
+          permissionsService.onPermissionRequestResult(PermissionStatus.values[statusOrdinal]);
 
         default:
           log.warning('Background channel: no match for message $message');
@@ -320,6 +324,12 @@ abstract base class NativeDownloader extends BaseDownloader {
       mimeType
     ]);
     return result ?? false;
+  }
+
+
+  @override
+  Future<String> platformVersion() async {
+    return (await methodChannel.invokeMethod<String>('platformVersion')) ?? '';
   }
 
   @override
