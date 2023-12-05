@@ -168,7 +168,7 @@ abstract base class BaseDownloader {
 
   /// Retrieve data that was stored locally because it could not be
   /// delivered to the downloader
-  Future<void> retrieveLocallyStoredData() async { //TODO fix iOS side
+  Future<void> retrieveLocallyStoredData() async {
     if (!_retrievedLocallyStoredData) {
       final resumeDataMap = await popUndeliveredData(Undelivered.resumeData);
       for (var jsonString in resumeDataMap.values) {
@@ -580,7 +580,8 @@ abstract base class BaseDownloader {
   Future<bool> openFile(Task? task, String? filePath, String? mimeType);
 
   /// Return the platform version as a String
-  Future<String> platformVersion() => Future.value(Platform.operatingSystemVersion);
+  Future<String> platformVersion() =>
+      Future.value(Platform.operatingSystemVersion);
 
   // Testing methods
 

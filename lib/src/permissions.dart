@@ -92,7 +92,8 @@ final class AndroidPermissionsService extends IOSPermissionsService {
 
   @override
   Future<PermissionStatus> request(PermissionType permissionType) async {
-    if (![PermissionType.notifications, PermissionType.androidExternalStorage].contains(permissionType)) {
+    if (![PermissionType.notifications, PermissionType.androidExternalStorage]
+        .contains(permissionType)) {
       return PermissionStatus.granted;
     }
     if (permissionStatusCompleter != null) {

@@ -1,10 +1,5 @@
 # A background file downloader and uploader for iOS, Android, MacOS, Windows and Linux
 
----
-
-**If you are migrating from Flutter Downloader, please read the [migration document](https://github.com/781flyingdutchman/background_downloader/blob/main/MIGRATION.md)**
-
----
 Create a [DownloadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/DownloadTask-class.html) to define where to get your file from, where to store it, and how you want to monitor the download, then call `FileDownloader().download` and wait for the result.  Background_downloader uses URLSessions on iOS and DownloadWorker on Android, so tasks will complete also when your app is in the background. The download behavior is highly consistent across all supported platforms: iOS, Android, MacOS, Windows and Linux.
 
 Monitor progress by passing an `onProgress` listener, and monitor detailed status updates by passing an `onStatus` listener to the `download` call.  Alternatively, monitor tasks centrally using an [event listener](#using-an-event-listener) or [callbacks](#using-callbacks) and call `enqueue` to start the task.
@@ -185,6 +180,7 @@ FileDownloader().configureNotification(
   - [Using the database to track Tasks](#using-the-database-to-track-tasks)
 - [Notifications](#notifications)
 - [Shared and scoped storage](#shared-and-scoped-storage)
+- [Permissions](#permissions)
 - [Uploads](#uploads)
 - [Parallel downloads](#parallel-downloads)
 - [Managing tasks in the queue](#managing-tasks-and-the-queue)
@@ -433,7 +429,7 @@ You can interact with the `database` using `allRecords`, `allRecordsOlderThan`, 
 
 By default, the downloader uses a modified version of the [localstore](https://pub.dev/packages/localstore) package to store the `TaskRecord` and other objects. To use a different persistent storage solution, create a class that implements the [PersistentStorage](https://pub.dev/documentation/background_downloader/latest/background_downloader/PersistentStorage-class.html) interface, and initialize the downloader by calling `FileDownloader(persistentStorage: yourStorageClass())` as the first use of the `FileDownloader`.
 
-As an alternative to LocalStore, use `SqlitePersistentStorage` and see the [migration document](https://github.com/781flyingdutchman/background_downloader/blob/main/MIGRATION.md) to understand how it can migrate files from Localstore and the Flutter Downloader package.
+As an alternative to LocalStore, use `SqlitePersistentStorage`, included in [background_downloader_sql](https://pub.dev/packages/background_downloader_sql), which supports SQLite storage and migration from Flutter Downloader.
 
 
 ## Notifications
@@ -471,7 +467,7 @@ While notifications are possible on desktop platforms, there is no true backgrou
 
 The `configureNotification` call configures notification behavior for all download tasks. You can specify a separate configuration for a `group` of tasks by calling `configureNotificationForGroup` and for a single task by calling `configureNotificationForTask`. A `Task` configuration overrides a `group` configuration, which overrides the default configuration.
 
-When attempting to show its first notification, the downloader will ask the user for permission to show notifications (platform version dependent) and abide by the user choice. For Android, starting with API 33, you need to add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />` to your app's `AndroidManifest.xml`. Also on Android you can localize the button text by overriding string resources `bg_downloader_cancel`, `bg_downloader_pause`, `bg_downloader_resume` and descriptions `bg_downloader_notification_channel_name`, `bg_downloader_notification_channel_description`. Localization on iOS can be done through [configuration](#configuration).  If you need more sophisticated permission handling, then use a package like [flutter_local_notifications](https://pub.dev/packages/flutter_local_notifications).
+Make sure to check for, and if necessary request, permission to display notifications - see [permissions](#permissions). For Android, starting with API 33, you need to add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />` to your app's `AndroidManifest.xml`. Also on Android you can localize the button text by overriding string resources `bg_downloader_cancel`, `bg_downloader_pause`, `bg_downloader_resume` and descriptions `bg_downloader_notification_channel_name`, `bg_downloader_notification_channel_description`. Localization on iOS can be done through [configuration](#configuration).
 
 ### Grouping notifications
 
@@ -565,9 +561,8 @@ __On MacOS:__ For the `.downloads` to work you need to enable App Sandbox entitl
 
 __On Android:__ Depending on what `SharedStorage` destination you move a file to, and depending on the OS version your app runs on, you _may_ require extra permissions `WRITE_EXTERNAL_STORAGE` and/or `READ_EXTERNAL_STORAGE` . See [here](https://medium.com/androiddevelopers/android-11-storage-faq-78cefea52b7c) for details on the new scoped storage rules starting with Android API version 30, which is what the plugin is using.
 
-__On iOS:__ For `.images` and `.video` SharedStorage destinations, you need user permission to add to the Photos Library, which requires you to set the `NSPhotoLibraryAddUsageDescription` key in `Info.plist`. The returned String is _not_ a `filePath`, but a unique identifier. If you only want to add the file to the Photos Library you can ignore this identifier. If you want to actually get access to the file (and `filePath`) in the Photos Library, then the user needs to grant an additional 'modify' permission, which requires you to set the `NSPhotoLibraryUsageDescription` in `Info.plist`. To get the actual `filePath`, call `pathInSharedStorage` and pass the identifier obtained via the call to `moveToSharedStorage` as the `filePath` parameter:
+__On iOS:__ For `.images` and `.video` SharedStorage destinations, you need user [permission](#permissions) to add to the Photos Library, which requires you to set the `NSPhotoLibraryAddUsageDescription` key in `Info.plist`. The returned String is _not_ a `filePath`, but a unique identifier. If you only want to add the file to the Photos Library you can ignore this identifier. If you want to actually get access to the file (and `filePath`) in the Photos Library, then the user needs to grant an additional 'modify' permission, which requires you to set the `NSPhotoLibraryUsageDescription` in `Info.plist`. To get the actual `filePath`, call `pathInSharedStorage` and pass the identifier obtained via the call to `moveToSharedStorage` as the `filePath` parameter:
 ```dart
-// assume we have permission
 final identifier = await FileDownloader().moveToSharedStorage(task, SharedStorage.images);
 if (identifier != null) {
   final path = await FileDownloader().pathInSharedStorage(identifier, SharedStorage.images);
@@ -597,9 +592,9 @@ This will make all files in your app's `Documents` directory visible to the File
 
 See `moveToSharedStorage` above for the special handling of `.video` and `.images` destinations on iOS.
 
-## Permissions and platform version
+## Permissions
 
-User permissions may be needed to display notifications, to move files to external storage (on Android) and to add images or video to the iOS Photo Library. These permissions should be checked and if needed requested before executing those operations.
+User permissions may be needed to display notifications, to move files to shared storage (on Android) and to add images or video to the iOS Photo Library. These permissions should be checked and if needed requested before executing those operations.
 
 You can use a package like [permission_handler](https://pub.dev/packages/permission_handler), or use the `FileDownloader().permissions` object, which has three methods:
 * `status`: returns a `PermissionsStatus`. On Android this is either `granted` or `denied`. If you have not asked for permission yet, then Android returns `denied` and iOS returns `.undetermined`. iOS can also return `.partial`

@@ -198,14 +198,6 @@ void main() {
         equals({'Cookie': 'name=value; name2=value2'}));
     // test with cookies as an illegal type
     expect(() => Request.cookieHeader(1, url), throwsArgumentError);
-
-    final loginResponse = await FileDownloader()
-        .request(Request(url: 'https://server.com/login', headers: {'Auth': 'Token'}));
-    const downloadUrl = 'https://server.com/download';
-    final task2 = DownloadTask(url: downloadUrl, headers: {
-      'Auth': 'Token',
-      ...Request.cookieHeader(loginResponse.headers['set-cookie'], url)
-    });
   });
 
   test('cookiesFromSetCookie', () {

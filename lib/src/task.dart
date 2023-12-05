@@ -128,8 +128,8 @@ base class Request {
     final List<Cookie> cookieList = switch (cookies) {
       String _ => cookiesFromSetCookie(cookies),
       List<Cookie> _ => cookies,
-      _ =>
-        throw ArgumentError('cookies parameter must be a String or a List<Cookie>')
+      _ => throw ArgumentError(
+          'cookies parameter must be a String or a List<Cookie>')
     };
     final validCookies = cookieList.where((cookie) =>
         (cookie.maxAge == null || cookie.maxAge! > 0) &&

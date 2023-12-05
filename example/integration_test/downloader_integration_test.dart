@@ -2642,7 +2642,7 @@ void main() {
         "attachment;filename*= UTF-8''%e2%82%ac%20rates": '\u20AC rates',
         "attachment;filename*= utf-8''%e2%82%ac%20rates": '\u20AC rates',
         'attachment;filename="EURO rates";filename*=utf-8\'\'%e2%82%ac%20rates':
-        '\u20AC rates'
+            '\u20AC rates'
       };
       for (final s in entries.keys) {
         final r = await downloader.testSuggestedFilename(task, s);

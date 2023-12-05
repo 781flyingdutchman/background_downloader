@@ -9,7 +9,6 @@ import 'package:path_provider/path_provider.dart';
 import 'database.dart';
 import 'localstore/localstore.dart';
 import 'models.dart';
-import 'sqlite_storage.dart';
 import 'task.dart';
 
 /// Interface for the persistent storage used to back the downloader
@@ -82,8 +81,6 @@ abstract interface class PersistentStorage {
   Future<void> initialize();
 }
 
-typedef JsonMap = Map<String, dynamic>;
-
 /// Default implementation of [PersistentStorage] using Localstore package
 class LocalStorePersistentStorage implements PersistentStorage {
   final log = Logger('LocalStorePersistentStorage');
@@ -95,20 +92,21 @@ class LocalStorePersistentStorage implements PersistentStorage {
   static const pausedTasksPath = 'backgroundDownloaderPausedTasks';
   static const metaDataCollection = 'backgroundDownloaderDatabase';
 
-  /// Stores [JsonMap] formatted [document] in [collection] keyed under [identifier]
-  Future<void> store(
-      JsonMap document, String collection, String identifier) async {
+  /// Stores [Map<String, dynamic>] formatted [document] in [collection] keyed under [identifier]
+  Future<void> store(Map<String, dynamic> document, String collection,
+      String identifier) async {
     await _db.collection(collection).doc(identifier).set(document);
   }
 
   /// Returns [document] stored in [collection] under key [identifier]
-  /// as a [JsonMap], or null if not found
-  Future<JsonMap?> retrieve(String collection, String identifier) =>
+  /// as a [Map<String, dynamic>], or null if not found
+  Future<Map<String, dynamic>?> retrieve(
+          String collection, String identifier) =>
       _db.collection(collection).doc(identifier).get();
 
-  /// Returns all documents in collection as a [JsonMap] keyed by the
-  /// document identifier, with the value a [JsonMap] representing the document
-  Future<JsonMap> retrieveAll(String collection) async {
+  /// Returns all documents in collection as a [Map<String, dynamic>] keyed by the
+  /// document identifier, with the value a [Map<String, dynamic>] representing the document
+  Future<Map<String, dynamic>> retrieveAll(String collection) async {
     return await _db.collection(collection).get() ?? {};
   }
 
@@ -264,41 +262,48 @@ class LocalStorePersistentStorage implements PersistentStorage {
   }
 }
 
-/// Migrates from several possible persistent storage solutions to another
-class PersistentStorageMigrator {
-  final log = Logger('PersistentStorageMigrator');
-
-  /// Create [PersistentStorageMigrator] object to migrate between persistent
-  /// storage solutions
-  ///
-  /// Currently supported databases we can migrate from are:
-  /// * local_store (the default implementation of the database in
-  ///   background_downloader). Migration from local_store to
-  ///   [SqlitePersistentStorage] is complete, i.e. all state is transferred.
-  /// * flutter_downloader (a popular but now deprecated package for
-  ///   downloading files). Migration from flutter_downloader is partial: only
-  ///   tasks that were complete, failed or canceled are transferred, and
-  ///   if the location of a file cannot be determined as a combination of
-  ///   [BaseDirectory] and [directory] then the task's baseDirectory field
-  ///   will be set to [BaseDirectory.applicationDocuments] and its
-  ///   directory field will be set to the 'savedDir' field of the database
-  ///   used by flutter_downloader. You will have to determine what that
-  ///   directory resolves to (likely an external directory on Android)
-  ///
-  /// To add other migrations, extend this class and inject it in the
-  /// [PersistentStorage] class that you want to migrate to, such as
-  /// [SqlitePersistentStorage] or use it independently.
-  PersistentStorageMigrator();
-
+/// Interface to migrate from one persistent storage to another
+abstract interface class PersistentStorageMigrator {
   /// Migrate data from one of the [migrationOptions] to the [toStorage]
   ///
   /// If migration took place, returns the name of the migration option,
   /// otherwise returns null
   Future<String?> migrate(
+      List<String> migrationOptions, PersistentStorage toStorage);
+}
+
+/// Migrates from [LocalStorePersistentStorage] to another [PersistentStorage]
+class BasePersistentStorageMigrator implements PersistentStorageMigrator {
+  final log = Logger('PersistentStorageMigrator');
+
+  /// Create [BasePersistentStorageMigrator] object to migrate between persistent
+  /// storage solutions
+  ///
+  /// [BasePersistentStorageMigrator] only migrates from:
+  /// * local_store (the default implementation of the database in
+  ///   background_downloader).
+  ///
+  /// To add other migrations, extend this class and inject it in the
+  /// [PersistentStorage] class that you want to migrate to.
+  ///
+  /// See package background_downloader_sql for an implementation
+  /// that migrates to a SQLite based [PersistentStorage], including
+  /// migration from Flutter Downloader
+  BasePersistentStorageMigrator();
+
+  /// Migrate data from one of the [migrationOptions] to the [toStorage]
+  ///
+  /// If migration took place, returns the name of the migration option,
+  /// otherwise returns null
+  ///
+  /// This is the public interface to use in other [PersistentStorage]
+  /// solutions.
+  @override
+  Future<String?> migrate(
       List<String> migrationOptions, PersistentStorage toStorage) async {
     for (var persistentStorageName in migrationOptions) {
       try {
-        if (await _migrateFrom(persistentStorageName, toStorage)) {
+        if (await migrateFrom(persistentStorageName, toStorage)) {
           return persistentStorageName;
         }
       } on Exception catch (e, stacktrace) {
@@ -316,11 +321,10 @@ class PersistentStorageMigrator {
   ///
   /// If extending the class, add your mapping from a migration option String
   /// to a _migrateFrom... method that does your migration.
-  Future<bool> _migrateFrom(
+  Future<bool> migrateFrom(
           String persistentStorageName, PersistentStorage toStorage) =>
       switch (persistentStorageName.toLowerCase().replaceAll('_', '')) {
-        'localstore' => _migrateFromLocalStore(toStorage),
-        'flutterdownloader' => _migrateFromFlutterDownloader(toStorage),
+        'localstore' => migrateFromLocalStore(toStorage),
         _ => Future.value(false)
       };
 
@@ -330,7 +334,7 @@ class PersistentStorageMigrator {
   ///
   /// This is a generic migrator that copies from one storage to another, and
   /// is used by the _migrateFrom... methods
-  Future<bool> _migrateFromPersistentStorage(
+  Future<bool> migrateFromPersistentStorage(
       PersistentStorage fromStorage, PersistentStorage toStorage) async {
     bool migratedSomething = false;
     await fromStorage.initialize();
@@ -357,15 +361,13 @@ class PersistentStorageMigrator {
   /// If extending this class, add a method like this that does the
   /// migration by:
   /// 1. Setting up the [PersistentStorage] object you want to migrate from
-  /// 2. Call [_migrateFromPersistentStorage] to do the transfer from that
+  /// 2. Call [migrateFromPersistentStorage] to do the transfer from that
   ///    object to the new object, passed as [toStorage]
   /// 3. Remove all traces of the [PersistentStorage] object you want to migrate
   ///    from
-  ///
-  /// A second example is the [_migrateFromFlutterDownloader] method
-  Future<bool> _migrateFromLocalStore(PersistentStorage toStorage) async {
+  Future<bool> migrateFromLocalStore(PersistentStorage toStorage) async {
     final localStore = LocalStorePersistentStorage();
-    if (await _migrateFromPersistentStorage(localStore, toStorage)) {
+    if (await migrateFromPersistentStorage(localStore, toStorage)) {
       // delete all paths related to LocalStore
       final supportDir = await getApplicationSupportDirectory();
       for (String collectionPath in [
@@ -384,25 +386,6 @@ class PersistentStorageMigrator {
           log.fine('Error deleting collection path $collectionPath: $e');
         }
       }
-      return true; // we migrated a database
-    }
-    return false; // we did not migrate a database
-  }
-
-  /// Attempt to migrate from FlutterDownloader
-  ///
-  /// Return true if successful. Successful migration removes the original
-  /// data
-  Future<bool> _migrateFromFlutterDownloader(
-      PersistentStorage toStorage) async {
-    if (!(Platform.isAndroid || Platform.isIOS)) {
-      return false;
-    }
-    final fdl = Platform.isAndroid
-        ? FlutterDownloaderPersistentStorageAndroid()
-        : FlutterDownloaderPersistentStorageIOS();
-    if (await _migrateFromPersistentStorage(fdl, toStorage)) {
-      await fdl.removeDatabase();
       return true; // we migrated a database
     }
     return false; // we did not migrate a database

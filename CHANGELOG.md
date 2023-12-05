@@ -1,8 +1,8 @@
 ## 8.0.0
 
-### Permissions
+### BREAKING: Permissions
 
-BREAKING: permissions are no longer automatically requested. You need to explicitly check, and if necessary ask for permissions ahead of calling methods that use them.
+Permissions are no longer automatically requested. You need to explicitly check, and if necessary ask for permissions ahead of calling methods that use them.
 
 User permissions may be needed to display notifications, to move files to external storage (on Android) and to add images or video to the iOS Photo Library. These permissions should be checked and if needed requested before executing those operations.
 
@@ -29,9 +29,9 @@ The downloader will check permission status before each action, e.g. will not sh
 
 Note that permissions are very platform and version dependent, e.g. notification permissions on Android are only required as of API 33, and iOS 14 introduced new Photo Library permissions. If you want to get into details, you can determine the platform version you're running by calling `await FileDownloader().platformVersion()`.
 
-### Use iOS Photos Library for .videos and .images SharedStorage destinations
+### BREAKING: Use iOS Photos Library for .videos and .images SharedStorage destinations
 
-BREAKING: Previously, .images and .video destinations were 'faked' on iOS. With this change, when calling `moveToSharedStorage`, the file is added to the Photos Library (provided the user grants that permission).
+Previously, .images and .video destinations were 'faked' on iOS. With this change, when calling `moveToSharedStorage`, the file is added to the Photos Library (provided the user grants that permission).
 
 For `.images` and `.video` SharedStorage destinations, you need user permission to add to the Photos Library, which requires you to set the `NSPhotoLibraryAddUsageDescription` key in `Info.plist`. The returned String is _not_ a `filePath`, but a unique identifier. If you only want to add the file to the Photos Library you can ignore this identifier. If you want to actually get access to the file (and `filePath`) in the Photos Library, then the user needs to grant an additional 'modify' permission, which requires you to set the `NSPhotoLibraryUsageDescription` in `Info.plist`. To get the actual `filePath`, call `pathInSharedStorage` and pass the identifier obtained via the call to `moveToSharedStorage` as the `filePath` parameter:
 ```dart
@@ -46,6 +46,11 @@ if (identifier != null) {
 ```
 The reason for this two-step approach is that typically you only want to add to the library (requires `PermissionType.iosAddToPhotoLibrary`), which does not require the user to give read/write access to their entire photos library (`PermissionType.iosChangePhotoLibrary`, required to get the `filePath`).
 
+### BREAKING: SqlitePersistentStorage moved to a separate package
+
+Add `background_downloader_sql` to your dependencies in pubspec.yaml to get `SqlitePersistentStorage` and SQLite related migration options back.
+
+The reason for this change is that the `sqflite` dependency adds significant size to apps, even if they do not use the SQLite functionality.
 
 ### Introduce groupNotification
 

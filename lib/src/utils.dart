@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:logging/logging.dart';
 
 import 'task.dart';

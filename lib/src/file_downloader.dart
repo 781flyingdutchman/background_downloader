@@ -746,7 +746,7 @@ interface class FileDownloader {
   /// the downloader. If not set, the default [http.Client] will be used.
   /// The request is executed on an Isolate, to ensure minimal interference
   /// with the main Isolate
-  Future<http.Response> request(Request request) => compute(doRequest, (
+  Future<http.Response> request(Request request) => compute(_doRequest, (
         request,
         DesktopDownloader.requestTimeout,
         DesktopDownloader.proxy,
@@ -861,7 +861,7 @@ interface class FileDownloader {
 ///
 /// This function is run on an Isolate to ensure performance on the main
 /// Isolate is not affected
-Future<http.Response> doRequest(
+Future<http.Response> _doRequest(
     (Request, Duration?, Map<String, dynamic>, bool) params) async {
   final (request, requestTimeout, proxy, bypassTLSCertificateValidation) =
       params;

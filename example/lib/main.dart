@@ -44,8 +44,8 @@ class _MyAppState extends State<MyApp> {
     // storage backing that implements the [PersistentStorage] interface. You
     // must initialize the FileDownloader by passing that alternative storage
     // object on the first call to FileDownloader.
-    // As an example, this example app has implemented a backing using
-    // the sqflite package (works for Android/iOS only).
+    // For example, add a dependency for background_downloader_sql to
+    // pubspec.yaml which adds [SqlitePersistentStorage].
     // To try that SQLite version, uncomment the following line, which
     // will initialize the downloader with the SQLite storage solution.
     // FileDownloader(persistentStorage: SqlitePersistentStorage());
@@ -280,10 +280,13 @@ class _MyAppState extends State<MyApp> {
       if (Platform.isIOS) {
         // add to photos library and print path
         // If you need the path, ask full permissions beforehand by calling
-        var auth = await FileDownloader().permissions.status(PermissionType.iosChangePhotoLibrary);
+        var auth = await FileDownloader()
+            .permissions
+            .status(PermissionType.iosChangePhotoLibrary);
         if (auth != PermissionStatus.granted) {
-          auth = await FileDownloader().permissions.request(
-              PermissionType.iosChangePhotoLibrary);
+          auth = await FileDownloader()
+              .permissions
+              .request(PermissionType.iosChangePhotoLibrary);
         }
         if (auth == PermissionStatus.granted) {
           final identifier = await FileDownloader()
@@ -332,7 +335,9 @@ class _MyAppState extends State<MyApp> {
   Future<void> getPermission(PermissionType permissionType) async {
     var status = await FileDownloader().permissions.status(permissionType);
     if (status != PermissionStatus.granted) {
-      if (await FileDownloader().permissions.shouldShowRationale(permissionType)) {
+      if (await FileDownloader()
+          .permissions
+          .shouldShowRationale(permissionType)) {
         debugPrint('Showing some rationale');
       }
       status = await FileDownloader().permissions.request(permissionType);

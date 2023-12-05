@@ -36,7 +36,9 @@ abstract base class NativeDownloader extends BaseDownloader {
     _backgroundChannel.setMethodCallHandler((call) async {
       final args = call.arguments as List<dynamic>;
       var taskJsonString = args.first as String;
-      final task = taskJsonString.isNotEmpty ? Task.createFromJson(jsonDecode(taskJsonString)) : DownloadTask(url: 'url');
+      final task = taskJsonString.isNotEmpty
+          ? Task.createFromJson(jsonDecode(taskJsonString))
+          : DownloadTask(url: 'url');
       final message = (
         call.method,
         args.length > 2
@@ -166,8 +168,7 @@ abstract base class NativeDownloader extends BaseDownloader {
           final listOfTasks = List<DownloadTask>.from(jsonDecode(
               listOfTasksJson,
               reviver: (key, value) => switch (key) {
-                    int _ =>
-                      Task.createFromJson(value as Map<String, dynamic>),
+                    int _ => Task.createFromJson(value as Map<String, dynamic>),
                     _ => value
                   }));
           // execute the pause calls with a delay, to free up the message queue
@@ -179,7 +180,8 @@ abstract base class NativeDownloader extends BaseDownloader {
 
         // for permission request results
         case ('permissionRequestResult', int statusOrdinal):
-          permissionsService.onPermissionRequestResult(PermissionStatus.values[statusOrdinal]);
+          permissionsService.onPermissionRequestResult(
+              PermissionStatus.values[statusOrdinal]);
 
         default:
           log.warning('Background channel: no match for message $message');
@@ -322,14 +324,10 @@ abstract base class NativeDownloader extends BaseDownloader {
 
   @override
   Future<bool> openFile(Task? task, String? filePath, String? mimeType) async {
-    final result = await methodChannel.invokeMethod<bool>('openFile', [
-      task != null ? jsonEncode(task.toJson()) : null,
-      filePath,
-      mimeType
-    ]);
+    final result = await methodChannel.invokeMethod<bool>('openFile',
+        [task != null ? jsonEncode(task.toJson()) : null, filePath, mimeType]);
     return result ?? false;
   }
-
 
   @override
   Future<String> platformVersion() async {

@@ -18,23 +18,31 @@ void main() {
             expect(status, equals(PermissionStatus.undetermined));
           } else if (Platform.isAndroid) {
             final androidVersion = await getAndroidVersion();
-            expect(status, equals(androidVersion < 33 ? PermissionStatus.granted : PermissionStatus.denied));
+            expect(
+                status,
+                equals(androidVersion < 33
+                    ? PermissionStatus.granted
+                    : PermissionStatus.denied));
           } else {
             expect(status, equals(PermissionStatus.granted));
           }
         case PermissionType.androidExternalStorage:
           if (Platform.isAndroid) {
             final androidVersion = await getAndroidVersion();
-            expect(status, equals(androidVersion < 29 ? PermissionStatus.denied : PermissionStatus.granted));
+            expect(
+                status,
+                equals(androidVersion < 29
+                    ? PermissionStatus.denied
+                    : PermissionStatus.granted));
           } else {
             expect(status, equals(PermissionStatus.granted));
           }
         case PermissionType.iosAddToPhotoLibrary:
-        if (Platform.isIOS) {
-          expect(status, equals(PermissionStatus.undetermined));
-        } else {
-          expect(status, equals(PermissionStatus.granted));
-        }
+          if (Platform.isIOS) {
+            expect(status, equals(PermissionStatus.undetermined));
+          } else {
+            expect(status, equals(PermissionStatus.granted));
+          }
         case PermissionType.iosChangePhotoLibrary:
           if (Platform.isIOS) {
             expect(status, equals(PermissionStatus.undetermined));
@@ -56,24 +64,33 @@ void main() {
         case PermissionType.notifications:
           if (Platform.isAndroid) {
             final androidVersion = await getAndroidVersion();
-            expect(status, equals(androidVersion < 33 ? PermissionStatus.requestError : PermissionStatus.granted));
+            expect(
+                status,
+                equals(androidVersion < 33
+                    ? PermissionStatus.requestError
+                    : PermissionStatus.granted));
           } else {
             expect(status, equals(PermissionStatus.granted));
           }
         case PermissionType.androidExternalStorage:
           if (Platform.isAndroid) {
             final androidVersion = await getAndroidVersion();
-            expect(status, equals(androidVersion > 29 ? PermissionStatus.requestError : PermissionStatus.granted));
+            expect(
+                status,
+                equals(androidVersion > 29
+                    ? PermissionStatus.requestError
+                    : PermissionStatus.granted));
           } else {
             expect(status, equals(PermissionStatus.granted));
           }
         case PermissionType.iosAddToPhotoLibrary:
-            expect(status, equals(PermissionStatus.granted));
+          expect(status, equals(PermissionStatus.granted));
         case PermissionType.iosChangePhotoLibrary:
-            expect(status, equals(PermissionStatus.granted));
+          expect(status, equals(PermissionStatus.granted));
       }
     }
   });
 }
 
-Future<int> getAndroidVersion() async => int.parse(await FileDownloader().platformVersion());
+Future<int> getAndroidVersion() async =>
+    int.parse(await FileDownloader().platformVersion());
