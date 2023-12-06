@@ -53,7 +53,7 @@ public class ParallelDownloader: NSObject {
     var lastProgress: Double = 0
     var nextProgressUpdateTime = Date()
     var taskException: TaskException? = nil
-    var responseBody: String?
+    var responseBody: String? = nil
     
     /// Create a new ParallelDownloader
     init(task:Task) {
@@ -88,6 +88,7 @@ public class ParallelDownloader: NSObject {
         parallelDownloadContentLength = contentLengthFromHeader > 0 ?
             contentLengthFromHeader :
             getContentLength(responseHeaders: responseHeaders, task: self.parentTask)
+        extractContentType(responseHeaders: responseHeaders, task: self.parentTask)
         ParallelDownloader.downloads[parentTask.taskId] = self
         chunks = createChunks(task: parentTask, contentLength: parallelDownloadContentLength)
         let success = !chunks.isEmpty && enqueueChunkTasks()
@@ -213,7 +214,6 @@ public class ParallelDownloader: NSObject {
      /// status updates for the chunkGroup
     private func updateChunkStatus(chunk: Chunk, status: TaskStatus) -> TaskStatus? {
         chunk.status = status
-        
         let parentStatus = parentTaskStatus()
         if let parentStatus = parentStatus, parentStatus != lastTaskStatus {
             lastTaskStatus = parentStatus
@@ -361,8 +361,13 @@ public class ParallelDownloader: NSObject {
 
     /// Finish the [ParallelDownloadTask] by posting a statusUpdate and clearning up
     private func finishTask(status: TaskStatus) {
-        processStatusUpdate(task: parentTask, status: status, taskException: taskException, responseBody: responseBody)
-        ParallelDownloader.downloads.removeValue(forKey: parentTask.taskId)
+        let taskId = parentTask.taskId
+        let mimeType = BDPlugin.mimeTypes[taskId]
+        let charSet = BDPlugin.charSets[taskId]
+        processStatusUpdate(task: parentTask, status: status, taskException: taskException, responseBody: responseBody, mimeType: mimeType, charSet: charSet)
+        BDPlugin.mimeTypes.removeValue(forKey: taskId)
+        BDPlugin.charSets.removeValue(forKey: taskId)
+        ParallelDownloader.downloads.removeValue(forKey: taskId)
     }
 }
 

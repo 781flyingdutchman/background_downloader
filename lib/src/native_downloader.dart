@@ -64,11 +64,19 @@ abstract base class NativeDownloader extends BaseDownloader {
           }
 
         // status update with responseBody, mimeType and charSet (normal completion)
-        case ('statusUpdate', [int statusOrdinal, String? responseBody, String? mimeType, String? charSet]):
+        case (
+            'statusUpdate',
+            [
+              int statusOrdinal,
+              String? responseBody,
+              String? mimeType,
+              String? charSet
+            ]
+          ):
           final status = TaskStatus.values[statusOrdinal];
           if (task.group != BaseDownloader.chunkGroup) {
-            processStatusUpdate(
-                TaskStatusUpdate(task, status, null, responseBody, mimeType, charSet));
+            processStatusUpdate(TaskStatusUpdate(
+                task, status, null, responseBody, mimeType, charSet));
           } else {
             // this is a chunk task, so pass to native
             await methodChannel.invokeMethod('chunkStatusUpdate', [
@@ -157,12 +165,14 @@ abstract base class NativeDownloader extends BaseDownloader {
         case ('enqueueChild', String childTaskJsonString):
           final childTask =
               Task.createFromJson(jsonDecode(childTaskJsonString));
-          await FileDownloader().enqueue(childTask);
+          Future.delayed(const Duration(milliseconds: 100))
+              .then((_) => FileDownloader().enqueue(childTask));
 
         // from ParallelDownloadTask
         case ('cancelTasksWithId', String listOfTaskIdsJson):
           final taskIds = List<String>.from(jsonDecode(listOfTaskIdsJson));
-          await FileDownloader().cancelTasksWithIds(taskIds);
+          Future.delayed(const Duration(milliseconds: 100))
+              .then((_) => FileDownloader().cancelTasksWithIds(taskIds));
 
         // from ParallelDownloadTask
         case ('pauseTasks', String listOfTasksJson):
@@ -172,7 +182,6 @@ abstract base class NativeDownloader extends BaseDownloader {
                     int _ => Task.createFromJson(value as Map<String, dynamic>),
                     _ => value
                   }));
-          // execute the pause calls with a delay, to free up the message queue
           Future.delayed(const Duration(milliseconds: 100)).then((_) async {
             for (final chunkTask in listOfTasks) {
               await FileDownloader().pause(chunkTask);

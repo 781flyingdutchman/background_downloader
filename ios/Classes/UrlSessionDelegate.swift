@@ -127,6 +127,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
                     task = newTask
                 }
             }
+            extractContentType(responseHeaders: response.allHeaderFields, task: task)
             // obtain content length override, if needed and available
             if totalBytesExpectedToWrite == -1 {
                 let contentLength = getContentLength(responseHeaders: response.allHeaderFields, task: task)
@@ -200,8 +201,13 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
         else {
             os_log("Could not find task associated urlSessionTask %d, or did not get HttpResponse", log: log,  type: .info, downloadTask.taskIdentifier)
             return}
-        BDPlugin.tasksWithSuggestedFilename.removeValue(forKey: task.taskId)
-        BDPlugin.tasksWithContentLengthOverride.removeValue(forKey: task.taskId)
+        let taskId = task.taskId
+        let mimeType = BDPlugin.mimeTypes[taskId]
+        let charSet = BDPlugin.charSets[taskId]
+        BDPlugin.mimeTypes.removeValue(forKey: taskId)
+        BDPlugin.charSets.removeValue(forKey: taskId)
+        BDPlugin.tasksWithSuggestedFilename.removeValue(forKey: taskId)
+        BDPlugin.tasksWithContentLengthOverride.removeValue(forKey: taskId)
         let notificationConfig = getNotificationConfigFrom(urlSessionTask: downloadTask)
         if response.statusCode == 404 {
             let responseBody = readFile(url: location)
@@ -223,7 +229,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             var finalStatus = TaskStatus.failed
             var taskException: TaskException? = nil
             defer {
-                processStatusUpdate(task: task, status: finalStatus, taskException: taskException)
+                processStatusUpdate(task: task, status: finalStatus, taskException: taskException, mimeType: mimeType, charSet: charSet)
                 if finalStatus != TaskStatus.failed || task.retriesRemaining == 0 {
                     // update notification only if not failed, or no retries remaining
                     updateNotification(task: task, notificationType: notificationTypeForTaskStatus(status: finalStatus), notificationConfig: notificationConfig)
@@ -410,5 +416,3 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
         return urlSessionTask
     }
 }
-
-

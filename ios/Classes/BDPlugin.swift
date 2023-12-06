@@ -37,6 +37,8 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     static var responseBodyData = [String: [Data]]() // list of Data objects received for this UploadTask id
     static var tasksWithSuggestedFilename = [String : Task]() // [taskId : Task with suggested filename]
     static var tasksWithContentLengthOverride = [String : Int64]() // [taskId : Content length]
+    static var mimeTypes = [String : String]() // [taskId : mimeType]
+    static var charSets = [String : String]() // [taskId : charSet]
     
     public static var flutterPluginRegistrantCallback: FlutterPluginRegistrantCallback?
     public static var backgroundChannel: FlutterMethodChannel?

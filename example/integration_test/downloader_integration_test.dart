@@ -2722,7 +2722,7 @@ void main() {
     });
   });
 
-  group('Content-Disposition, mimeType and charSet', () {
+  group('Content-Type, mimeType and charSet', () {
     testWidgets('mimeType', (widgetTester) async {
       task = DownloadTask(url: urlWithContentLength);
       var result = await FileDownloader().download(task);
