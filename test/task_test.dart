@@ -174,6 +174,8 @@ void main() {
     expect(Request.cookieHeader([c], url), equals({}));
     c.path = '/test';
     expect(Request.cookieHeader([c], url), equals({'Cookie': 'name=value'}));
+    c.path = '/';
+    expect(Request.cookieHeader([c], 'https://google.com'), equals({'Cookie': 'name=value'}));
     c.expires = DateTime.now().subtract(const Duration(seconds: 1));
     expect(Request.cookieHeader([c], url), equals({}));
     c.expires = DateTime.now().add(const Duration(seconds: 1));

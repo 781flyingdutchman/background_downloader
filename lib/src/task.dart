@@ -131,10 +131,11 @@ base class Request {
       _ => throw ArgumentError(
           'cookies parameter must be a String or a List<Cookie>')
     };
+    final path = uri.path.isNotEmpty ? uri.path : '/';
     final validCookies = cookieList.where((cookie) =>
         (cookie.maxAge == null || cookie.maxAge! > 0) &&
         (cookie.domain == null || uri.host.endsWith(cookie.domain!)) &&
-        (cookie.path == null || uri.path.startsWith(cookie.path!)) &&
+        (cookie.path == null || path.startsWith(cookie.path!)) &&
         (cookie.expires == null || cookie.expires!.isAfter(DateTime.now())) &&
         (!cookie.secure || uri.scheme == 'https'));
     final cookieHeaderValue = validCookies
