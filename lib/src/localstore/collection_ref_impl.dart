@@ -1,4 +1,4 @@
-part of localstore;
+part of 'localstore.dart';
 
 /// The interface that other CollectionRef must extend.
 abstract class CollectionRefImpl {

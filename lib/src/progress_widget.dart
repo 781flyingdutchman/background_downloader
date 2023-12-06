@@ -40,8 +40,7 @@ class DownloadProgressIndicator extends StatefulWidget {
       this.height = 50,
       this.maxExpandable = 1,
       this.backgroundColor = Colors.grey,
-      Key? key})
-      : super(key: key);
+      super.key});
 
   final Stream<TaskUpdate> updates;
   final String message;
@@ -206,9 +205,7 @@ class _DownloadProgressItem extends StatelessWidget {
       this.showCancelButton,
       this.height,
       this.backgroundColor,
-      this.pausedTasks,
-      {Key? key})
-      : super(key: key);
+      this.pausedTasks);
 
   final Task task;
   final double progress;
@@ -277,9 +274,7 @@ class _DownloadProgressItem extends StatelessWidget {
 /// indicator
 class _CollapsedDownloadProgress extends StatelessWidget {
   const _CollapsedDownloadProgress(this.numCompleted, this.numTotal,
-      this.collapsedMessage, this.height, this.backgroundColor,
-      {Key? key})
-      : super(key: key);
+      this.collapsedMessage, this.height, this.backgroundColor);
 
   final int numCompleted;
   final int numTotal;
@@ -323,9 +318,7 @@ class _CollapsedDownloadProgress extends StatelessWidget {
 /// progress indicators (up to expandable as defined in the core widget
 class _ExpandedDownloadProgress extends StatelessWidget {
   const _ExpandedDownloadProgress(this.tasks, this.message, this.height,
-      this.backgroundColor, this.inProgress,
-      {Key? key})
-      : super(key: key);
+      this.backgroundColor, this.inProgress);
 
   final List<Task> tasks;
   final String message;

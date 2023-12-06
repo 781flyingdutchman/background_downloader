@@ -392,7 +392,7 @@ sealed class Task extends Request implements Comparable {
   ///
   /// Only used by subclasses. Use [createFromJsonMap] to create a properly
   /// subclassed [Task] from the [json]
-  Task.fromJson(Map<String, dynamic> json)
+  Task.fromJson(super.json)
       : taskId = json['taskId'] ?? '',
         filename = json['filename'] ?? '',
         directory = json['directory'] ?? '',
@@ -405,7 +405,7 @@ sealed class Task extends Request implements Comparable {
         priority = (json['priority'] as num?)?.toInt() ?? 5,
         metaData = json['metaData'] ?? '',
         displayName = json['displayName'] ?? '',
-        super.fromJson(json);
+        super.fromJson();
 
   /// Creates JSON map of this object
   @override
@@ -529,12 +529,12 @@ final class DownloadTask extends Task {
       super.creationTime});
 
   /// Creates [DownloadTask] object from [json]
-  DownloadTask.fromJson(Map<String, dynamic> json)
+  DownloadTask.fromJson(super.json)
       : assert(
             ['DownloadTask', 'ParallelDownloadTask'].contains(json['taskType']),
             'The provided JSON map is not'
             ' a DownloadTask, because key "taskType" is not "DownloadTask" or "ParallelDownloadTask".'),
-        super.fromJson(json);
+        super.fromJson();
 
   @override
   String get taskType => 'DownloadTask';
@@ -681,10 +681,10 @@ final class UploadTask extends Task {
       {super.taskId,
       required super.url,
       super.urlQueryParameters,
-      required String filename,
+      required String super.filename,
       super.headers,
       String? httpRequestMethod,
-      String? post,
+      String? super.post,
       this.fileField = 'file',
       String? mimeType,
       Map<String, String>? fields,
@@ -707,13 +707,11 @@ final class UploadTask extends Task {
         mimeType =
             mimeType ?? lookupMimeType(filename) ?? 'application/octet-stream',
         super(
-            filename: filename,
             httpRequestMethod: httpRequestMethod ?? 'POST',
-            post: post,
             allowPause: false);
 
   /// Creates [UploadTask] object from [json]
-  UploadTask.fromJson(Map<String, dynamic> json)
+  UploadTask.fromJson(super.json)
       : assert(
             ['UploadTask', 'MultiUploadTask'].contains(json['taskType']),
             'The provided JSON map is not an UploadTask, '
@@ -721,7 +719,7 @@ final class UploadTask extends Task {
         fileField = json['fileField'] ?? 'file',
         mimeType = json['mimeType'] ?? 'application/octet-stream',
         fields = Map<String, String>.from(json['fields'] ?? {}),
-        super.fromJson(json);
+        super.fromJson();
 
   /// Returns a list of fileData elements, one for each file to upload.
   /// Each element is a triple containing fileField, full filePath, mimeType
@@ -878,7 +876,7 @@ final class MultiUploadTask extends UploadTask {
       required List<dynamic> files,
       super.headers,
       super.httpRequestMethod,
-      Map<String, String>? fields = const {},
+      super.fields = const {},
       super.directory,
       super.baseDirectory,
       super.group,
@@ -917,8 +915,7 @@ final class MultiUploadTask extends UploadTask {
         super(
             filename: 'multi-upload',
             fileField: '',
-            mimeType: '',
-            fields: fields);
+            mimeType: '');
 
   /// For [MultiUploadTask], returns jsonEncoded list of [fileFields]
   @override
@@ -933,7 +930,7 @@ final class MultiUploadTask extends UploadTask {
   String get mimeType => jsonEncode(mimeTypes);
 
   /// Creates [MultiUploadTask] object from [json]
-  MultiUploadTask.fromJson(Map<String, dynamic> json)
+  MultiUploadTask.fromJson(super.json)
       : assert(
             json['taskType'] == 'MultiUploadTask',
             'The provided JSON map is not'
@@ -942,7 +939,7 @@ final class MultiUploadTask extends UploadTask {
             List.from(jsonDecode(json['fileField'] as String? ?? '[]')),
         filenames = List.from(jsonDecode(json['filename'] as String? ?? '[]')),
         mimeTypes = List.from(jsonDecode(json['mimeType'] as String? ?? '[]')),
-        super.fromJson(json);
+        super.fromJson();
 
   @override
   MultiUploadTask copyWith(
@@ -1067,14 +1064,14 @@ final class ParallelDownloadTask extends DownloadTask {
   }
 
   /// Creates [ParallelDownloadTask] object from [json]
-  ParallelDownloadTask.fromJson(Map<String, dynamic> json)
+  ParallelDownloadTask.fromJson(super.json)
       : assert(
             json['taskType'] == 'ParallelDownloadTask',
             'The provided JSON map is not a ParallelDownloadTask, '
             'because key "taskType" is not "ParallelDownloadTask".'),
         urls = List.from(json['urls'] as List<dynamic>? ?? []),
         chunks = json['chunks'] as int? ?? 1,
-        super.fromJson(json);
+        super.fromJson();
 
   @override
   Map<String, dynamic> toJson() =>

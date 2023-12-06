@@ -1,4 +1,4 @@
-part of localstore;
+part of 'localstore.dart';
 
 /// The entry point for accessing a [Localstore].
 ///

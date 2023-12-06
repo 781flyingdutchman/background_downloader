@@ -1,4 +1,4 @@
-part of localstore;
+part of 'localstore.dart';
 
 /// An options class that configures the behavior of set() calls in
 /// [DocumentRef].

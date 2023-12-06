@@ -340,14 +340,14 @@ void logError(Task task, String error) {
 /// Set the [taskException] variable based on error e
 void setTaskError(dynamic e) {
   switch (e.runtimeType) {
-    case IOException:
-      taskException = TaskFileSystemException(e.toString());
-
-    case HttpException:
-    case TimeoutException:
+    case HttpException _:
+    case TimeoutException _:
       taskException = TaskConnectionException(e.toString());
 
-    case TaskException:
+    case IOException _:
+      taskException = TaskFileSystemException(e.toString());
+
+    case TaskException _:
       taskException = e;
 
     default:

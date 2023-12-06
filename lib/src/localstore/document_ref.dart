@@ -1,4 +1,4 @@
-part of localstore;
+part of 'localstore.dart';
 
 /// A [DocumentRef] refers to a document location in a [Localstore] database
 /// and can be used to write, read, or listen to the location.
