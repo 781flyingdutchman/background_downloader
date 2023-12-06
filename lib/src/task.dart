@@ -273,7 +273,7 @@ sealed class Task extends Request implements Comparable {
       super.headers,
       super.httpRequestMethod,
       super.post,
-      this.directory = '',
+      String directory = '',
       this.baseDirectory = BaseDirectory.applicationDocuments,
       this.group = 'default',
       this.updates = Updates.status,
@@ -285,16 +285,14 @@ sealed class Task extends Request implements Comparable {
       this.priority = 5,
       super.creationTime})
       : taskId = taskId ?? Random().nextInt(1 << 32).toString(),
-        filename = filename ?? Random().nextInt(1 << 32).toString() {
+        filename = filename ?? Random().nextInt(1 << 32).toString(),
+        directory = _startsWithPathSeparator.hasMatch(directory) ? directory.substring(1) : directory
+  {
     if (filename?.isEmpty == true) {
       throw ArgumentError('Filename cannot be empty');
     }
     if (_pathSeparator.hasMatch(this.filename) && this is! MultiUploadTask) {
       throw ArgumentError('Filename cannot contain path separators');
-    }
-    if (_startsWithPathSeparator.hasMatch(directory)) {
-      throw ArgumentError(
-          'Directory must be relative to the baseDirectory specified in the baseDirectory argument');
     }
     if (allowPause && post != null) {
       throw ArgumentError('Tasks that can pause must be GET requests');

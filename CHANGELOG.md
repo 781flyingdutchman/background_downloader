@@ -96,6 +96,7 @@ Return the platform version as a String:
 * Fixes Pause notification issue on iOS
 * Fixes issue with priority for multi-part file uploads
 * Fixes issue #194 (remove notification when canceling a paused task)
+* If the Task.directory starts with a path separator, it is stripped (earlier it would throw)
 * Refactors code to improve readability
 
 

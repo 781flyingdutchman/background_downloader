@@ -144,8 +144,10 @@ void main() {
     expect(task0.directory.isEmpty, isTrue);
     final task1 = DownloadTask(url: workingUrl, directory: 'testDir');
     expect(task1.directory, equals('testDir'));
-    expect(() => DownloadTask(url: workingUrl, directory: '/testDir'),
-        throwsArgumentError);
+    final task2 = DownloadTask(url: workingUrl, directory: '/testDir');
+    expect(task2.directory, equals('testDir'));
+    final task3 = DownloadTask(url: workingUrl, directory: '/');
+    expect(task3.directory, equals(''));
   });
 
   test('cookieHeader', () async {
