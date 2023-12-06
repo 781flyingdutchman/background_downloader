@@ -107,13 +107,13 @@ base class Request {
         'creationTime': creationTime.millisecondsSinceEpoch
       };
 
-  /// The regex pattern to split the cookies in `set-cookie`.
+  /// The regex pattern to split the cookies in `Set-Cookie`.
   static final _regexSplitSetCookies = RegExp(',(?=[^ ])');
 
   /// Returns the cookie header appropriate for this [request],
   /// taken from the [cookies] list.
   ///
-  /// [cookies] can be a List<Cookie> or the 'set-cookie' header value
+  /// [cookies] can be a List<Cookie> or the 'Set-Cookie' header value
   ///
   /// The returned map is the 'Cookie:' header, with the
   /// value=name; value2=name2 as the value.
@@ -145,7 +145,7 @@ base class Request {
   }
 
   /// Returns a list of Cookies extracted from the [setCookie] string,
-  /// which is the value of the 'set-cookie' header of a server response
+  /// which is the value of the 'Set-Cookie' header of a server response
   ///
   /// Based on https://github.com/dart-lang/http/pull/688/files
   static List<Cookie> cookiesFromSetCookie(String setCookie) {

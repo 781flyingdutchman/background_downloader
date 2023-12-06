@@ -193,14 +193,17 @@ sealed class TaskUpdate {
 /// A status update
 ///
 /// Contains [TaskStatus] and, if [TaskStatus.failed] possibly a
-/// [TaskException] and [responseBody]
+/// [TaskException] and if this is a final state possibly a [responseBody],
+/// [mimeType] and [charSet]
 class TaskStatusUpdate extends TaskUpdate {
   final TaskStatus status;
   final TaskException? exception;
   final String? responseBody;
+  final String? mimeType; // derived from Content-Type header
+  final String? charSet; // derived from Content-Type header
 
   const TaskStatusUpdate(super.task, this.status,
-      [this.exception, this.responseBody]);
+      [this.exception, this.responseBody, this.mimeType, this.charSet]);
 
   /// Create object from [json]
   TaskStatusUpdate.fromJson(super.json)
@@ -209,6 +212,8 @@ class TaskStatusUpdate extends TaskUpdate {
             ? TaskException.fromJson(json['exception'])
             : null,
         responseBody = json['responseBody'],
+        mimeType = json['mimeType'],
+        charSet = json['charSet'],
         super.fromJson();
 
   /// Create object from [jsonString]
@@ -221,16 +226,25 @@ class TaskStatusUpdate extends TaskUpdate {
         ...super.toJson(),
         'taskStatus': status.index,
         'exception': exception?.toJson(),
-        'responseBody': responseBody
+        'responseBody': responseBody,
+        'mimeType': mimeType,
+        'charSet': charSet
       };
 
   TaskStatusUpdate copyWith(
           {Task? task,
           TaskStatus? status,
           TaskException? exception,
-          String? responseBody}) =>
-      TaskStatusUpdate(task ?? this.task, status ?? this.status,
-          exception ?? this.exception, responseBody ?? this.responseBody);
+          String? responseBody,
+          String? mimeType,
+          String? charSet}) =>
+      TaskStatusUpdate(
+          task ?? this.task,
+          status ?? this.status,
+          exception ?? this.exception,
+          responseBody ?? this.responseBody,
+          mimeType ?? this.mimeType,
+          charSet ?? this.charSet);
 }
 
 /// A progress update

@@ -116,6 +116,8 @@ open class TaskWorker(
             prefs: SharedPreferences,
             taskException: TaskException? = null,
             responseBody: String? = null,
+            mimeType: String? = null,
+            charSet: String? = null,
             context: Context? = null
         ) {
             // A 'failed' progress update is only provided if
@@ -167,7 +169,9 @@ open class TaskWorker(
                     responseBody
                 ) else mutableListOf(
                     status.ordinal,
-                    if (status.isFinalState()) responseBody else null
+                    if (status.isFinalState()) responseBody else null,
+                    if (status.isFinalState()) mimeType else null,
+                    if (status.isFinalState()) charSet else null
                 )
                 if (!postOnBackgroundChannel("statusUpdate", task, arg)) {
                     // unsuccessful post, so store in local prefs (without exception info)
@@ -343,8 +347,13 @@ open class TaskWorker(
     var notificationProgress = 2.0 // indeterminate
     var lastNotificationTime = 0L
 
+    // additional parameters for final TaskStatusUpdate
     var taskException: TaskException? = null
     var responseBody: String? = null
+    var mimeType: String? = null // derived from Content-Type header
+    var charSet: String? = null // derived from Content-Type header
+
+    // related to foreground tasks
     private var runInForegroundFileSize: Int = -1
     var canRunInForeground = false
     var runInForeground = false
@@ -400,6 +409,8 @@ open class TaskWorker(
                     prefs,
                     taskException,
                     responseBody,
+                    mimeType,
+                    charSet,
                     applicationContext
                 )
                 if (status != TaskStatus.failed || task.retriesRemaining == 0) {
@@ -714,6 +725,23 @@ open class TaskWorker(
             exceptionType = ExceptionType.connection
         }
         taskException = TaskException(exceptionType, description = e.toString())
+    }
+
+    /**
+     * Extract content type from [headers] and set [mimeType] and [charSet]
+     */
+    fun extractContentType(headers: MutableMap<String, MutableList<String>>) {
+        val contentType = headers["content-type"]?.first()
+        if (contentType != null) {
+            val regEx = Regex("""(.*);\s*charset\s*=(.*)""")
+            val match = regEx.find(contentType)
+            if (match != null) {
+                mimeType = match.groups[1]?.value
+                charSet = match.groups[2]?.value
+            } else {
+                mimeType = contentType
+            }
+        }
     }
 }
 

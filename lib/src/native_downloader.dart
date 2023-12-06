@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:background_downloader/src/desktop/isolate.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -62,12 +63,12 @@ abstract base class NativeDownloader extends BaseDownloader {
             ]);
           }
 
-        // status update with responseBody, no exception
-        case ('statusUpdate', [int statusOrdinal, String? responseBody]):
+        // status update with responseBody, mimeType and charSet (normal completion)
+        case ('statusUpdate', [int statusOrdinal, String? responseBody, String? mimeType, String? charSet]):
           final status = TaskStatus.values[statusOrdinal];
           if (task.group != BaseDownloader.chunkGroup) {
             processStatusUpdate(
-                TaskStatusUpdate(task, status, null, responseBody));
+                TaskStatusUpdate(task, status, null, responseBody, mimeType, charSet));
           } else {
             // this is a chunk task, so pass to native
             await methodChannel.invokeMethod('chunkStatusUpdate', [

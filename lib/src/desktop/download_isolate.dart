@@ -85,6 +85,7 @@ Future<void> doDownloadTask(
         log.finest(
             'Suggested filename for taskId ${task.taskId}: ${task.filename}');
       }
+      extractContentType(response.headers);
       if (okResponses.contains(response.statusCode)) {
         resultStatus = await processOkDownloadResponse(
             filePath,
@@ -278,3 +279,19 @@ void deleteTempFile(String tempFilePath) async {
     log.fine('Could not delete temp file $tempFilePath');
   }
 }
+
+/// Extract content type from [headers] and set [mimeType] and [charSet]
+void extractContentType(Map<String, String> headers) {
+  final contentType = headers['content-type'];
+  if (contentType != null) {
+    final regEx = RegExp(r'(.*);\s*charset\s*=(.*)');
+    final match = regEx.firstMatch(contentType);
+    if (match != null) {
+      mimeType = match.group(1);
+      charSet = match.group(2);
+    } else {
+      mimeType = contentType;
+    }
+  }
+}
+

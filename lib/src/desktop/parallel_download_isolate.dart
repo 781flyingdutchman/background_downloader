@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
 
+import 'package:background_downloader/src/desktop/download_isolate.dart';
 import 'package:collection/collection.dart';
 
 import '../chunk.dart';
@@ -68,6 +69,7 @@ Future<void> doParallelDownloadTask(
     final response = await DesktopDownloader.httpClient
         .head(Uri.parse(task.url), headers: task.headers);
     if ([200, 201, 202, 203, 204, 205, 206].contains(response.statusCode)) {
+      extractContentType(response.headers);
       chunks = createChunks(task, response.headers);
       for (var chunk in chunks) {
         // Ask main isolate to enqueue the child task. Updates related to the child

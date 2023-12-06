@@ -103,6 +103,7 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
                 destFilePath = "$dirName/${task.filename}"
                 Log.d(TAG, "Suggested filename for taskId ${task.taskId}: ${task.filename}")
             }
+            extractContentType(connection.headerFields)
             // determine tempFile
             val contentLength = getContentLength(connection.headerFields, task)
             val applicationSupportPath =

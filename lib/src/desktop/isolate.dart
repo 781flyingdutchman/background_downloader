@@ -30,8 +30,12 @@ var bytesTotalAtLastProgressUpdate = 0;
 var networkSpeed = 0.0; // in MB/s
 var isPaused = false;
 var isCanceled = false;
+
+// additional parameters for final TaskStatusUpdate
 TaskException? taskException;
 String? responseBody;
+String? mimeType; // derived from Content-Type header
+String? charSet; // derived from Content-Type header
 
 // logging from isolate is always 'FINEST', as it is sent to
 // the [DesktopDownloader] for processing
@@ -232,7 +236,9 @@ void processStatusUpdateInIsolate(
       status == TaskStatus.failed
           ? taskException ?? TaskException('None')
           : null,
-      status.isFinalState ? responseBody : null
+      status.isFinalState ? responseBody : null,
+      status.isFinalState ? mimeType : null,
+      status.isFinalState ? charSet : null,
     ));
   }
 }

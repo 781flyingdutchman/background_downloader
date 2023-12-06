@@ -2722,6 +2722,29 @@ void main() {
     });
   });
 
+  group('Content-Disposition, mimeType and charSet', () {
+    testWidgets('mimeType', (widgetTester) async {
+      task = DownloadTask(url: urlWithContentLength);
+      var result = await FileDownloader().download(task);
+      expect(result.status, equals(TaskStatus.complete));
+      expect(result.mimeType, equals('application/zip'));
+      expect(result.charSet, isNull);
+      task = ParallelDownloadTask(url: urlWithContentLength, chunks: 2);
+      result = await FileDownloader().download(task);
+      expect(result.status, equals(TaskStatus.complete));
+      expect(result.mimeType, equals('application/zip'));
+      expect(result.charSet, isNull);
+    });
+
+    testWidgets('mimeType and charSet', (widgetTester) async {
+      task = DownloadTask(url: workingUrl);
+      final result = await FileDownloader().download(task);
+      expect(result.status, equals(TaskStatus.complete));
+      expect(result.mimeType, equals('text/html'));
+      expect(result.charSet, equals('ISO-8859-1'));
+    });
+  });
+
   group('Range and Content-Length headers', () {
     testWidgets('parseRange', (widgetTester) async {
       // tested on the native side for Android and iOS

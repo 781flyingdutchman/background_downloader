@@ -79,6 +79,10 @@ All tasks in group `bunchOfFiles` will now use the notification group configurat
 
 You can now pass an absolute path to the downloader by using `BaseDirectory.root` combined with the path in `directory`. This allows you to reach any file destination on your platform. However, be careful: the reason you should not normally do this (and use e.g. `BaseDirectory.applicationDocuments` instead) is that the location of the app's documents directory may change between application starts (on iOS, and on Android in some cases), and may therefore fail for downloads that complete while the app is suspended.  You should therefore never store permanently, or hard-code, an absolute path, unless you are absolutely sure that that path is 'stable'.
 
+### Add fields `mimeType` and `charSet` to `TaskStatusUpdate`
+
+If the server provides this information via the `Content-Type` header then these fields will be non-null only for final states.
+
 ### Remove `awaitGroup`
 * Removed all references to `awaitGroup` as the logic for the convenience methods has changed
 * Removed all references to `modifiedTasks` in `PersistentStorage` interface

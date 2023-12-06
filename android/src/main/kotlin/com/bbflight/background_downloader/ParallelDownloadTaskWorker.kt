@@ -79,6 +79,7 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                     if (!isResume) {
                         // start the download by creating [Chunk]s and enqueuing chunk tasks
                         if (connection.responseCode in listOf(200, 201, 202, 203, 204, 205, 206)) {
+                            extractContentType(connection.headerFields)
                             chunks = createChunks(task, connection.headerFields)
                             for (chunk in chunks) {
                                 // Ask Dart side to enqueue the child task. Updates related to the child
