@@ -71,8 +71,8 @@ Future<void> doParallelDownloadTask(
     if ([200, 201, 202, 203, 204, 205, 206].contains(response.statusCode)) {
       // get suggested filename if needed, and change task and parentTask
       if (!task.hasFilename) {
-        task = (await taskWithSuggestedFilename(
-            task, response.headers, true)) as ParallelDownloadTask;
+        task = (await taskWithSuggestedFilename(task, response.headers, true))
+            as ParallelDownloadTask;
         parentTask = task;
         log.finest(
             'Suggested filename for taskId ${task.taskId}: ${task.filename}');

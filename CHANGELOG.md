@@ -46,7 +46,12 @@ if (identifier != null) {
 ```
 The reason for this two-step approach is that typically you only want to add to the library (requires `PermissionType.iosAddToPhotoLibrary`), which does not require the user to give read/write access to their entire photos library (`PermissionType.iosChangePhotoLibrary`, required to get the `filePath`).
 
-### BREAKING: SqlitePersistentStorage moved to a separate package
+### BREAKING: PersistentStorage and PersistentStorageMigrator
+
+If you use the default `PersistentStorage` then nothing changes. Otherwise:
+* `SqlitePersistentStorage` moved to a separate package, and the migrator used is `SqlPersistentStorageMigrator`
+* `PersistentStorage` is now an interface, not a call, so must be implemented instead of extended
+* `PersistentStorageMigrator` is now an interface, and `BasePersistentStorageMigrator` is a basic implementation that can be extended to add migration options (as is done in `SqlPersistentStorageMigrator`)
 
 Add `background_downloader_sql` to your dependencies in pubspec.yaml to get `SqlitePersistentStorage` and SQLite related migration options back.
 

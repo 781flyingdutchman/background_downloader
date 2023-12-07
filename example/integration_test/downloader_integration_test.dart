@@ -2721,7 +2721,8 @@ void main() {
       await file.delete();
     });
 
-    testWidgets('parallelDownloadTask with ? for filename', (widgetTester) async {
+    testWidgets('parallelDownloadTask with ? for filename',
+        (widgetTester) async {
       // delete old downloads
       task = DownloadTask(url: urlWithContentLength, filename: '5MB-test.ZIP');
       try {

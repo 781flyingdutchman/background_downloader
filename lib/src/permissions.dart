@@ -7,7 +7,7 @@ import 'native_downloader.dart';
 
 enum PermissionType {
   notifications,
-  androidExternalStorage,
+  androidSharedStorage,
   iosAddToPhotoLibrary,
   iosChangePhotoLibrary
 }
@@ -92,7 +92,7 @@ final class AndroidPermissionsService extends IOSPermissionsService {
 
   @override
   Future<PermissionStatus> request(PermissionType permissionType) async {
-    if (![PermissionType.notifications, PermissionType.androidExternalStorage]
+    if (![PermissionType.notifications, PermissionType.androidSharedStorage]
         .contains(permissionType)) {
       return PermissionStatus.granted;
     }

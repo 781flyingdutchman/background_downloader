@@ -294,4 +294,3 @@ void extractContentType(Map<String, String> headers) {
     }
   }
 }
-

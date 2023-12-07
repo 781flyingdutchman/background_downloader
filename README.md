@@ -495,6 +495,8 @@ await FileDownloader().enqueue(DownloadTask(
 
 All tasks in group `bunchOfFiles` will now use the notification group configuration with ID `myNotificationGroup`. Any other task that uses a configuration with `groupNotificationId` set to 'myGroupNotification' will also be added to that group notification.
 
+__On iOS__: If your `running` group notification contains a dynamic item (such as `{numFinished}` in the example above) then a new notification will be issued every time the notification message changes (different from Android, where the existing notification is updated so does not trigger a new one).
+
 ### Tapping a notification
 To respond to the user tapping a notification, register a callback that takes `Task` and `NotificationType` as parameters:
 
@@ -604,10 +606,15 @@ You can use a package like [permission_handler](https://pub.dev/packages/permiss
 * `request`: to request the actual permission. Only do this if you have confirmed that the permission is not already `granted`
 * `shouldShowRationale`: for Android only, if `true` you should show a UI element (e.g. a dialog) to explain to the user why this permission is necessary
 
-All three methods take one `PermissionType` parameter, e.g. `PermissionType.notifications`.
+All three methods take one `PermissionType` parameter:
+* `notifications`, to display notifications
+* `androidSharedStorage`, to move files to external storage on Android, before API 29
+* `iosAddToPhotoLibrary`, to move files to `SharedStorage.images` or `SharedStorage.video` on iOS, as this adds those files to the Photo Library
+* `iosChangePhotoLibrary`, to access the path to files moved to the Photos Library
 
 For example, to request permissions for notifications:
 ```dart
+final permissionType = PermissionType.notifications;
 var status = await FileDownloader().permissions.status(permissionType);
 if (status != PermissionStatus.granted) {
   if (await FileDownloader().permissions.shouldShowRationale(permissionType)) {

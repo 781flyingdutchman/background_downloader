@@ -9,7 +9,7 @@ import android.os.Build
 import androidx.core.app.ActivityCompat
 
 enum class PermissionType {
-    notifications, androidExternalStorage, iosAddToPhotoLibrary, iosChangePhotoLibrary
+    notifications, androidSharedStorage, iosAddToPhotoLibrary, iosChangePhotoLibrary
 }
 
 enum class PermissionStatus {
@@ -46,7 +46,7 @@ class PermissionsService {
                     }
                 }
 
-                PermissionType.androidExternalStorage -> {
+                PermissionType.androidSharedStorage -> {
                     return if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
                     ) {
                         // On Android before 29, check/ask for permission
@@ -96,7 +96,7 @@ class PermissionsService {
                     }
                 }
 
-                PermissionType.androidExternalStorage -> {
+                PermissionType.androidSharedStorage -> {
                     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
                         // On Android before 29, check/ask for permission
                         if (BDPlugin.activity == null) {
@@ -135,7 +135,7 @@ class PermissionsService {
                     }
                 }
 
-                PermissionType.androidExternalStorage -> {
+                PermissionType.androidSharedStorage -> {
                     ActivityCompat.shouldShowRequestPermissionRationale(BDPlugin.activity!!, Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 }
 
@@ -151,7 +151,7 @@ class PermissionsService {
                 (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)
             return when (requestCode) {
                 baseRequestCode + PermissionType.notifications.ordinal,
-                baseRequestCode + PermissionType.androidExternalStorage.ordinal-> {
+                baseRequestCode + PermissionType.androidSharedStorage.ordinal-> {
                     sendPermissionResult(granted)
                     true
                 }

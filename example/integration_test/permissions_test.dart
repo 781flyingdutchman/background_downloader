@@ -26,7 +26,7 @@ void main() {
           } else {
             expect(status, equals(PermissionStatus.granted));
           }
-        case PermissionType.androidExternalStorage:
+        case PermissionType.androidSharedStorage:
           if (Platform.isAndroid) {
             final androidVersion = await getAndroidVersion();
             expect(
@@ -72,7 +72,7 @@ void main() {
           } else {
             expect(status, equals(PermissionStatus.granted));
           }
-        case PermissionType.androidExternalStorage:
+        case PermissionType.androidSharedStorage:
           if (Platform.isAndroid) {
             final androidVersion = await getAndroidVersion();
             expect(

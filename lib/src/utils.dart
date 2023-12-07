@@ -136,7 +136,7 @@ Future<DownloadTask> taskWithSuggestedFilename(
     }
     // Try filename="filename"
     final plainFilenameRegEx =
-    RegExp(r'filename=\s*"?([^"]+)"?.*$', caseSensitive: false);
+        RegExp(r'filename=\s*"?([^"]+)"?.*$', caseSensitive: false);
     match = plainFilenameRegEx.firstMatch(disposition);
     if (match != null && match.group(1)?.isNotEmpty == true) {
       return uniqueFilename(task.copyWith(filename: match.group(1)), unique);

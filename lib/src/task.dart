@@ -287,8 +287,9 @@ sealed class Task extends Request implements Comparable {
       super.creationTime})
       : taskId = taskId ?? Random().nextInt(1 << 32).toString(),
         filename = filename ?? Random().nextInt(1 << 32).toString(),
-        directory = _startsWithPathSeparator.hasMatch(directory) ? directory.substring(1) : directory
-  {
+        directory = _startsWithPathSeparator.hasMatch(directory)
+            ? directory.substring(1)
+            : directory {
     if (filename?.isEmpty == true) {
       throw ArgumentError('Filename cannot be empty');
     }
@@ -706,8 +707,7 @@ final class UploadTask extends Task {
         mimeType =
             mimeType ?? lookupMimeType(filename) ?? 'application/octet-stream',
         super(
-            httpRequestMethod: httpRequestMethod ?? 'POST',
-            allowPause: false);
+            httpRequestMethod: httpRequestMethod ?? 'POST', allowPause: false);
 
   /// Creates [UploadTask] object from [json]
   UploadTask.fromJson(super.json)
@@ -911,10 +911,7 @@ final class MultiUploadTask extends UploadTask {
                   _ => throw ArgumentError(_filesArgumentError)
                 })
             .toList(growable: false),
-        super(
-            filename: 'multi-upload',
-            fileField: '',
-            mimeType: '');
+        super(filename: 'multi-upload', fileField: '', mimeType: '');
 
   /// For [MultiUploadTask], returns jsonEncoded list of [fileFields]
   @override

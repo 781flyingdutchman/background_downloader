@@ -11,7 +11,7 @@ import os.log
 
 public enum PermissionType: Int {
     case notifications,
-         androidExternalStorage,
+         androidSharedStorage,
          iosAddToPhotoLibrary,
          iosChangePhotoLibrary
 }
