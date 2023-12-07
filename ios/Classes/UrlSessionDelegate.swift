@@ -41,12 +41,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             os_log("Could not find task related to urlSessionTask %d", log: log, type: .error, task.taskIdentifier)
             return
         }
-        // clear storage related to this task
-        BDPlugin.tasksWithSuggestedFilename.removeValue(forKey: task.taskId)
-        BDPlugin.tasksWithContentLengthOverride.removeValue(forKey: task.taskId)
         let responseBody = getResponseBody(taskId: task.taskId)
-        BDPlugin.responseBodyData.removeValue(forKey: task.taskId)
-        BDPlugin.taskIdsThatCanResume.remove(task.taskId)
         let taskWasProgramaticallyCanceled: Bool = BDPlugin.taskIdsProgrammaticallyCancelled.remove(task.taskId) != nil
         guard error == nil else {
             // handle the error if this task wasn't programatically cancelled (in which
@@ -379,7 +374,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
         }
         UrlSessionDelegate.urlSession = URLSession(configuration: config, delegate: UrlSessionDelegate.instance, delegateQueue: nil)
     }
-
+    
     /// Return all tasks in this urlSession
     static func getAllTasks() async -> [Task] {
         UrlSessionDelegate.createUrlSession()

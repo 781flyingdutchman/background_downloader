@@ -63,16 +63,16 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
         let terminator = "\(lineFeed)--\(Uploader.boundary)--\(lineFeed)" // after last file
         guard let filePath = getFilePath(for: task) else {return false}
         let filesData = filePath.isEmpty
-            ? extractFilesData(task: task) // MultiUpload case
-            : [(task.fileField!, filePath, task.mimeType!)] // one file Upload case
+        ? extractFilesData(task: task) // MultiUpload case
+        : [(task.fileField!, filePath, task.mimeType!)] // one file Upload case
         for (fileField, path, mimeType) in filesData {
             if !FileManager.default.fileExists(atPath: path) {
                 os_log("File to upload does not exist at %@", log: log, type: .error, path)
                 return false
             }
             let contentDispositionString =
-                "Content-Disposition: form-data; name=\"\(browserEncode(fileField))\"; "
-                + "filename=\"\(browserEncode(path.components(separatedBy: "/").last!))\"\(lineFeed)"
+            "Content-Disposition: form-data; name=\"\(browserEncode(fileField))\"; "
+            + "filename=\"\(browserEncode(path.components(separatedBy: "/").last!))\"\(lineFeed)"
             let contentTypeString = "Content-Type: \(mimeType)\(lineFeed)\(lineFeed)"
             let fileUrl = URL(fileURLWithPath: path)
             guard let inputStream = InputStream(url: fileUrl) else {

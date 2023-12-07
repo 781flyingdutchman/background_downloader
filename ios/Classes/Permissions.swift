@@ -107,5 +107,5 @@ public func requestPermission(for permissionType: PermissionType) async -> Permi
         }
     }
     return .granted
-
+    
 }

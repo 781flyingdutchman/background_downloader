@@ -313,29 +313,29 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
     // a retry is not needed: if it is needed, a `waitingToRetry` progress update
     // will be generated on the Dart side
     switch (status) {
-    case .complete:
-        processProgressUpdate(task: task, progress: 1.0)
-    case .failed:
-        if !retryNeeded {
-            processProgressUpdate(task: task, progress: -1.0)
-        }
-    case .canceled:
-        processProgressUpdate(task: task, progress: -2.0)
-    case .notFound:
-        processProgressUpdate(task: task, progress: -3.0)
-    case .paused:
-        processProgressUpdate(task: task, progress: -5.0)
-    default:
-        break
+        case .complete:
+            processProgressUpdate(task: task, progress: 1.0)
+        case .failed:
+            if !retryNeeded {
+                processProgressUpdate(task: task, progress: -1.0)
+            }
+        case .canceled:
+            processProgressUpdate(task: task, progress: -2.0)
+        case .notFound:
+            processProgressUpdate(task: task, progress: -3.0)
+        case .paused:
+            processProgressUpdate(task: task, progress: -5.0)
+        default:
+            break
     }
     
     if providesStatusUpdates(downloadTask: task) || retryNeeded {
         let finalTaskException = taskException == nil
-            ? TaskException(type: .general, httpResponseCode: -1, description: "")
-            : taskException
+        ? TaskException(type: .general, httpResponseCode: -1, description: "")
+        : taskException
         let arg: [Any?] = status == .failed
-            ? [status.rawValue, finalTaskException!.type.rawValue, finalTaskException!.description, finalTaskException!.httpResponseCode, responseBody] as [Any?]
-            : [status.rawValue, responseBody, mimeType, charSet] as [Any?]
+        ? [status.rawValue, finalTaskException!.type.rawValue, finalTaskException!.description, finalTaskException!.httpResponseCode, responseBody] as [Any?]
+        : [status.rawValue, responseBody, mimeType, charSet] as [Any?]
         if !postOnBackgroundChannel(method: "statusUpdate", task: task, arg: arg) {
             // store update locally as a merged task/status JSON string, without error info
             guard let jsonData = try? JSONEncoder().encode(TaskStatusUpdate(task: task, taskStatus: status))
@@ -350,6 +350,11 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
         BDPlugin.progressInfo.removeValue(forKey: task.taskId)
         BDPlugin.localResumeData.removeValue(forKey: task.taskId)
         BDPlugin.remainingBytesToDownload.removeValue(forKey: task.taskId)
+        BDPlugin.tasksWithSuggestedFilename.removeValue(forKey: task.taskId)
+        BDPlugin.tasksWithContentLengthOverride.removeValue(forKey: task.taskId)
+        BDPlugin.responseBodyData.removeValue(forKey: task.taskId)
+        BDPlugin.taskIdsThatCanResume.remove(task.taskId)
+        BDPlugin.taskIdsProgrammaticallyCancelled.remove(task.taskId)
     }
 }
 
@@ -552,8 +557,8 @@ func directoryForTask(task: Task) throws ->  URL {
         documentsURL = URL(fileURLWithPath: "/")
     }
     return task.directory.isEmpty
-        ? documentsURL
-        : documentsURL.appendingPathComponent(task.directory)
+    ? documentsURL
+    : documentsURL.appendingPathComponent(task.directory)
     
 }
 

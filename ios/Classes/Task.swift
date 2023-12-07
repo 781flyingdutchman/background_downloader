@@ -240,14 +240,14 @@ enum ExceptionType: String {
 }
 
 /**
-* Contains error information associated with a failed [Task]
-*
-* The [type] categorizes the error
-* The [httpResponseCode] is only valid if >0 and may offer details about the
-* nature of the error
-* The [description] is typically taken from the platform-generated
-* error message, or from the plugin. The localization is undefined
-*/
+ * Contains error information associated with a failed [Task]
+ *
+ * The [type] categorizes the error
+ * The [httpResponseCode] is only valid if >0 and may offer details about the
+ * nature of the error
+ * The [description] is typically taken from the platform-generated
+ * error message, or from the plugin. The localization is undefined
+ */
 struct TaskException {
     var type: ExceptionType
     var httpResponseCode: Int = -1
@@ -257,7 +257,7 @@ struct TaskException {
 func taskException(jsonString: String) -> TaskException {
     if let jsonMap = try! JSONSerialization.jsonObject(with: jsonString.data(using: .utf8)!, options: []) as? [String: Any] {
         return TaskException(type: ExceptionType(rawValue: jsonMap["type"] as! String) ?? ExceptionType.general
-, httpResponseCode: jsonMap["httpResponseCode"] as? Int ?? -1, description:  jsonMap["description"] as! String  )
+                             , httpResponseCode: jsonMap["httpResponseCode"] as? Int ?? -1, description:  jsonMap["description"] as! String  )
     }
     return TaskException(type: .general, description: "Unknown error")
 }

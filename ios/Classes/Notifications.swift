@@ -40,29 +40,29 @@ enum NotificationType : Int {
 class GroupNotification {
     let name: String
     let notificationConfig: NotificationConfig
-
+    
     private var notifications: [Task : NotificationType]
-
+    
     init(name: String, notificationConfig: NotificationConfig) {
         self.name = name
         self.notificationConfig = notificationConfig
         self.notifications = [:]
     }
-
+    
     /// NotificationId derived from group name
     var notificationId: String {
         get {
             return "groupNotification:\(name)"
         }
     }
-
+    
     /// Total number of notifications in this group
     var numTotal: Int {
         get {
             return notifications.count
         }
     }
-
+    
     /// Progress expressed as [numFinished]/[numTotal], except
     /// return 2.0 if numTotal is 0, to suggest that progress
     /// is undetermined
@@ -75,7 +75,7 @@ class GroupNotification {
             }
         }
     }
-
+    
     /// Number of "finished" notifications in this group.
     ///
     /// A "finished" notification is one that is not .running,
@@ -86,7 +86,7 @@ class GroupNotification {
             return notifications.filter { (_, v) in v != NotificationType.running }.count
         }
     }
-
+    
     /// Number of "failed" notifications in this group.
     ///
     /// A "failed" notification is one of type .error
@@ -96,14 +96,14 @@ class GroupNotification {
             return notifications.filter { (_, v) in v == NotificationType.error }.count
         }
     }
-
+    
     /// True if all tasks finished, regardless of outcome
     var isFinished: Bool {
         get {
             return numFinished == numTotal
         }
     }
-
+    
     ///
     /// Return true if this group has an error
     ///
@@ -112,7 +112,7 @@ class GroupNotification {
             return numFailed > 0
         }
     }
-
+    
     /// Returns a Set of running tasks in this notificationGroup
     var runningTasks: Set<Task> {
         get {
@@ -121,7 +121,7 @@ class GroupNotification {
             }.keys)
         }
     }
-
+    
     /// Int representing this group's state. If this number
     /// does not change, the group state did not change.
     ///
@@ -132,7 +132,7 @@ class GroupNotification {
             return 1000 * numTotal + numFinished
         }
     }
-
+    
     /// Update a [task] and [notificationType] to this group,
     /// and return True if this led to change in [groupState]
     func update(task: Task, notificationType: NotificationType) -> Bool {
@@ -347,7 +347,7 @@ func registerNotificationCategories() {
     // get values from shared preferences
     let defaults = UserDefaults.standard
     let localize = defaults.dictionary(forKey: BDPlugin.keyConfigLocalize)
-
+    
     // define the actions
     let cancelAction = UNNotificationAction(identifier: "cancel_action",
                                             title: localize?["Cancel"] as? String ?? "Cancel",

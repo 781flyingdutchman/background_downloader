@@ -8,7 +8,7 @@ let log = OSLog.init(subsystem: "BackgroundDownloader", category: "Downloader")
 
 /// Main Downloader plugin object, handles incoming methodCalls
 public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate {
-
+    
     static let instance = BDPlugin()
     
     public static var defaultResourceTimeout = 4 * 60 * 60.0 // in seconds
@@ -23,7 +23,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     public static var keyConfigProxyPort = "com.bbflight.background_downloader.config.proxyPort"
     public static var keyConfigCheckAvailableSpace = "com.bbflight.background_downloader.config.checkAvailableSpace"
     public static var forceFailPostOnBackgroundChannel = false
-        
+    
     static var progressInfo = [String: (lastProgressUpdateTime: TimeInterval,
                                         lastProgressValue: Double,
                                         lastTotalBytesDone: Int64,
@@ -54,7 +54,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     public static func setPluginRegistrantCallback(_ callback: @escaping FlutterPluginRegistrantCallback) {
         flutterPluginRegistrantCallback = callback
     }
-
+    
     
     /// Handler for Flutter plugin method channel calls
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -133,8 +133,8 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         let notificationConfigJsonString = args[1] as? String
         let isResume = args.count == 5
         let resumeDataAsBase64String = isResume
-            ? args[2] as? String ?? ""
-            : ""
+        ? args[2] as? String ?? ""
+        : ""
         doEnqueue(taskJsonString: taskJsonString, notificationConfigJsonString: notificationConfigJsonString, resumeDataAsBase64String: resumeDataAsBase64String, result: result)
     }
     
@@ -357,7 +357,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             updateNotification(task: task, notificationType: notificationType, notificationConfig: notificationConfig)
         }
     }
-
+    
     
     /// Returns a JSON String of a map of [ResumeData], keyed by taskId, that has been stored
     /// in local shared preferences because they could not be delivered to the Dart side.
@@ -411,7 +411,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         }
         result(await moveToSharedStorage(filePath: filePath, destination: destination, directory: directory))
     }
-
+    
     /// Returns path to file in a SharedStorage destination, or null
     private func methodPathInSharedStorage(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let args = call.arguments as! [Any]
@@ -425,7 +425,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         }
         result(await pathInSharedStorage(filePath: filePath, destination: destination, directory: directory))
     }
-
+    
     
     /// Opens to file represented by the Task or filePath using iOS standard
     ///
@@ -453,11 +453,11 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         success = doOpenFile(filePath: filePath!, mimeType: mimeType)
     }
     
-     /// Update the status of one chunk (part of a ParallelDownloadTask), and returns
-     /// the status of the parent task based on the 'sum' of its children, or null
-     /// if unchanged
-     ///
-     /// Arguments are the parent TaskId, chunk taskId, taskStatusOrdinal
+    /// Update the status of one chunk (part of a ParallelDownloadTask), and returns
+    /// the status of the parent task based on the 'sum' of its children, or null
+    /// if unchanged
+    ///
+    /// Arguments are the parent TaskId, chunk taskId, taskStatusOrdinal
     private func methodUpdateChunkStatus(call: FlutterMethodCall, result: @escaping FlutterResult) {
         let args = call.arguments as! [Any]
         guard
@@ -504,7 +504,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         }
         result(nil)
     }
-
+    
     /// Return the authorization status of a permission, passed as the rawValue of the
     /// [Permissionequest] enum
     private func methodPermissionStatus(call: FlutterMethodCall, result: @escaping FlutterResult) async {
@@ -519,7 +519,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         let status = await requestPermission(for: permissionType)
         result(status.rawValue)
     }
-
+    
     
     /// Sets or resets flag to force failing posting on background channel
     ///
@@ -543,7 +543,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         let resultTask = suggestedFilenameFromResponseHeaders(task: task, responseHeaders: ["Content-Disposition" : contentDisposition], unique: true)
         result(resultTask.filename)
     }
-
+    
     //MARK: UNUserNotificationCenterDelegate
     
     @MainActor

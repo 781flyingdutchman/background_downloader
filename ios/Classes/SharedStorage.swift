@@ -48,8 +48,8 @@ public func moveToSharedStorage(filePath: String, destination: SharedStorage, di
     switch destination {
         case .images, .video:
             return await moveToPhotoLibrary(filePath: filePath, destination: destination)
-    default:
-        return moveToFakeSharedStorage(filePath: filePath, destination: destination, directory: directory)
+        default:
+            return moveToFakeSharedStorage(filePath: filePath, destination: destination, directory: directory)
     }
 }
 
@@ -69,7 +69,7 @@ private func moveToPhotoLibrary(filePath: String, destination: SharedStorage) as
     let result = await withCheckedContinuation { continuation in
         PHPhotoLibrary.shared().performChanges({
             let assetChangeRequest = destination == .video ? PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: fileURL) :
-                PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: fileURL)
+            PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: fileURL)
             localId = assetChangeRequest?.placeholderForCreatedAsset?.localIdentifier
         })
         { (success, error: Error?) in
@@ -153,13 +153,13 @@ public func directoryForSharedStorage(destination: SharedStorage, directory: Str
             
     }
     let documentsURL =
-        try? FileManager.default.url(for: FileManager.SearchPathDirectory.documentDirectory,
+    try? FileManager.default.url(for: FileManager.SearchPathDirectory.documentDirectory,
                                  in: .userDomainMask,
                                  appropriateFor: nil,
                                  create: true)
     return directory.isEmpty
-        ? documentsURL?.appendingPathComponent(dir)
-        : documentsURL?.appendingPathComponent(dir).appendingPathComponent(directory)
+    ? documentsURL?.appendingPathComponent(dir)
+    : documentsURL?.appendingPathComponent(dir).appendingPathComponent(directory)
 }
 
 private func moveToFakeSharedStorage(filePath: String, destination: SharedStorage, directory: String) -> String? {
