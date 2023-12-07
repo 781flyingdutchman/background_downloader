@@ -96,6 +96,13 @@ Return the platform version as a String:
 * On iOS this is the iOS version, e.g. "16.1"
 * On desktop this is a description of the OS version, not parsable
 
+### Add `ready`
+
+If initializing a non-default `PersistentStorage` such as `SqlitePersistentStorage` you may need to wait for database initialization and perhaps migration to complete before using the downloader. Call `await FileDowloader().ready` before the first call that involves the persistent storage. Because initialization is often followed immediately by the `trackTasks` call, that call waits for `ready`, so this is valid:
+```dart
+await FileDownloader(persistentStorage: SqlitePersistentStorage()).trackTasks();
+```
+
 ### Bug fixes and other improvements
 * Fixes Pause notification issue on iOS
 * Fixes issue with priority for multi-part file uploads

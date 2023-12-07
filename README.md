@@ -338,9 +338,10 @@ Central monitoring can be done by listening to an updates stream, or by register
 To ensure your callbacks or listener capture events that may have happened when your app was suspended in the background, call `resumeFromBackground` right after registering your callbacks or listener.
 
 In summary, to track your tasks persistently, follow these steps in order, immediately after app startup:
-1. Register an event listener or callback(s) to process status and progress updates
-2. call `await FileDownloader().trackTasks()` if you want to track the tasks in a persistent database
-3. call `await FileDownloader().resumeFromBackground()` to ensure events that happened while your app was in the background are processed
+1. If using a non-default `PersistentStorage` backend, initialize with `FileDownloader(persistentStorage: MyPersistentStorage())` and wait for the initialization to complete by calling `await FileDownloader().ready` (see [using the database](#using-the-database-to-track-tasks) for details on `PersistentStorage`).
+2. Register an event listener or callback(s) to process status and progress updates
+3. call `await FileDownloader().trackTasks()` if you want to track the tasks in a persistent database
+4. call `await FileDownloader().resumeFromBackground()` to ensure events that happened while your app was in the background are processed
 
 The rest of this section details [event listeners](#using-an-event-listener), [callbacks](#using-callbacks) and the [database](#using-the-database-to-track-tasks) in detail.
 
@@ -429,7 +430,7 @@ print('Taskid ${record.taskId} with task ${record.task} has '
 You can interact with the `database` using `allRecords`, `allRecordsOlderThan`, `recordForId`,`deleteAllRecords`,
 `deleteRecordWithId` etc. If you only want to track tasks in a specific [group](#grouping-tasks), call `trackTasksInGroup` instead.
 
-By default, the downloader uses a modified version of the [localstore](https://pub.dev/packages/localstore) package to store the `TaskRecord` and other objects. To use a different persistent storage solution, create a class that implements the [PersistentStorage](https://pub.dev/documentation/background_downloader/latest/background_downloader/PersistentStorage-class.html) interface, and initialize the downloader by calling `FileDownloader(persistentStorage: yourStorageClass())` as the first use of the `FileDownloader`.
+By default, the downloader uses a modified version of the [localstore](https://pub.dev/packages/localstore) package to store the `TaskRecord` and other objects. To use a different persistent storage solution, create a class that implements the [PersistentStorage](https://pub.dev/documentation/background_downloader/latest/background_downloader/PersistentStorage-class.html) interface, and initialize the downloader by calling `FileDownloader(persistentStorage: MyPersistentStorage())` as the first use of the `FileDownloader`.
 
 As an alternative to LocalStore, use `SqlitePersistentStorage`, included in [background_downloader_sql](https://pub.dev/packages/background_downloader_sql), which supports SQLite storage and migration from Flutter Downloader.
 

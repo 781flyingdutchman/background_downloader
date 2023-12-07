@@ -37,6 +37,12 @@ abstract base class BaseDownloader {
   /// [ParallelDownloadTask]
   static const chunkGroup = 'chunk';
 
+  /// Completes when initialization is complete and downloader ready for use
+  final _readyCompleter = Completer<bool>();
+
+  /// True when initialization is complete and downloader ready for use
+  Future<bool> get ready => _readyCompleter.future;
+
   /// Persistent storage
   late final PersistentStorage _storage;
   late final Database database;
@@ -118,8 +124,13 @@ abstract base class BaseDownloader {
   /// Initializes the PersistentStorage instance and if necessary perform database
   /// migration, then initializes the subclassed implementation for
   /// desktop or native
+  ///
+  ///
   @mustCallSuper
-  Future<void> initialize() => _storage.initialize();
+  Future<void> initialize() async {
+    await _storage.initialize();
+    _readyCompleter.complete(true);
+  }
 
   /// Configures the downloader
   ///
@@ -451,6 +462,7 @@ abstract base class BaseDownloader {
   /// the app was suspended, provided you have registered your listeners
   /// or callback before calling this.
   Future<void> trackTasks(String? group, bool markDownloadedComplete) async {
+    await ready; // no database operations until ready
     trackedGroups.add(group);
     if (markDownloadedComplete) {
       final records = await database.allRecords(group: group);

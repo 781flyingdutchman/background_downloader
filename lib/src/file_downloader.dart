@@ -63,6 +63,9 @@ interface class FileDownloader {
     _downloader = BaseDownloader.instance(persistentStorage, database);
   }
 
+  /// True when initialization is complete and downloader ready for use
+  Future<bool> get ready => _downloader.ready;
+
   /// Stream of [TaskUpdate] updates for downloads that do
   /// not have a registered callback
   Stream<TaskUpdate> get updates => _downloader.updates.stream;
