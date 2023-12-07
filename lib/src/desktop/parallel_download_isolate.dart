@@ -4,7 +4,6 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
 
-import 'package:background_downloader/src/desktop/download_isolate.dart';
 import 'package:collection/collection.dart';
 
 import '../chunk.dart';
@@ -13,6 +12,7 @@ import '../models.dart';
 import '../task.dart';
 import '../utils.dart';
 import 'desktop_downloader.dart';
+import 'download_isolate.dart';
 import 'isolate.dart';
 
 /// A [ParallelDownloadTask] pings the server to get the content-length of the
@@ -34,7 +34,7 @@ import 'isolate.dart';
 /// Similarly, pause and cancel commands are sent to all chunk tasks before
 /// updating the status of the parent [ParallelDownloadTask]
 
-late final ParallelDownloadTask parentTask;
+late ParallelDownloadTask parentTask;
 var chunks = <Chunk>[]; // chunks associated with this download
 var lastTaskStatus = TaskStatus.running;
 Completer<TaskStatusUpdate> parallelTaskStatusUpdateCompleter = Completer();
@@ -69,6 +69,14 @@ Future<void> doParallelDownloadTask(
     final response = await DesktopDownloader.httpClient
         .head(Uri.parse(task.url), headers: task.headers);
     if ([200, 201, 202, 203, 204, 205, 206].contains(response.statusCode)) {
+      // get suggested filename if needed, and change task and parentTask
+      if (!task.hasFilename) {
+        task = (await taskWithSuggestedFilename(
+            task, response.headers, true)) as ParallelDownloadTask;
+        parentTask = task;
+        log.finest(
+            'Suggested filename for taskId ${task.taskId}: ${task.filename}');
+      }
       extractContentType(response.headers);
       chunks = createChunks(task, response.headers);
       for (var chunk in chunks) {

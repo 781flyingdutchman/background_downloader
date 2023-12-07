@@ -46,7 +46,7 @@ public class ParallelDownloader: NSObject {
     // downloads is the list of active parallel downloads, used to route child
     // status and progress updates
     static var downloads: [String : ParallelDownloader] = [:] // keyed by parentTask.taskId
-    let parentTask: Task
+    var parentTask: Task
     var chunks: [Chunk] = []
     var parallelDownloadContentLength: Int64 = 0
     var lastTaskStatus: TaskStatus = .enqueued
@@ -58,6 +58,34 @@ public class ParallelDownloader: NSObject {
     /// Create a new ParallelDownloader
     init(task:Task) {
         self.parentTask = task
+    }
+    
+    /// Start the parallel download by creating and enqueueing chunks based on
+    /// the
+    ///
+    /// Returns false if start was unsuccessful
+    public func start(contentLengthFromHeader: Int64, responseHeaders: [AnyHashable: Any]) -> Bool {
+        // get suggested filename if needed
+        if parentTask.filename == "?" {
+            let newTask = suggestedFilenameFromResponseHeaders(task: parentTask, responseHeaders: responseHeaders)
+            os_log("Suggested task filename for taskId %@ is %@", log: log, type: .info, newTask.taskId, newTask.filename)
+            if newTask.filename != parentTask.filename {
+                // store for future replacement, and replace now
+                BDPlugin.tasksWithSuggestedFilename[newTask.taskId] = newTask
+                parentTask = newTask
+            }
+        }
+        parallelDownloadContentLength = contentLengthFromHeader > 0 ?
+            contentLengthFromHeader :
+            getContentLength(responseHeaders: responseHeaders, task: self.parentTask)
+        extractContentType(responseHeaders: responseHeaders, task: self.parentTask)
+        ParallelDownloader.downloads[parentTask.taskId] = self
+        chunks = createChunks(task: parentTask, contentLength: parallelDownloadContentLength)
+        let success = !chunks.isEmpty && enqueueChunkTasks()
+        if !success {
+            ParallelDownloader.downloads.removeValue(forKey: parentTask.taskId)
+        }
+        return success
     }
     
     /// resume: reconstruct [chunks] and wait for all chunk tasks to complete.
@@ -78,24 +106,6 @@ public class ParallelDownloader: NSObject {
         })
         lastTaskStatus = .paused
         return true
-    }
-    
-    /// Start the parallel download by creating and enqueueing chunks based on
-    /// the
-    ///
-    /// Returns false if start was unsuccessful
-    public func start(contentLengthFromHeader: Int64, responseHeaders: [AnyHashable: Any]) -> Bool {
-        parallelDownloadContentLength = contentLengthFromHeader > 0 ?
-            contentLengthFromHeader :
-            getContentLength(responseHeaders: responseHeaders, task: self.parentTask)
-        extractContentType(responseHeaders: responseHeaders, task: self.parentTask)
-        ParallelDownloader.downloads[parentTask.taskId] = self
-        chunks = createChunks(task: parentTask, contentLength: parallelDownloadContentLength)
-        let success = !chunks.isEmpty && enqueueChunkTasks()
-        if !success {
-            ParallelDownloader.downloads.removeValue(forKey: parentTask.taskId)
-        }
-        return success
     }
     
     /// Returns a list of chunk information for this task, and sets
@@ -367,6 +377,7 @@ public class ParallelDownloader: NSObject {
         processStatusUpdate(task: parentTask, status: status, taskException: taskException, responseBody: responseBody, mimeType: mimeType, charSet: charSet)
         BDPlugin.mimeTypes.removeValue(forKey: taskId)
         BDPlugin.charSets.removeValue(forKey: taskId)
+        BDPlugin.tasksWithSuggestedFilename.removeValue(forKey: taskId)
         ParallelDownloader.downloads.removeValue(forKey: taskId)
     }
 }

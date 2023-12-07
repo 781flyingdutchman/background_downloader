@@ -2720,6 +2720,32 @@ void main() {
       expect(await file.length(), equals(urlWithContentLengthFileSize));
       await file.delete();
     });
+
+    testWidgets('parallelDownloadTask with ? for filename', (widgetTester) async {
+      // delete old downloads
+      task = DownloadTask(url: urlWithContentLength, filename: '5MB-test.ZIP');
+      try {
+        File(await task.filePath()).deleteSync();
+      } catch (e) {}
+      task =
+          DownloadTask(url: urlWithContentLength, filename: '5MB-test (1).ZIP');
+      try {
+        File(await task.filePath()).deleteSync();
+      } catch (e) {}
+      task =
+          DownloadTask(url: urlWithContentLength, filename: '5MB-test (2).ZIP');
+      try {
+        File(await task.filePath()).deleteSync();
+      } catch (e) {}
+      task = ParallelDownloadTask(
+          url: urlWithContentLength, filename: DownloadTask.suggestedFilename);
+      final result = await FileDownloader().download(task);
+      expect(result.task.filename, equals('5MB-test.ZIP'));
+      final file = File(await result.task.filePath());
+      expect(await file.exists(), isTrue);
+      expect(await file.length(), equals(urlWithContentLengthFileSize));
+      await file.delete();
+    });
   });
 
   group('Content-Type, mimeType and charSet', () {
