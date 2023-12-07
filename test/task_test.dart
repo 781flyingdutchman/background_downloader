@@ -150,7 +150,7 @@ void main() {
     expect(task3.directory, equals(''));
   });
 
-  test('cookieHeader', () async {
+  test('cookieHeader selection', () async {
     // test that the right cookies are included/excluded, based on cookie
     // settings and the url
     var url = 'https://www.google.com/test/something';
@@ -232,5 +232,17 @@ void main() {
             'WUUID_TEST'
           ]));
     }
+  });
+
+  test('cookies from real result', () {
+    const setCookie =
+        '1P_JAR=2023-12-07-04; expires=Sat, 06-Jan-2024 04:35:39 GMT; path=/; domain=.google.com; Secure,AEC=Ackid1SEIH1DSwhiGIkMBIfXQvDRUa7r-KDyUd6VRiIy7ymCzAdeQhHrEw; expires=Tue, 04-Jun-2024 04:35:39 GMT; path=/; domain=.google.com; Secure; HttpOnly; SameSite=lax,NID=511=gw-jjbhBPUTQAaqPg8wu3JI8t_Q_cxjtFAlHVgmq4qgEZF4hJuRLqnVVV13rQawScVpvgn-QVy0YFaJ9eS7Y9vXWduG33xRARAH6SbZ23HAzhQRierJWVzdyurmrukkzJJZjgUC5gPhqxWS4NgewajCbOkGItfegf5_ukstq5RA; expires=Fri, 07-Jun-2024 04:35:39 GMT; path=/; domain=.google.com; HttpOnly';
+    final cookies = Request.cookiesFromSetCookie(setCookie);
+    expect(cookies.length, equals(3));
+    expect(cookies.first.name, equals('1P_JAR'));
+    expect(cookies.first.value, equals('2023-12-07-04'));
+    expect(cookies.first.expires, equals(DateTime.utc(2024, 1, 6, 4, 35, 39)));
+    expect(cookies.first.path, equals('/'));
+    expect(cookies.first.domain, equals('.google.com'));
   });
 }

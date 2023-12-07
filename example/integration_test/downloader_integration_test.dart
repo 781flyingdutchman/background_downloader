@@ -2881,6 +2881,16 @@ void main() {
     });
   });
 
+  group('Cookies', () {
+    testWidgets('cookie from live set-cookie response header',
+        (widgetTester) async {
+      final response = await FileDownloader().request(task);
+      print(response.headers['set-cookie']);
+      final cookies = Request.cookieHeader(response, task.url);
+      expect(cookies['Cookie']?.startsWith('1P_JAR'), isTrue);
+    });
+  });
+
   group('Priority and TaskQueue', () {
     testWidgets('High priority', (widgetTester) async {
       task = task.copyWith(priority: 0);

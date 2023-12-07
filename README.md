@@ -188,6 +188,7 @@ FileDownloader().configureNotification(
   - [Grouping tasks](#grouping-tasks)
   - [Task queues](#task-queues)
 - [Server requests](#server-requests)
+- [Cookies](#cookies)
 - [Optional parameters](#optional-parameters)
 - [Initial setup](#initial-setup)
 - [Configuration](#configuration)
@@ -748,6 +749,26 @@ To make a regular server request (e.g. to obtain a response from an API end poin
 
 Because requests are meant to be immediate, they are not enqueued like a `Task` is, and do not allow for status/progress monitoring.
 
+## Cookies
+
+Servers may ask you to set a cookie (via the 'Set-Cookie' header in the response), to be passed along to the next request (in the 'Cookie' header). 
+This may be needed for authentication, or for session state. 
+
+The method `Request.cookieHeader` makes it easy to insert cookies in a request. The first argument `cookies` is either a `http.Response` object (as returned by the `FileDownloader().request` method), a `List<Cookie>`, or a String value from a 'Set-Cookie' header. It returns a `{'Cookie': '...'}` header that can be added to the next request.
+The second argument is the `url` you intend to use the cookies with. This is needed to filter the appropriate cookies based on domain and path.
+
+For example:
+```dart
+final loginResponse = await FileDownloader()
+   .request(Request(url: 'https://server.com/login', headers: {'Auth': 'Token'}));
+const downloadUrl = 'https://server.com/download';
+// add the cookies from the response to the task
+final task = DownloadTask(url: downloadUrl, headers: {
+  'Auth': 'Token',
+  ...Request.cookieHeader(loginResponse, downloadUrl) // inserts the 'Cookie' header
+});
+```
+
 ## Optional parameters
 
 The `DownloadTask`, `UploadTask` and `Request` objects all take several optional parameters that define how the task will be executed.  Note that a `Task` is a subclass of `Request`, and both `DownloadTask` and `UploadTask` are subclasses of `Task`, so what applies to a `Request` or `Task` will also apply to a `DownloadTask` and `UploadTask`.
@@ -760,18 +781,7 @@ If provided, these parameters (presented as a `Map<String, String>`) will be app
 
 #### Headers
 
-Optionally, `headers` can be added to a `Request` or `Task`, which will be added to the HTTP request. This may be useful for authentication, or for cookies. For example:
-```dart
-final loginResponse = await FileDownloader()
-   .request(Request(url: 'https://server.com/login', headers: {'Auth': 'Token'}));
-const downloadUrl = 'https://server.com/download';
-// pass the cookies from the 'set-cookie' response header to the server
-final task = DownloadTask(url: downloadUrl, headers: {
-  'Auth': 'Token',
-  ...Request.cookieHeader(loginResponse.headers['set-cookie'], downloadUrl)
-});
-```
-
+Optionally, `headers` can be added to a `Request` or `Task`, which will be added to the HTTP request. This may be needed for authentication or session [cookies](#cookies).
 
 #### HTTP request method
 

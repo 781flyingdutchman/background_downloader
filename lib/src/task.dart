@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' show Random;
 import 'dart:typed_data';
 
+import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as path;
@@ -126,15 +127,20 @@ base class Request {
       return {};
     }
     final List<Cookie> cookieList = switch (cookies) {
+      http.Response response =>
+        cookiesFromSetCookie(response.headers['set-cookie'] ?? ''),
+      List<Cookie> list => list,
       String _ => cookiesFromSetCookie(cookies),
-      List<Cookie> _ => cookies,
       _ => throw ArgumentError(
-          'cookies parameter must be a String or a List<Cookie>')
+          'cookies parameter must be a http.Response object, a String or a List<Cookie>')
     };
     final path = uri.path.isNotEmpty ? uri.path : '/';
     final validCookies = cookieList.where((cookie) =>
         (cookie.maxAge == null || cookie.maxAge! > 0) &&
-        (cookie.domain == null || uri.host.endsWith(cookie.domain!)) &&
+        (cookie.domain == null ||
+            uri.host.endsWith(cookie.domain!) ||
+            (cookie.domain!.startsWith('.') &&
+                uri.host == cookie.domain!.substring(1))) &&
         (cookie.path == null || path.startsWith(cookie.path!)) &&
         (cookie.expires == null || cookie.expires!.isAfter(DateTime.now())) &&
         (!cookie.secure || uri.scheme == 'https'));
