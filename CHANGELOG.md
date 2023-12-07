@@ -1,27 +1,44 @@
 ## 8.0.0
 
+### Summary of changes:
+* Permissions must now be explicitly checked and requested to improve user experience and give control to developer
+* Add images and video to iOS Photo Library when using `SharedStorage.images` or `SharedStorage.video`
+* `SqlitePersistentStorage` backing database moved to separate package `background_downloader_sql` to reduce app size for default
+* Add notification for groups of downloads
+* Add `BaseDirectory.root` to allow absolute file path (use with care!)
+* Add fields `mimeType` and `charSet` to `TaskStatusUpdate`
+* Add `Request.cookieHeader` to parse 'Set-Cookie' response header
+* Add `platformVersion` method
+* Add `ready` getter to wait for initialization if needed
+* Bug fixes and other improvements
+
 ### BREAKING: Permissions
 
 Permissions are no longer automatically requested. You need to explicitly check, and if necessary ask for permissions ahead of calling methods that use them.
 
-User permissions may be needed to display notifications, to move files to external storage (on Android) and to add images or video to the iOS Photo Library. These permissions should be checked and if needed requested before executing those operations.
+User permissions may be needed to display notifications, to move files to shared storage (on Android) and to add images or video to the iOS Photo Library. These permissions should be checked and if needed requested before executing those operations.
 
 You can use a package like [permission_handler](https://pub.dev/packages/permission_handler), or use the `FileDownloader().permissions` object, which has three methods:
 * `status`: returns a `PermissionsStatus`. On Android this is either `granted` or `denied`. If you have not asked for permission yet, then Android returns `denied` and iOS returns `.undetermined`. iOS can also return `.partial`
-* `request`: to request the actual permission. Only do this if you have confirmed that the permission is not already `granted` and only request one permission at a time
+* `request`: to request the actual permission. Only do this if you have confirmed that the permission is not already `granted`
 * `shouldShowRationale`: for Android only, if `true` you should show a UI element (e.g. a dialog) to explain to the user why this permission is necessary
 
-All three methods take one `PermissionType` parameter, e.g. `PermissionType.notifications`.
+All three methods take one `PermissionType` parameter:
+* `notifications`, to display notifications
+* `androidSharedStorage`, to move files to external storage on Android, before API 29
+* `iosAddToPhotoLibrary`, to move files to `SharedStorage.images` or `SharedStorage.video` on iOS, as this adds those files to the Photo Library
+* `iosChangePhotoLibrary`, to access the path to files moved to the Photos Library
 
 For example, to request permissions for notifications:
 ```dart
+final permissionType = PermissionType.notifications;
 var status = await FileDownloader().permissions.status(permissionType);
 if (status != PermissionStatus.granted) {
-  if (await FileDownloader().permissions.shouldShowRationale(permissionType)) {
-    await showRationaleDialog(permissionType); // Show a dialog with rationale
-  }
-  status = await FileDownloader().permissions.request(permissionType);
-  debugPrint('Permission for $permissionType was $status');
+if (await FileDownloader().permissions.shouldShowRationale(permissionType)) {
+await showRationaleDialog(permissionType); // Show a dialog with rationale
+}
+status = await FileDownloader().permissions.request(permissionType);
+debugPrint('Permission for $permissionType was $status');
 }
 ```
 
@@ -29,7 +46,7 @@ The downloader will check permission status before each action, e.g. will not sh
 
 Note that permissions are very platform and version dependent, e.g. notification permissions on Android are only required as of API 33, and iOS 14 introduced new Photo Library permissions. If you want to get into details, you can determine the platform version you're running by calling `await FileDownloader().platformVersion()`.
 
-### BREAKING: Use iOS Photos Library for .videos and .images SharedStorage destinations
+### BREAKING: Use iOS Photos Library for .video and .images SharedStorage destinations
 
 Previously, .images and .video destinations were 'faked' on iOS. With this change, when calling `moveToSharedStorage`, the file is added to the Photos Library (provided the user grants that permission).
 
@@ -50,7 +67,7 @@ The reason for this two-step approach is that typically you only want to add to 
 
 If you use the default `PersistentStorage` then nothing changes. Otherwise:
 * `SqlitePersistentStorage` moved to a separate package, and the migrator used is `SqlPersistentStorageMigrator`
-* `PersistentStorage` is now an interface, not a call, so must be implemented instead of extended
+* `PersistentStorage` is now an interface, not a class, and `LocalStorePersistentStorage` is the default implementation
 * `PersistentStorageMigrator` is now an interface, and `BasePersistentStorageMigrator` is a basic implementation that can be extended to add migration options (as is done in `SqlPersistentStorageMigrator`)
 
 Add `background_downloader_sql` to your dependencies in pubspec.yaml to get `SqlitePersistentStorage` and SQLite related migration options back.
@@ -88,11 +105,25 @@ You can now pass an absolute path to the downloader by using `BaseDirectory.root
 
 If the server provides this information via the `Content-Type` header then these fields will be non-null only for final states.
 
-### Remove `awaitGroup`
-* Removed all references to `awaitGroup` as the logic for the convenience methods has changed
-* Removed all references to `modifiedTasks` in `PersistentStorage` interface
-* If you use a convenience function, your task _must_ generate status updates (by setting the `updates` field to `Updates.status` - the default - or `Updates.statusAndProgress`)
-* If you use convenience function and specify a progress callback, your task _must_ also generate status updates (by setting the `updates` field to `Updates.statusAndProgress`)
+### Add Request.cookieHeader to parse 'Set-Cookie' response header
+
+Servers may ask you to set a cookie (via the 'Set-Cookie' header in the response), to be passed along to the next request (in the 'Cookie' header).
+This may be needed for authentication, or for session state.
+
+The method `Request.cookieHeader` makes it easy to insert cookies in a request. The first argument `cookies` is either a `http.Response` object (as returned by the `FileDownloader().request` method), a `List<Cookie>`, or a String value from a 'Set-Cookie' header. It returns a `{'Cookie': '...'}` header that can be added to the next request.
+The second argument is the `url` you intend to use the cookies with. This is needed to filter the appropriate cookies based on domain and path.
+
+For example:
+```dart
+final loginResponse = await FileDownloader()
+   .request(Request(url: 'https://server.com/login', headers: {'Auth': 'Token'}));
+const downloadUrl = 'https://server.com/download';
+// add the cookies from the response to the task
+final task = DownloadTask(url: downloadUrl, headers: {
+  'Auth': 'Token',
+  ...Request.cookieHeader(loginResponse, downloadUrl) // inserts the 'Cookie' header
+});
+```
 
 
 ### Add platformVersion method
@@ -108,11 +139,19 @@ If initializing a non-default `PersistentStorage` such as `SqlitePersistentStora
 await FileDownloader(persistentStorage: SqlitePersistentStorage()).trackTasks();
 ```
 
+### Remove `awaitGroup`
+* Removed all references to `awaitGroup` as the logic for the convenience methods such as `download` has changed
+* Removed all references to `modifiedTasks` in `PersistentStorage` interface
+* If you use a convenience function, your task _must_ generate status updates (by setting the `updates` field to `Updates.status` - the default - or `Updates.statusAndProgress`)
+* If you use a convenience function and specify a progress callback, your task _must_ also generate status updates (by setting the `updates` field to `Updates.statusAndProgress`)
+
 ### Bug fixes and other improvements
 * Fixes Pause notification issue on iOS
 * Fixes issue with priority for multi-part file uploads
-* Fixes issue #194 (remove notification when canceling a paused task)
-* If the Task.directory starts with a path separator, it is stripped (earlier it would throw)
+* Fixes issue #194: remove notification when canceling a paused task
+* Fixes issue #200: prefer UTF-8 filename in Content-Disposition parse
+* Fixes issue #202: add minimum deployment target to PodSpec on iOS
+* Strip leading path separator from Task.directory instead of throwing an exception
 * Refactors code to improve readability
 
 

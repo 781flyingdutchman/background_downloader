@@ -606,7 +606,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         // first check and potentially ask for permissions
         val status = PermissionsService.getPermissionStatus(
             applicationContext,
-            PermissionType.androidExternalStorage
+            PermissionType.androidSharedStorage
         )
         if (status == PermissionStatus.granted) {
             result.success(
