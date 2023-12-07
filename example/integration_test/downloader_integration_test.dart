@@ -286,7 +286,7 @@ void main() {
       await enqueueAndFileExists(path);
       // root directory: same destination as applicationLibrary, using
       // the 'directory' field
-      final dir = dirname(path).substring(1); // strip leading path separator
+      final dir = dirname(path); // no need to remove leading '/'
       final oldPath = path;
       task = DownloadTask(
           url: workingUrl,

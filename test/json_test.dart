@@ -169,7 +169,7 @@ void main() {
       final statusUpdate = TaskStatusUpdate(
           task, TaskStatus.failed, TaskConnectionException('test'));
       const expected =
-          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"priority":5,"metaData":"metaData","displayName":"","taskType":"DownloadTask"},"taskStatus":4,"exception":{"type":"TaskConnectionException","description":"test"},"responseBody":null}';
+          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"priority":5,"metaData":"metaData","displayName":"","taskType":"DownloadTask"},"taskStatus":4,"exception":{"type":"TaskConnectionException","description":"test"},"responseBody":null,"mimeType":null,"charSet":null}';
       expect(jsonEncode(statusUpdate.toJson()), equals(expected));
       final update2 = TaskStatusUpdate.fromJson(jsonDecode(expected));
       expect(update2.task, equals(statusUpdate.task));
