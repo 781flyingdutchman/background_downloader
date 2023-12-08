@@ -139,6 +139,9 @@ actor GroupNotification {
     /// Update a [task] and [notificationType] to this group,
     /// and return True if this led to change in [groupState]
     func update(task: Task, notificationType: NotificationType) -> Bool {
+        guard notifications[task] != notificationType else {
+            return false
+        }
         let priorState = groupState
         notifications[task] = notificationType
         return priorState != groupState

@@ -1,3 +1,7 @@
+## 8.0.1
+
+Fix issue #208 concurrentModificationException on Android and similar in iOS
+
 ## 8.0.0
 
 ### Summary of changes:
