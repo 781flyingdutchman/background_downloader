@@ -67,11 +67,12 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
         // maps to keep track of which backgroundChannel to use
         private var bgChannelsByAppContextHash = mutableMapOf<Int, MethodChannel>()
-        private var bgChannelByActivityContextHash = mutableMapOf<Int, MethodChannel>()
+        private var bgChannelsByAppContextCount = mutableMapOf<Int, Int>() // ref counter
         var bgChannelByTaskId = mutableMapOf<String, MethodChannel>()
 
         @SuppressLint("StaticFieldLeak")
         var activity: Activity? = null //TODO check if we can lose this
+        var notificationButtonText = mutableMapOf<String, String>() // for localization
         var canceledTaskIds = mutableMapOf<String, Long>() // <taskId, timeMillis>
         var pausedTaskIds = mutableSetOf<String>() // <taskId>
         var parallelDownloadTaskWorkers = HashMap<String, ParallelDownloadTaskWorker>()
@@ -312,7 +313,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         applicationContext = flutterPluginBinding.applicationContext
-        Log.wtf(TAG, "Attaching context ${applicationContext.hashCode()} and plugin ${this.hashCode()}")
+        val hashCode = applicationContext.hashCode()
+        Log.wtf(TAG, "Attaching context $hashCode and plugin ${this.hashCode()}")
         // create channels and handler
         if (backgroundChannel == null) {
             Log.wtf(TAG, "backgroundChanel = null")
@@ -320,14 +322,17 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             // and per https://github.com/firebase/flutterfire/issues/9689 other
             // plugins can create multiple instances of the plugin
             backgroundChannel =
-                bgChannelsByAppContextHash[applicationContext.hashCode()] ?: MethodChannel(
+                bgChannelsByAppContextHash[hashCode] ?: MethodChannel(
                     flutterPluginBinding.binaryMessenger,
                     "com.bbflight.background_downloader.background"
                 )
             Log.wtf(TAG, "backgroundChanel hash = ${backgroundChannel?.hashCode()}")
         }
-        bgChannelsByAppContextHash[applicationContext.hashCode()] = backgroundChannel!!
+        bgChannelsByAppContextHash[hashCode] = backgroundChannel!!
+        val backgroundChannelCount = bgChannelsByAppContextCount[hashCode] ?: 0
+        bgChannelsByAppContextCount[hashCode] = backgroundChannelCount + 1 // ref counting
         Log.wtf(TAG, "bgChannelsByAppContextHash has ${bgChannelsByAppContextHash.count()} entries")
+        Log.wtf(TAG, "bgChannelsByAppContextCount = ${bgChannelsByAppContextCount[hashCode]}")
         channel = MethodChannel(
             flutterPluginBinding.binaryMessenger, "com.bbflight.background_downloader"
         )
@@ -351,24 +356,23 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * BackgroundChannel is only released if no more references to an engine
      * */
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        Log.wtf(TAG, "Detaching ${applicationContext.hashCode()}")
+        val hashCode = applicationContext.hashCode()
+        Log.wtf(TAG, "Detaching $hashCode")
         channel?.setMethodCallHandler(null)
         channel = null
-        val backgroundChannelCount =
-            bgChannelsByAppContextHash.count { it.value == backgroundChannel }
+        val backgroundChannelCount = bgChannelsByAppContextCount[hashCode] ?: 0
         Log.wtf(TAG, "bgChannelCount =  $backgroundChannelCount")
-
         if (backgroundChannelCount == 1) { // last engine is detaching
             // destroy backgroundChannel and remove from all maps
             Log.wtf(TAG, "Destroying bgChannel hash ${backgroundChannel?.hashCode()}")
             bgChannelsByAppContextHash =
                 bgChannelsByAppContextHash.filter { it.value != backgroundChannel } as MutableMap
-            bgChannelByActivityContextHash =
-                bgChannelByActivityContextHash.filter { it.value != backgroundChannel } as MutableMap
             bgChannelByTaskId =
                 bgChannelByTaskId.filter { it.value != backgroundChannel } as MutableMap
             backgroundChannel = null
         }
+        bgChannelsByAppContextCount[hashCode] = backgroundChannelCount - 1 // ref counting
+        Log.wtf(TAG, "bgChannelsByAppContextCount = ${bgChannelsByAppContextCount[hashCode]}")
     }
 
     /** Processes the methodCall coming from Dart */
@@ -940,50 +944,55 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * its listener may not have been initialized yet. This function therefore includes retry logic.
      */
     private fun handleIntent(intent: Intent?): Boolean {
+        Log.wtf(TAG, "Intent.action = ${intent?.action} with ${intent?.getStringExtra(NotificationRcvr.keyTask)}")
         if (intent != null && intent.action == NotificationRcvr.actionTap) {
+            // if taskJsonMapString == null, this was a main launch and we ignore
             val taskJsonMapString = intent.getStringExtra(NotificationRcvr.keyTask) ?: return true
             val notificationTypeOrdinal =
                 intent.getIntExtra(NotificationRcvr.keyNotificationType, 0)
             val notificationId = intent.getIntExtra(NotificationRcvr.keyNotificationId, 0)
-            CoroutineScope(Dispatchers.Default).launch {
-                var retries = 0
-                var success = false
-                while (retries < 5 && !success) {
-                    try {
-                        if (backgroundChannel != null && scope != null) {
-                            val resultCompleter = CompletableFuture<Boolean>()
-                            val resultHandler = ResultHandler(resultCompleter)
-                            scope?.launch {
-                                backgroundChannel?.invokeMethod(
-                                    "notificationTap",
-                                    listOf(taskJsonMapString, notificationTypeOrdinal),
-                                    resultHandler
-                                )
+            // only process notificationTap and tapOpensFile if we have task data
+            if (taskJsonMapString.isNotEmpty()) {
+                CoroutineScope(Dispatchers.Default).launch {
+                    var retries = 0
+                    var success = false
+                    while (retries < 5 && !success) {
+                        try {
+                            if (backgroundChannel != null && scope != null) {
+                                val resultCompleter = CompletableFuture<Boolean>()
+                                val resultHandler = ResultHandler(resultCompleter)
+                                scope?.launch {
+                                    backgroundChannel?.invokeMethod(
+                                        "notificationTap",
+                                        listOf(taskJsonMapString, notificationTypeOrdinal),
+                                        resultHandler
+                                    )
+                                }
+                                success = resultCompleter.join()
                             }
-                            success = resultCompleter.join()
+                        } catch (e: Exception) {
+                            Log.v(TAG, "Exception in handleIntent: $e")
                         }
-                    } catch (e: Exception) {
-                        Log.v(TAG, "Exception in handleIntent: $e")
-                    }
-                    if (!success) {
-                        delay(timeMillis = 100L shl (retries))
-                        retries++
+                        if (!success) {
+                            delay(timeMillis = 100L shl (retries))
+                            retries++
+                        }
                     }
                 }
-            }
-            // check for 'tapOpensFile'
-            if (notificationTypeOrdinal == NotificationType.complete.ordinal) {
-                val task = Json.decodeFromString<Task>(taskJsonMapString)
-                val notificationConfigJsonString =
-                    intent.extras?.getString(NotificationRcvr.keyNotificationConfig)
-                val notificationConfig =
-                    if (notificationConfigJsonString != null) Json.decodeFromString<NotificationConfig>(
-                        notificationConfigJsonString
-                    )
-                    else null
-                if (notificationConfig?.tapOpensFile == true && activity != null) {
-                    val filePath = task.filePath(activity!!)
-                    doOpenFile(activity!!, filePath, getMimeType(filePath))
+                // check for 'tapOpensFile'
+                if (notificationTypeOrdinal == NotificationType.complete.ordinal) {
+                    val task = Json.decodeFromString<Task>(taskJsonMapString)
+                    val notificationConfigJsonString =
+                        intent.extras?.getString(NotificationRcvr.keyNotificationConfig)
+                    val notificationConfig =
+                        if (notificationConfigJsonString != null) Json.decodeFromString<NotificationConfig>(
+                            notificationConfigJsonString
+                        )
+                        else null
+                    if (notificationConfig?.tapOpensFile == true && activity != null) {
+                        val filePath = task.filePath(activity!!)
+                        doOpenFile(activity!!, filePath, getMimeType(filePath))
+                    }
                 }
             }
             // dismiss notification if it is a 'complete' or 'error' notification
@@ -1023,14 +1032,18 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private fun attach(binding: ActivityPluginBinding) {
         detach()
         activity = binding.activity
-        if (backgroundChannel != null) {
-            bgChannelByActivityContextHash[binding.activity.hashCode()] = backgroundChannel!!
-        }
         scope = MainScope()
         binding.addRequestPermissionsResultListener(this)
         binding.addOnNewIntentListener(fun(intent: Intent?): Boolean {
             return handleIntent(intent)
         })
+        if (notificationButtonText.isEmpty()) {
+            // store localized strings so they can be used in notifications even when the
+            // activity is not alive
+            notificationButtonText["Cancel"] = activity!!.getString(R.string.bg_downloader_cancel)
+            notificationButtonText["Pause"] = activity!!.getString(R.string.bg_downloader_pause)
+            notificationButtonText["Resume"] = activity!!.getString(R.string.bg_downloader_resume)
+        }
     }
 
     /**
