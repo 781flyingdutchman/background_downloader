@@ -478,138 +478,135 @@ object NotificationService {
     private fun addNotificationActions(
         taskWorker: TaskWorker, notificationType: NotificationType, builder: Builder
     ) {
-        val activity = BDPlugin.activity
-        if (activity != null) {
-            val taskJsonString = Json.encodeToString(taskWorker.task)
-            // add tap action for all notifications
-            val tapIntent = taskWorker.applicationContext.packageManager.getLaunchIntentForPackage(
-                taskWorker.applicationContext.packageName
+        val taskJsonString = Json.encodeToString(taskWorker.task)
+        // add tap action for all notifications
+        val tapIntent = taskWorker.applicationContext.packageManager.getLaunchIntentForPackage(
+            taskWorker.applicationContext.packageName
+        )
+        if (tapIntent != null) {
+            tapIntent.apply {
+                setPackage(null)
+                action = NotificationRcvr.actionTap
+                addCategory(Intent.CATEGORY_LAUNCHER)
+                addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                putExtra(NotificationRcvr.keyTask, taskJsonString)
+                putExtra(NotificationRcvr.keyNotificationType, notificationType.ordinal)
+                putExtra(
+                    NotificationRcvr.keyNotificationConfig,
+                    taskWorker.notificationConfigJsonString
+                )
+                putExtra(NotificationRcvr.keyNotificationId, taskWorker.notificationId)
+            }
+            val tapPendingIntent: PendingIntent = PendingIntent.getActivity(
+                taskWorker.applicationContext,
+                taskWorker.notificationId,
+                tapIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            if (tapIntent != null) {
-                tapIntent.apply {
-                    setPackage(null)
-                    action = NotificationRcvr.actionTap
-                    addCategory(Intent.CATEGORY_LAUNCHER)
-                    addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                    putExtra(NotificationRcvr.keyTask, taskJsonString)
-                    putExtra(NotificationRcvr.keyNotificationType, notificationType.ordinal)
-                    putExtra(
+            builder.setContentIntent(tapPendingIntent)
+        }
+        // add buttons depending on notificationType
+        when (notificationType) {
+            NotificationType.running -> {
+                // cancel button when running
+                val cancelOrPauseBundle = Bundle().apply {
+                    putString(NotificationRcvr.keyTaskId, taskWorker.task.taskId)
+                }
+                val cancelIntent =
+                    Intent(taskWorker.applicationContext, NotificationRcvr::class.java).apply {
+                        action = NotificationRcvr.actionCancelActive
+                        putExtra(NotificationRcvr.keyBundle, cancelOrPauseBundle)
+                    }
+                val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
+                    taskWorker.applicationContext,
+                    taskWorker.notificationId,
+                    cancelIntent,
+                    PendingIntent.FLAG_IMMUTABLE
+                )
+                builder.addAction(
+                    R.drawable.outline_cancel_24,
+                    BDPlugin.notificationButtonText["Cancel"],
+                    cancelPendingIntent
+                )
+                if (taskWorker.taskCanResume && (taskWorker.notificationConfig?.paused != null)) {
+                    // pause button when running and paused notification configured
+                    val pauseIntent = Intent(
+                        taskWorker.applicationContext, NotificationRcvr::class.java
+                    ).apply {
+                        action = NotificationRcvr.actionPause
+                        putExtra(NotificationRcvr.keyBundle, cancelOrPauseBundle)
+                    }
+                    val pausePendingIntent: PendingIntent = PendingIntent.getBroadcast(
+                        taskWorker.applicationContext,
+                        taskWorker.notificationId,
+                        pauseIntent,
+                        PendingIntent.FLAG_IMMUTABLE
+                    )
+                    builder.addAction(
+                        R.drawable.outline_pause_24,
+                        BDPlugin.notificationButtonText["Pause"],
+                        pausePendingIntent
+                    )
+                }
+            }
+
+            NotificationType.paused -> {
+                // cancel button
+                val cancelBundle = Bundle().apply {
+                    putString(NotificationRcvr.keyTaskId, taskWorker.task.taskId)
+                    putString(
+                        NotificationRcvr.keyTask, taskJsonString
+                    )
+                }
+                val cancelIntent = Intent(
+                    taskWorker.applicationContext, NotificationRcvr::class.java
+                ).apply {
+                    action = NotificationRcvr.actionCancelInactive
+                    putExtra(NotificationRcvr.keyBundle, cancelBundle)
+                }
+                val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
+                    taskWorker.applicationContext,
+                    taskWorker.notificationId,
+                    cancelIntent,
+                    PendingIntent.FLAG_IMMUTABLE
+                )
+                builder.addAction(
+                    R.drawable.outline_cancel_24,
+                    BDPlugin.notificationButtonText["Cancel"],
+                    cancelPendingIntent
+                )
+                // resume button
+                val resumeBundle = Bundle().apply {
+                    putString(NotificationRcvr.keyTaskId, taskWorker.task.taskId)
+                    putString(
+                        NotificationRcvr.keyTask, taskJsonString
+                    )
+                    putString(
                         NotificationRcvr.keyNotificationConfig,
                         taskWorker.notificationConfigJsonString
                     )
-                    putExtra(NotificationRcvr.keyNotificationId, taskWorker.notificationId)
                 }
-                val tapPendingIntent: PendingIntent = PendingIntent.getActivity(
+                val resumeIntent = Intent(
+                    taskWorker.applicationContext, NotificationRcvr::class.java
+                ).apply {
+                    action = NotificationRcvr.actionResume
+                    putExtra(NotificationRcvr.keyBundle, resumeBundle)
+                }
+                val resumePendingIntent: PendingIntent = PendingIntent.getBroadcast(
                     taskWorker.applicationContext,
                     taskWorker.notificationId,
-                    tapIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    resumeIntent,
+                    PendingIntent.FLAG_IMMUTABLE
                 )
-                builder.setContentIntent(tapPendingIntent)
+                builder.addAction(
+                    R.drawable.outline_play_arrow_24,
+                    BDPlugin.notificationButtonText["Resume"],
+                    resumePendingIntent
+                )
             }
-            // add buttons depending on notificationType
-            when (notificationType) {
-                NotificationType.running -> {
-                    // cancel button when running
-                    val cancelOrPauseBundle = Bundle().apply {
-                        putString(NotificationRcvr.keyTaskId, taskWorker.task.taskId)
-                    }
-                    val cancelIntent =
-                        Intent(taskWorker.applicationContext, NotificationRcvr::class.java).apply {
-                            action = NotificationRcvr.actionCancelActive
-                            putExtra(NotificationRcvr.keyBundle, cancelOrPauseBundle)
-                        }
-                    val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
-                        taskWorker.applicationContext,
-                        taskWorker.notificationId,
-                        cancelIntent,
-                        PendingIntent.FLAG_IMMUTABLE
-                    )
-                    builder.addAction(
-                        R.drawable.outline_cancel_24,
-                        activity.getString(R.string.bg_downloader_cancel),
-                        cancelPendingIntent
-                    )
-                    if (taskWorker.taskCanResume && (taskWorker.notificationConfig?.paused != null)) {
-                        // pause button when running and paused notification configured
-                        val pauseIntent = Intent(
-                            taskWorker.applicationContext, NotificationRcvr::class.java
-                        ).apply {
-                            action = NotificationRcvr.actionPause
-                            putExtra(NotificationRcvr.keyBundle, cancelOrPauseBundle)
-                        }
-                        val pausePendingIntent: PendingIntent = PendingIntent.getBroadcast(
-                            taskWorker.applicationContext,
-                            taskWorker.notificationId,
-                            pauseIntent,
-                            PendingIntent.FLAG_IMMUTABLE
-                        )
-                        builder.addAction(
-                            R.drawable.outline_pause_24,
-                            activity.getString(R.string.bg_downloader_pause),
-                            pausePendingIntent
-                        )
-                    }
-                }
 
-                NotificationType.paused -> {
-                    // cancel button
-                    val cancelBundle = Bundle().apply {
-                        putString(NotificationRcvr.keyTaskId, taskWorker.task.taskId)
-                        putString(
-                            NotificationRcvr.keyTask, taskJsonString
-                        )
-                    }
-                    val cancelIntent = Intent(
-                        taskWorker.applicationContext, NotificationRcvr::class.java
-                    ).apply {
-                        action = NotificationRcvr.actionCancelInactive
-                        putExtra(NotificationRcvr.keyBundle, cancelBundle)
-                    }
-                    val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
-                        taskWorker.applicationContext,
-                        taskWorker.notificationId,
-                        cancelIntent,
-                        PendingIntent.FLAG_IMMUTABLE
-                    )
-                    builder.addAction(
-                        R.drawable.outline_cancel_24,
-                        activity.getString(R.string.bg_downloader_cancel),
-                        cancelPendingIntent
-                    )
-                    // resume button
-                    val resumeBundle = Bundle().apply {
-                        putString(NotificationRcvr.keyTaskId, taskWorker.task.taskId)
-                        putString(
-                            NotificationRcvr.keyTask, taskJsonString
-                        )
-                        putString(
-                            NotificationRcvr.keyNotificationConfig,
-                            taskWorker.notificationConfigJsonString
-                        )
-                    }
-                    val resumeIntent = Intent(
-                        taskWorker.applicationContext, NotificationRcvr::class.java
-                    ).apply {
-                        action = NotificationRcvr.actionResume
-                        putExtra(NotificationRcvr.keyBundle, resumeBundle)
-                    }
-                    val resumePendingIntent: PendingIntent = PendingIntent.getBroadcast(
-                        taskWorker.applicationContext,
-                        taskWorker.notificationId,
-                        resumeIntent,
-                        PendingIntent.FLAG_IMMUTABLE
-                    )
-                    builder.addAction(
-                        R.drawable.outline_play_arrow_24,
-                        activity.getString(R.string.bg_downloader_resume),
-                        resumePendingIntent
-                    )
-                }
-
-                NotificationType.complete -> {}
-                NotificationType.error -> {}
-            }
+            NotificationType.complete -> {}
+            NotificationType.error -> {}
         }
     }
 
