@@ -487,7 +487,10 @@ object NotificationService {
             )
             if (tapIntent != null) {
                 tapIntent.apply {
+                    setPackage(null)
                     action = NotificationRcvr.actionTap
+                    addCategory(Intent.CATEGORY_LAUNCHER)
+                    addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
                     putExtra(NotificationRcvr.keyTask, taskJsonString)
                     putExtra(NotificationRcvr.keyNotificationType, notificationType.ordinal)
                     putExtra(
@@ -500,7 +503,7 @@ object NotificationService {
                     taskWorker.applicationContext,
                     taskWorker.notificationId,
                     tapIntent,
-                    PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
                 builder.setContentIntent(tapPendingIntent)
             }

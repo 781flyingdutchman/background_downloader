@@ -145,6 +145,7 @@ class PermissionsService {
 
         /// Processes the onRequestPermissionsResult received by the Activity
         fun onRequestPermissionsResult(
+            context: Context,
             requestCode: Int, permissions: Array<out String>, grantResults: IntArray
         ): Boolean {
             val granted =
@@ -152,7 +153,7 @@ class PermissionsService {
             return when (requestCode) {
                 baseRequestCode + PermissionType.notifications.ordinal,
                 baseRequestCode + PermissionType.androidSharedStorage.ordinal-> {
-                    sendPermissionResult(granted)
+                    sendPermissionResult(context, granted)
                     true
                 }
 
@@ -168,10 +169,12 @@ class PermissionsService {
          * Only one request can be 'in flight' at any time
          */
         private fun sendPermissionResult(
+            context: Context,
             granted: Boolean
         ) {
             // send with dummy task ("")
-            BDPlugin.backgroundChannel?.invokeMethod(
+            val bgChannel = BDPlugin.backgroundChannel(context)
+            bgChannel?.invokeMethod(
                 "permissionRequestResult",
                 listOf("", if (granted) PermissionStatus.granted.ordinal else PermissionStatus.denied.ordinal))
 

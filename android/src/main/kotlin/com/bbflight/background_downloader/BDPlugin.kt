@@ -65,17 +65,21 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         const val keyConfigUseExternalStorage =
             "com.bbflight.background_downloader.config.useExternalStorage"
 
+        // maps to keep track of which backgroundChannel to use
+        private var bgChannelsByAppContextHash = mutableMapOf<Int, MethodChannel>()
+        private var bgChannelByActivityContextHash = mutableMapOf<Int, MethodChannel>()
+        var bgChannelByTaskId = mutableMapOf<String, MethodChannel>()
+
         @SuppressLint("StaticFieldLeak")
-        var activity: Activity? = null
-        var canceledTaskIds = HashMap<String, Long>() // <taskId, timeMillis>
-        var pausedTaskIds = HashSet<String>() // <taskId>
+        var activity: Activity? = null //TODO check if we can lose this
+        var canceledTaskIds = mutableMapOf<String, Long>() // <taskId, timeMillis>
+        var pausedTaskIds = mutableSetOf<String>() // <taskId>
         var parallelDownloadTaskWorkers = HashMap<String, ParallelDownloadTaskWorker>()
-        var backgroundChannel: MethodChannel? = null
-        var backgroundChannelCounter = 0  // reference counter
         var forceFailPostOnBackgroundChannel = false
         val prefsLock = ReentrantReadWriteLock()
-        var localResumeData = HashMap<String, ResumeData>() // for pause notifications
-        var remainingBytesToDownload = HashMap<String, Long>()
+        var localResumeData =
+            mutableMapOf<String, ResumeData>() // by taskId, for pause notifications
+        var remainingBytesToDownload = mutableMapOf<String, Long>() // <taskId, size>
         var haveLoggedProxyMessage = false
 
         /**
@@ -101,6 +105,13 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             } catch (e: IllegalArgumentException) {
                 Log.i(TAG, "Could not url-decode url for taskId ${task.taskId}")
                 return false
+            }
+            // store backgroundChannel to be used by this task
+            val bgChannel = backgroundChannel(context)
+            if (bgChannel != null) {
+                bgChannelByTaskId[task.taskId] = bgChannel
+            } else {
+                Log.w(TAG, "Could not find backgroundChannel for taskId ${task.taskId}")
             }
             canceledTaskIds.remove(task.taskId)
             val dataBuilder = Data.Builder().putString(TaskWorker.keyTask, taskToJsonString(task))
@@ -264,35 +275,63 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             pausedTaskIds.add(taskId)
             return true
         }
+
+        /**
+         * Return the backgroundChannel for the given [context] or [taskId]
+         *
+         * If no channel can be found, returns null
+         *
+         * Will attempt to match on [context] first
+         */
+        fun backgroundChannel(context: Context? = null, taskId: String? = null): MethodChannel? {
+            if (context != null) {
+                val applicationContext =
+                    if (context is Activity) context.applicationContext else context
+                val channel = bgChannelsByAppContextHash[applicationContext.hashCode()]
+                if (channel != null) {
+                    return channel
+                }
+            }
+            if (taskId != null) {
+                val channel = bgChannelByTaskId[taskId]
+                if (channel != null) {
+                    return channel
+                }
+            }
+            return if (bgChannelsByAppContextHash.isNotEmpty()) bgChannelsByAppContextHash.values.first() else null
+        }
     }
 
     private var channel: MethodChannel? = null
+    private var backgroundChannel: MethodChannel? = null
     private lateinit var applicationContext: Context
-    private var pauseReceiver: NotificationRcvr? = null
-    private var resumeReceiver: NotificationRcvr? = null
     private var scope: CoroutineScope? = null
 
     /**
      * Attaches the plugin to the Flutter engine and performs initialization
      */
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
+        applicationContext = flutterPluginBinding.applicationContext
+        Log.wtf(TAG, "Attaching context ${applicationContext.hashCode()} and plugin ${this.hashCode()}")
         // create channels and handler
-        backgroundChannelCounter++
         if (backgroundChannel == null) {
-            // only set background channel once, as it has to be static field
+            Log.wtf(TAG, "backgroundChanel = null")
+            // only set background channel once per plugin instance or application context
             // and per https://github.com/firebase/flutterfire/issues/9689 other
             // plugins can create multiple instances of the plugin
-            backgroundChannel = MethodChannel(
-                flutterPluginBinding.binaryMessenger,
-                "com.bbflight.background_downloader.background"
-            )
+            backgroundChannel =
+                bgChannelsByAppContextHash[applicationContext.hashCode()] ?: MethodChannel(
+                    flutterPluginBinding.binaryMessenger,
+                    "com.bbflight.background_downloader.background"
+                )
+            Log.wtf(TAG, "backgroundChanel hash = ${backgroundChannel?.hashCode()}")
         }
+        bgChannelsByAppContextHash[applicationContext.hashCode()] = backgroundChannel!!
+        Log.wtf(TAG, "bgChannelsByAppContextHash has ${bgChannelsByAppContextHash.count()} entries")
         channel = MethodChannel(
             flutterPluginBinding.binaryMessenger, "com.bbflight.background_downloader"
         )
         channel?.setMethodCallHandler(this)
-        // set context and register notification broadcast receivers
-        applicationContext = flutterPluginBinding.applicationContext
         // clear expired items
         val workManager = WorkManager.getInstance(applicationContext)
         val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
@@ -312,19 +351,23 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * BackgroundChannel is only released if no more references to an engine
      * */
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        Log.wtf(TAG, "Detaching ${applicationContext.hashCode()}")
         channel?.setMethodCallHandler(null)
         channel = null
-        backgroundChannelCounter--
-        if (backgroundChannelCounter == 0) {
+        val backgroundChannelCount =
+            bgChannelsByAppContextHash.count { it.value == backgroundChannel }
+        Log.wtf(TAG, "bgChannelCount =  $backgroundChannelCount")
+
+        if (backgroundChannelCount == 1) { // last engine is detaching
+            // destroy backgroundChannel and remove from all maps
+            Log.wtf(TAG, "Destroying bgChannel hash ${backgroundChannel?.hashCode()}")
+            bgChannelsByAppContextHash =
+                bgChannelsByAppContextHash.filter { it.value != backgroundChannel } as MutableMap
+            bgChannelByActivityContextHash =
+                bgChannelByActivityContextHash.filter { it.value != backgroundChannel } as MutableMap
+            bgChannelByTaskId =
+                bgChannelByTaskId.filter { it.value != backgroundChannel } as MutableMap
             backgroundChannel = null
-        }
-        if (pauseReceiver != null) {
-            applicationContext.unregisterReceiver(pauseReceiver)
-            pauseReceiver = null
-        }
-        if (resumeReceiver != null) {
-            applicationContext.unregisterReceiver(resumeReceiver)
-            resumeReceiver = null
         }
     }
 
@@ -898,7 +941,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private fun handleIntent(intent: Intent?): Boolean {
         if (intent != null && intent.action == NotificationRcvr.actionTap) {
-            val taskJsonMapString = intent.getStringExtra(NotificationRcvr.keyTask)
+            val taskJsonMapString = intent.getStringExtra(NotificationRcvr.keyTask) ?: return true
             val notificationTypeOrdinal =
                 intent.getIntExtra(NotificationRcvr.keyNotificationType, 0)
             val notificationId = intent.getIntExtra(NotificationRcvr.keyNotificationId, 0)
@@ -930,7 +973,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             }
             // check for 'tapOpensFile'
             if (notificationTypeOrdinal == NotificationType.complete.ordinal) {
-                val task = Json.decodeFromString<Task>(taskJsonMapString!!)
+                val task = Json.decodeFromString<Task>(taskJsonMapString)
                 val notificationConfigJsonString =
                     intent.extras?.getString(NotificationRcvr.keyNotificationConfig)
                 val notificationConfig =
@@ -980,6 +1023,9 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private fun attach(binding: ActivityPluginBinding) {
         detach()
         activity = binding.activity
+        if (backgroundChannel != null) {
+            bgChannelByActivityContextHash[binding.activity.hashCode()] = backgroundChannel!!
+        }
         scope = MainScope()
         binding.addRequestPermissionsResultListener(this)
         binding.addOnNewIntentListener(fun(intent: Intent?): Boolean {
@@ -989,6 +1035,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
     /**
      * Detach from activity
+     *
+     * Because we don't know which activity, we can't really do much here
      */
     private fun detach() {
         activity = null
@@ -1000,11 +1048,15 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Receives onRequestPermissionsResult and passes this to the
      * [PermissionsService]
      */
-
     override fun onRequestPermissionsResult(
         requestCode: Int, permissions: Array<out String>, grantResults: IntArray
     ): Boolean {
-        return PermissionsService.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        return PermissionsService.onRequestPermissionsResult(
+            applicationContext,
+            requestCode,
+            permissions,
+            grantResults
+        )
     }
 }
 
