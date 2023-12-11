@@ -50,10 +50,6 @@ android {
         main.java.srcDirs += 'src/main/kotlin'
     }
 
-    defaultConfig {
-        minSdkVersion 24
-    }
-
     namespace 'com.bbflight.background_downloader'
 }
 
