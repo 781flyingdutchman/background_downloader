@@ -1,3 +1,7 @@
+## 8.0.2 Allow compilation on XCode 14
+
+Add compiler version gate for Swift >=5.9
+
 ## 8.0.1
 
 Fix issue #208 concurrentModificationException on Android and similar in iOS
