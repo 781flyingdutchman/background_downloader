@@ -29,6 +29,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.util.LinkedList
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 
 /**
@@ -77,7 +78,7 @@ class GroupNotification(
     val name: String,
     val notificationConfig: NotificationConfig
 ) {
-    private var notifications = HashMap<Task, NotificationType>()
+    private var notifications = ConcurrentHashMap<Task, NotificationType>()
 
     /** NotificationId derived from group name */
     val notificationId get() = "groupNotification$name".hashCode()

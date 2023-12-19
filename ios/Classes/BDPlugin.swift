@@ -153,11 +153,17 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         os_log("%@ task with id %@", log: log, type: .info, verb, task.taskId)
         UrlSessionDelegate.createUrlSession()
         let url: URL?
+        // encodingInvalidCharacters is only available when compiling with Xcode 15, which uses Swift version 5.9
+        #if swift(>=5.9)
         if #available(iOS 17.0, *) {
             url = URL(string: task.url, encodingInvalidCharacters: false)
         } else {
             url = URL(string: task.url)
         }
+        #else
+        url = URL(string: task.url)
+        #endif
+        
         guard let url = url else
         {
             os_log("Invalid url: %@", log: log, type: .info, task.url)

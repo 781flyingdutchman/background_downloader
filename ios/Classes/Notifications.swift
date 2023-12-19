@@ -37,7 +37,10 @@ enum NotificationType : Int {
          paused
 }
 
-class GroupNotification {
+/// Data and methods related to a notification for a group of tasks
+actor GroupNotification {
+    static var notifications: [String : GroupNotification] = [:]
+
     let name: String
     let notificationConfig: NotificationConfig
     
@@ -136,6 +139,9 @@ class GroupNotification {
     /// Update a [task] and [notificationType] to this group,
     /// and return True if this led to change in [groupState]
     func update(task: Task, notificationType: NotificationType) -> Bool {
+        guard notifications[task] != notificationType else {
+            return false
+        }
         let priorState = groupState
         notifications[task] = notificationType
         return priorState != groupState
@@ -182,8 +188,8 @@ func updateNotification(task: Task, notificationType: NotificationType, notifica
                 return
             }
             let content = UNMutableNotificationContent()
-            content.title = replaceTokens(input: notification!.title, task: task)
-            content.body = replaceTokens(input: notification!.body, task: task)
+            content.title = await replaceTokens(input: notification!.title, task: task)
+            content.body = await replaceTokens(input: notification!.body, task: task)
             content.userInfo = [
                 "task": jsonStringFor(task: task) ?? "",
                 "notificationConfig": jsonStringFor(notificationConfig: notificationConfig!) ?? "",
@@ -205,8 +211,6 @@ func updateNotification(task: Task, notificationType: NotificationType, notifica
 }
 
 
-var groupNotifications: [String : GroupNotification] = [:]
-
 /**
  * Update notification for this [taskWorker] in group
  * [notificationGroupName] and type [notificationType].
@@ -220,14 +224,14 @@ private func updateGroupNotification(
     notificationConfig: NotificationConfig
 ) async {
     let groupNotificationId = notificationConfig.groupNotificationId
-    var groupNotification = groupNotifications[groupNotificationId] ?? GroupNotification(name: groupNotificationId, notificationConfig: notificationConfig)
-    let stateChange = groupNotification.update(task: task, notificationType: notificationType)
-    groupNotifications[groupNotificationId] = groupNotification
+    var groupNotification = GroupNotification.notifications[groupNotificationId] ?? GroupNotification(name: groupNotificationId, notificationConfig: notificationConfig)
+    let stateChange = await groupNotification.update(task: task, notificationType: notificationType)
+    GroupNotification.notifications[groupNotificationId] = groupNotification
     if stateChange {
         // need to update the group notification
         let notificationCenter = UNUserNotificationCenter.current()
-        let hasError = groupNotification.hasError
-        let isFinished = groupNotification.isFinished
+        let hasError = await groupNotification.hasError
+        let isFinished = await groupNotification.isFinished
         var notification: NotificationContents?
         if isFinished {
             if hasError {
@@ -246,20 +250,20 @@ private func updateGroupNotification(
         }
         // need to show a notification
         let content = UNMutableNotificationContent()
-        content.title = replaceTokens(input: notification.title, task: task, progress: groupNotification.progress, notificationGroup: groupNotification)
-        content.body = replaceTokens(input: notification.body, task: task, progress: groupNotification.progress, notificationGroup: groupNotification)
+        content.title = await replaceTokens(input: notification.title, task: task, progress: await groupNotification.progress, notificationGroup: groupNotification)
+        content.body = await replaceTokens(input: notification.body, task: task, progress: await groupNotification.progress, notificationGroup: groupNotification)
         // check if the notification title or body have changed relative to what may
         // already be delivered, to avoid flashing notifications without change
         let existingNotifications = await notificationCenter.deliveredNotifications()
         let previousNotification = existingNotifications.filter { 
-            $0.request.identifier == groupNotification.notificationId
+            $0.request.identifier == groupNotificationId
         }
         if previousNotification.isEmpty || previousNotification.first?.request.content.title != content.title || previousNotification.first?.request.content.body != content.body
         {
             if !isFinished {
                 addCancelActionToNotificationGroup(content: content)
             }
-            let request = UNNotificationRequest(identifier: groupNotification.notificationId,
+            let request = UNNotificationRequest(identifier: await groupNotification.notificationId,
                                                 content: content, trigger: nil)
             do {
                 try await notificationCenter.add(request)
@@ -270,8 +274,8 @@ private func updateGroupNotification(
         if isFinished {
             // remove only if not re-activated within 5 seconds
             try? await _Concurrency.Task.sleep(nanoseconds: 5_000_000_000)
-            if groupNotification.isFinished {
-                groupNotifications.removeValue(forKey: groupNotificationId)
+            if await groupNotification.isFinished {
+                GroupNotification.notifications.removeValue(forKey: groupNotificationId)
             }
         }
     }
@@ -321,7 +325,7 @@ let numFailedRegEx = try! NSRegularExpression(pattern: "\\{numFailed\\}", option
 let numTotalRegEx = try! NSRegularExpression(pattern: "\\{numTotal\\}", options: NSRegularExpression.Options.caseInsensitive)
 
 /// Replace special tokens {filename} and {metadata} with their respective values
-func replaceTokens(input: String, task: Task, progress: Double? = nil, notificationGroup: GroupNotification? = nil) -> String {
+func replaceTokens(input: String, task: Task, progress: Double? = nil, notificationGroup: GroupNotification? = nil) async -> String {
     let inputString = NSMutableString()
     inputString.append(input)
     displayNameRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: task.displayName)
@@ -335,9 +339,12 @@ func replaceTokens(input: String, task: Task, progress: Double? = nil, notificat
     networkSpeedRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: "-- MB/s")
     timeRemainingRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: "--:--")
     if (notificationGroup != nil) {
-        numFinishedRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: "\(notificationGroup!.numFinished)")
-        numFailedRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: "\(notificationGroup!.numFailed)")
-        numTotalRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: "\(notificationGroup!.numTotal)")
+        let numFinished = await notificationGroup!.numFinished
+        let numFailed = await notificationGroup!.numFailed
+        let numTotal = await notificationGroup!.numTotal
+        numFinishedRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: "\(numFinished)")
+        numFailedRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: "\(numFailed)")
+        numTotalRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: "\(numTotal)")
     }
     return inputString as String
 }
