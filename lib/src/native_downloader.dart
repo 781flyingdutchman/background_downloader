@@ -491,9 +491,6 @@ final class AndroidDownloader extends NativeDownloader {
         await NativeDownloader.methodChannel
             .invokeMethod('configUseExternalStorage', Config.argToInt(whenTo));
         Task.useExternalStorage = whenTo == Config.always;
-        
-      case (Config.multipleInstances, bool acvtive):
-        await NativeDownloader.methodChannel.invokeMethod('configMultipleInstances', acvtive ? 1 : 0);
 
       default:
         return (

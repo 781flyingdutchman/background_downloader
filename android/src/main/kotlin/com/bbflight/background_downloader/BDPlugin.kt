@@ -65,15 +65,9 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         const val keyConfigUseCacheDir = "com.bbflight.background_downloader.config.useCacheDir"
         const val keyConfigUseExternalStorage =
             "com.bbflight.background_downloader.config.useExternalStorage"
-        const val keyConfigMultipleInstances =
-            "com.bbflight.background_downloader.config.multipleInstances"
-
 
         // backgroundChannel related
-        private var multipleInstances: Boolean = false
         var bgChannelByTaskId = mutableMapOf<String, MethodChannel>()
-        var sharedBackgroundChannel: MethodChannel? = null
-        var sharedBackgroundChannelCount = 0
 
         @SuppressLint("StaticFieldLeak")
         var activity: Activity? = null //TODO check if we can lose this
@@ -290,7 +284,10 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
          *
          * Will attempt to match on [plugin] first
          */
-        fun backgroundChannel(plugin: BDPlugin? = null, taskId: String = "bgd_non_existent_id"): MethodChannel? {
+        fun backgroundChannel(
+            plugin: BDPlugin? = null,
+            taskId: String = "bgd_non_existent_id"
+        ): MethodChannel? {
             return plugin?.backgroundChannel ?: bgChannelByTaskId[taskId]
         }
     }
@@ -306,35 +303,22 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         applicationContext = flutterPluginBinding.applicationContext
         val hashCode = applicationContext.hashCode()
-        Log.wtf(TAG, "Attaching context $hashCode and plugin ${this.hashCode()} and engine ${flutterPluginBinding.binaryMessenger.hashCode()}")
-        val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
-        sharedBackgroundChannel = sharedBackgroundChannel ?: MethodChannel(
-            flutterPluginBinding.binaryMessenger,
-            "com.bbflight.background_downloader.background"
+        Log.wtf(
+            TAG,
+            "Attaching context $hashCode and plugin ${this.hashCode()} and engine ${flutterPluginBinding.binaryMessenger.hashCode()}"
         )
-        multipleInstances = prefs.getInt(keyConfigMultipleInstances, 0) != 0
-        if (multipleInstances) {
-            backgroundChannel = if (sharedBackgroundChannelCount == 0) {
-                sharedBackgroundChannel
-            } else {
-                MethodChannel(
-                    flutterPluginBinding.binaryMessenger,
-                    "com.bbflight.background_downloader.background"
-                )
-            }
-            sharedBackgroundChannelCount = 1
-            Log.wtf(TAG, "MI: backgroundChanel hash = ${backgroundChannel?.hashCode()}")
-        } else {
-            backgroundChannel = sharedBackgroundChannel
-            sharedBackgroundChannelCount++
-            Log.wtf(TAG, "Non-MI: backgroundChanel hash = ${backgroundChannel?.hashCode()}")
-        }
-        Log.wtf(TAG, "sharedBackgroundChannelCount = $sharedBackgroundChannelCount")
+        backgroundChannel =
+            MethodChannel(
+                flutterPluginBinding.binaryMessenger,
+                "com.bbflight.background_downloader.background"
+            )
+        Log.wtf(TAG, "MI: backgroundChanel hash = ${backgroundChannel?.hashCode()}")
         channel = MethodChannel(
             flutterPluginBinding.binaryMessenger, "com.bbflight.background_downloader"
         )
         channel?.setMethodCallHandler(this)
         // clear expired items
+        val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
         val workManager = WorkManager.getInstance(applicationContext)
         val allWorkInfos = workManager.getWorkInfosByTag(TAG).get()
         if (allWorkInfos.isEmpty()) {
@@ -352,23 +336,12 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * BackgroundChannel is set to null, and references to it removed if it no longer in use anywhere
      * */
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        val hashCode = applicationContext.hashCode()
-        Log.wtf(TAG, "Detaching $hashCode")
+        Log.wtf(TAG, "Detaching ${binding.binaryMessenger}")
         channel?.setMethodCallHandler(null)
         channel = null
-        if (multipleInstances) {
-            Log.wtf(TAG, "MI: Destroying bgChannel hash ${backgroundChannel?.hashCode()}")
-            bgChannelByTaskId =
-                bgChannelByTaskId.filter { it.value != backgroundChannel } as MutableMap
-        } else {
-            sharedBackgroundChannelCount--
-            if (sharedBackgroundChannelCount == 0) {
-                Log.wtf(TAG, "NonMI: Destroying bgChannel hash ${backgroundChannel?.hashCode()}")
-                sharedBackgroundChannel = null
-                bgChannelByTaskId =
-                    bgChannelByTaskId.filter { it.value != backgroundChannel } as MutableMap
-            }
-        }
+        Log.wtf(TAG, "MI: Destroying bgChannel hash ${backgroundChannel?.hashCode()}")
+        bgChannelByTaskId =
+            bgChannelByTaskId.filter { it.value != backgroundChannel } as MutableMap
         backgroundChannel = null
     }
 
@@ -411,7 +384,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 "configCheckAvailableSpace" -> methodConfigCheckAvailableSpace(call, result)
                 "configUseCacheDir" -> methodConfigUseCacheDir(call, result)
                 "configUseExternalStorage" -> methodConfigUseExternalStorage(call, result)
-                "configMultipleInstances" -> methodConfigMultipleInstances(call, result)
                 "platformVersion" -> methodPlatformVersion(result)
                 "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
                     call, result
@@ -429,6 +401,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     }
                     result.success(null)
                 }
+
                 else -> result.notImplemented()
             }
         }
@@ -887,11 +860,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         result.success(null)
     }
 
-    private fun methodConfigMultipleInstances(call: MethodCall, result: Result) {
-        updateSharedPreferences(keyConfigMultipleInstances, call.arguments as Int?)
-        result.success(null)
-    }
-    
     /**
      * Return the Android API version integer as a String
      */
@@ -959,7 +927,10 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * its listener may not have been initialized yet. This function therefore includes retry logic.
      */
     private fun handleIntent(intent: Intent?): Boolean {
-        Log.wtf(TAG, "Intent.action = ${intent?.action} with ${intent?.getStringExtra(NotificationRcvr.keyTask)}")
+        Log.wtf(
+            TAG,
+            "Intent.action = ${intent?.action} with ${intent?.getStringExtra(NotificationRcvr.keyTask)}"
+        )
         if (intent != null && intent.action == NotificationRcvr.actionTap) {
             // if taskJsonMapString == null, this was a main launch and we ignore
             val taskJsonMapString = intent.getStringExtra(NotificationRcvr.keyTask) ?: return true

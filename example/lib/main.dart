@@ -56,7 +56,6 @@ class _MyAppState extends State<MyApp> {
       (Config.requestTimeout, const Duration(seconds: 100)),
     ], androidConfig: [
       (Config.useCacheDir, Config.whenAble),
-      (Config.multipleInstances, true)
     ], iOSConfig: [
       (Config.localize, {'Cancel': 'StopIt'}),
     ]).then((result) => debugPrint('Configuration result = $result'));
