@@ -257,7 +257,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
          * Because this [task] is not managed by a [WorkManager] it is cancelled directly. This
          * is normally called from a notification when the task is paused (which is why it is
          * inactive), and therefore the caller must remove the notification that triggered the
-         * cancellation. See [NotificationRcvr]
+         * cancellation. See [NotificationReceiver]
          */
         suspend fun cancelInactiveTask(context: Context, task: Task) {
             prefsLock.write {
@@ -272,6 +272,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
          *
          * Marks the task for pausing, actual pausing happens in [TaskWorker]
          */
+        @Suppress("SameReturnValue")
         fun pauseTaskWithId(taskId: String): Boolean {
             pausedTaskIds.add(taskId)
             return true
@@ -630,7 +631,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private fun methodMoveToSharedStorage(call: MethodCall, result: Result) {
         val args = call.arguments as List<*>
         val filePath = args[0] as String
-        val destination = SharedStorage.values()[args[1] as Int]
+        val destination = SharedStorage.entries[args[1] as Int]
         val directory = args[2] as String
         val mimeType = args[3] as String?
         // first check and potentially ask for permissions
@@ -668,7 +669,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private fun methodPathInSharedStorage(call: MethodCall, result: Result) {
         val args = call.arguments as List<*>
         val filePath = args[0] as String
-        val destination = SharedStorage.values()[args[1] as Int]
+        val destination = SharedStorage.entries[args[1] as Int]
         val directory = args[2] as String
         result.success(pathInSharedStorage(applicationContext, filePath, destination, directory))
     }
@@ -710,7 +711,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val responseBody = args[4] as String?
         parallelDownloadTaskWorkers[taskId]?.chunkStatusUpdate(
             chunkTaskId,
-            TaskStatus.values()[statusOrdinal],
+            TaskStatus.entries[statusOrdinal],
             exception,
             responseBody
         )
@@ -739,7 +740,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Return [PermissionStatus] for this [PermissionType]
      */
     private fun methodPermissionStatus(call: MethodCall, result: Result) {
-        val permissionType = PermissionType.values()[call.arguments as Int]
+        val permissionType = PermissionType.entries[call.arguments as Int]
         result.success(
             PermissionsService.getPermissionStatus(
                 applicationContext,
@@ -756,7 +757,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * channel method "permissionRequestResult"
      */
     private fun methodRequestPermission(call: MethodCall, result: Result) {
-        val permissionType = PermissionType.values()[call.arguments as Int]
+        val permissionType = PermissionType.entries[call.arguments as Int]
         result.success(PermissionsService.requestPermission(permissionType))
     }
 
@@ -764,7 +765,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Returns true if you should show a rationale for this [PermissionType]
      */
     private fun methodShouldShowPermissionRationale(call: MethodCall, result: Result) {
-        val permissionType = PermissionType.values()[call.arguments as Int]
+        val permissionType = PermissionType.entries[call.arguments as Int]
         result.success(PermissionsService.shouldShowRequestPermissionRationale(permissionType))
     }
 
@@ -929,14 +930,14 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private fun handleIntent(intent: Intent?): Boolean {
         Log.wtf(
             TAG,
-            "Intent.action = ${intent?.action} with ${intent?.getStringExtra(NotificationRcvr.keyTask)}"
+            "Intent.action = ${intent?.action} with ${intent?.getStringExtra(NotificationReceiver.keyTask)}"
         )
-        if (intent != null && intent.action == NotificationRcvr.actionTap) {
+        if (intent != null && intent.action == NotificationReceiver.actionTap) {
             // if taskJsonMapString == null, this was a main launch and we ignore
-            val taskJsonMapString = intent.getStringExtra(NotificationRcvr.keyTask) ?: return true
+            val taskJsonMapString = intent.getStringExtra(NotificationReceiver.keyTask) ?: return true
             val notificationTypeOrdinal =
-                intent.getIntExtra(NotificationRcvr.keyNotificationType, 0)
-            val notificationId = intent.getIntExtra(NotificationRcvr.keyNotificationId, 0)
+                intent.getIntExtra(NotificationReceiver.keyNotificationType, 0)
+            val notificationId = intent.getIntExtra(NotificationReceiver.keyNotificationId, 0)
             // only process notificationTap and tapOpensFile if we have task data
             if (taskJsonMapString.isNotEmpty()) {
                 CoroutineScope(Dispatchers.Default).launch {
@@ -969,7 +970,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 if (notificationTypeOrdinal == NotificationType.complete.ordinal) {
                     val task = Json.decodeFromString<Task>(taskJsonMapString)
                     val notificationConfigJsonString =
-                        intent.extras?.getString(NotificationRcvr.keyNotificationConfig)
+                        intent.extras?.getString(NotificationReceiver.keyNotificationConfig)
                     val notificationConfig =
                         if (notificationConfigJsonString != null) Json.decodeFromString<NotificationConfig>(
                             notificationConfigJsonString

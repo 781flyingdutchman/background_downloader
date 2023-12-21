@@ -347,7 +347,7 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
      * Stitch all chunks together into one file
      */
     private suspend fun stitchChunks(): TaskStatus {
-        withContext(Dispatchers.IO) {
+        return withContext(Dispatchers.IO) {
             try {
                 val dataBuffer = ByteArray(bufferSize)
                 var numBytes: Int
@@ -391,8 +391,8 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                     }
                 }
             }
+            return@withContext TaskStatus.complete
         }
-        return TaskStatus.complete
     }
 
 
@@ -436,6 +436,7 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
     }
 }
 
+@Suppress("unused")
 @Serializable
 class Chunk private constructor(
     private val parentTaskId: String,

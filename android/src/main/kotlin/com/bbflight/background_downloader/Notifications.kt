@@ -152,13 +152,13 @@ enum class NotificationType { running, complete, error, paused }
  *
  * Note the two cancellation actions: one for active tasks (running and managed by a
  * [WorkManager] and one for inactive (paused) tasks. Because the latter is not running in a
- * [WorkManager] job, cancellation is simpler, but the [NotificationRcvr] must remove the
+ * [WorkManager] job, cancellation is simpler, but the [NotificationReceiver] must remove the
  * notification that asked for cancellation directly from here. If an 'error' notification
  * was configured for the task, then it will NOT be shown (as it would when cancelling an active
  * task)
  */
 @Keep
-class NotificationRcvr : BroadcastReceiver() {
+class NotificationReceiver : BroadcastReceiver() {
 
     companion object {
         const val actionCancelActive = "com.bbflight.background_downloader.cancelActive"
@@ -519,12 +519,12 @@ object NotificationService {
             NotificationType.running -> {
                 // cancel button when running
                 val cancelOrPauseBundle = Bundle().apply {
-                    putString(NotificationRcvr.keyTaskId, taskWorker.task.taskId)
+                    putString(NotificationReceiver.keyTaskId, taskWorker.task.taskId)
                 }
                 val cancelIntent =
-                    Intent(taskWorker.applicationContext, NotificationRcvr::class.java).apply {
-                        action = NotificationRcvr.actionCancelActive
-                        putExtra(NotificationRcvr.keyBundle, cancelOrPauseBundle)
+                    Intent(taskWorker.applicationContext, NotificationReceiver::class.java).apply {
+                        action = NotificationReceiver.actionCancelActive
+                        putExtra(NotificationReceiver.keyBundle, cancelOrPauseBundle)
                     }
                 val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
                     taskWorker.applicationContext,
@@ -540,10 +540,10 @@ object NotificationService {
                 if (taskWorker.taskCanResume && (taskWorker.notificationConfig?.paused != null)) {
                     // pause button when running and paused notification configured
                     val pauseIntent = Intent(
-                        taskWorker.applicationContext, NotificationRcvr::class.java
+                        taskWorker.applicationContext, NotificationReceiver::class.java
                     ).apply {
-                        action = NotificationRcvr.actionPause
-                        putExtra(NotificationRcvr.keyBundle, cancelOrPauseBundle)
+                        action = NotificationReceiver.actionPause
+                        putExtra(NotificationReceiver.keyBundle, cancelOrPauseBundle)
                     }
                     val pausePendingIntent: PendingIntent = PendingIntent.getBroadcast(
                         taskWorker.applicationContext,
@@ -562,16 +562,16 @@ object NotificationService {
             NotificationType.paused -> {
                 // cancel button
                 val cancelBundle = Bundle().apply {
-                    putString(NotificationRcvr.keyTaskId, taskWorker.task.taskId)
+                    putString(NotificationReceiver.keyTaskId, taskWorker.task.taskId)
                     putString(
-                        NotificationRcvr.keyTask, taskJsonString
+                        NotificationReceiver.keyTask, taskJsonString
                     )
                 }
                 val cancelIntent = Intent(
-                    taskWorker.applicationContext, NotificationRcvr::class.java
+                    taskWorker.applicationContext, NotificationReceiver::class.java
                 ).apply {
-                    action = NotificationRcvr.actionCancelInactive
-                    putExtra(NotificationRcvr.keyBundle, cancelBundle)
+                    action = NotificationReceiver.actionCancelInactive
+                    putExtra(NotificationReceiver.keyBundle, cancelBundle)
                 }
                 val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
                     taskWorker.applicationContext,
@@ -586,20 +586,20 @@ object NotificationService {
                 )
                 // resume button
                 val resumeBundle = Bundle().apply {
-                    putString(NotificationRcvr.keyTaskId, taskWorker.task.taskId)
+                    putString(NotificationReceiver.keyTaskId, taskWorker.task.taskId)
                     putString(
-                        NotificationRcvr.keyTask, taskJsonString
+                        NotificationReceiver.keyTask, taskJsonString
                     )
                     putString(
-                        NotificationRcvr.keyNotificationConfig,
+                        NotificationReceiver.keyNotificationConfig,
                         taskWorker.notificationConfigJsonString
                     )
                 }
                 val resumeIntent = Intent(
-                    taskWorker.applicationContext, NotificationRcvr::class.java
+                    taskWorker.applicationContext, NotificationReceiver::class.java
                 ).apply {
-                    action = NotificationRcvr.actionResume
-                    putExtra(NotificationRcvr.keyBundle, resumeBundle)
+                    action = NotificationReceiver.actionResume
+                    putExtra(NotificationReceiver.keyBundle, resumeBundle)
                 }
                 val resumePendingIntent: PendingIntent = PendingIntent.getBroadcast(
                     taskWorker.applicationContext,
@@ -637,16 +637,16 @@ object NotificationService {
         if (tapIntent != null) {
             tapIntent.apply {
                 setPackage(null)
-                action = NotificationRcvr.actionTap
+                action = NotificationReceiver.actionTap
                 addCategory(Intent.CATEGORY_LAUNCHER)
                 addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                putExtra(NotificationRcvr.keyTask, taskJsonString)
+                putExtra(NotificationReceiver.keyTask, taskJsonString)
                 putExtra(
-                    NotificationRcvr.keyNotificationConfig,
+                    NotificationReceiver.keyNotificationConfig,
                     taskWorker.notificationConfigJsonString
                 )
-                putExtra(NotificationRcvr.keyNotificationType, notificationType.ordinal)
-                putExtra(NotificationRcvr.keyNotificationId, taskWorker.notificationId)
+                putExtra(NotificationReceiver.keyNotificationType, notificationType.ordinal)
+                putExtra(NotificationReceiver.keyNotificationId, taskWorker.notificationId)
             }
             val tapPendingIntent: PendingIntent = PendingIntent.getActivity(
                 taskWorker.applicationContext,
@@ -672,12 +672,12 @@ object NotificationService {
         // add cancel button for running notification
         if (notificationType == NotificationType.running) {
             val cancelBundle = Bundle().apply {
-                putString(NotificationRcvr.keyGroupNotificationName, groupNotification.name)
+                putString(NotificationReceiver.keyGroupNotificationName, groupNotification.name)
             }
             val cancelIntent =
-                Intent(taskWorker.applicationContext, NotificationRcvr::class.java).apply {
-                    action = NotificationRcvr.actionCancelActive
-                    putExtra(NotificationRcvr.keyBundle, cancelBundle)
+                Intent(taskWorker.applicationContext, NotificationReceiver::class.java).apply {
+                    action = NotificationReceiver.actionCancelActive
+                    putExtra(NotificationReceiver.keyBundle, cancelBundle)
                 }
             val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
                 taskWorker.applicationContext,

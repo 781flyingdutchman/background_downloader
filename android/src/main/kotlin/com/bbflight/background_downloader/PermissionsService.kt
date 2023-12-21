@@ -12,6 +12,7 @@ enum class PermissionType {
     notifications, androidSharedStorage, iosAddToPhotoLibrary, iosChangePhotoLibrary
 }
 
+@Suppress("unused")
 enum class PermissionStatus {
     undetermined, denied, granted, partial, requestError
 }

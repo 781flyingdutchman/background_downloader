@@ -1,5 +1,3 @@
-@file:Suppress("EnumEntryName")
-
 package com.bbflight.background_downloader
 
 import android.content.Context
