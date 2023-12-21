@@ -19,6 +19,7 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.plugin.common.PluginRegistry
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
@@ -33,7 +34,6 @@ import java.lang.Long.min
 import java.net.MalformedURLException
 import java.net.URL
 import java.net.URLDecoder
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
@@ -946,16 +946,15 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     while (retries < 5 && !success) {
                         try {
                             if (backgroundChannel != null && scope != null) {
-                                val resultCompleter = CompletableFuture<Boolean>()
-                                val resultHandler = ResultHandler(resultCompleter)
+                                val resultCompleter = CompletableDeferred<Boolean>()
                                 scope?.launch {
                                     backgroundChannel?.invokeMethod(
                                         "notificationTap",
                                         listOf(taskJsonMapString, notificationTypeOrdinal),
-                                        resultHandler
+                                        FlutterResultHandler(resultCompleter)
                                     )
                                 }
-                                success = resultCompleter.join()
+                                success = resultCompleter.await()
                             }
                         } catch (e: Exception) {
                             Log.v(TAG, "Exception in handleIntent: $e")
@@ -1057,26 +1056,4 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             grantResults
         )
     }
-}
-
-/**
- * Simple Flutter result handler, completes the [completer] with the result
- * of the MethodChannel call
- */
-class ResultHandler(private val completer: CompletableFuture<Boolean>) : Result {
-
-    override fun success(result: Any?) {
-        completer.complete(result == true)
-    }
-
-    override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
-        Log.i(BDPlugin.TAG, "Flutter result error $errorCode: $errorMessage")
-        completer.complete(false)
-    }
-
-    override fun notImplemented() {
-        Log.i(BDPlugin.TAG, "Flutter method not implemented")
-        completer.complete(false)
-    }
-
 }

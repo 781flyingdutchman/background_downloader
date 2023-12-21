@@ -8,6 +8,8 @@ import android.os.StatFs
 import android.util.Log
 import androidx.preference.PreferenceManager
 import com.bbflight.background_downloader.TaskWorker.Companion.TAG
+import io.flutter.plugin.common.MethodChannel
+import kotlinx.coroutines.CompletableDeferred
 import java.io.File
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
@@ -190,4 +192,25 @@ fun getBasenameWithoutExtension(file: File): String {
     val fileName = file.name
     val extension = file.extension
     return fileName.substringBeforeLast(".$extension")
+}
+
+/**
+ * Simple Flutter result handler, completes the [completer] with the result
+ * of the MethodChannel call
+ */
+class FlutterResultHandler(private val completer: CompletableDeferred<Boolean>) : MethodChannel.Result {
+
+    override fun success(result: Any?) {
+        completer.complete(result == true)
+    }
+
+    override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
+        Log.i(BDPlugin.TAG, "Flutter result error $errorCode: $errorMessage")
+        completer.complete(false)
+    }
+
+    override fun notImplemented() {
+        Log.i(BDPlugin.TAG, "Flutter method not implemented")
+        completer.complete(false)
+    }
 }

@@ -9,7 +9,6 @@ import androidx.preference.PreferenceManager
 import androidx.work.CoroutineWorker
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -75,11 +74,12 @@ open class TaskWorker(
             method: String, task: Task, arg: Any
         ): Boolean {
             Log.wtf(TAG, "Posting $method")
-            val runningOnUIThread = Looper.myLooper() == Looper.getMainLooper()
+            val mainLooper = Looper.getMainLooper()
+            val runningOnUIThread = Looper.myLooper() == mainLooper
             Log.wtf(TAG, "running on UI thread = $runningOnUIThread")
             return coroutineScope {
                 val success = CompletableDeferred<Boolean>()
-                Handler(Looper.getMainLooper()).post {
+                Handler(mainLooper).post {
                     try {
                         val argList = mutableListOf<Any>(
                             taskToJsonString(task)
@@ -93,27 +93,8 @@ open class TaskWorker(
                         Log.wtf(TAG, "Got bgChannel hash ${bgChannel?.hashCode()}")
                         if (bgChannel != null) {
                             bgChannel.invokeMethod(
-                                method, argList, object : MethodChannel.Result {
-                                    override fun success(result: Any?) {
-                                        success.complete(!BDPlugin.forceFailPostOnBackgroundChannel)
-                                        Log.wtf(TAG, "Successful post")
-                                    }
-
-                                    override fun error(
-                                        errorCode: String,
-                                        errorMessage: String?,
-                                        errorDetails: Any?
-                                    ) {
-                                        Log.wtf(TAG, "Unsuccessful post")
-                                        success.complete(false)
-                                    }
-
-                                    override fun notImplemented() {
-                                        Log.wtf(TAG, "Method $method not implemented")
-                                        success.complete(false)
-                                    }
-                                })
-
+                                method, argList, FlutterResultHandler(success)
+                            )
                         } else {
                             Log.i(TAG, "Could not post $method to background channel")
                             success.complete(false)
@@ -129,7 +110,7 @@ open class TaskWorker(
                     }
                 }
                 // don't wait for result of post if running on UI thread -> true
-                return@coroutineScope runningOnUIThread || success.await()
+                return@coroutineScope if (BDPlugin.forceFailPostOnBackgroundChannel) false else runningOnUIThread || success.await()
             }
         }
 
@@ -249,7 +230,7 @@ open class TaskWorker(
                     editor.apply()
                 }
                 BDPlugin.localResumeData.remove(task.taskId)
-                BDPlugin.bgChannelByTaskId.remove(task.taskId)
+                //TODO BDPlugin.bgChannelByTaskId.remove(task.taskId)
             }
         }
 
