@@ -66,19 +66,18 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         const val keyConfigUseExternalStorage =
             "com.bbflight.background_downloader.config.useExternalStorage"
 
-        // backgroundChannel related
-        var bgChannelByTaskId = mutableMapOf<String, MethodChannel>()
 
         @SuppressLint("StaticFieldLeak")
         var activity: Activity? = null //TODO check if we can lose this
         var notificationButtonText = mutableMapOf<String, String>() // for localization
         var canceledTaskIds = mutableMapOf<String, Long>() // <taskId, timeMillis>
-        var pausedTaskIds = mutableSetOf<String>() // <taskId>
+        var pausedTaskIds = mutableSetOf<String>() // <taskId>, acts as flag
+        var bgChannelByTaskId = mutableMapOf<String, MethodChannel>()
+        var localResumeData =
+            mutableMapOf<String, ResumeData>() // by taskId, for pause notifications
         var parallelDownloadTaskWorkers = HashMap<String, ParallelDownloadTaskWorker>()
         var forceFailPostOnBackgroundChannel = false
         val prefsLock = ReentrantReadWriteLock()
-        var localResumeData =
-            mutableMapOf<String, ResumeData>() // by taskId, for pause notifications
         var remainingBytesToDownload = mutableMapOf<String, Long>() // <taskId, size>
         var haveLoggedProxyMessage = false
 

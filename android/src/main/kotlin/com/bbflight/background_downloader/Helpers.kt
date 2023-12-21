@@ -10,6 +10,11 @@ import androidx.preference.PreferenceManager
 import com.bbflight.background_downloader.TaskWorker.Companion.TAG
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.io.File
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
@@ -212,5 +217,40 @@ class FlutterResultHandler(private val completer: CompletableDeferred<Boolean>) 
     override fun notImplemented() {
         Log.i(BDPlugin.TAG, "Flutter method not implemented")
         completer.complete(false)
+    }
+}
+
+object QueueService {
+    private const val minTaskIdDeletionDelay: Long = 2000L //ms
+    private val taskIdDeletionQueue = Channel<String>(capacity = Channel.UNLIMITED)
+    private val scope = CoroutineScope(Dispatchers.Default)
+    private var lastTaskIdAdditionTime: Long = 0
+
+    /**
+     * Starts listening to the queue and processes each item
+     *
+     * Each item is a taskId and it will be removed from the
+     * BDPlugin.bgChannelByTaskId and BDPlugin.localResumeData maps
+     */
+    init {
+        scope.launch {
+            for (taskId in taskIdDeletionQueue) {
+                val now = System.currentTimeMillis()
+                val elapsed = now - lastTaskIdAdditionTime
+                if (elapsed < minTaskIdDeletionDelay) {
+                    delay(minTaskIdDeletionDelay - elapsed)
+                }
+                BDPlugin.bgChannelByTaskId.remove(taskId)
+                BDPlugin.localResumeData.remove(taskId)
+            }
+        }
+    }
+
+    /**
+     * Remove this [taskId] from the [BDPlugin.bgChannelByTaskId] map
+     */
+    suspend fun cleanupTaskId(taskId: String) {
+        lastTaskIdAdditionTime = System.currentTimeMillis()
+        taskIdDeletionQueue.send(taskId)
     }
 }

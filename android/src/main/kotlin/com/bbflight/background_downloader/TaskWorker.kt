@@ -73,10 +73,8 @@ open class TaskWorker(
         suspend fun postOnBackgroundChannel(
             method: String, task: Task, arg: Any
         ): Boolean {
-            Log.wtf(TAG, "Posting $method")
             val mainLooper = Looper.getMainLooper()
             val runningOnUIThread = Looper.myLooper() == mainLooper
-            Log.wtf(TAG, "running on UI thread = $runningOnUIThread")
             return coroutineScope {
                 val success = CompletableDeferred<Boolean>()
                 Handler(mainLooper).post {
@@ -229,8 +227,7 @@ open class TaskWorker(
                     )
                     editor.apply()
                 }
-                BDPlugin.localResumeData.remove(task.taskId)
-                //TODO BDPlugin.bgChannelByTaskId.remove(task.taskId)
+                QueueService.cleanupTaskId(task.taskId)
             }
         }
 
