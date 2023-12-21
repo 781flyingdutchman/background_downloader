@@ -19,7 +19,6 @@ enum class PermissionStatus {
 class PermissionsService {
     companion object {
         private const val baseRequestCode = 373900
-        private const val TAG = "PermissionsService"
 
         /**
          * Requests [PermissionStatus] for permission of [permissionType]
@@ -145,15 +144,15 @@ class PermissionsService {
 
         /// Processes the onRequestPermissionsResult received by the Activity
         fun onRequestPermissionsResult(
-            context: Context,
-            requestCode: Int, permissions: Array<out String>, grantResults: IntArray
+            plugin: BDPlugin,
+            requestCode: Int, grantResults: IntArray
         ): Boolean {
             val granted =
                 (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)
             return when (requestCode) {
                 baseRequestCode + PermissionType.notifications.ordinal,
                 baseRequestCode + PermissionType.androidSharedStorage.ordinal-> {
-                    sendPermissionResult(context, granted)
+                    sendPermissionResult(plugin, granted)
                     true
                 }
 
@@ -169,11 +168,11 @@ class PermissionsService {
          * Only one request can be 'in flight' at any time
          */
         private fun sendPermissionResult(
-            context: Context,
+            plugin: BDPlugin,
             granted: Boolean
         ) {
             // send with dummy task ("")
-            val bgChannel = BDPlugin.backgroundChannel(context)
+            val bgChannel = BDPlugin.backgroundChannel(plugin)
             bgChannel?.invokeMethod(
                 "permissionRequestResult",
                 listOf("", if (granted) PermissionStatus.granted.ordinal else PermissionStatus.denied.ordinal))

@@ -56,6 +56,7 @@ class _MyAppState extends State<MyApp> {
       (Config.requestTimeout, const Duration(seconds: 100)),
     ], androidConfig: [
       (Config.useCacheDir, Config.whenAble),
+      (Config.multipleInstances, true)
     ], iOSConfig: [
       (Config.localize, {'Cancel': 'StopIt'}),
     ]).then((result) => debugPrint('Configuration result = $result'));
@@ -182,6 +183,12 @@ class _MyAppState extends State<MyApp> {
                 ),
                 Center(
                     child: ElevatedButton(
+                        onPressed: spawnNewApp,
+                        child: const Text(
+                          'Spawn',
+                        ))),
+                Center(
+                    child: ElevatedButton(
                         onPressed:
                             loadAndOpenInProgress ? null : processLoadAndOpen,
                         child: Text(
@@ -259,6 +266,10 @@ class _MyAppState extends State<MyApp> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  Future<void> spawnNewApp() async {
+    await FileDownloader().spawn();
   }
 
   /// Process 'Load & Open' button

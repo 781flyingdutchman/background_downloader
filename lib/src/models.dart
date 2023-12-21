@@ -535,6 +535,7 @@ final class Config {
   static const localize = 'localize';
   static const useCacheDir = 'useCacheDir';
   static const useExternalStorage = 'useExternalStorage';
+  static const multipleInstances = 'multipleInstances';
 
   // Config arguments
   static const always = 'always'; // int 0 on native side

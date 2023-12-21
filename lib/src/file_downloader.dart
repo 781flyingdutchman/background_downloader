@@ -858,6 +858,8 @@ interface class FileDownloader {
     _downloader.destroy();
     Localstore.instance.clearCache();
   }
+
+  Future<void> spawn() => _downloader.spawn();
 }
 
 /// Performs the actual server request, with retries
