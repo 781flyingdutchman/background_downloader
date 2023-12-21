@@ -1,5 +1,5 @@
 # Uncomment this line to define a global platform for your project
-# platform :ios, '11.0'
+platform :ios, '13.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -37,5 +37,22 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    
+    # The following loop has been added to bypass compilation of specific
+    # permissions.
+    # If you want to bypass one or more permissions (so that you don't
+    # have to include things like a Photo Library Usage Description
+    # if you don't add files to the Photo Library) then add this loop
+    # and uncomment the permissions you want to bypass.
+    # If you bypass (by including the line below) then the
+    # check will not happen, and the permission is aways denied. If you
+    # bypass you do not need to include the associated entry in your
+    # Info.plist file
+    target.build_configurations.each do |config|
+      config.build_settings['OTHER_SWIFT_FLAGS'] ||= ['$(inherited)']
+      #config.build_settings['OTHER_SWIFT_FLAGS'] << '-D BYPASS_PERMISSION_NOTIFICATIONS'
+      #config.build_settings['OTHER_SWIFT_FLAGS'] << '-D BYPASS_PERMISSION_IOSADDTOPHOTOLIBRARY'
+      #config.build_settings['OTHER_SWIFT_FLAGS'] << '-D BYPASS_PERMISSION_IOSCHANGEPHOTOLIBRARY'
+      end
   end
 end
