@@ -303,7 +303,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         applicationContext = flutterPluginBinding.applicationContext
-        val hashCode = applicationContext.hashCode()
         backgroundChannel =
             MethodChannel(
                 flutterPluginBinding.binaryMessenger,

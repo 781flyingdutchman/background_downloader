@@ -807,7 +807,7 @@ void main() {
           fields: {'name': 'value'},
           group: 'someGroup',
           updates: Updates.statusAndProgress,
-          requiresWiFi: true,
+          requiresWiFi: false,
           retries: 1,
           metaData: 'someMetaData');
       expect(complexTask.httpRequestMethod, equals('POST'));

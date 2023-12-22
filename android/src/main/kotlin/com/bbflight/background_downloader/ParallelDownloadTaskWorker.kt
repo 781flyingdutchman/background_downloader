@@ -86,7 +86,6 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                                     connection.headerFields,
                                     unique = true
                                 )
-                                val dirName = File(filePath).parent ?: ""
                                 Log.d(TAG, "Suggested filename for taskId ${task.taskId}: ${task.filename}")
                             }
                             extractContentType(connection.headerFields)

@@ -1,4 +1,31 @@
-## 8.0.3 Bypassing permissions on iOS
+## 8.0.4
+
+### Kotlin compiler V1.9
+
+Kotlin compiler version moved from 1.8 to 1.9, typically this means changing your project's `build.gradle` entry:
+```agsl
+buildscript {
+    ext.kotlin_version = '1.9.0' # changed from '1.8.0'
+    repositories {
+        google()
+        mavenCentral()
+    }
+```
+
+### Enable multiple application instances on Android
+
+* Changes approach to backgroundChannel and activity fields in Kotlin plugin
+* Allows use of `android:launchMode="standard"` in Android manifest
+
+### Improvements and bug fixes
+
+* Notification handling on Android when app is suspended
+* Kotlin code refactoring for posting on backgroundChannel
+* Web compilation
+
+## 8.0.3
+
+### Bypassing permissions on iOS
 
 By default, the downloader allows any of the permissions to be requested, but that also means that Apple requires you to add things like Photo Library Usage Description to your Info.plist, even if you never move files to the Photo Library.
 
@@ -29,9 +56,9 @@ end
 ```
 and uncomment the line items that you want to bypass by deleting the `#` mark at the start of the line.
 
-## 8.0.2 Allow compilation on XCode 14
+## 8.0.2
 
-Add compiler version gate for Swift >=5.9
+* Allow compilation on XCode 14 by adding compiler version gate for Swift >=5.9
 
 ## 8.0.1
 
@@ -287,7 +314,7 @@ Partial Downloads, using a Range header, can now be properly paused on all platf
 
 ## 7.10.1
 
-Add `displayName` field to `Task` that can be used to store and dsipay a 'human readable' description of the task. It can be displayed in a notification using {displayName}.
+Add `displayName` field to `Task` that can be used to store and display a 'human readable' description of the task. It can be displayed in a notification using {displayName}.
 
 Bug fix for regression in compiling for Web platform (through stubbing - no actual web functionality).
 
