@@ -2,8 +2,6 @@ package com.bbflight.background_downloader
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import androidx.preference.PreferenceManager
 import androidx.work.CoroutineWorker
@@ -15,7 +13,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -73,43 +70,9 @@ open class TaskWorker(
         suspend fun postOnBackgroundChannel(
             method: String, task: Task, arg: Any
         ): Boolean {
-            val mainLooper = Looper.getMainLooper()
-            val runningOnUIThread = Looper.myLooper() == mainLooper
-            return coroutineScope {
-                val success = CompletableDeferred<Boolean>()
-                Handler(mainLooper).post {
-                    try {
-                        val argList = mutableListOf<Any>(
-                            taskToJsonString(task)
-                        )
-                        if (arg is ArrayList<*>) {
-                            argList.addAll(arg)
-                        } else {
-                            argList.add(arg)
-                        }
-                        val bgChannel = BDPlugin.backgroundChannel(taskId = task.taskId)
-                        Log.wtf(TAG, "Got bgChannel hash ${bgChannel?.hashCode()}")
-                        if (bgChannel != null) {
-                            bgChannel.invokeMethod(
-                                method, argList, FlutterResultHandler(success)
-                            )
-                        } else {
-                            Log.i(TAG, "Could not post $method to background channel")
-                            success.complete(false)
-                        }
-                    } catch (e: Exception) {
-                        Log.w(
-                            TAG,
-                            "Exception trying to post $method to background channel: ${e.message}"
-                        )
-                        if (!success.isCompleted) {
-                            success.complete(false)
-                        }
-                    }
-                }
-                // don't wait for result of post if running on UI thread -> true
-                return@coroutineScope if (BDPlugin.forceFailPostOnBackgroundChannel) false else runningOnUIThread || success.await()
-            }
+            val bgPost = BackgroundPost(task, method, arg)
+            QueueService.postOnBackgroundChannel(bgPost)
+            return bgPost.success.await()
         }
 
         /**

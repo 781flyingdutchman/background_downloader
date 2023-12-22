@@ -70,6 +70,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         @SuppressLint("StaticFieldLeak")
         var activity: Activity? = null //TODO check if we can lose this
         var notificationButtonText = mutableMapOf<String, String>() // for localization
+        var firstBackgroundChannel: MethodChannel? = null
         var canceledTaskIds = mutableMapOf<String, Long>() // <taskId, timeMillis>
         var pausedTaskIds = mutableSetOf<String>() // <taskId>, acts as flag
         var bgChannelByTaskId = mutableMapOf<String, MethodChannel>()
@@ -110,6 +111,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             val bgChannel = backgroundChannel(plugin)
             if (bgChannel != null) {
                 bgChannelByTaskId[task.taskId] = bgChannel
+                Log.wtf(TAG, " backgroundChannel for taskId ${task.taskId} = ${bgChannel.hashCode()}")
             } else {
                 Log.w(TAG, "Could not find backgroundChannel for taskId ${task.taskId}")
             }
@@ -288,7 +290,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             plugin: BDPlugin? = null,
             taskId: String = "bgd_non_existent_id"
         ): MethodChannel? {
-            return plugin?.backgroundChannel ?: bgChannelByTaskId[taskId]
+            return plugin?.backgroundChannel ?: bgChannelByTaskId[taskId] ?: firstBackgroundChannel
         }
     }
 
@@ -313,6 +315,9 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 "com.bbflight.background_downloader.background"
             )
         Log.wtf(TAG, "MI: backgroundChanel hash = ${backgroundChannel?.hashCode()}")
+        if (firstBackgroundChannel == null) {
+            firstBackgroundChannel = backgroundChannel
+        }
         channel = MethodChannel(
             flutterPluginBinding.binaryMessenger, "com.bbflight.background_downloader"
         )
@@ -342,6 +347,9 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         Log.wtf(TAG, "MI: Destroying bgChannel hash ${backgroundChannel?.hashCode()}")
         bgChannelByTaskId =
             bgChannelByTaskId.filter { it.value != backgroundChannel } as MutableMap
+        if (firstBackgroundChannel == backgroundChannel) {
+            firstBackgroundChannel = null
+        }
         backgroundChannel = null
     }
 
