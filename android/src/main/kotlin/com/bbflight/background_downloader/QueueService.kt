@@ -2,7 +2,6 @@ package com.bbflight.background_downloader
 
 import android.os.Looper
 import android.util.Log
-import com.bbflight.background_downloader.QueueService.taskIdDeletionQueue
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,11 +26,11 @@ object QueueService {
      * Starts listening to the queues and processes each item
      *
      * taskIdDeletionQueue:
-     * -  Each item is a taskId and it will be removed from the
+     *    Each item is a taskId and it will be removed from the
      *    BDPlugin.bgChannelByTaskId and BDPlugin.localResumeData maps
      *
      * backgroundPostQueue:
-     *    each item is a [BackgroundPost] that will be posted on the UI thread, and its
+     *    Each item is a [BackgroundPost] that will be posted on the UI thread, and its
      *    success completer will complete with true if successfully posted
      */
     init {
@@ -95,7 +94,8 @@ object QueueService {
 
 
     /**
-     * Remove this [taskId] from the [BDPlugin.bgChannelByTaskId] map
+     * Remove this [taskId] from the [BDPlugin.bgChannelByTaskId] map and the
+     * [BDPlugin.localResumeData] map
      */
     suspend fun cleanupTaskId(taskId: String) {
         lastTaskIdAdditionTime = System.currentTimeMillis()
@@ -112,6 +112,9 @@ object QueueService {
 
 }
 
+/**
+ * BackgroundPost to be sent via backgroundChannel to Flutter, used in [QueueService]
+ */
 data class BackgroundPost(
     val task: Task,
     val method: String,

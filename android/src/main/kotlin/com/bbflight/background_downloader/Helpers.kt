@@ -10,11 +10,6 @@ import androidx.preference.PreferenceManager
 import com.bbflight.background_downloader.TaskWorker.Companion.TAG
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.io.File
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
@@ -134,7 +129,10 @@ fun getContentLength(responseHeaders: Map<String, List<String>>, task: Task): Lo
         ?: task.headers["known-content-length"]?.toLongOrNull()
         ?: -1)
     if (knownLength != -1L) {
-        Log.d(TAG, "TaskId ${task.taskId} contentLength set to $knownLength based on Known-Content-Length header")
+        Log.d(
+            TAG,
+            "TaskId ${task.taskId} contentLength set to $knownLength based on Known-Content-Length header"
+        )
     } else {
         Log.d(TAG, "TaskId ${task.taskId} contentLength undetermined")
     }
@@ -163,6 +161,7 @@ fun baseDirPath(context: Context, baseDirectory: BaseDirectory): String? {
                 BaseDirectory.applicationLibrary -> Path(
                     context.filesDir.path, "Library"
                 ).pathString
+
                 BaseDirectory.root -> ""
             }
         } else {
@@ -203,7 +202,8 @@ fun getBasenameWithoutExtension(file: File): String {
  * Simple Flutter result handler, completes the [completer] with the result
  * of the MethodChannel call
  */
-class FlutterResultHandler(private val completer: CompletableDeferred<Boolean>) : MethodChannel.Result {
+class FlutterResultHandler(private val completer: CompletableDeferred<Boolean>) :
+    MethodChannel.Result {
 
     override fun success(result: Any?) {
         completer.complete(result == true)

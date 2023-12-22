@@ -68,7 +68,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
 
         @SuppressLint("StaticFieldLeak")
-        var activity: Activity? = null //TODO check if we can lose this
         var notificationButtonText = mutableMapOf<String, String>() // for localization
         var firstBackgroundChannel: MethodChannel? = null
         var canceledTaskIds = mutableMapOf<String, Long>() // <taskId, timeMillis>
@@ -111,7 +110,10 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             val bgChannel = backgroundChannel(plugin)
             if (bgChannel != null) {
                 bgChannelByTaskId[task.taskId] = bgChannel
-                Log.wtf(TAG, " backgroundChannel for taskId ${task.taskId} = ${bgChannel.hashCode()}")
+                Log.wtf(
+                    TAG,
+                    " backgroundChannel for taskId ${task.taskId} = ${bgChannel.hashCode()}"
+                )
             } else {
                 Log.w(TAG, "Could not find backgroundChannel for taskId ${task.taskId}")
             }
@@ -298,6 +300,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private var backgroundChannel: MethodChannel? = null
     private lateinit var applicationContext: Context
     private var scope: CoroutineScope? = null
+    var activity: Activity? = null
+
 
     /**
      * Attaches the plugin to the Flutter engine and performs initialization
@@ -765,7 +769,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private fun methodRequestPermission(call: MethodCall, result: Result) {
         val permissionType = PermissionType.entries[call.arguments as Int]
-        result.success(PermissionsService.requestPermission(permissionType))
+        result.success(PermissionsService.requestPermission(this, permissionType))
     }
 
     /**
@@ -773,7 +777,12 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private fun methodShouldShowPermissionRationale(call: MethodCall, result: Result) {
         val permissionType = PermissionType.entries[call.arguments as Int]
-        result.success(PermissionsService.shouldShowRequestPermissionRationale(permissionType))
+        result.success(
+            PermissionsService.shouldShowRequestPermissionRationale(
+                this,
+                permissionType
+            )
+        )
     }
 
     /**
@@ -941,7 +950,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         )
         if (intent != null && intent.action == NotificationReceiver.actionTap) {
             // if taskJsonMapString == null, this was a main launch and we ignore
-            val taskJsonMapString = intent.getStringExtra(NotificationReceiver.keyTask) ?: return true
+            val taskJsonMapString =
+                intent.getStringExtra(NotificationReceiver.keyTask) ?: return true
             val notificationTypeOrdinal =
                 intent.getIntExtra(NotificationReceiver.keyNotificationType, 0)
             val notificationId = intent.getIntExtra(NotificationReceiver.keyNotificationId, 0)
