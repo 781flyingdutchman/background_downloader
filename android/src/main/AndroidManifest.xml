@@ -3,7 +3,7 @@
 
     <application>
 
-        <receiver android:name="NotificationRcvr" android:exported="false">
+        <receiver android:name="NotificationReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="com.bbflight.background_downloader.cancelActive" />
             </intent-filter>

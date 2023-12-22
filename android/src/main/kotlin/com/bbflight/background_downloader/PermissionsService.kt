@@ -12,6 +12,7 @@ enum class PermissionType {
     notifications, androidSharedStorage, iosAddToPhotoLibrary, iosChangePhotoLibrary
 }
 
+@Suppress("unused")
 enum class PermissionStatus {
     undetermined, denied, granted, partial, requestError
 }
@@ -19,7 +20,6 @@ enum class PermissionStatus {
 class PermissionsService {
     companion object {
         private const val baseRequestCode = 373900
-        private const val TAG = "PermissionsService"
 
         /**
          * Requests [PermissionStatus] for permission of [permissionType]
@@ -77,17 +77,17 @@ class PermissionsService {
          * [onRequestPermissionsResult], a message is sent back to the
          * Flutter side with the permission result
          */
-        fun requestPermission(permissionType: PermissionType) : Boolean {
+        fun requestPermission(plugin: BDPlugin, permissionType: PermissionType): Boolean {
             val requestCode = baseRequestCode + permissionType.ordinal
             when (permissionType) {
                 PermissionType.notifications -> {
                     // On Android 33+, check/ask for permission
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        if (BDPlugin.activity == null) {
+                        if (plugin.activity == null) {
                             return false
                         }
                         ActivityCompat.requestPermissions(
-                            BDPlugin.activity!!, arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                            plugin.activity!!, arrayOf(Manifest.permission.POST_NOTIFICATIONS),
                             requestCode
                         )
                         return true
@@ -99,11 +99,11 @@ class PermissionsService {
                 PermissionType.androidSharedStorage -> {
                     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
                         // On Android before 29, check/ask for permission
-                        if (BDPlugin.activity == null) {
+                        if (plugin.activity == null) {
                             return false
                         }
                         ActivityCompat.requestPermissions(
-                            BDPlugin.activity!!,
+                            plugin.activity!!,
                             arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
                             requestCode
                         )
@@ -116,7 +116,7 @@ class PermissionsService {
                 }
 
                 else -> {
-                   return false
+                    return false
                 }
             }
         }
@@ -125,34 +125,49 @@ class PermissionsService {
          * Returns true if Android shouldShowRequestPermissionRationale returns true for this
          * [permissionType]. Returns false for unrecognized [permissionType]
          */
-        fun shouldShowRequestPermissionRationale(permissionType: PermissionType) : Boolean {
-            return when (permissionType) {
-                PermissionType.notifications -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                         ActivityCompat.shouldShowRequestPermissionRationale(BDPlugin.activity!!, Manifest.permission.POST_NOTIFICATIONS)
-                    } else {
-                        false
+        fun shouldShowRequestPermissionRationale(
+            plugin: BDPlugin,
+            permissionType: PermissionType
+        ): Boolean {
+            val activity = plugin.activity
+            return if (activity != null) {
+                when (permissionType) {
+                    PermissionType.notifications -> {
+                        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            ActivityCompat.shouldShowRequestPermissionRationale(
+                                activity,
+                                Manifest.permission.POST_NOTIFICATIONS
+                            )
+                        } else {
+                            false
+                        }
                     }
-                }
 
-                PermissionType.androidSharedStorage -> {
-                    ActivityCompat.shouldShowRequestPermissionRationale(BDPlugin.activity!!, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                }
+                    PermissionType.androidSharedStorage -> {
+                        return ActivityCompat.shouldShowRequestPermissionRationale(
+                            activity,
+                            Manifest.permission.WRITE_EXTERNAL_STORAGE
+                        )
+                    }
 
-                else -> false
+                    else -> return false
+                }
+            } else {
+                false
             }
         }
 
         /// Processes the onRequestPermissionsResult received by the Activity
         fun onRequestPermissionsResult(
-            requestCode: Int, permissions: Array<out String>, grantResults: IntArray
+            plugin: BDPlugin,
+            requestCode: Int, grantResults: IntArray
         ): Boolean {
             val granted =
                 (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)
             return when (requestCode) {
                 baseRequestCode + PermissionType.notifications.ordinal,
-                baseRequestCode + PermissionType.androidSharedStorage.ordinal-> {
-                    sendPermissionResult(granted)
+                baseRequestCode + PermissionType.androidSharedStorage.ordinal -> {
+                    sendPermissionResult(plugin, granted)
                     true
                 }
 
@@ -168,12 +183,18 @@ class PermissionsService {
          * Only one request can be 'in flight' at any time
          */
         private fun sendPermissionResult(
+            plugin: BDPlugin,
             granted: Boolean
         ) {
             // send with dummy task ("")
-            BDPlugin.backgroundChannel?.invokeMethod(
+            val bgChannel = BDPlugin.backgroundChannel(plugin)
+            bgChannel?.invokeMethod(
                 "permissionRequestResult",
-                listOf("", if (granted) PermissionStatus.granted.ordinal else PermissionStatus.denied.ordinal))
+                listOf(
+                    "",
+                    if (granted) PermissionStatus.granted.ordinal else PermissionStatus.denied.ordinal
+                )
+            )
 
         }
     }

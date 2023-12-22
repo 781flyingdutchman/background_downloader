@@ -38,7 +38,7 @@ enum class BaseDirectory {
 private class BaseDirectorySerializer: EnumAsIntSerializer<BaseDirectory>(
     "BaseDirectory",
     { it.ordinal },
-    { v -> BaseDirectory.values().first { it.ordinal == v } }
+    { v -> BaseDirectory.entries.first { it.ordinal == v } }
 )
 
 /// Type of updates requested for a group of tasks
@@ -53,7 +53,7 @@ enum class Updates {
 private class UpdatesSerializer: EnumAsIntSerializer<Updates>(
     "Updates",
     { it.ordinal },
-    { v -> Updates.values().first { it.ordinal == v } }
+    { v -> Updates.entries.first { it.ordinal == v } }
 )
 
 /**
@@ -62,6 +62,7 @@ private class UpdatesSerializer: EnumAsIntSerializer<Updates>(
  * A blend of UploadTask, DownloadTask and ParallelDownloadTask with [taskType] indicating what kind
  * of task this is
  */
+@Suppress("SameParameterValue")
 @Serializable
 class Task(
     val taskId: String = "${Random.nextInt().absoluteValue}",
@@ -342,9 +343,7 @@ class Task(
 
         other as Task
 
-        if (taskId != other.taskId) return false
-
-        return true
+        return taskId == other.taskId
     }
 
     override fun hashCode(): Int {
@@ -381,7 +380,7 @@ enum class TaskStatus {
 private class TaskStatusSerializer: EnumAsIntSerializer<TaskStatus>(
     "TaskStatus",
     { it.ordinal },
-    { v -> TaskStatus.values().first { it.ordinal == v } }
+    { v -> TaskStatus.entries.first { it.ordinal == v } }
 )
 
 @Serializable
@@ -404,7 +403,7 @@ data class ResumeData(val task: Task, val data: String, val requiredStartByte: L
  * single [TaskException] class has a field for the [TaskException.type] of exception, as well as all possible
  * exception fields.
  * The [TaskException.type] (as a String using the enum's [ExceptionType.typeString]) is used on the
- * Flutter side to create the approrpriate Exception subclass.
+ * Flutter side to create the appropriate Exception subclass.
  */
 enum class ExceptionType(val typeString: String) {
     /// General error

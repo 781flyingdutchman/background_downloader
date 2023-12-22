@@ -8,6 +8,8 @@ import android.os.StatFs
 import android.util.Log
 import androidx.preference.PreferenceManager
 import com.bbflight.background_downloader.TaskWorker.Companion.TAG
+import io.flutter.plugin.common.MethodChannel
+import kotlinx.coroutines.CompletableDeferred
 import java.io.File
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
@@ -127,7 +129,10 @@ fun getContentLength(responseHeaders: Map<String, List<String>>, task: Task): Lo
         ?: task.headers["known-content-length"]?.toLongOrNull()
         ?: -1)
     if (knownLength != -1L) {
-        Log.d(TAG, "TaskId ${task.taskId} contentLength set to $knownLength based on Known-Content-Length header")
+        Log.d(
+            TAG,
+            "TaskId ${task.taskId} contentLength set to $knownLength based on Known-Content-Length header"
+        )
     } else {
         Log.d(TAG, "TaskId ${task.taskId} contentLength undetermined")
     }
@@ -156,6 +161,7 @@ fun baseDirPath(context: Context, baseDirectory: BaseDirectory): String? {
                 BaseDirectory.applicationLibrary -> Path(
                     context.filesDir.path, "Library"
                 ).pathString
+
                 BaseDirectory.root -> ""
             }
         } else {
@@ -190,4 +196,26 @@ fun getBasenameWithoutExtension(file: File): String {
     val fileName = file.name
     val extension = file.extension
     return fileName.substringBeforeLast(".$extension")
+}
+
+/**
+ * Simple Flutter result handler, completes the [completer] with the result
+ * of the MethodChannel call
+ */
+class FlutterResultHandler(private val completer: CompletableDeferred<Boolean>) :
+    MethodChannel.Result {
+
+    override fun success(result: Any?) {
+        completer.complete(result == true)
+    }
+
+    override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
+        Log.i(BDPlugin.TAG, "Flutter result error $errorCode: $errorMessage")
+        completer.complete(false)
+    }
+
+    override fun notImplemented() {
+        Log.i(BDPlugin.TAG, "Flutter method not implemented")
+        completer.complete(false)
+    }
 }

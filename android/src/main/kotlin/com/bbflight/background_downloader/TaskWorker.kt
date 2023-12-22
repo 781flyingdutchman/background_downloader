@@ -1,27 +1,35 @@
-@file:Suppress("EnumEntryName")
-
 package com.bbflight.background_downloader
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import androidx.preference.PreferenceManager
 import androidx.work.CoroutineWorker
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import java.io.*
+import java.io.DataOutputStream
+import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 import java.lang.System.currentTimeMillis
 import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.SocketException
 import java.net.URL
-import java.util.*
+import java.util.Timer
 import kotlin.concurrent.schedule
 import kotlin.concurrent.write
 import java.lang.Double.min as doubleMin
@@ -62,43 +70,9 @@ open class TaskWorker(
         suspend fun postOnBackgroundChannel(
             method: String, task: Task, arg: Any
         ): Boolean {
-            val runningOnUIThread = Looper.myLooper() == Looper.getMainLooper()
-            return coroutineScope {
-                val success = CompletableDeferred<Boolean>()
-                Handler(Looper.getMainLooper()).post {
-                    try {
-                        val argList = mutableListOf<Any>(
-                            taskToJsonString(task)
-                        )
-                        if (arg is ArrayList<*>) {
-                            argList.addAll(arg)
-                        } else {
-                            argList.add(arg)
-                        }
-                        if (BDPlugin.backgroundChannel != null) {
-                            BDPlugin.backgroundChannel?.invokeMethod(
-                                method, argList
-                            )
-                            if (!BDPlugin.forceFailPostOnBackgroundChannel) {
-                                success.complete(true)
-                            }
-                        } else {
-                            Log.i(TAG, "Could not post $method to background channel")
-                        }
-                    } catch (e: Exception) {
-                        Log.w(
-                            TAG,
-                            "Exception trying to post $method to background channel: ${e.message}"
-                        )
-                    } finally {
-                        if (!success.isCompleted) {
-                            success.complete(false)
-                        }
-                    }
-                }
-                // don't wait for result of post if running on UI thread -> true
-                return@coroutineScope runningOnUIThread || success.await()
-            }
+            val bgPost = BackgroundPost(task, method, arg)
+            QueueService.postOnBackgroundChannel(bgPost)
+            return bgPost.success.await()
         }
 
         /**
@@ -185,7 +159,8 @@ open class TaskWorker(
                 }
             }
             // if task is in final state, cancel the WorkManager job (if failed),
-            // remove task from persistent storage and remove resume data from local memory
+            // remove task from persistent storage, remove resume data from local memory
+            // and remove the task from the backgroundChannel map
             if (status.isFinalState()) {
                 if (context != null && status == TaskStatus.failed) {
                     // Cancel the WorkManager job.
@@ -215,7 +190,7 @@ open class TaskWorker(
                     )
                     editor.apply()
                 }
-                BDPlugin.localResumeData.remove(task.taskId)
+                QueueService.cleanupTaskId(task.taskId)
             }
         }
 
@@ -226,16 +201,9 @@ open class TaskWorker(
          * from the [BDPlugin.canceledTaskIds]
          */
         private fun canSendCancellation(task: Task): Boolean {
-            val idsToRemove = ArrayList<String>()
             val now = currentTimeMillis()
-            for (entry in BDPlugin.canceledTaskIds) {
-                if (now - entry.value > 1000) {
-                    idsToRemove.add(entry.key)
-                }
-            }
-            for (taskId in idsToRemove) {
-                BDPlugin.canceledTaskIds.remove(taskId)
-            }
+            BDPlugin.canceledTaskIds =
+                BDPlugin.canceledTaskIds.filter { now - it.value < 1000 } as MutableMap
             return BDPlugin.canceledTaskIds[task.taskId] == null
         }
 
@@ -258,7 +226,9 @@ open class TaskWorker(
                     // unsuccessful post, so store in local prefs
                     Log.d(TAG, "Could not post progress update -> storing locally")
                     storeLocally(
-                        BDPlugin.keyProgressUpdateMap, task.taskId, Json.encodeToString(TaskProgressUpdate(task, progress, expectedFileSize)),
+                        BDPlugin.keyProgressUpdateMap,
+                        task.taskId,
+                        Json.encodeToString(TaskProgressUpdate(task, progress, expectedFileSize)),
                         prefs
                     )
                 }
@@ -350,8 +320,8 @@ open class TaskWorker(
     // additional parameters for final TaskStatusUpdate
     var taskException: TaskException? = null
     var responseBody: String? = null
-    var mimeType: String? = null // derived from Content-Type header
-    var charSet: String? = null // derived from Content-Type header
+    private var mimeType: String? = null // derived from Content-Type header
+    private var charSet: String? = null // derived from Content-Type header
 
     // related to foreground tasks
     private var runInForegroundFileSize: Int = -1

@@ -39,7 +39,7 @@ class UpdateNotificationWorker(applicationContext: Context, workerParams: Worker
             }
         } else {
             // update notification for this taskStatus
-            val taskStatus = TaskStatus.values()[taskStatusOrdinal]
+            val taskStatus = TaskStatus.entries[taskStatusOrdinal]
             NotificationService.updateNotification(this, taskStatus)
         }
         return Result.success()
