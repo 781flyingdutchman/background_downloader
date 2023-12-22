@@ -892,8 +892,4 @@ abstract base class BaseDownloader {
     removePausedTask(); // removes all
     resetUpdatesStreamController();
   }
-
-  Future<void> spawn() async {
-    return;
-  }
 }

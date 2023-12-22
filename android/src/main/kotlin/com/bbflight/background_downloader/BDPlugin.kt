@@ -7,7 +7,6 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat.startActivity
 import androidx.preference.PreferenceManager
 import androidx.work.*
 import com.bbflight.background_downloader.TaskWorker.Companion.taskToJsonString
@@ -110,10 +109,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             val bgChannel = backgroundChannel(plugin)
             if (bgChannel != null) {
                 bgChannelByTaskId[task.taskId] = bgChannel
-                Log.wtf(
-                    TAG,
-                    " backgroundChannel for taskId ${task.taskId} = ${bgChannel.hashCode()}"
-                )
             } else {
                 Log.w(TAG, "Could not find backgroundChannel for taskId ${task.taskId}")
             }
@@ -309,16 +304,11 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         applicationContext = flutterPluginBinding.applicationContext
         val hashCode = applicationContext.hashCode()
-        Log.wtf(
-            TAG,
-            "Attaching context $hashCode and plugin ${this.hashCode()} and engine ${flutterPluginBinding.binaryMessenger.hashCode()}"
-        )
         backgroundChannel =
             MethodChannel(
                 flutterPluginBinding.binaryMessenger,
                 "com.bbflight.background_downloader.background"
             )
-        Log.wtf(TAG, "MI: backgroundChanel hash = ${backgroundChannel?.hashCode()}")
         if (firstBackgroundChannel == null) {
             firstBackgroundChannel = backgroundChannel
         }
@@ -345,10 +335,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * BackgroundChannel is set to null, and references to it removed if it no longer in use anywhere
      * */
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        Log.wtf(TAG, "Detaching ${binding.binaryMessenger}")
         channel?.setMethodCallHandler(null)
         channel = null
-        Log.wtf(TAG, "MI: Destroying bgChannel hash ${backgroundChannel?.hashCode()}")
         bgChannelByTaskId =
             bgChannelByTaskId.filter { it.value != backgroundChannel } as MutableMap
         if (firstBackgroundChannel == backgroundChannel) {
@@ -402,17 +390,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 )
 
                 "testSuggestedFilename" -> methodTestSuggestedFilename(call, result)
-                "spawn" -> {
-                    val intent = applicationContext.packageManager.getLaunchIntentForPackage(
-                        applicationContext.packageName
-                    )
-                    if (intent != null) {
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        intent.addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
-                        startActivity(applicationContext, intent, null)
-                    }
-                    result.success(null)
-                }
 
                 else -> result.notImplemented()
             }
@@ -944,10 +921,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * its listener may not have been initialized yet. This function therefore includes retry logic.
      */
     private fun handleIntent(intent: Intent?): Boolean {
-        Log.wtf(
-            TAG,
-            "Intent.action = ${intent?.action} with ${intent?.getStringExtra(NotificationReceiver.keyTask)}"
-        )
         if (intent != null && intent.action == NotificationReceiver.actionTap) {
             // if taskJsonMapString == null, this was a main launch and we ignore
             val taskJsonMapString =

@@ -59,7 +59,6 @@ object QueueService {
                             argList.add(bgPost.arg)
                         }
                         val bgChannel = BDPlugin.backgroundChannel(taskId = bgPost.task.taskId)
-                        Log.wtf(TaskWorker.TAG, "Got bgChannel hash ${bgChannel?.hashCode()}")
                         if (bgChannel != null) {
                             bgChannel.invokeMethod(
                                 bgPost.method, argList, FlutterResultHandler(success)

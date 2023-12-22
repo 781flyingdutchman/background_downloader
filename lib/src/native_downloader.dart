@@ -404,11 +404,6 @@ abstract base class NativeDownloader extends BaseDownloader {
     }
     return (configItem.$1, ''); // normal result
   }
-
-  @override
-  Future<void> spawn() async {
-    NativeDownloader.methodChannel.invokeMethod('spawn');
-  }
 }
 
 /// Android native downloader

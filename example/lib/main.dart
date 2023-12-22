@@ -182,12 +182,6 @@ class _MyAppState extends State<MyApp> {
                 ),
                 Center(
                     child: ElevatedButton(
-                        onPressed: spawnNewApp,
-                        child: const Text(
-                          'Spawn',
-                        ))),
-                Center(
-                    child: ElevatedButton(
                         onPressed:
                             loadAndOpenInProgress ? null : processLoadAndOpen,
                         child: Text(
@@ -265,10 +259,6 @@ class _MyAppState extends State<MyApp> {
     if (mounted) {
       setState(() {});
     }
-  }
-
-  Future<void> spawnNewApp() async {
-    await FileDownloader().spawn();
   }
 
   /// Process 'Load & Open' button
