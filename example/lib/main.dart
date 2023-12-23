@@ -185,7 +185,11 @@ class _MyAppState extends State<MyApp> {
                         onPressed:
                             loadAndOpenInProgress ? null : processLoadAndOpen,
                         child: Text(
-                          Platform.isIOS ? 'Load, open and add' : 'Load & Open',
+                          Platform.isIOS
+                              ? 'Load, open and add'
+                              : Platform.isAndroid
+                                  ? 'Load, open and move'
+                                  : 'Load & Open',
                         ))),
                 Center(
                     child: Text(
@@ -302,6 +306,27 @@ class _MyAppState extends State<MyApp> {
           }
         } else {
           debugPrint('iOS Photo Library permission not granted');
+        }
+      }
+      if (Platform.isAndroid) {
+        // on Android we move, not add, so we first wat for the
+        // openFile method to complete
+        await Future.delayed(const Duration(seconds: 3));
+        var auth = await FileDownloader()
+            .permissions
+            .status(PermissionType.androidSharedStorage);
+        if (auth != PermissionStatus.granted) {
+          auth = await FileDownloader()
+              .permissions
+              .request(PermissionType.androidSharedStorage);
+        }
+        if (auth == PermissionStatus.granted) {
+          final path = await FileDownloader()
+              .moveToSharedStorage(task, SharedStorage.images);
+          debugPrint(
+              'Android path to dog picture in .images = ${path ?? "permission denied"}');
+        } else {
+          debugPrint('androidSharedStorage permission not granted');
         }
       }
       setState(() {

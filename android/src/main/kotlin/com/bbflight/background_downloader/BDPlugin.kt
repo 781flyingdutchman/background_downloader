@@ -638,7 +638,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             )
         } else {
             Log.i(TAG, "No permission to move to shared storage")
-            result.success(false)
+            result.success(null)
         }
     }
 
