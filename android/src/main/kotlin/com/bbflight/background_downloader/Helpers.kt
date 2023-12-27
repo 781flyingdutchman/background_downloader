@@ -166,7 +166,11 @@ fun baseDirPath(context: Context, baseDirectory: BaseDirectory): String? {
             }
         } else {
             baseDirPath = when (baseDirectory) {
-                BaseDirectory.applicationDocuments -> "${context.dataDir.path}/app_flutter"
+                BaseDirectory.applicationDocuments -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    "${context.dataDir.path}/app_flutter"
+                } else {
+                    "${context.applicationInfo.dataDir}/app_flutter"
+                }
                 BaseDirectory.temporary -> context.cacheDir.path
                 BaseDirectory.applicationSupport -> context.filesDir.path
                 BaseDirectory.applicationLibrary -> "${context.filesDir.path}/Library"

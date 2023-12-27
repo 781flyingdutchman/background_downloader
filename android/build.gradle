@@ -35,7 +35,7 @@ apply plugin: 'kotlinx-serialization'
 
 
 android {
-    compileSdk 33
+    compileSdk 34
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
@@ -51,7 +51,7 @@ android {
     }
 
     defaultConfig {
-        minSdkVersion 24
+        minSdkVersion 21
     }
 
     namespace 'com.bbflight.background_downloader'

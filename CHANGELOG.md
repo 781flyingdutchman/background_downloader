@@ -1,3 +1,7 @@
+## 8.0.5
+
+Android minSdk now 21 (was 24) and compileSdk now 34 (was 33)
+
 ## 8.0.4
 
 ### Kotlin compiler V1.9
@@ -58,7 +62,7 @@ and uncomment the line items that you want to bypass by deleting the `#` mark at
 
 ## 8.0.2
 
-* Allow compilation on XCode 14 by adding compiler version gate for Swift >=5.9
+Allow compilation on XCode 14 by adding compiler version gate for Swift >=5.9
 
 ## 8.0.1
 
