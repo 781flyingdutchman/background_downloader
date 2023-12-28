@@ -240,7 +240,12 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
                                               description: "Failed to create directory \(directory.path)")
                 return
             }
-            let filePath = directory.appendingPathComponent(task.filename)
+            let filePath: URL
+            if #available(iOS 16.0, *) {
+                filePath = directory.appending(path: task.filename)
+            } else {
+                filePath = directory.appendingPathComponent(task.filename)
+            }
             if FileManager.default.fileExists(atPath: filePath.path) {
                 try? FileManager.default.removeItem(at: filePath)
             }

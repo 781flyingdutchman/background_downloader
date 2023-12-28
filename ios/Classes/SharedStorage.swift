@@ -176,7 +176,12 @@ private func moveToFakeSharedStorage(filePath: String, destination: SharedStorag
             return nil
         }
     }
-    let destUrl = directory.appendingPathComponent((filePath as NSString).lastPathComponent, isDirectory: false)
+    let destUrl: URL
+    if #available(iOS 16.0, *) {
+        destUrl = directory.appending(path: (filePath as NSString).lastPathComponent, directoryHint: .notDirectory)
+    } else {
+        destUrl = directory.appendingPathComponent((filePath as NSString).lastPathComponent, isDirectory: false)
+    }
     if FileManager.default.fileExists(atPath: destUrl.path) {
         try? FileManager.default.removeItem(at: destUrl)
     }
