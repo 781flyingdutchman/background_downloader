@@ -187,9 +187,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             scheduleDownload(task: task, taskDescription: taskDescription, baseRequest: baseRequest, resumeData: resumeData, result: result)
         } else
         {
-            DispatchQueue.global().async {
-                self.scheduleUpload(task: task, taskDescription: taskDescription, baseRequest: baseRequest, result: result)
-            }
+            scheduleUpload(task: task, taskDescription: taskDescription, baseRequest: baseRequest, result: result)
         }
     }
     
