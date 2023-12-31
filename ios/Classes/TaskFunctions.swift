@@ -75,7 +75,7 @@ func getFilePath(for task: Task, withFilename: String? = nil) -> String? {
     else {
         return nil
     }
-    return directory.appendingPathComponent(withFilename ?? task.filename).path
+    return directory.appendingPath(withFilename ?? task.filename).path
 }
 
 func stripFileExtension ( _ filename: String ) -> String {
@@ -558,7 +558,7 @@ func directoryForTask(task: Task) throws ->  URL {
     }
     return task.directory.isEmpty
     ? documentsURL
-    : documentsURL.appendingPathComponent(task.directory)
+    : documentsURL.appendingPath(task.directory, isDirectory: true)
     
 }
 

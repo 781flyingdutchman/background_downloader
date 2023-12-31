@@ -97,7 +97,7 @@ public func pathInSharedStorage(filePath: String, destination: SharedStorage, di
         os_log("Cannot determine path in shared storage: no permission for directory %@", log: log, type: .info, directory)
         return nil
     }
-    let destUrl = directory.appendingPathComponent((filePath as NSString).lastPathComponent)
+    let destUrl = directory.appendingPath((filePath as NSString).lastPathComponent)
     return destUrl.path
 }
 
@@ -158,8 +158,8 @@ public func directoryForSharedStorage(destination: SharedStorage, directory: Str
                                  appropriateFor: nil,
                                  create: true)
     return directory.isEmpty
-    ? documentsURL?.appendingPathComponent(dir)
-    : documentsURL?.appendingPathComponent(dir).appendingPathComponent(directory)
+    ? documentsURL?.appendingPath(dir, isDirectory: true)
+    : documentsURL?.appendingPath(dir, isDirectory: true).appendingPath(directory, isDirectory: true)
 }
 
 private func moveToFakeSharedStorage(filePath: String, destination: SharedStorage, directory: String) -> String? {
@@ -176,12 +176,7 @@ private func moveToFakeSharedStorage(filePath: String, destination: SharedStorag
             return nil
         }
     }
-    let destUrl: URL
-    if #available(iOS 16.0, *) {
-        destUrl = directory.appending(path: (filePath as NSString).lastPathComponent, directoryHint: .notDirectory)
-    } else {
-        destUrl = directory.appendingPathComponent((filePath as NSString).lastPathComponent, isDirectory: false)
-    }
+    let destUrl = directory.appendingPath((filePath as NSString).lastPathComponent)
     if FileManager.default.fileExists(atPath: destUrl.path) {
         try? FileManager.default.removeItem(at: destUrl)
     }

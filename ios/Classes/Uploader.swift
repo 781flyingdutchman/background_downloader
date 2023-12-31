@@ -96,7 +96,7 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
     ///
     /// Should only be called after calling createMultipartFile, and only when that returns true
     func outputFileUrl() -> URL {
-        return FileManager.default.temporaryDirectory.appendingPathComponent(outputFilename)
+        return FileManager.default.temporaryDirectory.appendingPath(outputFilename)
     }
     
     /// Write form fields

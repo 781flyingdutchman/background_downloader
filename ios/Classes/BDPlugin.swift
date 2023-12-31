@@ -215,7 +215,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                 postResult(result: result, value: false)
                 return
             }
-            let filePath = directory.appendingPathComponent(task.filename)
+            let filePath = directory.appendingPath(task.filename)
             if !FileManager.default.fileExists(atPath: filePath.path) {
                 os_log("Could not find file %@ for taskId %@", log: log, type: .info, filePath.absoluteString, task.taskId)
                 postResult(result: result, value: false)
