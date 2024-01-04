@@ -1,7 +1,6 @@
 
 
 buildscript {
-//    ext.kotlin_version = '1.9.20'
     repositories {
         google()
         mavenCentral()
@@ -13,10 +12,6 @@ buildscript {
         classpath "org.jetbrains.kotlin:kotlin-serialization:$kotlin_version"
     }
 }
-
-//plugins {
-//    id 'org.jetbrains.kotlin.plugin.serialization' version '1.9.20'
-//}
 
 group 'com.bbflight.background_downloader'
 version '1.0-SNAPSHOT'
@@ -59,11 +54,10 @@ android {
 }
 
 dependencies {
-    implementation "androidx.work:work-runtime-ktx:2.8.1"
+    implementation "androidx.work:work-runtime-ktx:2.9.0"
     implementation "androidx.concurrent:concurrent-futures-ktx:1.1.0"
     implementation "androidx.preference:preference-ktx:1.2.1"
-    implementation 'com.google.code.gson:gson:2.8.9'
-    implementation "androidx.core:core-ktx:1.10.0"
+    implementation "androidx.core:core-ktx:1.12.0"
     implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0"
     implementation 'androidx.test:monitor:1.6.1'
     testImplementation "junit:junit:4.13.2"
