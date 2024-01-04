@@ -53,8 +53,9 @@ android {
     defaultConfig {
         minSdkVersion 21
     }
+    if (project.android.hasProperty("namespace")) { namespace 'com.bbflight.background_downloader' }
 
-    namespace 'com.bbflight.background_downloader'
+
 }
 
 dependencies {
