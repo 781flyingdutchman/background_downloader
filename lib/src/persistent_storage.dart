@@ -16,7 +16,6 @@ import 'task.dart';
 /// Defines 'store', 'retrieve', 'retrieveAll' and 'remove' methods for:
 /// - [TaskRecord]s, keyed by taskId
 /// - paused [Task]s, keyed by taskId
-/// - modified [Task]s, keyed by taskId
 /// - [ResumeData], keyed by taskId
 ///
 /// Each of the objects has a toJson method and can be created using
@@ -30,7 +29,7 @@ abstract interface class PersistentStorage {
   /// Retrieve [TaskRecord] with [taskId], or null if not found
   Future<TaskRecord?> retrieveTaskRecord(String taskId);
 
-  /// Retrieve all modified tasks
+  /// Retrieve all [TaskRecord]
   Future<List<TaskRecord>> retrieveAllTaskRecords();
 
   /// Remove [TaskRecord] with [taskId] from storage. If null, remove all
