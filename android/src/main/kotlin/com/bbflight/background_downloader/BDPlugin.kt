@@ -9,6 +9,7 @@ import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import androidx.preference.PreferenceManager
 import androidx.work.*
+import com.bbflight.background_downloader.BDPlugin.Companion.backgroundChannel
 import com.bbflight.background_downloader.TaskWorker.Companion.taskToJsonString
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -53,6 +54,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         const val keyResumeDataMap = "com.bbflight.background_downloader.resumeDataMap.v2"
         const val keyStatusUpdateMap = "com.bbflight.background_downloader.statusUpdateMap.v2"
         const val keyProgressUpdateMap = "com.bbflight.background_downloader.progressUpdateMap.v2"
+        const val keyRequireWiFi =
+            "com.bbflight.background_downloader.requireWifi"
         const val keyConfigForegroundFileSize =
             "com.bbflight.background_downloader.config.foregroundFileSize"
         const val keyConfigProxyAddress = "com.bbflight.background_downloader.config.proxyAddress"
@@ -69,15 +72,19 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         @SuppressLint("StaticFieldLeak")
         var notificationButtonText = mutableMapOf<String, String>() // for localization
         var firstBackgroundChannel: MethodChannel? = null
-        var canceledTaskIds = mutableMapOf<String, Long>() // <taskId, timeMillis>
-        var pausedTaskIds = mutableSetOf<String>() // <taskId>, acts as flag
         var bgChannelByTaskId = mutableMapOf<String, MethodChannel>()
-        var localResumeData =
+        var requireWifi = RequireWifi.asSetByTask // global setting
+        val localResumeData =
             mutableMapOf<String, ResumeData>() // by taskId, for pause notifications
-        var parallelDownloadTaskWorkers = HashMap<String, ParallelDownloadTaskWorker>()
+        var canceledTaskIds = mutableMapOf<String, Long>() // <taskId, timeMillis>
+        val pausedTaskIds = mutableSetOf<String>() // <taskId>, acts as flag
+        val parallelDownloadTaskWorkers = HashMap<String, ParallelDownloadTaskWorker>()
+        val tasksToReEnqueue = mutableSetOf<Task>() // for when WiFi requirement changes
+        val taskIdsRequiringWiFi = mutableSetOf<String>()
+        val notificationConfigs = mutableMapOf<String, String>() // by taskId
         var forceFailPostOnBackgroundChannel = false
         val prefsLock = ReentrantReadWriteLock()
-        var remainingBytesToDownload = mutableMapOf<String, Long>() // <taskId, size>
+        val remainingBytesToDownload = mutableMapOf<String, Long>() // <taskId, size>
         var haveLoggedProxyMessage = false
 
         /**
@@ -105,6 +112,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 Log.i(TAG, "Could not url-decode url for taskId ${task.taskId}")
                 return false
             }
+            Log.wtf(TAG, "After URL for ${task.taskId}")
             // store backgroundChannel to be used by this task
             val bgChannel = backgroundChannel(plugin)
             if (bgChannel != null) {
@@ -119,6 +127,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     TaskWorker.keyNotificationConfig,
                     notificationConfigJsonString
                 )
+                notificationConfigs[task.taskId] = notificationConfigJsonString
             }
             if (resumeData != null) {
                 dataBuilder.putString(TaskWorker.keyResumeDataData, resumeData.data)
@@ -126,8 +135,14 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     .putString(TaskWorker.keyETag, resumeData.eTag)
             }
             val data = dataBuilder.build()
+            Log.wtf(TAG, "After databuilder for ${task.taskId}")
+            val taskRequiresWifi = taskRequiresWifi(task)
+            Log.wtf(TAG, "taskRequiresWifi = $taskRequiresWifi")
+            if (taskRequiresWifi) {
+                taskIdsRequiringWiFi.add(task.taskId)
+            }
             val constraints = Constraints.Builder().setRequiredNetworkType(
-                if (task.requiresWiFi) NetworkType.UNMETERED else NetworkType.CONNECTED
+                if (taskRequiresWifi) NetworkType.UNMETERED else NetworkType.CONNECTED
             ).build()
             val requestBuilder =
                 if (task.isParallelDownloadTask())
@@ -143,14 +158,19 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             if (task.priority < 5 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 requestBuilder.setExpedited(policy = OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             }
+            Log.wtf(TAG, "Before WorkManager for ${task.taskId}")
             val workManager = WorkManager.getInstance(context)
             val operation = workManager.enqueue(requestBuilder.build())
+            Log.wtf(TAG, "After operation for ${task.taskId}")
             try {
                 withContext(Dispatchers.IO) {
+                    Log.wtf(TAG, "Before result get for ${task.taskId}")
                     operation.result.get()
+                    Log.wtf(TAG, "After result get for ${task.taskId}")
                 }
                 val prefs = PreferenceManager.getDefaultSharedPreferences(context)
                 if (initialDelayMillis == 0L) {
+                    Log.wtf(TAG, "Before enqueue status update for ${task.taskId}")
                     TaskWorker.processStatusUpdate(
                         task, TaskStatus.enqueued, prefs
                     )
@@ -166,6 +186,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 return false
             }
             // store Task in persistent storage, as Json representation keyed by taskId
+            Log.wtf(TAG, "Before prefslock write for ${task.taskId}")
             prefsLock.write {
                 val prefs = PreferenceManager.getDefaultSharedPreferences(context)
                 val tasksMap = getTaskMap(prefs)
@@ -174,7 +195,13 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 editor.putString(keyTasksMap, Json.encodeToString(tasksMap))
                 editor.apply()
             }
+            Log.wtf(TAG, "Before return for ${task.taskId}")
             return true
+        }
+
+        /** True if task requires WiFi, based on global and task-specific settings */
+        fun taskRequiresWifi(task: Task): Boolean {
+            return (requireWifi == RequireWifi.forAllTasks || (requireWifi == RequireWifi.asSetByTask && task.requiresWiFi))
         }
 
         /** cancel tasks with [taskIds] and return true if successful */
@@ -198,9 +225,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         ): Boolean {
             // cancel chunk tasks if this is a ParallelDownloadTask
             parallelDownloadTaskWorkers[taskId]?.cancelAllChunkTasks()
-            val workInfos = withContext(Dispatchers.IO) {
-                workManager.getWorkInfosByTag("taskId=$taskId").get()
-            }
+            val workInfos = workManager.getWorkInfosByTag("taskId=$taskId").get()
             if (workInfos.isEmpty()) {
                 Log.d(TAG, "Could not find tasks to cancel")
                 return false
@@ -209,12 +234,11 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 if (workInfo.state != WorkInfo.State.SUCCEEDED) {
                     // send cancellation update for tasks that have not yet succeeded
                     // and remove associated notification
-                    prefsLock.write {
                         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
                         val tasksMap = getTaskMap(prefs)
                         val task = tasksMap[taskId]
                         if (task != null) {
-                            TaskWorker.processStatusUpdate(task, TaskStatus.canceled, prefs)
+                            TaskWorker.processStatusUpdate(task, TaskStatus.canceled, prefs, context=context)
                             // remove outstanding notification for task or group
                             val notificationGroup =
                                 NotificationService.groupNotificationWithTaskId(taskId)
@@ -234,7 +258,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                         } else {
                             Log.d(TAG, "Could not find task with taskId $taskId to cancel")
                         }
-                    }
                 }
                 val operation = workManager.cancelAllWorkByTag("taskId=$taskId")
                 try {
@@ -258,11 +281,9 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
          * cancellation. See [NotificationReceiver]
          */
         suspend fun cancelInactiveTask(context: Context, task: Task) {
-            prefsLock.write {
                 Log.d(TAG, "Canceling inactive task")
                 val prefs = PreferenceManager.getDefaultSharedPreferences(context)
                 TaskWorker.processStatusUpdate(task, TaskStatus.canceled, prefs)
-            }
         }
 
         /**
@@ -325,6 +346,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             editor.remove(keyTasksMap)
             editor.apply()
         }
+        requireWifi = RequireWifi.entries[prefs.getInt(keyRequireWiFi, 0)]
     }
 
 
@@ -359,6 +381,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 "moveToSharedStorage" -> methodMoveToSharedStorage(call, result)
                 "pathInSharedStorage" -> methodPathInSharedStorage(call, result)
                 "openFile" -> methodOpenFile(call, result)
+                "requireWiFi" -> methodRequireWiFi(call, result)
+                "getRequireWiFiSetting" -> methodGetRequireWiFiSetting(result)
                 // ParallelDownloadTask child updates
                 "chunkStatusUpdate" -> methodUpdateChunkStatus(call, result)
                 "chunkProgressUpdate" -> methodUpdateChunkProgress(call, result)
@@ -416,6 +440,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         } else {
             null
         }
+        Log.wtf(TAG, "In methodEnqueue for ${task.taskId}")
         result.success(
             doEnqueue(
                 applicationContext,
@@ -675,6 +700,37 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val filePath = args[1] as String? ?: task!!.filePath(applicationContext)
         val mimeType = args[2] as String? ?: getMimeType(filePath)
         result.success(if (activity != null) doOpenFile(activity!!, filePath, mimeType) else false)
+    }
+
+    /**
+     * Set WiFi requirement globally, based on requirement.
+     *
+     * Affects future tasks and reschedules enqueued, inactive tasks
+     * with the new setting.
+     * Reschedules active tasks if rescheduleRunning is true,
+     * otherwise leaves those running with their prior setting
+     *
+     * - requirement is first argument (enum)
+     * - rescheduleRunning is second argument (bool)
+     *
+     * Returns true always
+     */
+    private suspend fun methodRequireWiFi(call: MethodCall, result: Result) {
+        val args = call.arguments as List<*>
+        val newRequireWiFi = RequireWifi.entries[args[0] as Int]
+        val rescheduleRunning = args[1] as Boolean
+        Log.wtf(TAG, "newRequireWiFi=$newRequireWiFi and rescheduleRunning=$rescheduleRunning")
+        QueueService.requireWiFiChange(RequireWiFiChange(applicationContext, newRequireWiFi, rescheduleRunning))
+        result.success(true)
+    }
+
+    /**
+     * Returns the current global setting for 'requireWiFi', as an ordinal
+     */
+    private fun methodGetRequireWiFiSetting(result: Result) {
+        val setting = PreferenceManager.getDefaultSharedPreferences(applicationContext).getInt(
+            keyRequireWiFi, 0)
+        result.success(setting)
     }
 
     /**

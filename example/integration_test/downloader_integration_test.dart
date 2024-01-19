@@ -854,6 +854,26 @@ void main() {
       /// which is what the server expects
       expect(lastStatus, equals(TaskStatus.notFound));
     });
+
+    testWidgets('requireWiFi setting', (widgetTester) async {
+      if (Platform.isAndroid || Platform.isIOS) {
+        await FileDownloader().requireWiFi(RequireWifi.asSetByTask);
+        expect(await FileDownloader().getRequireWiFiSetting(),
+            equals(RequireWifi.asSetByTask));
+        await FileDownloader().requireWiFi(RequireWifi.forAllTasks);
+        await Future.delayed(const Duration(seconds: 2));
+        expect(await FileDownloader().getRequireWiFiSetting(),
+            equals(RequireWifi.forAllTasks));
+        await FileDownloader().requireWiFi(RequireWifi.forNoTasks);
+        await Future.delayed(const Duration(seconds: 2));
+        expect(await FileDownloader().getRequireWiFiSetting(),
+            equals(RequireWifi.forNoTasks));
+        await FileDownloader().requireWiFi(RequireWifi.asSetByTask);
+        await Future.delayed(const Duration(seconds: 2));
+        expect(await FileDownloader().getRequireWiFiSetting(),
+            equals(RequireWifi.asSetByTask));
+      }
+    });
   });
 
   group('Convenience downloads', () {

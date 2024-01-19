@@ -563,3 +563,8 @@ final class Config {
     return value;
   }
 }
+
+/// Wifi requirement modes at the application level
+enum RequireWifi {
+  asSetByTask, forAllTasks, forNoTasks
+}

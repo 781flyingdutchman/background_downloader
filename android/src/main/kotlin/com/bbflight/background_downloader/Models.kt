@@ -454,6 +454,15 @@ class TaskException(
 }
 
 /**
+ * Wifi requirement modes at the application level
+ */
+enum class RequireWifi {
+    asSetByTask,
+    forAllTasks,
+    forNoTasks
+}
+
+/**
  * Serializer for enums, such that they are encoded as an Int representing
  * the ordinal (index) of the value, instead of the String representation of
  * the value.

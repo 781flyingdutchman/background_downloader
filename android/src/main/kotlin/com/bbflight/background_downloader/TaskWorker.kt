@@ -95,6 +95,20 @@ open class TaskWorker(
             charSet: String? = null,
             context: Context? = null
         ) {
+            // Intercept status updates resulting from re-enqueue request, which
+            // themselves are triggered by a change in WiFi requirement
+            if (BDPlugin.tasksToReEnqueue.contains(task)) {
+                Log.wtf(TAG, "tasksToReEnqueue contains task with status $status and context $context")
+                BDPlugin.tasksToReEnqueue.remove(task)
+                if ((status == TaskStatus.paused || status == TaskStatus.canceled || status == TaskStatus.failed) && context != null) {
+                    Log.wtf(TAG, "Re-enqueueing ${task.taskId}")
+                    QueueService.reEnqueue(ReEnqueue(context, task, BDPlugin.notificationConfigs[task.taskId], BDPlugin.localResumeData[task.taskId]))
+                    return
+                }
+            }
+
+            // Normal status update
+
             // A 'failed' progress update is only provided if
             // a retry is not needed: if it is needed, a `waitingToRetry` progress update
             // will be generated on the Dart side
