@@ -557,7 +557,8 @@ interface class FileDownloader {
       _downloader.requireWiFi(requirement, rescheduleRunningTasks);
 
   /// Returns the current global setting for requiring WiFi
-  Future<RequireWifi> getRequireWiFiSetting() => _downloader.getRequireWiFiSetting();
+  Future<RequireWifi> getRequireWiFiSetting() =>
+      _downloader.getRequireWiFiSetting();
 
   /// Configure notification for a single task
   ///

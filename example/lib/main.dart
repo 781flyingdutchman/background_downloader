@@ -142,13 +142,16 @@ class _MyAppState extends State<MyApp> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Padding(padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    Text('RequireWiFi setting', style: Theme.of(context).textTheme.titleLarge),
-                    const RequireWiFiChoice(),
-                  ],
-                ),),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Text('RequireWiFi setting',
+                          style: Theme.of(context).textTheme.titleLarge),
+                      const RequireWiFiChoice(),
+                    ],
+                  ),
+                ),
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: Row(
@@ -234,7 +237,7 @@ class _MyAppState extends State<MyApp> {
         backgroundDownloadTask = DownloadTask(
             url: downloadWithError
                 ? 'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/get_current_app_data' // returns 403 status code
-                : 'https://storage.googleapis.com/approachcharts/test/5MB-test.ZIP',
+                : 'https://storage.googleapis.com/approachcharts/test/57MB-test.ZIP',
             filename: 'zipfile.zip',
             directory: 'my/directory',
             baseDirectory: BaseDirectory.applicationDocuments,
@@ -419,7 +422,8 @@ class _RequireWiFiChoiceState extends State<RequireWiFiChoice> {
           // selected at one time, so its value is always the first
           // item in the selected set.
           requireWiFi = newSelection.first;
-          unawaited(FileDownloader().requireWiFi(requireWiFi));
+          unawaited(FileDownloader()
+              .requireWiFi(requireWiFi, rescheduleRunningTasks: true));
         });
       },
     );

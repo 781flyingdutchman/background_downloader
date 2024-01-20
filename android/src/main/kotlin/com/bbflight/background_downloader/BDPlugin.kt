@@ -112,7 +112,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 Log.i(TAG, "Could not url-decode url for taskId ${task.taskId}")
                 return false
             }
-            Log.wtf(TAG, "After URL for ${task.taskId}")
             // store backgroundChannel to be used by this task
             val bgChannel = backgroundChannel(plugin)
             if (bgChannel != null) {
@@ -135,9 +134,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     .putString(TaskWorker.keyETag, resumeData.eTag)
             }
             val data = dataBuilder.build()
-            Log.wtf(TAG, "After databuilder for ${task.taskId}")
             val taskRequiresWifi = taskRequiresWifi(task)
-            Log.wtf(TAG, "taskRequiresWifi = $taskRequiresWifi")
             if (taskRequiresWifi) {
                 taskIdsRequiringWiFi.add(task.taskId)
             }
@@ -158,19 +155,14 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             if (task.priority < 5 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 requestBuilder.setExpedited(policy = OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             }
-            Log.wtf(TAG, "Before WorkManager for ${task.taskId}")
             val workManager = WorkManager.getInstance(context)
             val operation = workManager.enqueue(requestBuilder.build())
-            Log.wtf(TAG, "After operation for ${task.taskId}")
             try {
                 withContext(Dispatchers.IO) {
-                    Log.wtf(TAG, "Before result get for ${task.taskId}")
                     operation.result.get()
-                    Log.wtf(TAG, "After result get for ${task.taskId}")
                 }
                 val prefs = PreferenceManager.getDefaultSharedPreferences(context)
                 if (initialDelayMillis == 0L) {
-                    Log.wtf(TAG, "Before enqueue status update for ${task.taskId}")
                     TaskWorker.processStatusUpdate(
                         task, TaskStatus.enqueued, prefs
                     )
@@ -186,7 +178,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 return false
             }
             // store Task in persistent storage, as Json representation keyed by taskId
-            Log.wtf(TAG, "Before prefslock write for ${task.taskId}")
             prefsLock.write {
                 val prefs = PreferenceManager.getDefaultSharedPreferences(context)
                 val tasksMap = getTaskMap(prefs)
@@ -195,7 +186,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 editor.putString(keyTasksMap, Json.encodeToString(tasksMap))
                 editor.apply()
             }
-            Log.wtf(TAG, "Before return for ${task.taskId}")
             return true
         }
 
@@ -440,7 +430,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         } else {
             null
         }
-        Log.wtf(TAG, "In methodEnqueue for ${task.taskId}")
         result.success(
             doEnqueue(
                 applicationContext,
@@ -719,7 +708,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val args = call.arguments as List<*>
         val newRequireWiFi = RequireWifi.entries[args[0] as Int]
         val rescheduleRunning = args[1] as Boolean
-        Log.wtf(TAG, "newRequireWiFi=$newRequireWiFi and rescheduleRunning=$rescheduleRunning")
+        Log.d(TAG, "RequireWiFi=$newRequireWiFi and rescheduleRunning=$rescheduleRunning")
         QueueService.requireWiFiChange(RequireWiFiChange(applicationContext, newRequireWiFi, rescheduleRunning))
         result.success(true)
     }

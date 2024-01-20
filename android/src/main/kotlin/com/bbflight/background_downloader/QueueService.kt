@@ -109,14 +109,16 @@ object QueueService {
         scope.launch {
             for (change in requireWiFiQueue) {
                 change.execute()
-                delay(1000)
+                while (!reEnqueueQueue.isEmpty) {
+                    delay(1000)
+                }
             }
         }
 
         scope.launch {
             for (reEnqueue in reEnqueueQueue) {
+                delay(200)
                 reEnqueue.execute()
-                delay(50)
             }
         }
     }
@@ -150,8 +152,7 @@ object QueueService {
      * Execute the reEnqueue request
      */
     suspend fun reEnqueue(reEnqueue: ReEnqueue) {
-        delay(1000)
-        reEnqueue.execute()
+        reEnqueueQueue.send(reEnqueue)
     }
 
 }
@@ -193,19 +194,16 @@ class RequireWiFiChange(
                 val taskId = tags.first().substring(7)
                 val task = tasksMap[taskId]
                 if (task != null && task.isDownloadTask()) {
-                    Log.wtf("BackgroundDownloader", "task to re-enqueue = $task")
                     if (BDPlugin.taskRequiresWifi(task) != BDPlugin.taskIdsRequiringWiFi.contains(
                             task.taskId
                         )
                     ) {
-                        Log.wtf("BackgroundDownloader", "Passed IF")
                         when (BDPlugin.taskRequiresWifi(task)) {
                             false -> BDPlugin.taskIdsRequiringWiFi.remove(task.taskId)
                             true -> BDPlugin.taskIdsRequiringWiFi.add(task.taskId)
                         }
                         when (workInfo.state) {
                             WorkInfo.State.ENQUEUED -> {
-                                Log.wtf("BackgroundDownloader", "Re-enqueue ENQUEUED")
                                 BDPlugin.tasksToReEnqueue.add(task)
                                 if (!BDPlugin.cancelActiveTaskWithId(
                                         applicationContext,
@@ -219,7 +217,6 @@ class RequireWiFiChange(
 
                             WorkInfo.State.RUNNING -> {
                                 if (rescheduleRunningTasks) {
-                                    Log.wtf("BackgroundDownloader", "Re-enqueue RUNNING")
                                     BDPlugin.tasksToReEnqueue.add(task)
                                     BDPlugin.pauseTaskWithId(task.taskId)
                                 }
@@ -250,6 +247,5 @@ class ReEnqueue(
             notificationConfigJsonString = notificationConfigJsonString,
             resumeData = resumeData
         )
-        BDPlugin.localResumeData.remove(task.taskId)
     }
 }

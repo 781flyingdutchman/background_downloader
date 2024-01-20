@@ -509,10 +509,12 @@ abstract base class BaseDownloader {
   /// with the new setting.
   /// Reschedules running tasks if [rescheduleRunningTasks] is true,
   /// otherwise leaves those running with their prior setting
-  Future<bool> requireWiFi(RequireWifi requirement, rescheduleRunningTasks) => Future.value(true);
+  Future<bool> requireWiFi(RequireWifi requirement, rescheduleRunningTasks) =>
+      Future.value(true);
 
   /// Returns the current global setting for requiring WiFi
-  Future<RequireWifi> getRequireWiFiSetting() => Future.value(RequireWifi.asSetByTask);
+  Future<RequireWifi> getRequireWiFiSetting() =>
+      Future.value(RequireWifi.asSetByTask);
 
   /// Sets the 'canResumeTask' flag for this task
   ///

@@ -298,17 +298,18 @@ abstract base class NativeDownloader extends BaseDownloader {
     return false;
   }
 
-
   @override
-  Future<bool> requireWiFi(RequireWifi requirement,
-      rescheduleRunningTasks) async {
-    return await methodChannel.invokeMethod('requireWiFi', [requirement.index, rescheduleRunningTasks]) ?? false;
+  Future<bool> requireWiFi(
+      RequireWifi requirement, rescheduleRunningTasks) async {
+    return await methodChannel.invokeMethod(
+            'requireWiFi', [requirement.index, rescheduleRunningTasks]) ??
+        false;
   }
-
 
   @override
   Future<RequireWifi> getRequireWiFiSetting() async {
-    return RequireWifi.values[await methodChannel.invokeMethod('getRequireWiFiSetting') ?? 0];
+    return RequireWifi
+        .values[await methodChannel.invokeMethod('getRequireWiFiSetting') ?? 0];
   }
 
   @override
