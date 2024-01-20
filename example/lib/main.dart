@@ -390,7 +390,7 @@ class RequireWiFiChoice extends StatefulWidget {
 }
 
 class _RequireWiFiChoiceState extends State<RequireWiFiChoice> {
-  RequireWifi requireWiFi = RequireWifi.asSetByTask;
+  RequireWiFi requireWiFi = RequireWiFi.asSetByTask;
 
   @override
   void initState() {
@@ -404,19 +404,19 @@ class _RequireWiFiChoiceState extends State<RequireWiFiChoice> {
 
   @override
   Widget build(BuildContext context) {
-    return SegmentedButton<RequireWifi>(
-      segments: const <ButtonSegment<RequireWifi>>[
-        ButtonSegment<RequireWifi>(
-            value: RequireWifi.asSetByTask, label: Text('Task')),
-        ButtonSegment<RequireWifi>(
-            value: RequireWifi.forAllTasks, label: Text('All')),
-        ButtonSegment<RequireWifi>(
-          value: RequireWifi.forNoTasks,
+    return SegmentedButton<RequireWiFi>(
+      segments: const <ButtonSegment<RequireWiFi>>[
+        ButtonSegment<RequireWiFi>(
+            value: RequireWiFi.asSetByTask, label: Text('Task')),
+        ButtonSegment<RequireWiFi>(
+            value: RequireWiFi.forAllTasks, label: Text('All')),
+        ButtonSegment<RequireWiFi>(
+          value: RequireWiFi.forNoTasks,
           label: Text('None'),
         ),
       ],
-      selected: <RequireWifi>{requireWiFi},
-      onSelectionChanged: (Set<RequireWifi> newSelection) {
+      selected: <RequireWiFi>{requireWiFi},
+      onSelectionChanged: (Set<RequireWiFi> newSelection) {
         setState(() {
           // By default there is only a single segment that can be
           // selected at one time, so its value is always the first

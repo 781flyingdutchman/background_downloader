@@ -857,21 +857,21 @@ void main() {
 
     testWidgets('requireWiFi setting', (widgetTester) async {
       if (Platform.isAndroid || Platform.isIOS) {
-        await FileDownloader().requireWiFi(RequireWifi.asSetByTask);
+        await FileDownloader().requireWiFi(RequireWiFi.asSetByTask);
         expect(await FileDownloader().getRequireWiFiSetting(),
-            equals(RequireWifi.asSetByTask));
-        await FileDownloader().requireWiFi(RequireWifi.forAllTasks);
+            equals(RequireWiFi.asSetByTask));
+        await FileDownloader().requireWiFi(RequireWiFi.forAllTasks);
         await Future.delayed(const Duration(seconds: 2));
         expect(await FileDownloader().getRequireWiFiSetting(),
-            equals(RequireWifi.forAllTasks));
-        await FileDownloader().requireWiFi(RequireWifi.forNoTasks);
+            equals(RequireWiFi.forAllTasks));
+        await FileDownloader().requireWiFi(RequireWiFi.forNoTasks);
         await Future.delayed(const Duration(seconds: 2));
         expect(await FileDownloader().getRequireWiFiSetting(),
-            equals(RequireWifi.forNoTasks));
-        await FileDownloader().requireWiFi(RequireWifi.asSetByTask);
+            equals(RequireWiFi.forNoTasks));
+        await FileDownloader().requireWiFi(RequireWiFi.asSetByTask);
         await Future.delayed(const Duration(seconds: 2));
         expect(await FileDownloader().getRequireWiFiSetting(),
-            equals(RequireWifi.asSetByTask));
+            equals(RequireWiFi.asSetByTask));
       }
     });
   });

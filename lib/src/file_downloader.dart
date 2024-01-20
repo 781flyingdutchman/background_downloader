@@ -552,12 +552,12 @@ interface class FileDownloader {
   /// with the new setting.
   /// Reschedules running tasks if [rescheduleRunningTasks] is true,
   /// otherwise leaves those running with their prior setting
-  Future<bool> requireWiFi(RequireWifi requirement,
+  Future<bool> requireWiFi(RequireWiFi requirement,
           {final rescheduleRunningTasks = false}) =>
       _downloader.requireWiFi(requirement, rescheduleRunningTasks);
 
   /// Returns the current global setting for requiring WiFi
-  Future<RequireWifi> getRequireWiFiSetting() =>
+  Future<RequireWiFi> getRequireWiFiSetting() =>
       _downloader.getRequireWiFiSetting();
 
   /// Configure notification for a single task

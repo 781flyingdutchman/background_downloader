@@ -58,7 +58,7 @@ object QueueService {
                 }
                 BDPlugin.bgChannelByTaskId.remove(taskId)
                 BDPlugin.localResumeData.remove(taskId)
-                BDPlugin.notificationConfigs.remove(taskId)
+                BDPlugin.notificationConfigJsonStrings.remove(taskId)
             }
         }
         scope.launch {
@@ -174,7 +174,7 @@ data class BackgroundPost(
  */
 class RequireWiFiChange(
     private val applicationContext: Context,
-    private val requireWifi: RequireWifi,
+    private val requireWifi: RequireWiFi,
     private val rescheduleRunningTasks: Boolean
 ) {
     suspend fun execute() {

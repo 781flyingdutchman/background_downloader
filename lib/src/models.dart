@@ -565,4 +565,4 @@ final class Config {
 }
 
 /// Wifi requirement modes at the application level
-enum RequireWifi { asSetByTask, forAllTasks, forNoTasks }
+enum RequireWiFi { asSetByTask, forAllTasks, forNoTasks }

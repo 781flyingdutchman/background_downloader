@@ -100,10 +100,11 @@ open class TaskWorker(
             if (BDPlugin.tasksToReEnqueue.contains(task)) {
                 BDPlugin.tasksToReEnqueue.remove(task)
                 if ((status == TaskStatus.paused || status == TaskStatus.canceled || status == TaskStatus.failed) && context != null) {
-                    QueueService.reEnqueue(ReEnqueue(context, task, BDPlugin.notificationConfigs[task.taskId], BDPlugin.localResumeData[task.taskId]))
+                    QueueService.reEnqueue(ReEnqueue(context, task, BDPlugin.notificationConfigJsonStrings[task.taskId], BDPlugin.localResumeData[task.taskId]))
                     return
                 }
             }
+
             // Normal status update
 
             // A 'failed' progress update is only provided if

@@ -73,15 +73,15 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         var notificationButtonText = mutableMapOf<String, String>() // for localization
         var firstBackgroundChannel: MethodChannel? = null
         var bgChannelByTaskId = mutableMapOf<String, MethodChannel>()
-        var requireWifi = RequireWifi.asSetByTask // global setting
+        var requireWifi = RequireWiFi.asSetByTask // global setting
         val localResumeData =
             mutableMapOf<String, ResumeData>() // by taskId, for pause notifications
         var canceledTaskIds = mutableMapOf<String, Long>() // <taskId, timeMillis>
         val pausedTaskIds = mutableSetOf<String>() // <taskId>, acts as flag
         val parallelDownloadTaskWorkers = HashMap<String, ParallelDownloadTaskWorker>()
         val tasksToReEnqueue = mutableSetOf<Task>() // for when WiFi requirement changes
-        val taskIdsRequiringWiFi = mutableSetOf<String>()
-        val notificationConfigs = mutableMapOf<String, String>() // by taskId
+        val taskIdsRequiringWiFi = mutableSetOf<String>() // ensures correctness when enqueueing task
+        val notificationConfigJsonStrings = mutableMapOf<String, String>() // by taskId
         var forceFailPostOnBackgroundChannel = false
         val prefsLock = ReentrantReadWriteLock()
         val remainingBytesToDownload = mutableMapOf<String, Long>() // <taskId, size>
@@ -126,7 +126,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     TaskWorker.keyNotificationConfig,
                     notificationConfigJsonString
                 )
-                notificationConfigs[task.taskId] = notificationConfigJsonString
+                notificationConfigJsonStrings[task.taskId] = notificationConfigJsonString
             }
             if (resumeData != null) {
                 dataBuilder.putString(TaskWorker.keyResumeDataData, resumeData.data)
@@ -191,7 +191,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
         /** True if task requires WiFi, based on global and task-specific settings */
         fun taskRequiresWifi(task: Task): Boolean {
-            return (requireWifi == RequireWifi.forAllTasks || (requireWifi == RequireWifi.asSetByTask && task.requiresWiFi))
+            return (requireWifi == RequireWiFi.forAllTasks || (requireWifi == RequireWiFi.asSetByTask && task.requiresWiFi))
         }
 
         /** cancel tasks with [taskIds] and return true if successful */
@@ -336,7 +336,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             editor.remove(keyTasksMap)
             editor.apply()
         }
-        requireWifi = RequireWifi.entries[prefs.getInt(keyRequireWiFi, 0)]
+        requireWifi = RequireWiFi.entries[prefs.getInt(keyRequireWiFi, 0)]
     }
 
 
@@ -706,7 +706,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private suspend fun methodRequireWiFi(call: MethodCall, result: Result) {
         val args = call.arguments as List<*>
-        val newRequireWiFi = RequireWifi.entries[args[0] as Int]
+        val newRequireWiFi = RequireWiFi.entries[args[0] as Int]
         val rescheduleRunning = args[1] as Boolean
         Log.d(TAG, "RequireWiFi=$newRequireWiFi and rescheduleRunning=$rescheduleRunning")
         QueueService.requireWiFiChange(RequireWiFiChange(applicationContext, newRequireWiFi, rescheduleRunning))

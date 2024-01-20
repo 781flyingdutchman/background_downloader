@@ -456,7 +456,7 @@ class TaskException(
 /**
  * Wifi requirement modes at the application level
  */
-enum class RequireWifi {
+enum class RequireWiFi {
     asSetByTask,
     forAllTasks,
     forNoTasks
