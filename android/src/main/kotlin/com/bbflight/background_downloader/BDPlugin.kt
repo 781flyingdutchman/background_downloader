@@ -138,6 +138,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             if (taskRequiresWifi) {
                 taskIdsRequiringWiFi.add(task.taskId)
             }
+            Log.wtf(TAG, "TaskId ${task.taskId} requireWiFi=$taskRequiresWifi")
             val constraints = Constraints.Builder().setRequiredNetworkType(
                 if (taskRequiresWifi) NetworkType.UNMETERED else NetworkType.CONNECTED
             ).build()
@@ -709,7 +710,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val newRequireWiFi = RequireWiFi.entries[args[0] as Int]
         val rescheduleRunning = args[1] as Boolean
         Log.d(TAG, "RequireWiFi=$newRequireWiFi and rescheduleRunning=$rescheduleRunning")
-        QueueService.requireWiFiChange(RequireWiFiChange(applicationContext, newRequireWiFi, rescheduleRunning))
+        WiFi.requireWiFiChange(RequireWiFiChange(applicationContext, newRequireWiFi, rescheduleRunning))
         result.success(true)
     }
 

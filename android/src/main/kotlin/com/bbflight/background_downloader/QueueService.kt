@@ -1,11 +1,7 @@
 package com.bbflight.background_downloader
 
-import android.content.Context
 import android.os.Looper
 import android.util.Log
-import androidx.preference.PreferenceManager
-import androidx.work.WorkInfo
-import androidx.work.WorkManager
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,10 +22,6 @@ object QueueService {
 
     private val backgroundPostQueue = Channel<BackgroundPost>(capacity = Channel.UNLIMITED)
 
-    private val requireWiFiQueue =
-        Channel<RequireWiFiChange>(capacity = Channel.UNLIMITED)
-
-    private val reEnqueueQueue = Channel<ReEnqueue>(capacity = Channel.UNLIMITED)
 
     /**
      * Starts listening to the queues and processes each item
@@ -42,11 +34,6 @@ object QueueService {
      * backgroundPostQueue:
      *    Each item is a [BackgroundPost] that will be posted on the UI thread, and its
      *    success completer will complete with true if successfully posted
-     *
-     * requireWiFiQueue:
-     *    Each item is a Triple(context, workInfo, rescheduleActive), and each workInfo
-     *    will be either rescheduled (if enqueued) or paused and resumed (if running and
-     *    possible) or cancelled and re-enqueued (if running and pause not possible
      */
     init {
         scope.launch {
@@ -105,22 +92,6 @@ object QueueService {
                 }
             }
         }
-
-        scope.launch {
-            for (change in requireWiFiQueue) {
-                change.execute()
-                while (!reEnqueueQueue.isEmpty) {
-                    delay(1000)
-                }
-            }
-        }
-
-        scope.launch {
-            for (reEnqueue in reEnqueueQueue) {
-                delay(200)
-                reEnqueue.execute()
-            }
-        }
     }
 
 
@@ -140,21 +111,6 @@ object QueueService {
     suspend fun postOnBackgroundChannel(bgPost: BackgroundPost) {
         backgroundPostQueue.send(bgPost)
     }
-
-    /**
-     * Execute the requireWiFi change request
-     */
-    suspend fun requireWiFiChange(change: RequireWiFiChange) {
-        requireWiFiQueue.send(change)
-    }
-
-    /**
-     * Execute the reEnqueue request
-     */
-    suspend fun reEnqueue(reEnqueue: ReEnqueue) {
-        reEnqueueQueue.send(reEnqueue)
-    }
-
 }
 
 /**
@@ -167,85 +123,4 @@ data class BackgroundPost(
 ) {
     val postedFromUIThread = Looper.myLooper() == Looper.getMainLooper()
     val success = CompletableDeferred<Boolean>()
-}
-
-/**
- * Change the global WiFi requirement setting
- */
-class RequireWiFiChange(
-    private val applicationContext: Context,
-    private val requireWifi: RequireWiFi,
-    private val rescheduleRunningTasks: Boolean
-) {
-    suspend fun execute() {
-        BDPlugin.requireWifi = requireWifi
-        val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
-        prefs.edit().apply {
-            putInt(BDPlugin.keyRequireWiFi, requireWifi.ordinal)
-            apply()
-        }
-        val tasksMap = getTaskMap(prefs)
-        val workManager = WorkManager.getInstance(applicationContext)
-        val workInfos = workManager.getWorkInfosByTag(BDPlugin.TAG).get()
-            .filter { !it.state.isFinished }
-        for (workInfo in workInfos) {
-            val tags = workInfo.tags.filter { it.contains("taskId=") }
-            if (tags.isNotEmpty()) {
-                val taskId = tags.first().substring(7)
-                val task = tasksMap[taskId]
-                if (task != null && task.isDownloadTask()) {
-                    if (BDPlugin.taskRequiresWifi(task) != BDPlugin.taskIdsRequiringWiFi.contains(
-                            task.taskId
-                        )
-                    ) {
-                        when (BDPlugin.taskRequiresWifi(task)) {
-                            false -> BDPlugin.taskIdsRequiringWiFi.remove(task.taskId)
-                            true -> BDPlugin.taskIdsRequiringWiFi.add(task.taskId)
-                        }
-                        when (workInfo.state) {
-                            WorkInfo.State.ENQUEUED -> {
-                                BDPlugin.tasksToReEnqueue.add(task)
-                                if (!BDPlugin.cancelActiveTaskWithId(
-                                        applicationContext,
-                                        task.taskId,
-                                        workManager
-                                    )
-                                ) {
-                                    BDPlugin.tasksToReEnqueue.remove(task)
-                                }
-                            }
-
-                            WorkInfo.State.RUNNING -> {
-                                if (rescheduleRunningTasks) {
-                                    BDPlugin.tasksToReEnqueue.add(task)
-                                    BDPlugin.pauseTaskWithId(task.taskId)
-                                }
-                            }
-
-                            else -> {}
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * Re-enqueue a task (in the context of changing the RequireWiFi setting)
- */
-class ReEnqueue(
-    private val context: Context,
-    private val task: Task,
-    private val notificationConfigJsonString: String?,
-    private val resumeData: ResumeData?
-) {
-    suspend fun execute() {
-        BDPlugin.doEnqueue(
-            context = context,
-            task = task,
-            notificationConfigJsonString = notificationConfigJsonString,
-            resumeData = resumeData
-        )
-    }
 }

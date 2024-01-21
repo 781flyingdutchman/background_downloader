@@ -100,7 +100,7 @@ open class TaskWorker(
             if (BDPlugin.tasksToReEnqueue.contains(task)) {
                 BDPlugin.tasksToReEnqueue.remove(task)
                 if ((status == TaskStatus.paused || status == TaskStatus.canceled || status == TaskStatus.failed) && context != null) {
-                    QueueService.reEnqueue(ReEnqueue(context, task, BDPlugin.notificationConfigJsonStrings[task.taskId], BDPlugin.localResumeData[task.taskId]))
+                    WiFi.reEnqueue(ReEnqueue(context, task, BDPlugin.notificationConfigJsonStrings[task.taskId], BDPlugin.localResumeData[task.taskId]))
                     return
                 }
             }
