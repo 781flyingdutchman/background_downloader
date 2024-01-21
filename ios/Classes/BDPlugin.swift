@@ -22,6 +22,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     public static var keyConfigProxyAdress = "com.bbflight.background_downloader.config.proxyAddress"
     public static var keyConfigProxyPort = "com.bbflight.background_downloader.config.proxyPort"
     public static var keyConfigCheckAvailableSpace = "com.bbflight.background_downloader.config.checkAvailableSpace"
+    public static var keyRequireWiFi = "com.bbflight.background_downloader.requireWiFi"
     public static var forceFailPostOnBackgroundChannel = false
     
     static var progressInfo = [String: (lastProgressUpdateTime: TimeInterval,
@@ -30,8 +31,12 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                                         lastNetworkSpeed: Double)]() // time, bytes, speed
     static var uploaderForUrlSessionTaskIdentifier = [Int:Uploader]() // maps from UrlSessionTask TaskIdentifier
     static var haveregisteredNotificationCategories = false
+    static var requireWiFi = RequireWiFi.asSetByTask // global setting
     static var taskIdsThatCanResume = Set<String>() // taskIds that can resume
     static var taskIdsProgrammaticallyCancelled = Set<String>() // skips error handling for these tasks
+    static var tasksToReEnqueue = Set<Task>() // for when WiFi requirement changes
+    static var taskIdsRequiringWiFi = Set<String>() // ensures correctness when enqueueing task
+    static var notificationConfigJsonStrings = [String:String]() // by taskId
     static var localResumeData = [String : String]() // locally stored to enable notification resume
     static var remainingBytesToDownload = [String : Int64]()  // keyed by taskId
     static var responseBodyData = [String: [Data]]() // list of Data objects received for this UploadTask id
@@ -39,6 +44,8 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     static var tasksWithContentLengthOverride = [String : Int64]() // [taskId : Content length]
     static var mimeTypes = [String : String]() // [taskId : mimeType]
     static var charSets = [String : String]() // [taskId : charSet]
+    
+    static var propertyLock: NSLock = NSLock() // used to synchronize access to static properties
     
     public static var flutterPluginRegistrantCallback: FlutterPluginRegistrantCallback?
     public static var backgroundChannel: FlutterMethodChannel?
@@ -48,6 +55,8 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         backgroundChannel = FlutterMethodChannel(name: "com.bbflight.background_downloader.background", binaryMessenger: registrar.messenger())
         registrar.addMethodCallDelegate(instance, channel: channel)
         registrar.addApplicationDelegate(instance)
+        let defaults = UserDefaults.standard
+        requireWiFi = RequireWiFi(rawValue: defaults.integer(forKey: BDPlugin.keyRequireWiFi))!
     }
     
     @objc
@@ -81,6 +90,10 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                     await methodPathInSharedStorage(call: call, result: result)
                 case "openFile":
                     methodOpenFile(call: call, result: result)
+                case "requireWiFi":
+                    methodRequireWiFi(call: call, result: result)
+                case "getRequireWiFiSetting":
+                    methodGetRequireWiFiSetting(result: result)
                     /// ParallelDownloadTask child updates
                 case "chunkStatusUpdate":
                     methodUpdateChunkStatus(call: call, result: result)
@@ -148,6 +161,11 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             postResult(result: result, value: false)
             return
         }
+        if notificationConfigJsonString != nil {
+            BDPlugin.propertyLock.withLock {
+                BDPlugin.notificationConfigJsonStrings[task.taskId] = notificationConfigJsonString
+            }
+        }
         isResume = isParallelDownloadTask(task: task) ? isResume : isResume && resumeData != nil
         let verb = isResume ? "Resuming" : "Starting"
         os_log("%@ task with id %@", log: log, type: .info, verb, task.taskId)
@@ -163,7 +181,6 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         #else
         url = URL(string: task.url)
         #endif
-        
         guard let url = url else
         {
             os_log("Invalid url: %@", log: log, type: .info, task.url)
@@ -175,9 +192,12 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         for (key, value) in task.headers {
             baseRequest.setValue(value, forHTTPHeaderField: key)
         }
-        if task.requiresWiFi {
+        let requiresWiFi = taskRequiresWiFi(task: task)
+        if requiresWiFi {
             baseRequest.allowsCellularAccess = false
+            BDPlugin.taskIdsRequiringWiFi.insert(task.taskId)
         }
+        os_log("Task %@ requires WiFi=%d", log: log, type: .fault, task.taskId, requiresWiFi)
         if isParallelDownloadTask(task: task) {
             // ParallelDownloadTask itself is not part of a urlSession, so handled separately
             baseRequest.httpMethod = "HEAD" // override
@@ -421,7 +441,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         let args = call.arguments as! [Any]
         guard
             let filePath = args[0] as? String,
-            let destination = SharedStorage.init(rawValue: args[1] as? Int ?? 0),
+            let destination = SharedStorage(rawValue: args[1] as? Int ?? 0),
             let directory = args[2] as? String
         else {
             result(nil)
@@ -455,6 +475,36 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         }
         let mimeType = args[2] as? String
         success = doOpenFile(filePath: filePath!, mimeType: mimeType)
+    }
+    
+    /**
+     * Set WiFi requirement globally, based on requirement.
+     *
+     * Affects future tasks and reschedules enqueued, inactive tasks
+     * with the new setting.
+     * Reschedules active tasks if rescheduleRunning is true,
+     * otherwise leaves those running with their prior setting
+     *
+     * - requirement is first argument (enum)
+     * - rescheduleRunning is second argument (bool)
+     *
+     * Returns true if successful
+     */
+    private func methodRequireWiFi(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        let args = call.arguments as! [Any]
+        guard let newRequireWiFi = RequireWiFi(rawValue: args[0] as? Int ?? 0) else {
+            result(false)
+            return
+        }
+        let rescheduleRunning = args[1] as? Bool ?? false
+        WiFiQueue.shared.requireWiFiChange(requireWiFi: newRequireWiFi, rescheduleRunningTasks: rescheduleRunning)
+        result(true)
+    }
+    
+    /// Returns current globval setting for 'RequireWiFi' as an ordinal / rawValue
+    private func methodGetRequireWiFiSetting(result: @escaping FlutterResult) {
+        let defaults = UserDefaults.standard
+        result(defaults.integer(forKey: BDPlugin.keyRequireWiFi))
     }
     
     /// Update the status of one chunk (part of a ParallelDownloadTask), and returns
@@ -598,7 +648,10 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                     processStatusUpdate(task: task, status: .canceled)
                     
                 case "resume_action":
-                    let resumeDataAsBase64String = BDPlugin.localResumeData[task.taskId] ?? ""
+                    var resumeDataAsBase64String = ""
+                    BDPlugin.propertyLock.withLock {
+                        resumeDataAsBase64String = BDPlugin.localResumeData[task.taskId] ?? ""
+                    }
                     if resumeDataAsBase64String.isEmpty {
                         os_log("Resume data for taskId %@ no longer available: restarting", log: log, type: .info)
                     }

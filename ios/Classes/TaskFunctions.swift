@@ -306,6 +306,27 @@ func updateProgress(task: Task, totalBytesExpected: Int64, totalBytesDone: Int64
 /// If the task is finished, processes a final progressUpdate update and removes
 /// task from persistent storage
 func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskException? = nil, responseBody: String? = nil, responseHeaders: [AnyHashable:Any]? = nil, mimeType: String? = nil, charSet: String? = nil) {
+    // Intercept status updates resulting from re-enqueue requests, which
+    // themselves are triggered by a change in WiFi requirement
+    if BDPlugin.tasksToReEnqueue.contains(task) {
+        os_log("Task %@ with status %d needs to re-enqueue", log: log, type: .fault, task.taskId, status.rawValue)
+        BDPlugin.tasksToReEnqueue.remove(task)
+        defer {
+            if BDPlugin.tasksToReEnqueue.isEmpty {
+                WiFiQueue.shared.reEnqueue(nil) // signal end of batch
+            }
+        }
+        if [TaskStatus.paused, TaskStatus.canceled, TaskStatus.failed].contains(status) {
+            BDPlugin.propertyLock.withLock {
+                let reEnqueueData = ReEnqueue(task: task, notificationConfigJsonString: BDPlugin.notificationConfigJsonStrings[task.taskId] ?? "", resumeDataAsBase64String: BDPlugin.localResumeData[task.taskId] ?? "")
+                WiFiQueue.shared.reEnqueue(reEnqueueData)
+            }
+            return
+        }
+    }
+
+    // Normal status update
+
     // Post update if task expects one, or if failed and retry is needed
     let retryNeeded = status == TaskStatus.failed && task.retriesRemaining > 0
     // if task is in final state, process a final progressUpdate
@@ -347,14 +368,17 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
     }
     if isFinalState(status: status) {
         // remove references to this task that are no longer needed
-        BDPlugin.progressInfo.removeValue(forKey: task.taskId)
-        BDPlugin.localResumeData.removeValue(forKey: task.taskId)
-        BDPlugin.remainingBytesToDownload.removeValue(forKey: task.taskId)
-        BDPlugin.tasksWithSuggestedFilename.removeValue(forKey: task.taskId)
-        BDPlugin.tasksWithContentLengthOverride.removeValue(forKey: task.taskId)
-        BDPlugin.responseBodyData.removeValue(forKey: task.taskId)
-        BDPlugin.taskIdsThatCanResume.remove(task.taskId)
-        BDPlugin.taskIdsProgrammaticallyCancelled.remove(task.taskId)
+        BDPlugin.propertyLock.withLock {
+            BDPlugin.progressInfo.removeValue(forKey: task.taskId)
+            BDPlugin.localResumeData.removeValue(forKey: task.taskId)
+            BDPlugin.remainingBytesToDownload.removeValue(forKey: task.taskId)
+            BDPlugin.tasksWithSuggestedFilename.removeValue(forKey: task.taskId)
+            BDPlugin.tasksWithContentLengthOverride.removeValue(forKey: task.taskId)
+            BDPlugin.responseBodyData.removeValue(forKey: task.taskId)
+            BDPlugin.notificationConfigJsonStrings.removeValue(forKey: task.taskId)
+            BDPlugin.taskIdsThatCanResume.remove(task.taskId)
+            BDPlugin.taskIdsProgrammaticallyCancelled.remove(task.taskId)
+        }
     }
 }
 
@@ -390,7 +414,9 @@ func processCanResume(task: Task, taskCanResume: Bool) {
 /// Sends the data via the background channel to Dart
 func processResumeData(task: Task, resumeData: Data) -> Bool {
     let resumeDataAsBase64String = resumeData.base64EncodedString()
-    BDPlugin.localResumeData[task.taskId] = resumeDataAsBase64String
+    BDPlugin.propertyLock.withLock {
+        BDPlugin.localResumeData[task.taskId] = resumeDataAsBase64String
+    }
     if !postOnBackgroundChannel(method: "resumeData", task: task, arg: resumeDataAsBase64String) {
         // store resume data locally
         guard let jsonData = try? JSONEncoder().encode(ResumeData(task: task, data: resumeDataAsBase64String))
@@ -560,6 +586,11 @@ func directoryForTask(task: Task) throws ->  URL {
     ? documentsURL
     : documentsURL.appendingPath(task.directory, isDirectory: true)
     
+}
+
+/// True if task requires WiFi, based on global and task-specific setting
+func taskRequiresWiFi(task: Task) -> Bool {
+    return BDPlugin.requireWiFi == .forAllTasks || (BDPlugin.requireWiFi == .asSetByTask && task.requiresWiFi)
 }
 
 /**
