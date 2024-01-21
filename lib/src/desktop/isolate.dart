@@ -34,6 +34,7 @@ var isCanceled = false;
 // additional parameters for final TaskStatusUpdate
 TaskException? taskException;
 String? responseBody;
+Map<String, String>? responseHeaders;
 String? mimeType; // derived from Content-Type header
 String? charSet; // derived from Content-Type header
 
@@ -237,6 +238,7 @@ void processStatusUpdateInIsolate(
           ? taskException ?? TaskException('None')
           : null,
       status.isFinalState ? responseBody : null,
+      status.isFinalState ? responseHeaders : null,
       status.isFinalState ? mimeType : null,
       status.isFinalState ? charSet : null,
     ));

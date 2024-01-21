@@ -199,11 +199,16 @@ class TaskStatusUpdate extends TaskUpdate {
   final TaskStatus status;
   final TaskException? exception;
   final String? responseBody;
+  final Map<String, String>? responseHeaders;
   final String? mimeType; // derived from Content-Type header
   final String? charSet; // derived from Content-Type header
 
   const TaskStatusUpdate(super.task, this.status,
-      [this.exception, this.responseBody, this.mimeType, this.charSet]);
+      [this.exception,
+      this.responseBody,
+      this.responseHeaders,
+      this.mimeType,
+      this.charSet]);
 
   /// Create object from [json]
   TaskStatusUpdate.fromJson(super.json)
@@ -212,6 +217,7 @@ class TaskStatusUpdate extends TaskUpdate {
             ? TaskException.fromJson(json['exception'])
             : null,
         responseBody = json['responseBody'],
+        responseHeaders = json['responseHeaders'],
         mimeType = json['mimeType'],
         charSet = json['charSet'],
         super.fromJson();
@@ -227,6 +233,7 @@ class TaskStatusUpdate extends TaskUpdate {
         'taskStatus': status.index,
         'exception': exception?.toJson(),
         'responseBody': responseBody,
+        'responseHeaders': responseHeaders,
         'mimeType': mimeType,
         'charSet': charSet
       };
@@ -236,6 +243,7 @@ class TaskStatusUpdate extends TaskUpdate {
           TaskStatus? status,
           TaskException? exception,
           String? responseBody,
+          Map<String, String>? responseHeaders,
           String? mimeType,
           String? charSet}) =>
       TaskStatusUpdate(
@@ -243,6 +251,7 @@ class TaskStatusUpdate extends TaskUpdate {
           status ?? this.status,
           exception ?? this.exception,
           responseBody ?? this.responseBody,
+          responseHeaders ?? this.responseHeaders,
           mimeType ?? this.mimeType,
           charSet ?? this.charSet);
 }

@@ -62,20 +62,21 @@ abstract base class NativeDownloader extends BaseDownloader {
             ]);
           }
 
-        // status update with responseBody, mimeType and charSet (normal completion)
+        // status update with responseBody, responseHeaders, mimeType and charSet (normal completion)
         case (
             'statusUpdate',
             [
               int statusOrdinal,
               String? responseBody,
+              Map<String, String>? responseHeaders,
               String? mimeType,
               String? charSet
             ]
           ):
           final status = TaskStatus.values[statusOrdinal];
           if (task.group != BaseDownloader.chunkGroup) {
-            processStatusUpdate(TaskStatusUpdate(
-                task, status, null, responseBody, mimeType, charSet));
+            processStatusUpdate(TaskStatusUpdate(task, status, null,
+                responseBody, responseHeaders, mimeType, charSet));
           } else {
             // this is a chunk task, so pass to native
             await methodChannel.invokeMethod('chunkStatusUpdate', [

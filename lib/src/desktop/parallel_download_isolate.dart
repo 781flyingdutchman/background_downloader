@@ -68,6 +68,7 @@ Future<void> doParallelDownloadTask(
     // start the download by creating [Chunk]s and enqueuing chunk tasks
     final response = await DesktopDownloader.httpClient
         .head(Uri.parse(task.url), headers: task.headers);
+    responseHeaders = response.headers;
     if ([200, 201, 202, 203, 204, 205, 206].contains(response.statusCode)) {
       // get suggested filename if needed, and change task and parentTask
       if (!task.hasFilename) {
@@ -148,16 +149,18 @@ Future<void> chunkStatusUpdate(
       case TaskStatus.failed:
         taskException = update.exception;
         responseBody = update.responseBody;
+        responseHeaders = update.responseHeaders;
         cancelAllChunkTasks(sendPort);
-        parallelTaskStatusUpdateCompleter.complete(TaskStatusUpdate(
-            task, TaskStatus.failed, taskException, responseBody));
+        parallelTaskStatusUpdateCompleter.complete(TaskStatusUpdate(task,
+            TaskStatus.failed, taskException, responseBody, responseHeaders));
         break;
 
       case TaskStatus.notFound:
         responseBody = update.responseBody;
+        responseHeaders = update.responseHeaders;
         cancelAllChunkTasks(sendPort);
-        parallelTaskStatusUpdateCompleter.complete(
-            TaskStatusUpdate(task, TaskStatus.notFound, null, responseBody));
+        parallelTaskStatusUpdateCompleter.complete(TaskStatusUpdate(
+            task, TaskStatus.notFound, null, responseBody, responseHeaders));
         break;
 
       default:

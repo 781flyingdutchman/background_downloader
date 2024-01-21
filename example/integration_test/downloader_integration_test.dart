@@ -868,6 +868,7 @@ void main() {
       expect(result.status, equals(TaskStatus.complete));
       expect(result.exception, isNull);
       expect(result.responseBody, isNull);
+      expect(result.responseHeaders?['server'], equals('gws'));
       exists = await File(path).exists();
       expect(exists, isTrue);
       await File(path).delete();
@@ -1632,6 +1633,7 @@ void main() {
       final result = await FileDownloader().upload(uploadTask);
       expect(result.status, equals(TaskStatus.complete));
       expect(result.responseBody, equals('OK'));
+      expect(result.responseHeaders?['server'], equals('Google Frontend'));
     });
 
     testWidgets('binary upload with await', (widgetTester) async {
@@ -1639,6 +1641,7 @@ void main() {
           .upload(uploadTask.copyWith(url: uploadBinaryTestUrl));
       expect(result.status, equals(TaskStatus.complete));
       expect(result.responseBody, equals('OK'));
+      expect(result.responseHeaders?['server'], equals('Google Frontend'));
     });
 
     testWidgets('multiple upload with futures', (widgetTester) async {
@@ -1652,6 +1655,7 @@ void main() {
       for (var result in results) {
         expect(result.status, equals(TaskStatus.complete));
         expect(result.responseBody, equals('OK'));
+        expect(result.responseHeaders?['server'], equals('Google Frontend'));
       }
     });
 
@@ -1784,6 +1788,7 @@ void main() {
       final result = await FileDownloader().upload(multiTask);
       expect(result.status, equals(TaskStatus.complete));
       expect(result.responseBody, equals('OK'));
+      expect(result.responseHeaders?['server'], equals('Google Frontend'));
     });
 
     testWidgets('upload 2 files with full file path', (widgetTester) async {
@@ -1796,6 +1801,7 @@ void main() {
       final result = await FileDownloader().upload(multiTask);
       expect(result.status, equals(TaskStatus.complete));
       expect(result.responseBody, equals('OK'));
+      expect(result.responseHeaders?['server'], equals('Google Frontend'));
     });
   });
 
