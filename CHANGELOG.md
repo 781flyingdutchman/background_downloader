@@ -1,3 +1,8 @@
+## 8.1.0
+
+* Adds `responseHeaders` to `TaskStatusUpdate` for tasks that complete successfully (null otherwise). Per Dart convention, header names are lower-cased
+* Added `ext.kotlin_version` back to build.gradle
+
 ## 8.0.5
 
 Android minSdk now 21 (was 24) and compileSdk now 34 (was 33)
@@ -278,7 +283,7 @@ for (var n = 0; n < 100; n++) {
 Because it is possible that an error occurs when the taskQueue eventually actually enqueues the task with the FileDownloader, you can listen to the `enqueueErrors` stream for tasks that failed to enqueue.
 
 The default `TaskQueue` is the `MemoryTaskQueue` which, as the  name suggests, keeps everything in memory. This is fine for most situations, but be aware that the queue may get dropped if the OS aggressively moves the app to the background. Tasks still waiting in the queue will not be enqueued, and will therefore be lost. If you want a `TaskQueue` with more persistence, subclass the `MemoryTaskQueue` and add persistence.
-In addition, if your app is supended by the OS due to resource constraints, tasks waiting in the queue will not be enqueued to the native platform and will not run in the background. TaskQueues are therefore best for situations where you expect the queue to be emptied while the app is still in the foreground.
+In addition, if your app is suspended by the OS due to resource constraints, tasks waiting in the queue will not be enqueued to the native platform and will not run in the background. TaskQueues are therefore best for situations where you expect the queue to be emptied while the app is still in the foreground.
 
 
 ## 7.11.1
@@ -393,7 +398,7 @@ Bug fix for Flutter Downloader migration on iOS, issue #86
 ## 7.7.0 
 
 ### Uploading multiple files in a single request
-If you need to upload multiple files in a single request, create a [MultiUploadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/MultiUploadTask-class.html) instead of an `UploadTask`. It has similar parameters as the `UploadTask`, except you specifiy a list of files to upload as the `files` argument of the constructor, and do not use `fileName`, `fileField` and `mimeType`. Each element in the `files` list is either:
+If you need to upload multiple files in a single request, create a [MultiUploadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/MultiUploadTask-class.html) instead of an `UploadTask`. It has similar parameters as the `UploadTask`, except you specify a list of files to upload as the `files` argument of the constructor, and do not use `fileName`, `fileField` and `mimeType`. Each element in the `files` list is either:
 * a filename (e.g. `"file1.txt"`). The `fileField` for that file will be set to the base name (i.e. "file1" for "file1.txt") and the mime type will be derived from the extension (i.e. "text/plain" for "file1.txt")
 * a record containing `(fileField, filename)`, e.g. `("document", "file1.txt")`. The `fileField` for that file will be set to "document" and the mime type derived from the file extension (i.e. "text/plain" for "file1.txt")
 * a record containing `(filefield, filename, mimeType)`, e.g. `("document", "file1.txt", "text/plain")`

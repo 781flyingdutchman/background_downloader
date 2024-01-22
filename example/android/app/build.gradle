@@ -59,7 +59,6 @@ android {
             signingConfig signingConfigs.debug
         }
     }
-    buildToolsVersion '34.0.0'
     if (project.android.hasProperty("namespace")) { namespace 'com.bbflight.background_downloader_example' }
 }
 
