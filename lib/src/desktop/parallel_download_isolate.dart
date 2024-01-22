@@ -78,6 +78,7 @@ Future<void> doParallelDownloadTask(
         log.finest(
             'Suggested filename for taskId ${task.taskId}: ${task.filename}');
       }
+      responseHeaders = response.headers;
       extractContentType(response.headers);
       chunks = createChunks(task, response.headers);
       for (var chunk in chunks) {
@@ -149,7 +150,6 @@ Future<void> chunkStatusUpdate(
       case TaskStatus.failed:
         taskException = update.exception;
         responseBody = update.responseBody;
-        responseHeaders = update.responseHeaders;
         cancelAllChunkTasks(sendPort);
         parallelTaskStatusUpdateCompleter.complete(TaskStatusUpdate(task,
             TaskStatus.failed, taskException, responseBody, responseHeaders));
@@ -157,7 +157,6 @@ Future<void> chunkStatusUpdate(
 
       case TaskStatus.notFound:
         responseBody = update.responseBody;
-        responseHeaders = update.responseHeaders;
         cancelAllChunkTasks(sendPort);
         parallelTaskStatusUpdateCompleter.complete(TaskStatusUpdate(
             task, TaskStatus.notFound, null, responseBody, responseHeaders));

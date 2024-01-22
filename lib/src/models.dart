@@ -193,8 +193,9 @@ sealed class TaskUpdate {
 /// A status update
 ///
 /// Contains [TaskStatus] and, if [TaskStatus.failed] possibly a
-/// [TaskException] and if this is a final state possibly a [responseBody],
-/// [mimeType] and [charSet]
+/// [TaskException] and if this is a final state possibly [responseBody],
+/// [responseHeaders], [mimeType] and [charSet].
+/// Note: header names in [responseHeaders] are converted to lowercase
 class TaskStatusUpdate extends TaskUpdate {
   final TaskStatus status;
   final TaskException? exception;

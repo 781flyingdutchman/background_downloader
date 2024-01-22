@@ -90,6 +90,7 @@ open class TaskWorker(
             prefs: SharedPreferences,
             taskException: TaskException? = null,
             responseBody: String? = null,
+            responseHeaders: Map<String, String>? = null,
             mimeType: String? = null,
             charSet: String? = null,
             context: Context? = null
@@ -144,6 +145,7 @@ open class TaskWorker(
                 ) else mutableListOf(
                     status.ordinal,
                     if (status.isFinalState()) responseBody else null,
+                    if (status.isFinalState()) responseHeaders else null,
                     if (status.isFinalState()) mimeType else null,
                     if (status.isFinalState()) charSet else null
                 )
@@ -320,6 +322,7 @@ open class TaskWorker(
     // additional parameters for final TaskStatusUpdate
     var taskException: TaskException? = null
     var responseBody: String? = null
+    var responseHeaders: Map<String, String>? = null
     private var mimeType: String? = null // derived from Content-Type header
     private var charSet: String? = null // derived from Content-Type header
 
@@ -379,6 +382,7 @@ open class TaskWorker(
                     prefs,
                     taskException,
                     responseBody,
+                    responseHeaders,
                     mimeType,
                     charSet,
                     applicationContext
@@ -712,6 +716,20 @@ open class TaskWorker(
                 mimeType = contentType
             }
         }
+    }
+
+    /**
+     * Extract headers from response [headers] and store in [responseHeaders]
+     *
+     * Required because the headers object has a List<String> for each key,
+     * whereas the Dart convention separates values under the same key by
+     * concatenating them, separated by a comma and a space.
+     *
+     * This method sets the global responseHeaders field based on the Dart
+     * convention.
+     */
+    fun extractResponseHeaders(headers: MutableMap<String, MutableList<String>>) {
+        responseHeaders = headers.mapValues { it.value.joinToString() }
     }
 }
 

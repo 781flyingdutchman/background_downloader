@@ -53,7 +53,8 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
             }
 
             TaskStatus.complete -> {
-                responseBody = responseBodyContent(connection)
+                extractResponseBody(connection)
+                extractResponseHeaders(connection.headerFields)
                 if (connection.responseCode in 200..206) {
                     Log.i(
                         TAG, "Successfully uploaded taskId ${task.taskId} from $filePath"
@@ -234,18 +235,20 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
     }
 
     /**
-     * Return the response's body content as a String, or null if unable
+     * Extract the response's body content as a String, or null if unable, and store
+     * in [responseBody]
      */
-    private fun responseBodyContent(connection: HttpURLConnection): String? {
+    private fun extractResponseBody(connection: HttpURLConnection) {
         try {
-            return connection.inputStream.bufferedReader().readText()
+            responseBody = connection.inputStream.bufferedReader().readText()
+            return
         } catch (e: Exception) {
             Log.i(
                 TAG,
                 "Could not read response body from httpResponseCode ${connection.responseCode}: $e"
             )
         }
-        return null
+        responseBody = null
     }
 
     /**

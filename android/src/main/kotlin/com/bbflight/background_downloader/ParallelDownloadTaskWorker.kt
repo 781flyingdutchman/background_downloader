@@ -88,6 +88,7 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                                 )
                                 Log.d(TAG, "Suggested filename for taskId ${task.taskId}: ${task.filename}")
                             }
+                            extractResponseHeaders(connection.headerFields)
                             extractContentType(connection.headerFields)
                             chunks = createChunks(task, connection.headerFields)
                             for (chunk in chunks) {

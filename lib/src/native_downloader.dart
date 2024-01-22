@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:background_downloader/src/desktop/isolate.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -68,15 +69,23 @@ abstract base class NativeDownloader extends BaseDownloader {
             [
               int statusOrdinal,
               String? responseBody,
-              Map<String, String>? responseHeaders,
+              Map<Object?, Object?>? responseHeaders,
               String? mimeType,
               String? charSet
             ]
           ):
           final status = TaskStatus.values[statusOrdinal];
           if (task.group != BaseDownloader.chunkGroup) {
+            final Map<String, String>? cleanResponseHeaders = responseHeaders ==
+                    null
+                ? null
+                : {
+                    for (var entry in responseHeaders.entries.where(
+                        (entry) => entry.key != null && entry.value != null))
+                      entry.key.toString().toLowerCase(): entry.value.toString()
+                  };
             processStatusUpdate(TaskStatusUpdate(task, status, null,
-                responseBody, responseHeaders, mimeType, charSet));
+                responseBody, cleanResponseHeaders, mimeType, charSet));
           } else {
             // this is a chunk task, so pass to native
             await methodChannel.invokeMethod('chunkStatusUpdate', [
@@ -195,7 +204,8 @@ abstract base class NativeDownloader extends BaseDownloader {
 
         default:
           log.warning('Background channel: no match for message $message');
-          throw StateError('Background channel: no match for message $message');
+          throw ArgumentError(
+              'Background channel: no match for message $message');
       }
       return true;
     });
