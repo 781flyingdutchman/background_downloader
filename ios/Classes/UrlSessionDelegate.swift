@@ -35,6 +35,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
         }
         let responseStatusCode = (task.response as? HTTPURLResponse)?.statusCode ?? 0
         let responseStatusDescription = HTTPURLResponse.localizedString(forStatusCode: responseStatusCode)
+        let responseHeaders = (task.response as? HTTPURLResponse)?.allHeaderFields
         let notificationConfig = getNotificationConfigFrom(urlSessionTask: task)
         // from here on, task refers to "our" task, not a URLSessionTask
         guard let task = getTaskFrom(urlSessionTask: task) else {
@@ -86,7 +87,8 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
         }
         // there was no error
         os_log("Finished task with id %@", log: log, type: .info, task.taskId)
-        // if this is an upload task, send final TaskStatus (based on HTTP status code
+        // if this is an upload task, send final TaskStatus (based on HTTP status code).
+        // for download tasks, this is done in urlSession(downloadTask:, didFinishDownloadingTo:)
         if isUploadTask(task: task) {
             let taskException = TaskException(type: .httpResponse, httpResponseCode: responseStatusCode, description: responseStatusDescription)
             let finalStatus = (200...206).contains(responseStatusCode)
@@ -94,7 +96,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             : responseStatusCode == 404
             ? TaskStatus.notFound
             : TaskStatus.failed
-            processStatusUpdate(task: task, status: finalStatus, taskException: taskException, responseBody: responseBody)
+            processStatusUpdate(task: task, status: finalStatus, taskException: taskException, responseBody: responseBody, responseHeaders: responseHeaders)
         }
     }
     
@@ -196,6 +198,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
         else {
             os_log("Could not find task associated urlSessionTask %d, or did not get HttpResponse", log: log,  type: .info, downloadTask.taskIdentifier)
             return}
+        let responseHeaders = response.allHeaderFields
         let taskId = task.taskId
         let mimeType = BDPlugin.mimeTypes[taskId]
         let charSet = BDPlugin.charSets[taskId]
@@ -224,7 +227,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             var finalStatus = TaskStatus.failed
             var taskException: TaskException? = nil
             defer {
-                processStatusUpdate(task: task, status: finalStatus, taskException: taskException, mimeType: mimeType, charSet: charSet)
+                processStatusUpdate(task: task, status: finalStatus, taskException: taskException, responseHeaders: responseHeaders, mimeType: mimeType, charSet: charSet)
                 if finalStatus != TaskStatus.failed || task.retriesRemaining == 0 {
                     // update notification only if not failed, or no retries remaining
                     updateNotification(task: task, notificationType: notificationTypeForTaskStatus(status: finalStatus), notificationConfig: notificationConfig)

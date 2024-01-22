@@ -305,7 +305,7 @@ func updateProgress(task: Task, totalBytesExpected: Int64, totalBytesDone: Int64
 /// Sends status update via the background channel to Dart, if requested
 /// If the task is finished, processes a final progressUpdate update and removes
 /// task from persistent storage
-func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskException? = nil, responseBody: String? = nil, mimeType: String? = nil, charSet: String? = nil) {
+func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskException? = nil, responseBody: String? = nil, responseHeaders: [AnyHashable:Any]? = nil, mimeType: String? = nil, charSet: String? = nil) {
     // Post update if task expects one, or if failed and retry is needed
     let retryNeeded = status == TaskStatus.failed && task.retriesRemaining > 0
     // if task is in final state, process a final progressUpdate
@@ -335,7 +335,7 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
         : taskException
         let arg: [Any?] = status == .failed
         ? [status.rawValue, finalTaskException!.type.rawValue, finalTaskException!.description, finalTaskException!.httpResponseCode, responseBody] as [Any?]
-        : [status.rawValue, responseBody, mimeType, charSet] as [Any?]
+        : [status.rawValue, responseBody, responseHeaders, mimeType, charSet] as [Any?]
         if !postOnBackgroundChannel(method: "statusUpdate", task: task, arg: arg) {
             // store update locally as a merged task/status JSON string, without error info
             guard let jsonData = try? JSONEncoder().encode(TaskStatusUpdate(task: task, taskStatus: status))

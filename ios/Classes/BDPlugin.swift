@@ -229,7 +229,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             urlSessionUploadTask.resume()
         }
         else {
-            // multi-part upload via StreamedRequest
+            // multi-part upload
             os_log("Multipart file upload", log: log, type: .debug)
             let uploader = Uploader(task: task)
             if !uploader.createMultipartFile() {
