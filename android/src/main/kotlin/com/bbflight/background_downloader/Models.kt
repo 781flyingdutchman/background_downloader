@@ -80,6 +80,7 @@ class Task(
     val baseDirectory: BaseDirectory,
     val group: String,
     val updates: Updates,
+    val requiresConnectedNetwork: Boolean = true,
     val requiresWiFi: Boolean = false,
     val retries: Int = 0,
     var retriesRemaining: Int = 0,
@@ -110,6 +111,7 @@ class Task(
         baseDirectory: BaseDirectory? = null,
         group: String? = null,
         updates: Updates? = null,
+        requiresConnectedNetwork: Boolean? = null,
         requiresWiFi: Boolean? = null,
         retries: Int? = null,
         retriesRemaining: Int? = null,
@@ -136,6 +138,7 @@ class Task(
             baseDirectory = baseDirectory ?: this.baseDirectory,
             group = group ?: this.group,
             updates = updates ?: this.updates,
+            requiresConnectedNetwork = requiresConnectedNetwork ?: this.requiresConnectedNetwork,
             requiresWiFi = requiresWiFi ?: this.requiresWiFi,
             retries = retries ?: this.retries,
             retriesRemaining = retriesRemaining ?: this.retriesRemaining,
@@ -331,7 +334,7 @@ class Task(
     fun hasFilename() = filename != "?"
 
     override fun toString(): String {
-        return "Task(taskId='$taskId', url='$url', filename='$filename', headers=$headers, httpRequestMethod=$httpRequestMethod, post=$post, fileField='$fileField', mimeType='$mimeType', fields=$fields, directory='$directory', baseDirectory=$baseDirectory, group='$group', updates=$updates, requiresWiFi=$requiresWiFi, retries=$retries, retriesRemaining=$retriesRemaining, allowPause=$allowPause, metaData='$metaData', creationTime=$creationTime, taskType='$taskType')"
+        return "Task(taskId='$taskId', url='$url', filename='$filename', headers=$headers, httpRequestMethod=$httpRequestMethod, post=$post, fileField='$fileField', mimeType='$mimeType', fields=$fields, directory='$directory', baseDirectory=$baseDirectory, group='$group', updates=$updates, requiresConnectedNetwork=$requiresConnectedNetwork, requiresWiFi=$requiresWiFi, retries=$retries, retriesRemaining=$retriesRemaining, allowPause=$allowPause, metaData='$metaData', creationTime=$creationTime, taskType='$taskType')"
     }
 
     /**

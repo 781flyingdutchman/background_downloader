@@ -21,15 +21,16 @@ final task = DownloadTask(
     directory: 'dir',
     group: 'group',
     updates: Updates.statusAndProgress,
+    requiresConnectedNetwork: true,
     requiresWiFi: true,
     retries: 5,
     allowPause: true,
     metaData: 'metaData',
     creationTime: DateTime.fromMillisecondsSinceEpoch(1000));
 const downloadTaskJsonString =
-    '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"priority":5,"metaData":"metaData","displayName":"","taskType":"DownloadTask"}';
+    '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresConnectedNetwork":true,"requiresWiFi":true,"allowPause":true,"priority":5,"metaData":"metaData","displayName":"","taskType":"DownloadTask"}';
 const downloadTaskJsonStringDoubles =
-    '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5.0,"retriesRemaining":5.0,"creationTime":1000.0,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1.0,"group":"group","updates":3.0,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask"}';
+    '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5.0,"retriesRemaining":5.0,"creationTime":1000.0,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1.0,"group":"group","updates":3.0,"requiresConnectedNetwork":true,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask"}';
 
 final uploadTask = UploadTask(
     taskId: 'taskId',
@@ -44,14 +45,15 @@ final uploadTask = UploadTask(
     directory: 'dir',
     group: 'group',
     updates: Updates.statusAndProgress,
+    requiresConnectedNetwork: true,
     requiresWiFi: true,
     retries: 5,
     metaData: 'metaData',
     creationTime: DateTime.fromMillisecondsSinceEpoch(1000));
 const uploadTaskJsonString =
-    '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"PUT","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":false,"priority":5,"metaData":"metaData","displayName":"","taskType":"UploadTask","fileField":"fileField","mimeType":"application/octet-stream","fields":{"e":"f"}}';
+    '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"PUT","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresConnectedNetwork":true,"requiresWiFi":true,"allowPause":false,"priority":5,"metaData":"metaData","displayName":"","taskType":"UploadTask","fileField":"fileField","mimeType":"application/octet-stream","fields":{"e":"f"}}';
 const uploadTaskJsonStringDoubles =
-    '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"PUT","post":null,"retries":5.0,"retriesRemaining":5.0,"creationTime":1000.0,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1.0,"group":"group","updates":3.0,"requiresWiFi":true,"allowPause":false,"metaData":"metaData","fileField":"fileField","mimeType":"application/octet-stream","fields":{"e":"f"},"taskType":"UploadTask"}';
+    '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"PUT","post":null,"retries":5.0,"retriesRemaining":5.0,"creationTime":1000.0,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1.0,"group":"group","updates":3.0,"requiresConnectedNetwork":true,"requiresWiFi":true,"allowPause":false,"metaData":"metaData","fileField":"fileField","mimeType":"application/octet-stream","fields":{"e":"f"},"taskType":"UploadTask"}';
 
 void main() {
   group('JSON conversion', () {
@@ -169,7 +171,7 @@ void main() {
       final statusUpdate = TaskStatusUpdate(
           task, TaskStatus.failed, TaskConnectionException('test'));
       const expected =
-          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"priority":5,"metaData":"metaData","displayName":"","taskType":"DownloadTask"},"taskStatus":4,"exception":{"type":"TaskConnectionException","description":"test"},"responseBody":null,"mimeType":null,"charSet":null}';
+          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresConnectedNetwork":true,"requiresWiFi":true,"allowPause":true,"priority":5,"metaData":"metaData","displayName":"","taskType":"DownloadTask"},"taskStatus":4,"exception":{"type":"TaskConnectionException","description":"test"},"responseBody":null,"responseHeaders":null,"mimeType":null,"charSet":null}';
       expect(jsonEncode(statusUpdate.toJson()), equals(expected));
       final update2 = TaskStatusUpdate.fromJson(jsonDecode(expected));
       expect(update2.task, equals(statusUpdate.task));
@@ -177,7 +179,7 @@ void main() {
       expect(update2.exception?.description, equals('test'));
       expect(update2.exception is TaskConnectionException, isTrue);
       const withDoubles =
-          '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5.0,"retriesRemaining":5.0,"creationTime":1000.0,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1.0,"group":"group","updates":3.0,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask","taskStatus":4.0,"exception":{"type":"TaskConnectionException","description":"test"}}';
+          '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5.0,"retriesRemaining":5.0,"creationTime":1000.0,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1.0,"group":"group","updates":3.0,"requiresConnectedNetwork":true,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask","taskStatus":4.0,"exception":{"type":"TaskConnectionException","description":"test"}}';
       expect(
           jsonEncode(
               TaskStatusUpdate.fromJson(jsonDecode(withDoubles)).toJson()),
@@ -187,14 +189,14 @@ void main() {
     test('TaskProgressUpdate', () {
       final progressUpdate = TaskProgressUpdate(task, 1, 123);
       const expected =
-          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"priority":5,"metaData":"metaData","displayName":"","taskType":"DownloadTask"},"progress":1.0,"expectedFileSize":123,"networkSpeed":-1.0,"timeRemaining":-1}';
+          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresConnectedNetwork":true,"requiresWiFi":true,"allowPause":true,"priority":5,"metaData":"metaData","displayName":"","taskType":"DownloadTask"},"progress":1.0,"expectedFileSize":123,"networkSpeed":-1.0,"timeRemaining":-1}';
       expect(jsonEncode(progressUpdate.toJson()), equals(expected));
       final update2 = TaskProgressUpdate.fromJson(jsonDecode(expected));
       expect(update2.task, equals(progressUpdate.task));
       expect(update2.progress, equals(1));
       expect(update2.expectedFileSize, equals(123));
       const withDoubles =
-          '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5.0,"retriesRemaining":5.0,"creationTime":1000.0,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1.0,"group":"group","updates":3.0,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask","progress":1,"expectedFileSize":123.0}';
+          '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5.0,"retriesRemaining":5.0,"creationTime":1000.0,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1.0,"group":"group","updates":3.0,"requiresConnectedNetwork":true,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask","progress":1,"expectedFileSize":123.0}';
       expect(
           jsonEncode(
               TaskProgressUpdate.fromJson(jsonDecode(withDoubles)).toJson()),
@@ -205,7 +207,7 @@ void main() {
       final taskRecord =
           TaskRecord(task, TaskStatus.failed, 1, 123, TaskUrlException('test'));
       const expected =
-          '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"priority":5,"metaData":"metaData","displayName":"","taskType":"DownloadTask","status":4,"progress":1.0,"expectedFileSize":123,"exception":{"type":"TaskUrlException","description":"test"}}';
+          '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresConnectedNetwork":true,"requiresWiFi":true,"allowPause":true,"priority":5,"metaData":"metaData","displayName":"","taskType":"DownloadTask","status":4,"progress":1.0,"expectedFileSize":123,"exception":{"type":"TaskUrlException","description":"test"}}';
       expect(jsonEncode(taskRecord.toJson()), equals(expected));
       final update2 = TaskRecord.fromJson(jsonDecode(expected));
       expect(update2.task, equals(taskRecord.task));
@@ -215,7 +217,7 @@ void main() {
       expect(update2.progress, equals(1));
       expect(update2.expectedFileSize, equals(123));
       const withDoubles =
-          '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5.0,"retriesRemaining":5.0,"creationTime":1000.0,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask","status":4.0,"progress":1,"expectedFileSize":123.0,"exception":{"type":"TaskUrlException","description":"test"}}';
+          '{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5.0,"retriesRemaining":5.0,"creationTime":1000.0,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresConnectedNetwork":true,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask","status":4.0,"progress":1,"expectedFileSize":123.0,"exception":{"type":"TaskUrlException","description":"test"}}';
       expect(jsonEncode(TaskRecord.fromJson(jsonDecode(withDoubles)).toJson()),
           equals(expected));
     });
@@ -223,7 +225,7 @@ void main() {
     test('ResumeData', () {
       final resumeData = ResumeData(task, 'data', 123, 'tag');
       const expected =
-          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"priority":5,"metaData":"metaData","displayName":"","taskType":"DownloadTask"},"data":"data","requiredStartByte":123,"eTag":"tag"}';
+          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresConnectedNetwork":true,"requiresWiFi":true,"allowPause":true,"priority":5,"metaData":"metaData","displayName":"","taskType":"DownloadTask"},"data":"data","requiredStartByte":123,"eTag":"tag"}';
       expect(jsonEncode(resumeData.toJson()), equals(expected));
       final update2 = ResumeData.fromJson(jsonDecode(expected));
       expect(update2.task, equals(resumeData.task));
@@ -231,12 +233,12 @@ void main() {
       expect(update2.requiredStartByte, equals(123));
       expect(update2.eTag, equals('tag'));
       const withDoubles =
-          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5.0,"retriesRemaining":5.0,"creationTime":1000.0,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1.0,"group":"group","updates":3.0,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask"},"data":"data","requiredStartByte":123.0,"eTag":"tag"}';
+          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5.0,"retriesRemaining":5.0,"creationTime":1000.0,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1.0,"group":"group","updates":3.0,"requiresConnectedNetwork":true,"requiresWiFi":true,"allowPause":true,"metaData":"metaData","taskType":"DownloadTask"},"data":"data","requiredStartByte":123.0,"eTag":"tag"}';
       expect(jsonEncode(ResumeData.fromJson(jsonDecode(withDoubles)).toJson()),
           equals(expected));
       final resumeData2 = ResumeData(task, 'data', 123, null);
       const expected2 =
-          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresWiFi":true,"allowPause":true,"priority":5,"metaData":"metaData","displayName":"","taskType":"DownloadTask"},"data":"data","requiredStartByte":123,"eTag":null}';
+          '{"task":{"url":"url?a=b","headers":{"c":"d"},"httpRequestMethod":"GET","post":null,"retries":5,"retriesRemaining":5,"creationTime":1000,"taskId":"taskId","filename":"filename","directory":"dir","baseDirectory":1,"group":"group","updates":3,"requiresConnectedNetwork":true,"requiresWiFi":true,"allowPause":true,"priority":5,"metaData":"metaData","displayName":"","taskType":"DownloadTask"},"data":"data","requiredStartByte":123,"eTag":null}';
       expect(jsonEncode(resumeData2.toJson()), equals(expected2));
       final update3 = ResumeData.fromJson(jsonDecode(expected2));
       expect(update3.task, equals(resumeData.task));
@@ -247,7 +249,7 @@ void main() {
 
     test('DownloadTask incoming from Android', () {
       const incoming =
-          '{"allowPause":false,"baseDirectory": 1,"chunks":1,"creationTime":1694879914883,"directory":"","fields":{},"fileField":"","filename":"com.bbflight.background_downloader.1186323287","group":"chunk","headers":{"Range":"bytes\u003d0-29836749"},"httpRequestMethod":"GET","metaData":"{\\"parentTaskId\\":\\"3069222547\\",\\"from\\":0,\\"to\\":29836749}","mimeType":"","requiresWiFi":false,"retries":0,"retriesRemaining":0,"taskId":"1702658487","taskType":"DownloadTask","updates":2,"url":"https://storage.googleapis.com/approachcharts/test/57MB-test.ZIP","urls":[]}';
+          '{"allowPause":false,"baseDirectory": 1,"chunks":1,"creationTime":1694879914883,"directory":"","fields":{},"fileField":"","filename":"com.bbflight.background_downloader.1186323287","group":"chunk","headers":{"Range":"bytes\u003d0-29836749"},"httpRequestMethod":"GET","metaData":"{\\"parentTaskId\\":\\"3069222547\\",\\"from\\":0,\\"to\\":29836749}","mimeType":"","requiresConnectedNetwork":true,"requiresWiFi":false,"retries":0,"retriesRemaining":0,"taskId":"1702658487","taskType":"DownloadTask","updates":2,"url":"https://storage.googleapis.com/approachcharts/test/57MB-test.ZIP","urls":[]}';
       final task = Task.createFromJson(jsonDecode(incoming));
       print(task);
     });

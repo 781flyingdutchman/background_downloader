@@ -749,6 +749,7 @@ void main() {
           baseDirectory: BaseDirectory.temporary,
           group: 'someGroup',
           updates: Updates.statusAndProgress,
+          requiresConnectedNetwork: true,
           requiresWiFi: false,
           retries: 5,
           allowPause: false,
@@ -777,6 +778,8 @@ void main() {
         expect(task.baseDirectory, equals(complexTask.baseDirectory));
         expect(task.group, equals(complexTask.group));
         expect(task.updates, equals(complexTask.updates));
+        expect(task.requiresConnectedNetwork,
+            equals(complexTask.requiresConnectedNetwork));
         expect(task.requiresWiFi, equals(complexTask.requiresWiFi));
         expect(task.allowPause, equals(complexTask.allowPause));
         expect(task.retries, equals(complexTask.retries));
@@ -807,6 +810,7 @@ void main() {
           fields: {'name': 'value'},
           group: 'someGroup',
           updates: Updates.statusAndProgress,
+          requiresConnectedNetwork: true,
           requiresWiFi: false,
           retries: 1,
           metaData: 'someMetaData');
@@ -835,6 +839,8 @@ void main() {
         expect(task.baseDirectory, equals(complexTask.baseDirectory));
         expect(task.group, equals(complexTask.group));
         expect(task.updates, equals(complexTask.updates));
+        expect(task.requiresConnectedNetwork,
+            equals(complexTask.requiresConnectedNetwork));
         expect(task.requiresWiFi, equals(complexTask.requiresWiFi));
         expect(task.allowPause, equals(complexTask.allowPause));
         expect(task.retries, equals(complexTask.retries));

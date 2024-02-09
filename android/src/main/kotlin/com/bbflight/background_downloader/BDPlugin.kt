@@ -127,7 +127,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             }
             val data = dataBuilder.build()
             val constraints = Constraints.Builder().setRequiredNetworkType(
-                if (task.requiresWiFi) NetworkType.UNMETERED else NetworkType.CONNECTED
+                if (task.requiresConnectedNetwork) NetworkType.NOT_REQUIRED else if (task.requiresWiFi) NetworkType.UNMETERED else NetworkType.CONNECTED
             ).build()
             val requestBuilder =
                 if (task.isParallelDownloadTask())

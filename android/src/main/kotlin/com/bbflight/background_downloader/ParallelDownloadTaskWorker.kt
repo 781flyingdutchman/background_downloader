@@ -481,6 +481,7 @@ class Chunk private constructor(
             updates = updatesBasedOnParent(parentTask),
             retries = parentTask.retries,
             retriesRemaining = parentTask.retries,
+            requiresConnectedNetwork = parentTask.requiresConnectedNetwork,
             requiresWiFi = parentTask.requiresWiFi,
             allowPause = parentTask.allowPause,
             priority = parentTask.priority,

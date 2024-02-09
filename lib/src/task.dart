@@ -217,6 +217,14 @@ sealed class Task extends Request implements Comparable {
   /// Type of progress updates desired
   final Updates updates;
 
+  /// If true, will not require an internet connected network to start task.
+  /// On Android, the NetworkType.CONNECTED constraint requires a valid internet
+  /// connection to start the task. If you're connected to a WiFi connection
+  /// which doesn't have external internet access but does have access to the
+  /// server you want to download/upload from (e.g., an API running on a local
+  /// IP) then setting this to true will allow the task to run.
+  final bool requiresConnectedNetwork;
+
   /// If true, will not download over cellular (metered) network
   final bool requiresWiFi;
 
@@ -260,6 +268,8 @@ sealed class Task extends Request implements Comparable {
   /// [group] if set allows different callbacks or processing for different
   /// groups
   /// [updates] the kind of progress updates requested
+  /// [requiresConnectedNetwork] if set, will start regardless of if device has
+  /// internet
   /// [requiresWiFi] if set, will not start download until WiFi is available.
   /// If not set may start download over cellular network
   /// [retries] if >0 will retry a failed download this many times
@@ -284,6 +294,7 @@ sealed class Task extends Request implements Comparable {
       this.baseDirectory = BaseDirectory.applicationDocuments,
       this.group = 'default',
       this.updates = Updates.status,
+      this.requiresConnectedNetwork = true,
       this.requiresWiFi = false,
       super.retries,
       this.metaData = '',
@@ -385,6 +396,7 @@ sealed class Task extends Request implements Comparable {
       BaseDirectory? baseDirectory,
       String? group,
       Updates? updates,
+      bool? requiresConnectedNetwork,
       bool? requiresWiFi,
       int? retries,
       int? retriesRemaining,
@@ -406,6 +418,7 @@ sealed class Task extends Request implements Comparable {
             BaseDirectory.values[(json['baseDirectory'] as num?)?.toInt() ?? 0],
         group = json['group'] ?? FileDownloader.defaultGroup,
         updates = Updates.values[(json['updates'] as num?)?.toInt() ?? 0],
+        requiresConnectedNetwork = json['requiresConnectedNetwork'] ?? true,
         requiresWiFi = json['requiresWiFi'] ?? false,
         allowPause = json['allowPause'] ?? false,
         priority = (json['priority'] as num?)?.toInt() ?? 5,
@@ -423,6 +436,7 @@ sealed class Task extends Request implements Comparable {
         'baseDirectory': baseDirectory.index, // stored as int
         'group': group,
         'updates': updates.index, // stored as int
+        'requiresConnectedNetwork': requiresConnectedNetwork,
         'requiresWiFi': requiresWiFi,
         'allowPause': allowPause,
         'priority': priority,
@@ -473,7 +487,7 @@ sealed class Task extends Request implements Comparable {
   @override
   String toString() {
     return '$taskType{taskId: $taskId, url: $url, filename: $filename, headers: '
-        '$headers, httpRequestMethod: $httpRequestMethod, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, updates: $updates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, allowPause: $allowPause, priority: $priority, metaData: $metaData, displayName: $displayName}';
+        '$headers, httpRequestMethod: $httpRequestMethod, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, updates: $updates, requiresConnectedNetwork: $requiresConnectedNetwork, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, allowPause: $allowPause, priority: $priority, metaData: $metaData, displayName: $displayName}';
   }
 }
 
@@ -506,6 +520,8 @@ final class DownloadTask extends Task {
   /// [group] if set allows different callbacks or processing for different
   /// groups
   /// [updates] the kind of progress updates requested
+  /// [requiresConnectedNetwork] if set, will start regardless of if device has
+  /// internet
   /// [requiresWiFi] if set, will not start download until WiFi is available.
   /// If not set may start download over cellular network
   /// [retries] if >0 will retry a failed download this many times
@@ -526,6 +542,7 @@ final class DownloadTask extends Task {
       super.baseDirectory,
       super.group,
       super.updates,
+      super.requiresConnectedNetwork,
       super.requiresWiFi,
       super.retries,
       super.allowPause,
@@ -557,6 +574,7 @@ final class DownloadTask extends Task {
           BaseDirectory? baseDirectory,
           String? group,
           Updates? updates,
+          bool? requiresConnectedNetwork,
           bool? requiresWiFi,
           int? retries,
           int? retriesRemaining,
@@ -576,6 +594,8 @@ final class DownloadTask extends Task {
           baseDirectory: baseDirectory ?? this.baseDirectory,
           group: group ?? this.group,
           updates: updates ?? this.updates,
+          requiresConnectedNetwork:
+              requiresConnectedNetwork ?? this.requiresConnectedNetwork,
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
           retries: retries ?? this.retries,
           allowPause: allowPause ?? this.allowPause,
@@ -676,6 +696,8 @@ final class UploadTask extends Task {
   /// [group] if set allows different callbacks or processing for different
   /// groups
   /// [updates] the kind of progress updates requested
+  /// [requiresConnectedNetwork] if set, will start regardless of if device has
+  /// internet
   /// [requiresWiFi] if set, will not start upload until WiFi is available.
   /// If not set may start upload over cellular network
   /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5
@@ -698,6 +720,7 @@ final class UploadTask extends Task {
       super.baseDirectory,
       super.group,
       super.updates,
+      super.requiresConnectedNetwork,
       super.requiresWiFi,
       super.retries,
       super.priority,
@@ -782,6 +805,7 @@ final class UploadTask extends Task {
           BaseDirectory? baseDirectory,
           String? group,
           Updates? updates,
+          bool? requiresConnectedNetwork,
           bool? requiresWiFi,
           int? retries,
           int? retriesRemaining,
@@ -804,6 +828,8 @@ final class UploadTask extends Task {
           baseDirectory: baseDirectory ?? this.baseDirectory,
           group: group ?? this.group,
           updates: updates ?? this.updates,
+          requiresConnectedNetwork:
+              requiresConnectedNetwork ?? this.requiresConnectedNetwork,
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
           priority: priority ?? this.priority,
           retries: retries ?? this.retries,
@@ -867,6 +893,8 @@ final class MultiUploadTask extends UploadTask {
   /// [group] if set allows different callbacks or processing for different
   /// groups
   /// [updates] the kind of progress updates requested
+  /// [requiresConnectedNetwork] if set, will start regardless of if device has
+  /// internet
   /// [requiresWiFi] if set, will not start upload until WiFi is available.
   /// If not set may start upload over cellular network
   /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5
@@ -886,6 +914,7 @@ final class MultiUploadTask extends UploadTask {
       super.baseDirectory,
       super.group,
       super.updates,
+      super.requiresConnectedNetwork,
       super.requiresWiFi,
       super.priority,
       super.retries,
@@ -958,6 +987,7 @@ final class MultiUploadTask extends UploadTask {
           BaseDirectory? baseDirectory,
           String? group,
           Updates? updates,
+          bool? requiresConnectedNetwork,
           bool? requiresWiFi,
           int? priority,
           int? retries,
@@ -977,6 +1007,8 @@ final class MultiUploadTask extends UploadTask {
           baseDirectory: baseDirectory ?? this.baseDirectory,
           group: group ?? this.group,
           updates: updates ?? this.updates,
+          requiresConnectedNetwork:
+              requiresConnectedNetwork ?? this.requiresConnectedNetwork,
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
           priority: priority ?? this.priority,
           retries: retries ?? this.retries,
@@ -1024,6 +1056,8 @@ final class ParallelDownloadTask extends DownloadTask {
   /// [group] if set allows different callbacks or processing for different
   /// groups
   /// [updates] the kind of progress updates requested
+  /// [requiresConnectedNetwork] if set, will start regardless of if device has
+  /// internet
   /// [requiresWiFi] if set, will not start download until WiFi is available.
   /// If not set may start download over cellular network
   /// [retries] if >0 will retry a failed download this many times
@@ -1046,6 +1080,7 @@ final class ParallelDownloadTask extends DownloadTask {
       super.baseDirectory,
       super.group,
       super.updates,
+      super.requiresConnectedNetwork,
       super.requiresWiFi,
       super.retries,
       super.allowPause,
@@ -1094,6 +1129,7 @@ final class ParallelDownloadTask extends DownloadTask {
           BaseDirectory? baseDirectory,
           String? group,
           Updates? updates,
+          bool? requiresConnectedNetwork,
           bool? requiresWiFi,
           int? retries,
           int? retriesRemaining,
@@ -1113,6 +1149,8 @@ final class ParallelDownloadTask extends DownloadTask {
           baseDirectory: baseDirectory ?? this.baseDirectory,
           group: group ?? this.group,
           updates: updates ?? this.updates,
+          requiresConnectedNetwork:
+              requiresConnectedNetwork ?? this.requiresConnectedNetwork,
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
           retries: retries ?? this.retries,
           allowPause: allowPause ?? this.allowPause,
