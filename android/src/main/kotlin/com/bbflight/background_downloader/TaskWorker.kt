@@ -100,7 +100,13 @@ open class TaskWorker(
             if (BDPlugin.tasksToReEnqueue.remove(task)) {
                 if ((status == TaskStatus.paused || status == TaskStatus.canceled || status == TaskStatus.failed) && context != null) {
                     WiFi.reEnqueue(ReEnqueue(context, task, BDPlugin.notificationConfigJsonStrings[task.taskId], BDPlugin.localResumeData[task.taskId]))
+                    if (BDPlugin.tasksToReEnqueue.isEmpty()) {
+                        WiFi.reEnqueue(null) // signal end of batch
+                    }
                     return
+                }
+                if (BDPlugin.tasksToReEnqueue.isEmpty()) {
+                    WiFi.reEnqueue(null) // signal end of batch
                 }
             }
 

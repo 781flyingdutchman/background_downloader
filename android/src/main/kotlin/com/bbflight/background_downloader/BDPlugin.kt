@@ -138,7 +138,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             if (taskRequiresWifi) {
                 taskIdsRequiringWiFi.add(task.taskId)
             }
-            Log.wtf(TAG, "TaskId ${task.taskId} requireWiFi=$taskRequiresWifi")
             val constraints = Constraints.Builder().setRequiredNetworkType(
                 if (taskRequiresWifi) NetworkType.UNMETERED else NetworkType.CONNECTED
             ).build()

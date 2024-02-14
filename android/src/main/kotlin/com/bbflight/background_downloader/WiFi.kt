@@ -6,10 +6,10 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import java.util.Date
 
 /**
@@ -24,27 +24,32 @@ import java.util.Date
  *    Each item is a [ReEnqueue] data object represent one task re-enqueue. The task
  *    will be re-enqueued with an appropriate delay
  */
-@OptIn(ExperimentalCoroutinesApi::class)
 object WiFi {
     private val scope = CoroutineScope(Dispatchers.Default)
 
     private val requireWiFiQueue =
         Channel<RequireWiFiChange>(capacity = Channel.UNLIMITED)
-    private val reEnqueueQueue = Channel<ReEnqueue>(capacity = Channel.UNLIMITED)
+    private val reEnqueueQueue = Channel<ReEnqueue?>(capacity = Channel.UNLIMITED)
+    private val requireWiFiLock = Mutex()
 
     init {
         scope.launch {
             for (change in requireWiFiQueue) {
-                while (!reEnqueueQueue.isEmpty) {
-                    delay(1000)
+                requireWiFiLock.lock()
+                if (!change.execute() && requireWiFiLock.isLocked) {
+                    // no re-enqueues, so unblock the requireWiFiQueue immediately
+                    requireWiFiLock.unlock()
                 }
-                change.execute()
             }
         }
 
         scope.launch {
             for (reEnqueue in reEnqueueQueue) {
-                reEnqueue.execute()
+                reEnqueue?.execute()
+                if (reEnqueue == null && requireWiFiLock.isLocked) {
+                    // null signals all reEnqueue items are enqueued
+                    requireWiFiLock.unlock()
+                }
             }
         }
     }
@@ -59,7 +64,7 @@ object WiFi {
     /**
      * Re-enqueue this task and associated data. Null signals end of batch
      */
-    suspend fun reEnqueue(reEnqueue: ReEnqueue) {
+    suspend fun reEnqueue(reEnqueue: ReEnqueue?) {
         reEnqueueQueue.send(reEnqueue)
     }
 }
@@ -72,7 +77,11 @@ class RequireWiFiChange(
     private val requireWifi: RequireWiFi,
     private val rescheduleRunningTasks: Boolean
 ) {
-    suspend fun execute() {
+    /**
+     * Execute the change in WiFi requirement and return
+     * true if one or more tasks have been scheduled for re-enqueue
+     */
+    suspend fun execute(): Boolean {
         BDPlugin.requireWifi = requireWifi
         val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
         prefs.edit().apply {
@@ -83,6 +92,7 @@ class RequireWiFiChange(
         val workManager = WorkManager.getInstance(applicationContext)
         val workInfos = workManager.getWorkInfosByTag(BDPlugin.TAG).get()
             .filter { !it.state.isFinished }
+        var haveReEnqueued = false
         for (workInfo in workInfos) {
             val tags = workInfo.tags.filter { it.contains("taskId=") }
             if (tags.isNotEmpty()) {
@@ -99,6 +109,7 @@ class RequireWiFiChange(
                         }
                         when (workInfo.state) {
                             WorkInfo.State.ENQUEUED -> {
+                                haveReEnqueued = true
                                 BDPlugin.tasksToReEnqueue.add(task)
                                 if (!BDPlugin.cancelActiveTaskWithId(
                                         applicationContext,
@@ -112,6 +123,7 @@ class RequireWiFiChange(
 
                             WorkInfo.State.RUNNING -> {
                                 if (rescheduleRunningTasks) {
+                                    haveReEnqueued = true
                                     BDPlugin.tasksToReEnqueue.add(task)
                                     BDPlugin.pauseTaskWithId(task.taskId)
                                 }
@@ -123,6 +135,7 @@ class RequireWiFiChange(
                 }
             }
         }
+        return haveReEnqueued
     }
 }
 
