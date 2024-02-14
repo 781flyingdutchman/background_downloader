@@ -308,21 +308,25 @@ func updateProgress(task: Task, totalBytesExpected: Int64, totalBytesDone: Int64
 func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskException? = nil, responseBody: String? = nil, responseHeaders: [AnyHashable:Any]? = nil, mimeType: String? = nil, charSet: String? = nil) {
     // Intercept status updates resulting from re-enqueue requests, which
     // themselves are triggered by a change in WiFi requirement
-    if BDPlugin.tasksToReEnqueue.contains(task) {
-        os_log("Task %@ with status %d needs to re-enqueue", log: log, type: .fault, task.taskId, status.rawValue)
-        BDPlugin.tasksToReEnqueue.remove(task)
-        defer {
-            if BDPlugin.tasksToReEnqueue.isEmpty {
-                WiFiQueue.shared.reEnqueue(nil) // signal end of batch
+    let intercepted = BDPlugin.propertyLock.withLock {
+        if BDPlugin.tasksToReEnqueue.contains(task) {
+            os_log("Task %@ with status %d needs to re-enqueue", log: log, type: .fault, task.taskId, status.rawValue)
+            BDPlugin.tasksToReEnqueue.remove(task)
+            defer {
+                if BDPlugin.tasksToReEnqueue.isEmpty {
+                    WiFiQueue.shared.reEnqueue(nil) // signal end of batch
+                }
             }
-        }
-        if [TaskStatus.paused, TaskStatus.canceled, TaskStatus.failed].contains(status) {
-            BDPlugin.propertyLock.withLock {
-                let reEnqueueData = ReEnqueue(task: task, notificationConfigJsonString: BDPlugin.notificationConfigJsonStrings[task.taskId] ?? "", resumeDataAsBase64String: BDPlugin.localResumeData[task.taskId] ?? "")
+            if [TaskStatus.paused, TaskStatus.canceled, TaskStatus.failed].contains(status) {
+                let reEnqueueData = ReEnqueueData(task: task, notificationConfigJsonString: BDPlugin.notificationConfigJsonStrings[task.taskId] ?? "", resumeDataAsBase64String: BDPlugin.localResumeData[task.taskId] ?? "")
                 WiFiQueue.shared.reEnqueue(reEnqueueData)
+                return true // intercepted
             }
-            return
         }
+        return false // not intercepted
+    }
+    if intercepted {
+        return
     }
 
     // Normal status update

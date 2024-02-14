@@ -57,6 +57,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         registrar.addApplicationDelegate(instance)
         let defaults = UserDefaults.standard
         requireWiFi = RequireWiFi(rawValue: defaults.integer(forKey: BDPlugin.keyRequireWiFi))!
+        os_log("requireWiFi=%d", log: log, type: .fault, requireWiFi.rawValue)
     }
     
     @objc
@@ -195,7 +196,9 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         let requiresWiFi = taskRequiresWiFi(task: task)
         if requiresWiFi {
             baseRequest.allowsCellularAccess = false
-            BDPlugin.taskIdsRequiringWiFi.insert(task.taskId)
+            BDPlugin.propertyLock.withLock {
+                _ = BDPlugin.taskIdsRequiringWiFi.insert(task.taskId)
+            }
         }
         os_log("Task %@ requires WiFi=%d", log: log, type: .fault, task.taskId, requiresWiFi)
         if isParallelDownloadTask(task: task) {
