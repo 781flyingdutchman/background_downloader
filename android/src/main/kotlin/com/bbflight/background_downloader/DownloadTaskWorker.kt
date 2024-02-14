@@ -208,6 +208,15 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
                         )
                         return TaskStatus.paused
                     }
+                    if (BDPlugin.tasksToReEnqueue.contains(task) && serverAcceptsRanges) {
+                        // pause was triggered by re-enqueue request due to WiFi requirement change
+                        // so we only store local resumeData without posting it
+                        Log.i(TAG, "Task ${task.taskId} paused in order to re-enqueue")
+                        BDPlugin.localResumeData[task.taskId] = ResumeData(
+                            task, tempFilePath, bytesTotal + startByte, eTagHeader
+                        )
+                        return TaskStatus.paused
+                    }
                     Log.i(TAG, "Task ${task.taskId} cannot resume, therefore pause failed")
                     taskException = TaskException(
                         ExceptionType.resume,

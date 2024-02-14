@@ -150,5 +150,6 @@ class ReEnqueue(
             notificationConfigJsonString = notificationConfigJsonString,
             resumeData = resumeData
         )
+        delay(20)
     }
 }

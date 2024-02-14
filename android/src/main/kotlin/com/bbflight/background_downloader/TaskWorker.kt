@@ -97,8 +97,7 @@ open class TaskWorker(
         ) {
             // Intercept status updates resulting from re-enqueue request, which
             // themselves are triggered by a change in WiFi requirement
-            if (BDPlugin.tasksToReEnqueue.contains(task)) {
-                BDPlugin.tasksToReEnqueue.remove(task)
+            if (BDPlugin.tasksToReEnqueue.remove(task)) {
                 if ((status == TaskStatus.paused || status == TaskStatus.canceled || status == TaskStatus.failed) && context != null) {
                     WiFi.reEnqueue(ReEnqueue(context, task, BDPlugin.notificationConfigJsonStrings[task.taskId], BDPlugin.localResumeData[task.taskId]))
                     return
