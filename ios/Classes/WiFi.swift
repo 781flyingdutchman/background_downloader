@@ -30,7 +30,6 @@ class WiFiQueue {
     func requireWiFiChange(requireWiFi: RequireWiFi, rescheduleRunningTasks: Bool) {
         requireWiFiChangeQueue.async {
             _Concurrency.Task {
-                os_log("requireWiFi=%d", log: log, type: .fault, requireWiFi.rawValue)
                 BDPlugin.requireWiFi = requireWiFi
                 let defaults = UserDefaults.standard
                 defaults.setValue(requireWiFi.rawValue, forKey: BDPlugin.keyRequireWiFi)
@@ -46,7 +45,6 @@ class WiFiQueue {
                         guard let task = getTaskFrom(urlSessionTask: urlSessionTask) else {
                             return
                         }
-                        os_log("Checking taskId %@", log: log, type: .fault, task.taskId)
                         BDPlugin.propertyLock.withLock {
                             if taskRequiresWiFi(task: task) != BDPlugin.taskIdsRequiringWiFi.contains(task.taskId) {
                                 // requirement differs, so we need to re-enqueue
@@ -56,14 +54,12 @@ class WiFiQueue {
                                     BDPlugin.taskIdsRequiringWiFi.remove(task.taskId)
                                 }
                                 if BDPlugin.progressInfo[task.taskId] == nil {
-                                    os_log("TaskId %@ was enqueued, re-enqueueing", log: log, type: .fault, task.taskId)
                                     // enqueued only, so ensure it is re-enqueued and cancel
                                     haveReEnqueued = true
                                     BDPlugin.tasksToReEnqueue.insert(task)
                                     urlSessionTask.cancel()
                                 } else {
                                     if rescheduleRunningTasks {
-                                        os_log("TaskId %@ was running, re-enqueueing", log: log, type: .fault, task.taskId)
                                         // already running, so pause instead of cancel
                                         haveReEnqueued = true
                                         BDPlugin.tasksToReEnqueue.insert(task)
@@ -72,8 +68,6 @@ class WiFiQueue {
                                         }
                                     }
                                 }
-                            } else {
-                                os_log("No need to change taskId %@", log: log, type: .fault, task.taskId)
                             }
                         }
                     }
@@ -93,20 +87,16 @@ class WiFiQueue {
     
     /// Re-enqueue this task and associated data. Nil signals end of batch
     func reEnqueue(_ reEnqueueData: ReEnqueueData?) {
-        os_log("ReEnqueue entry for %@", log: log, type: .fault, reEnqueueData?.task.taskId ?? "nil")
         reEnqueueQueue.async {
             guard let reEnqueueData = reEnqueueData else {
-                os_log("reEnqueue with nil", log: log, type: .fault)
                 // nil value indicates end of batch of re-enqueues
                 self.reEnqueuesDone()
                 return
             }
-            os_log("TaskId %@ waiting to re-enqueue", log: log, type: .fault, reEnqueueData.task.taskId)
             let timeSinceCreated = Date().timeIntervalSince(reEnqueueData.created)
             if timeSinceCreated < 0.3 {
                 Thread.sleep(forTimeInterval: 0.3 - timeSinceCreated)
             }
-            os_log("TaskId %@ re-enqueueing", log: log, type: .fault, reEnqueueData.task.taskId)
             BDPlugin.instance.doEnqueue(taskJsonString: jsonStringFor(task: reEnqueueData.task) ?? "", notificationConfigJsonString: reEnqueueData.notificationConfigJsonString, resumeDataAsBase64String: reEnqueueData.resumeDataAsBase64String, result: nil)
             Thread.sleep(forTimeInterval: 0.02)
         }

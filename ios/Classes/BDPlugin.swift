@@ -57,7 +57,6 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         registrar.addApplicationDelegate(instance)
         let defaults = UserDefaults.standard
         requireWiFi = RequireWiFi(rawValue: defaults.integer(forKey: BDPlugin.keyRequireWiFi))!
-        os_log("requireWiFi=%d", log: log, type: .fault, requireWiFi.rawValue)
     }
     
     @objc
@@ -168,7 +167,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             }
         }
         isResume = isParallelDownloadTask(task: task) ? isResume : isResume && resumeData != nil
-        let verb = isResume ? "Resuming" : "Starting"
+        let verb = isResume ? "Enqueueing (to resume)" : "Enqueueing"
         os_log("%@ task with id %@", log: log, type: .info, verb, task.taskId)
         UrlSessionDelegate.createUrlSession()
         let url: URL?
@@ -200,7 +199,6 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                 _ = BDPlugin.taskIdsRequiringWiFi.insert(task.taskId)
             }
         }
-        os_log("Task %@ requires WiFi=%d", log: log, type: .fault, task.taskId, requiresWiFi)
         if isParallelDownloadTask(task: task) {
             // ParallelDownloadTask itself is not part of a urlSession, so handled separately
             baseRequest.httpMethod = "HEAD" // override

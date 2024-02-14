@@ -187,6 +187,7 @@ FileDownloader().configureNotification(
   - [Canceling, pausing and resuming tasks](#canceling-pausing-and-resuming-tasks)
   - [Grouping tasks](#grouping-tasks)
   - [Task queues](#task-queues)
+  - [Changing WiFi requirements](#changing-wifi-requirements)
 - [Server requests](#server-requests)
 - [Cookies](#cookies)
 - [Optional parameters](#optional-parameters)
@@ -774,6 +775,17 @@ A common use for the `MemoryTaskQueue` is enqueueing a large number of tasks. Th
 The default `TaskQueue` is the `MemoryTaskQueue` which, as the  name suggests, keeps everything in memory. This is fine for most situations, but be aware that the queue may get dropped if the OS aggressively moves the app to the background. Tasks still waiting in the queue will not be enqueued, and will therefore be lost. If you want a `TaskQueue` with more persistence, or add different prioritzation and concurrency roles, then subclass the `MemoryTaskQueue` and add your own persistence or logic.
 In addition, if your app is supended by the OS due to resource constraints, tasks waiting in the queue will not be enqueued to the native platform and will not run in the background. TaskQueues are therefore best for situations where you expect the queue to be emptied while the app is still in the foreground.
 
+### Changing WiFi requirements
+
+By default, whether a task requires WiFi or not is determined by its `requireWiFi` property (iOS and Android only). To override this globally, call `FileDownloader().requireWifi` and pass one of the `RequireWiFi` enums:
+* `asSetByTask` (default) lets the task's `requireWiFi` property determine if WiFi is required
+* `forAllTasks` requires WiFi for all tasks
+* `forNoTasks` does not require WiFi for any tasks
+
+When calling `FileDownloader().requireWifi`, all enqueued tasks will be canceled and rescheduled with the appropriate WiFi requirement setting, and if the `rescheduleRunningTasks` parameter is true, all running tasks will be paused (if possible, independent of the task's `allowPause` property) or canceled and resumed/restarted with the new WiFi requirement. All newly enqueued tasks will follow this setting as well.
+
+The global setting persists across application restarts. Check the current setting by calling `FileDownloader().getRequireWiFiSetting`.
+
 ## Server requests
 
 To make a regular server request (e.g. to obtain a response from an API end point that you process directly in your app) use the `request` method.  It works similar to the `download` method, except you pass a `Request` object that has fewer fields than the `DownloadTask`, but is similar in structure.  You `await` the response, which will be a [Response](https://pub.dev/documentation/http/latest/http/Response-class.html) object as defined in the dart [http package](https://pub.dev/packages/http), and includes getters for the response body (as a `String` or as `UInt8List`), `statusCode` and `reasonPhrase`.
@@ -839,7 +851,7 @@ Note that certain failures can be resumed, and retries will therefore attempt to
 
 #### Requiring WiFi
 
-If the `requiresWiFi` field of a `Task` is set to true, the task won't start unless a WiFi network is available. By default `requiresWiFi` is false, and downloads/uploads will use the cellular (or metered) network if WiFi is not available, which may incur cost.
+On Android and iOS only: If the `requiresWiFi` field of a `Task` is set to true, the task won't start unless a WiFi network is available. By default `requiresWiFi` is false, and downloads/uploads will use the cellular (or metered) network if WiFi is not available, which may incur cost. Note that every task requires a working internet connection: local server connections that do not reach the internet may not work.
 
 #### Priority
 

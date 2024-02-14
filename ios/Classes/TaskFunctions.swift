@@ -309,9 +309,7 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
     // Intercept status updates resulting from re-enqueue requests, which
     // themselves are triggered by a change in WiFi requirement
     let intercepted = BDPlugin.propertyLock.withLock {
-        if BDPlugin.tasksToReEnqueue.contains(task) {
-            os_log("Task %@ with status %d needs to re-enqueue", log: log, type: .fault, task.taskId, status.rawValue)
-            BDPlugin.tasksToReEnqueue.remove(task)
+        if BDPlugin.tasksToReEnqueue.remove(task) != nil {
             defer {
                 if BDPlugin.tasksToReEnqueue.isEmpty {
                     WiFiQueue.shared.reEnqueue(nil) // signal end of batch

@@ -113,6 +113,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
         guard var task = getTaskFrom(urlSessionTask: downloadTask) else { return }
         if BDPlugin.progressInfo[task.taskId] == nil {
             // first 'didWriteData' call
+            os_log("Starting/resuming taskId %@", log: log, type: .info, task.taskId)
             let response = downloadTask.response as! HTTPURLResponse
             // get suggested filename if needed
             if task.filename == "?" {

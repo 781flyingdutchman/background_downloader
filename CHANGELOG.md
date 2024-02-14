@@ -1,3 +1,7 @@
+## 8.2.0
+
+* Adds `Future<bool> requireWiFi(RequireWiFi requirement, {final rescheduleRunningTasks = true})` to set a globally enforced WiFi requirement, and pause/resume or cancel/restart tasks accordingly. This is helpful when implementing a global toggle switch to prevent data download over metered (cellular) networks. iOS and Android only
+
 ## 8.1.0
 
 * Adds `responseHeaders` to `TaskStatusUpdate` for tasks that complete successfully (null otherwise). Per Dart convention, header names are lower-cased
