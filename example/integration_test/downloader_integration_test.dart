@@ -1637,6 +1637,24 @@ void main() {
       print('Finished enqueue multipart with fields');
     });
 
+    testWidgets('enqueue multipart with fields that have multiple values',
+        (widgetTester) async {
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      expect(
+          await FileDownloader().enqueue(uploadTask.copyWith(
+              fields: {'field1': 'value1', 'field2': '"value2", "value3"'},
+              updates: Updates.statusAndProgress)),
+          isTrue);
+      await statusCallbackCompleter.future;
+      expect(statusCallbackCounter, equals(3));
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(progressCallbackCounter, greaterThan(1));
+      expect(lastProgress, equals(progressComplete));
+      print('Finished enqueue multipart with fields that have multiple values');
+    });
+
     testWidgets('upload task creation with errors', (widgetTester) async {
       expect(
           () => UploadTask(

@@ -95,9 +95,19 @@ Future<TaskStatus> binaryUpload(
 Future<TaskStatus> multipartUpload(
     UploadTask task, String filePath, SendPort sendPort) async {
   // field portion of the multipart, all in one string
+  // multiple values should be encoded as '"value1", "value2", ...'
+  final multiValueRegEx = RegExp(r'(?:"[^"]+"\s*,\s*)*"[^"]+"');
   var fieldsString = '';
   for (var entry in task.fields.entries) {
-    fieldsString += fieldEntry(entry.key, entry.value);
+    if (multiValueRegEx.hasMatch(entry.value)) {
+      // extract multiple values from entry.value
+      for (final match in RegExp(r'"([^"]+)"').allMatches(entry.value)) {
+        fieldsString += fieldEntry(entry.key, match.group(1) ?? 'error');
+      }
+    } else {
+      fieldsString +=
+          fieldEntry(entry.key, entry.value); // single value for key
+    }
   }
   // File portion of the multi-part
   // Assumes list of files. If only one file, that becomes a list of length one.

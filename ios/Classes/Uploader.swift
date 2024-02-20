@@ -47,9 +47,27 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
             os_log("Could not open temporary file %@", log: log, type: .error, outputFileUrl().path)
             return false
         }
-        // field portion of the multipart
+        // field portion of the multipart, all in one string
+        // multiple values should be encoded as '"value1", "value2", ...'
+        let multiValueRegEx = try! NSRegularExpression(pattern: #"(?:"[^"]+"\s*,\s*)*"[^"]+""#, options: [])
         for entry in task.fields ?? [:] {
-            fieldsString += fieldEntry(name: entry.key, value: entry.value)
+            let value = entry.value
+            let fullRange = NSRange(location: 0, length: value.utf16.count)
+            // Check if the value matches the multi-value format
+            if multiValueRegEx.firstMatch(in: value, options: [], range: fullRange) != nil {
+                // Extract multiple values from entry.value
+                let valueMatchRegEx = try! NSRegularExpression(pattern: #""([^"]+)""#, options: [])
+                valueMatchRegEx.enumerateMatches(in: value, options: [], range: fullRange) { match, _, _ in
+                    if let matchRange = match?.range(at: 1), // Capture group 1
+                       let swiftRange = Range(matchRange, in: value) {
+                        let matchedString = String(value[swiftRange])
+                        fieldsString += fieldEntry(name: entry.key, value: matchedString)
+                    }
+                }
+            } else {
+                // Handle single value for key
+                fieldsString += fieldEntry(name: entry.key, value: entry.value)
+            }
         }
         if (!writeFields(fileHandle: fileHandle)) {
             os_log("Could not write to temporary file %@", log: log, type: .error, outputFileUrl().path)

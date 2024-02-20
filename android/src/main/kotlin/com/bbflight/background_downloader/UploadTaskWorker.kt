@@ -150,10 +150,22 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
         connection: HttpURLConnection,
         filePath: String
     ): TaskStatus {
-        // field portion of the multipart
+        // field portion of the multipart, all in one string
+        // multiple values should be encoded as '"value1", "value2", ...'
+        val multiValueRegEx = Regex("""(?:"[^"]+"\s*,\s*)*"[^"]+"""")
         var fieldsString = ""
         for (entry in task.fields.entries) {
-            fieldsString += fieldEntry(entry.key, entry.value)
+            // Check if the entry value matches the multiple values format
+            if (multiValueRegEx.matches(entry.value)) {
+                // Extract multiple values from entry.value
+                val valueMatches = Regex(""""([^"]+)"""").findAll(entry.value)
+                for (match in valueMatches) {
+                    fieldsString += fieldEntry(entry.key, match.groupValues[1])
+                }
+            } else {
+                // Handle single value for key
+                fieldsString += fieldEntry(entry.key, entry.value)
+            }
         }
         // File portion of the multi-part
         // Assumes list of files. If only one file, that becomes a list of length one.

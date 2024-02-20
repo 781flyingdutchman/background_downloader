@@ -1,3 +1,7 @@
+## 8.2.1
+
+* Adds option to specify multiple values for a single field name in the `UploadTask.fields` property by formatting the value as `'"value1", "value2", "value3"'` (note the double quotes and the comma to separate the values).
+
 ## 8.2.0
 
 * Adds `Future<bool> requireWiFi(RequireWiFi requirement, {final rescheduleRunningTasks = true})` to set a globally enforced WiFi requirement, and pause/resume or cancel/restart tasks accordingly. This is helpful when implementing a global toggle switch to prevent data download over metered (cellular) networks. iOS and Android only

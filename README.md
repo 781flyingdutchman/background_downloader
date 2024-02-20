@@ -671,7 +671,9 @@ Uploads are very similar to downloads, except:
 
 There are two ways to upload a file to a server: binary upload (where the file is included in the POST body) and form/multi-part upload. Which type of upload is appropriate depends on the server you are uploading to. The upload will be done using the binary upload method only if you have set the `post` field of the `UploadTask` to 'binary'.
 
-For multi-part uploads you can specify name/value pairs in the `fields` field of the `UploadTask` as a `Map<String, String>`. These will be uploaded as form fields along with the file. You can also set the field name used for the file itself by setting `fileField` (default is "file") and override the mimeType by setting `mimeType` (default is derived from filename extension).
+For multi-part uploads you can specify name/value pairs in the `fields` property of the `UploadTask` as a `Map<String, String>`. These will be uploaded as form fields along with the file. To specify multiple values for a single name, format the value as `'"value1", "value2", "value3"'` (note the double quotes and the comma to separate the values).
+
+You can also set the field name used for the file itself by setting `fileField` (default is "file") and override the mimeType by setting `mimeType` (default is derived from filename extension).
 
 If you need to upload multiple files in a single request, create a [MultiUploadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/MultiUploadTask-class.html) instead of an `UploadTask`. It has similar parameters as the `UploadTask`, except you specifiy a list of files to upload as the `files` argument of the constructor, and do not use `fileName`, `fileField` and `mimeType`. Each element in the `files` list is either:
 * a filename (e.g. `"file1.txt"`). The `fileField` for that file will be set to the base name (i.e. "file1" for "file1.txt") and the mime type will be derived from the extension (i.e. "text/plain" for "file1.txt")
