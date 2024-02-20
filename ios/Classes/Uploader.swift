@@ -49,7 +49,7 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
         }
         // field portion of the multipart, all in one string
         // multiple values should be encoded as '"value1", "value2", ...'
-        let multiValueRegEx = try! NSRegularExpression(pattern: #"(?:"[^"]+"\s*,\s*)*"[^"]+""#, options: [])
+        let multiValueRegEx = try! NSRegularExpression(pattern: #"^(?:"[^"]+"\s*,\s*)+"[^"]+"$"#, options: [])
         for entry in task.fields ?? [:] {
             let value = entry.value
             let fullRange = NSRange(location: 0, length: value.utf16.count)

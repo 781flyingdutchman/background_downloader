@@ -152,7 +152,7 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
     ): TaskStatus {
         // field portion of the multipart, all in one string
         // multiple values should be encoded as '"value1", "value2", ...'
-        val multiValueRegEx = Regex("""(?:"[^"]+"\s*,\s*)*"[^"]+"""")
+        val multiValueRegEx = Regex("""^(?:"[^"]+"\s*,\s*)+"[^"]+"$""")
         var fieldsString = ""
         for (entry in task.fields.entries) {
             // Check if the entry value matches the multiple values format

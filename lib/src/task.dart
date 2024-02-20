@@ -654,8 +654,8 @@ final class UploadTask extends Task {
 
   /// Map of name/value pairs to encode as form fields in a multi-part upload.
   /// To specify multiple values for a single name, format the value as
-  /// '"value1", "value2", "value3"' (note the double quotes and
-  /// the comma to separate the values).
+  /// '"value1", "value2", "value3"' so that it matches the following
+  /// RegEx: ^(?:"[^"]+"\s*,\s*)+"[^"]+"$
   final Map<String, String> fields;
 
   /// Creates [UploadTask]

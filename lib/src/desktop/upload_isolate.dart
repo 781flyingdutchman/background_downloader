@@ -96,7 +96,7 @@ Future<TaskStatus> multipartUpload(
     UploadTask task, String filePath, SendPort sendPort) async {
   // field portion of the multipart, all in one string
   // multiple values should be encoded as '"value1", "value2", ...'
-  final multiValueRegEx = RegExp(r'(?:"[^"]+"\s*,\s*)*"[^"]+"');
+  final multiValueRegEx = RegExp(r'^(?:"[^"]+"\s*,\s*)+"[^"]+"$');
   var fieldsString = '';
   for (var entry in task.fields.entries) {
     if (multiValueRegEx.hasMatch(entry.value)) {
