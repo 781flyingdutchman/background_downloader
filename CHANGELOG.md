@@ -1,3 +1,15 @@
+## 8.2.2
+
+* Fixes bug on Android API 34 when using configuration `Config.runInForeground`
+
+If targeting API 34 or greater, you must add to your `AndroidManifest.xml` a permission declaration `<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />` and the foreground service type definition (under the `application` element):
+  ```
+  <service
+    android:name="androidx.work.impl.foreground.SystemForegroundService"
+    android:foregroundServiceType="dataSync"
+    tools:node="merge" />
+  ```
+
 ## 8.2.1
 
 * Adds option to specify multiple values for a single field name in the `UploadTask.fields` property by formatting the value as `'"value1", "value2", "value3"'` (note the double quotes and the comma to separate the values).
