@@ -51,7 +51,7 @@ class _MyAppState extends State<MyApp> {
     // FileDownloader(persistentStorage: SqlitePersistentStorage());
 
     // optional: configure the downloader with platform specific settings,
-    // see CONFIG.md
+    // see CONFIG.md - some examples shown here
     FileDownloader().configure(globalConfig: [
       (Config.requestTimeout, const Duration(seconds: 100)),
     ], androidConfig: [
@@ -96,7 +96,7 @@ class _MyAppState extends State<MyApp> {
     // Listen to updates and process
     FileDownloader().updates.listen((update) {
       switch (update) {
-        case TaskStatusUpdate _:
+        case TaskStatusUpdate():
           if (update.task == backgroundDownloadTask) {
             buttonState = switch (update.status) {
               TaskStatus.running || TaskStatus.enqueued => ButtonState.pause,
@@ -108,7 +108,7 @@ class _MyAppState extends State<MyApp> {
             });
           }
 
-        case TaskProgressUpdate _:
+        case TaskProgressUpdate():
           progressUpdateStream.add(update); // pass on to widget for indicator
       }
     });

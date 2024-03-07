@@ -65,23 +65,23 @@ switch (result.status) {
 // typically in your app's `initState()`:
 FileDownloader().updates.listen((update) {
       switch (update) {
-        case TaskStatusUpdate _:
+        case TaskStatusUpdate():
           // process the TaskStatusUpdate, e.g.
-        switch (update.status) {
-          case TaskStatus.complete:
-          print('Task ${update.task.taskId} success!');
-          
-          case TaskStatus.canceled:
-          print('Download was canceled');
-          
-          case TaskStatus.paused:
-          print('Download was paused');
-          
-          default:
-          print('Download not successful');
+          switch (update.status) {
+            case TaskStatus.complete:
+              print('Task ${update.task.taskId} success!');
+            
+            case TaskStatus.canceled:
+              print('Download was canceled');
+            
+            case TaskStatus.paused:
+              print('Download was paused');
+            
+            default:
+              print('Download not successful');
           }
 
-        case TaskProgressUpdate _:
+        case TaskProgressUpdate():
           // process the TaskProgressUpdate, e.g.
           progressUpdateStream.add(update); // pass on to widget for indicator
       }
@@ -352,11 +352,12 @@ The rest of this section details [event listeners](#using-an-event-listener), [c
 Listen to updates from the downloader by listening to the `updates` stream, and process those updates centrally. For example, the following creates a listener to monitor status and progress updates for downloads, and then enqueues a task as an example:
 ```dart
     final subscription = FileDownloader().updates.listen((update) {
-        if (update is TaskStatusUpdate) {
-            print('Status update for ${update.task} with status ${update.status}');
-        } else if (update is TaskProgressUpdate) {
-            print('Progress update for ${update.task} with progress ${update.progress}');
-        }
+      switch(update) {
+        case TaskStatusUpdate():
+          print('Status update for ${update.task} with status ${update.status}');
+        case TaskProgressUpdate():
+          print('Progress update for ${update.task} with progress ${update.progress}');
+      }
     });
     
     // define the task
@@ -374,7 +375,7 @@ A TaskProgressUpdate includes `expectedFileSize`, `networkSpeed` and `timeRemain
 
 Note that `successFullyEnqueued` only refers to the enqueueing of the download task, not its result, which must be monitored via the listener. Also note that in order to get progress updates the task must set its `updates` field to a value that includes progress updates. In the example, we are asking for both status and progress updates, but other combinations are possible. For example, if you set `updates` to `Updates.status` then the task will only generate status updates and no progress updates. You define what updates to receive on a task by task basis via the `Task.updates` field, which defaults to status updates only.
 
-You can start your subscription in a convenient place, like a widget's `initState`, and don't forget to cancel your subscription to the stream using `subscription.cancel()`. Note the stream can only be listened to once, though you can reset the stream controller by calling `await FileDownloader().resetUpdates()` to start listening again.
+Best practice is to start your subscription in a singleton object that you initialize upon app startup, so that you only ever listen to the stream once, and use that singleton object to maintain state for your downloads. Note the stream can only be listened to once, though you can reset the stream controller by calling `await FileDownloader().resetUpdates()` to start listening again.
 
 ### Using callbacks
 
@@ -675,7 +676,7 @@ For multi-part uploads you can specify name/value pairs in the `fields` property
 
 You can also set the field name used for the file itself by setting `fileField` (default is "file") and override the mimeType by setting `mimeType` (default is derived from filename extension).
 
-If you need to upload multiple files in a single request, create a [MultiUploadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/MultiUploadTask-class.html) instead of an `UploadTask`. It has similar parameters as the `UploadTask`, except you specifiy a list of files to upload as the `files` argument of the constructor, and do not use `fileName`, `fileField` and `mimeType`. Each element in the `files` list is either:
+If you need to upload multiple files in a single request, create a [MultiUploadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/MultiUploadTask-class.html) instead of an `UploadTask`. It has similar parameters as the `UploadTask`, except you specify a list of files to upload as the `files` argument of the constructor, and do not use `fileName`, `fileField` and `mimeType`. Each element in the `files` list is either:
 * a filename (e.g. `"file1.txt"`). The `fileField` for that file will be set to the base name (i.e. "file1" for "file1.txt") and the mime type will be derived from the extension (i.e. "text/plain" for "file1.txt")
 * a record containing `(fileField, filename)`, e.g. `("document", "file1.txt")`. The `fileField` for that file will be set to "document" and the mime type derived from the file extension (i.e. "text/plain" for "file1.txt")
 * a record containing `(filefield, filename, mimeType)`, e.g. `("document", "file1.txt", "text/plain")`
@@ -754,7 +755,7 @@ The `MemoryTaskQueue` bundled with the `background_downloader` allows:
 * managing the number of tasks that talk to the same host concurrently, by setting `maxConcurrentByHost`
 * managing the number of tasks running that are in the same `Task.group`, by setting `maxConcurrentByGroup`
 
-A `TaskQueue` conceptually sits 'before' the FileDownloader's queue, and the `TaskQueue` makes the call to `FileDownloader().enqueue`. To use it, add it to the `FileDownloader` and instead of enqueuing tasks with the `FileDownloader`, you now `add` tasks to the queue:
+A `TaskQueue` conceptually sits 'in front of' the FileDownloader queue, and the `TaskQueue` makes the call to `FileDownloader().enqueue`. To use it, add it to the `FileDownloader` and instead of enqueuing tasks with the `FileDownloader`, you now `add` tasks to the queue:
 ```dart
 final tq = MemoryTaskQueue();
 tq.maxConcurrent = 5; // no more than 5 tasks active at any one time
@@ -774,8 +775,8 @@ Because it is possible that an error occurs when the taskQueue eventually actual
 
 A common use for the `MemoryTaskQueue` is enqueueing a large number of tasks. This can 'choke' the downloader if done in a loop, but is easy to do when adding all tasks to a queue. The `minInterval` field of the `MemoryTaskQueue` ensures that the tasks are fed to the `FileDownloader` at a rate that does not grind your app to a halt.
 
-The default `TaskQueue` is the `MemoryTaskQueue` which, as the  name suggests, keeps everything in memory. This is fine for most situations, but be aware that the queue may get dropped if the OS aggressively moves the app to the background. Tasks still waiting in the queue will not be enqueued, and will therefore be lost. If you want a `TaskQueue` with more persistence, or add different prioritzation and concurrency roles, then subclass the `MemoryTaskQueue` and add your own persistence or logic.
-In addition, if your app is supended by the OS due to resource constraints, tasks waiting in the queue will not be enqueued to the native platform and will not run in the background. TaskQueues are therefore best for situations where you expect the queue to be emptied while the app is still in the foreground.
+The default `TaskQueue` is the `MemoryTaskQueue` which, as the  name suggests, keeps everything in memory. This is fine for most situations, but be aware that the queue may get dropped if the OS aggressively moves the app to the background. Tasks still waiting in the queue will not be enqueued, and will therefore be lost. If you want a `TaskQueue` with more persistence, or add different prioritization and concurrency roles, then subclass the `MemoryTaskQueue` and add your own persistence or logic.
+In addition, if your app is suspended by the OS due to resource constraints, tasks waiting in the queue will not be enqueued to the native platform and will not run in the background. TaskQueues are therefore best for situations where you expect the queue to be emptied while the app is still in the foreground.
 
 ### Changing WiFi requirements
 

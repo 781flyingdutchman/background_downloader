@@ -272,7 +272,7 @@ The `MemoryTaskQueue` bundled with the `background_downloader` allows:
 * managing the number of tasks that talk to the same host concurrently, by setting `maxConcurrentByHost`
 * managing the number of tasks running that are in the same `Task.group`, by setting `maxConcurrentByGroup`
 
-A `TaskQueue` conceptually sits 'before' the FileDownloader's queue. To use it, add it to the `FileDownloader` and instead of enqueuing tasks with the `FileDownloader`, you now `add` tasks to the queue:
+A `TaskQueue` conceptually sits 'in front of' the FileDownloader queue. To use it, add it to the `FileDownloader` and instead of enqueuing tasks with the `FileDownloader`, you now `add` tasks to the queue:
 ```dart
 final tq = MemoryTaskQueue();
 tq.maxConcurrent = 5; // no more than 5 tasks active at any one time

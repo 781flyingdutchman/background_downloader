@@ -454,11 +454,10 @@ sealed class Task extends Request implements Comparable {
   @override
   int get hashCode => taskId.hashCode;
 
-  @override
-
   /// Returns this.priority - other.priority if not the same
   /// Returns this.creationTime - other.creationTime if priorities the same
   /// Returns 0 if other is not a [Task]
+  @override
   int compareTo(other) {
     if (other is Task) {
       final diff = priority - other.priority;
