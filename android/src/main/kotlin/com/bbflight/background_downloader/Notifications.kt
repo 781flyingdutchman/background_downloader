@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -717,11 +718,19 @@ object NotificationService {
             val androidNotification = builder.build()
             if (taskWorker.runInForeground) {
                 if (notificationType == NotificationType.running) {
-                    taskWorker.setForeground(
-                        ForegroundInfo(
-                            taskWorker.notificationId, androidNotification
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        taskWorker.setForeground(
+                            ForegroundInfo(
+                                taskWorker.notificationId, androidNotification, FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                            )
                         )
-                    )
+                    } else {
+                        taskWorker.setForeground(
+                            ForegroundInfo(
+                                taskWorker.notificationId, androidNotification
+                            )
+                        )
+                    }
                 } else {
                     // to prevent the 'not running' notification getting killed as the foreground
                     // process is terminated, this notification is shown regularly, but with
