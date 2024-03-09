@@ -717,6 +717,41 @@ final class UploadTask extends Task {
         super(
             httpRequestMethod: httpRequestMethod ?? 'POST', allowPause: false);
 
+  /// Creates [UploadTask] from a [File] object, using the [file] absolute path.
+  ///
+  /// Note that using absolute paths is discouraged on mobile, as the path to
+  /// files in an application's directory scope is not stable between application
+  /// starts. Use the combination of [baseDirectory], [directory] and [filename]
+  /// whenever possible to prevent hard to debug errors.
+  UploadTask.fromFile(
+      {required File file,
+      super.taskId,
+      required super.url,
+      super.urlQueryParameters,
+      super.headers,
+      String? httpRequestMethod,
+      String? super.post,
+      this.fileField = 'file',
+      String? mimeType,
+      Map<String, String>? fields,
+      super.group,
+      super.updates,
+      super.requiresWiFi,
+      super.retries,
+      super.priority,
+      super.metaData,
+      super.displayName,
+      super.creationTime})
+      : fields = fields ?? {},
+        mimeType =
+            mimeType ?? lookupMimeType(file.path) ?? 'application/octet-stream',
+        super(
+            baseDirectory: BaseDirectory.root,
+            directory: path.dirname(file.absolute.path),
+            filename: path.basename(file.absolute.path),
+            httpRequestMethod: httpRequestMethod ?? 'POST',
+            allowPause: false);
+
   /// Creates [UploadTask] object from [json]
   UploadTask.fromJson(super.json)
       : assert(

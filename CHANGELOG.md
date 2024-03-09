@@ -1,5 +1,7 @@
-## 8.2.2
+## 8.3.0
 
+* Adds `responseStatusCode` to `TaskStatusUpdate` for tasks that result in `TaskStatus.complete` or `TaskStatus.notFound` (null otherwise).
+* Adds `UploadTask.fromFile` to create an `UploadTask` from an existing `File` object. Note that this will create a task with an absolute path reference and `BaseDirectory.root`, which can cause problems on mobile platforms, so use with care
 * Fixes bug on Android API 34 when using configuration `Config.runInForeground`
 
 If targeting API 34 or greater, you must add to your `AndroidManifest.xml` a permission declaration `<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />` and the foreground service type definition (under the `application` element):

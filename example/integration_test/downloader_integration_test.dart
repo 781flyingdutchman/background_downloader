@@ -1666,6 +1666,15 @@ void main() {
               post: 'binary'),
           throwsAssertionError);
     });
+
+    testWidgets('Create UploadTask from File', (widgetTester) async {
+      final pathToFile = await uploadTask.filePath();
+      final file = File(pathToFile);
+      final taskFromFile = UploadTask.fromFile(file: file, url: uploadTask.url);
+      expect(await taskFromFile.filePath(), equals(pathToFile));
+      final result = await FileDownloader().upload(taskFromFile);
+      expect(result.status, equals(TaskStatus.complete));
+    });
   });
 
   group('Convenience uploads', () {
