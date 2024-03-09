@@ -305,7 +305,7 @@ func updateProgress(task: Task, totalBytesExpected: Int64, totalBytesDone: Int64
 /// Sends status update via the background channel to Dart, if requested
 /// If the task is finished, processes a final progressUpdate update and removes
 /// task from persistent storage
-func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskException? = nil, responseBody: String? = nil, responseHeaders: [AnyHashable:Any]? = nil, mimeType: String? = nil, charSet: String? = nil) {
+func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskException? = nil, responseBody: String? = nil, responseHeaders: [AnyHashable:Any]? = nil, responseStatusCode: Int? = nil, mimeType: String? = nil, charSet: String? = nil) {
     // Intercept status updates resulting from re-enqueue requests, which
     // themselves are triggered by a change in WiFi requirement
     let intercepted = BDPlugin.propertyLock.withLock {
@@ -353,12 +353,15 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
     }
     
     if providesStatusUpdates(downloadTask: task) || retryNeeded {
+        let finalResponseStatusCode = status == .complete || status == .notFound
+            ? responseStatusCode
+            : nil
         let finalTaskException = taskException == nil
-        ? TaskException(type: .general, httpResponseCode: -1, description: "")
-        : taskException
+            ? TaskException(type: .general, httpResponseCode: -1, description: "")
+            : taskException
         let arg: [Any?] = status == .failed
-        ? [status.rawValue, finalTaskException!.type.rawValue, finalTaskException!.description, finalTaskException!.httpResponseCode, responseBody] as [Any?]
-        : [status.rawValue, responseBody, responseHeaders, mimeType, charSet] as [Any?]
+            ? [status.rawValue, finalTaskException!.type.rawValue, finalTaskException!.description, finalTaskException!.httpResponseCode, responseBody] as [Any?]
+            : [status.rawValue, responseBody, responseHeaders, finalResponseStatusCode, mimeType, charSet] as [Any?]
         if !postOnBackgroundChannel(method: "statusUpdate", task: task, arg: arg) {
             // store update locally as a merged task/status JSON string, without error info
             guard let jsonData = try? JSONEncoder().encode(TaskStatusUpdate(task: task, taskStatus: status))
@@ -580,7 +583,7 @@ func directoryForTask(task: Task) throws ->  URL {
         try FileManager.default.url(for: dir,
                                     in: .userDomainMask,
                                     appropriateFor: nil,
-                                    create: false)
+                                    create: true)
     } else {
         documentsURL = URL(fileURLWithPath: "/")
     }

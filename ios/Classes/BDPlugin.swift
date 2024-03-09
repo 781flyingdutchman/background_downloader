@@ -512,7 +512,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     /// the status of the parent task based on the 'sum' of its children, or null
     /// if unchanged
     ///
-    /// Arguments are the parent TaskId, chunk taskId, taskStatusOrdinal
+    /// Arguments are the parent TaskId, chunk taskId, taskStatusOrdinal, exceptionJsonString, responseBody
     private func methodUpdateChunkStatus(call: FlutterMethodCall, result: @escaping FlutterResult) {
         let args = call.arguments as! [Any]
         guard

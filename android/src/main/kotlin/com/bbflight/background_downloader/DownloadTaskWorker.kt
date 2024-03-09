@@ -64,6 +64,7 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
         connection: HttpURLConnection,
         filePath: String
     ): TaskStatus {
+        responseStatusCode = connection.responseCode
         if (connection.responseCode in 200..206) {
             // ok response, check if resume is possible
             eTagHeader = connection.headerFields["ETag"]?.first()

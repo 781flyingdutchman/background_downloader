@@ -69,6 +69,7 @@ Future<void> doParallelDownloadTask(
     final response = await DesktopDownloader.httpClient
         .head(Uri.parse(task.url), headers: task.headers);
     responseHeaders = response.headers;
+    responseStatusCode = response.statusCode;
     if ([200, 201, 202, 203, 204, 205, 206].contains(response.statusCode)) {
       // get suggested filename if needed, and change task and parentTask
       if (!task.hasFilename) {
@@ -78,7 +79,6 @@ Future<void> doParallelDownloadTask(
         log.finest(
             'Suggested filename for taskId ${task.taskId}: ${task.filename}');
       }
-      responseHeaders = response.headers;
       extractContentType(response.headers);
       chunks = createChunks(task, response.headers);
       for (var chunk in chunks) {
@@ -143,23 +143,33 @@ Future<void> chunkStatusUpdate(
     switch (newStatusUpdate) {
       case TaskStatus.complete:
         final result = await stitchChunks();
-        parallelTaskStatusUpdateCompleter
-            .complete(TaskStatusUpdate(task, result));
+        parallelTaskStatusUpdateCompleter.complete(TaskStatusUpdate(task,
+            result, null, responseBody, responseHeaders, responseStatusCode));
         break;
 
       case TaskStatus.failed:
         taskException = update.exception;
         responseBody = update.responseBody;
         cancelAllChunkTasks(sendPort);
-        parallelTaskStatusUpdateCompleter.complete(TaskStatusUpdate(task,
-            TaskStatus.failed, taskException, responseBody, responseHeaders));
+        parallelTaskStatusUpdateCompleter.complete(TaskStatusUpdate(
+            task,
+            TaskStatus.failed,
+            taskException,
+            responseBody,
+            responseHeaders,
+            responseStatusCode));
         break;
 
       case TaskStatus.notFound:
         responseBody = update.responseBody;
         cancelAllChunkTasks(sendPort);
         parallelTaskStatusUpdateCompleter.complete(TaskStatusUpdate(
-            task, TaskStatus.notFound, null, responseBody, responseHeaders));
+            task,
+            TaskStatus.notFound,
+            null,
+            responseBody,
+            responseHeaders,
+            responseStatusCode));
         break;
 
       default:

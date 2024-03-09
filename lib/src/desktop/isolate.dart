@@ -35,6 +35,7 @@ var isCanceled = false;
 TaskException? taskException;
 String? responseBody;
 Map<String, String>? responseHeaders;
+int? responseStatusCode;
 String? mimeType; // derived from Content-Type header
 String? charSet; // derived from Content-Type header
 
@@ -239,6 +240,9 @@ void processStatusUpdateInIsolate(
           : null,
       status.isFinalState ? responseBody : null,
       status.isFinalState ? responseHeaders : null,
+      status == TaskStatus.complete || status == TaskStatus.notFound
+          ? responseStatusCode
+          : null,
       status.isFinalState ? mimeType : null,
       status.isFinalState ? charSet : null,
     ));
@@ -347,15 +351,15 @@ void logError(Task task, String error) {
 
 /// Set the [taskException] variable based on error e
 void setTaskError(dynamic e) {
-  switch (e.runtimeType) {
-    case HttpException _:
-    case TimeoutException _:
+  switch (e) {
+    case HttpException():
+    case TimeoutException():
       taskException = TaskConnectionException(e.toString());
 
-    case IOException _:
+    case IOException():
       taskException = TaskFileSystemException(e.toString());
 
-    case TaskException _:
+    case TaskException():
       taskException = e;
 
     default:

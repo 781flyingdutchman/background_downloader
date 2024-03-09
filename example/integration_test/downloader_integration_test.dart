@@ -889,6 +889,7 @@ void main() {
       expect(result.exception, isNull);
       expect(result.responseBody, isNull);
       expect(result.responseHeaders?['server'], equals('gws'));
+      expect(result.responseStatusCode, equals(200));
       exists = await File(path).exists();
       expect(exists, isTrue);
       await File(path).delete();
@@ -1152,6 +1153,7 @@ void main() {
               '<h1>Not Found</h1>\n'
               '<p>The requested URL was not found on the server. If you entered the URL manually '
               'please check your spelling and try again.</p>\n'));
+      expect(result.responseStatusCode, equals(404));
     });
   });
 
@@ -1672,6 +1674,7 @@ void main() {
       expect(result.status, equals(TaskStatus.complete));
       expect(result.responseBody, equals('OK'));
       expect(result.responseHeaders?['server'], equals('Google Frontend'));
+      expect(result.responseStatusCode, equals(200));
     });
 
     testWidgets('binary upload with await', (widgetTester) async {
@@ -1680,6 +1683,7 @@ void main() {
       expect(result.status, equals(TaskStatus.complete));
       expect(result.responseBody, equals('OK'));
       expect(result.responseHeaders?['server'], equals('Google Frontend'));
+      expect(result.responseStatusCode, equals(200));
     });
 
     testWidgets('multiple upload with futures', (widgetTester) async {
@@ -1694,6 +1698,7 @@ void main() {
         expect(result.status, equals(TaskStatus.complete));
         expect(result.responseBody, equals('OK'));
         expect(result.responseHeaders?['server'], equals('Google Frontend'));
+        expect(result.responseStatusCode, equals(200));
       }
     });
 
@@ -1827,6 +1832,7 @@ void main() {
       expect(result.status, equals(TaskStatus.complete));
       expect(result.responseBody, equals('OK'));
       expect(result.responseHeaders?['server'], equals('Google Frontend'));
+      expect(result.responseStatusCode, equals(200));
     });
 
     testWidgets('upload 2 files with full file path', (widgetTester) async {
@@ -1840,6 +1846,7 @@ void main() {
       expect(result.status, equals(TaskStatus.complete));
       expect(result.responseBody, equals('OK'));
       expect(result.responseHeaders?['server'], equals('Google Frontend'));
+      expect(result.responseStatusCode, equals(200));
     });
   });
 
@@ -2661,6 +2668,17 @@ void main() {
       expect((exception as TaskHttpException).httpResponseCode, equals(403));
     });
 
+    testWidgets('convenience download for httpResponse 403',
+        (widgetTester) async {
+      task = DownloadTask(url: failingUrl, filename: 'test');
+      final result = await FileDownloader().download(task);
+      final exception = result.exception!;
+      expect(exception is TaskHttpException, isTrue);
+      expect(exception.description, equals('Not authorized'));
+      expect((exception as TaskHttpException).httpResponseCode, equals(403));
+      expect(result.responseStatusCode, isNull);
+    });
+
     testWidgets('fileSystem: File to upload does not exist',
         (widgetTester) async {
       if (!Platform.isIOS) {
@@ -2787,6 +2805,7 @@ void main() {
           url: urlWithContentLength, filename: DownloadTask.suggestedFilename);
       final result = await FileDownloader().download(task);
       expect(result.task.filename, equals('5MB-test.ZIP'));
+      expect(result.responseStatusCode, equals(200));
       final file = File(await result.task.filePath());
       expect(await file.exists(), isTrue);
       expect(await file.length(), equals(urlWithContentLengthFileSize));

@@ -96,7 +96,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             : responseStatusCode == 404
             ? TaskStatus.notFound
             : TaskStatus.failed
-            processStatusUpdate(task: task, status: finalStatus, taskException: taskException, responseBody: responseBody, responseHeaders: responseHeaders)
+            processStatusUpdate(task: task, status: finalStatus, taskException: taskException, responseBody: responseBody, responseHeaders: responseHeaders, responseStatusCode: responseStatusCode)
         }
     }
     
@@ -210,7 +210,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
         let notificationConfig = getNotificationConfigFrom(urlSessionTask: downloadTask)
         if response.statusCode == 404 {
             let responseBody = readFile(url: location)
-            processStatusUpdate(task: task, status: TaskStatus.notFound, responseBody: responseBody)
+            processStatusUpdate(task: task, status: TaskStatus.notFound, responseBody: responseBody, responseHeaders: responseHeaders, responseStatusCode: response.statusCode)
             updateNotification(task: task, notificationType: .error, notificationConfig: notificationConfig)
             return
         }
@@ -228,7 +228,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             var finalStatus = TaskStatus.failed
             var taskException: TaskException? = nil
             defer {
-                processStatusUpdate(task: task, status: finalStatus, taskException: taskException, responseHeaders: responseHeaders, mimeType: mimeType, charSet: charSet)
+                processStatusUpdate(task: task, status: finalStatus, taskException: taskException, responseHeaders: responseHeaders, responseStatusCode: response.statusCode, mimeType: mimeType, charSet: charSet)
                 if finalStatus != TaskStatus.failed || task.retriesRemaining == 0 {
                     // update notification only if not failed, or no retries remaining
                     updateNotification(task: task, notificationType: notificationTypeForTaskStatus(status: finalStatus), notificationConfig: notificationConfig)

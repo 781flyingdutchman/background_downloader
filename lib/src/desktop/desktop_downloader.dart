@@ -142,11 +142,19 @@ final class DesktopDownloader extends BaseDownloader {
             TaskException? exception,
             String? responseBody,
             Map<String, String>? responseHeaders,
+            int? responseCode,
             String? mimeType,
             String? charSet
           ):
-          final taskStatusUpdate = TaskStatusUpdate(updatedTask, status,
-              exception, responseBody, responseHeaders, mimeType, charSet);
+          final taskStatusUpdate = TaskStatusUpdate(
+              updatedTask,
+              status,
+              exception,
+              responseBody,
+              responseHeaders,
+              responseCode,
+              mimeType,
+              charSet);
           if (updatedTask.group != BaseDownloader.chunkGroup) {
             if (status.isFinalState) {
               _remove(updatedTask);

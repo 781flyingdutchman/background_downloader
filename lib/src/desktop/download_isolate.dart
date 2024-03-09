@@ -86,6 +86,7 @@ Future<void> doDownloadTask(
             'Suggested filename for taskId ${task.taskId}: ${task.filename}');
       }
       responseHeaders = response.headers;
+      responseStatusCode = response.statusCode;
       extractContentType(response.headers);
       if (okResponses.contains(response.statusCode)) {
         resultStatus = await processOkDownloadResponse(

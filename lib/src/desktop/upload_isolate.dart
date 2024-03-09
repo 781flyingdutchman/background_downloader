@@ -61,6 +61,7 @@ Future<TaskStatus> binaryUpload(
           : transferBytesResult;
       responseBody = await responseContent(response);
       responseHeaders = response.headers;
+      responseStatusCode = response.statusCode;
       taskException ??= TaskHttpException(
           responseBody?.isNotEmpty == true
               ? responseBody!
@@ -170,6 +171,7 @@ Future<TaskStatus> multipartUpload(
           : transferBytesResult;
       responseBody = await responseContent(response);
       responseHeaders = response.headers;
+      responseStatusCode = response.statusCode;
       taskException ??= TaskHttpException(
           responseBody?.isNotEmpty == true
               ? responseBody!

@@ -91,6 +91,7 @@ open class TaskWorker(
             taskException: TaskException? = null,
             responseBody: String? = null,
             responseHeaders: Map<String, String>? = null,
+            responseStatusCode: Int? = null,
             mimeType: String? = null,
             charSet: String? = null,
             context: Context? = null
@@ -99,7 +100,14 @@ open class TaskWorker(
             // themselves are triggered by a change in WiFi requirement
             if (BDPlugin.tasksToReEnqueue.remove(task)) {
                 if ((status == TaskStatus.paused || status == TaskStatus.canceled || status == TaskStatus.failed) && context != null) {
-                    WiFi.reEnqueue(ReEnqueue(context, task, BDPlugin.notificationConfigJsonStrings[task.taskId], BDPlugin.localResumeData[task.taskId]))
+                    WiFi.reEnqueue(
+                        ReEnqueue(
+                            context,
+                            task,
+                            BDPlugin.notificationConfigJsonStrings[task.taskId],
+                            BDPlugin.localResumeData[task.taskId]
+                        )
+                    )
                     if (BDPlugin.tasksToReEnqueue.isEmpty()) {
                         WiFi.reEnqueue(null) // signal end of batch
                     }
@@ -163,6 +171,7 @@ open class TaskWorker(
                     status.ordinal,
                     if (status.isFinalState()) responseBody else null,
                     if (status.isFinalState()) responseHeaders else null,
+                    if (status == TaskStatus.complete || status == TaskStatus.notFound) responseStatusCode else null,
                     if (status.isFinalState()) mimeType else null,
                     if (status.isFinalState()) charSet else null
                 )
@@ -340,6 +349,7 @@ open class TaskWorker(
     var taskException: TaskException? = null
     var responseBody: String? = null
     var responseHeaders: Map<String, String>? = null
+    var responseStatusCode: Int? = null
     private var mimeType: String? = null // derived from Content-Type header
     private var charSet: String? = null // derived from Content-Type header
 
@@ -400,6 +410,7 @@ open class TaskWorker(
                     taskException,
                     responseBody,
                     responseHeaders,
+                    responseStatusCode,
                     mimeType,
                     charSet,
                     applicationContext
