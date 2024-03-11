@@ -402,15 +402,16 @@ public class ParallelDownloader: NSObject {
         let taskId = parentTask.taskId
         let mimeType = BDPlugin.mimeTypes[taskId]
         let charSet = BDPlugin.charSets[taskId]
-        let responseStatusCode: Int? = switch status {
+        var responseStatusCode: Int? = nil
+        switch status {
             case .complete:
-                initialResponseStatusCode
+                responseStatusCode = initialResponseStatusCode
                 
             case .notFound:
-                404
+                responseStatusCode = 404
                 
             default:
-                nil
+                responseStatusCode = nil
         }
         processStatusUpdate(task: parentTask, status: status, taskException: taskException, responseBody: responseBody, responseHeaders: responseHeaders, responseStatusCode: responseStatusCode, mimeType: mimeType, charSet: charSet)
         BDPlugin.mimeTypes.removeValue(forKey: taskId)
