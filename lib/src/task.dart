@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' show Random;
@@ -6,7 +7,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:mime/mime.dart';
-import 'package:path/path.dart' as path;
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'file_downloader.dart';
@@ -339,6 +340,12 @@ sealed class Task extends Request implements Comparable {
     if (this is MultiUploadTask && withFilename == null) {
       return '';
     }
+    final baseDirPath = await baseDirectoryPath(baseDirectory);
+    return p.join(baseDirPath, directory, withFilename ?? filename);
+  }
+
+  /// Returns the directory represented by [baseDirectory]
+  static Future<String> baseDirectoryPath(BaseDirectory baseDirectory) async {
     Directory? externalStorageDirectory;
     Directory? externalCacheDirectory;
     if (Task.useExternalStorage) {
@@ -349,8 +356,7 @@ sealed class Task extends Request implements Comparable {
             'Android external storage is not available');
       }
     }
-    final Directory baseDir =
-        switch ((baseDirectory, Task.useExternalStorage)) {
+    final baseDir = switch ((baseDirectory, Task.useExternalStorage)) {
       (BaseDirectory.applicationDocuments, false) =>
         await getApplicationDocumentsDirectory(),
       (BaseDirectory.temporary, false) => await getTemporaryDirectory(),
@@ -360,17 +366,78 @@ sealed class Task extends Request implements Comparable {
           when Platform.isMacOS || Platform.isIOS =>
         await getLibraryDirectory(),
       (BaseDirectory.applicationLibrary, false) => Directory(
-          path.join((await getApplicationSupportDirectory()).path, 'Library')),
+          p.join((await getApplicationSupportDirectory()).path, 'Library')),
       (BaseDirectory.root, _) => Directory('/'),
       // Android only: external storage variants
       (BaseDirectory.applicationDocuments, true) => externalStorageDirectory!,
       (BaseDirectory.temporary, true) => externalCacheDirectory!,
       (BaseDirectory.applicationSupport, true) =>
-        Directory(path.join(externalStorageDirectory!.path, 'Support')),
+        Directory(p.join(externalStorageDirectory!.path, 'Support')),
       (BaseDirectory.applicationLibrary, true) =>
-        Directory(path.join(externalStorageDirectory!.path, 'Library'))
+        Directory(p.join(externalStorageDirectory!.path, 'Library'))
     };
-    return path.join(baseDir.path, directory, withFilename ?? filename);
+    return baseDir.absolute.path;
+  }
+
+  /// Extract the baseDirectory, directory and filename from
+  /// the provided [filePath] or [file], and return this as a record
+  ///
+  /// Either [filePath] or [file] must be provided, not both.
+  ///
+  /// Throws a FileSystemException if using external storage on Android (via
+  /// configuration at startup), and external storage is not available.
+  static Future<
+          (BaseDirectory baseDirectory, String directory, String filename)>
+      split({String? filePath, File? file}) async {
+    assert((filePath != null) ^ (file != null),
+        'Either filePath or file must be given and not both');
+    final path = filePath ?? file!.absolute.path;
+    final absoluteDirectoryPath = p.dirname(path);
+    final filename = p.basename(path);
+    // try to match the start of the absoluteDirectory to one of the
+    // directories represented by the BaseDirectory enum.
+    // Order matters, as some may be subdirs of others
+    final testSequence = Platform.isAndroid
+        ? [
+            BaseDirectory.temporary,
+            BaseDirectory.applicationLibrary,
+            BaseDirectory.applicationSupport,
+            BaseDirectory.applicationDocuments
+          ]
+        : [
+            BaseDirectory.temporary,
+            BaseDirectory.applicationSupport,
+            BaseDirectory.applicationLibrary,
+            BaseDirectory.applicationDocuments
+          ];
+    for (final baseDirectoryEnum in testSequence) {
+      final baseDirPath = await baseDirectoryPath(baseDirectoryEnum);
+      final (match, directory) = _contains(baseDirPath, absoluteDirectoryPath);
+      if (match) {
+        return (baseDirectoryEnum, directory, filename);
+      }
+    }
+    // if no match, return a BaseDirectory.root with the absoluteDirectory
+    // minus the leading characters that designate the root (differs by platform)
+    final match =
+        RegExp(r'^(/|\\|([a-zA-Z]:[\\/]))').firstMatch(absoluteDirectoryPath);
+    return (
+      BaseDirectory.root,
+      absoluteDirectoryPath.substring(match != null ? match.end : 0),
+      filename
+    );
+  }
+
+  /// Returns the subdirectory of the given [baseDirPath] within [dirPath],
+  /// if [dirPath] starts with [baseDirPath].
+  ///
+  /// If found, returns (true, subdir) otherwise returns (false, '').
+  ///
+  /// [dirPath] should not contain a filename - if it does, it is returned
+  /// as part of the subdir.
+  static (bool, String) _contains(String baseDirPath, String dirPath) {
+    final match = RegExp('^$baseDirPath/?(.*)').firstMatch(dirPath);
+    return (match != null, match?.group(1) ?? '');
   }
 
   /// Returns a copy of the [Task] with optional changes to specific fields
@@ -747,8 +814,8 @@ final class UploadTask extends Task {
             mimeType ?? lookupMimeType(file.path) ?? 'application/octet-stream',
         super(
             baseDirectory: BaseDirectory.root,
-            directory: path.dirname(file.absolute.path),
-            filename: path.basename(file.absolute.path),
+            directory: p.dirname(file.absolute.path),
+            filename: p.basename(file.absolute.path),
             httpRequestMethod: httpRequestMethod ?? 'POST',
             allowPause: false);
 
@@ -931,7 +998,7 @@ final class MultiUploadTask extends UploadTask {
       super.creationTime})
       : fileFields = files
             .map((e) => switch (e) {
-                  String filename => path.basenameWithoutExtension(filename),
+                  String filename => p.basenameWithoutExtension(filename),
                   (String fileField, String _, String _) => fileField,
                   (String fileField, String _) => fileField,
                   _ => throw ArgumentError(_filesArgumentError)

@@ -1,9 +1,23 @@
 ## 8.3.0
 
 * Adds `responseStatusCode` to `TaskStatusUpdate` for tasks that result in `TaskStatus.complete` or `TaskStatus.notFound` (null otherwise).
+* Adds `Task.split` to extract the baseDirectory, directory and filename from an absolute filePath or a File. This is saver than using `.fromFile` and preferred
 * Adds `UploadTask.fromFile` to create an `UploadTask` from an existing `File` object. Note that this will create a task with an absolute path reference and `BaseDirectory.root`, which can cause problems on mobile platforms, so use with care
 * Fixes bug on Android API 34 when using configuration `Config.runInForeground`
 
+### Extracting baseDirectory, directory and filename from a filePath or File
+
+If you already have a path to a file or a `File` object, you can extract the values for `baseDirectory`, `directory` and `filename` using `Task.split` to create the task:
+```dart
+final (baseDirectory, directory, filename) = await Task.split(filePath: yourPath);
+final task = UploadTask(
+        url: 'https://yourserver.com',
+        baseDirectory: baseDirectory,
+        directory: directory,
+        filename: filename);
+```
+
+### Using foreground service on Android targeting API 34
 If targeting API 34 or greater, you must add to your `AndroidManifest.xml` a permission declaration `<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />` and the foreground service type definition (under the `application` element):
   ```
   <service

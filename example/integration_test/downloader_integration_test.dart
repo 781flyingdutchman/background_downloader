@@ -3016,6 +3016,55 @@ void main() {
       expect(await completer.future, isTrue);
     });
   });
+
+  group('task functions', () {
+    test('baseDirectoryPath', () async {
+      for (final baseDirectoryEnum in BaseDirectory.values) {
+        final task =
+            DownloadTask(url: workingUrl, baseDirectory: baseDirectoryEnum);
+        final path = await task.filePath();
+        final dir = dirname(path);
+        print('For $baseDirectoryEnum the dir is $dir');
+        expect(await Task.baseDirectoryPath(baseDirectoryEnum), equals(dir));
+      }
+    });
+
+    test('split with filePath parameter', () async {
+      for (final subdirName in ['something', '']) {
+        for (final baseDirectoryEnum in BaseDirectory.values) {
+          final task = DownloadTask(
+              url: workingUrl,
+              baseDirectory: baseDirectoryEnum,
+              directory: subdirName);
+          final path = await task.filePath();
+          print('Testing path $path');
+          final (baseDirectory, directory, filename) =
+              await Task.split(filePath: path);
+          expect(baseDirectory, equals(baseDirectoryEnum));
+          expect(directory, equals(subdirName));
+          expect(filename, equals(task.filename));
+        }
+      }
+    });
+
+    test('split with File parameter', () async {
+      for (final subdirName in ['something', '']) {
+        for (final baseDirectoryEnum in BaseDirectory.values) {
+          final task = DownloadTask(
+              url: workingUrl,
+              baseDirectory: baseDirectoryEnum,
+              directory: subdirName);
+          final path = await task.filePath();
+          print('Testing path $path');
+          final (baseDirectory, directory, filename) =
+              await Task.split(file: File(path));
+          expect(baseDirectory, equals(baseDirectoryEnum));
+          expect(directory, equals(subdirName));
+          expect(filename, equals(task.filename));
+        }
+      }
+    });
+  });
 }
 
 /// Helper: make sure [task] is set as desired, and this will enqueue, wait for
