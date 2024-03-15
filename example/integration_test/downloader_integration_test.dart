@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:background_downloader/background_downloader.dart';
 import 'package:background_downloader/src/utils.dart';
@@ -650,7 +651,7 @@ void main() {
     });
 
     testWidgets('allTasks', (widgetTester) async {
-      print('Starting alTasks');
+      print('Starting allTasks');
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(task), isTrue);
       expect(await FileDownloader().allTasks(group: 'non-default'), isEmpty);
@@ -3017,7 +3018,100 @@ void main() {
     });
   });
 
-  group('task functions', () {
+  group('HoldingQueue', () {
+    testWidgets('multiple maxConcurrent combinations', (widgetTester) async {
+      var start = DateTime.now();
+      var concurrent = 0;
+      var maxActual = 0;
+      var finished = 0;
+
+      // same callback used for group 0 and group 1
+      void callBack(TaskStatusUpdate update) {
+        if (update.status == TaskStatus.running) {
+          concurrent++;
+          print('Started ${update.task.taskId} in group ${update.task.group}, $concurrent concurrent');
+          maxActual = max(concurrent, maxActual);
+        }
+        if (update.status == TaskStatus.complete) {
+          concurrent--;
+          finished++;
+          print('Finished ${update.task.taskId}, $concurrent concurrent');
+        }
+      }
+
+      FileDownloader().registerCallbacks(group: 'group 0', taskStatusCallback: callBack);
+      FileDownloader().registerCallbacks(group: 'group 1', taskStatusCallback: callBack);
+
+      // test function: enqueues 10 times the same file from the same host, but
+      // with alternating group "group 0" and "group 1", watches the concurrency
+      // count and then waits for all downloads to complete
+      Future<void> runTest() async {
+        for (var n = 0; n < 10; n++) {
+          var downloadTask = DownloadTask(url: urlWithContentLength, group: 'group ${n % 2}', priority: Random().nextInt(9));
+          print('Enqueuing ${downloadTask.taskId} with priority ${downloadTask.priority}');
+          FileDownloader().enqueue(downloadTask);
+        }
+        while (finished < 10) {
+          await Future.delayed(const Duration(milliseconds: 100));
+        }
+        print('Completed in ${DateTime.now().difference(
+            start)} and maxActual=$maxActual');
+        finished = 0;
+      }
+      // baseline, unrestricted
+      await runTest();
+      expect(maxActual, greaterThan(3));
+      // configure for maxConcurrent
+      maxActual = 0;
+      expect((await FileDownloader().configure(globalConfig: (Config.holdingQueue, (3, null, null)))).toString(), equals('[(holdingQueue, )]'));
+      await runTest();
+      expect(maxActual, lessThan(4));
+      // configure for maxConcurrentByHost
+      maxActual = 0;
+      expect((await FileDownloader().configure(globalConfig: (Config.holdingQueue, (null, 3, null)))).toString(), equals('[(holdingQueue, )]'));
+      await runTest();
+      expect(maxActual, lessThan(4));
+      // configure for maxConcurrentByGroup. There are two groups, so now we can
+      // get up to 6 maxConcurrent (3 for each group)
+      maxActual = 0;
+      expect((await FileDownloader().configure(globalConfig: (Config.holdingQueue, (null, null, 3)))).toString(), equals('[(holdingQueue, )]'));
+      await runTest();
+      expect(maxActual, greaterThan(3));
+      expect(maxActual, lessThan(7));
+    });
+
+    test('HoldingQueue allTaskIds and allTasks', () async {
+      expect((await FileDownloader().configure(globalConfig: (Config.holdingQueue, (1, null, null)))).toString(), equals('[(holdingQueue, )]'));
+      final taskIds = <String>[];
+      for (var n = 0; n < 10; n++) {
+        var downloadTask = DownloadTask(url: urlWithContentLength);
+        taskIds.add(downloadTask.taskId);
+        print('Enqueuing ${downloadTask.taskId}');
+        FileDownloader().enqueue(downloadTask);
+      }
+      await Future.delayed(const Duration(milliseconds: 500));
+      expect((await FileDownloader().allTaskIds()).length, equals(10));
+      expect((await FileDownloader().allTasks()).length, equals(10));
+      expect(await FileDownloader().allTaskIds(group: 'non-existent'), isEmpty);
+    });
+
+    test('HoldingQueue cancel tasks', () async {
+      expect((await FileDownloader().configure(globalConfig: (Config.holdingQueue, (1, null, null)))).toString(), equals('[(holdingQueue, )]'));
+      final taskIds = <String>[];
+      for (var n = 0; n < 10; n++) {
+        var downloadTask = DownloadTask(url: urlWithContentLength);
+        taskIds.add(downloadTask.taskId);
+        print('Enqueuing ${downloadTask.taskId}');
+        FileDownloader().enqueue(downloadTask);
+      }
+      await Future.delayed(const Duration(milliseconds: 500));
+      expect(await FileDownloader().cancelTasksWithIds(taskIds), isTrue);
+      await Future.delayed(const Duration(milliseconds: 1500));
+      expect(await FileDownloader().allTaskIds(), isEmpty);
+    });
+  });
+
+  group('Task functions', () {
     test('baseDirectoryPath', () async {
       for (final baseDirectoryEnum in BaseDirectory.values) {
         final task =

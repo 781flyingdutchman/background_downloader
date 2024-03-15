@@ -7,10 +7,8 @@ import androidx.work.WorkManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import java.util.Date
 
 /**
  * Processes WiFi requirement changes
@@ -29,7 +27,7 @@ object WiFi {
 
     private val requireWiFiQueue =
         Channel<RequireWiFiChange>(capacity = Channel.UNLIMITED)
-    private val reEnqueueQueue = Channel<ReEnqueue?>(capacity = Channel.UNLIMITED)
+    private val reEnqueueQueue = Channel<EnqueueItem?>(capacity = Channel.UNLIMITED)
     private val requireWiFiLock = Mutex()
 
     init {
@@ -45,7 +43,7 @@ object WiFi {
 
         scope.launch {
             for (reEnqueue in reEnqueueQueue) {
-                reEnqueue?.execute()
+                reEnqueue?.enqueue()
                 if (reEnqueue == null && requireWiFiLock.isLocked) {
                     // null signals all reEnqueue items are enqueued
                     requireWiFiLock.unlock()
@@ -64,8 +62,8 @@ object WiFi {
     /**
      * Re-enqueue this task and associated data. Null signals end of batch
      */
-    suspend fun reEnqueue(reEnqueue: ReEnqueue?) {
-        reEnqueueQueue.send(reEnqueue)
+    suspend fun reEnqueue(enqueueItem: EnqueueItem?) {
+        reEnqueueQueue.send(enqueueItem)
     }
 }
 
@@ -136,33 +134,5 @@ class RequireWiFiChange(
             }
         }
         return haveReEnqueued
-    }
-}
-
-/**
- * Re-enqueue a task (in the context of changing the RequireWiFi setting)
- */
-class ReEnqueue(
-    private val context: Context,
-    private val task: Task,
-    private val notificationConfigJsonString: String?,
-    private val resumeData: ResumeData?,
-    private val created: Date = Date()
-) {
-
-
-    /** Execute the re-enqueue after an appropriate delay */
-    suspend fun execute() {
-        val timeSinceCreatedMillis = Date().time - created.time
-        if (timeSinceCreatedMillis < 1000) {
-            delay(1000 - timeSinceCreatedMillis)
-        }
-        BDPlugin.doEnqueue(
-            context = context,
-            task = task,
-            notificationConfigJsonString = notificationConfigJsonString,
-            resumeData = resumeData
-        )
-        delay(20)
     }
 }

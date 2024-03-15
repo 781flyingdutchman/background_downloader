@@ -87,7 +87,7 @@ class Task(
     val priority: Int = 5,
     val metaData: String = "",
     val displayName: String = "",
-    private val creationTime: Long = System.currentTimeMillis(), // untouched, so kept as integer on Android side
+    val creationTime: Long = System.currentTimeMillis(), // untouched, so kept as integer on Android side
     val taskType: String
 ) {
 

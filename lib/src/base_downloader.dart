@@ -173,7 +173,7 @@ abstract base class BaseDownloader {
 
   /// Configures one [configItem] and returns the (String, String) result
   ///
-  /// If the second element is 'ignored' then the method did not act on
+  /// If the second element is 'not implemented' then the method did not act on
   /// the [configItem]
   Future<(String, String)> configureItem((String, dynamic) configItem);
 

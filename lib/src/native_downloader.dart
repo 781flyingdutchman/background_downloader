@@ -398,6 +398,7 @@ abstract base class NativeDownloader extends BaseDownloader {
 
   @override
   Future<(String, String)> configureItem((String, dynamic) configItem) async {
+    print(configItem.runtimeType);
     switch (configItem) {
       case (Config.requestTimeout, Duration? duration):
         await NativeDownloader.methodChannel
@@ -424,6 +425,21 @@ abstract base class NativeDownloader extends BaseDownloader {
       case (Config.checkAvailableSpace, Config.never):
         await NativeDownloader.methodChannel
             .invokeMethod('configCheckAvailableSpace', null);
+
+      case (
+          Config.holdingQueue,
+          (
+            int? maxConcurrent,
+            int? maxConcurrentByHost,
+            int? maxConcurrentByGroup
+          )
+        ):
+        await NativeDownloader.methodChannel
+            .invokeMethod('configHoldingQueue', [
+          maxConcurrent ?? 1 << 20,
+          maxConcurrentByHost ?? 1 << 20,
+          maxConcurrentByGroup ?? 1 << 20
+        ]);
 
       default:
         return (

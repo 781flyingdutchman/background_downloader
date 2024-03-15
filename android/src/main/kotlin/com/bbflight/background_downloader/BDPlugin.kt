@@ -8,7 +8,13 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import androidx.preference.PreferenceManager
-import androidx.work.*
+import androidx.work.Constraints
+import androidx.work.Data
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.bbflight.background_downloader.BDPlugin.Companion.backgroundChannel
 import com.bbflight.background_downloader.TaskWorker.Companion.taskToJsonString
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -80,12 +86,14 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val pausedTaskIds = mutableSetOf<String>() // <taskId>, acts as flag
         val parallelDownloadTaskWorkers = HashMap<String, ParallelDownloadTaskWorker>()
         val tasksToReEnqueue = mutableSetOf<Task>() // for when WiFi requirement changes
-        val taskIdsRequiringWiFi = mutableSetOf<String>() // ensures correctness when enqueueing task
+        val taskIdsRequiringWiFi =
+            mutableSetOf<String>() // ensures correctness when enqueueing task
         val notificationConfigJsonStrings = mutableMapOf<String, String>() // by taskId
         var forceFailPostOnBackgroundChannel = false
         val prefsLock = ReentrantReadWriteLock()
         val remainingBytesToDownload = mutableMapOf<String, Long>() // <taskId, size>
         var haveLoggedProxyMessage = false
+        var holdingQueue: HoldingQueue? = null
 
         /**
          * Enqueue a WorkManager task based on the provided parameters
@@ -198,8 +206,10 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         suspend fun cancelTasksWithIds(context: Context, taskIds: Iterable<String>): Boolean {
             val workManager = WorkManager.getInstance(context)
             Log.v(TAG, "Canceling taskIds $taskIds")
+            val removedFromHoldingQueue = holdingQueue?.cancelTasksWithIds(taskIds) ?: listOf()
+            val remaining = taskIds.filter { !removedFromHoldingQueue.contains(it) }
             var success = true
-            for (taskId in taskIds) {
+            for (taskId in remaining) {
                 success = success && cancelActiveTaskWithId(context, taskId, workManager)
             }
             return success
@@ -224,30 +234,35 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 if (workInfo.state != WorkInfo.State.SUCCEEDED) {
                     // send cancellation update for tasks that have not yet succeeded
                     // and remove associated notification
-                        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-                        val tasksMap = getTaskMap(prefs)
-                        val task = tasksMap[taskId]
-                        if (task != null) {
-                            TaskWorker.processStatusUpdate(task, TaskStatus.canceled, prefs, context=context)
-                            // remove outstanding notification for task or group
-                            val notificationGroup =
-                                NotificationService.groupNotificationWithTaskId(taskId)
-                            with(NotificationManagerCompat.from(context)) {
-                                if (notificationGroup == null) {
-                                    cancel(task.taskId.hashCode())
-                                } else {
-                                    // update notification for group
-                                    NotificationService.createUpdateNotificationWorker(
-                                        context,
-                                        Json.encodeToString(task),
-                                        Json.encodeToString(notificationGroup.notificationConfig),
-                                        TaskStatus.canceled.ordinal
-                                    )
-                                }
+                    val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+                    val tasksMap = getTaskMap(prefs)
+                    val task = tasksMap[taskId]
+                    if (task != null) {
+                        TaskWorker.processStatusUpdate(
+                            task,
+                            TaskStatus.canceled,
+                            prefs,
+                            context = context
+                        )
+                        // remove outstanding notification for task or group
+                        val notificationGroup =
+                            NotificationService.groupNotificationWithTaskId(taskId)
+                        with(NotificationManagerCompat.from(context)) {
+                            if (notificationGroup == null) {
+                                cancel(task.taskId.hashCode())
+                            } else {
+                                // update notification for group
+                                NotificationService.createUpdateNotificationWorker(
+                                    context,
+                                    Json.encodeToString(task),
+                                    Json.encodeToString(notificationGroup.notificationConfig),
+                                    TaskStatus.canceled.ordinal
+                                )
                             }
-                        } else {
-                            Log.d(TAG, "Could not find task with taskId $taskId to cancel")
                         }
+                    } else {
+                        Log.d(TAG, "Could not find task with taskId $taskId to cancel")
+                    }
                 }
                 val operation = workManager.cancelAllWorkByTag("taskId=$taskId")
                 try {
@@ -271,9 +286,9 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
          * cancellation. See [NotificationReceiver]
          */
         suspend fun cancelInactiveTask(context: Context, task: Task) {
-                Log.d(TAG, "Canceling inactive task")
-                val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-                TaskWorker.processStatusUpdate(task, TaskStatus.canceled, prefs)
+            Log.d(TAG, "Canceling inactive task")
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            TaskWorker.processStatusUpdate(task, TaskStatus.canceled, prefs)
         }
 
         /**
@@ -304,7 +319,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
     private var channel: MethodChannel? = null
     private var backgroundChannel: MethodChannel? = null
-    private lateinit var applicationContext: Context
+    lateinit var applicationContext: Context
     private var scope: CoroutineScope? = null
     var activity: Activity? = null
 
@@ -397,6 +412,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 "configCheckAvailableSpace" -> methodConfigCheckAvailableSpace(call, result)
                 "configUseCacheDir" -> methodConfigUseCacheDir(call, result)
                 "configUseExternalStorage" -> methodConfigUseExternalStorage(call, result)
+                "configHoldingQueue" -> methodConfigHoldingQueue(call, result)
                 "platformVersion" -> methodPlatformVersion(result)
                 "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
                     call, result
@@ -430,15 +446,28 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         } else {
             null
         }
-        result.success(
-            doEnqueue(
-                applicationContext,
-                task,
-                notificationConfigJsonString,
-                resumeData,
-                plugin = this
+        if (holdingQueue == null) {
+            result.success(
+                doEnqueue(
+                    applicationContext,
+                    task,
+                    notificationConfigJsonString,
+                    resumeData,
+                    plugin = this
+                )
             )
-        )
+        } else {
+            holdingQueue?.add(
+                EnqueueItem(
+                    context = applicationContext,
+                    task = task,
+                    notificationConfigJsonString = notificationConfigJsonString,
+                    resumeData = resumeData,
+                    plugin = this
+                )
+            )
+            result.success(true)
+        }
     }
 
 
@@ -449,7 +478,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private fun methodReset(call: MethodCall, result: Result) {
         val group = call.arguments as String
-        var counter = 0
+        var counter = holdingQueue?.cancelAllTasks(group) ?: 0
         val workManager = WorkManager.getInstance(applicationContext)
         val workInfos = workManager.getWorkInfosByTag(TAG).get()
             .filter { !it.state.isFinished && it.tags.contains("group=$group") }
@@ -464,7 +493,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     /**
      * Returns a list of tasks for all tasks in progress, as a list of JSON strings
      */
-    private fun methodAllTasks(call: MethodCall, result: Result) {
+    private suspend fun methodAllTasks(call: MethodCall, result: Result) {
         val group = call.arguments as String
         val workManager = WorkManager.getInstance(applicationContext)
         val workInfos = workManager.getWorkInfosByTag(TAG).get()
@@ -483,6 +512,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     }
                 }
             }
+            holdingQueue?.allTasks(group)
+                ?.forEach { tasksAsListOfJsonStrings.add(Json.encodeToString(it)) }
         }
         Log.v(TAG, "Returning ${tasksAsListOfJsonStrings.size} unfinished tasks in group $group")
         result.success(tasksAsListOfJsonStrings)
@@ -535,6 +566,10 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             if (task != null) {
                 result.success(Json.encodeToString(tasksMap[taskId]))
             } else {
+                val heldTask = holdingQueue?.taskForId(taskId)
+                if (heldTask != null) {
+                    result.success(Json.encodeToString(heldTask))
+                }
                 result.success(null)
             }
         }
@@ -709,7 +744,13 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val newRequireWiFi = RequireWiFi.entries[args[0] as Int]
         val rescheduleRunning = args[1] as Boolean
         Log.d(TAG, "RequireWiFi=$newRequireWiFi and rescheduleRunning=$rescheduleRunning")
-        WiFi.requireWiFiChange(RequireWiFiChange(applicationContext, newRequireWiFi, rescheduleRunning))
+        WiFi.requireWiFiChange(
+            RequireWiFiChange(
+                applicationContext,
+                newRequireWiFi,
+                rescheduleRunning
+            )
+        )
         result.success(true)
     }
 
@@ -718,7 +759,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private fun methodGetRequireWiFiSetting(result: Result) {
         val setting = PreferenceManager.getDefaultSharedPreferences(applicationContext).getInt(
-            keyRequireWiFi, 0)
+            keyRequireWiFi, 0
+        )
         result.success(setting)
     }
 
@@ -895,6 +937,19 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private fun methodConfigUseExternalStorage(call: MethodCall, result: Result) {
         updateSharedPreferences(keyConfigUseExternalStorage, call.arguments as Int?)
+        result.success(null)
+    }
+
+
+    /**
+     * Configure the holding queue
+     */
+    private fun methodConfigHoldingQueue(call: MethodCall, result: Result) {
+        val arguments = call.arguments as List<*>
+        holdingQueue = holdingQueue ?: HoldingQueue(WorkManager.getInstance(applicationContext))
+        holdingQueue?.maxConcurrent = arguments[0] as Int
+        holdingQueue?.maxConcurrentByHost = arguments[1] as Int
+        holdingQueue?.maxConcurrentByGroup = arguments[2] as Int
         result.success(null)
     }
 
