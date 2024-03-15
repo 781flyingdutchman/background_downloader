@@ -397,7 +397,7 @@ sealed class Task extends Request implements Comparable {
     // try to match the start of the absoluteDirectory to one of the
     // directories represented by the BaseDirectory enum.
     // Order matters, as some may be subdirs of others
-    final testSequence = Platform.isAndroid
+    final testSequence = Platform.isAndroid || Platform.isLinux
         ? [
             BaseDirectory.temporary,
             BaseDirectory.applicationLibrary,
