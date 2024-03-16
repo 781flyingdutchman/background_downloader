@@ -1,6 +1,5 @@
 package com.bbflight.background_downloader
 
-import android.os.Looper
 import android.util.Log
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -82,13 +81,9 @@ object QueueService {
                             success.complete(false)
                         }
                     }
-                    // Complete the success completer that was part of the backgroundPost
-                    if (!bgPost.postedFromUIThread) {
-                        bgPost.success.complete(!BDPlugin.forceFailPostOnBackgroundChannel && success.await())
+                    if (bgPost.onFail != null && !success.await()) {
+                        bgPost.onFail?.invoke()
                     }
-                }
-                if (bgPost.postedFromUIThread) {
-                    bgPost.success.complete(!BDPlugin.forceFailPostOnBackgroundChannel)
                 }
             }
         }
@@ -105,8 +100,7 @@ object QueueService {
     }
 
     /**
-     * Post this [BackgroundPost] on the background channel, on the main/UI thread, and
-     * complete the [BackgroundPost.success] completer with the result
+     * Post this [BackgroundPost] on the background channel
      */
     suspend fun postOnBackgroundChannel(bgPost: BackgroundPost) {
         backgroundPostQueue.send(bgPost)
@@ -120,7 +114,5 @@ data class BackgroundPost(
     val task: Task,
     val method: String,
     val arg: Any,
-) {
-    val postedFromUIThread = Looper.myLooper() == Looper.getMainLooper()
-    val success = CompletableDeferred<Boolean>()
-}
+    val onFail: (suspend () -> Unit)? = null
+)

@@ -40,6 +40,7 @@ import java.lang.Double.min as doubleMin
  *
  * Processes DownloadTask, UploadTask or MultiUploadTask
  */
+@Suppress("ConstPropertyName")
 open class TaskWorker(
     applicationContext: Context, workerParams: WorkerParameters
 ) : CoroutineWorker(applicationContext, workerParams) {
@@ -62,17 +63,17 @@ open class TaskWorker(
         }
 
         /**
-         * Post method message on backgroundChannel with arguments and return true if this was
-         * successful
+         * Post method message on backgroundChannel with arguments
+         *
+         * If the post is not successful, execute the [onFail] block, if given
          *
          * [arg] can be single variable or a MutableList
          */
         suspend fun postOnBackgroundChannel(
-            method: String, task: Task, arg: Any
-        ): Boolean {
-            val bgPost = BackgroundPost(task, method, arg)
+            method: String, task: Task, arg: Any, onFail: (suspend () -> Unit)? = null
+        ) {
+            val bgPost = BackgroundPost(task, method, arg, onFail)
             QueueService.postOnBackgroundChannel(bgPost)
-            return bgPost.success.await()
         }
 
         /**
@@ -175,7 +176,7 @@ open class TaskWorker(
                     if (status.isFinalState()) mimeType else null,
                     if (status.isFinalState()) charSet else null
                 )
-                if (!postOnBackgroundChannel("statusUpdate", task, arg)) {
+                postOnBackgroundChannel("statusUpdate", task, arg, onFail = {
                     // unsuccessful post, so store in local prefs (without exception info)
                     Log.d(TAG, "Could not post status update -> storing locally")
                     storeLocally(
@@ -184,7 +185,7 @@ open class TaskWorker(
                         Json.encodeToString(TaskStatusUpdate(task, status)),
                         prefs
                     )
-                }
+                })
             }
             // if task is in final state, cancel the WorkManager job (if failed),
             // remove task from persistent storage, remove resume data from local memory
@@ -245,21 +246,25 @@ open class TaskWorker(
             downloadSpeed: Double = -1.0, timeRemaining: Long = -1000
         ) {
             if (task.providesProgressUpdates()) {
-                if (!postOnBackgroundChannel(
-                        "progressUpdate",
-                        task,
-                        mutableListOf(progress, expectedFileSize, downloadSpeed, timeRemaining)
-                    )
-                ) {
-                    // unsuccessful post, so store in local prefs
-                    Log.d(TAG, "Could not post progress update -> storing locally")
-                    storeLocally(
-                        BDPlugin.keyProgressUpdateMap,
-                        task.taskId,
-                        Json.encodeToString(TaskProgressUpdate(task, progress, expectedFileSize)),
-                        prefs
-                    )
-                }
+                postOnBackgroundChannel("progressUpdate", task,
+                    mutableListOf(progress, expectedFileSize, downloadSpeed, timeRemaining),
+                    onFail =
+                    {
+                        // unsuccessful post, so store in local prefs
+                        Log.d(TAG, "Could not post progress update -> storing locally")
+                        storeLocally(
+                            BDPlugin.keyProgressUpdateMap,
+                            task.taskId,
+                            Json.encodeToString(
+                                TaskProgressUpdate(
+                                    task,
+                                    progress,
+                                    expectedFileSize
+                                )
+                            ),
+                            prefs
+                        )
+                    })
             }
         }
 
@@ -281,23 +286,22 @@ open class TaskWorker(
          */
         suspend fun processResumeData(resumeData: ResumeData, prefs: SharedPreferences) {
             BDPlugin.localResumeData[resumeData.task.taskId] = resumeData
-            if (!postOnBackgroundChannel(
-                    "resumeData", resumeData.task, mutableListOf(
-                        resumeData.data,
-                        resumeData.requiredStartByte,
-                        resumeData.eTag
+            postOnBackgroundChannel(
+                "resumeData", resumeData.task, mutableListOf(
+                    resumeData.data,
+                    resumeData.requiredStartByte,
+                    resumeData.eTag
+                ), onFail =
+                {
+                    // unsuccessful post, so store in local prefs
+                    Log.d(TAG, "Could not post resume data -> storing locally")
+                    storeLocally(
+                        BDPlugin.keyResumeDataMap,
+                        resumeData.task.taskId,
+                        Json.encodeToString(resumeData),
+                        prefs
                     )
-                )
-            ) {
-                // unsuccessful post, so store in local prefs
-                Log.d(TAG, "Could not post resume data -> storing locally")
-                storeLocally(
-                    BDPlugin.keyResumeDataMap,
-                    resumeData.task.taskId,
-                    Json.encodeToString(resumeData),
-                    prefs
-                )
-            }
+                })
         }
 
         /**
@@ -348,7 +352,7 @@ open class TaskWorker(
     // additional parameters for final TaskStatusUpdate
     var taskException: TaskException? = null
     var responseBody: String? = null
-    var responseHeaders: Map<String, String>? = null
+    private var responseHeaders: Map<String, String>? = null
     var responseStatusCode: Int? = null
     private var mimeType: String? = null // derived from Content-Type header
     private var charSet: String? = null // derived from Content-Type header
@@ -419,9 +423,14 @@ open class TaskWorker(
                     // update only if not failed, or no retries remaining
                     NotificationService.updateNotification(this@TaskWorker, status)
                 }
+                if (status != TaskStatus.canceled) {
+                    // let the holdingQueue know this task is no longer active
+                    // except TaskStatus.canceled is handled directly in cancellation and reset methods
+                    BDPlugin.holdingQueue?.taskFinished(task)
+                }
             }
         }
-        BDPlugin.holdingQueue?.taskFinished(task)
+//        BDPlugin.holdingQueue?.taskFinished(task)
         return Result.success()
     }
 

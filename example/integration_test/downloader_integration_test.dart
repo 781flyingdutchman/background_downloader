@@ -153,6 +153,8 @@ void main() {
     try {
       File(path).deleteSync();
     } on FileSystemException {}
+    await FileDownloader().configure(
+        globalConfig: (Config.holdingQueue, (2, null, null))); //TODO remove
   });
 
   tearDown(() async {
@@ -691,11 +693,15 @@ void main() {
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
       expect(await FileDownloader().enqueue(task), isTrue);
+      print("1");
       var taskIds = await FileDownloader().allTaskIds();
+      print("2");
       expect(taskIds.length, equals(1));
       expect(taskIds.first, equals(task.taskId));
       expect(await FileDownloader().cancelTasksWithIds(taskIds), isTrue);
+      print("3");
       await statusCallbackCompleter.future;
+      print("4");
       // on iOS, the quick cancellation may not yield a 'running' state
       expect(statusCallbackCounter, lessThanOrEqualTo(3));
       expect(lastStatus, equals(TaskStatus.canceled));
@@ -709,11 +715,14 @@ void main() {
           updates: Updates.statusAndProgress);
       expect(await FileDownloader().enqueue(task), isTrue);
       await someProgressCompleter.future;
+      print("Passed someProgress");
       taskIds = await FileDownloader().allTaskIds();
       expect(taskIds.length, equals(1));
       expect(taskIds.first, equals(task.taskId));
       expect(await FileDownloader().cancelTasksWithIds(taskIds), isTrue);
+      print("5");
       await statusCallbackCompleter.future;
+      print("6");
       expect(statusCallbackCounter, equals(3));
       expect(lastStatus, equals(TaskStatus.canceled));
       print('Finished cancelTasksWithIds');
@@ -763,7 +772,6 @@ void main() {
           group: complexTask.group, taskStatusCallback: statusCallback);
       expect(await FileDownloader().taskForId(complexTask.taskId), isNull);
       expect(await FileDownloader().enqueue(complexTask), isTrue);
-      print("done with enqueue");
       final task = await FileDownloader().taskForId(complexTask.taskId);
       expect(task is DownloadTask, isTrue);
       expect(task, equals(complexTask));
@@ -3029,7 +3037,8 @@ void main() {
       void callBack(TaskStatusUpdate update) {
         if (update.status == TaskStatus.running) {
           concurrent++;
-          print('Started ${update.task.taskId} in group ${update.task.group}, $concurrent concurrent');
+          print(
+              'Started ${update.task.taskId} in group ${update.task.group}, $concurrent concurrent');
           maxActual = max(concurrent, maxActual);
         }
         if (update.status == TaskStatus.complete) {
@@ -3039,49 +3048,72 @@ void main() {
         }
       }
 
-      FileDownloader().registerCallbacks(group: 'group 0', taskStatusCallback: callBack);
-      FileDownloader().registerCallbacks(group: 'group 1', taskStatusCallback: callBack);
+      FileDownloader()
+          .registerCallbacks(group: 'group 0', taskStatusCallback: callBack);
+      FileDownloader()
+          .registerCallbacks(group: 'group 1', taskStatusCallback: callBack);
 
       // test function: enqueues 10 times the same file from the same host, but
       // with alternating group "group 0" and "group 1", watches the concurrency
       // count and then waits for all downloads to complete
       Future<void> runTest() async {
         for (var n = 0; n < 10; n++) {
-          var downloadTask = DownloadTask(url: urlWithContentLength, group: 'group ${n % 2}', priority: Random().nextInt(9));
-          print('Enqueuing ${downloadTask.taskId} with priority ${downloadTask.priority}');
+          var downloadTask = DownloadTask(
+              url: urlWithContentLength,
+              group: 'group ${n % 2}',
+              priority: Random().nextInt(9));
+          print(
+              'Enqueuing ${downloadTask.taskId} with priority ${downloadTask.priority}');
           FileDownloader().enqueue(downloadTask);
         }
         while (finished < 10) {
           await Future.delayed(const Duration(milliseconds: 100));
         }
-        print('Completed in ${DateTime.now().difference(
-            start)} and maxActual=$maxActual');
+        print(
+            'Completed in ${DateTime.now().difference(start)} and maxActual=$maxActual');
         finished = 0;
       }
+
       // baseline, unrestricted
       await runTest();
       expect(maxActual, greaterThan(3));
       // configure for maxConcurrent
       maxActual = 0;
-      expect((await FileDownloader().configure(globalConfig: (Config.holdingQueue, (3, null, null)))).toString(), equals('[(holdingQueue, )]'));
+      expect(
+          (await FileDownloader().configure(
+                  globalConfig: (Config.holdingQueue, (3, null, null))))
+              .toString(),
+          equals('[(holdingQueue, )]'));
       await runTest();
       expect(maxActual, lessThan(4));
       // configure for maxConcurrentByHost
       maxActual = 0;
-      expect((await FileDownloader().configure(globalConfig: (Config.holdingQueue, (null, 3, null)))).toString(), equals('[(holdingQueue, )]'));
+      expect(
+          (await FileDownloader().configure(
+                  globalConfig: (Config.holdingQueue, (null, 3, null))))
+              .toString(),
+          equals('[(holdingQueue, )]'));
       await runTest();
       expect(maxActual, lessThan(4));
       // configure for maxConcurrentByGroup. There are two groups, so now we can
       // get up to 6 maxConcurrent (3 for each group)
       maxActual = 0;
-      expect((await FileDownloader().configure(globalConfig: (Config.holdingQueue, (null, null, 3)))).toString(), equals('[(holdingQueue, )]'));
+      expect(
+          (await FileDownloader().configure(
+                  globalConfig: (Config.holdingQueue, (null, null, 3))))
+              .toString(),
+          equals('[(holdingQueue, )]'));
       await runTest();
       expect(maxActual, greaterThan(3));
       expect(maxActual, lessThan(7));
     });
 
     test('HoldingQueue allTaskIds and allTasks', () async {
-      expect((await FileDownloader().configure(globalConfig: (Config.holdingQueue, (1, null, null)))).toString(), equals('[(holdingQueue, )]'));
+      expect(
+          (await FileDownloader().configure(
+                  globalConfig: (Config.holdingQueue, (1, null, null))))
+              .toString(),
+          equals('[(holdingQueue, )]'));
       final taskIds = <String>[];
       for (var n = 0; n < 10; n++) {
         var downloadTask = DownloadTask(url: urlWithContentLength);
@@ -3096,7 +3128,11 @@ void main() {
     });
 
     test('HoldingQueue cancel tasks', () async {
-      expect((await FileDownloader().configure(globalConfig: (Config.holdingQueue, (1, null, null)))).toString(), equals('[(holdingQueue, )]'));
+      expect(
+          (await FileDownloader().configure(
+                  globalConfig: (Config.holdingQueue, (1, null, null))))
+              .toString(),
+          equals('[(holdingQueue, )]'));
       final taskIds = <String>[];
       for (var n = 0; n < 10; n++) {
         var downloadTask = DownloadTask(url: urlWithContentLength);

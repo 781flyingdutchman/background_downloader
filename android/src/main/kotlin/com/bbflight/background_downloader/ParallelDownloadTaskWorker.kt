@@ -85,7 +85,10 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                                     connection.headerFields,
                                     unique = true
                                 )
-                                Log.d(TAG, "Suggested filename for taskId ${task.taskId}: ${task.filename}")
+                                Log.d(
+                                    TAG,
+                                    "Suggested filename for taskId ${task.taskId}: ${task.filename}"
+                                )
                             }
                             extractResponseHeaders(connection.headerFields)
                             responseStatusCode = connection.responseCode
@@ -94,24 +97,24 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                             for (chunk in chunks) {
                                 // Ask Dart side to enqueue the child task. Updates related to the child
                                 // will be sent to this (parent) task (the child's metaData is the parent taskId).
-                                if (!postOnBackgroundChannel(
-                                        "enqueueChild",
-                                        task,
-                                        Json.encodeToString(chunk.task)
-                                    )
-                                ) {
-                                    // failed to enqueue child
-                                    cancelAllChunkTasks()
-                                    Log.i(
-                                        TAG,
-                                        "Failed to enqueue chunk task with id ${chunk.task.taskId}"
-                                    )
-                                    taskException = TaskException(
-                                        ExceptionType.general,
-                                        description = "Failed to enqueue chunk task with id ${chunk.task.taskId}"
-                                    )
-                                    parallelTaskStatusUpdateCompleter.complete(TaskStatus.failed)
-                                }
+                                postOnBackgroundChannel(
+                                    "enqueueChild",
+                                    task,
+                                    Json.encodeToString(chunk.task),
+                                    onFail =
+                                    {
+                                        // failed to enqueue child
+                                        cancelAllChunkTasks()
+                                        Log.i(
+                                            TAG,
+                                            "Failed to enqueue chunk task with id ${chunk.task.taskId}"
+                                        )
+                                        taskException = TaskException(
+                                            ExceptionType.general,
+                                            description = "Failed to enqueue chunk task with id ${chunk.task.taskId}"
+                                        )
+                                        parallelTaskStatusUpdateCompleter.complete(TaskStatus.failed)
+                                    })
                             }
                         } else {
                             // HTTP response code not OK
@@ -206,14 +209,13 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                 "Chunk task with taskId ${chunkTask.taskId} failed, waiting $waitTimeSeconds seconds before retrying. ${chunkTask.retriesRemaining} retries remaining"
             )
             delay(waitTimeSeconds * 1000L)
-            if (!postOnBackgroundChannel(
-                    "enqueueChild",
-                    task,
-                    Json.encodeToString(chunk.task)
-                )
-            ) {
-                chunkStatusUpdate(chunkTaskId, TaskStatus.failed, taskException, responseBody)
-            }
+            postOnBackgroundChannel(
+                "enqueueChild",
+                task,
+                Json.encodeToString(chunk.task),
+                onFail = {
+                    chunkStatusUpdate(chunkTaskId, TaskStatus.failed, taskException, responseBody)
+                })
         } else {
             // no retry
             val newStatusUpdate = updateChunkStatus(chunk, status)

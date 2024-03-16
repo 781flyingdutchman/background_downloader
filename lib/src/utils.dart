@@ -128,7 +128,8 @@ Future<DownloadTask> taskWithSuggestedFilename(
         final suggestedFilename = match.group(1)?.toUpperCase() == 'UTF-8'
             ? Uri.decodeComponent(match.group(3)!)
             : match.group(3)!;
-        return uniqueFilename(task.copyWith(filename: suggestedFilename), unique);
+        return uniqueFilename(
+            task.copyWith(filename: suggestedFilename), unique);
       } on ArgumentError {
         _log.finest(
             'Could not interpret suggested filename (UTF-8 url encoded) ${match.group(3)}');

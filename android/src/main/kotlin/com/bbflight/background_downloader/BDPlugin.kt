@@ -52,6 +52,7 @@ import kotlin.concurrent.write
  * Manages the WorkManager task queue and the interface to Dart. Actual work is done in
  * [TaskWorker]
  */
+@Suppress("ConstPropertyName")
 class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     PluginRegistry.RequestPermissionsResultListener {
     companion object {
@@ -225,7 +226,9 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         ): Boolean {
             // cancel chunk tasks if this is a ParallelDownloadTask
             parallelDownloadTaskWorkers[taskId]?.cancelAllChunkTasks()
-            val workInfos = workManager.getWorkInfosByTag("taskId=$taskId").get()
+            val workInfos = withContext(Dispatchers.IO) {
+                workManager.getWorkInfosByTag("taskId=$taskId").get()
+            }
             if (workInfos.isEmpty()) {
                 Log.d(TAG, "Could not find tasks to cancel")
                 return false
@@ -244,6 +247,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                             prefs,
                             context = context
                         )
+                        holdingQueue?.taskFinished(task)
                         // remove outstanding notification for task or group
                         val notificationGroup =
                             NotificationService.groupNotificationWithTaskId(taskId)
@@ -476,13 +480,30 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      *
      * Returns the number of tasks canceled
      */
-    private fun methodReset(call: MethodCall, result: Result) {
+    private suspend fun methodReset(call: MethodCall, result: Result) {
         val group = call.arguments as String
         var counter = holdingQueue?.cancelAllTasks(group) ?: 0
+        val tasksMap: MutableMap<String, Task>
+        prefsLock.read {
+            val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
+            tasksMap = getTaskMap(prefs)
+        }
         val workManager = WorkManager.getInstance(applicationContext)
-        val workInfos = workManager.getWorkInfosByTag(TAG).get()
+        val workInfos = withContext(Dispatchers.IO) {
+            workManager.getWorkInfosByTag(TAG).get()
+        }
             .filter { !it.state.isFinished && it.tags.contains("group=$group") }
         for (workInfo in workInfos) {
+            if (holdingQueue != null) {
+                val tags = workInfo.tags.filter { it.contains("taskId=") }
+                if (tags.isNotEmpty()) {
+                    val taskId = tags.first().substring(7)
+                    val task = tasksMap[taskId]
+                    if (task != null) {
+                        holdingQueue?.taskFinished(task)
+                    }
+                }
+            }
             workManager.cancelWorkById(workInfo.id)
             counter++
         }
@@ -495,25 +516,29 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private suspend fun methodAllTasks(call: MethodCall, result: Result) {
         val group = call.arguments as String
-        val workManager = WorkManager.getInstance(applicationContext)
-        val workInfos = workManager.getWorkInfosByTag(TAG).get()
-            .filter { !it.state.isFinished && it.tags.contains("group=$group") }
         val tasksAsListOfJsonStrings = mutableListOf<String>()
+        holdingQueue?.allTasks(group)
+            ?.forEach { tasksAsListOfJsonStrings.add(Json.encodeToString(it)) }
+        Log.wtf(BDPlugin.TAG, "allTasks so far found ${tasksAsListOfJsonStrings.size} items")
+        val workManager = WorkManager.getInstance(applicationContext)
+        val workInfos = withContext(Dispatchers.IO) {
+            workManager.getWorkInfosByTag(TAG).get()
+        }
+            .filter { !it.state.isFinished && it.tags.contains("group=$group") }
+        val tasksMap: MutableMap<String, Task>
         prefsLock.read {
             val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
-            val tasksMap = getTaskMap(prefs)
-            for (workInfo in workInfos) {
-                val tags = workInfo.tags.filter { it.contains("taskId=") }
-                if (tags.isNotEmpty()) {
-                    val taskId = tags.first().substring(7)
-                    val task = tasksMap[taskId]
-                    if (task != null) {
-                        tasksAsListOfJsonStrings.add(Json.encodeToString(task))
-                    }
+            tasksMap = getTaskMap(prefs)
+        }
+        for (workInfo in workInfos) {
+            val tags = workInfo.tags.filter { it.contains("taskId=") }
+            if (tags.isNotEmpty()) {
+                val taskId = tags.first().substring(7)
+                val task = tasksMap[taskId]
+                if (task != null) {
+                    tasksAsListOfJsonStrings.add(Json.encodeToString(task))
                 }
             }
-            holdingQueue?.allTasks(group)
-                ?.forEach { tasksAsListOfJsonStrings.add(Json.encodeToString(it)) }
         }
         Log.v(TAG, "Returning ${tasksAsListOfJsonStrings.size} unfinished tasks in group $group")
         result.success(tasksAsListOfJsonStrings)
@@ -556,20 +581,22 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     }
 
     /** Returns Task for this taskId, or nil */
-    private fun methodTaskForId(call: MethodCall, result: Result) {
+    private suspend fun methodTaskForId(call: MethodCall, result: Result) {
         val taskId = call.arguments as String
         Log.v(TAG, "Returning task for taskId $taskId")
-        prefsLock.read {
-            val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
-            val tasksMap = getTaskMap(prefs)
-            val task = tasksMap[taskId]
+        val heldTask = holdingQueue?.taskForId(taskId)
+        if (heldTask != null) {
+            result.success(Json.encodeToString(heldTask))
+        } else {
+            val task: Task?
+            prefsLock.read {
+                val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
+                val tasksMap = getTaskMap(prefs)
+                task = tasksMap[taskId]
+            }
             if (task != null) {
-                result.success(Json.encodeToString(tasksMap[taskId]))
+                result.success(Json.encodeToString(task))
             } else {
-                val heldTask = holdingQueue?.taskForId(taskId)
-                if (heldTask != null) {
-                    result.success(Json.encodeToString(heldTask))
-                }
                 result.success(null)
             }
         }
