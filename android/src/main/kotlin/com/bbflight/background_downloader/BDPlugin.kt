@@ -16,6 +16,7 @@ import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.bbflight.background_downloader.BDPlugin.Companion.backgroundChannel
+import com.bbflight.background_downloader.TaskWorker.Companion.processStatusUpdate
 import com.bbflight.background_downloader.TaskWorker.Companion.taskToJsonString
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -108,19 +109,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             plugin: BDPlugin? = null
         ): Boolean {
             Log.i(TAG, "Enqueuing task with id ${task.taskId}")
-            // validate the task.url
-            try {
-                URL(task.url)
-                withContext(Dispatchers.IO) {
-                    URLDecoder.decode(task.url, "UTF-8")
-                }
-            } catch (e: MalformedURLException) {
-                Log.i(TAG, "MalformedURLException for taskId ${task.taskId}")
-                return false
-            } catch (e: IllegalArgumentException) {
-                Log.i(TAG, "Could not url-decode url for taskId ${task.taskId}")
-                return false
-            }
             // store backgroundChannel to be used by this task
             val bgChannel = backgroundChannel(plugin)
             if (bgChannel != null) {
@@ -128,6 +116,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             } else {
                 Log.w(TAG, "Could not find backgroundChannel for taskId ${task.taskId}")
             }
+            // store host if we have a HoldingQueue
+            holdingQueue?.hostByTaskId?.set(task.taskId, task.host())
             canceledTaskIds.remove(task.taskId)
             val dataBuilder = Data.Builder().putString(TaskWorker.keyTask, taskToJsonString(task))
             if (notificationConfigJsonString != null) {
@@ -171,14 +161,11 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     operation.result.get()
                 }
                 val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-                if (initialDelayMillis == 0L) {
-                    TaskWorker.processStatusUpdate(
-                        task, TaskStatus.enqueued, prefs
-                    )
-                } else {
+                if (initialDelayMillis != 0L) {
                     delay(min(100L, initialDelayMillis))
-                    TaskWorker.processStatusUpdate(task, TaskStatus.enqueued, prefs)
                 }
+                if (holdingQueue?.enqueuedTaskIds?.contains(task.taskId) != true)
+                    processStatusUpdate(task, TaskStatus.enqueued, prefs, context = context)
             } catch (e: Throwable) {
                 Log.w(
                     TAG,
@@ -207,7 +194,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         suspend fun cancelTasksWithIds(context: Context, taskIds: Iterable<String>): Boolean {
             val workManager = WorkManager.getInstance(context)
             Log.v(TAG, "Canceling taskIds $taskIds")
-            val removedFromHoldingQueue = holdingQueue?.cancelTasksWithIds(taskIds) ?: listOf()
+            val removedFromHoldingQueue =
+                holdingQueue?.cancelTasksWithIds(context, taskIds) ?: listOf()
             val remaining = taskIds.filter { !removedFromHoldingQueue.contains(it) }
             var success = true
             for (taskId in remaining) {
@@ -241,7 +229,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     val tasksMap = getTaskMap(prefs)
                     val task = tasksMap[taskId]
                     if (task != null) {
-                        TaskWorker.processStatusUpdate(
+                        processStatusUpdate(
                             task,
                             TaskStatus.canceled,
                             prefs,
@@ -292,7 +280,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         suspend fun cancelInactiveTask(context: Context, task: Task) {
             Log.d(TAG, "Canceling inactive task")
             val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-            TaskWorker.processStatusUpdate(task, TaskStatus.canceled, prefs)
+            processStatusUpdate(task, TaskStatus.canceled, prefs)
         }
 
         /**
@@ -323,7 +311,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
     private var channel: MethodChannel? = null
     private var backgroundChannel: MethodChannel? = null
-    lateinit var applicationContext: Context
+    private lateinit var applicationContext: Context
     private var scope: CoroutineScope? = null
     var activity: Activity? = null
 
@@ -450,6 +438,22 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         } else {
             null
         }
+        // validate the task.url
+        try {
+            URL(task.url)
+            withContext(Dispatchers.IO) {
+                URLDecoder.decode(task.url, "UTF-8")
+            }
+        } catch (e: MalformedURLException) {
+            Log.i(TAG, "MalformedURLException for taskId ${task.taskId}")
+            result.success(false)
+            return
+        } catch (e: IllegalArgumentException) {
+            Log.i(TAG, "Could not url-decode url for taskId ${task.taskId}")
+            result.success(false)
+            return
+        }
+        // enqueue or add to HoldingQueue
         if (holdingQueue == null) {
             result.success(
                 doEnqueue(
@@ -461,6 +465,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 )
             )
         } else {
+            Log.i(TAG, "Moving task with id ${task.taskId} to HoldingQueue")
             holdingQueue?.add(
                 EnqueueItem(
                     context = applicationContext,
@@ -469,6 +474,12 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     resumeData = resumeData,
                     plugin = this
                 )
+            )
+            processStatusUpdate(
+                task,
+                TaskStatus.enqueued,
+                PreferenceManager.getDefaultSharedPreferences(applicationContext),
+                context = applicationContext
             )
             result.success(true)
         }
@@ -482,10 +493,10 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private suspend fun methodReset(call: MethodCall, result: Result) {
         val group = call.arguments as String
-        var counter = holdingQueue?.cancelAllTasks(group) ?: 0
+        var counter = holdingQueue?.cancelAllTasks(applicationContext, group) ?: 0
         val tasksMap: MutableMap<String, Task>
+        val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
         prefsLock.read {
-            val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
             tasksMap = getTaskMap(prefs)
         }
         val workManager = WorkManager.getInstance(applicationContext)
@@ -494,14 +505,18 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         }
             .filter { !it.state.isFinished && it.tags.contains("group=$group") }
         for (workInfo in workInfos) {
-            if (holdingQueue != null) {
-                val tags = workInfo.tags.filter { it.contains("taskId=") }
-                if (tags.isNotEmpty()) {
-                    val taskId = tags.first().substring(7)
-                    val task = tasksMap[taskId]
-                    if (task != null) {
-                        holdingQueue?.taskFinished(task)
-                    }
+            val tags = workInfo.tags.filter { it.contains("taskId=") }
+            if (tags.isNotEmpty()) {
+                val taskId = tags.first().substring(7)
+                val task = tasksMap[taskId]
+                if (task != null) {
+                    processStatusUpdate(
+                        task,
+                        TaskStatus.canceled,
+                        prefs,
+                        context = applicationContext
+                    )
+                    holdingQueue?.taskFinished(task)
                 }
             }
             workManager.cancelWorkById(workInfo.id)
@@ -519,7 +534,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val tasksAsListOfJsonStrings = mutableListOf<String>()
         holdingQueue?.allTasks(group)
             ?.forEach { tasksAsListOfJsonStrings.add(Json.encodeToString(it)) }
-        Log.wtf(BDPlugin.TAG, "allTasks so far found ${tasksAsListOfJsonStrings.size} items")
         val workManager = WorkManager.getInstance(applicationContext)
         val workInfos = withContext(Dispatchers.IO) {
             workManager.getWorkInfosByTag(TAG).get()

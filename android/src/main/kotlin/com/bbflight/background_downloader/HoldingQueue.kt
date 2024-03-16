@@ -2,6 +2,7 @@ package com.bbflight.background_downloader
 
 import android.content.Context
 import android.util.Log
+import androidx.preference.PreferenceManager
 import androidx.work.WorkManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -11,8 +12,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.net.MalformedURLException
-import java.net.URL
 import java.util.Date
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.PriorityBlockingQueue
@@ -23,29 +22,30 @@ import java.util.concurrent.atomic.AtomicInteger
  *
  * Configure [maxConcurrent], [maxConcurrentByHost] and [maxConcurrentByGroup] to limit which items
  * can be enqueued simultaneously.
+ *
  * Call:
  * [add] to add an [EnqueueItem]
- * [taskFinished] for all tasks that finish
- * [cancelAllTasks] to empty the queue (no status updates)
- * [cancelTasksWithIds] to remove specific tasks (no status updates)
+ * [taskFinished] for all tasks that finish, so we may start a new one
+ * [cancelAllTasks] to empty the queue (sends status updates)
+ * [cancelTasksWithIds] to remove specific tasks (sends status updates)
  * [allTasks] for a list of [Task] matching a group
+ * [taskForId] to get the task for a specific taskId
  */
 class HoldingQueue(private val workManager: WorkManager) {
-    val unlimited = 1 shl 20
-    private var job: Job? = null // timer job
 
-    var maxConcurrent: Int = unlimited
-    var maxConcurrentByHost: Int = unlimited
-    var maxConcurrentByGroup: Int = unlimited
+    var maxConcurrent: Int = 1 shl 20
+    var maxConcurrentByHost: Int = 1 shl 20
+    var maxConcurrentByGroup: Int = 1 shl 20
+    val hostByTaskId = ConcurrentHashMap<String, String>()
+    val enqueuedTaskIds = mutableListOf<String>()
 
     private val concurrent = AtomicInteger(0)
     private val concurrentByHost = ConcurrentHashMap<String, AtomicInteger>()
     private val concurrentByGroup = ConcurrentHashMap<String, AtomicInteger>()
 
-    private val hostByTaskId = ConcurrentHashMap<String, String>()
-
     private val queue = PriorityBlockingQueue<EnqueueItem>()
 
+    private var job: Job? = null // timer job
     private val scope = CoroutineScope(Dispatchers.Default)
     private val processSignal = Channel<Unit>(Channel.UNLIMITED)
     private val stateMutex = Mutex()
@@ -55,19 +55,13 @@ class HoldingQueue(private val workManager: WorkManager) {
         scope.launch {
             for (signal in processSignal) {  // signal comes from [advanceQueue]
                 stateMutex.withLock {
-                    Log.wtf(BDPlugin.TAG, "queue management Got Mutex")
                     if (concurrent.get() < maxConcurrent) {
-                        Log.wtf(BDPlugin.TAG, "queue management passed basic concurrency check")
                         // walk through queue to find item that can be enqueued
                         val mustWait = ArrayList<EnqueueItem>()
                         while (queue.isNotEmpty()) {
                             val item = queue.poll()
                             if (item != null) {
-                                val host = try {
-                                    URL(item.task.url).host
-                                } catch (e: MalformedURLException) {
-                                    ""
-                                }
+                                val host = item.task.host()
                                 val group = item.task.group
                                 if ((concurrentByHost[host]?.get()
                                         ?: 0) < maxConcurrentByHost && (concurrentByGroup[group]?.get()
@@ -83,9 +77,7 @@ class HoldingQueue(private val workManager: WorkManager) {
                                         concurrentByGroup[group] = AtomicInteger(0)
                                     }
                                     concurrentByGroup[group]?.incrementAndGet()
-                                    Log.wtf(BDPlugin.TAG, "enqueuing")
                                     item.enqueue(afterDelayMillis = 0)
-                                    Log.wtf(BDPlugin.TAG, "enqueued")
                                     break
                                 } else {
                                     // this item has to wait
@@ -97,7 +89,6 @@ class HoldingQueue(private val workManager: WorkManager) {
                         queue.addAll(mustWait)
                     }
                 }
-                Log.wtf(BDPlugin.TAG, "queue management released Mutex")
             }
         }
     }
@@ -106,12 +97,10 @@ class HoldingQueue(private val workManager: WorkManager) {
      * Add [EnqueueItem] [item] to the queue and advance the queue if possible
      */
     suspend fun add(item: EnqueueItem) {
-        Log.wtf(BDPlugin.TAG, "enqueue add waiting for mutex")
         stateMutex.withLock {
-            Log.wtf(BDPlugin.TAG, "enqueue add got mutex")
             queue.add(item)
+            enqueuedTaskIds.add(item.task.taskId)
         }
-        Log.wtf(BDPlugin.TAG, "enqueue add released mutex")
         advanceQueue()
     }
 
@@ -121,47 +110,48 @@ class HoldingQueue(private val workManager: WorkManager) {
      * Adjusts the state variables and advances the queue
      */
     suspend fun taskFinished(task: Task) {
-        Log.wtf(BDPlugin.TAG, "taskFinished")
-        val host = try {
-            URL(task.url).host
-        } catch (e: MalformedURLException) {
-            ""
-        }
+        hostByTaskId.remove(task.taskId)
+        enqueuedTaskIds.remove(task.taskId)
+        val host = task.host()
         val group = task.group
         stateMutex.withLock {
-            Log.wtf(BDPlugin.TAG, "taskFinished got mutex")
             concurrent.decrementAndGet()
             concurrentByHost[host]?.decrementAndGet()
             concurrentByGroup[group]?.decrementAndGet()
         }
-        Log.wtf(BDPlugin.TAG, "released Mutex")
         advanceQueue()
     }
 
     /**
-     * Removes all [EnqueueItem] where their taskId is in [taskIds], and returns a list of
-     * taskIds that were removed this way
+     * Removes all [EnqueueItem] where their taskId is in [taskIds], sends a
+     * [TaskStatus.canceled] update and returns a list of
+     * taskIds that were cancelled this way
      */
-    suspend fun cancelTasksWithIds(taskIds: Iterable<String>): List<String> {
+    suspend fun cancelTasksWithIds(context: Context, taskIds: Iterable<String>): List<String> {
         stateMutex.withLock {
             val removedTaskIds: List<String>
             val toRemove = queue.filter { taskIds.contains(it.task.taskId) }
-            toRemove.forEach { queue.remove(it) }
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            toRemove.forEach {
+                queue.remove(it)
+                TaskWorker.processStatusUpdate(it.task, TaskStatus.canceled, prefs)
+            }
             removedTaskIds = toRemove.map { it.task.taskId }.toMutableList()
             return removedTaskIds
         }
     }
 
     /**
-     * Cancel (delete) all [EnqueueItem] matching [group] and return the number of items deleted
+     * Cancel (delete) all [EnqueueItem] matching [group], send a
+     * [TaskStatus.canceled] for each and return the number of items cancelled
      */
-    suspend fun cancelAllTasks(group: String): Int {
+    suspend fun cancelAllTasks(context: Context, group: String): Int {
         val taskIds: MutableList<String>
         stateMutex.withLock {
             taskIds =
                 queue.filter { it.task.group == group }.map { it.task.taskId }.toMutableList()
         }
-        cancelTasksWithIds(taskIds)
+        cancelTasksWithIds(context, taskIds)
         return taskIds.size
     }
 
@@ -183,7 +173,6 @@ class HoldingQueue(private val workManager: WorkManager) {
      */
     suspend fun allTasks(group: String): List<Task> {
         stateMutex.withLock {
-            Log.wtf(BDPlugin.TAG, "allTasks Got Mutex")
             return queue.filter { it.task.group == group }.map { it.task }
         }
     }
@@ -195,8 +184,7 @@ class HoldingQueue(private val workManager: WorkManager) {
      * it dries up
      */
     private fun advanceQueue() {
-        val result = processSignal.trySend(Unit)
-        Log.wtf(BDPlugin.TAG, "AdvanceQueue result = ${result.isSuccess}")
+        processSignal.trySend(Unit)
         if (queue.isNotEmpty()) {
             advanceQueueInFuture()
         }
@@ -212,7 +200,6 @@ class HoldingQueue(private val workManager: WorkManager) {
         job?.cancel()
         job = scope.launch {
             delay(10000)
-            Log.wtf(BDPlugin.TAG, "advanceQueueInFuture triggered")
             calculateState()
             advanceQueue()
         }
@@ -280,15 +267,23 @@ class EnqueueItem(
         if (timeSinceCreatedMillis < afterDelayMillis) {
             delay(afterDelayMillis - timeSinceCreatedMillis)
         }
-        Log.wtf(BDPlugin.TAG, "Starting enqueue")
-        BDPlugin.doEnqueue(
-            context = context,
-            task = task,
-            notificationConfigJsonString = notificationConfigJsonString,
-            resumeData = resumeData,
-            plugin = plugin
-        )
-        Log.wtf(BDPlugin.TAG, "Finished enqueue")
+        if (!BDPlugin.doEnqueue(
+                context = context,
+                task = task,
+                notificationConfigJsonString = notificationConfigJsonString,
+                resumeData = resumeData,
+                plugin = plugin
+            )
+        ) {
+            Log.w(BDPlugin.TAG, "Delayed or retried enqueue failed for taskId ${task.taskId}")
+            TaskWorker.processStatusUpdate(
+                task, TaskStatus.failed, PreferenceManager.getDefaultSharedPreferences(context),
+                taskException = TaskException(
+                    type = ExceptionType.general,
+                    description = "Delayed or retried enqueue failed"
+                ), context = context
+            )
+        }
         delay(20)
     }
 

@@ -153,8 +153,6 @@ void main() {
     try {
       File(path).deleteSync();
     } on FileSystemException {}
-    await FileDownloader().configure(
-        globalConfig: (Config.holdingQueue, (2, null, null))); //TODO remove
   });
 
   tearDown(() async {
@@ -693,15 +691,11 @@ void main() {
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
       expect(await FileDownloader().enqueue(task), isTrue);
-      print("1");
       var taskIds = await FileDownloader().allTaskIds();
-      print("2");
       expect(taskIds.length, equals(1));
       expect(taskIds.first, equals(task.taskId));
       expect(await FileDownloader().cancelTasksWithIds(taskIds), isTrue);
-      print("3");
       await statusCallbackCompleter.future;
-      print("4");
       // on iOS, the quick cancellation may not yield a 'running' state
       expect(statusCallbackCounter, lessThanOrEqualTo(3));
       expect(lastStatus, equals(TaskStatus.canceled));
@@ -715,14 +709,11 @@ void main() {
           updates: Updates.statusAndProgress);
       expect(await FileDownloader().enqueue(task), isTrue);
       await someProgressCompleter.future;
-      print("Passed someProgress");
       taskIds = await FileDownloader().allTaskIds();
       expect(taskIds.length, equals(1));
       expect(taskIds.first, equals(task.taskId));
       expect(await FileDownloader().cancelTasksWithIds(taskIds), isTrue);
-      print("5");
       await statusCallbackCompleter.future;
-      print("6");
       expect(statusCallbackCounter, equals(3));
       expect(lastStatus, equals(TaskStatus.canceled));
       print('Finished cancelTasksWithIds');
@@ -2336,7 +2327,7 @@ void main() {
               progressCallback(TaskProgressUpdate(task, progress))));
       await someProgressCompleter.future;
       expect(await FileDownloader().pause(task), equals(true));
-      await Future.delayed(const Duration(milliseconds: 250));
+      await Future.delayed(const Duration(milliseconds: 500));
       expect(lastStatus, equals(TaskStatus.paused));
       expect(await FileDownloader().resume(task), equals(true));
       await statusCallbackCompleter.future;
@@ -3144,6 +3135,24 @@ void main() {
       expect(await FileDownloader().cancelTasksWithIds(taskIds), isTrue);
       await Future.delayed(const Duration(milliseconds: 1500));
       expect(await FileDownloader().allTaskIds(), isEmpty);
+    });
+
+    test('HoldingQueue enqueue', () async {
+      expect(
+          (await FileDownloader().configure(
+              globalConfig: (Config.holdingQueue, (1, null, null))))
+              .toString(),
+          equals('[(holdingQueue, )]'));
+      var enqueueCount = 0;
+      FileDownloader().registerCallbacks(taskStatusCallback: (update) {
+        if (update.status == TaskStatus.enqueued) enqueueCount++;
+      });
+      for (var n = 0; n < 10; n++) {
+        var downloadTask = DownloadTask(url: urlWithContentLength);
+        FileDownloader().enqueue(downloadTask);
+      }
+      await Future.delayed(const Duration(seconds: 1));
+      expect(enqueueCount, equals(10));
     });
   });
 

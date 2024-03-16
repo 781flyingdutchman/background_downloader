@@ -344,7 +344,7 @@ sealed class Task extends Request implements Comparable {
     return p.join(baseDirPath, directory, withFilename ?? filename);
   }
 
-  /// Returns the directory represented by [baseDirectory]
+  /// Returns the path to the directory represented by [baseDirectory]
   static Future<String> baseDirectoryPath(BaseDirectory baseDirectory) async {
     Directory? externalStorageDirectory;
     Directory? externalCacheDirectory;
@@ -423,7 +423,7 @@ sealed class Task extends Request implements Comparable {
         RegExp(r'^(/|\\|([a-zA-Z]:[\\/]))').firstMatch(absoluteDirectoryPath);
     return (
       BaseDirectory.root,
-      absoluteDirectoryPath.substring(match != null ? match.end : 0),
+      absoluteDirectoryPath.substring(match?.end ?? 0),
       filename
     );
   }

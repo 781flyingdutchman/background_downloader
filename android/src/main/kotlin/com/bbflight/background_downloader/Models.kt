@@ -17,6 +17,8 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.net.MalformedURLException
+import java.net.URL
 import java.net.URLDecoder
 import kotlin.math.absoluteValue
 import kotlin.random.Random
@@ -326,6 +328,15 @@ class Task(
             }
         }
         return result
+    }
+
+    /**
+     * Return the hos of the url in this task
+     */
+    fun host() = try {
+        URL(url).host
+    } catch (e: MalformedURLException) {
+        ""
     }
 
     fun hasFilename() = filename != "?"

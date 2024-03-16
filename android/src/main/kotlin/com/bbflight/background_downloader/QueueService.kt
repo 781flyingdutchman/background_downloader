@@ -81,8 +81,9 @@ object QueueService {
                             success.complete(false)
                         }
                     }
-                    if (bgPost.onFail != null && !success.await()) {
-                        bgPost.onFail?.invoke()
+                    val onFail = bgPost.onFail
+                    if (onFail != null && (BDPlugin.forceFailPostOnBackgroundChannel || !success.await())) {
+                        onFail.invoke()
                     }
                 }
             }

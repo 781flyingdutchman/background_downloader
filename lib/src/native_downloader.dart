@@ -398,7 +398,6 @@ abstract base class NativeDownloader extends BaseDownloader {
 
   @override
   Future<(String, String)> configureItem((String, dynamic) configItem) async {
-    print(configItem.runtimeType);
     switch (configItem) {
       case (Config.requestTimeout, Duration? duration):
         await NativeDownloader.methodChannel
