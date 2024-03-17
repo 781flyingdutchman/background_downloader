@@ -167,8 +167,8 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                 postResult(result: result, value: false)
                 return
             }
-            os_log("Moving task with id %@ to HoldingQueue", log: log, type: .info, task.taskId)
-            BDPlugin.holdingQueue?.add(item: EnqueueItem(task: task, notificationConfigJsonString: notificationConfigJsonString, resumeDataAsBase64String: resumeDataAsBase64String))
+            os_log("Enqueueing task with id %@ to the HoldingQueue", log: log, type: .info, task.taskId)
+            await BDPlugin.holdingQueue?.add(item: EnqueueItem(task: task, notificationConfigJsonString: notificationConfigJsonString, resumeDataAsBase64String: resumeDataAsBase64String))
             processStatusUpdate(task: task, status: .enqueued)
             postResult(result: result, value: true)
         }
@@ -307,9 +307,11 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     /// Returns the number of tasks canceled
     private func methodReset(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let group = call.arguments as! String
+        await BDPlugin.holdingQueue?.stateLock.lock()
         var counter = BDPlugin.holdingQueue?.cancelAllTasks(group: group) ?? 0
         let tasksToCancel = await UrlSessionDelegate.getAllUrlSessionTasks(group: group)
         tasksToCancel.forEach({$0.cancel()})
+        await BDPlugin.holdingQueue?.stateLock.unlock()
         counter += tasksToCancel.count
         os_log("reset removed %d unfinished tasks", log: log, type: .debug, counter)
         result(counter)
@@ -319,18 +321,18 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     private func methodAllTasks(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let group = call.arguments as! String
         var tasksAsListOfJsonStrings = [String]()
+        await BDPlugin.holdingQueue?.stateLock.lock()
         if let heldTasksJsonStrings = BDPlugin.holdingQueue?.allTasks(group: group).map({jsonStringFor(task: $0)}).filter({$0 != nil}).map({$0!}) {
             tasksAsListOfJsonStrings.append(contentsOf:  heldTasksJsonStrings)
         }
-
         UrlSessionDelegate.createUrlSession()
-        guard let urlSessionTasks = await UrlSessionDelegate.urlSession?.allTasks else {
-            result(nil)
-            return
+        if let urlSessionTasks = await UrlSessionDelegate.urlSession?.allTasks {
+            tasksAsListOfJsonStrings.append(contentsOf: urlSessionTasks.filter({ $0.state == .running || $0.state == .suspended }).map({ getTaskFrom(urlSessionTask: $0)}).filter({ $0?.group == group }).map({ jsonStringFor(task: $0!) }).filter({ $0 != nil }).map({$0!}))
         }
-        tasksAsListOfJsonStrings.append(contentsOf: urlSessionTasks.filter({ $0.state == .running || $0.state == .suspended }).map({ getTaskFrom(urlSessionTask: $0)}).filter({ $0?.group == group }).map({ jsonStringFor(task: $0!) }).filter({ $0 != nil }).map({$0!}))
+        await BDPlugin.holdingQueue?.stateLock.unlock()
         os_log("Returning %d unfinished tasks", log: log, type: .debug, tasksAsListOfJsonStrings.count)
         result(tasksAsListOfJsonStrings)
+        
     }
     
     /// Cancels ongoing tasks whose taskId is in the list provided with this call
@@ -339,6 +341,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     private func methodCancelTasksWithIds(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let taskIds = call.arguments as! [String]
         os_log("Canceling taskIds %@", log: log, type: .info, taskIds)
+        await BDPlugin.holdingQueue?.stateLock.lock()
         let taskIdsRemovedFromHoldingQueue = BDPlugin.holdingQueue?.cancelTasksWithIds(taskIds) ?? []
         let taskIdsRemaining = taskIds.filter({ !taskIdsRemovedFromHoldingQueue.contains($0) })
         let tasksToCancel = await UrlSessionDelegate.getAllUrlSessionTasks().filter({
@@ -349,20 +352,21 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         // cancel all ParallelDownloadTasks (they would not have shown up in tasksToCancel)
         taskIdsRemaining.forEach { ParallelDownloader.downloads[$0]?.cancelTask() }
         result(true)
+        await BDPlugin.holdingQueue?.stateLock.unlock()
     }
+    
+    
     
     /// Returns Task for this taskId, or nil
     private func methodTaskForId(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let taskId = call.arguments as! String
-        if let heldTask = BDPlugin.holdingQueue?.taskForId(taskId) {
-            result(jsonStringFor(task: heldTask))
-            return
+        await BDPlugin.holdingQueue?.stateLock.lock()
+        var foundTask = BDPlugin.holdingQueue?.taskForId(taskId)
+        if (foundTask == nil) {
+            foundTask = await UrlSessionDelegate.getTaskWithId(taskId: taskId)
         }
-        guard let task = await UrlSessionDelegate.getTaskWithId(taskId: taskId) else {
-            result(nil)
-            return
-        }
-        result(jsonStringFor(task: task))
+        result(foundTask == nil ? nil : jsonStringFor(task: foundTask!))
+        await BDPlugin.holdingQueue?.stateLock.unlock()
     }
     
     /// Pauses Task for this taskId. Returns true of pause likely successful, false otherwise
@@ -713,7 +717,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                         _Concurrency.Task {
                             if await(BDPlugin.instance.doEnqueue(taskJsonString: taskAsJsonString, notificationConfigJsonString: userInfo["notificationConfig"] as? String, resumeDataAsBase64String: resumeDataAsBase64String)) == false {
                                 os_log("Could not enqueue taskId %@ to resume", log: log, type: .info, task.taskId)
-                                BDPlugin.holdingQueue?.taskFinished(task)
+                                await BDPlugin.holdingQueue?.taskFinished(task)
                             }
                         }
                     }

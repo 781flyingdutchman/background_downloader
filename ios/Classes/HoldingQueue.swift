@@ -34,19 +34,19 @@ class HoldingQueue {
     
     private var queue = [EnqueueItem]()  // Using an array as a substitute for a priority queue
     
-    private let stateLock = NSLock()
+    let stateLock = AsyncLock()
     private var job: DispatchWorkItem? = nil // for advanceQueue in future
     
     /**
      * Add [EnqueueItem] [item] to the queue and advance the queue if possible
      */
-    func add(item: EnqueueItem) {
-        stateLock.lock()
-        defer { stateLock.unlock() }
+    func add(item: EnqueueItem) async {
+        await stateLock.lock()
         queue.append(item)
         queue.sort()
         enqueuedTaskIds.append(item.task.taskId)
         advanceQueue()
+        await stateLock.unlock()
     }
     
     /**
@@ -54,9 +54,8 @@ class HoldingQueue {
      *
      * Adjusts the state variables and advances the queue
      */
-    func taskFinished(_ task: Task) {
-        stateLock.lock()
-        defer { stateLock.unlock() }
+    func taskFinished(_ task: Task) async {
+        await stateLock.lock()
         let host = getHost(task)
         concurrent -= 1
         concurrentByHost[host]? -= 1
@@ -65,16 +64,18 @@ class HoldingQueue {
             enqueuedTaskIds.remove(at: index)
         }
         advanceQueue()
+        await stateLock.unlock()
     }
     
     /**
      * Removes all [EnqueueItem] where their taskId is in [taskIds], sends a
      * [TaskStatus.canceled] update and returns a list of
-     * taskIds that were cancelled this way
+     * taskIds that were cancelled this way.
+     *
+     * Because this is used in combination with the UrlSessions tasks, use of this method
+     * requires the caller to acquire the [stateLock]
      */
     func cancelTasksWithIds(_ taskIds: [String]) -> [String] {
-        stateLock.lock()
-        defer { stateLock.unlock() }
         let toRemove = queue.filter( { taskIds.contains($0.task.taskId) } )
         toRemove.forEach { item in
             processStatusUpdate(task: item.task, status: .canceled)
@@ -87,20 +88,22 @@ class HoldingQueue {
     /**
      * Cancel (delete) all [EnqueueItem] matching [group], send a
      * [TaskStatus.canceled] for each and return the number of items cancelled
+     *
+     * Because this is used in combination with the UrlSessions tasks, use of this method
+     * requires the caller to acquire the [stateLock]
      */
     func cancelAllTasks(group: String) -> Int {
-        stateLock.lock()
         let taskIds = queue.filter({ $0.task.group == group }).map { $0.task.taskId }
-        stateLock.unlock()
         return cancelTasksWithIds(taskIds).count
     }
     
     /**
      * Return task matching [taskId], or null
+     *
+     * Because this is used in combination with the UrlSessions tasks, use of this method
+     * requires the caller to acquire the [stateLock]
      */
     func taskForId(_ taskId: String) -> Task? {
-        stateLock.lock()
-        defer { stateLock.unlock() }
         let tasks = queue.filter( { $0.task.taskId == taskId } ).map { $0.task }
         if !tasks.isEmpty {
             return tasks.first
@@ -110,10 +113,11 @@ class HoldingQueue {
     
     /**
      * Return list of [Task] for this [group]
+     *
+     * Because this is used in combination with the UrlSessions tasks, use of this method
+     * requires the caller to acquire the [stateLock]
      */
     func allTasks(group: String) -> [Task] {
-        stateLock.lock()
-        defer { stateLock.unlock() }
         return queue.filter( { $0.task.group == group } ).map { $0.task }
     }
     
@@ -147,29 +151,27 @@ class HoldingQueue {
     
     /// Processes one item in the queue, if possible
     private func processQueue() async {
-        stateLock.withLock {
-            if concurrent < maxConcurrent {
-                var mustWait = [EnqueueItem]()
-                while !queue.isEmpty {
-                    let item = queue.removeFirst()
-                    let host = getHost(item.task)
-                    if concurrentByHost[host] ?? 0 < maxConcurrentByHost &&
-                        concurrentByGroup[item.task.group] ?? 0 < maxConcurrentByGroup {
-                        concurrent += 1
-                        concurrentByHost[host, default: 0] += 1
-                        concurrentByGroup[item.task.group, default: 0] += 1
-                        _Concurrency.Task {
-                            await item.enqueue()
-                        }
-                        break
-                    } else {
-                        mustWait.append(item)
-                    }
+        await stateLock.lock()
+        if concurrent < maxConcurrent {
+            var mustWait = [EnqueueItem]()
+            while !queue.isEmpty {
+                let item = queue.removeFirst()
+                let host = getHost(item.task)
+                if concurrentByHost[host] ?? 0 < maxConcurrentByHost &&
+                    concurrentByGroup[item.task.group] ?? 0 < maxConcurrentByGroup {
+                    concurrent += 1
+                    concurrentByHost[host, default: 0] += 1
+                    concurrentByGroup[item.task.group, default: 0] += 1
+                    await item.enqueue()
+                    break
+                } else {
+                    mustWait.append(item)
                 }
-                queue.append(contentsOf: mustWait)
-                queue.sort()
             }
+            queue.append(contentsOf: mustWait)
+            queue.sort()
         }
+        await stateLock.unlock()
     }
     
     /**
@@ -179,23 +181,22 @@ class HoldingQueue {
      * fires
      */
     private func calculateState() async {
-        return stateLock.withLock {
-            _Concurrency.Task {
-                UrlSessionDelegate.createUrlSession()
-                guard let urlSessionTasks = await UrlSessionDelegate.urlSession?.allTasks else {
-                    return
-                }
-                let tasks: [Task] = urlSessionTasks.filter({ $0.state != .completed }).map({ getTaskFrom(urlSessionTask: $0)}).filter({ $0 != nil}).map({ $0!})
-                concurrent = tasks.count
-                concurrentByHost.removeAll()
-                concurrentByGroup.removeAll()
-                for task in tasks {
-                    let host = getHost(task)
-                    concurrentByHost[host, default: 0] += 1
-                    concurrentByGroup[task.group, default: 0] += 1
-                }
-            }
+        await stateLock.lock()
+        UrlSessionDelegate.createUrlSession()
+        guard let urlSessionTasks = await UrlSessionDelegate.urlSession?.allTasks else {
+            await stateLock.unlock()
+            return
         }
+        let tasks: [Task] = urlSessionTasks.filter({ $0.state != .completed }).map({ getTaskFrom(urlSessionTask: $0)}).filter({ $0 != nil}).map({ $0!})
+        concurrent = tasks.count
+        concurrentByHost.removeAll()
+        concurrentByGroup.removeAll()
+        for task in tasks {
+            let host = getHost(task)
+            concurrentByHost[host, default: 0] += 1
+            concurrentByGroup[task.group, default: 0] += 1
+        }
+        await stateLock.unlock()
     }
 }
 
@@ -227,7 +228,23 @@ struct EnqueueItem : Comparable {
         if !success {
             os_log("Delayed or retried enqueue failed for taskId %@", log: log, type: .info, task.taskId)
             processStatusUpdate(task: task, status: .failed, taskException: TaskException(type: .general, description: "Delayed or retried enqueue failed"))
-            BDPlugin.holdingQueue?.taskFinished(task)
+            await BDPlugin.holdingQueue?.taskFinished(task)
         }
+    }
+}
+
+/// Traditional lock for asyn/await environment
+actor AsyncLock {
+    private var isLocked = false
+    
+    func lock() async {
+        while isLocked {
+            await _Concurrency.Task.yield()
+        }
+        isLocked = true
+    }
+    
+    func unlock() async {
+        isLocked = false
     }
 }

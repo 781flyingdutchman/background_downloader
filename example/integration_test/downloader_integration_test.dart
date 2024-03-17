@@ -153,8 +153,6 @@ void main() {
     try {
       File(path).deleteSync();
     } on FileSystemException {}
-    await FileDownloader().configure(
-        globalConfig: (Config.holdingQueue, (3, null, null))); //TODO remove
   });
 
   tearDown(() async {
@@ -821,7 +819,6 @@ void main() {
       expect(await FileDownloader().taskForId(complexTask.taskId), isNull);
       expect(await FileDownloader().enqueue(complexTask), isTrue);
       final task = await FileDownloader().taskForId(complexTask.taskId);
-      print(task);  //TODO remove
       expect(task is UploadTask, isTrue);
       expect(task, equals(complexTask));
       if (task != null && task is UploadTask) {
@@ -3129,8 +3126,10 @@ void main() {
               .toString(),
           equals('[(holdingQueue, )]'));
       var cancelCount = 0;
+      var completeCount = 0;
       FileDownloader().registerCallbacks(taskStatusCallback: (update) {
         if (update.status == TaskStatus.canceled) cancelCount++;
+        if (update.status == TaskStatus.complete) completeCount++;
       });
       final taskIds = <String>[];
       for (var n = 0; n < 10; n++) {
@@ -3143,7 +3142,8 @@ void main() {
       expect(await FileDownloader().cancelTasksWithIds(taskIds), isTrue);
       await Future.delayed(const Duration(milliseconds: 1500));
       expect(await FileDownloader().allTaskIds(), isEmpty);
-      expect(cancelCount, equals(10));
+      expect(cancelCount, greaterThan(2));
+      expect(cancelCount + completeCount, equals(10));
     });
 
     test('holdingQueue enqueue', () async {

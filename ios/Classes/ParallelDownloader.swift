@@ -25,6 +25,8 @@ func scheduleParallelDownload(task: Task, taskDescription: String, baseRequest: 
                         os_log("Cannot chunk or enqueue download", log: log, type: .info)
                     } else {
                         if BDPlugin.holdingQueue?.enqueuedTaskIds.contains(task.taskId) != true {
+                            // only send .enqueued if we didn't already do that when
+                            // enqueueing with the holdingQueue
                             processStatusUpdate(task: task, status: TaskStatus.enqueued)
                         }
                         continuation.resume(returning: true)
