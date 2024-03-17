@@ -44,11 +44,13 @@ class HoldingQueue(private val workManager: WorkManager) {
     private val concurrentByGroup = ConcurrentHashMap<String, AtomicInteger>()
 
     private val queue = PriorityBlockingQueue<EnqueueItem>()
+    private val taskFinishedQueue = Channel<Task>(capacity = Channel.UNLIMITED)
+
 
     private var job: Job? = null // timer job
     private val scope = CoroutineScope(Dispatchers.Default)
     private val processSignal = Channel<Unit>(Channel.UNLIMITED)
-    private val stateMutex = Mutex()
+    val stateMutex = Mutex()
 
     init {
         // coroutine to process the queue, one item per signal
@@ -91,6 +93,13 @@ class HoldingQueue(private val workManager: WorkManager) {
                 }
             }
         }
+
+        // coroutine to process 'taskFinished' messages
+        scope.launch {
+            for (task in taskFinishedQueue) {
+                executeTaskFinished(task)
+            }
+        }
     }
 
     /**
@@ -107,75 +116,70 @@ class HoldingQueue(private val workManager: WorkManager) {
     /**
      * Signals to the holdingQueue that a [task] has finished
      *
-     * Adjusts the state variables and advances the queue
+     * The processing is done async, so this method only adds
+     * the task to the processing queue
      */
     suspend fun taskFinished(task: Task) {
-        hostByTaskId.remove(task.taskId)
-        enqueuedTaskIds.remove(task.taskId)
-        val host = task.host()
-        val group = task.group
-        stateMutex.withLock {
-            concurrent.decrementAndGet()
-            concurrentByHost[host]?.decrementAndGet()
-            concurrentByGroup[group]?.decrementAndGet()
-        }
-        advanceQueue()
+        taskFinishedQueue.send(task)
     }
 
     /**
      * Removes all [EnqueueItem] where their taskId is in [taskIds], sends a
      * [TaskStatus.canceled] update and returns a list of
      * taskIds that were cancelled this way
+     *
+     * Because this is used in combination with the WorkManager tasks, use of this method
+     * requires the caller to acquire the [stateMutex]
      */
     suspend fun cancelTasksWithIds(context: Context, taskIds: Iterable<String>): List<String> {
-        stateMutex.withLock {
-            val removedTaskIds: List<String>
-            val toRemove = queue.filter { taskIds.contains(it.task.taskId) }
-            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-            toRemove.forEach {
-                queue.remove(it)
-                TaskWorker.processStatusUpdate(it.task, TaskStatus.canceled, prefs)
-                Log.i(BDPlugin.TAG, "Canceled task with id ${it.task.taskId}")
-            }
-            removedTaskIds = toRemove.map { it.task.taskId }.toMutableList()
-            return removedTaskIds
+        val removedTaskIds: List<String>
+        val toRemove = queue.filter { taskIds.contains(it.task.taskId) }
+        val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+        toRemove.forEach {
+            queue.remove(it)
+            TaskWorker.processStatusUpdate(it.task, TaskStatus.canceled, prefs)
+            Log.i(BDPlugin.TAG, "Canceled task with id ${it.task.taskId}")
         }
+        removedTaskIds = toRemove.map { it.task.taskId }.toMutableList()
+        return removedTaskIds
     }
 
     /**
      * Cancel (delete) all [EnqueueItem] matching [group], send a
      * [TaskStatus.canceled] for each and return the number of items cancelled
+     *
+     * Because this is used in combination with the WorkManager tasks, use of this method
+     * requires the caller to acquire the [stateMutex]
      */
     suspend fun cancelAllTasks(context: Context, group: String): Int {
-        val taskIds: MutableList<String>
-        stateMutex.withLock {
-            taskIds =
-                queue.filter { it.task.group == group }.map { it.task.taskId }.toMutableList()
-        }
+        val taskIds =
+            queue.filter { it.task.group == group }.map { it.task.taskId }.toMutableList()
         cancelTasksWithIds(context, taskIds)
         return taskIds.size
     }
 
     /**
      * Return task matching [taskId], or null
+     *
+     * Because this is used in combination with the WorkManager tasks, use of this method
+     * requires the caller to acquire the [stateMutex]
      */
-    suspend fun taskForId(taskId: String): Task? {
-        stateMutex.withLock {
-            val tasks = queue.filter { it.task.taskId == taskId }.map { it.task }
-            if (tasks.isNotEmpty()) {
-                return tasks.first()
-            }
-            return null
+    fun taskForId(taskId: String): Task? {
+        val tasks = queue.filter { it.task.taskId == taskId }.map { it.task }
+        if (tasks.isNotEmpty()) {
+            return tasks.first()
         }
+        return null
     }
 
     /**
      * Return list of [Task] for this [group]
+     *
+     * Because this is used in combination with the WorkManager tasks, use of this method
+     * requires the caller to acquire the [stateMutex]
      */
-    suspend fun allTasks(group: String): List<Task> {
-        stateMutex.withLock {
-            return queue.filter { it.task.group == group }.map { it.task }
-        }
+    fun allTasks(group: String): List<Task> {
+        return queue.filter { it.task.group == group }.map { it.task }
     }
 
     /**
@@ -204,6 +208,24 @@ class HoldingQueue(private val workManager: WorkManager) {
             calculateState()
             advanceQueue()
         }
+    }
+
+    /**
+     * Signals to the holdingQueue that a [task] has finished
+     *
+     * Adjusts the state variables and advances the queue
+     */
+    private suspend fun executeTaskFinished(task: Task) {
+        hostByTaskId.remove(task.taskId)
+        enqueuedTaskIds.remove(task.taskId)
+        val host = task.host()
+        val group = task.group
+        stateMutex.withLock {
+            concurrent.decrementAndGet()
+            concurrentByHost[host]?.decrementAndGet()
+            concurrentByGroup[group]?.decrementAndGet()
+        }
+        advanceQueue()
     }
 
     /**

@@ -194,6 +194,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         suspend fun cancelTasksWithIds(context: Context, taskIds: Iterable<String>): Boolean {
             val workManager = WorkManager.getInstance(context)
             Log.v(TAG, "Canceling taskIds $taskIds")
+            holdingQueue?.stateMutex?.lock()
             val taskIdsRemovedFromHoldingQueue =
                 holdingQueue?.cancelTasksWithIds(context, taskIds) ?: listOf()
             val taskIdsRemaining = taskIds.filter { !taskIdsRemovedFromHoldingQueue.contains(it) }
@@ -201,6 +202,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             for (taskId in taskIdsRemaining) {
                 success = success && cancelActiveTaskWithId(context, taskId, workManager)
             }
+            holdingQueue?.stateMutex?.unlock()
             return success
         }
 
@@ -465,7 +467,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 )
             )
         } else {
-            Log.i(TAG, "Moving task with id ${task.taskId} to HoldingQueue")
+            Log.i(TAG, "Enqueueing task with id ${task.taskId} to the HoldingQueue")
             holdingQueue?.add(
                 EnqueueItem(
                     context = applicationContext,
@@ -493,6 +495,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private suspend fun methodReset(call: MethodCall, result: Result) {
         val group = call.arguments as String
+        holdingQueue?.stateMutex?.lock()
         var counter = holdingQueue?.cancelAllTasks(applicationContext, group) ?: 0
         val tasksMap: MutableMap<String, Task>
         val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
@@ -522,6 +525,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             workManager.cancelWorkById(workInfo.id)
             counter++
         }
+        holdingQueue?.stateMutex?.unlock()
         Log.v(TAG, "methodReset removed $counter unfinished tasks in group $group")
         result.success(counter)
     }
@@ -532,6 +536,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private suspend fun methodAllTasks(call: MethodCall, result: Result) {
         val group = call.arguments as String
         val tasksAsListOfJsonStrings = mutableListOf<String>()
+        holdingQueue?.stateMutex?.lock()
         holdingQueue?.allTasks(group)
             ?.forEach { tasksAsListOfJsonStrings.add(Json.encodeToString(it)) }
         val workManager = WorkManager.getInstance(applicationContext)
@@ -540,8 +545,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         }
             .filter { !it.state.isFinished && it.tags.contains("group=$group") }
         val tasksMap: MutableMap<String, Task>
+        val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
         prefsLock.read {
-            val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
             tasksMap = getTaskMap(prefs)
         }
         for (workInfo in workInfos) {
@@ -554,6 +559,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 }
             }
         }
+        holdingQueue?.stateMutex?.unlock()
         Log.v(TAG, "Returning ${tasksAsListOfJsonStrings.size} unfinished tasks in group $group")
         result.success(tasksAsListOfJsonStrings)
     }
@@ -598,22 +604,21 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private suspend fun methodTaskForId(call: MethodCall, result: Result) {
         val taskId = call.arguments as String
         Log.v(TAG, "Returning task for taskId $taskId")
-        val heldTask = holdingQueue?.taskForId(taskId)
-        if (heldTask != null) {
-            result.success(Json.encodeToString(heldTask))
-        } else {
-            val task: Task?
+        holdingQueue?.stateMutex?.lock()
+        var foundTask = holdingQueue?.taskForId(taskId)
+        if (foundTask == null) {
             prefsLock.read {
                 val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
                 val tasksMap = getTaskMap(prefs)
-                task = tasksMap[taskId]
-            }
-            if (task != null) {
-                result.success(Json.encodeToString(task))
-            } else {
-                result.success(null)
+                foundTask = tasksMap[taskId]
             }
         }
+        if (foundTask != null) {
+            result.success(Json.encodeToString(foundTask))
+        } else {
+            result.success(null)
+        }
+        holdingQueue?.stateMutex?.unlock()
     }
 
     /**

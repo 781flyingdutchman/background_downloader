@@ -13,6 +13,13 @@ The following configurations are supported:
 * Checking available space
   - `(Config.checkAvailableSpace, int minMegabytes)` ensures a file download fails if less than `minMegabytes` space will be available after this download completes
   - `(Config.checkAvailableSpace, false)` or `(Config.checkAvailableSpace, Config.never)`turns off checking available space
+* Using a holding queue to limit the number of tasks running concurrently
+  - `(Config.holdingQueue, (int? maxConcurrent, int? maxConcurrentByHost, int? maxConcurrentByGroup))` activates the holding queue and sets the constraints. Pass `null` for no constraint
+  - Using the holding queue adds a queue on the native side where tasks may have to wait before being enqueued with the Android WorkManager or iOS URLSessions. Because the holding queue lives on the native side (not Dart) tasks will continue to get pulled from the holding queue even when the app is suspended by the OS. This is different from the `TaskQueue`, which lives on the Dart side and suspends when the app is suspended by the OS
+  - When using a holding queue:
+    - Tasks will be taken out of the queue based on their priority and time of creation, provided they pass the constraints imposed by the `maxConcurrent` values
+    - Status messages will differ slightly. You will get the `TaskStatus.enqueued` update immediately upon enqueuing. Once the task gets enqueued with the Android WorkManager or iOS URLSessions you will not get another "enqueue" update, but if that enqueue fails the task will fail. Once the task starts running you will get `TaskStatus.running` as usual.
+    - The holding queue and the native queues managed by the Android WorkManager or iOS URLSessions are treated as a single queue for queries like `taskForId` and `cancelTasksWithIds`. There is no way to determine whether a task is in the holding queue or already enqueued with the Android WorkManager or iOS URLSessions
 * [Android] When to use the cache directory
   - `(Config.useCacheDir, String whenToUse)` with values 'never', 'always' or 'whenAble'. Default is `Config.whenAble`, which will use the cacheDir if the size of the file to download is less than half the cacheQuota given to your app by Android. If you find that your app fails to download large files or cannot resume from pause, set this to `Config.never` and make sure to clear up the directory aligned with `BaseDirectory.applicationSupport` for stray temp files. Temp file names start with `com.bbflight.background_downloader`. Note that the use of cache or applicationSupport directories responds to the configuration `Config.useExternalStorage`: if set, the external cache and applicationSupport directories will be used
 * HTTP Proxy

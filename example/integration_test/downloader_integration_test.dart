@@ -3149,7 +3149,7 @@ void main() {
     test('holdingQueue enqueue', () async {
       expect(
           (await FileDownloader().configure(
-              globalConfig: (Config.holdingQueue, (1, null, null))))
+                  globalConfig: (Config.holdingQueue, (1, null, null))))
               .toString(),
           equals('[(holdingQueue, )]'));
       var enqueueCount = 0;

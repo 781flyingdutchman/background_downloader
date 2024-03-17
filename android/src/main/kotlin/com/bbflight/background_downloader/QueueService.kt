@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
  * Queue service that executes things on a queue, to ensure ordered execution
  * and potentially manage delay
  */
+@Suppress("ConstPropertyName")
 object QueueService {
     private val scope = CoroutineScope(Dispatchers.Default)
 
