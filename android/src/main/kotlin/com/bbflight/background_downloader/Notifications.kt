@@ -158,6 +158,7 @@ enum class NotificationType { running, complete, error, paused }
  * was configured for the task, then it will NOT be shown (as it would when cancelling an active
  * task)
  */
+@Suppress("ConstPropertyName")
 @Keep
 class NotificationReceiver : BroadcastReceiver() {
 
@@ -215,12 +216,18 @@ class NotificationReceiver : BroadcastReceiver() {
                                 keyNotificationConfig
                             )
                             if (notificationConfigJsonString != null) {
-                                BDPlugin.doEnqueue(
-                                    context,
-                                    resumeData.task,
-                                    notificationConfigJsonString,
-                                    resumeData
-                                )
+                                if (!BDPlugin.doEnqueue(
+                                        context,
+                                        resumeData.task,
+                                        notificationConfigJsonString,
+                                        resumeData
+                                    )
+                                ) {
+                                    Log.i(TAG, "Could not enqueue taskId $taskId to resume")
+                                    BDPlugin.holdingQueue?.taskFinished(resumeData.task)
+                                } else {
+                                    Log.i(TAG, "Resumed taskId $taskId from notification")
+                                }
                             } else {
                                 BDPlugin.cancelActiveTaskWithId(
                                     context, taskId, WorkManager.getInstance(context)
@@ -258,6 +265,7 @@ class NotificationReceiver : BroadcastReceiver() {
 /**
  * Singleton service to manage notifications
  */
+@Suppress("ConstPropertyName")
 object NotificationService {
     var groupNotifications = ConcurrentHashMap<String, GroupNotification>()
 
@@ -721,7 +729,9 @@ object NotificationService {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                         taskWorker.setForeground(
                             ForegroundInfo(
-                                taskWorker.notificationId, androidNotification, FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                                taskWorker.notificationId,
+                                androidNotification,
+                                FOREGROUND_SERVICE_TYPE_DATA_SYNC
                             )
                         )
                     } else {

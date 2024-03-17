@@ -88,17 +88,19 @@ class WiFiQueue {
     /// Re-enqueue this task and associated data. Nil signals end of batch
     func reEnqueue(_ enqueueItem: EnqueueItem?) {
         reEnqueueQueue.async {
-            guard let reEnqueueData = enqueueItem else {
-                // nil value indicates end of batch of re-enqueues
-                self.reEnqueuesDone()
-                return
+            _Concurrency.Task {
+                guard let reEnqueueData = enqueueItem else {
+                    // nil value indicates end of batch of re-enqueues
+                    self.reEnqueuesDone()
+                    return
+                }
+                let timeSinceCreated = Date().timeIntervalSince(reEnqueueData.created)
+                if timeSinceCreated < 0.3 {
+                    try await _Concurrency.Task.sleep(nanoseconds: UInt64((0.3 - timeSinceCreated) * 1_000_000_000))
+                }
+                await enqueueItem?.enqueue()
+                try await _Concurrency.Task.sleep(nanoseconds: 20_000_000)
             }
-            let timeSinceCreated = Date().timeIntervalSince(reEnqueueData.created)
-            if timeSinceCreated < 0.3 {
-                Thread.sleep(forTimeInterval: 0.3 - timeSinceCreated)
-            }
-            enqueueItem?.enqueue()
-            Thread.sleep(forTimeInterval: 0.02)
         }
     }
 }

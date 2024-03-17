@@ -279,16 +279,10 @@ func extractFilesData(task: Task) -> [((String, String, String))] {
 }
 
 /// Return the host name for the task's url or ""
-func getHost(_ task: Task) -> String {
-    let host: String
-    if #available(iOS 16.0, *) {
-        host = URL(string: task.url)?.host(percentEncoded: true) ?? ""
-    } else {
-        host = URL(string: task.url)?.host ?? ""
-    }
-    return host
+func getHost(_ task: Task) -> String  {
+    return URL(string: task.url)?.host ?? ""
 }
-
+    
 /// Calculate progress, network speed and time remaining, and send this at an appropriate
 /// interval to the Dart side
 func updateProgress(task: Task, totalBytesExpected: Int64, totalBytesDone: Int64) {

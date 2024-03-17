@@ -10,32 +10,34 @@ import os.log
 
 let chunkGroup = "chunk"
 
-func scheduleParallelDownload(task: Task, taskDescription: String, baseRequest: URLRequest, resumeData: String) -> Bool
+func scheduleParallelDownload(task: Task, taskDescription: String, baseRequest: URLRequest, resumeData: String) async -> Bool
 {
     let isResume = !resumeData.isEmpty
     let parallelDownload = ParallelDownloader(task: task)
     if !isResume {
-        var success = false
-        let dataTask = URLSession.shared.dataTask(with: baseRequest) { (data, response, error) in
-            if let httpResponse = response as? HTTPURLResponse, error == nil {
-                if httpResponse.statusCode == 404 {
-                    os_log("URL not found for taskId %@", log: log, type: .info, task.taskId)
-                }
-                else if !parallelDownload.start(responseStatusCode: httpResponse.statusCode, contentLengthFromHeader: Int64(httpResponse.value(forHTTPHeaderField: "Content-Length") ?? "-1") ?? -1, responseHeaders: httpResponse.allHeaderFields ) {
-                    os_log("Cannot chunk or enqueue download", log: log, type: .info)
-                } else {
-                    if BDPlugin.holdingQueue?.enqueuedTaskIds.contains(task.taskId) != true {
-                        processStatusUpdate(task: task, status: TaskStatus.enqueued)
+        return await withCheckedContinuation { continuation in
+            let dataTask = URLSession.shared.dataTask(with: baseRequest) { (data, response, error) in
+                if let httpResponse = response as? HTTPURLResponse, error == nil {
+                    if httpResponse.statusCode == 404 {
+                        os_log("URL not found for taskId %@", log: log, type: .info, task.taskId)
                     }
-                    success = true
+                    else if !parallelDownload.start(responseStatusCode: httpResponse.statusCode, contentLengthFromHeader: Int64(httpResponse.value(forHTTPHeaderField: "Content-Length") ?? "-1") ?? -1, responseHeaders: httpResponse.allHeaderFields ) {
+                        os_log("Cannot chunk or enqueue download", log: log, type: .info)
+                    } else {
+                        if BDPlugin.holdingQueue?.enqueuedTaskIds.contains(task.taskId) != true {
+                            processStatusUpdate(task: task, status: TaskStatus.enqueued)
+                        }
+                        continuation.resume(returning: true)
+                        return
+                    }
+                } else {
+                    os_log("Error making HEAD request for taskId %@", log: log, type: .info, task.taskId)
                 }
-            } else {
-                os_log("Error making HEAD request for taskId %@", log: log, type: .info, task.taskId)
+                continuation.resume(returning: false)
             }
+            dataTask.priority = 1 - Float(task.priority) / 10
+            dataTask.resume()
         }
-        dataTask.priority = 1 - Float(task.priority) / 10
-        dataTask.resume()
-        return success
     } else {
         // resume
         return parallelDownload.resume(resumeData: resumeData)

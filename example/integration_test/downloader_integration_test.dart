@@ -153,6 +153,8 @@ void main() {
     try {
       File(path).deleteSync();
     } on FileSystemException {}
+    await FileDownloader().configure(
+        globalConfig: (Config.holdingQueue, (3, null, null))); //TODO remove
   });
 
   tearDown(() async {
@@ -819,6 +821,7 @@ void main() {
       expect(await FileDownloader().taskForId(complexTask.taskId), isNull);
       expect(await FileDownloader().enqueue(complexTask), isTrue);
       final task = await FileDownloader().taskForId(complexTask.taskId);
+      print(task);  //TODO remove
       expect(task is UploadTask, isTrue);
       expect(task, equals(complexTask));
       if (task != null && task is UploadTask) {
@@ -2813,6 +2816,7 @@ void main() {
       task = ParallelDownloadTask(
           url: urlWithContentLength, filename: DownloadTask.suggestedFilename);
       final result = await FileDownloader().download(task);
+      expect(result.status, equals(TaskStatus.complete));
       expect(result.task.filename, equals('5MB-test.ZIP'));
       expect(result.responseStatusCode, equals(200));
       final file = File(await result.task.filePath());
@@ -3099,7 +3103,7 @@ void main() {
       expect(maxActual, lessThan(7));
     });
 
-    test('HoldingQueue allTaskIds and allTasks', () async {
+    test('holdingQueue allTaskIds and allTasks', () async {
       expect(
           (await FileDownloader().configure(
                   globalConfig: (Config.holdingQueue, (1, null, null))))
@@ -3112,18 +3116,22 @@ void main() {
         print('Enqueuing ${downloadTask.taskId}');
         FileDownloader().enqueue(downloadTask);
       }
-      await Future.delayed(const Duration(milliseconds: 500));
+      await Future.delayed(const Duration(milliseconds: 100));
       expect((await FileDownloader().allTaskIds()).length, equals(10));
       expect((await FileDownloader().allTasks()).length, equals(10));
       expect(await FileDownloader().allTaskIds(group: 'non-existent'), isEmpty);
     });
 
-    test('HoldingQueue cancel tasks', () async {
+    test('holdingQueue cancel tasks', () async {
       expect(
           (await FileDownloader().configure(
                   globalConfig: (Config.holdingQueue, (1, null, null))))
               .toString(),
           equals('[(holdingQueue, )]'));
+      var cancelCount = 0;
+      FileDownloader().registerCallbacks(taskStatusCallback: (update) {
+        if (update.status == TaskStatus.canceled) cancelCount++;
+      });
       final taskIds = <String>[];
       for (var n = 0; n < 10; n++) {
         var downloadTask = DownloadTask(url: urlWithContentLength);
@@ -3131,13 +3139,14 @@ void main() {
         print('Enqueuing ${downloadTask.taskId}');
         FileDownloader().enqueue(downloadTask);
       }
-      await Future.delayed(const Duration(milliseconds: 500));
+      await Future.delayed(const Duration(milliseconds: 200));
       expect(await FileDownloader().cancelTasksWithIds(taskIds), isTrue);
       await Future.delayed(const Duration(milliseconds: 1500));
       expect(await FileDownloader().allTaskIds(), isEmpty);
+      expect(cancelCount, equals(10));
     });
 
-    test('HoldingQueue enqueue', () async {
+    test('holdingQueue enqueue', () async {
       expect(
           (await FileDownloader().configure(
               globalConfig: (Config.holdingQueue, (1, null, null))))

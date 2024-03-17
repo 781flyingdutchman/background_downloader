@@ -135,6 +135,7 @@ class HoldingQueue(private val workManager: WorkManager) {
             toRemove.forEach {
                 queue.remove(it)
                 TaskWorker.processStatusUpdate(it.task, TaskStatus.canceled, prefs)
+                Log.i(BDPlugin.TAG, "Canceled task with id ${it.task.taskId}")
             }
             removedTaskIds = toRemove.map { it.task.taskId }.toMutableList()
             return removedTaskIds
@@ -283,6 +284,7 @@ class EnqueueItem(
                     description = "Delayed or retried enqueue failed"
                 ), context = context
             )
+            BDPlugin.holdingQueue?.taskFinished(task)
         }
         delay(20)
     }

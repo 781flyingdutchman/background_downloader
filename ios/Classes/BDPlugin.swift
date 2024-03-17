@@ -152,7 +152,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         ? args[2] as? String ?? ""
         : ""
         if BDPlugin.holdingQueue == nil {
-            postResult(result: result, value: doEnqueue(taskJsonString: taskJsonString, notificationConfigJsonString: notificationConfigJsonString, resumeDataAsBase64String: resumeDataAsBase64String))
+            postResult(result: result, value: await doEnqueue(taskJsonString: taskJsonString, notificationConfigJsonString: notificationConfigJsonString, resumeDataAsBase64String: resumeDataAsBase64String))
         } else {
             // add entry for HoldingQueue, after checks
             guard let task = taskFrom(jsonString: taskJsonString)
@@ -169,12 +169,13 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             }
             os_log("Moving task with id %@ to HoldingQueue", log: log, type: .info, task.taskId)
             BDPlugin.holdingQueue?.add(item: EnqueueItem(task: task, notificationConfigJsonString: notificationConfigJsonString, resumeDataAsBase64String: resumeDataAsBase64String))
+            processStatusUpdate(task: task, status: .enqueued)
             postResult(result: result, value: true)
         }
     }
     
     /// Do the actual enqueue as a URLSessionTask
-    public func doEnqueue(taskJsonString: String, notificationConfigJsonString: String?, resumeDataAsBase64String: String) -> Bool {
+    public func doEnqueue(taskJsonString: String, notificationConfigJsonString: String?, resumeDataAsBase64String: String) async -> Bool {
         let taskDescription = notificationConfigJsonString == nil ? taskJsonString : taskJsonString + separatorString + notificationConfigJsonString!
         var isResume = !resumeDataAsBase64String.isEmpty
         let resumeData = isResume ? Data(base64Encoded: resumeDataAsBase64String) : nil
@@ -212,7 +213,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         if isParallelDownloadTask(task: task) {
             // ParallelDownloadTask itself is not part of a urlSession, so handled separately
             baseRequest.httpMethod = "HEAD" // override
-            return scheduleParallelDownload(task: task, taskDescription: taskDescription, baseRequest: baseRequest, resumeData: resumeDataAsBase64String)
+            return await scheduleParallelDownload(task: task, taskDescription: taskDescription, baseRequest: baseRequest, resumeData: resumeDataAsBase64String)
         } else if isDownloadTask(task: task)
         {
             return scheduleDownload(task: task, taskDescription: taskDescription, baseRequest: baseRequest, resumeData: resumeData)
@@ -306,22 +307,28 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     /// Returns the number of tasks canceled
     private func methodReset(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let group = call.arguments as! String
+        var counter = BDPlugin.holdingQueue?.cancelAllTasks(group: group) ?? 0
         let tasksToCancel = await UrlSessionDelegate.getAllUrlSessionTasks(group: group)
         tasksToCancel.forEach({$0.cancel()})
-        let numTasks = tasksToCancel.count
-        os_log("reset removed %d unfinished tasks", log: log, type: .debug, numTasks)
-        result(numTasks)
+        counter += tasksToCancel.count
+        os_log("reset removed %d unfinished tasks", log: log, type: .debug, counter)
+        result(counter)
     }
     
     /// Returns a list with all tasks in progress, as a list of JSON strings
     private func methodAllTasks(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let group = call.arguments as! String
+        var tasksAsListOfJsonStrings = [String]()
+        if let heldTasksJsonStrings = BDPlugin.holdingQueue?.allTasks(group: group).map({jsonStringFor(task: $0)}).filter({$0 != nil}).map({$0!}) {
+            tasksAsListOfJsonStrings.append(contentsOf:  heldTasksJsonStrings)
+        }
+
         UrlSessionDelegate.createUrlSession()
         guard let urlSessionTasks = await UrlSessionDelegate.urlSession?.allTasks else {
             result(nil)
             return
         }
-        let tasksAsListOfJsonStrings = urlSessionTasks.filter({ $0.state == .running || $0.state == .suspended }).map({ getTaskFrom(urlSessionTask: $0)}).filter({ $0?.group == group }).map({ jsonStringFor(task: $0!) }).filter({ $0 != nil }) as? [String] ?? []
+        tasksAsListOfJsonStrings.append(contentsOf: urlSessionTasks.filter({ $0.state == .running || $0.state == .suspended }).map({ getTaskFrom(urlSessionTask: $0)}).filter({ $0?.group == group }).map({ jsonStringFor(task: $0!) }).filter({ $0 != nil }).map({$0!}))
         os_log("Returning %d unfinished tasks", log: log, type: .debug, tasksAsListOfJsonStrings.count)
         result(tasksAsListOfJsonStrings)
     }
@@ -332,19 +339,25 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     private func methodCancelTasksWithIds(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let taskIds = call.arguments as! [String]
         os_log("Canceling taskIds %@", log: log, type: .info, taskIds)
+        let taskIdsRemovedFromHoldingQueue = BDPlugin.holdingQueue?.cancelTasksWithIds(taskIds) ?? []
+        let taskIdsRemaining = taskIds.filter({ !taskIdsRemovedFromHoldingQueue.contains($0) })
         let tasksToCancel = await UrlSessionDelegate.getAllUrlSessionTasks().filter({
             guard let task = getTaskFrom(urlSessionTask: $0) else { return false }
-            return taskIds.contains(task.taskId)
+            return taskIdsRemaining.contains(task.taskId)
         })
         tasksToCancel.forEach({$0.cancel()})
         // cancel all ParallelDownloadTasks (they would not have shown up in tasksToCancel)
-        taskIds.forEach { ParallelDownloader.downloads[$0]?.cancelTask() }
+        taskIdsRemaining.forEach { ParallelDownloader.downloads[$0]?.cancelTask() }
         result(true)
     }
     
     /// Returns Task for this taskId, or nil
     private func methodTaskForId(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let taskId = call.arguments as! String
+        if let heldTask = BDPlugin.holdingQueue?.taskForId(taskId) {
+            result(jsonStringFor(task: heldTask))
+            return
+        }
         guard let task = await UrlSessionDelegate.getTaskWithId(taskId: taskId) else {
             result(nil)
             return
@@ -697,8 +710,11 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                         os_log("Resume data for taskId %@ no longer available: restarting", log: log, type: .info, task.taskId)
                     }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        if !BDPlugin.instance.doEnqueue(taskJsonString: taskAsJsonString, notificationConfigJsonString: userInfo["notificationConfig"] as? String, resumeDataAsBase64String: resumeDataAsBase64String) {
-                            os_log("Could not enqueue taskId %@ to resume", log: log, type: .info, task.taskId)
+                        _Concurrency.Task {
+                            if await(BDPlugin.instance.doEnqueue(taskJsonString: taskAsJsonString, notificationConfigJsonString: userInfo["notificationConfig"] as? String, resumeDataAsBase64String: resumeDataAsBase64String)) == false {
+                                os_log("Could not enqueue taskId %@ to resume", log: log, type: .info, task.taskId)
+                                BDPlugin.holdingQueue?.taskFinished(task)
+                            }
                         }
                     }
                     

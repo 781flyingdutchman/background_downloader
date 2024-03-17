@@ -194,11 +194,11 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         suspend fun cancelTasksWithIds(context: Context, taskIds: Iterable<String>): Boolean {
             val workManager = WorkManager.getInstance(context)
             Log.v(TAG, "Canceling taskIds $taskIds")
-            val removedFromHoldingQueue =
+            val taskIdsRemovedFromHoldingQueue =
                 holdingQueue?.cancelTasksWithIds(context, taskIds) ?: listOf()
-            val remaining = taskIds.filter { !removedFromHoldingQueue.contains(it) }
+            val taskIdsRemaining = taskIds.filter { !taskIdsRemovedFromHoldingQueue.contains(it) }
             var success = true
-            for (taskId in remaining) {
+            for (taskId in taskIdsRemaining) {
                 success = success && cancelActiveTaskWithId(context, taskId, workManager)
             }
             return success

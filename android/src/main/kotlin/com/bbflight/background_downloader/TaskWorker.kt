@@ -430,7 +430,6 @@ open class TaskWorker(
                 }
             }
         }
-//        BDPlugin.holdingQueue?.taskFinished(task)
         return Result.success()
     }
 
@@ -518,7 +517,7 @@ open class TaskWorker(
                 is CancellationException -> {
                     Log.i(
                         TAG,
-                        "Job cancelled for taskId ${task.taskId} and $filePath: ${e.message}"
+                        "Canceled task with id ${task.taskId}: ${e.message}"
                     )
                     return TaskStatus.canceled
                 }

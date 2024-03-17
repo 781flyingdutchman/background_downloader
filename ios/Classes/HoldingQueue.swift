@@ -59,13 +59,62 @@ class HoldingQueue {
         defer { stateLock.unlock() }
         let host = getHost(task)
         concurrent -= 1
-        os_log("taskFinished (%@), concurrent now %d", log: log, type: .fault, task.taskId, concurrent)
         concurrentByHost[host]? -= 1
         concurrentByGroup[task.group]? -= 1
         if let index = enqueuedTaskIds.firstIndex(of: task.taskId) {
             enqueuedTaskIds.remove(at: index)
         }
         advanceQueue()
+    }
+    
+    /**
+     * Removes all [EnqueueItem] where their taskId is in [taskIds], sends a
+     * [TaskStatus.canceled] update and returns a list of
+     * taskIds that were cancelled this way
+     */
+    func cancelTasksWithIds(_ taskIds: [String]) -> [String] {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        let toRemove = queue.filter( { taskIds.contains($0.task.taskId) } )
+        toRemove.forEach { item in
+            processStatusUpdate(task: item.task, status: .canceled)
+            os_log("Canceled task with id %@", log: log, type: .info, item.task.taskId)
+        }
+        queue.removeAll(where: { taskIds.contains($0.task.taskId)})
+        return toRemove.map { $0.task.taskId }
+    }
+    
+    /**
+     * Cancel (delete) all [EnqueueItem] matching [group], send a
+     * [TaskStatus.canceled] for each and return the number of items cancelled
+     */
+    func cancelAllTasks(group: String) -> Int {
+        stateLock.lock()
+        let taskIds = queue.filter({ $0.task.group == group }).map { $0.task.taskId }
+        stateLock.unlock()
+        return cancelTasksWithIds(taskIds).count
+    }
+    
+    /**
+     * Return task matching [taskId], or null
+     */
+    func taskForId(_ taskId: String) -> Task? {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        let tasks = queue.filter( { $0.task.taskId == taskId } ).map { $0.task }
+        if !tasks.isEmpty {
+            return tasks.first
+        }
+        return nil
+    }
+    
+    /**
+     * Return list of [Task] for this [group]
+     */
+    func allTasks(group: String) -> [Task] {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return queue.filter( { $0.task.group == group } ).map { $0.task }
     }
     
     /**
@@ -76,7 +125,9 @@ class HoldingQueue {
      */
     private func advanceQueue() {
         DispatchQueue.global().async {
-            self.processQueue()
+            _Concurrency.Task {
+                await self.processQueue()
+            }
         }
         advanceQueueInFuture()
     }
@@ -95,31 +146,29 @@ class HoldingQueue {
     }
     
     /// Processes one item in the queue, if possible
-    private func processQueue() {
-        os_log("processQueue", log: log, type: .fault)
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        os_log("processQueue got lock", log: log, type: .fault)
-        if concurrent < maxConcurrent {
-            os_log("processQueue has space: %d < %d", log: log, type: .fault, concurrent, maxConcurrent)
-            var mustWait = [EnqueueItem]()
-            while !queue.isEmpty {
-                let item = queue.removeFirst()
-                let host = getHost(item.task)
-                if concurrentByHost[host] ?? 0 < maxConcurrentByHost &&
-                    concurrentByGroup[item.task.group] ?? 0 < maxConcurrentByGroup {
-                    concurrent += 1
-                    concurrentByHost[host, default: 0] += 1
-                    concurrentByGroup[item.task.group, default: 0] += 1
-                    os_log("processQueue enqueuing with concurrent now %d", log: log, type: .fault, concurrent)
-                    item.enqueue()
-                    break
-                } else {
-                    mustWait.append(item)
+    private func processQueue() async {
+        stateLock.withLock {
+            if concurrent < maxConcurrent {
+                var mustWait = [EnqueueItem]()
+                while !queue.isEmpty {
+                    let item = queue.removeFirst()
+                    let host = getHost(item.task)
+                    if concurrentByHost[host] ?? 0 < maxConcurrentByHost &&
+                        concurrentByGroup[item.task.group] ?? 0 < maxConcurrentByGroup {
+                        concurrent += 1
+                        concurrentByHost[host, default: 0] += 1
+                        concurrentByGroup[item.task.group, default: 0] += 1
+                        _Concurrency.Task {
+                            await item.enqueue()
+                        }
+                        break
+                    } else {
+                        mustWait.append(item)
+                    }
                 }
+                queue.append(contentsOf: mustWait)
+                queue.sort()
             }
-            queue.append(contentsOf: mustWait)
-            queue.sort()
         }
     }
     
@@ -130,7 +179,6 @@ class HoldingQueue {
      * fires
      */
     private func calculateState() async {
-        os_log("CalculateState", log: log, type: .fault)
         return stateLock.withLock {
             _Concurrency.Task {
                 UrlSessionDelegate.createUrlSession()
@@ -174,10 +222,12 @@ struct EnqueueItem : Comparable {
         return lhs.task.priority == rhs.task.priority && lhs.task.creationTime == rhs.task.creationTime
     }
     
-    func enqueue() {
-        if !BDPlugin.instance.doEnqueue(taskJsonString: jsonStringFor(task: task) ?? "", notificationConfigJsonString: notificationConfigJsonString, resumeDataAsBase64String: resumeDataAsBase64String) {
+    func enqueue() async {
+        let success = await BDPlugin.instance.doEnqueue(taskJsonString: jsonStringFor(task: task) ?? "", notificationConfigJsonString: notificationConfigJsonString, resumeDataAsBase64String: resumeDataAsBase64String)
+        if !success {
             os_log("Delayed or retried enqueue failed for taskId %@", log: log, type: .info, task.taskId)
             processStatusUpdate(task: task, status: .failed, taskException: TaskException(type: .general, description: "Delayed or retried enqueue failed"))
+            BDPlugin.holdingQueue?.taskFinished(task)
         }
     }
 }
