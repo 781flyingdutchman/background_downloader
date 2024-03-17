@@ -278,6 +278,17 @@ func extractFilesData(task: Task) -> [((String, String, String))] {
     return result
 }
 
+/// Return the host name for the task's url or ""
+func getHost(_ task: Task) -> String {
+    let host: String
+    if #available(iOS 16.0, *) {
+        host = URL(string: task.url)?.host(percentEncoded: true) ?? ""
+    } else {
+        host = URL(string: task.url)?.host ?? ""
+    }
+    return host
+}
+
 /// Calculate progress, network speed and time remaining, and send this at an appropriate
 /// interval to the Dart side
 func updateProgress(task: Task, totalBytesExpected: Int64, totalBytesDone: Int64) {
@@ -316,7 +327,7 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
                 }
             }
             if [TaskStatus.paused, TaskStatus.canceled, TaskStatus.failed].contains(status) {
-                let reEnqueueData = ReEnqueueData(task: task, notificationConfigJsonString: BDPlugin.notificationConfigJsonStrings[task.taskId] ?? "", resumeDataAsBase64String: BDPlugin.localResumeData[task.taskId] ?? "")
+                let reEnqueueData = EnqueueItem(task: task, notificationConfigJsonString: BDPlugin.notificationConfigJsonStrings[task.taskId], resumeDataAsBase64String: BDPlugin.localResumeData[task.taskId] ?? "")
                 WiFiQueue.shared.reEnqueue(reEnqueueData)
                 return true // intercepted
             }

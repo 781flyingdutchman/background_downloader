@@ -10,35 +10,35 @@ import os.log
 
 let chunkGroup = "chunk"
 
-func scheduleParallelDownload(task: Task, taskDescription: String, baseRequest: URLRequest, resumeData: String, result: FlutterResult?)
+func scheduleParallelDownload(task: Task, taskDescription: String, baseRequest: URLRequest, resumeData: String) -> Bool
 {
     let isResume = !resumeData.isEmpty
     let parallelDownload = ParallelDownloader(task: task)
     if !isResume {
+        var success = false
         let dataTask = URLSession.shared.dataTask(with: baseRequest) { (data, response, error) in
             if let httpResponse = response as? HTTPURLResponse, error == nil {
                 if httpResponse.statusCode == 404 {
                     os_log("URL not found for taskId %@", log: log, type: .info, task.taskId)
-                    postResult(result: result, value: false)
                 }
                 else if !parallelDownload.start(responseStatusCode: httpResponse.statusCode, contentLengthFromHeader: Int64(httpResponse.value(forHTTPHeaderField: "Content-Length") ?? "-1") ?? -1, responseHeaders: httpResponse.allHeaderFields ) {
                     os_log("Cannot chunk or enqueue download", log: log, type: .info)
-                    postResult(result: result, value: false)
                 } else {
-                    processStatusUpdate(task: task, status: TaskStatus.enqueued)
-                    postResult(result: result, value: true)
+                    if BDPlugin.holdingQueue?.enqueuedTaskIds.contains(task.taskId) != true {
+                        processStatusUpdate(task: task, status: TaskStatus.enqueued)
+                    }
+                    success = true
                 }
             } else {
                 os_log("Error making HEAD request for taskId %@", log: log, type: .info, task.taskId)
-                postResult(result: result, value: false)
             }
         }
         dataTask.priority = 1 - Float(task.priority) / 10
         dataTask.resume()
+        return success
     } else {
         // resume
-        let success = parallelDownload.resume(resumeData: resumeData)
-        postResult(result: result, value: success)
+        return parallelDownload.resume(resumeData: resumeData)
     }
 }
 

@@ -86,9 +86,9 @@ class WiFiQueue {
     
     
     /// Re-enqueue this task and associated data. Nil signals end of batch
-    func reEnqueue(_ reEnqueueData: ReEnqueueData?) {
+    func reEnqueue(_ enqueueItem: EnqueueItem?) {
         reEnqueueQueue.async {
-            guard let reEnqueueData = reEnqueueData else {
+            guard let reEnqueueData = enqueueItem else {
                 // nil value indicates end of batch of re-enqueues
                 self.reEnqueuesDone()
                 return
@@ -97,16 +97,8 @@ class WiFiQueue {
             if timeSinceCreated < 0.3 {
                 Thread.sleep(forTimeInterval: 0.3 - timeSinceCreated)
             }
-            BDPlugin.instance.doEnqueue(taskJsonString: jsonStringFor(task: reEnqueueData.task) ?? "", notificationConfigJsonString: reEnqueueData.notificationConfigJsonString, resumeDataAsBase64String: reEnqueueData.resumeDataAsBase64String, result: nil)
+            enqueueItem?.enqueue()
             Thread.sleep(forTimeInterval: 0.02)
         }
     }
-}
-
-/// Re-enqueue data (in the context of changing the RequireWiFi setting)
-struct ReEnqueueData {
-    let task: Task
-    let notificationConfigJsonString: String
-    let resumeDataAsBase64String: String
-    let created = Date()
 }

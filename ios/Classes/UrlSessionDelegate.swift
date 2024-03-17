@@ -42,6 +42,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             os_log("Could not find task related to urlSessionTask %d", log: log, type: .error, task.taskIdentifier)
             return
         }
+        BDPlugin.holdingQueue?.taskFinished(task)
         let responseBody = getResponseBody(taskId: task.taskId)
         let taskWasProgramaticallyCanceled: Bool = BDPlugin.taskIdsProgrammaticallyCancelled.remove(task.taskId) != nil
         guard error == nil else {
