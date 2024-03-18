@@ -725,7 +725,7 @@ object NotificationService {
             }
             val androidNotification = builder.build()
             if (taskWorker.runInForeground) {
-                if (notificationType == NotificationType.running) {
+                if (notificationType == NotificationType.running && taskWorker.isActive) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                         taskWorker.setForeground(
                             ForegroundInfo(

@@ -361,6 +361,9 @@ open class TaskWorker(
     private var runInForegroundFileSize: Int = -1
     var canRunInForeground = false
     var runInForeground = false
+    private var hasDeliveredResult = false
+    val isActive: Boolean
+        get() = !hasDeliveredResult && !isStopped
 
     lateinit var prefs: SharedPreferences
 
@@ -430,6 +433,7 @@ open class TaskWorker(
                 }
             }
         }
+        hasDeliveredResult = true
         return Result.success()
     }
 
