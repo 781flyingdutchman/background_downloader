@@ -1,3 +1,7 @@
+## 8.4.1
+
+* Fixes Android bug when using `Config.runInForeground` that can lead to a crash
+
 ## 8.4.0
 
 * Adds optional holding queue to manage how many tasks are executed concurrently
