@@ -53,13 +53,14 @@ abstract base class NativeDownloader extends BaseDownloader {
             processStatusUpdate(TaskStatusUpdate(task, status));
           } else {
             // this is a chunk task, so pass to native
-            await methodChannel.invokeMethod('chunkStatusUpdate', [
-              Chunk.getParentTaskId(task),
-              task.taskId,
-              status.index,
-              null,
-              null
-            ]);
+            Future.delayed(const Duration(milliseconds: 100)).then((_) =>
+                methodChannel.invokeMethod('chunkStatusUpdate', [
+                  Chunk.getParentTaskId(task),
+                  task.taskId,
+                  status.index,
+                  null,
+                  null
+                ]));
           }
 
         // status update with responseBody, responseHeaders, responseStatusCode, mimeType and charSet (normal completion)
@@ -95,13 +96,14 @@ abstract base class NativeDownloader extends BaseDownloader {
                 charSet));
           } else {
             // this is a chunk task, so pass to native
-            await methodChannel.invokeMethod('chunkStatusUpdate', [
-              Chunk.getParentTaskId(task),
-              task.taskId,
-              status.index,
-              null,
-              responseBody
-            ]);
+            Future.delayed(const Duration(milliseconds: 100)).then((_) =>
+                methodChannel.invokeMethod('chunkStatusUpdate', [
+                  Chunk.getParentTaskId(task),
+                  task.taskId,
+                  status.index,
+                  null,
+                  responseBody
+                ]));
           }
 
         // status update with TaskException and responseBody
@@ -126,13 +128,14 @@ abstract base class NativeDownloader extends BaseDownloader {
                 TaskStatusUpdate(task, status, exception, responseBody));
           } else {
             // this is a chunk task, so pass to native
-            await methodChannel.invokeMethod('chunkStatusUpdate', [
-              Chunk.getParentTaskId(task),
-              task.taskId,
-              status.index,
-              exception?.toJsonString(),
-              responseBody
-            ]);
+            Future.delayed(const Duration(milliseconds: 100))
+                .then((_) => methodChannel.invokeMethod('chunkStatusUpdate', [
+                      Chunk.getParentTaskId(task),
+                      task.taskId,
+                      status.index,
+                      exception?.toJsonString(),
+                      responseBody
+                    ]));
           }
 
         case (
@@ -154,8 +157,9 @@ abstract base class NativeDownloader extends BaseDownloader {
           } else {
             // this is a chunk task, so pass parent taskId,
             // chunk taskId and progress to native
-            await methodChannel.invokeMethod('chunkProgressUpdate',
-                [Chunk.getParentTaskId(task), task.taskId, progress]);
+            Future.delayed(const Duration(milliseconds: 100)).then((_) =>
+                methodChannel.invokeMethod('chunkProgressUpdate',
+                    [Chunk.getParentTaskId(task), task.taskId, progress]));
           }
 
         case ('canResume', bool canResume):

@@ -1,3 +1,7 @@
+## 8.4.2
+
+* Fixes iOS/Android bug with ParallelDownloadTask hanging when number of chunks exceeds ~10
+
 ## 8.4.1
 
 * Fixes Android bug when using `Config.runInForeground` that can lead to a crash
