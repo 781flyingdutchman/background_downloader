@@ -2396,6 +2396,7 @@ void main() {
         lastProgress = -1; // must change to a real value
         await downloader
             .retrieveLocallyStoredData(); // triggers status & prog update
+        downloader.retrievedLocallyStoredData = false; // reset for testing
         await Future.delayed(const Duration(milliseconds: 500));
         expect(lastStatus, equals(TaskStatus.paused));
         expect(lastProgress, equals(oldLastProgress));
@@ -2445,6 +2446,7 @@ void main() {
             taskStatusCallback: (update) => taskStatusUpdate = update);
         await Future.delayed(const Duration(milliseconds: 500));
         await downloader.retrieveLocallyStoredData(); // triggers status update
+        downloader.retrievedLocallyStoredData = false; // reset for testing
         await Future.delayed(const Duration(milliseconds: 500));
         expect(taskStatusUpdate.status, equals(TaskStatus.complete));
         expect(taskStatusUpdate.exception, isNull);
@@ -2481,6 +2483,7 @@ void main() {
             taskStatusCallback: (update) => taskStatusUpdate = update);
         await Future.delayed(const Duration(milliseconds: 500));
         await downloader.retrieveLocallyStoredData(); // triggers status update
+        downloader.retrievedLocallyStoredData = false; // reset for testing
         await Future.delayed(const Duration(milliseconds: 500));
         expect(taskStatusUpdate.status, equals(TaskStatus.failed));
         exception = taskStatusUpdate.exception as TaskHttpException;

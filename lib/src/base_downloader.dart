@@ -94,7 +94,8 @@ abstract base class BaseDownloader {
   final canResumeTask = <Task, Completer<bool>>{};
 
   /// Flag indicating we have retrieved missed data
-  var _retrievedLocallyStoredData = false;
+  @visibleForTesting
+  var retrievedLocallyStoredData = false;
 
   /// Connected TaskQueues that will receive a signal upon task completion
   final taskQueues = <TaskQueue>[];
@@ -180,7 +181,7 @@ abstract base class BaseDownloader {
   /// Retrieve data that was stored locally because it could not be
   /// delivered to the downloader
   Future<void> retrieveLocallyStoredData() async {
-    if (!_retrievedLocallyStoredData) {
+    if (!retrievedLocallyStoredData) {
       final resumeDataMap = await popUndeliveredData(Undelivered.resumeData);
       for (var jsonString in resumeDataMap.values) {
         final resumeData = ResumeData.fromJsonString(jsonString);
@@ -197,7 +198,7 @@ abstract base class BaseDownloader {
       for (var jsonString in progressUpdateMap.values) {
         processProgressUpdate(TaskProgressUpdate.fromJsonString(jsonString));
       }
-      _retrievedLocallyStoredData = true;
+      retrievedLocallyStoredData = true;
     }
   }
 
