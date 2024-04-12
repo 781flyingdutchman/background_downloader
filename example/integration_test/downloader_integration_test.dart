@@ -2443,6 +2443,7 @@ void main() {
         taskStatusUpdate = TaskStatusUpdate(task, TaskStatus.failed); // reset
         FileDownloader().registerCallbacks(
             taskStatusCallback: (update) => taskStatusUpdate = update);
+        await Future.delayed(const Duration(milliseconds: 500));
         await downloader.retrieveLocallyStoredData(); // triggers status update
         await Future.delayed(const Duration(milliseconds: 500));
         expect(taskStatusUpdate.status, equals(TaskStatus.complete));
@@ -2478,6 +2479,7 @@ void main() {
         taskStatusUpdate = TaskStatusUpdate(task, TaskStatus.canceled); // reset
         FileDownloader().registerCallbacks(
             taskStatusCallback: (update) => taskStatusUpdate = update);
+        await Future.delayed(const Duration(milliseconds: 500));
         await downloader.retrieveLocallyStoredData(); // triggers status update
         await Future.delayed(const Duration(milliseconds: 500));
         expect(taskStatusUpdate.status, equals(TaskStatus.failed));

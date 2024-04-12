@@ -18,3 +18,16 @@ extension URL {
         }
     }
 }
+
+/// Converts the [map] to a [String:String] map with lowercased keys
+func lowerCasedStringStringMap(_ map: [AnyHashable: Any]?) -> [String: String]? {
+    if map == nil {return nil}
+    var result: [String: String] = [:]
+    for (key, value) in map! {
+        if let stringKey = key as? String, let stringValue = value as? String {
+            result[stringKey.lowercased()] = stringValue
+        }
+    }
+    return result
+}
+

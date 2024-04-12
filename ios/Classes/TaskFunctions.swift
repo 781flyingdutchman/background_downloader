@@ -364,12 +364,20 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
         let finalTaskException = taskException == nil
             ? TaskException(type: .general, httpResponseCode: -1, description: "")
             : taskException
-        let arg: [Any?] = status == .failed
-            ? [status.rawValue, finalTaskException!.type.rawValue, finalTaskException!.description, finalTaskException!.httpResponseCode, responseBody] as [Any?]
-            : [status.rawValue, responseBody, responseHeaders, finalResponseStatusCode, mimeType, charSet] as [Any?]
+        let statusUpdate = isFinalState(status: status) 
+            ? TaskStatusUpdate(task: task,
+                               taskStatus: status,
+                               exception: status == .failed ? finalTaskException : nil,
+                               responseBody: responseBody,
+                               responseStatusCode: (status == .complete || status == .notFound) ? finalResponseStatusCode : nil,
+                               responseHeaders: lowerCasedStringStringMap(responseHeaders),
+                               mimeType: mimeType,
+                               charSet: charSet)
+            : TaskStatusUpdate(task: task, taskStatus: status)
+        let arg = statusUpdate.argList()
         if !postOnBackgroundChannel(method: "statusUpdate", task: task, arg: arg) {
             // store update locally as a merged task/status JSON string, without error info
-            guard let jsonData = try? JSONEncoder().encode(TaskStatusUpdate(task: task, taskStatus: status))
+            guard let jsonData = try? JSONEncoder().encode(statusUpdate)
             else {
                 os_log("Could not store status update locally", log: log, type: .debug)
                 return }
