@@ -160,38 +160,30 @@ open class TaskWorker(
 
             // Post update if task expects one, or if failed and retry is needed
             if (canSendStatusUpdate && (task.providesStatusUpdates() || retryNeeded)) {
-                val finalTaskException = taskException ?: TaskException(ExceptionType.general)
-                val taskStatusUpdate = if (status == TaskStatus.failed) TaskStatusUpdate(
-                    task = task,
-                    taskStatus = status,
-                    exception = finalTaskException,
-                    responseBody = responseBody,
-                    responseStatusCode = null,
-                    responseHeaders = responseHeaders?.filterNotNull()?.mapKeys { it.key.lowercase() },
-                    mimeType = mimeType,
-                    charSet = charSet
-                ) else if (status.isFinalState()) {  // last update gets all data except exception
-                    TaskStatusUpdate(
+                val taskStatusUpdate =
+                    if (status.isFinalState()) {  // last update gets all data
+                        TaskStatusUpdate(
+                            task = task,
+                            taskStatus = status,
+                            exception = if (status == TaskStatus.failed) taskException
+                                ?: TaskException(ExceptionType.general) else null,
+                            responseBody = responseBody,
+                            responseStatusCode = if (status == TaskStatus.complete || status == TaskStatus.notFound) responseStatusCode else null,
+                            responseHeaders = responseHeaders?.filterNotNull()
+                                ?.mapKeys { it.key.lowercase() },
+                            mimeType = mimeType,
+                            charSet = charSet
+                        )
+                    } else TaskStatusUpdate(  // interim updates are limited
                         task = task,
                         taskStatus = status,
                         exception = null,
-                        responseBody = responseBody,
-                        responseStatusCode = if (status == TaskStatus.complete || status == TaskStatus.notFound) responseStatusCode else null,
-                        responseHeaders = responseHeaders?.filterNotNull()
-                            ?.mapKeys { it.key.lowercase() },
-                        mimeType = mimeType,
-                        charSet = charSet
+                        responseBody = null,
+                        responseStatusCode = null,
+                        responseHeaders = null,
+                        mimeType = null,
+                        charSet = null
                     )
-                } else TaskStatusUpdate(  // interim updates are limited
-                    task = task,
-                    taskStatus = status,
-                    exception = null,
-                    responseBody = null,
-                    responseStatusCode = null,
-                    responseHeaders = null,
-                    mimeType = null,
-                    charSet = null
-                )
                 val arg = taskStatusUpdate.argList
                 postOnBackgroundChannel("statusUpdate", task, arg, onFail = {
                     // unsuccessful post, so store in local prefs

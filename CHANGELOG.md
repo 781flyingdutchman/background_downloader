@@ -1,3 +1,7 @@
+## 8.4.3
+
+* Fixes iOS/Android issue where `retrieveLocallyStoredData` retrieves only a basic `TaskStatusUpdate`, without responseCode, responseBody etc
+
 ## 8.4.2
 
 * Fixes iOS/Android bug with ParallelDownloadTask hanging when number of chunks exceeds ~10
