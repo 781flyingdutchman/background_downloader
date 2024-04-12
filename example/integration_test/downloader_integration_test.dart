@@ -2361,12 +2361,14 @@ void main() {
     });
   });
 
-  group('Persistence', () {
+  group('Fail background channel', () {
     testWidgets(
         'Local storage for resumeData, statusUpdates and progressUpdates',
         (widgetTester) async {
       if (Platform.isAndroid || Platform.isIOS) {
         final downloader = FileDownloader().downloaderForTesting;
+        // force fail triggers local storage, but does not prevent
+        // messages to be posted, so we can see the real value as well
         await downloader.setForceFailPostOnBackgroundChannel(true);
         FileDownloader().registerCallbacks(
             taskStatusCallback: statusCallback,
@@ -2411,6 +2413,82 @@ void main() {
             await downloader.popUndeliveredData(Undelivered.progressUpdates);
         expect(progressUpdateMap.length, equals(0));
         expect(await FileDownloader().cancelTaskWithId(task.taskId), isTrue);
+      }
+    });
+
+    testWidgets('Local storage for taskStatusUpdate - ok download',
+        (widgetTester) async {
+      if (Platform.isAndroid || Platform.isIOS) {
+        final downloader = FileDownloader().downloaderForTesting;
+        // force fail triggers local storage, but does not prevent
+        // messages to be posted, so we can see the real value as well
+        await downloader.setForceFailPostOnBackgroundChannel(true);
+        FileDownloader().registerCallbacks(
+            taskStatusCallback: statusCallback,
+            taskProgressCallback: progressCallback);
+        task = DownloadTask(
+            url: urlWithContentLength,
+            filename: defaultFilename,
+            allowPause: true);
+        var taskStatusUpdate = await FileDownloader().download(task);
+        expect(taskStatusUpdate.status, equals(TaskStatus.complete));
+        expect(taskStatusUpdate.exception, isNull);
+        expect(taskStatusUpdate.mimeType, equals('application/zip'));
+        expect(taskStatusUpdate.charSet, isNull);
+        expect(taskStatusUpdate.responseBody, isNull);
+        expect(taskStatusUpdate.responseHeaders?.containsKey('content-length'),
+            isTrue);
+        expect(taskStatusUpdate.responseStatusCode, equals(200));
+        // now get the locally stored taskStatus and check again
+        taskStatusUpdate = TaskStatusUpdate(task, TaskStatus.failed); // reset
+        FileDownloader().registerCallbacks(
+            taskStatusCallback: (update) => taskStatusUpdate = update);
+        await downloader.retrieveLocallyStoredData(); // triggers status update
+        await Future.delayed(const Duration(milliseconds: 500));
+        expect(taskStatusUpdate.status, equals(TaskStatus.complete));
+        expect(taskStatusUpdate.exception, isNull);
+        expect(taskStatusUpdate.mimeType, equals('application/zip'));
+        expect(taskStatusUpdate.charSet, isNull);
+        expect(taskStatusUpdate.responseBody, isNull);
+        expect(taskStatusUpdate.responseHeaders?.containsKey('content-length'),
+            isTrue);
+        expect(taskStatusUpdate.responseStatusCode, equals(200));
+      }
+    });
+
+    testWidgets('Local storage for taskStatusUpdate - failed download',
+        (widgetTester) async {
+      if (Platform.isAndroid || Platform.isIOS) {
+        final downloader = FileDownloader().downloaderForTesting;
+        // force fail triggers local storage, but does not prevent
+        // messages to be posted, so we can see the real value as well
+        await downloader.setForceFailPostOnBackgroundChannel(true);
+        task = DownloadTask(url: failingUrl, filename: defaultFilename);
+        var taskStatusUpdate = await FileDownloader().download(task);
+        expect(taskStatusUpdate.status, equals(TaskStatus.failed));
+        var exception = taskStatusUpdate.exception as TaskHttpException;
+        expect(exception.description, equals('Not authorized'));
+        expect(exception.httpResponseCode, equals(403));
+        expect(taskStatusUpdate.mimeType, isNull);
+        expect(taskStatusUpdate.charSet, isNull);
+        expect(taskStatusUpdate.responseBody, isNull);
+        expect(taskStatusUpdate.responseHeaders, isNull);
+        expect(taskStatusUpdate.responseStatusCode, isNull);
+        // now get the locally stored taskStatus and check again
+        taskStatusUpdate = TaskStatusUpdate(task, TaskStatus.canceled); // reset
+        FileDownloader().registerCallbacks(
+            taskStatusCallback: (update) => taskStatusUpdate = update);
+        await downloader.retrieveLocallyStoredData(); // triggers status update
+        await Future.delayed(const Duration(milliseconds: 500));
+        expect(taskStatusUpdate.status, equals(TaskStatus.failed));
+        exception = taskStatusUpdate.exception as TaskHttpException;
+        expect(exception.description, equals('Not authorized'));
+        expect(exception.httpResponseCode, equals(403));
+        expect(taskStatusUpdate.mimeType, isNull);
+        expect(taskStatusUpdate.charSet, isNull);
+        expect(taskStatusUpdate.responseBody, isNull);
+        expect(taskStatusUpdate.responseHeaders, isNull);
+        expect(taskStatusUpdate.responseStatusCode, isNull);
       }
     });
   });

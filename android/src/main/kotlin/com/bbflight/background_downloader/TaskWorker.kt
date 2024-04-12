@@ -161,28 +161,45 @@ open class TaskWorker(
             // Post update if task expects one, or if failed and retry is needed
             if (canSendStatusUpdate && (task.providesStatusUpdates() || retryNeeded)) {
                 val finalTaskException = taskException ?: TaskException(ExceptionType.general)
-                // send exception data only for .failed task, otherwise just the status
-                val arg: Any = if (status == TaskStatus.failed) mutableListOf(
-                    status.ordinal,
-                    finalTaskException.type.typeString,
-                    finalTaskException.description,
-                    finalTaskException.httpResponseCode,
-                    responseBody
-                ) else mutableListOf(
-                    status.ordinal,
-                    if (status.isFinalState()) responseBody else null,
-                    if (status.isFinalState()) responseHeaders else null,
-                    if (status == TaskStatus.complete || status == TaskStatus.notFound) responseStatusCode else null,
-                    if (status.isFinalState()) mimeType else null,
-                    if (status.isFinalState()) charSet else null
+                val taskStatusUpdate = if (status == TaskStatus.failed) TaskStatusUpdate(
+                    task = task,
+                    taskStatus = status,
+                    exception = finalTaskException,
+                    responseBody = responseBody,
+                    responseStatusCode = null,
+                    responseHeaders = responseHeaders?.filterNotNull()?.mapKeys { it.key.lowercase() },
+                    mimeType = mimeType,
+                    charSet = charSet
+                ) else if (status.isFinalState()) {  // last update gets all data except exception
+                    TaskStatusUpdate(
+                        task = task,
+                        taskStatus = status,
+                        exception = null,
+                        responseBody = responseBody,
+                        responseStatusCode = if (status == TaskStatus.complete || status == TaskStatus.notFound) responseStatusCode else null,
+                        responseHeaders = responseHeaders?.filterNotNull()
+                            ?.mapKeys { it.key.lowercase() },
+                        mimeType = mimeType,
+                        charSet = charSet
+                    )
+                } else TaskStatusUpdate(  // interim updates are limited
+                    task = task,
+                    taskStatus = status,
+                    exception = null,
+                    responseBody = null,
+                    responseStatusCode = null,
+                    responseHeaders = null,
+                    mimeType = null,
+                    charSet = null
                 )
+                val arg = taskStatusUpdate.argList
                 postOnBackgroundChannel("statusUpdate", task, arg, onFail = {
-                    // unsuccessful post, so store in local prefs (without exception info)
+                    // unsuccessful post, so store in local prefs
                     Log.d(TAG, "Could not post status update -> storing locally")
                     storeLocally(
                         BDPlugin.keyStatusUpdateMap,
                         task.taskId,
-                        Json.encodeToString(TaskStatusUpdate(task, status)),
+                        Json.encodeToString(taskStatusUpdate),
                         prefs
                     )
                 })

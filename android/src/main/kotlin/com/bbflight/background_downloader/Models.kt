@@ -8,13 +8,9 @@ import android.util.Log
 import com.bbflight.background_downloader.TaskWorker.Companion.TAG
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.KSerializer
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.descriptors.PrimitiveKind
-import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
-import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.*
+import kotlinx.serialization.descriptors.*
+import kotlinx.serialization.encoding.*
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.net.MalformedURLException
@@ -37,7 +33,7 @@ enum class BaseDirectory {
     root // system root directory
 }
 
-private class BaseDirectorySerializer: EnumAsIntSerializer<BaseDirectory>(
+private class BaseDirectorySerializer : EnumAsIntSerializer<BaseDirectory>(
     "BaseDirectory",
     { it.ordinal },
     { v -> BaseDirectory.entries.first { it.ordinal == v } }
@@ -52,7 +48,7 @@ enum class Updates {
     statusAndProgress // calls also for progress along the way
 }
 
-private class UpdatesSerializer: EnumAsIntSerializer<Updates>(
+private class UpdatesSerializer : EnumAsIntSerializer<Updates>(
     "Updates",
     { it.ordinal },
     { v -> Updates.entries.first { it.ordinal == v } }
@@ -388,15 +384,56 @@ enum class TaskStatus {
     }
 }
 
-private class TaskStatusSerializer: EnumAsIntSerializer<TaskStatus>(
+private class TaskStatusSerializer : EnumAsIntSerializer<TaskStatus>(
     "TaskStatus",
     { it.ordinal },
     { v -> TaskStatus.entries.first { it.ordinal == v } }
 )
 
 @Serializable
-/** Holds data associated with a task status update, for local storage */
-data class TaskStatusUpdate(val task: Task, val taskStatus: TaskStatus)
+/** Holds data associated with a task status update
+ *
+ * Stored locally in JSON format if posting on background channel fails,
+ * otherwise getter [argList] is used to extract the list of arguments
+ * to be passed to the background channel as arguments to the "statusUpdate" method invocation
+ */
+data class TaskStatusUpdate(
+    val task: Task,
+    val taskStatus: TaskStatus,  // note Dart field name is 'status'
+    val exception: TaskException?,
+    val responseBody: String?,
+    val responseStatusCode: Int?,
+    val responseHeaders: Map<String, String>?,
+    val mimeType: String?,
+    val charSet: String?
+) {
+
+    /**
+     * Returns the list of arguments that represents this [TaskStatusUpdate] when posting
+     * a "statusUpdate" on the backgroundChannel
+     *
+     * Included data differs between failed tasks and other status updates
+     */
+    val argList
+        get() = if (taskStatus == TaskStatus.failed) mutableListOf(
+            taskStatus.ordinal,
+            exception?.type?.typeString,
+            exception?.description,
+            exception?.httpResponseCode,
+            responseBody
+        ) else mutableListOf(
+            taskStatus.ordinal,
+            if (taskStatus.isFinalState()) responseBody else null,
+            if (taskStatus.isFinalState()) responseHeaders else null,
+            if (taskStatus == TaskStatus.complete || taskStatus == TaskStatus.notFound) responseStatusCode else null,
+            if (taskStatus.isFinalState()) mimeType else null,
+            if (taskStatus.isFinalState()) charSet else null
+        )
+
+    override fun toString(): String {
+        return "TaskStatusUpdate(task=$task, taskStatus=$taskStatus, exception=$exception, responseBody=$responseBody, responseStatusCode=$responseStatusCode, responseHeaders=$responseHeaders, mimeType=$mimeType, charSet=$charSet)"
+    }
+}
 
 @Serializable
 /** Holds data associated with a task progress update, for local storage */
@@ -404,7 +441,12 @@ data class TaskProgressUpdate(val task: Task, val progress: Double, val expected
 
 /// Holds data associated with a resume
 @Serializable
-data class ResumeData(val task: Task, val data: String, val requiredStartByte: Long, val eTag: String?)
+data class ResumeData(
+    val task: Task,
+    val data: String,
+    val requiredStartByte: Long,
+    val eTag: String?
+)
 
 /**
  * The type of a [TaskException]
@@ -445,6 +487,7 @@ enum class ExceptionType(val typeString: String) {
  * The [description] is typically taken from the platform-generated
  * error message, or from the plugin. The localization is undefined
  */
+@Serializable(with = TaskExceptionSerializer::class)
 class TaskException(
     val type: ExceptionType,
     val httpResponseCode: Int = -1,
@@ -464,6 +507,61 @@ class TaskException(
     )
 }
 
+
+object TaskExceptionSerializer : KSerializer<TaskException> {
+    override val descriptor = buildClassSerialDescriptor("TaskException") {
+        element<String>("type")
+        element<Int>("httpResponseCode")
+        element<String>("description")
+    }
+
+    override fun serialize(encoder: Encoder, value: TaskException) {
+        encoder.encodeStructure(descriptor) {
+            encodeStringElement(
+                descriptor, 0, when (value.type) {
+                    ExceptionType.fileSystem -> "TaskFileSystemException"
+                    ExceptionType.url -> "TaskUrlException"
+                    ExceptionType.connection -> "TaskConnectionException"
+                    ExceptionType.resume -> "TaskResumeException"
+                    ExceptionType.httpResponse -> "TaskHttpException"
+                    else -> "TaskException"
+                }
+            )
+            encodeIntElement(descriptor, 1, value.httpResponseCode)
+            encodeStringElement(descriptor, 2, value.description)
+        }
+    }
+
+    override fun deserialize(decoder: Decoder): TaskException {
+        return decoder.decodeStructure(descriptor) {
+            var type: ExceptionType? = null
+            var httpResponseCode = -1
+            var description = ""
+
+            while (true) {
+                when (val index = decodeElementIndex(descriptor)) {
+                    0 -> type = when (decodeStringElement(descriptor, 0)) {
+                        "TaskFileSystemException" -> ExceptionType.fileSystem
+                        "TaskUrlException" -> ExceptionType.url
+                        "TaskConnectionException" -> ExceptionType.connection
+                        "TaskResumeException" -> ExceptionType.resume
+                        "TaskHttpException" -> ExceptionType.httpResponse
+                        else -> ExceptionType.general
+                    }
+
+                    1 -> httpResponseCode = decodeIntElement(descriptor, 1)
+                    2 -> description = decodeStringElement(descriptor, 2)
+                    CompositeDecoder.DECODE_DONE -> break
+                    else -> error("Unexpected index: $index")
+                }
+            }
+
+            TaskException(type!!, httpResponseCode, description)
+        }
+    }
+}
+
+
 /**
  * Wifi requirement modes at the application level
  */
@@ -478,12 +576,13 @@ enum class RequireWiFi {
  * the ordinal (index) of the value, instead of the String representation of
  * the value.
  */
-open class EnumAsIntSerializer<T:Enum<*>>(
+open class EnumAsIntSerializer<T : Enum<*>>(
     serialName: String,
     val serialize: (v: T) -> Int,
     val deserialize: (v: Int) -> T
 ) : KSerializer<T> {
-    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor(serialName, PrimitiveKind.INT)
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor(serialName, PrimitiveKind.INT)
 
     override fun serialize(encoder: Encoder, value: T) {
         encoder.encodeInt(serialize(value))

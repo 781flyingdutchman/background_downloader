@@ -202,6 +202,11 @@ fun getBasenameWithoutExtension(file: File): String {
     return fileName.substringBeforeLast(".$extension")
 }
 
+// Helper extension to filter out null values from Maps
+fun <K, V> Map<K, V>?.filterNotNull(): Map<K, V> {
+    return this?.filter { (key, value) -> key != null && value != null } ?: emptyMap()
+}
+
 /**
  * Simple Flutter result handler, completes the [completer] with the result
  * of the MethodChannel call
