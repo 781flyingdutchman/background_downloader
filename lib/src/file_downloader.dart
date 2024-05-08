@@ -544,7 +544,7 @@ interface class FileDownloader {
   /// the task is now enqueued for resume.
   /// If the task is able to resume, it will, otherwise it will restart the
   /// task from scratch, or fail.
-  Future<bool> resume(DownloadTask task) => _downloader.resume(task);
+  Future<bool> resume(Task task) => _downloader.resume(task);
 
   /// Set WiFi requirement globally, based on [requirement].
   ///
