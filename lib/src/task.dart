@@ -1275,6 +1275,7 @@ final class DataTask extends Task {
       super.creationTime})
       : super(
             post: json != null ? jsonEncode(json) : post,
+            baseDirectory: BaseDirectory.temporary,
             updates: Updates.status,
             allowPause: false) {
     // if no content-type header set, it is set to [contentType] or
@@ -1285,13 +1286,14 @@ final class DataTask extends Task {
         if (contentType != null) {
           headers['Content-Type'] = contentType;
         } else if ((post != null || json != null)) {
-          assert((post != null) ^ (json !=
-              null), 'Only post or json can be set, not both');
+          assert((post != null) ^ (json != null),
+              'Only post or json can be set, not both');
           headers['Content-Type'] =
-          json != null ? 'application/json' : 'text/plain; charset=utf-8';
+              json != null ? 'application/json' : 'text/plain; charset=utf-8';
         }
       } on UnsupportedError {
-        _log.warning('Could not add Content-Type header as supplied header is const');
+        _log.warning(
+            'Could not add Content-Type header as supplied header is const');
       }
     }
   }

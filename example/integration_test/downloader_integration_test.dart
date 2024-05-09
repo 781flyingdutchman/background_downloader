@@ -3399,7 +3399,7 @@ void main() {
       final exception = lastUpdate.exception!;
       print(exception);
       expect(exception is TaskHttpException, isTrue);
-      expect(exception.description, equals('BAD REQUEST'));
+      expect(exception.description.toUpperCase(), equals('BAD REQUEST'));
       expect((exception as TaskHttpException).httpResponseCode, equals(400));
     });
 
@@ -3448,6 +3448,16 @@ void main() {
       await Future.delayed(const Duration(seconds: 3));
       expect(lastUpdate.status, equals(TaskStatus.canceled));
       expect(lastUpdate.task.retriesRemaining, greaterThan(0));
+    });
+
+    test('backgroundRequest', () async {
+      final t = DataTask(url: dataTaskGetUrl, headers: dataTaskHeaders);
+      final result = await FileDownloader().backgroundRequest(t);
+      expect(result.status, equals(TaskStatus.complete));
+      final json = jsonDecode(result.responseBody!);
+      final args = json['args'] as Map<String, dynamic>;
+      expect(args.isEmpty, isTrue);
+      expect(json['headers']['Accept'], equals('application/json'));
     });
   });
 }

@@ -816,9 +816,29 @@ The global setting persists across application restarts. Check the current setti
 
 ## Server requests
 
-To make a regular server request (e.g. to obtain a response from an API end point that you process directly in your app) use the `request` method.  It works similar to the `download` method, except you pass a `Request` object that has fewer fields than the `DownloadTask`, but is similar in structure.  You `await` the response, which will be a [Response](https://pub.dev/documentation/http/latest/http/Response-class.html) object as defined in the dart [http package](https://pub.dev/packages/http), and includes getters for the response body (as a `String` or as `UInt8List`), `statusCode` and `reasonPhrase`.
+To make a regular server request (e.g. to obtain a response from an API end point that you process directly in your app) use:
+1. The `request` method, if expecting an immediate return
+2. The `backgroundRequest` method, if you want to schedule the request to happen at some time
+
+### Foreground request
+
+A regular foreground request works similar to the `download` method, except you pass a `Request` object that has fewer fields than the `DownloadTask`, but is similar in structure.  You `await` the response, which will be a [Response](https://pub.dev/documentation/http/latest/http/Response-class.html) object as defined in the dart [http package](https://pub.dev/packages/http), and includes getters for the response body (as a `String` or as `UInt8List`), `statusCode` and `reasonPhrase`.
 
 Because requests are meant to be immediate, they are not enqueued like a `Task` is, and do not allow for status/progress monitoring.
+
+### background request
+
+To make a similar request using the background mechanism (e.g. if you want to wait for WiFi to be available), create and enqueue a `DataTask`.
+A `DataTask` is similar to a `DownloadTask` except it:
+* Does not accept file information, as there is no file involved
+* Accepts `post` data as a String, or
+* Accepts `json` data, which will be converted to a String and posted as content type `application/json`
+* Accepts `contentType` which will set the `Content-Type` header value
+* Returns the server `responseBody`, `responseHeaders` and possible `taskException` in the final `TaskStatusUpdate` fields
+
+Typically you would use `enqueue` to enqueue a `DataTask` and monitor the result using a listener or callback, but you can also use `FileDownloader().backgroundRequest` to enqueue and wait for the final result of the `DataTask`.
+
+
 
 ## Cookies
 

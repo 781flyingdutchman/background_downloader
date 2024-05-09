@@ -770,6 +770,33 @@ interface class FileDownloader {
         DesktopDownloader.bypassTLSCertificateValidation
       ));
 
+  /// Perform a background server request (a [DataTask]
+  ///
+  /// Different from [enqueue], this method returns a [Future] that completes
+  /// when the [DataTask] has completed, or an error has occurred.
+  /// While it uses the same mechanism as [enqueue],
+  /// and will execute the task also when
+  /// the app moves to the background, it is meant for data tasks that are
+  /// awaited while the app is in the foreground.
+  ///
+  /// [onStatus] is a callback for status updates
+  ///
+  /// An optional callback [onElapsedTime] will be called at regular intervals
+  /// (defined by [elapsedTimeInterval], which defaults to 5 seconds) with a
+  /// single argument that is the elapsed time since the call to [backgroundRequest].
+  /// This can be used to trigger UI warnings (e.g. 'this is taking rather long')
+  /// or to cancel the task if it does not complete within a desired time.
+  /// For performance reasons the [elapsedTimeInterval] should not be set to
+  /// a value less than one second.
+  Future<TaskStatusUpdate> backgroundRequest(DataTask task,
+          {void Function(TaskStatus)? onStatus,
+          void Function(Duration)? onElapsedTime,
+          Duration? elapsedTimeInterval}) =>
+      _downloader.enqueueAndAwait(task,
+          onStatus: onStatus,
+          onElapsedTime: onElapsedTime,
+          elapsedTimeInterval: elapsedTimeInterval);
+
   /// Move the file represented by the [task] to a shared storage
   /// [destination] and potentially a [directory] within that destination. If
   /// the [mimeType] is not provided we will attempt to derive it from the

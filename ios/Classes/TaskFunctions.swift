@@ -51,6 +51,11 @@ func isBinaryUploadTask(task: Task) -> Bool {
     return isUploadTask(task: task) && task.post?.lowercased() == "binary"
 }
 
+/// True if this is a DataTask
+func isDataTask(task: Task) -> Bool {
+    return task.taskType == "DataTask"
+}
+
 /// True if this state is not a final state (i.e. more changes may happen)
 func isNotFinalState(status: TaskStatus) -> Bool {
     return status == .enqueued || status == .running || status == .waitingToRetry || status == .paused

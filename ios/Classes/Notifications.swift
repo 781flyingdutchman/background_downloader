@@ -162,6 +162,10 @@ let ourCategories = NotificationCategory.allCases.map { $0.rawValue }
 
 /// Update notification for this [task], based on [notificationType] and [notificationConfig]
 func updateNotification(task: Task, notificationType: NotificationType, notificationConfig: NotificationConfig?) {
+    if isDataTask(task: task) {
+        // no notifications for data tasks
+        return
+    }
     _Concurrency.Task { @MainActor in // run using concurrency on main thread
         if (await getPermissionStatus(for: .notifications)) != .granted {
             return
