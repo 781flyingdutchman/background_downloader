@@ -1,5 +1,6 @@
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:developer';
 import 'dart:io';
 import 'dart:math' show Random;
 import 'dart:typed_data';
@@ -66,12 +67,13 @@ base class Request {
   Request(
       {required String url,
       Map<String, String>? urlQueryParameters,
-      this.headers = const {},
+      Map<String, String>? headers,
       String? httpRequestMethod,
       post,
       this.retries = 0,
       DateTime? creationTime})
       : url = urlWithQueryParameters(url, urlQueryParameters),
+        headers = headers ?? {},
         httpRequestMethod =
             httpRequestMethod?.toUpperCase() ?? (post == null ? 'GET' : 'POST'),
         post = post is Uint8List ? String.fromCharCodes(post) : post,
@@ -318,8 +320,9 @@ sealed class Task extends Request implements Comparable {
         'UploadTask' => UploadTask.fromJson(json),
         'MultiUploadTask' => MultiUploadTask.fromJson(json),
         'ParallelDownloadTask' => ParallelDownloadTask.fromJson(json),
+        'DataTask' => DataTask.fromJson(json),
         _ => throw ArgumentError(
-            'taskType not in [DownloadTask, UploadTask, MultiUploadTask, ParallelDownloadTask]')
+            'taskType not in [DownloadTask, UploadTask, MultiUploadTask, ParallelDownloadTask, DataTask]')
       };
 
   /// Create a new [Task] subclass from provided [jsonString]
@@ -1241,6 +1244,10 @@ final class DataTask extends Task {
   /// [headers] an optional map of HTTP request headers
   /// [httpRequestMethod] the HTTP request method used (e.g. GET, POST)
   /// [post] String post body, encoded in utf8
+  /// [json] if given will encode [json] to string and use as the [post] data
+  /// [contentType] sets the Content-Type header to this value. If omitted and
+  ///   [post] is given, it will be set to 'text-plain; charset=utf-8' and if
+  ///   [json] is given, it will be set to 'application/json]
   /// [group] if set allows different callbacks or processing for different
   /// groups
   /// [requiresWiFi] if set, will not start download until WiFi is available.
@@ -1256,7 +1263,9 @@ final class DataTask extends Task {
       super.urlQueryParameters,
       super.headers,
       super.httpRequestMethod,
-      String? super.post,
+      String? post,
+      Map<String, dynamic>? json,
+      String? contentType,
       super.group,
       super.requiresWiFi,
       super.retries,
@@ -1264,7 +1273,28 @@ final class DataTask extends Task {
       super.displayName,
       super.priority,
       super.creationTime})
-      : super(updates: Updates.status, allowPause: false);
+      : super(
+            post: json != null ? jsonEncode(json) : post,
+            updates: Updates.status,
+            allowPause: false) {
+    // if no content-type header set, it is set to [contentType] or
+    // (if post or json is given) to text/plain or application/json
+    if (!headers.containsKey('Content-Type') &&
+        !headers.containsKey('content-type')) {
+      try {
+        if (contentType != null) {
+          headers['Content-Type'] = contentType;
+        } else if ((post != null || json != null)) {
+          assert((post != null) ^ (json !=
+              null), 'Only post or json can be set, not both');
+          headers['Content-Type'] =
+          json != null ? 'application/json' : 'text/plain; charset=utf-8';
+        }
+      } on UnsupportedError {
+        _log.warning('Could not add Content-Type header as supplied header is const');
+      }
+    }
+  }
 
   @override
   Task copyWith(
@@ -1304,9 +1334,9 @@ final class DataTask extends Task {
   /// Creates [DataTask] object from [json]
   DataTask.fromJson(super.json)
       : assert(
-  json['taskType'] == 'DataTask',
-  'The provided JSON map is not a DataTask, '
-      'because key "taskType" is not "DataTask".'),
+            json['taskType'] == 'DataTask',
+            'The provided JSON map is not a DataTask, '
+            'because key "taskType" is not "DataTask".'),
         super.fromJson();
 
   @override

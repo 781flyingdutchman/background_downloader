@@ -414,7 +414,9 @@ open class TaskWorker(
             if (!isResume) {
                 processProgressUpdate(task, 0.0, prefs)
             }
-            NotificationService.updateNotification(this@TaskWorker, TaskStatus.running)
+            if (!task.isDataTask()) {
+                NotificationService.updateNotification(this@TaskWorker, TaskStatus.running)
+            }
             val status = doTask()
             withContext(NonCancellable) {
                 // NonCancellable to make sure we complete the status and notification
@@ -508,7 +510,7 @@ open class TaskWorker(
     open suspend fun connectAndProcess(connection: HttpURLConnection): TaskStatus {
         val filePath = task.filePath(applicationContext) // "" for MultiUploadTask
         try {
-            if (task.isDownloadTask() && task.post != null) {
+            if ((task.isDownloadTask() || task.isDataTask()) && task.post != null) {
                 connection.doOutput = true
                 connection.setFixedLengthStreamingMode(task.post!!.length)
                 DataOutputStream(connection.outputStream).use { it.writeBytes(task.post) }

@@ -140,11 +140,17 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             val constraints = Constraints.Builder().setRequiredNetworkType(
                 if (taskRequiresWifi) NetworkType.UNMETERED else NetworkType.CONNECTED
             ).build()
-            val requestBuilder =
-                if (task.isParallelDownloadTask())
-                    OneTimeWorkRequestBuilder<ParallelDownloadTaskWorker>()
-                else if (task.isDownloadTask()) OneTimeWorkRequestBuilder<DownloadTaskWorker>()
-                else OneTimeWorkRequestBuilder<UploadTaskWorker>()
+            val requestBuilder = when(task.taskType) {
+                "ParallelDownloadTask" -> OneTimeWorkRequestBuilder<ParallelDownloadTaskWorker>()
+                "DownloadTask" -> OneTimeWorkRequestBuilder<DownloadTaskWorker>()
+                "UploadTask" -> OneTimeWorkRequestBuilder<UploadTaskWorker>()
+                "MultiUploadTask" -> OneTimeWorkRequestBuilder<UploadTaskWorker>()
+                "DataTask" -> OneTimeWorkRequestBuilder<DataTaskWorker>()
+                else -> {
+                    Log.w(TAG, "Unknown taskType: ${task.taskType}")
+                    return false
+                }
+            }
             requestBuilder.setInputData(data)
                 .setConstraints(constraints).addTag(TAG).addTag("taskId=${task.taskId}")
                 .addTag("group=${task.group}")

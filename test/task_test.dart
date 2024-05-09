@@ -150,6 +150,26 @@ void main() {
     expect(task3.directory, equals(''));
   });
 
+  test('dataTask creation', () {
+    var t = DataTask(url: workingUrl);
+    expect(t.headers['Content-Type'], isNull);
+    t = DataTask(url: workingUrl, post: 'Text');
+    expect(t.headers['Content-Type'], equals('text/plain; charset=utf-8'));
+    t = DataTask(url: workingUrl, post: 'Text', headers: {'Content-Type': 'override'});
+    expect(t.headers['Content-Type'], equals('override'));
+    t = DataTask(url: workingUrl, json: {'key': 'value'});
+    expect(t.post, equals('{"key":"value"}'));
+    expect(t.headers['Content-Type'], equals('application/json'));
+    t = DataTask(url: workingUrl, json: {'key': 'value'}, headers: {'Content-Type': 'override'});
+    expect(t.post, equals('{"key":"value"}'));
+    expect(t.headers['Content-Type'], equals('override'));
+    // assertionError if setting both post and json
+    expect(() => DataTask(url: workingUrl, post: 'something', json: {'key': 'value'}), throwsAssertionError);
+    // constant header means we skip the header override
+    t = DataTask(url: workingUrl, post: 'Text', headers: const {});
+    expect(t.headers['Content-Type'], isNull);
+  });
+
   test('cookieHeader selection', () async {
     // test that the right cookies are included/excluded, based on cookie
     // settings and the url
