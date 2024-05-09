@@ -1226,3 +1226,89 @@ final class ParallelDownloadTask extends DownloadTask {
           creationTime: creationTime ?? this.creationTime)
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 }
+
+/// Class for background requests that do not involve a file
+///
+/// Closely resembles a Task, with  fewer fields available during construction
+final class DataTask extends Task {
+  /// Creates a [DataTask] that runs in the background, but does not involve a
+  /// file
+  ///
+  /// [taskId] must be unique. A unique id will be generated if omitted
+  /// [url] properly encoded if necessary, can include query parameters
+  /// [urlQueryParameters] may be added and will be appended to the [url], must
+  ///   be properly encoded if necessary
+  /// [headers] an optional map of HTTP request headers
+  /// [httpRequestMethod] the HTTP request method used (e.g. GET, POST)
+  /// [post] String post body, encoded in utf8
+  /// [group] if set allows different callbacks or processing for different
+  /// groups
+  /// [requiresWiFi] if set, will not start download until WiFi is available.
+  /// If not set may start download over cellular network
+  /// [retries] if >0 will retry a failed download this many times
+  /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5
+  /// [metaData] user data
+  /// [displayName] human readable name for this task
+  /// [creationTime] time of task creation, 'now' by default.
+  DataTask(
+      {String? taskId,
+      required super.url,
+      super.urlQueryParameters,
+      super.headers,
+      super.httpRequestMethod,
+      String? super.post,
+      super.group,
+      super.requiresWiFi,
+      super.retries,
+      super.metaData,
+      super.displayName,
+      super.priority,
+      super.creationTime})
+      : super(updates: Updates.status, allowPause: false);
+
+  @override
+  Task copyWith(
+          {String? taskId,
+          String? url,
+          String? filename,
+          Map<String, String>? headers,
+          String? httpRequestMethod,
+          Object? post,
+          String? directory,
+          BaseDirectory? baseDirectory,
+          String? group,
+          Updates? updates,
+          bool? requiresWiFi,
+          int? retries,
+          int? retriesRemaining,
+          bool? allowPause,
+          int? priority,
+          String? metaData,
+          String? displayName,
+          DateTime? creationTime}) =>
+      DataTask(
+          taskId: taskId ?? this.taskId,
+          url: url ?? this.url,
+          headers: headers ?? this.headers,
+          httpRequestMethod: httpRequestMethod ?? this.httpRequestMethod,
+          post: post as String? ?? this.post,
+          group: group ?? this.group,
+          requiresWiFi: requiresWiFi ?? this.requiresWiFi,
+          retries: retries ?? this.retries,
+          priority: priority ?? this.priority,
+          metaData: metaData ?? this.metaData,
+          displayName: displayName ?? this.displayName,
+          creationTime: creationTime ?? this.creationTime)
+        ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
+
+  /// Creates [DataTask] object from [json]
+  DataTask.fromJson(super.json)
+      : assert(
+  json['taskType'] == 'DataTask',
+  'The provided JSON map is not a DataTask, '
+      'because key "taskType" is not "DataTask".'),
+        super.fromJson();
+
+  @override
+  String get taskType => 'DataTask';
+}

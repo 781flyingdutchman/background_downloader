@@ -50,6 +50,10 @@ const uploadBinaryTestUrl =
     'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_upload_binary_file';
 const uploadMultiTestUrl =
     'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_multi_upload_file';
+const dataTaskGetUrl = 'https://httpbin.org/get';
+const dataTaskPostUrl = 'https://httpbin.org/post';
+const dataTaskHeaders = {'accept': 'application/json'};
+
 const urlWithContentLengthFileSize = 6207471;
 
 const defaultFilename = 'google.html';
@@ -65,6 +69,8 @@ var retryTask =
 
 var uploadTask = UploadTask(url: uploadTestUrl, filename: uploadFilename);
 var uploadTaskBinary = uploadTask.copyWith(post: 'binary');
+var dataTaskGet = DataTask(url: dataTaskGetUrl, headers: dataTaskHeaders);
+var dataTaskPost = DataTask(url: dataTaskPostUrl, headers: dataTaskHeaders, httpRequestMethod: 'POST');
 
 void statusCallback(TaskStatusUpdate update) {
   final task = update.task;
@@ -124,6 +130,9 @@ void main() {
     uploadTask = UploadTask(url: uploadTestUrl, filename: uploadFilename);
     uploadTaskBinary =
         uploadTask.copyWith(url: uploadBinaryTestUrl, post: 'binary');
+    dataTaskGet = DataTask(url: dataTaskGetUrl, headers: dataTaskHeaders);
+    dataTaskPost = DataTask(url: dataTaskPostUrl, headers: dataTaskHeaders, httpRequestMethod: 'POST');
+
     // copy the test files to upload from assets to documents directory
     Directory directory = await getApplicationDocumentsDirectory();
     for (final filename in [uploadFilename, uploadFilename2]) {
@@ -3295,6 +3304,57 @@ void main() {
         }
       }
     });
+  });
+
+  group('DataTask', () {
+    test('dataTask get', () async {
+      var lastUpdate = TaskStatusUpdate(dataTaskGet, TaskStatus.paused);
+      FileDownloader().registerCallbacks(taskStatusCallback: (update) {
+        lastUpdate = update;
+      });
+      expect(await FileDownloader().enqueue(dataTaskGet), isTrue);
+      await Future.delayed(const Duration(seconds: 1));
+      expect(lastUpdate.status, equals(TaskStatus.complete));
+      final json = jsonDecode(lastUpdate.responseBody!);
+      final args = json['args'] as Map<String, dynamic>;
+      expect(args.isEmpty, isTrue);
+      expect(json['headers']['Accept'], equals('application/json'));
+    });
+
+    test('dataTask post no data', () async {
+      var lastUpdate = TaskStatusUpdate(dataTaskPost, TaskStatus.paused);
+      FileDownloader().registerCallbacks(taskStatusCallback: (update) {
+        lastUpdate = update;
+      });
+      expect(await FileDownloader().enqueue(dataTaskPost), isTrue);
+      await Future.delayed(const Duration(seconds: 1));
+      expect(lastUpdate.status, equals(TaskStatus.complete));
+      print(lastUpdate.responseBody);
+      final json = jsonDecode(lastUpdate.responseBody!);
+      final args = json['args'] as Map<String, dynamic>;
+      expect(args.isEmpty, isTrue);
+      expect(json['headers']['Accept'], equals('application/json'));
+      expect((json['data'] as String).isEmpty, isTrue);
+    });
+
+    test('dataTask post with data', () async {
+      var lastUpdate = TaskStatusUpdate(dataTaskPost, TaskStatus.paused);
+      FileDownloader().registerCallbacks(taskStatusCallback: (update) {
+        lastUpdate = update;
+      });
+      expect(await FileDownloader().enqueue(dataTaskPost.copyWith(post: 'My data')), isTrue);
+      await Future.delayed(const Duration(seconds: 1));
+      print(lastUpdate.responseStatusCode);
+      expect(lastUpdate.status, equals(TaskStatus.complete));
+      print(lastUpdate.responseBody);
+      final json = jsonDecode(lastUpdate.responseBody!);
+      final args = json['args'] as Map<String, dynamic>;
+      expect(args.isEmpty, isTrue);
+      expect(json['headers']['Accept'], equals('application/json'));
+      expect((json['data'] as String), equals('My data'));
+    });
+
+
   });
 }
 

@@ -41,7 +41,6 @@ Future<TaskStatus> binaryUpload(
     return TaskStatus.failed;
   }
   final fileSize = inFile.lengthSync();
-  // determine the content length of the multi-part data
   var resultStatus = TaskStatus.failed;
   try {
     final client = DesktopDownloader.httpClient;
