@@ -268,6 +268,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                 return false
             }
             // binary post can use uploadTask fromFile method
+            request.setValue(task.mimeType, forHTTPHeaderField: "Content-Type")
             request.setValue("attachment; filename=\"\(task.filename)\"", forHTTPHeaderField: "Content-Disposition")
             let urlSessionUploadTask = UrlSessionDelegate.urlSession!.uploadTask(with: request, fromFile: filePath)
             urlSessionUploadTask.taskDescription = taskDescription
