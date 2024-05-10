@@ -414,9 +414,7 @@ open class TaskWorker(
             if (!isResume) {
                 processProgressUpdate(task, 0.0, prefs)
             }
-            if (!task.isDataTask()) {
-                NotificationService.updateNotification(this@TaskWorker, TaskStatus.running)
-            }
+            NotificationService.updateNotification(this@TaskWorker, TaskStatus.running)
             val status = doTask()
             withContext(NonCancellable) {
                 // NonCancellable to make sure we complete the status and notification

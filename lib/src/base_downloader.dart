@@ -206,7 +206,7 @@ abstract base class BaseDownloader {
   ///
   /// Matches on task, then on group, then on default
   TaskNotificationConfig? notificationConfigForTask(Task task) {
-    if (task.group == chunkGroup) {
+    if (task.group == chunkGroup || task is DataTask) {
       return null;
     }
     return notificationConfigs
