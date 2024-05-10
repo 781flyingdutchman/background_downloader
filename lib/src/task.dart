@@ -1,6 +1,5 @@
 import 'dart:collection';
 import 'dart:convert';
-import 'dart:developer';
 import 'dart:io';
 import 'dart:math' show Random;
 import 'dart:typed_data';
@@ -1250,6 +1249,7 @@ final class DataTask extends Task {
   ///   [json] is given, it will be set to 'application/json]
   /// [group] if set allows different callbacks or processing for different
   /// groups
+  /// [updates] the kind of progress updates requested (only .status or none)
   /// [requiresWiFi] if set, will not start download until WiFi is available.
   /// If not set may start download over cellular network
   /// [retries] if >0 will retry a failed download this many times
@@ -1267,16 +1267,18 @@ final class DataTask extends Task {
       Map<String, dynamic>? json,
       String? contentType,
       super.group,
+      super.updates,
       super.requiresWiFi,
       super.retries,
       super.metaData,
       super.displayName,
       super.priority,
       super.creationTime})
-      : super(
+      : assert(const [Updates.status, Updates.none].contains(updates),
+            'DataTasks can only provide status updates'),
+        super(
             post: json != null ? jsonEncode(json) : post,
             baseDirectory: BaseDirectory.temporary,
-            updates: Updates.status,
             allowPause: false) {
     // if no content-type header set, it is set to [contentType] or
     // (if post or json is given) to text/plain or application/json
@@ -1325,6 +1327,7 @@ final class DataTask extends Task {
           httpRequestMethod: httpRequestMethod ?? this.httpRequestMethod,
           post: post as String? ?? this.post,
           group: group ?? this.group,
+          updates: updates ?? this.updates,
           requiresWiFi: requiresWiFi ?? this.requiresWiFi,
           retries: retries ?? this.retries,
           priority: priority ?? this.priority,

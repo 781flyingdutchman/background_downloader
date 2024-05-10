@@ -3450,9 +3450,9 @@ void main() {
       expect(lastUpdate.task.retriesRemaining, greaterThan(0));
     });
 
-    test('backgroundRequest', () async {
+    test('transmit (wait for completion)', () async {
       final t = DataTask(url: dataTaskGetUrl, headers: dataTaskHeaders);
-      final result = await FileDownloader().backgroundRequest(t);
+      final result = await FileDownloader().transmit(t);
       expect(result.status, equals(TaskStatus.complete));
       final json = jsonDecode(result.responseBody!);
       final args = json['args'] as Map<String, dynamic>;

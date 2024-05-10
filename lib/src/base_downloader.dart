@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:background_downloader/src/permissions.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
@@ -11,6 +10,7 @@ import 'database.dart';
 import 'exceptions.dart';
 import 'models.dart';
 import 'native_downloader.dart';
+import 'permissions.dart';
 import 'persistent_storage.dart';
 import 'queue/task_queue.dart';
 import 'task.dart';
