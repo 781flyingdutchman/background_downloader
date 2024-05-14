@@ -508,7 +508,7 @@ open class TaskWorker(
     open suspend fun connectAndProcess(connection: HttpURLConnection): TaskStatus {
         val filePath = task.filePath(applicationContext) // "" for MultiUploadTask
         try {
-            if (task.isDownloadTask() && task.post != null) {
+            if ((task.isDownloadTask() || task.isDataTask()) && task.post != null) {
                 connection.doOutput = true
                 connection.setFixedLengthStreamingMode(task.post!!.length)
                 DataOutputStream(connection.outputStream).use { it.writeBytes(task.post) }

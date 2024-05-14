@@ -289,6 +289,32 @@ interface class FileDownloader {
           onElapsedTime: onElapsedTime,
           elapsedTimeInterval: elapsedTimeInterval);
 
+  /// Transmit data in the [DataTask] and receive the response
+  ///
+  /// Different from [enqueue], this method returns a [Future] that completes
+  /// when the [DataTask] has completed, or an error has occurred.
+  /// While it uses the same mechanism as [enqueue],
+  /// and will execute the task also when
+  /// the app moves to the background, it is meant for data tasks that are
+  /// awaited while the app is in the foreground.
+  ///
+  /// [onStatus] is an optional callback for status updates
+  ///
+  /// An optional callback [onElapsedTime] will be called at regular intervals
+  /// (defined by [elapsedTimeInterval], which defaults to 5 seconds) with a
+  /// single argument that is the elapsed time since the call to [transmit].
+  /// This can be used to trigger UI warnings (e.g. 'this is taking rather long')
+  /// For performance reasons the [elapsedTimeInterval] should not be set to
+  /// a value less than one second.
+  Future<TaskStatusUpdate> transmit(DataTask task,
+          {void Function(TaskStatus)? onStatus,
+          void Function(Duration)? onElapsedTime,
+          Duration? elapsedTimeInterval}) =>
+      _downloader.enqueueAndAwait(task,
+          onStatus: onStatus,
+          onElapsedTime: onElapsedTime,
+          elapsedTimeInterval: elapsedTimeInterval);
+
   /// Enqueues a list of files to download and returns when all downloads
   /// have finished (successfully or otherwise). The returned value is a
   /// [Batch] object that contains the original [tasks], the

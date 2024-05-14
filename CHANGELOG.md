@@ -1,3 +1,24 @@
+## 8.5.0
+
+* Adds `DataTask` fro scheduled server requests
+* Fixes bug omitting Content-Type header for iOS uploads, and Content-Disposition header for desktop uploads
+
+### DataTask
+
+The downloader already supported server requests for immediate execution using `FileDownloader.request(Request request)`. This change adds the option to scheduled a server request similar to scheduling any other `Task`.
+
+To schedule a server request using the background mechanism (e.g. if you want to wait for WiFi to be available), create and enqueue a `DataTask`.
+A `DataTask` is similar to a `DownloadTask` except it:
+* Does not accept file information, as there is no file involved
+* Does not allow progress updates
+* Accepts `post` data as a String, or
+* Accepts `json` data, which will be converted to a String and posted as content type `application/json`
+* Accepts `contentType` which will set the `Content-Type` header value
+* Returns the server `responseBody`, `responseHeaders` and possible `taskException` in the final `TaskStatusUpdate` fields
+
+Typically you would use `enqueue` to enqueue a `DataTask` and monitor the result using a listener or callback, but you can also use `transmit` to enqueue and wait for the final result of the `DataTask`.
+
+
 ## 8.4.3
 
 * Fixes iOS/Android issue where `retrieveLocallyStoredData` retrieves only a basic `TaskStatusUpdate`, without responseCode, responseBody etc

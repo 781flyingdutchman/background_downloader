@@ -41,7 +41,6 @@ Future<TaskStatus> binaryUpload(
     return TaskStatus.failed;
   }
   final fileSize = inFile.lengthSync();
-  // determine the content length of the multi-part data
   var resultStatus = TaskStatus.failed;
   try {
     final client = DesktopDownloader.httpClient;
@@ -50,6 +49,8 @@ Future<TaskStatus> binaryUpload(
     request.headers.addAll(task.headers);
     request.contentLength = fileSize;
     request.headers['Content-Type'] = task.mimeType;
+    request.headers['Content-Disposition'] =
+        'attachment; filename="${task.filename}"';
     // initiate the request and handle completion async
     final requestCompleter = Completer();
     var transferBytesResult = TaskStatus.failed;

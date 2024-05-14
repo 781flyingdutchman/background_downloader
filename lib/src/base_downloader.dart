@@ -1,10 +1,7 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:background_downloader/src/chunk.dart';
-import 'package:background_downloader/src/permissions.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
@@ -13,6 +10,7 @@ import 'database.dart';
 import 'exceptions.dart';
 import 'models.dart';
 import 'native_downloader.dart';
+import 'permissions.dart';
 import 'persistent_storage.dart';
 import 'queue/task_queue.dart';
 import 'task.dart';
@@ -208,7 +206,7 @@ abstract base class BaseDownloader {
   ///
   /// Matches on task, then on group, then on default
   TaskNotificationConfig? notificationConfigForTask(Task task) {
-    if (task.group == chunkGroup) {
+    if (task.group == chunkGroup || task is DataTask) {
       return null;
     }
     return notificationConfigs
@@ -421,30 +419,12 @@ abstract base class BaseDownloader {
           pausedTasks.firstWhereOrNull((element) => element.taskId == taskId);
       if (task != null) {
         final resumeData = await getResumeData(task.taskId);
-        if (task is ParallelDownloadTask) {
-          if (resumeData != null) {
-            final chunks = List<Chunk>.from(
-                jsonDecode(resumeData.data, reviver: Chunk.listReviver));
-            for (final chunk in chunks) {
-              final tempFilePath =
-                  (await getResumeData(chunk.task.taskId))?.tempFilepath;
-              if (tempFilePath != null) {
-                try {
-                  await File(tempFilePath).delete();
-                } on FileSystemException {
-                  log.fine('Could not delete temp file $tempFilePath');
-                }
-              }
-            }
-          }
-        } else {
-          if (!Platform.isIOS && resumeData != null) {
-            final tempFilePath = resumeData.tempFilepath;
-            try {
-              await File(tempFilePath).delete();
-            } on FileSystemException {
-              log.fine('Could not delete temp file $tempFilePath');
-            }
+        if (!Platform.isIOS && resumeData != null) {
+          final tempFilePath = resumeData.tempFilepath;
+          try {
+            await File(tempFilePath).delete();
+          } on FileSystemException {
+            log.fine('Could not delete temp file $tempFilePath');
           }
         }
         processStatusUpdate(TaskStatusUpdate(task, TaskStatus.canceled));

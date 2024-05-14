@@ -8,9 +8,18 @@ import android.util.Log
 import com.bbflight.background_downloader.TaskWorker.Companion.TAG
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.*
-import kotlinx.serialization.descriptors.*
-import kotlinx.serialization.encoding.*
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.buildClassSerialDescriptor
+import kotlinx.serialization.descriptors.element
+import kotlinx.serialization.encoding.CompositeDecoder
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.encoding.decodeStructure
+import kotlinx.serialization.encoding.encodeStructure
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.net.MalformedURLException
@@ -163,6 +172,11 @@ class Task(
         return taskType == "DownloadTask" || taskType == "ParallelDownloadTask"
     }
 
+    /** True if this task is an UploadTask or MultiUploadTask */
+    fun isUploadTask(): Boolean {
+        return taskType == "UploadTask" || taskType == "MultiUploadTask"
+    }
+
     /** True if this task is a ParallelDownloadTask */
     fun isParallelDownloadTask(): Boolean {
         return taskType == "ParallelDownloadTask"
@@ -172,6 +186,12 @@ class Task(
     private fun isMultiUploadTask(): Boolean {
         return taskType == "MultiUploadTask"
     }
+
+    /** True if this task is a DataTask */
+    fun isDataTask(): Boolean {
+        return taskType == "DataTask"
+    }
+
 
     /**
      * Returns full path (String) to the file,
