@@ -3,11 +3,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:background_downloader/src/chunk.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 
+import 'chunk.dart';
 import 'database.dart';
 import 'exceptions.dart';
 import 'models.dart';
@@ -421,8 +421,8 @@ abstract base class BaseDownloader {
           pausedTasks.firstWhereOrNull((element) => element.taskId == taskId);
       if (task != null) {
         final resumeData = await getResumeData(task.taskId);
-        if (task is ParallelDownloadTask) {
-          if (resumeData != null) {
+        if (resumeData != null) {
+          if (task is ParallelDownloadTask) {
             final chunks = List<Chunk>.from(
                 jsonDecode(resumeData.data, reviver: Chunk.listReviver));
             for (final chunk in chunks) {
@@ -436,14 +436,14 @@ abstract base class BaseDownloader {
                 }
               }
             }
-          }
-        } else {
-          if (!Platform.isIOS && resumeData != null) {
-            final tempFilePath = resumeData.tempFilepath;
-            try {
-              await File(tempFilePath).delete();
-            } on FileSystemException {
-              log.fine('Could not delete temp file $tempFilePath');
+          } else {
+            if (!Platform.isIOS) {
+              final tempFilePath = resumeData.tempFilepath;
+              try {
+                await File(tempFilePath).delete();
+              } on FileSystemException {
+                log.fine('Could not delete temp file $tempFilePath');
+              }
             }
           }
         }

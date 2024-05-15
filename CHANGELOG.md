@@ -1,3 +1,7 @@
+## 8.5.1
+
+* Fixes an issue where temporary files were not deleted when canceling a paused parallel download task
+
 ## 8.5.0
 
 * Adds `DataTask` fro scheduled server requests
