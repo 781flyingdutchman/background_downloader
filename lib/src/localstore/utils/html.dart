@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
+import 'package:web/web.dart' as web;
 
 import 'utils_impl.dart';
 
@@ -21,13 +22,10 @@ class Utils implements UtilsImpl {
       [bool? isCollection = false, List<List>? conditions]) async {
     // Fetch the documents for this collection
     if (isCollection != null && isCollection == true) {
-      var dataCol = html.window.localStorage.entries.singleWhere(
-        (e) => e.key == path,
-        orElse: () => const MapEntry('', ''),
-      );
-      if (dataCol.key != '') {
+      var dataVal = web.window.localStorage.getItem(path);
+      if (dataVal != null) {
         if (conditions != null && conditions.first.isNotEmpty) {
-          return _getAll(dataCol);
+          return _getAll(MapEntry(path, dataVal));
           /*
           final ck = conditions.first[0] as String;
           final co = conditions.first[1];
@@ -54,7 +52,7 @@ class Utils implements UtilsImpl {
           }
           */
         } else {
-          return _getAll(dataCol);
+          return _getAll(MapEntry(path, dataVal));
         }
       }
     } else {
@@ -106,13 +104,10 @@ class Utils implements UtilsImpl {
 
   void _initStream(
       StreamController<Map<String, dynamic>> storage, String path) {
-    var dataCol = html.window.localStorage.entries.singleWhere(
-      (e) => e.key == path,
-      orElse: () => const MapEntry('', ''),
-    );
+    var dataVal = web.window.localStorage.getItem(path);
     try {
-      if (dataCol.key != '') {
-        final mapCol = json.decode(dataCol.value) as Map<String, dynamic>;
+      if (dataVal != null) {
+        final mapCol = json.decode(dataVal) as Map<String, dynamic>;
         mapCol.forEach((key, value) {
           final data = value as Map<String, dynamic>;
           storage.add(data);
@@ -127,13 +122,10 @@ class Utils implements UtilsImpl {
 
   Future<dynamic> _readFromStorage(String path) async {
     final key = path.replaceAll(RegExp(r'[^\/]+\/?$'), '');
-    final data = html.window.localStorage.entries.firstWhere(
-      (i) => i.key == key,
-      orElse: () => const MapEntry('', ''),
-    );
-    if (data != const MapEntry('', '')) {
+    final data = web.window.localStorage.getItem(key);
+    if (data != null) {
       try {
-        return json.decode(data.value) as Map<String, dynamic>;
+        return json.decode(data) as Map<String, dynamic>;
       } catch (e) {
         return e;
       }
@@ -148,25 +140,19 @@ class Utils implements UtilsImpl {
 
     final uri = Uri.parse(path);
     final id = uri.pathSegments.last;
-    var dataCol = html.window.localStorage.entries.singleWhere(
-      (e) => e.key == key,
-      orElse: () => const MapEntry('', ''),
-    );
+    var dataVal = web.window.localStorage.getItem(key);
     try {
-      if (dataCol.key != '') {
-        final mapCol = json.decode(dataCol.value) as Map<String, dynamic>;
+      if (dataVal != null) {
+        final mapCol = json.decode(dataVal) as Map<String, dynamic>;
         mapCol[id] = data;
-        dataCol = MapEntry(id, json.encode(mapCol));
-        html.window.localStorage.update(
+        web.window.localStorage.setItem(
           key,
-          (value) => dataCol.value,
-          ifAbsent: () => dataCol.value,
+          json.encode(mapCol),
         );
       } else {
-        html.window.localStorage.update(
+        web.window.localStorage.setItem(
           key,
-          (value) => json.encode({id: data}),
-          ifAbsent: () => json.encode({id: data}),
+          json.encode({id: data}),
         );
       }
       // ignore: close_sinks
@@ -183,14 +169,11 @@ class Utils implements UtilsImpl {
   Future<dynamic> _deleteFromStorage(String path) async {
     if (path.endsWith('/')) {
       // If path is a directory path
-      final dataCol = html.window.localStorage.entries.singleWhere(
-        (element) => element.key == path,
-        orElse: () => const MapEntry('', ''),
-      );
+      final dataCol = web.window.localStorage.getItem(path);
 
       try {
-        if (dataCol.key != '') {
-          html.window.localStorage.remove(dataCol.key);
+        if (dataCol != null) {
+          web.window.localStorage.delete(path.toJS);
         }
       } catch (error) {
         rethrow;
@@ -200,19 +183,15 @@ class Utils implements UtilsImpl {
       final uri = Uri.parse(path);
       final key = path.replaceAll(RegExp(r'[^\/]+\/?$'), '');
       final id = uri.pathSegments.last;
-      var dataCol = html.window.localStorage.entries.singleWhere(
-        (e) => e.key == key,
-        orElse: () => const MapEntry('', ''),
-      );
+      var dataVal = web.window.localStorage.getItem(key);
 
       try {
-        if (dataCol.key != '') {
-          final mapCol = json.decode(dataCol.value) as Map<String, dynamic>;
+        if (dataVal != null) {
+          final mapCol = json.decode(dataVal) as Map<String, dynamic>;
           mapCol.remove(id);
-          html.window.localStorage.update(
+          web.window.localStorage.setItem(
             key,
-            (value) => json.encode(mapCol),
-            ifAbsent: () => dataCol.value,
+            json.encode(mapCol),
           );
         }
       } catch (error) {
