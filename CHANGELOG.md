@@ -1,3 +1,8 @@
+## 8.5.2
+
+* Removes references to `dart:html` to allow web compilation using WASM. Note the package still does not work on the web
+* Adds auto-decode of `post` field if Map or List. Throws if `jsonEncode` cannot convert the object, in which case you have to encode it yourself using a custom encoder
+
 ## 8.5.1
 
 * Fixes an issue where temporary files were not deleted when canceling a paused parallel download task
