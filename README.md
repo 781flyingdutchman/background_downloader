@@ -778,7 +778,7 @@ final tq = MemoryTaskQueue();
 tq.maxConcurrent = 5; // no more than 5 tasks active at any one time
 tq.maxConcurrentByHost = 2; // no more than two tasks talking to the same host at the same time
 tq.maxConcurrentByGroup = 3; // no more than three tasks from the same group active at the same time
-FileDownloader().add(tq); // 'connects' the TaskQueue to the FileDownloader
+FileDownloader().addTaskQueue(tq); // 'connects' the TaskQueue to the FileDownloader
 FileDownloader().updates.listen((update) { // listen to updates as per usual
   print('Received update for ${update.task.taskId}: $update')
 });
