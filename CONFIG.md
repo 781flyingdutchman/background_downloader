@@ -33,8 +33,7 @@ The following configurations are supported:
   ```
   <service
     android:name="androidx.work.impl.foreground.SystemForegroundService"
-    android:foregroundServiceType="dataSync"
-    tools:node="merge" />
+    android:foregroundServiceType="dataSync" />
   ```
   
   - `(Config.runInForeground, bool activate)` or `(Config.runInForeground, Config.always)` or `(Config.runInForeground, Config.never)` activates or de-activates foreground mode for all tasks
