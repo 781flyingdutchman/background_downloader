@@ -538,7 +538,7 @@ register a `taskNotificationTapCallback`.
 
 ### Setup for notifications
 
-On iOS, add the following to your `AppDelegate.swift`:
+__On iOS__: Add the following to your `AppDelegate.swift`:
 ```swift
 UNUserNotificationCenter.current().delegate = self as UNUserNotificationCenterDelegate
 ```
@@ -546,6 +546,8 @@ or if using Objective C, add to `AppDelegate.m`:
 ```objective-c
 [UNUserNotificationCenter currentNotificationCenter].delegate = (id<UNUserNotificationCenterDelegate>) self;
 ```
+
+__On Android__: Optionally, supply your own notification icons by creating a version of the icons defined in `android/src/main/res/drawable`, e.g. `outline_download_done_24.xml`, and add those to your own app's `android/src/main/res/drawable` under the same name.
 
 
 ## Shared and scoped storage
