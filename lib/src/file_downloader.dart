@@ -340,10 +340,7 @@ interface class FileDownloader {
   /// a value less than one second.
   /// The [onElapsedTime] callback should not be used to indicate progress.
   ///
-  /// Note that to allow for special processing of tasks in a batch, the task's
-  /// [Task.group] and [Task.updates] value will be modified when enqueued, and
-  /// those modified tasks are returned as part of the [Batch]
-  /// object.
+  /// [tasks] cannot be an empty list
   Future<Batch> downloadBatch(final List<DownloadTask> tasks,
           {BatchProgressCallback? batchProgressCallback,
           TaskStatusCallback? taskStatusCallback,
@@ -382,10 +379,7 @@ interface class FileDownloader {
   /// a value less than one second.
   /// The [onElapsedTime] callback should not be used to indicate progress.
   ///
-  /// Note that to allow for special processing of tasks in a batch, the task's
-  /// [Task.group] and [Task.updates] value will be modified when enqueued, and
-  /// those modified tasks are returned as part of the [Batch]
-  /// object.
+  /// [tasks] cannot be an empty list
   Future<Batch> uploadBatch(final List<UploadTask> tasks,
           {BatchProgressCallback? batchProgressCallback,
           TaskStatusCallback? taskStatusCallback,
