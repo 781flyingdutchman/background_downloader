@@ -932,7 +932,23 @@ No setup is required for Windows or Linux.
 
 ### Android
 
-No setup is required if you don't use notifications. If you do:
+This package needs Kotlin 1.9.20 or above to compile.
+For modern Flutter projects this should be added to the `/android/settings.gradle` file.
+```gradle
+plugins {
+    // ...
+    id "org.jetbrains.kotlin.android" version "1.9.20" apply false
+    // ...
+}
+```
+For older flutter projects, the kotlin version is set in the `android/build.gradle` file as follows.
+```gradle
+buildScript {
+    ext.kotlin_version = '1.9.20'
+}
+```
+
+If using notifications you need to:
 * Starting with API 33, you need to add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />` to your app's `AndroidManifest.xml`
 * If needed, localize the button text by overriding string resources `bg_downloader_cancel`, `bg_downloader_pause`, `bg_downloader_resume` and descriptions `bg_downloader_notification_channel_name`, `bg_downloader_notification_channel_description`.
 
