@@ -288,7 +288,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
             let urlSessionUploadTask = UrlSessionDelegate.urlSession!.uploadTask(with: request, fromFile: uploader.outputFileUrl())
             urlSessionUploadTask.taskDescription = taskDescription
-            urlSessionUploadTask.priority = Float(task.priority) / 10
+            urlSessionUploadTask.priority = 1 - Float(task.priority) / 10
             BDPlugin.uploaderForUrlSessionTaskIdentifier[urlSessionUploadTask.taskIdentifier] = uploader
             urlSessionUploadTask.resume()
         }
