@@ -355,6 +355,10 @@ sealed class Task extends Request implements Comparable {
     if (this is MultiUploadTask && withFilename == null) {
       return '';
     }
+    bool isContainsWindowsDriveLetter = _containsWindowsDriveLetter(directory);
+    if (isContainsWindowsDriveLetter) {
+      return p.join(directory, withFilename ?? filename);
+    }
     final baseDirPath = await baseDirectoryPath(baseDirectory);
     return p.join(baseDirPath, directory, withFilename ?? filename);
   }
@@ -434,6 +438,14 @@ sealed class Task extends Request implements Comparable {
     }
     // if no match, return a BaseDirectory.root with the absoluteDirectory
     // minus the leading characters that designate the root (differs by platform)
+    bool isContainsWindowsDriveLetter = _containsWindowsDriveLetter(absoluteDirectoryPath);
+    if (isContainsWindowsDriveLetter) {
+      return (
+        BaseDirectory.root,
+        absoluteDirectoryPath,
+        filename
+      );
+    }
     final match =
         RegExp(r'^(/|\\|([a-zA-Z]:[\\/]))').firstMatch(absoluteDirectoryPath);
     return (
@@ -441,6 +453,12 @@ sealed class Task extends Request implements Comparable {
       absoluteDirectoryPath.substring(match?.end ?? 0),
       filename
     );
+  }
+
+  /// Return contains windows drive letter
+  static bool _containsWindowsDriveLetter(String path){
+    final regex = RegExp(r'^[a-zA-Z]:\\');
+    return regex.hasMatch(path);
   }
 
   /// Returns the subdirectory of the given [baseDirPath] within [dirPath],

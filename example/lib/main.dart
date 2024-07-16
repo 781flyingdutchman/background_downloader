@@ -5,6 +5,8 @@ import 'dart:math';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
+import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 
 void main() {
   Logger.root.onRecord.listen((LogRecord rec) {
@@ -234,13 +236,23 @@ class _MyAppState extends State<MyApp> {
       case ButtonState.download:
         // start download
         await getPermission(PermissionType.notifications);
+        String filename = 'zipfile.zip';
+        BaseDirectory baseDirectory = BaseDirectory.applicationDocuments;
+        String directory = 'my/directory';
+        if (Platform.isWindows) {
+          Directory? downloadDir = await getDownloadsDirectory();
+          if (downloadDir != null) {
+            (baseDirectory, directory, filename) = await Task.split(
+                filePath: join(downloadDir.path, 'test', filename));
+          }
+        }
         backgroundDownloadTask = DownloadTask(
             url: downloadWithError
                 ? 'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/get_current_app_data' // returns 403 status code
                 : 'https://storage.googleapis.com/approachcharts/test/5MB-test.ZIP',
-            filename: 'zipfile.zip',
-            directory: 'my/directory',
-            baseDirectory: BaseDirectory.applicationDocuments,
+            filename: filename,
+            directory: directory,
+            baseDirectory: baseDirectory,
             updates: Updates.statusAndProgress,
             retries: 3,
             allowPause: true,
