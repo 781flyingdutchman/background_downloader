@@ -457,6 +457,9 @@ sealed class Task extends Request implements Comparable {
 
   /// Return contains windows drive letter
   static bool _containsWindowsDriveLetter(String path){
+    if (!Platform.isWindows) {
+      return false;
+    }
     final regex = RegExp(r'^[a-zA-Z]:\\');
     return regex.hasMatch(path);
   }
