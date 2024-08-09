@@ -1,3 +1,8 @@
+## 8.5.3
+
+* Bug fixes
+* Improvements to documentation
+
 ## 8.5.2
 
 * Removes references to `dart:html` to allow web compilation using WASM. Note the package still does not work on the web
