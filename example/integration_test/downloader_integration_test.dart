@@ -1420,7 +1420,7 @@ void main() {
             'Header1': 'headerValue1',
             'content-type': 'application/json'
           },
-          post: '{"field1": 1}');
+          post: '{"field1":1}');
       final path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
       expect((await FileDownloader().download(task)).status,
@@ -1429,10 +1429,58 @@ void main() {
       print(result);
       expect(result['args']['request-type'], equals('post-json'));
       expect(result['headers']['Header1'], equals('headerValue1'));
-      expect(result['data'], equals('{"field1": 1}'));
+      expect(result['data'], equals('{"field1":1}'));
       // confirm the server side interpreted this as JSON
       expect(result['json'], equals({'field1': 1}));
     });
+
+    testWidgets('post DownloadTask with post is Map',
+            (widgetTester) async {
+          final task = DownloadTask(
+              url: postTestUrl,
+              urlQueryParameters: {'request-type': 'post-json'},
+              filename: postFilename,
+              headers: {
+                'Header1': 'headerValue1',
+                'content-type': 'application/json'
+              },
+              post: {"field1": 1});
+          final path =
+          join((await getApplicationDocumentsDirectory()).path, task.filename);
+          expect((await FileDownloader().download(task)).status,
+              equals(TaskStatus.complete));
+          final result = jsonDecode(await File(path).readAsString());
+          print(result);
+          expect(result['args']['request-type'], equals('post-json'));
+          expect(result['headers']['Header1'], equals('headerValue1'));
+          expect(result['data'], equals('{"field1":1}'));
+          // confirm the server side interpreted this as JSON
+          expect(result['json'], equals({'field1': 1}));
+        });
+
+    testWidgets('post DownloadTask with post is List',
+            (widgetTester) async {
+          final task = DownloadTask(
+              url: postTestUrl,
+              urlQueryParameters: {'request-type': 'post-json'},
+              filename: postFilename,
+              headers: {
+                'Header1': 'headerValue1',
+                'content-type': 'application/json'
+              },
+              post: ['apple', 'orange']);
+          final path =
+          join((await getApplicationDocumentsDirectory()).path, task.filename);
+          expect((await FileDownloader().download(task)).status,
+              equals(TaskStatus.complete));
+          final result = jsonDecode(await File(path).readAsString());
+          print(result);
+          expect(result['args']['request-type'], equals('post-json'));
+          expect(result['headers']['Header1'], equals('headerValue1'));
+          expect(result['data'], equals('["apple","orange"]'));
+          // confirm the server side interpreted this as JSON
+          expect(result['json'], equals(['apple', 'orange']));
+        });
 
     testWidgets('post DownloadTask with post is invalid type',
         (widgetTester) async {
@@ -1442,7 +1490,7 @@ void main() {
               urlQueryParameters: {'request-type': 'invalid'},
               filename: postFilename,
               headers: {'Header1': 'headerValue1'},
-              post: {'invalid': 'map'}),
+              post: 2),
           throwsA(isA<TypeError>()));
     });
   });
@@ -1526,13 +1574,51 @@ void main() {
       expect(result['json'], equals({'field1': 1}));
     });
 
+    testWidgets('post request with post is Map', (widgetTester) async {
+      final request = Request(
+          url: postTestUrl,
+          urlQueryParameters: {'request-type': 'post-json'},
+          headers: {
+            'Header1': 'headerValue1',
+            'content-type': 'application/json'
+          },
+          post: {'field': 1});
+      final response = await FileDownloader().request(request);
+      expect(response.statusCode, equals(200));
+      final result = jsonDecode(response.body);
+      expect(result['args']['request-type'], equals('post-json'));
+      expect(result['headers']['Header1'], equals('headerValue1'));
+      expect(result['data'], equals('{"field":1}'));
+      // confirm the server side interpreted this as JSON
+      expect(result['json'], equals({'field': 1}));
+    });
+
+    testWidgets('post request with post is List', (widgetTester) async {
+      final request = Request(
+          url: postTestUrl,
+          urlQueryParameters: {'request-type': 'post-json'},
+          headers: {
+            'Header1': 'headerValue1',
+            'content-type': 'application/json'
+          },
+          post: ['apple', 'orange']);
+      final response = await FileDownloader().request(request);
+      expect(response.statusCode, equals(200));
+      final result = jsonDecode(response.body);
+      expect(result['args']['request-type'], equals('post-json'));
+      expect(result['headers']['Header1'], equals('headerValue1'));
+      expect(result['data'], equals('["apple","orange"]'));
+      // confirm the server side interpreted this as JSON
+      expect(result['json'], equals(['apple', 'orange']));
+    });
+
     testWidgets('post request with post is invalid type', (widgetTester) async {
       expect(
           () => Request(
               url: postTestUrl,
               urlQueryParameters: {'request-type': 'invalid'},
               headers: {'Header1': 'headerValue1'},
-              post: {'invalid': 'map'}),
+              post: 2),
           throwsA(isA<TypeError>()));
     });
 
@@ -3048,7 +3134,7 @@ void main() {
       final response = await FileDownloader().request(task);
       print(response.headers['set-cookie']);
       final cookies = Request.cookieHeader(response, task.url);
-      expect(cookies['Cookie']?.startsWith('1P_JAR'), isTrue);
+      expect(cookies['Cookie']?.startsWith('AEC'), isTrue);
     });
   });
 
