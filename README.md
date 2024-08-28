@@ -952,6 +952,11 @@ If using notifications you need to:
 * Starting with API 33, you need to add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />` to your app's `AndroidManifest.xml`
 * If needed, localize the button text by overriding string resources `bg_downloader_cancel`, `bg_downloader_pause`, `bg_downloader_resume` and descriptions `bg_downloader_notification_channel_name`, `bg_downloader_notification_channel_description`.
 
+If your app uses HTTP connections, make sure to configure your app's network security settings:
+
+Refer to [domain-config](https://developer.android.com/privacy-and-security/security-config#domain-config) settings to properly handle HTTP connections.
+
+
 ### iOS
 
 On iOS, ensure that you have the Background Fetch capability enabled:
@@ -971,6 +976,10 @@ or if using Objective C, add to `AppDelegate.m`:
 ```objective-c
 [UNUserNotificationCenter currentNotificationCenter].delegate = (id<UNUserNotificationCenterDelegate>) self;
 ```
+
+If your app uses HTTP connections, make sure to configure your app's network security settings:
+
+Refer to App [Transport Security (ATS)](https://developer.apple.com/documentation/bundleresources/information_property_list/nsapptransportsecurity/) settings.
 
 
 ### MacOS
