@@ -42,6 +42,11 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             os_log("Could not find task related to urlSessionTask %d", log: log, type: .error, task.taskIdentifier)
             return
         }
+        if BDPlugin.holdingQueue != nil {
+            _Concurrency.Task {
+                await BDPlugin.holdingQueue?.taskFinished(task)
+            }
+        }
         let responseBody = getResponseBody(taskId: task.taskId)
         let taskWasProgramaticallyCanceled: Bool = BDPlugin.taskIdsProgrammaticallyCancelled.remove(task.taskId) != nil
         guard error == nil else {
@@ -96,7 +101,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             : responseStatusCode == 404
             ? TaskStatus.notFound
             : TaskStatus.failed
-            processStatusUpdate(task: task, status: finalStatus, taskException: taskException, responseBody: responseBody, responseHeaders: responseHeaders)
+            processStatusUpdate(task: task, status: finalStatus, taskException: taskException, responseBody: responseBody, responseHeaders: responseHeaders, responseStatusCode: responseStatusCode)
         }
     }
     
@@ -113,6 +118,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
         guard var task = getTaskFrom(urlSessionTask: downloadTask) else { return }
         if BDPlugin.progressInfo[task.taskId] == nil {
             // first 'didWriteData' call
+            os_log("Starting/resuming taskId %@", log: log, type: .info, task.taskId)
             let response = downloadTask.response as! HTTPURLResponse
             // get suggested filename if needed
             if task.filename == "?" {
@@ -209,7 +215,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
         let notificationConfig = getNotificationConfigFrom(urlSessionTask: downloadTask)
         if response.statusCode == 404 {
             let responseBody = readFile(url: location)
-            processStatusUpdate(task: task, status: TaskStatus.notFound, responseBody: responseBody)
+            processStatusUpdate(task: task, status: TaskStatus.notFound, responseBody: responseBody, responseHeaders: responseHeaders, responseStatusCode: response.statusCode)
             updateNotification(task: task, notificationType: .error, notificationConfig: notificationConfig)
             return
         }
@@ -226,36 +232,51 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
         do {
             var finalStatus = TaskStatus.failed
             var taskException: TaskException? = nil
+            var responseBody: String? = nil
             defer {
-                processStatusUpdate(task: task, status: finalStatus, taskException: taskException, responseHeaders: responseHeaders, mimeType: mimeType, charSet: charSet)
+                processStatusUpdate(task: task, 
+                                    status: finalStatus,
+                                    taskException: taskException,
+                                    responseBody: responseBody,
+                                    responseHeaders: responseHeaders,
+                                    responseStatusCode: response.statusCode,
+                                    mimeType: mimeType,
+                                    charSet: charSet)
                 if finalStatus != TaskStatus.failed || task.retriesRemaining == 0 {
                     // update notification only if not failed, or no retries remaining
                     updateNotification(task: task, notificationType: notificationTypeForTaskStatus(status: finalStatus), notificationConfig: notificationConfig)
                 }
             }
-            let directory = try directoryForTask(task: task)
-            do
-            {
-                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories:  true)
-            } catch {
-                os_log("Failed to create directory %@", log: log, type: .error, directory.path)
-                taskException = TaskException(type: .fileSystem, httpResponseCode: -1,
-                                              description: "Failed to create directory \(directory.path)")
-                return
+            if (isDownloadTask(task: task)) {
+                let directory = try directoryForTask(task: task)
+                do
+                {
+                    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories:  true)
+                } catch {
+                    os_log("Failed to create directory %@", log: log, type: .error, directory.path)
+                    taskException = TaskException(type: .fileSystem, httpResponseCode: -1,
+                                                  description: "Failed to create directory \(directory.path)")
+                    return
+                }
+                let filePath = directory.appendingPath(task.filename)
+                if FileManager.default.fileExists(atPath: filePath.path) {
+                    try? FileManager.default.removeItem(at: filePath)
+                }
+                do {
+                    try FileManager.default.moveItem(at: location, to: filePath)
+                } catch {
+                    os_log("Failed to move file from %@ to %@: %@", log: log, type: .error, location.path, filePath.path, error.localizedDescription)
+                    taskException = TaskException(type: .fileSystem, httpResponseCode: -1,
+                                                  description: "Failed to move file from \(location.path) to \(filePath.path): \(error.localizedDescription)")
+                    return
+                }
+                finalStatus = TaskStatus.complete
+            } else {
+                // this is a DataTask, so we read the file as the responseBody
+                responseBody = readFile(url: location)
+                try? FileManager.default.removeItem(at: location);
+                finalStatus = .complete
             }
-            let filePath = directory.appendingPath(task.filename)
-            if FileManager.default.fileExists(atPath: filePath.path) {
-                try? FileManager.default.removeItem(at: filePath)
-            }
-            do {
-                try FileManager.default.moveItem(at: location, to: filePath)
-            } catch {
-                os_log("Failed to move file from %@ to %@: %@", log: log, type: .error, location.path, filePath.path, error.localizedDescription)
-                taskException = TaskException(type: .fileSystem, httpResponseCode: -1,
-                                              description: "Failed to move file from \(location.path) to \(filePath.path): \(error.localizedDescription)")
-                return
-            }
-            finalStatus = TaskStatus.complete
         } catch {
             os_log("Uncaught file download error for taskId %@ and file %@: %@", log: log, type: .error, task.taskId, task.filename, error.localizedDescription)
         }

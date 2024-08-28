@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -157,6 +158,7 @@ enum class NotificationType { running, complete, error, paused }
  * was configured for the task, then it will NOT be shown (as it would when cancelling an active
  * task)
  */
+@Suppress("ConstPropertyName")
 @Keep
 class NotificationReceiver : BroadcastReceiver() {
 
@@ -214,12 +216,18 @@ class NotificationReceiver : BroadcastReceiver() {
                                 keyNotificationConfig
                             )
                             if (notificationConfigJsonString != null) {
-                                BDPlugin.doEnqueue(
-                                    context,
-                                    resumeData.task,
-                                    notificationConfigJsonString,
-                                    resumeData
-                                )
+                                if (!BDPlugin.doEnqueue(
+                                        context,
+                                        resumeData.task,
+                                        notificationConfigJsonString,
+                                        resumeData
+                                    )
+                                ) {
+                                    Log.i(TAG, "Could not enqueue taskId $taskId to resume")
+                                    BDPlugin.holdingQueue?.taskFinished(resumeData.task)
+                                } else {
+                                    Log.i(TAG, "Resumed taskId $taskId from notification")
+                                }
                             } else {
                                 BDPlugin.cancelActiveTaskWithId(
                                     context, taskId, WorkManager.getInstance(context)
@@ -257,6 +265,7 @@ class NotificationReceiver : BroadcastReceiver() {
 /**
  * Singleton service to manage notifications
  */
+@Suppress("ConstPropertyName")
 object NotificationService {
     var groupNotifications = ConcurrentHashMap<String, GroupNotification>()
 
@@ -716,12 +725,22 @@ object NotificationService {
             }
             val androidNotification = builder.build()
             if (taskWorker.runInForeground) {
-                if (notificationType == NotificationType.running) {
-                    taskWorker.setForeground(
-                        ForegroundInfo(
-                            taskWorker.notificationId, androidNotification
+                if (notificationType == NotificationType.running && taskWorker.isActive) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        taskWorker.setForeground(
+                            ForegroundInfo(
+                                taskWorker.notificationId,
+                                androidNotification,
+                                FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                            )
                         )
-                    )
+                    } else {
+                        taskWorker.setForeground(
+                            ForegroundInfo(
+                                taskWorker.notificationId, androidNotification
+                            )
+                        )
+                    }
                 } else {
                     // to prevent the 'not running' notification getting killed as the foreground
                     // process is terminated, this notification is shown regularly, but with

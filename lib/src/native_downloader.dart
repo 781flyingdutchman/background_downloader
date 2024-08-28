@@ -53,22 +53,24 @@ abstract base class NativeDownloader extends BaseDownloader {
             processStatusUpdate(TaskStatusUpdate(task, status));
           } else {
             // this is a chunk task, so pass to native
-            await methodChannel.invokeMethod('chunkStatusUpdate', [
-              Chunk.getParentTaskId(task),
-              task.taskId,
-              status.index,
-              null,
-              null
-            ]);
+            Future.delayed(const Duration(milliseconds: 100)).then((_) =>
+                methodChannel.invokeMethod('chunkStatusUpdate', [
+                  Chunk.getParentTaskId(task),
+                  task.taskId,
+                  status.index,
+                  null,
+                  null
+                ]));
           }
 
-        // status update with responseBody, responseHeaders, mimeType and charSet (normal completion)
+        // status update with responseBody, responseHeaders, responseStatusCode, mimeType and charSet (normal completion)
         case (
             'statusUpdate',
             [
               int statusOrdinal,
               String? responseBody,
               Map<Object?, Object?>? responseHeaders,
+              int? responseStatusCode,
               String? mimeType,
               String? charSet
             ]
@@ -83,17 +85,25 @@ abstract base class NativeDownloader extends BaseDownloader {
                         (entry) => entry.key != null && entry.value != null))
                       entry.key.toString().toLowerCase(): entry.value.toString()
                   };
-            processStatusUpdate(TaskStatusUpdate(task, status, null,
-                responseBody, cleanResponseHeaders, mimeType, charSet));
+            processStatusUpdate(TaskStatusUpdate(
+                task,
+                status,
+                null,
+                responseBody,
+                cleanResponseHeaders,
+                responseStatusCode,
+                mimeType,
+                charSet));
           } else {
             // this is a chunk task, so pass to native
-            await methodChannel.invokeMethod('chunkStatusUpdate', [
-              Chunk.getParentTaskId(task),
-              task.taskId,
-              status.index,
-              null,
-              responseBody
-            ]);
+            Future.delayed(const Duration(milliseconds: 100)).then((_) =>
+                methodChannel.invokeMethod('chunkStatusUpdate', [
+                  Chunk.getParentTaskId(task),
+                  task.taskId,
+                  status.index,
+                  null,
+                  responseBody
+                ]));
           }
 
         // status update with TaskException and responseBody
@@ -118,13 +128,14 @@ abstract base class NativeDownloader extends BaseDownloader {
                 TaskStatusUpdate(task, status, exception, responseBody));
           } else {
             // this is a chunk task, so pass to native
-            await methodChannel.invokeMethod('chunkStatusUpdate', [
-              Chunk.getParentTaskId(task),
-              task.taskId,
-              status.index,
-              exception?.toJsonString(),
-              responseBody
-            ]);
+            Future.delayed(const Duration(milliseconds: 100))
+                .then((_) => methodChannel.invokeMethod('chunkStatusUpdate', [
+                      Chunk.getParentTaskId(task),
+                      task.taskId,
+                      status.index,
+                      exception?.toJsonString(),
+                      responseBody
+                    ]));
           }
 
         case (
@@ -146,21 +157,20 @@ abstract base class NativeDownloader extends BaseDownloader {
           } else {
             // this is a chunk task, so pass parent taskId,
             // chunk taskId and progress to native
-            await methodChannel.invokeMethod('chunkProgressUpdate',
-                [Chunk.getParentTaskId(task), task.taskId, progress]);
+            Future.delayed(const Duration(milliseconds: 100)).then((_) =>
+                methodChannel.invokeMethod('chunkProgressUpdate',
+                    [Chunk.getParentTaskId(task), task.taskId, progress]));
           }
 
         case ('canResume', bool canResume):
           setCanResume(task, canResume);
 
-        case (
-            'resumeData',
-            [String tempFilename, int requiredStartByte, String? eTag]
-          ):
-          setResumeData(
-              ResumeData(task, tempFilename, requiredStartByte, eTag));
+        // resumeData Android and Desktop variant
+        case ('resumeData', [String data, int requiredStartByte, String? eTag]):
+          setResumeData(ResumeData(task, data, requiredStartByte, eTag));
 
-        case ('resumeData', String data): // iOS version and ParallelDownloads
+        // resumeData iOS and ParallelDownloads variant
+        case ('resumeData', String data):
           setResumeData(ResumeData(task, data));
 
         case ('notificationTap', int notificationTypeOrdinal):
@@ -299,6 +309,20 @@ abstract base class NativeDownloader extends BaseDownloader {
   }
 
   @override
+  Future<bool> requireWiFi(
+      RequireWiFi requirement, rescheduleRunningTasks) async {
+    return await methodChannel.invokeMethod(
+            'requireWiFi', [requirement.index, rescheduleRunningTasks]) ??
+        false;
+  }
+
+  @override
+  Future<RequireWiFi> getRequireWiFiSetting() async {
+    return RequireWiFi
+        .values[await methodChannel.invokeMethod('getRequireWiFiSetting') ?? 0];
+  }
+
+  @override
   void updateNotification(Task task, TaskStatus? taskStatusOrNull) {
     final notificationConfig = notificationConfigForTask(task);
     if (notificationConfig != null) {
@@ -404,6 +428,21 @@ abstract base class NativeDownloader extends BaseDownloader {
       case (Config.checkAvailableSpace, Config.never):
         await NativeDownloader.methodChannel
             .invokeMethod('configCheckAvailableSpace', null);
+
+      case (
+          Config.holdingQueue,
+          (
+            int? maxConcurrent,
+            int? maxConcurrentByHost,
+            int? maxConcurrentByGroup
+          )
+        ):
+        await NativeDownloader.methodChannel
+            .invokeMethod('configHoldingQueue', [
+          maxConcurrent ?? 1 << 20,
+          maxConcurrentByHost ?? 1 << 20,
+          maxConcurrentByGroup ?? 1 << 20
+        ]);
 
       default:
         return (

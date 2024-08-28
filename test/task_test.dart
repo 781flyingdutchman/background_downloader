@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -148,6 +149,48 @@ void main() {
     expect(task2.directory, equals('testDir'));
     final task3 = DownloadTask(url: workingUrl, directory: '/');
     expect(task3.directory, equals(''));
+  });
+
+  test('downloadTask POST options', () {
+    var t = DownloadTask(url: workingUrl);
+    expect(t.post, isNull);
+    t = DownloadTask(url: workingUrl, post: 'string');
+    expect(t.post, equals('string'));
+    t = DownloadTask(url: workingUrl, post: [1, 2, 3]);
+    expect(t.post, equals('[1,2,3]'));
+    t = DownloadTask(url: workingUrl, post: {'key': 'value'});
+    expect(t.post, equals('{"key":"value"}'));
+    final l = Uint8List(1);
+    l[0] = 97;
+    t = DownloadTask(url: workingUrl, post: l);
+    expect(t.post, equals('a'));
+  });
+
+  test('dataTask creation', () {
+    var t = DataTask(url: workingUrl);
+    expect(t.headers['Content-Type'], isNull);
+    t = DataTask(url: workingUrl, post: 'Text');
+    expect(t.headers['Content-Type'], equals('text/plain; charset=utf-8'));
+    t = DataTask(
+        url: workingUrl, post: 'Text', headers: {'Content-Type': 'override'});
+    expect(t.headers['Content-Type'], equals('override'));
+    t = DataTask(url: workingUrl, json: {'key': 'value'});
+    expect(t.post, equals('{"key":"value"}'));
+    expect(t.headers['Content-Type'], equals('application/json'));
+    t = DataTask(
+        url: workingUrl,
+        json: {'key': 'value'},
+        headers: {'Content-Type': 'override'});
+    expect(t.post, equals('{"key":"value"}'));
+    expect(t.headers['Content-Type'], equals('override'));
+    // assertionError if setting both post and json
+    expect(
+        () => DataTask(
+            url: workingUrl, post: 'something', json: {'key': 'value'}),
+        throwsAssertionError);
+    // constant header means we skip the header override
+    t = DataTask(url: workingUrl, post: 'Text', headers: const {});
+    expect(t.headers['Content-Type'], isNull);
   });
 
   test('cookieHeader selection', () async {

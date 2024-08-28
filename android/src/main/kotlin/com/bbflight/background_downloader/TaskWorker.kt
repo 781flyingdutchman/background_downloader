@@ -40,6 +40,7 @@ import java.lang.Double.min as doubleMin
  *
  * Processes DownloadTask, UploadTask or MultiUploadTask
  */
+@Suppress("ConstPropertyName")
 open class TaskWorker(
     applicationContext: Context, workerParams: WorkerParameters
 ) : CoroutineWorker(applicationContext, workerParams) {
@@ -62,17 +63,17 @@ open class TaskWorker(
         }
 
         /**
-         * Post method message on backgroundChannel with arguments and return true if this was
-         * successful
+         * Post method message on backgroundChannel with arguments
+         *
+         * If the post is not successful, execute the [onFail] block, if given
          *
          * [arg] can be single variable or a MutableList
          */
         suspend fun postOnBackgroundChannel(
-            method: String, task: Task, arg: Any
-        ): Boolean {
-            val bgPost = BackgroundPost(task, method, arg)
+            method: String, task: Task, arg: Any, onFail: (suspend () -> Unit)? = null
+        ) {
+            val bgPost = BackgroundPost(task, method, arg, onFail)
             QueueService.postOnBackgroundChannel(bgPost)
-            return bgPost.success.await()
         }
 
         /**
@@ -91,10 +92,35 @@ open class TaskWorker(
             taskException: TaskException? = null,
             responseBody: String? = null,
             responseHeaders: Map<String, String>? = null,
+            responseStatusCode: Int? = null,
             mimeType: String? = null,
             charSet: String? = null,
             context: Context? = null
         ) {
+            // Intercept status updates resulting from re-enqueue request, which
+            // themselves are triggered by a change in WiFi requirement
+            if (BDPlugin.tasksToReEnqueue.remove(task)) {
+                if ((status == TaskStatus.paused || status == TaskStatus.canceled || status == TaskStatus.failed) && context != null) {
+                    WiFi.reEnqueue(
+                        EnqueueItem(
+                            context,
+                            task,
+                            BDPlugin.notificationConfigJsonStrings[task.taskId],
+                            BDPlugin.localResumeData[task.taskId]
+                        )
+                    )
+                    if (BDPlugin.tasksToReEnqueue.isEmpty()) {
+                        WiFi.reEnqueue(null) // signal end of batch
+                    }
+                    return
+                }
+                if (BDPlugin.tasksToReEnqueue.isEmpty()) {
+                    WiFi.reEnqueue(null) // signal end of batch
+                }
+            }
+
+            // Normal status update
+
             // A 'failed' progress update is only provided if
             // a retry is not needed: if it is needed, a `waitingToRetry` progress update
             // will be generated on the Dart side
@@ -134,31 +160,41 @@ open class TaskWorker(
 
             // Post update if task expects one, or if failed and retry is needed
             if (canSendStatusUpdate && (task.providesStatusUpdates() || retryNeeded)) {
-                val finalTaskException = taskException ?: TaskException(ExceptionType.general)
-                // send exception data only for .failed task, otherwise just the status
-                val arg: Any = if (status == TaskStatus.failed) mutableListOf(
-                    status.ordinal,
-                    finalTaskException.type.typeString,
-                    finalTaskException.description,
-                    finalTaskException.httpResponseCode,
-                    responseBody
-                ) else mutableListOf(
-                    status.ordinal,
-                    if (status.isFinalState()) responseBody else null,
-                    if (status.isFinalState()) responseHeaders else null,
-                    if (status.isFinalState()) mimeType else null,
-                    if (status.isFinalState()) charSet else null
-                )
-                if (!postOnBackgroundChannel("statusUpdate", task, arg)) {
-                    // unsuccessful post, so store in local prefs (without exception info)
+                val taskStatusUpdate =
+                    if (status.isFinalState()) {  // last update gets all data
+                        TaskStatusUpdate(
+                            task = task,
+                            taskStatus = status,
+                            exception = if (status == TaskStatus.failed) taskException
+                                ?: TaskException(ExceptionType.general) else null,
+                            responseBody = responseBody,
+                            responseStatusCode = if (status == TaskStatus.complete || status == TaskStatus.notFound) responseStatusCode else null,
+                            responseHeaders = responseHeaders?.filterNotNull()
+                                ?.mapKeys { it.key.lowercase() },
+                            mimeType = mimeType,
+                            charSet = charSet
+                        )
+                    } else TaskStatusUpdate(  // interim updates are limited
+                        task = task,
+                        taskStatus = status,
+                        exception = null,
+                        responseBody = null,
+                        responseStatusCode = null,
+                        responseHeaders = null,
+                        mimeType = null,
+                        charSet = null
+                    )
+                val arg = taskStatusUpdate.argList
+                postOnBackgroundChannel("statusUpdate", task, arg, onFail = {
+                    // unsuccessful post, so store in local prefs
                     Log.d(TAG, "Could not post status update -> storing locally")
                     storeLocally(
                         BDPlugin.keyStatusUpdateMap,
                         task.taskId,
-                        Json.encodeToString(TaskStatusUpdate(task, status)),
+                        Json.encodeToString(taskStatusUpdate),
                         prefs
                     )
-                }
+                })
             }
             // if task is in final state, cancel the WorkManager job (if failed),
             // remove task from persistent storage, remove resume data from local memory
@@ -219,21 +255,25 @@ open class TaskWorker(
             downloadSpeed: Double = -1.0, timeRemaining: Long = -1000
         ) {
             if (task.providesProgressUpdates()) {
-                if (!postOnBackgroundChannel(
-                        "progressUpdate",
-                        task,
-                        mutableListOf(progress, expectedFileSize, downloadSpeed, timeRemaining)
-                    )
-                ) {
-                    // unsuccessful post, so store in local prefs
-                    Log.d(TAG, "Could not post progress update -> storing locally")
-                    storeLocally(
-                        BDPlugin.keyProgressUpdateMap,
-                        task.taskId,
-                        Json.encodeToString(TaskProgressUpdate(task, progress, expectedFileSize)),
-                        prefs
-                    )
-                }
+                postOnBackgroundChannel("progressUpdate", task,
+                    mutableListOf(progress, expectedFileSize, downloadSpeed, timeRemaining),
+                    onFail =
+                    {
+                        // unsuccessful post, so store in local prefs
+                        Log.d(TAG, "Could not post progress update -> storing locally")
+                        storeLocally(
+                            BDPlugin.keyProgressUpdateMap,
+                            task.taskId,
+                            Json.encodeToString(
+                                TaskProgressUpdate(
+                                    task,
+                                    progress,
+                                    expectedFileSize
+                                )
+                            ),
+                            prefs
+                        )
+                    })
             }
         }
 
@@ -255,23 +295,22 @@ open class TaskWorker(
          */
         suspend fun processResumeData(resumeData: ResumeData, prefs: SharedPreferences) {
             BDPlugin.localResumeData[resumeData.task.taskId] = resumeData
-            if (!postOnBackgroundChannel(
-                    "resumeData", resumeData.task, mutableListOf(
-                        resumeData.data,
-                        resumeData.requiredStartByte,
-                        resumeData.eTag
+            postOnBackgroundChannel(
+                "resumeData", resumeData.task, mutableListOf(
+                    resumeData.data,
+                    resumeData.requiredStartByte,
+                    resumeData.eTag
+                ), onFail =
+                {
+                    // unsuccessful post, so store in local prefs
+                    Log.d(TAG, "Could not post resume data -> storing locally")
+                    storeLocally(
+                        BDPlugin.keyResumeDataMap,
+                        resumeData.task.taskId,
+                        Json.encodeToString(resumeData),
+                        prefs
                     )
-                )
-            ) {
-                // unsuccessful post, so store in local prefs
-                Log.d(TAG, "Could not post resume data -> storing locally")
-                storeLocally(
-                    BDPlugin.keyResumeDataMap,
-                    resumeData.task.taskId,
-                    Json.encodeToString(resumeData),
-                    prefs
-                )
-            }
+                })
         }
 
         /**
@@ -322,7 +361,8 @@ open class TaskWorker(
     // additional parameters for final TaskStatusUpdate
     var taskException: TaskException? = null
     var responseBody: String? = null
-    var responseHeaders: Map<String, String>? = null
+    private var responseHeaders: Map<String, String>? = null
+    var responseStatusCode: Int? = null
     private var mimeType: String? = null // derived from Content-Type header
     private var charSet: String? = null // derived from Content-Type header
 
@@ -330,6 +370,9 @@ open class TaskWorker(
     private var runInForegroundFileSize: Int = -1
     var canRunInForeground = false
     var runInForeground = false
+    private var hasDeliveredResult = false
+    val isActive: Boolean
+        get() = !hasDeliveredResult && !isStopped
 
     lateinit var prefs: SharedPreferences
 
@@ -383,6 +426,7 @@ open class TaskWorker(
                     taskException,
                     responseBody,
                     responseHeaders,
+                    responseStatusCode,
                     mimeType,
                     charSet,
                     applicationContext
@@ -391,8 +435,14 @@ open class TaskWorker(
                     // update only if not failed, or no retries remaining
                     NotificationService.updateNotification(this@TaskWorker, status)
                 }
+                if (status != TaskStatus.canceled) {
+                    // let the holdingQueue know this task is no longer active
+                    // except TaskStatus.canceled is handled directly in cancellation and reset methods
+                    BDPlugin.holdingQueue?.taskFinished(task)
+                }
             }
         }
+        hasDeliveredResult = true
         return Result.success()
     }
 
@@ -458,7 +508,7 @@ open class TaskWorker(
     open suspend fun connectAndProcess(connection: HttpURLConnection): TaskStatus {
         val filePath = task.filePath(applicationContext) // "" for MultiUploadTask
         try {
-            if (task.isDownloadTask() && task.post != null) {
+            if ((task.isDownloadTask() || task.isDataTask()) && task.post != null) {
                 connection.doOutput = true
                 connection.setFixedLengthStreamingMode(task.post!!.length)
                 DataOutputStream(connection.outputStream).use { it.writeBytes(task.post) }
@@ -480,7 +530,7 @@ open class TaskWorker(
                 is CancellationException -> {
                     Log.i(
                         TAG,
-                        "Job cancelled for taskId ${task.taskId} and $filePath: ${e.message}"
+                        "Canceled task with id ${task.taskId}: ${e.message}"
                     )
                     return TaskStatus.canceled
                 }

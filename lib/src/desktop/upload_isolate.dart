@@ -41,7 +41,6 @@ Future<TaskStatus> binaryUpload(
     return TaskStatus.failed;
   }
   final fileSize = inFile.lengthSync();
-  // determine the content length of the multi-part data
   var resultStatus = TaskStatus.failed;
   try {
     final client = DesktopDownloader.httpClient;
@@ -50,6 +49,8 @@ Future<TaskStatus> binaryUpload(
     request.headers.addAll(task.headers);
     request.contentLength = fileSize;
     request.headers['Content-Type'] = task.mimeType;
+    request.headers['Content-Disposition'] =
+        'attachment; filename="${task.filename}"';
     // initiate the request and handle completion async
     final requestCompleter = Completer();
     var transferBytesResult = TaskStatus.failed;
@@ -61,6 +62,7 @@ Future<TaskStatus> binaryUpload(
           : transferBytesResult;
       responseBody = await responseContent(response);
       responseHeaders = response.headers;
+      responseStatusCode = response.statusCode;
       taskException ??= TaskHttpException(
           responseBody?.isNotEmpty == true
               ? responseBody!
@@ -95,9 +97,19 @@ Future<TaskStatus> binaryUpload(
 Future<TaskStatus> multipartUpload(
     UploadTask task, String filePath, SendPort sendPort) async {
   // field portion of the multipart, all in one string
+  // multiple values should be encoded as '"value1", "value2", ...'
+  final multiValueRegEx = RegExp(r'^(?:"[^"]+"\s*,\s*)+"[^"]+"$');
   var fieldsString = '';
   for (var entry in task.fields.entries) {
-    fieldsString += fieldEntry(entry.key, entry.value);
+    if (multiValueRegEx.hasMatch(entry.value)) {
+      // extract multiple values from entry.value
+      for (final match in RegExp(r'"([^"]+)"').allMatches(entry.value)) {
+        fieldsString += fieldEntry(entry.key, match.group(1) ?? 'error');
+      }
+    } else {
+      fieldsString +=
+          fieldEntry(entry.key, entry.value); // single value for key
+    }
   }
   // File portion of the multi-part
   // Assumes list of files. If only one file, that becomes a list of length one.
@@ -160,6 +172,7 @@ Future<TaskStatus> multipartUpload(
           : transferBytesResult;
       responseBody = await responseContent(response);
       responseHeaders = response.headers;
+      responseStatusCode = response.statusCode;
       taskException ??= TaskHttpException(
           responseBody?.isNotEmpty == true
               ? responseBody!

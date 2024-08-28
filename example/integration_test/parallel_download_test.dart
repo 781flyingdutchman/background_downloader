@@ -195,9 +195,23 @@ void main() {
       expect(numProgressUpdates, greaterThan(1));
     });
 
+    test('Convenience download', () async {
+      final result = await FileDownloader()
+          .download(task.copyWith(url: urlWithContentLength));
+      expect(result.status, equals(TaskStatus.complete));
+      expect(result.responseStatusCode, equals(200));
+      expect(result.responseHeaders, isNotNull);
+      expect(result.responseHeaders, isNotEmpty);
+    });
+
     test('403 enqueue, no retries', () async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
-      expect(await FileDownloader().enqueue(failingTask), isTrue);
+      if (!Platform.isIOS) {
+        expect(await FileDownloader().enqueue(failingTask), isTrue);
+      } else {
+        expect(await FileDownloader().enqueue(failingTask), isFalse);
+        return;
+      }
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.failed));
     });

@@ -64,6 +64,7 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
         connection: HttpURLConnection,
         filePath: String
     ): TaskStatus {
+        responseStatusCode = connection.responseCode
         if (connection.responseCode in 200..206) {
             // ok response, check if resume is possible
             eTagHeader = connection.headerFields["ETag"]?.first()
@@ -205,6 +206,15 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
                             ResumeData(
                                 task, tempFilePath, bytesTotal + startByte, eTagHeader
                             ), prefs
+                        )
+                        return TaskStatus.paused
+                    }
+                    if (BDPlugin.tasksToReEnqueue.contains(task) && serverAcceptsRanges) {
+                        // pause was triggered by re-enqueue request due to WiFi requirement change
+                        // so we only store local resumeData without posting it
+                        Log.i(TAG, "Task ${task.taskId} paused in order to re-enqueue")
+                        BDPlugin.localResumeData[task.taskId] = ResumeData(
+                            task, tempFilePath, bytesTotal + startByte, eTagHeader
                         )
                         return TaskStatus.paused
                     }

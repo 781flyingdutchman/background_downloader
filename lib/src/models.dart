@@ -194,12 +194,13 @@ sealed class TaskUpdate {
 ///
 /// Contains [TaskStatus] and, if [TaskStatus.failed] possibly a
 /// [TaskException] and if this is a final state possibly [responseBody],
-/// [responseHeaders], [mimeType] and [charSet].
+/// [responseHeaders], [responseStatusCode], [mimeType] and [charSet].
 /// Note: header names in [responseHeaders] are converted to lowercase
 class TaskStatusUpdate extends TaskUpdate {
-  final TaskStatus status;
+  final TaskStatus status; // note: serialized as 'taskStatus'
   final TaskException? exception;
   final String? responseBody;
+  final int? responseStatusCode;
   final Map<String, String>? responseHeaders;
   final String? mimeType; // derived from Content-Type header
   final String? charSet; // derived from Content-Type header
@@ -208,6 +209,7 @@ class TaskStatusUpdate extends TaskUpdate {
       [this.exception,
       this.responseBody,
       this.responseHeaders,
+      this.responseStatusCode,
       this.mimeType,
       this.charSet]);
 
@@ -218,7 +220,10 @@ class TaskStatusUpdate extends TaskUpdate {
             ? TaskException.fromJson(json['exception'])
             : null,
         responseBody = json['responseBody'],
-        responseHeaders = json['responseHeaders'],
+        responseHeaders = json['responseHeaders'] != null
+            ? Map.from(json['responseHeaders'])
+            : null,
+        responseStatusCode = (json['responseStatusCode'] as num?)?.toInt(),
         mimeType = json['mimeType'],
         charSet = json['charSet'],
         super.fromJson();
@@ -235,6 +240,7 @@ class TaskStatusUpdate extends TaskUpdate {
         'exception': exception?.toJson(),
         'responseBody': responseBody,
         'responseHeaders': responseHeaders,
+        'responseStatusCode': responseStatusCode,
         'mimeType': mimeType,
         'charSet': charSet
       };
@@ -245,6 +251,7 @@ class TaskStatusUpdate extends TaskUpdate {
           TaskException? exception,
           String? responseBody,
           Map<String, String>? responseHeaders,
+          int? responseStatusCode,
           String? mimeType,
           String? charSet}) =>
       TaskStatusUpdate(
@@ -253,6 +260,7 @@ class TaskStatusUpdate extends TaskUpdate {
           exception ?? this.exception,
           responseBody ?? this.responseBody,
           responseHeaders ?? this.responseHeaders,
+          responseStatusCode ?? this.responseStatusCode,
           mimeType ?? this.mimeType,
           charSet ?? this.charSet);
 }
@@ -545,6 +553,7 @@ final class Config {
   static const localize = 'localize';
   static const useCacheDir = 'useCacheDir';
   static const useExternalStorage = 'useExternalStorage';
+  static const holdingQueue = 'holdingQueue';
 
   // Config arguments
   static const always = 'always'; // int 0 on native side
@@ -563,3 +572,6 @@ final class Config {
     return value;
   }
 }
+
+/// Wifi requirement modes at the application level
+enum RequireWiFi { asSetByTask, forAllTasks, forNoTasks }

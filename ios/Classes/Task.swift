@@ -200,6 +200,28 @@ enum TaskStatus: Int, Codable {
 struct TaskStatusUpdate: Encodable {
     var task: Task
     var taskStatus: TaskStatus
+    var exception: TaskException?
+    var responseBody: String?
+    var responseStatusCode: Int?
+    var responseHeaders: [String: String]?
+    var mimeType: String?
+    var charSet: String?
+    
+    func argList() -> [Any?] {
+        let finalState = isFinalState(status: taskStatus)
+        return taskStatus == .failed
+        ? [taskStatus.rawValue,
+           exception?.type.rawValue,
+           exception?.description,
+           exception?.httpResponseCode,
+           responseBody]
+        : [taskStatus.rawValue,
+           finalState ? responseBody : nil,
+           finalState ? responseHeaders : nil,
+           (taskStatus == .complete || taskStatus == .notFound) ? responseStatusCode : nil,
+           finalState ? mimeType : nil,
+           finalState ? charSet : nil]
+    }
 }
 
 /** Holds data associated with a task progress update, for local storage */
@@ -216,7 +238,7 @@ struct ResumeData: Encodable {
 }
 
 /// The type of [TaskException]
-enum ExceptionType: String {
+enum ExceptionType: String, Encodable {
     case
     
     // General error
@@ -248,7 +270,7 @@ enum ExceptionType: String {
  * The [description] is typically taken from the platform-generated
  * error message, or from the plugin. The localization is undefined
  */
-struct TaskException {
+struct TaskException : Encodable {
     var type: ExceptionType
     var httpResponseCode: Int = -1
     var description: String

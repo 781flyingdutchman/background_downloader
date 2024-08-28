@@ -31,7 +31,10 @@ const okResponses = [200, 201, 202, 203, 204, 205, 206];
 /// WorkManager as there is on iOS and Android
 final class DesktopDownloader extends BaseDownloader {
   static final _log = Logger('DesktopDownloader');
-  final maxConcurrent = 10;
+  static const unlimited = 1 << 20;
+  var maxConcurrent = 10;
+  var maxConcurrentByHost = unlimited;
+  var maxConcurrentByGroup = unlimited;
   static final DesktopDownloader _singleton = DesktopDownloader._internal();
   final _queue = PriorityQueue<Task>();
   final _running = Queue<Task>(); // subset that is running
@@ -65,14 +68,46 @@ final class DesktopDownloader extends BaseDownloader {
   /// Advance the queue if it's not empty and there is room in the run queue
   void _advanceQueue() {
     while (_running.length < maxConcurrent && _queue.isNotEmpty) {
-      final task = _queue.removeFirst();
-      _running.add(task);
-      _executeTask(task).then((_) {
-        _remove(task);
-        _advanceQueue();
-      });
+      final task = _getNextTask();
+      if (task != null) {
+        _running.add(task);
+        _executeTask(task).then((_) {
+          _remove(task);
+          _advanceQueue();
+        });
+      } else {
+        return; // if no suitable task, done
+      }
     }
   }
+
+  /// Returns a [Task] to run, or null if no suitable task is available
+  Task? _getNextTask() {
+    final tasksThatHaveToWait = <Task>[];
+    while (_queue.isNotEmpty) {
+      final task = _queue.removeFirst();
+      if (_numActiveWithHostname(task.hostName) < maxConcurrentByHost &&
+          _numActiveWithGroup(task.group) < maxConcurrentByGroup) {
+        _queue.addAll(tasksThatHaveToWait); // put back in queue
+        return task;
+      }
+      tasksThatHaveToWait.add(task);
+    }
+    _queue.addAll(tasksThatHaveToWait); // put back in queue
+    return null;
+  }
+
+  /// Returns number of tasks active with this [hostname]
+  int _numActiveWithHostname(String hostname) => _running.fold(
+      0,
+      (previousValue, task) =>
+          task.hostName == hostname ? previousValue + 1 : previousValue);
+
+  /// Returns number of tasks active with this [group]
+  int _numActiveWithGroup(String group) => _running.fold(
+      0,
+      (previousValue, task) =>
+          task.group == group ? previousValue + 1 : previousValue);
 
   /// Execute this task
   ///
@@ -142,11 +177,19 @@ final class DesktopDownloader extends BaseDownloader {
             TaskException? exception,
             String? responseBody,
             Map<String, String>? responseHeaders,
+            int? responseCode,
             String? mimeType,
             String? charSet
           ):
-          final taskStatusUpdate = TaskStatusUpdate(updatedTask, status,
-              exception, responseBody, responseHeaders, mimeType, charSet);
+          final taskStatusUpdate = TaskStatusUpdate(
+              updatedTask,
+              status,
+              exception,
+              responseBody,
+              responseHeaders,
+              responseCode,
+              mimeType,
+              charSet);
           if (updatedTask.group != BaseDownloader.chunkGroup) {
             if (status.isFinalState) {
               _remove(updatedTask);
@@ -466,6 +509,18 @@ final class DesktopDownloader extends BaseDownloader {
 
       case (Config.bypassTLSCertificateValidation, bool bypass):
         bypassTLSCertificateValidation = bypass;
+
+      case (
+          Config.holdingQueue,
+          (
+            int? maxConcurrentParam,
+            int? maxConcurrentByHostParam,
+            int? maxConcurrentByGroupParam
+          )
+        ):
+        maxConcurrent = maxConcurrentParam ?? 10;
+        maxConcurrentByHost = maxConcurrentByHostParam ?? unlimited;
+        maxConcurrentByGroup = maxConcurrentByGroupParam ?? unlimited;
 
       default:
         return (

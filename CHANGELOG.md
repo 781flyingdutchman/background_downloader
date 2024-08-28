@@ -1,3 +1,110 @@
+## 8.5.3
+
+* Bug fixes
+* Improvements to documentation
+
+## 8.5.2
+
+* Removes references to `dart:html` to allow web compilation using WASM. Note the package still does not work on the web
+* Adds auto-decode of `post` field if Map or List. Throws if `jsonEncode` cannot convert the object, in which case you have to encode it yourself using a custom encoder
+
+## 8.5.1
+
+* Fixes an issue where temporary files were not deleted when canceling a paused parallel download task
+
+## 8.5.0
+
+* Adds `DataTask` fro scheduled server requests
+* Fixes bug omitting Content-Type header for iOS uploads, and Content-Disposition header for desktop uploads
+
+### DataTask
+
+The downloader already supported server requests for immediate execution using `FileDownloader.request(Request request)`. This change adds the option to scheduled a server request similar to scheduling any other `Task`.
+
+To schedule a server request using the background mechanism (e.g. if you want to wait for WiFi to be available), create and enqueue a `DataTask`.
+A `DataTask` is similar to a `DownloadTask` except it:
+* Does not accept file information, as there is no file involved
+* Does not allow progress updates
+* Accepts `post` data as a String, or
+* Accepts `json` data, which will be converted to a String and posted as content type `application/json`
+* Accepts `contentType` which will set the `Content-Type` header value
+* Returns the server `responseBody`, `responseHeaders` and possible `taskException` in the final `TaskStatusUpdate` fields
+
+Typically you would use `enqueue` to enqueue a `DataTask` and monitor the result using a listener or callback, but you can also use `transmit` to enqueue and wait for the final result of the `DataTask`.
+
+
+## 8.4.3
+
+* Fixes iOS/Android issue where `retrieveLocallyStoredData` retrieves only a basic `TaskStatusUpdate`, without responseCode, responseBody etc
+
+## 8.4.2
+
+* Fixes iOS/Android bug with ParallelDownloadTask hanging when number of chunks exceeds ~10
+
+## 8.4.1
+
+* Fixes Android bug when using `Config.runInForeground` that can lead to a crash
+
+## 8.4.0
+
+* Adds optional holding queue to manage how many tasks are executed concurrently
+* Fixes bug with using `unique` parameter in context of server suggested filename
+* Transition from imperative to declarative Gradle plugin application, see [here](https://docs.flutter.dev/release/breaking-changes/flutter-gradle-plugin-apply)
+
+### Holding queue
+
+Once you `enqueue` a task with the `FileDownloader` it is added to an internal queue that is managed by the native platform you're running on (e.g. Android). Once enqueued, you have limited control over the execution order, the number of tasks running in parallel, etc, because all that is managed by the platform.  If you want more control over the queue, you need to use a `TaskQueue` or a `HoldingQueue`:
+* A `TaskQueue` is a Dart object that you can add to the `FileDownloader`. You can create this object yourself (implementing the `TaskQueue` interface) or use the bundled `MemoryTaskQueue` implementation. This queue sits "in front of" the `FileDownloader` and instead of using the `enqueue` and `download` methods directly, you now simply `add` your tasks to the `TaskQueue`. Because this is a Dart object, the queue will suspend when the OS suspends your application, and if the app gets killed, tasks held in the `TaskQueue` will be lost (unless you have implemented persistence)
+* A `HoldingQueue` is native to the OS and can be configured using `FileDownloader().configure` to limit the number of concurrent tasks that are executed (in total, by host or by group). When using this queue you do not change how you interact with the FileDownloader, but you cannot implement your own holding queue. Because this queue is native, it will continue to run when your app is suspended by the OS, but if the app is killed then tasks held in the holding queue will be lost (unlike tasks already enqueued natively, which persist)
+
+This update adds the holding queue.
+
+Use a holding queue to limit the number of tasks running concurrently. Calling `await FileDownloader().configure(globalConfig: (Config.holdingQueue, (3, 2, 1)))` activates the holding queue and sets the constraints `maxConcurrent` to 3, `maxConcurrentByHost` to 2, and `maxConcurrentByGroup` to 1. Pass `null` for no constraint for that parameter.
+
+Using the holding queue adds a queue on the native side where tasks may have to wait before being enqueued with the Android WorkManager or iOS URLSessions. Because the holding queue lives on the native side (not Dart) tasks will continue to get pulled from the holding queue even when the app is suspended by the OS. This is different from the `TaskQueue`, which lives on the Dart side and suspends when the app is suspended by the OS
+
+When using a holding queue:
+* Tasks will be taken out of the queue based on their priority and time of creation, provided they pass the constraints imposed by the `maxConcurrent` values
+* Status messages will differ slightly. You will get the `TaskStatus.enqueued` update immediately upon enqueuing. Once the task gets enqueued with the Android WorkManager or iOS URLSessions you will not get another "enqueue" update, but if that enqueue fails the task will fail. Once the task starts running you will get `TaskStatus.running` as usual
+* The holding queue and the native queues managed by the Android WorkManager or iOS URLSessions are treated as a single queue for queries like `taskForId` and `cancelTasksWithIds`. There is no way to determine whether a task is in the holding queue or already enqueued with the Android WorkManager or iOS URLSessions
+
+
+## 8.3.0
+
+* Adds `responseStatusCode` to `TaskStatusUpdate` for tasks that result in `TaskStatus.complete` or `TaskStatus.notFound` (null otherwise).
+* Adds `Task.split` to extract the baseDirectory, directory and filename from an absolute filePath or a File. This is saver than using `.fromFile` and preferred
+* Adds `UploadTask.fromFile` to create an `UploadTask` from an existing `File` object. Note that this will create a task with an absolute path reference and `BaseDirectory.root`, which can cause problems on mobile platforms, so use with care
+* Fixes bug on Android API 34 when using configuration `Config.runInForeground`
+
+### Extracting baseDirectory, directory and filename from a filePath or File
+
+If you already have a path to a file or a `File` object, you can extract the values for `baseDirectory`, `directory` and `filename` using `Task.split` to create the task:
+```dart
+final (baseDirectory, directory, filename) = await Task.split(filePath: yourPath);
+final task = UploadTask(
+        url: 'https://yourserver.com',
+        baseDirectory: baseDirectory,
+        directory: directory,
+        filename: filename);
+```
+
+### Using foreground service on Android targeting API 34
+If targeting API 34 or greater, you must add to your `AndroidManifest.xml` a permission declaration `<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />` and the foreground service type definition (under the `application` element):
+  ```
+  <service
+    android:name="androidx.work.impl.foreground.SystemForegroundService"
+    android:foregroundServiceType="dataSync"
+    tools:node="merge" />
+  ```
+
+## 8.2.1
+
+* Adds option to specify multiple values for a single field name in the `UploadTask.fields` property by formatting the value as `'"value1", "value2", "value3"'` (note the double quotes and the comma to separate the values).
+
+## 8.2.0
+
+* Adds `Future<bool> requireWiFi(RequireWiFi requirement, {final rescheduleRunningTasks = true})` to set a globally enforced WiFi requirement, and pause/resume or cancel/restart tasks accordingly. This is helpful when implementing a global toggle switch to prevent data download over metered (cellular) networks. iOS and Android only
+
 ## 8.1.0
 
 * Adds `responseHeaders` to `TaskStatusUpdate` for tasks that complete successfully (null otherwise). Per Dart convention, header names are lower-cased
@@ -264,7 +371,7 @@ The `MemoryTaskQueue` bundled with the `background_downloader` allows:
 * managing the number of tasks that talk to the same host concurrently, by setting `maxConcurrentByHost`
 * managing the number of tasks running that are in the same `Task.group`, by setting `maxConcurrentByGroup`
 
-A `TaskQueue` conceptually sits 'before' the FileDownloader's queue. To use it, add it to the `FileDownloader` and instead of enqueuing tasks with the `FileDownloader`, you now `add` tasks to the queue:
+A `TaskQueue` conceptually sits 'in front of' the FileDownloader queue. To use it, add it to the `FileDownloader` and instead of enqueuing tasks with the `FileDownloader`, you now `add` tasks to the queue:
 ```dart
 final tq = MemoryTaskQueue();
 tq.maxConcurrent = 5; // no more than 5 tasks active at any one time

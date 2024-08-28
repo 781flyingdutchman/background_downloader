@@ -10,38 +10,63 @@ import os.log
 
 let chunkGroup = "chunk"
 
-func scheduleParallelDownload(task: Task, taskDescription: String, baseRequest: URLRequest, resumeData: String, result: FlutterResult?)
+func scheduleParallelDownload(task: Task, taskDescription: String, baseRequest: URLRequest, resumeData: String) async -> Bool
 {
     let isResume = !resumeData.isEmpty
     let parallelDownload = ParallelDownloader(task: task)
     if !isResume {
-        let dataTask = URLSession.shared.dataTask(with: baseRequest) { (data, response, error) in
-            if let httpResponse = response as? HTTPURLResponse, error == nil {
-                if httpResponse.statusCode == 404 {
-                    os_log("URL not found for taskId %@", log: log, type: .info, task.taskId)
-                    postResult(result: result, value: false)
-                }
-                else if !parallelDownload.start(contentLengthFromHeader: Int64(httpResponse.value(forHTTPHeaderField: "Content-Length") ?? "-1") ?? -1, responseHeaders: httpResponse.allHeaderFields ) {
-                    os_log("Cannot chunk or enqueue download", log: log, type: .info)
-                    postResult(result: result, value: false)
+        return await withCheckedContinuation { continuation in
+            let dataTask = URLSession.shared.dataTask(with: baseRequest) { (data, response, error) in
+                if let httpResponse = response as? HTTPURLResponse, error == nil {
+                    if httpResponse.statusCode == 404 {
+                        os_log("URL not found for taskId %@", log: log, type: .info, task.taskId)
+                    }
+                    else if !parallelDownload.start(responseStatusCode: httpResponse.statusCode, contentLengthFromHeader: Int64(httpResponse.value(forHTTPHeaderField: "Content-Length") ?? "-1") ?? -1, responseHeaders: httpResponse.allHeaderFields ) {
+                        os_log("Cannot chunk or enqueue download", log: log, type: .info)
+                    } else {
+                        if BDPlugin.holdingQueue?.enqueuedTaskIds.contains(task.taskId) != true {
+                            // only send .enqueued if we didn't already do that when
+                            // enqueueing with the holdingQueue
+                            processStatusUpdate(task: task, status: TaskStatus.enqueued)
+                        }
+                        continuation.resume(returning: true)
+                        return
+                    }
                 } else {
-                    processStatusUpdate(task: task, status: TaskStatus.enqueued)
-                    postResult(result: result, value: true)
+                    os_log("Error making HEAD request for taskId %@", log: log, type: .info, task.taskId)
                 }
-            } else {
-                os_log("Error making HEAD request for taskId %@", log: log, type: .info, task.taskId)
-                postResult(result: result, value: false)
+                continuation.resume(returning: false)
             }
+            dataTask.priority = 1 - Float(task.priority) / 10
+            dataTask.resume()
         }
-        dataTask.priority = 1 - Float(task.priority) / 10
-        dataTask.resume()
     } else {
         // resume
-        let success = parallelDownload.resume(resumeData: resumeData)
-        postResult(result: result, value: success)
+        return parallelDownload.resume(resumeData: resumeData)
     }
 }
 
+/**
+ / Manages a parallel download
+ /
+ / A ParallelDownloadTask pings the server to get the content-length of the
+ / download, then creates a list of [Chunk]s, each representing a portion
+ / of the download.  Each chunk-task has its group set to 'chunk' and
+ / has the taskId of the parent ParallelDownloadTask in its
+ / [Task.metaData] field.
+ / The ParallelDownloader sends 'enqueue' messages back to the NativeDownloader to
+ / start each chunk-task, just like any other download task.
+ / Messages with group 'chunk' are intercepted in the NativeDownloader,
+ / and the update is sent to the ParallelDownloader.
+ / In the ParallelDownloader, the update is processed and the new status/progress
+ / of the ParallelDownloadTask is determined. If the status/progress has
+ / changed, an update is sent and the status is processed (e.g., a complete
+ / status triggers the piecing together of the downloaded file from
+ / its chunk pieces).
+ /
+ / Similarly, pause and cancel commands are sent to all chunk tasks before
+ / updating the status of the parent ParallelDownloadTask
+ */
 public class ParallelDownloader: NSObject {
     // downloads is the list of active parallel downloads, used to route child
     // status and progress updates
@@ -54,6 +79,8 @@ public class ParallelDownloader: NSObject {
     var nextProgressUpdateTime = Date()
     var taskException: TaskException? = nil
     var responseBody: String? = nil
+    var responseHeaders: [AnyHashable : Any]? = nil
+    var initialResponseStatusCode: Int? = nil
     
     /// Create a new ParallelDownloader
     init(task:Task) {
@@ -61,10 +88,16 @@ public class ParallelDownloader: NSObject {
     }
     
     /// Start the parallel download by creating and enqueueing chunks based on
-    /// the
+    /// the content length and header fields
     ///
     /// Returns false if start was unsuccessful
-    public func start(contentLengthFromHeader: Int64, responseHeaders: [AnyHashable: Any]) -> Bool {
+    public func start(responseStatusCode: Int, contentLengthFromHeader: Int64, responseHeaders: [AnyHashable: Any]) -> Bool {
+        if !(200...206).contains(responseStatusCode) {
+            os_log("TaskId %@ returned response code %d", log: log, type: .info, parentTask.taskId, responseStatusCode)
+            return false
+        }
+        initialResponseStatusCode = responseStatusCode // may change due to chunk errors
+        self.responseHeaders = responseHeaders
         // get suggested filename if needed
         if parentTask.filename == "?" {
             let newTask = suggestedFilenameFromResponseHeaders(task: parentTask, responseHeaders: responseHeaders)
@@ -75,9 +108,17 @@ public class ParallelDownloader: NSObject {
                 parentTask = newTask
             }
         }
-        parallelDownloadContentLength = contentLengthFromHeader > 0 ?
-        contentLengthFromHeader :
-        getContentLength(responseHeaders: responseHeaders, task: self.parentTask)
+        parallelDownloadContentLength = contentLengthFromHeader > 0
+            ? contentLengthFromHeader
+            : getContentLength(responseHeaders: responseHeaders, task: self.parentTask)
+        if parallelDownloadContentLength <= 0 {
+            os_log("Server does not provide content length - cannot chunk download. If you know the length, set Range or Known-Content-Length header", log: log, type: .info)
+            return false
+        }
+        if responseHeaders.first(where: { entry in (entry.key as! String).lowercased() == "accept-ranges" && entry.value as! String == "bytes"}) == nil {
+            os_log("Server does not accept ranges - cannot chunk download", log: log, type: .info)
+            return false
+        }
         extractContentType(responseHeaders: responseHeaders, task: self.parentTask)
         ParallelDownloader.downloads[parentTask.taskId] = self
         chunks = createChunks(task: parentTask, contentLength: parallelDownloadContentLength)
@@ -133,8 +174,6 @@ public class ParallelDownloader: NSObject {
         return chunksList
     }
     
-    
-    
     /// Enqueues all chunk tasks and returns true if successful
     ///
     /// Enqueue request is posted to Dart side
@@ -154,9 +193,12 @@ public class ParallelDownloader: NSObject {
     }
     
     /// Process incoming [status] update for a chunk with [chunkTaskId]
+    ///
+    /// If status is failure, may include [taskException] and [responseBody]
     func chunkStatusUpdate(chunkTaskId: String, status: TaskStatus, taskException: TaskException?, responseBody: String?) {
-        guard let chunk = chunks.first(where: { $0.task.taskId == chunkTaskId }) else { return } // chunk is not part of this parent task
-                                                                                                 // first check for fail -> retry
+        // Confirm chunk is part of this parent task
+        guard let chunk = chunks.first(where: { $0.task.taskId == chunkTaskId }) else { return }
+        // first check for fail -> retry
         if status == .failed && chunk.task.retriesRemaining > 0 {
             chunk.task.retriesRemaining -= 1
             let waitTimeSeconds = 2 << min(chunk.task.retries - chunk.task.retriesRemaining - 1, 8)
@@ -215,8 +257,6 @@ public class ParallelDownloader: NSObject {
         }
     }
     
-    
-    
     /// Update the status for this chunk, and return the status for the parent task
     /// as derived from the sum of the child tasks, or null if undefined
     ///
@@ -229,10 +269,8 @@ public class ParallelDownloader: NSObject {
             lastTaskStatus = parentStatus
             return parentStatus
         }
-        
         return nil
     }
-    
     
     /// Returns the [TaskStatus] for the parent of this chunk, as derived from
     /// the 'sum' of the child tasks, or nil if undetermined
@@ -243,11 +281,9 @@ public class ParallelDownloader: NSObject {
         if chunks.first(where: { $0.status == .failed }) != nil {
             return .failed
         }
-        
         if chunks.first(where: { $0.status == .notFound }) != nil {
             return .notFound
         }
-        
         if (chunks.reduce(into: 0) { previousValue, chunk in
             if chunk.status == .running {
                 previousValue += 1
@@ -255,11 +291,9 @@ public class ParallelDownloader: NSObject {
         }) == 1 {
             return .running // if exactly one chunk task is running
         }
-        
         if chunks.allSatisfy({ $0.status == .complete }) {
             return .complete
         }
-        
         return nil
     }
     
@@ -269,12 +303,10 @@ public class ParallelDownloader: NSObject {
     /// its children by averaging
     private func updateChunkProgress(chunk: Chunk, progress: Double) -> Double {
         chunk.progress = progress
-        
         return chunks.reduce(into: 0.0) { previousValue, chunk in
             previousValue += chunk.progress
         } / Double(chunks.count)
     }
-    
     
     /// Stitch all chunks together into one file, per the [parentTask]
     private func stitchChunks() -> TaskStatus {
@@ -374,7 +406,18 @@ public class ParallelDownloader: NSObject {
         let taskId = parentTask.taskId
         let mimeType = BDPlugin.mimeTypes[taskId]
         let charSet = BDPlugin.charSets[taskId]
-        processStatusUpdate(task: parentTask, status: status, taskException: taskException, responseBody: responseBody, mimeType: mimeType, charSet: charSet)
+        var responseStatusCode: Int? = nil
+        switch status {
+            case .complete:
+                responseStatusCode = initialResponseStatusCode
+                
+            case .notFound:
+                responseStatusCode = 404
+                
+            default:
+                responseStatusCode = nil
+        }
+        processStatusUpdate(task: parentTask, status: status, taskException: taskException, responseBody: responseBody, responseHeaders: responseHeaders, responseStatusCode: responseStatusCode, mimeType: mimeType, charSet: charSet)
         BDPlugin.mimeTypes.removeValue(forKey: taskId)
         BDPlugin.charSets.removeValue(forKey: taskId)
         BDPlugin.tasksWithSuggestedFilename.removeValue(forKey: taskId)
@@ -382,6 +425,10 @@ public class ParallelDownloader: NSObject {
     }
 }
 
+/// Represents one chunk of a parallel download
+///
+/// Initialized to a specific range of the parent task.
+/// Holds state (status and progress) of the chunk
 public class Chunk: NSObject, Codable {
     let parentTaskId: String
     let url: String
@@ -406,7 +453,6 @@ public class Chunk: NSObject, Codable {
         let metaData = data != nil ? String(data: data!, encoding: .utf8) ?? "" : ""
         self.task = Task(url: url, filename: filename, headers: headers, baseDirectory: BaseDirectory.temporary.rawValue, group: chunkGroup, updates: Chunk.updatesBasedOnParent(parentTask), retries: parentTask.retries, retriesRemaining: parentTask.retries, allowPause: parentTask.allowPause, priority: parentTask.priority, metaData: metaData, taskType: "DownloadTask")
     }
-    
     
     /// Returns [Updates] enum rawValue based on its parent
     static func updatesBasedOnParent(_ parentTask: Task) -> Int {

@@ -289,6 +289,32 @@ interface class FileDownloader {
           onElapsedTime: onElapsedTime,
           elapsedTimeInterval: elapsedTimeInterval);
 
+  /// Transmit data in the [DataTask] and receive the response
+  ///
+  /// Different from [enqueue], this method returns a [Future] that completes
+  /// when the [DataTask] has completed, or an error has occurred.
+  /// While it uses the same mechanism as [enqueue],
+  /// and will execute the task also when
+  /// the app moves to the background, it is meant for data tasks that are
+  /// awaited while the app is in the foreground.
+  ///
+  /// [onStatus] is an optional callback for status updates
+  ///
+  /// An optional callback [onElapsedTime] will be called at regular intervals
+  /// (defined by [elapsedTimeInterval], which defaults to 5 seconds) with a
+  /// single argument that is the elapsed time since the call to [transmit].
+  /// This can be used to trigger UI warnings (e.g. 'this is taking rather long')
+  /// For performance reasons the [elapsedTimeInterval] should not be set to
+  /// a value less than one second.
+  Future<TaskStatusUpdate> transmit(DataTask task,
+          {void Function(TaskStatus)? onStatus,
+          void Function(Duration)? onElapsedTime,
+          Duration? elapsedTimeInterval}) =>
+      _downloader.enqueueAndAwait(task,
+          onStatus: onStatus,
+          onElapsedTime: onElapsedTime,
+          elapsedTimeInterval: elapsedTimeInterval);
+
   /// Enqueues a list of files to download and returns when all downloads
   /// have finished (successfully or otherwise). The returned value is a
   /// [Batch] object that contains the original [tasks], the
@@ -314,10 +340,7 @@ interface class FileDownloader {
   /// a value less than one second.
   /// The [onElapsedTime] callback should not be used to indicate progress.
   ///
-  /// Note that to allow for special processing of tasks in a batch, the task's
-  /// [Task.group] and [Task.updates] value will be modified when enqueued, and
-  /// those modified tasks are returned as part of the [Batch]
-  /// object.
+  /// [tasks] cannot be an empty list
   Future<Batch> downloadBatch(final List<DownloadTask> tasks,
           {BatchProgressCallback? batchProgressCallback,
           TaskStatusCallback? taskStatusCallback,
@@ -356,10 +379,7 @@ interface class FileDownloader {
   /// a value less than one second.
   /// The [onElapsedTime] callback should not be used to indicate progress.
   ///
-  /// Note that to allow for special processing of tasks in a batch, the task's
-  /// [Task.group] and [Task.updates] value will be modified when enqueued, and
-  /// those modified tasks are returned as part of the [Batch]
-  /// object.
+  /// [tasks] cannot be an empty list
   Future<Batch> uploadBatch(final List<UploadTask> tasks,
           {BatchProgressCallback? batchProgressCallback,
           TaskStatusCallback? taskStatusCallback,
@@ -545,6 +565,20 @@ interface class FileDownloader {
   /// If the task is able to resume, it will, otherwise it will restart the
   /// task from scratch, or fail.
   Future<bool> resume(DownloadTask task) => _downloader.resume(task);
+
+  /// Set WiFi requirement globally, based on [requirement].
+  ///
+  /// Affects future tasks and reschedules enqueued, inactive tasks
+  /// with the new setting.
+  /// Reschedules running tasks if [rescheduleRunningTasks] is true,
+  /// otherwise leaves those running with their prior setting
+  Future<bool> requireWiFi(RequireWiFi requirement,
+          {final rescheduleRunningTasks = true}) =>
+      _downloader.requireWiFi(requirement, rescheduleRunningTasks);
+
+  /// Returns the current global setting for requiring WiFi
+  Future<RequireWiFi> getRequireWiFiSetting() =>
+      _downloader.getRequireWiFiSetting();
 
   /// Configure notification for a single task
   ///

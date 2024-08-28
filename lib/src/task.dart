@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' show Random;
@@ -6,7 +7,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:mime/mime.dart';
-import 'package:path/path.dart' as path;
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'file_downloader.dart';
@@ -35,9 +36,12 @@ base class Request {
   /// Set [post] to make the request using POST instead of GET.
   /// In the constructor, [post] must be one of the following:
   /// - a String: POST request with [post] as the body, encoded in utf8
-  /// - a List of bytes: POST request with [post] as the body
+  /// - a Map: will be jsonEncoded to a String and set as the POST body
+  /// - a List of bytes: will be converted to a String using String.fromCharCodes
+  ///   and set as the POST body
+  /// - a List: map will be jsonEncoded to a String and set as the POST body
   ///
-  /// The field [post] will be a UInt8List representing the bytes, or the String
+  /// The field [post] will be a String
   final String? post;
 
   /// Maximum number of retries the downloader should attempt
@@ -59,21 +63,29 @@ base class Request {
   /// [post] if set, uses POST instead of GET. Post must be one of the
   /// following:
   /// - a String: POST request with [post] as the body, encoded in utf8
-  /// - a List of bytes: POST request with [post] as the body
+  /// - a Map: will be jsonEncoded to a String and set as the POST body
+  /// - a List of bytes: will be converted to a String using String.fromCharCodes
+  ///   and set as the POST body
+  /// - a List: map will be jsonEncoded to a String and set as the POST body
   ///
   /// [retries] if >0 will retry a failed download this many times
   Request(
       {required String url,
       Map<String, String>? urlQueryParameters,
-      this.headers = const {},
+      Map<String, String>? headers,
       String? httpRequestMethod,
       post,
       this.retries = 0,
       DateTime? creationTime})
       : url = urlWithQueryParameters(url, urlQueryParameters),
+        headers = headers ?? {},
         httpRequestMethod =
             httpRequestMethod?.toUpperCase() ?? (post == null ? 'GET' : 'POST'),
-        post = post is Uint8List ? String.fromCharCodes(post) : post,
+        post = post is Uint8List
+            ? String.fromCharCodes(post)
+            : post is Map || post is List
+                ? jsonEncode(post)
+                : post,
         retriesRemaining = retries,
         creationTime = creationTime ?? DateTime.now() {
     if (retries < 0 || retries > 10) {
@@ -254,7 +266,10 @@ sealed class Task extends Request implements Comparable {
   /// [post] if set, uses POST instead of GET. Post must be one of the
   /// following:
   /// - a String: POST request with [post] as the body, encoded in utf8
-  /// - a List of bytes: POST request with [post] as the body
+  /// - a Map: will be jsonEncoded to a String and set as the POST body
+  /// - a List of bytes: will be converted to a String using String.fromCharCodes
+  ///   and set as the POST body
+  /// - a List: map will be jsonEncoded to a String and set as the POST body
   /// [directory] optional directory name, precedes [filename]
   /// [baseDirectory] one of the base directories, precedes [directory]
   /// [group] if set allows different callbacks or processing for different
@@ -317,8 +332,9 @@ sealed class Task extends Request implements Comparable {
         'UploadTask' => UploadTask.fromJson(json),
         'MultiUploadTask' => MultiUploadTask.fromJson(json),
         'ParallelDownloadTask' => ParallelDownloadTask.fromJson(json),
+        'DataTask' => DataTask.fromJson(json),
         _ => throw ArgumentError(
-            'taskType not in [DownloadTask, UploadTask, MultiUploadTask, ParallelDownloadTask]')
+            'taskType not in [DownloadTask, UploadTask, MultiUploadTask, ParallelDownloadTask, DataTask]')
       };
 
   /// Create a new [Task] subclass from provided [jsonString]
@@ -339,6 +355,12 @@ sealed class Task extends Request implements Comparable {
     if (this is MultiUploadTask && withFilename == null) {
       return '';
     }
+    final baseDirPath = await baseDirectoryPath(baseDirectory);
+    return p.join(baseDirPath, directory, withFilename ?? filename);
+  }
+
+  /// Returns the path to the directory represented by [baseDirectory]
+  static Future<String> baseDirectoryPath(BaseDirectory baseDirectory) async {
     Directory? externalStorageDirectory;
     Directory? externalCacheDirectory;
     if (Task.useExternalStorage) {
@@ -349,8 +371,7 @@ sealed class Task extends Request implements Comparable {
             'Android external storage is not available');
       }
     }
-    final Directory baseDir =
-        switch ((baseDirectory, Task.useExternalStorage)) {
+    final baseDir = switch ((baseDirectory, Task.useExternalStorage)) {
       (BaseDirectory.applicationDocuments, false) =>
         await getApplicationDocumentsDirectory(),
       (BaseDirectory.temporary, false) => await getTemporaryDirectory(),
@@ -360,17 +381,78 @@ sealed class Task extends Request implements Comparable {
           when Platform.isMacOS || Platform.isIOS =>
         await getLibraryDirectory(),
       (BaseDirectory.applicationLibrary, false) => Directory(
-          path.join((await getApplicationSupportDirectory()).path, 'Library')),
+          p.join((await getApplicationSupportDirectory()).path, 'Library')),
       (BaseDirectory.root, _) => Directory('/'),
       // Android only: external storage variants
       (BaseDirectory.applicationDocuments, true) => externalStorageDirectory!,
       (BaseDirectory.temporary, true) => externalCacheDirectory!,
       (BaseDirectory.applicationSupport, true) =>
-        Directory(path.join(externalStorageDirectory!.path, 'Support')),
+        Directory(p.join(externalStorageDirectory!.path, 'Support')),
       (BaseDirectory.applicationLibrary, true) =>
-        Directory(path.join(externalStorageDirectory!.path, 'Library'))
+        Directory(p.join(externalStorageDirectory!.path, 'Library'))
     };
-    return path.join(baseDir.path, directory, withFilename ?? filename);
+    return baseDir.absolute.path;
+  }
+
+  /// Extract the baseDirectory, directory and filename from
+  /// the provided [filePath] or [file], and return this as a record
+  ///
+  /// Either [filePath] or [file] must be provided, not both.
+  ///
+  /// Throws a FileSystemException if using external storage on Android (via
+  /// configuration at startup), and external storage is not available.
+  static Future<
+          (BaseDirectory baseDirectory, String directory, String filename)>
+      split({String? filePath, File? file}) async {
+    assert((filePath != null) ^ (file != null),
+        'Either filePath or file must be given and not both');
+    final path = filePath ?? file!.absolute.path;
+    final absoluteDirectoryPath = p.dirname(path);
+    final filename = p.basename(path);
+    // try to match the start of the absoluteDirectory to one of the
+    // directories represented by the BaseDirectory enum.
+    // Order matters, as some may be subdirs of others
+    final testSequence = Platform.isAndroid || Platform.isLinux
+        ? [
+            BaseDirectory.temporary,
+            BaseDirectory.applicationLibrary,
+            BaseDirectory.applicationSupport,
+            BaseDirectory.applicationDocuments
+          ]
+        : [
+            BaseDirectory.temporary,
+            BaseDirectory.applicationSupport,
+            BaseDirectory.applicationLibrary,
+            BaseDirectory.applicationDocuments
+          ];
+    for (final baseDirectoryEnum in testSequence) {
+      final baseDirPath = await baseDirectoryPath(baseDirectoryEnum);
+      final (match, directory) = _contains(baseDirPath, absoluteDirectoryPath);
+      if (match) {
+        return (baseDirectoryEnum, directory, filename);
+      }
+    }
+    // if no match, return a BaseDirectory.root with the absoluteDirectory
+    // minus the leading characters that designate the root (differs by platform)
+    final match =
+        RegExp(r'^(/|\\|([a-zA-Z]:[\\/]))').firstMatch(absoluteDirectoryPath);
+    return (
+      BaseDirectory.root,
+      absoluteDirectoryPath.substring(match?.end ?? 0),
+      filename
+    );
+  }
+
+  /// Returns the subdirectory of the given [baseDirPath] within [dirPath],
+  /// if [dirPath] starts with [baseDirPath].
+  ///
+  /// If found, returns (true, subdir) otherwise returns (false, '').
+  ///
+  /// [dirPath] should not contain a filename - if it does, it is returned
+  /// as part of the subdir.
+  static (bool, String) _contains(String baseDirPath, String dirPath) {
+    final match = RegExp('^$baseDirPath/?(.*)').firstMatch(dirPath);
+    return (match != null, match?.group(1) ?? '');
   }
 
   /// Returns a copy of the [Task] with optional changes to specific fields
@@ -454,11 +536,10 @@ sealed class Task extends Request implements Comparable {
   @override
   int get hashCode => taskId.hashCode;
 
-  @override
-
   /// Returns this.priority - other.priority if not the same
   /// Returns this.creationTime - other.creationTime if priorities the same
   /// Returns 0 if other is not a [Task]
+  @override
   int compareTo(other) {
     if (other is Task) {
       final diff = priority - other.priority;
@@ -494,12 +575,11 @@ final class DownloadTask extends Task {
   /// [httpRequestMethod] the HTTP request method used (e.g. GET, POST)
   /// [post] if set, uses POST instead of GET. Post must be one of the
   /// following:
-  /// - true: POST request without a body
-  /// - a String: POST request with [post] as the body, encoded in utf8 and
-  ///   content-type 'text/plain'
-  /// - a List of bytes: POST request with [post] as the body
-  /// - a Map: POST request with [post] as form fields, encoded in utf8 and
-  ///   content-type 'application/x-www-form-urlencoded'
+  /// - a String: POST request with [post] as the body, encoded in utf8
+  /// - a Map: will be jsonEncoded to a String and set as the POST body
+  /// - a List of bytes: will be converted to a String using String.fromCharCodes
+  ///   and set as the POST body
+  /// - a List: map will be jsonEncoded to a String and set as the POST body
   ///
   /// [directory] optional directory name, precedes [filename]
   /// [baseDirectory] one of the base directories, precedes [directory]
@@ -652,7 +732,10 @@ final class UploadTask extends Task {
   /// mimeType of the file to upload
   final String mimeType;
 
-  /// Map of name/value pairs to encode as form fields in a multi-part upload
+  /// Map of name/value pairs to encode as form fields in a multi-part upload.
+  /// To specify multiple values for a single name, format the value as
+  /// '"value1", "value2", "value3"' so that it matches the following
+  /// RegEx: ^(?:"[^"]+"\s*,\s*)+"[^"]+"$
   final Map<String, String> fields;
 
   /// Creates [UploadTask]
@@ -714,6 +797,41 @@ final class UploadTask extends Task {
             mimeType ?? lookupMimeType(filename) ?? 'application/octet-stream',
         super(
             httpRequestMethod: httpRequestMethod ?? 'POST', allowPause: false);
+
+  /// Creates [UploadTask] from a [File] object, using the [file] absolute path.
+  ///
+  /// Note that using absolute paths is discouraged on mobile, as the path to
+  /// files in an application's directory scope is not stable between application
+  /// starts. Use the combination of [baseDirectory], [directory] and [filename]
+  /// whenever possible to prevent hard to debug errors.
+  UploadTask.fromFile(
+      {required File file,
+      super.taskId,
+      required super.url,
+      super.urlQueryParameters,
+      super.headers,
+      String? httpRequestMethod,
+      String? super.post,
+      this.fileField = 'file',
+      String? mimeType,
+      Map<String, String>? fields,
+      super.group,
+      super.updates,
+      super.requiresWiFi,
+      super.retries,
+      super.priority,
+      super.metaData,
+      super.displayName,
+      super.creationTime})
+      : fields = fields ?? {},
+        mimeType =
+            mimeType ?? lookupMimeType(file.path) ?? 'application/octet-stream',
+        super(
+            baseDirectory: BaseDirectory.root,
+            directory: p.dirname(file.absolute.path),
+            filename: p.basename(file.absolute.path),
+            httpRequestMethod: httpRequestMethod ?? 'POST',
+            allowPause: false);
 
   /// Creates [UploadTask] object from [json]
   UploadTask.fromJson(super.json)
@@ -894,7 +1012,7 @@ final class MultiUploadTask extends UploadTask {
       super.creationTime})
       : fileFields = files
             .map((e) => switch (e) {
-                  String filename => path.basenameWithoutExtension(filename),
+                  String filename => p.basenameWithoutExtension(filename),
                   (String fileField, String _, String _) => fileField,
                   (String fileField, String _) => fileField,
                   _ => throw ArgumentError(_filesArgumentError)
@@ -1121,4 +1239,123 @@ final class ParallelDownloadTask extends DownloadTask {
           displayName: displayName ?? this.displayName,
           creationTime: creationTime ?? this.creationTime)
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
+}
+
+/// Class for background requests that do not involve a file
+///
+/// Closely resembles a Task, with  fewer fields available during construction
+final class DataTask extends Task {
+  /// Creates a [DataTask] that runs in the background, but does not involve a
+  /// file
+  ///
+  /// [taskId] must be unique. A unique id will be generated if omitted
+  /// [url] properly encoded if necessary, can include query parameters
+  /// [urlQueryParameters] may be added and will be appended to the [url], must
+  ///   be properly encoded if necessary
+  /// [headers] an optional map of HTTP request headers
+  /// [httpRequestMethod] the HTTP request method used (e.g. GET, POST)
+  /// [post] String post body, encoded in utf8
+  /// [json] if given will encode [json] to string and use as the [post] data
+  /// [contentType] sets the Content-Type header to this value. If omitted and
+  ///   [post] is given, it will be set to 'text-plain; charset=utf-8' and if
+  ///   [json] is given, it will be set to 'application/json]
+  /// [group] if set allows different callbacks or processing for different
+  /// groups
+  /// [updates] the kind of progress updates requested (only .status or none)
+  /// [requiresWiFi] if set, will not start download until WiFi is available.
+  /// If not set may start download over cellular network
+  /// [retries] if >0 will retry a failed download this many times
+  /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5
+  /// [metaData] user data
+  /// [displayName] human readable name for this task
+  /// [creationTime] time of task creation, 'now' by default.
+  DataTask(
+      {String? taskId,
+      required super.url,
+      super.urlQueryParameters,
+      super.headers,
+      super.httpRequestMethod,
+      String? post,
+      Map<String, dynamic>? json,
+      String? contentType,
+      super.group,
+      super.updates,
+      super.requiresWiFi,
+      super.retries,
+      super.metaData,
+      super.displayName,
+      super.priority,
+      super.creationTime})
+      : assert(const [Updates.status, Updates.none].contains(updates),
+            'DataTasks can only provide status updates'),
+        super(
+            post: json != null ? jsonEncode(json) : post,
+            baseDirectory: BaseDirectory.temporary,
+            allowPause: false) {
+    // if no content-type header set, it is set to [contentType] or
+    // (if post or json is given) to text/plain or application/json
+    if (!headers.containsKey('Content-Type') &&
+        !headers.containsKey('content-type')) {
+      try {
+        if (contentType != null) {
+          headers['Content-Type'] = contentType;
+        } else if ((post != null || json != null)) {
+          assert((post != null) ^ (json != null),
+              'Only post or json can be set, not both');
+          headers['Content-Type'] =
+              json != null ? 'application/json' : 'text/plain; charset=utf-8';
+        }
+      } on UnsupportedError {
+        _log.warning(
+            'Could not add Content-Type header as supplied header is const');
+      }
+    }
+  }
+
+  @override
+  Task copyWith(
+          {String? taskId,
+          String? url,
+          String? filename,
+          Map<String, String>? headers,
+          String? httpRequestMethod,
+          Object? post,
+          String? directory,
+          BaseDirectory? baseDirectory,
+          String? group,
+          Updates? updates,
+          bool? requiresWiFi,
+          int? retries,
+          int? retriesRemaining,
+          bool? allowPause,
+          int? priority,
+          String? metaData,
+          String? displayName,
+          DateTime? creationTime}) =>
+      DataTask(
+          taskId: taskId ?? this.taskId,
+          url: url ?? this.url,
+          headers: headers ?? this.headers,
+          httpRequestMethod: httpRequestMethod ?? this.httpRequestMethod,
+          post: post as String? ?? this.post,
+          group: group ?? this.group,
+          updates: updates ?? this.updates,
+          requiresWiFi: requiresWiFi ?? this.requiresWiFi,
+          retries: retries ?? this.retries,
+          priority: priority ?? this.priority,
+          metaData: metaData ?? this.metaData,
+          displayName: displayName ?? this.displayName,
+          creationTime: creationTime ?? this.creationTime)
+        ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
+
+  /// Creates [DataTask] object from [json]
+  DataTask.fromJson(super.json)
+      : assert(
+            json['taskType'] == 'DataTask',
+            'The provided JSON map is not a DataTask, '
+            'because key "taskType" is not "DataTask".'),
+        super.fromJson();
+
+  @override
+  String get taskType => 'DataTask';
 }

@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:background_downloader/background_downloader.dart';
 import 'package:background_downloader/src/utils.dart';
@@ -49,6 +50,10 @@ const uploadBinaryTestUrl =
     'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_upload_binary_file';
 const uploadMultiTestUrl =
     'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_multi_upload_file';
+const dataTaskGetUrl = 'https://httpbin.org/get';
+const dataTaskPostUrl = 'https://httpbin.org/post';
+final dataTaskHeaders = {'accept': 'application/json'};
+
 const urlWithContentLengthFileSize = 6207471;
 
 const defaultFilename = 'google.html';
@@ -123,6 +128,7 @@ void main() {
     uploadTask = UploadTask(url: uploadTestUrl, filename: uploadFilename);
     uploadTaskBinary =
         uploadTask.copyWith(url: uploadBinaryTestUrl, post: 'binary');
+
     // copy the test files to upload from assets to documents directory
     Directory directory = await getApplicationDocumentsDirectory();
     for (final filename in [uploadFilename, uploadFilename2]) {
@@ -650,7 +656,7 @@ void main() {
     });
 
     testWidgets('allTasks', (widgetTester) async {
-      print('Starting alTasks');
+      print('Starting allTasks');
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(task), isTrue);
       expect(await FileDownloader().allTasks(group: 'non-default'), isEmpty);
@@ -762,7 +768,6 @@ void main() {
           group: complexTask.group, taskStatusCallback: statusCallback);
       expect(await FileDownloader().taskForId(complexTask.taskId), isNull);
       expect(await FileDownloader().enqueue(complexTask), isTrue);
-      print("done with enqueue");
       final task = await FileDownloader().taskForId(complexTask.taskId);
       expect(task is DownloadTask, isTrue);
       expect(task, equals(complexTask));
@@ -854,6 +859,26 @@ void main() {
       /// which is what the server expects
       expect(lastStatus, equals(TaskStatus.notFound));
     });
+
+    testWidgets('requireWiFi setting', (widgetTester) async {
+      if (Platform.isAndroid || Platform.isIOS) {
+        await FileDownloader().requireWiFi(RequireWiFi.asSetByTask);
+        expect(await FileDownloader().getRequireWiFiSetting(),
+            equals(RequireWiFi.asSetByTask));
+        await FileDownloader().requireWiFi(RequireWiFi.forAllTasks);
+        await Future.delayed(const Duration(seconds: 2));
+        expect(await FileDownloader().getRequireWiFiSetting(),
+            equals(RequireWiFi.forAllTasks));
+        await FileDownloader().requireWiFi(RequireWiFi.forNoTasks);
+        await Future.delayed(const Duration(seconds: 2));
+        expect(await FileDownloader().getRequireWiFiSetting(),
+            equals(RequireWiFi.forNoTasks));
+        await FileDownloader().requireWiFi(RequireWiFi.asSetByTask);
+        await Future.delayed(const Duration(seconds: 2));
+        expect(await FileDownloader().getRequireWiFiSetting(),
+            equals(RequireWiFi.asSetByTask));
+      }
+    });
   });
 
   group('Convenience downloads', () {
@@ -869,6 +894,7 @@ void main() {
       expect(result.exception, isNull);
       expect(result.responseBody, isNull);
       expect(result.responseHeaders?['server'], equals('gws'));
+      expect(result.responseStatusCode, equals(200));
       exists = await File(path).exists();
       expect(exists, isTrue);
       await File(path).delete();
@@ -1132,6 +1158,7 @@ void main() {
               '<h1>Not Found</h1>\n'
               '<p>The requested URL was not found on the server. If you entered the URL manually '
               'please check your spelling and try again.</p>\n'));
+      expect(result.responseStatusCode, equals(404));
     });
   });
 
@@ -1393,7 +1420,7 @@ void main() {
             'Header1': 'headerValue1',
             'content-type': 'application/json'
           },
-          post: '{"field1": 1}');
+          post: '{"field1":1}');
       final path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
       expect((await FileDownloader().download(task)).status,
@@ -1402,10 +1429,58 @@ void main() {
       print(result);
       expect(result['args']['request-type'], equals('post-json'));
       expect(result['headers']['Header1'], equals('headerValue1'));
-      expect(result['data'], equals('{"field1": 1}'));
+      expect(result['data'], equals('{"field1":1}'));
       // confirm the server side interpreted this as JSON
       expect(result['json'], equals({'field1': 1}));
     });
+
+    testWidgets('post DownloadTask with post is Map',
+            (widgetTester) async {
+          final task = DownloadTask(
+              url: postTestUrl,
+              urlQueryParameters: {'request-type': 'post-json'},
+              filename: postFilename,
+              headers: {
+                'Header1': 'headerValue1',
+                'content-type': 'application/json'
+              },
+              post: {"field1": 1});
+          final path =
+          join((await getApplicationDocumentsDirectory()).path, task.filename);
+          expect((await FileDownloader().download(task)).status,
+              equals(TaskStatus.complete));
+          final result = jsonDecode(await File(path).readAsString());
+          print(result);
+          expect(result['args']['request-type'], equals('post-json'));
+          expect(result['headers']['Header1'], equals('headerValue1'));
+          expect(result['data'], equals('{"field1":1}'));
+          // confirm the server side interpreted this as JSON
+          expect(result['json'], equals({'field1': 1}));
+        });
+
+    testWidgets('post DownloadTask with post is List',
+            (widgetTester) async {
+          final task = DownloadTask(
+              url: postTestUrl,
+              urlQueryParameters: {'request-type': 'post-json'},
+              filename: postFilename,
+              headers: {
+                'Header1': 'headerValue1',
+                'content-type': 'application/json'
+              },
+              post: ['apple', 'orange']);
+          final path =
+          join((await getApplicationDocumentsDirectory()).path, task.filename);
+          expect((await FileDownloader().download(task)).status,
+              equals(TaskStatus.complete));
+          final result = jsonDecode(await File(path).readAsString());
+          print(result);
+          expect(result['args']['request-type'], equals('post-json'));
+          expect(result['headers']['Header1'], equals('headerValue1'));
+          expect(result['data'], equals('["apple","orange"]'));
+          // confirm the server side interpreted this as JSON
+          expect(result['json'], equals(['apple', 'orange']));
+        });
 
     testWidgets('post DownloadTask with post is invalid type',
         (widgetTester) async {
@@ -1415,7 +1490,7 @@ void main() {
               urlQueryParameters: {'request-type': 'invalid'},
               filename: postFilename,
               headers: {'Header1': 'headerValue1'},
-              post: {'invalid': 'map'}),
+              post: 2),
           throwsA(isA<TypeError>()));
     });
   });
@@ -1499,13 +1574,51 @@ void main() {
       expect(result['json'], equals({'field1': 1}));
     });
 
+    testWidgets('post request with post is Map', (widgetTester) async {
+      final request = Request(
+          url: postTestUrl,
+          urlQueryParameters: {'request-type': 'post-json'},
+          headers: {
+            'Header1': 'headerValue1',
+            'content-type': 'application/json'
+          },
+          post: {'field': 1});
+      final response = await FileDownloader().request(request);
+      expect(response.statusCode, equals(200));
+      final result = jsonDecode(response.body);
+      expect(result['args']['request-type'], equals('post-json'));
+      expect(result['headers']['Header1'], equals('headerValue1'));
+      expect(result['data'], equals('{"field":1}'));
+      // confirm the server side interpreted this as JSON
+      expect(result['json'], equals({'field': 1}));
+    });
+
+    testWidgets('post request with post is List', (widgetTester) async {
+      final request = Request(
+          url: postTestUrl,
+          urlQueryParameters: {'request-type': 'post-json'},
+          headers: {
+            'Header1': 'headerValue1',
+            'content-type': 'application/json'
+          },
+          post: ['apple', 'orange']);
+      final response = await FileDownloader().request(request);
+      expect(response.statusCode, equals(200));
+      final result = jsonDecode(response.body);
+      expect(result['args']['request-type'], equals('post-json'));
+      expect(result['headers']['Header1'], equals('headerValue1'));
+      expect(result['data'], equals('["apple","orange"]'));
+      // confirm the server side interpreted this as JSON
+      expect(result['json'], equals(['apple', 'orange']));
+    });
+
     testWidgets('post request with post is invalid type', (widgetTester) async {
       expect(
           () => Request(
               url: postTestUrl,
               urlQueryParameters: {'request-type': 'invalid'},
               headers: {'Header1': 'headerValue1'},
-              post: {'invalid': 'map'}),
+              post: 2),
           throwsA(isA<TypeError>()));
     });
 
@@ -1617,6 +1730,24 @@ void main() {
       print('Finished enqueue multipart with fields');
     });
 
+    testWidgets('enqueue multipart with fields that have multiple values',
+        (widgetTester) async {
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      expect(
+          await FileDownloader().enqueue(uploadTask.copyWith(
+              fields: {'field1': 'value1', 'field2': '"value2", "value3"'},
+              updates: Updates.statusAndProgress)),
+          isTrue);
+      await statusCallbackCompleter.future;
+      expect(statusCallbackCounter, equals(3));
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(progressCallbackCounter, greaterThan(1));
+      expect(lastProgress, equals(progressComplete));
+      print('Finished enqueue multipart with fields that have multiple values');
+    });
+
     testWidgets('upload task creation with errors', (widgetTester) async {
       expect(
           () => UploadTask(
@@ -1626,6 +1757,15 @@ void main() {
               post: 'binary'),
           throwsAssertionError);
     });
+
+    testWidgets('Create UploadTask from File', (widgetTester) async {
+      final pathToFile = await uploadTask.filePath();
+      final file = File(pathToFile);
+      final taskFromFile = UploadTask.fromFile(file: file, url: uploadTask.url);
+      expect(await taskFromFile.filePath(), equals(pathToFile));
+      final result = await FileDownloader().upload(taskFromFile);
+      expect(result.status, equals(TaskStatus.complete));
+    });
   });
 
   group('Convenience uploads', () {
@@ -1634,6 +1774,7 @@ void main() {
       expect(result.status, equals(TaskStatus.complete));
       expect(result.responseBody, equals('OK'));
       expect(result.responseHeaders?['server'], equals('Google Frontend'));
+      expect(result.responseStatusCode, equals(200));
     });
 
     testWidgets('binary upload with await', (widgetTester) async {
@@ -1642,6 +1783,7 @@ void main() {
       expect(result.status, equals(TaskStatus.complete));
       expect(result.responseBody, equals('OK'));
       expect(result.responseHeaders?['server'], equals('Google Frontend'));
+      expect(result.responseStatusCode, equals(200));
     });
 
     testWidgets('multiple upload with futures', (widgetTester) async {
@@ -1656,6 +1798,7 @@ void main() {
         expect(result.status, equals(TaskStatus.complete));
         expect(result.responseBody, equals('OK'));
         expect(result.responseHeaders?['server'], equals('Google Frontend'));
+        expect(result.responseStatusCode, equals(200));
       }
     });
 
@@ -1789,6 +1932,7 @@ void main() {
       expect(result.status, equals(TaskStatus.complete));
       expect(result.responseBody, equals('OK'));
       expect(result.responseHeaders?['server'], equals('Google Frontend'));
+      expect(result.responseStatusCode, equals(200));
     });
 
     testWidgets('upload 2 files with full file path', (widgetTester) async {
@@ -1802,6 +1946,7 @@ void main() {
       expect(result.status, equals(TaskStatus.complete));
       expect(result.responseBody, equals('OK'));
       expect(result.responseHeaders?['server'], equals('Google Frontend'));
+      expect(result.responseStatusCode, equals(200));
     });
   });
 
@@ -2259,7 +2404,7 @@ void main() {
     //   expect(await (File(await task.filePath())).length(), equals(59673498));
     //   expect(statusCallbackCounter, greaterThanOrEqualTo(9)); // min 2 pause
     // });
-//TODO put back multipause and resume
+//TODO put back multi pause and resume
     testWidgets('Pause and resume a convenience download',
         (widgetTester) async {
       task = DownloadTask(
@@ -2273,7 +2418,7 @@ void main() {
               progressCallback(TaskProgressUpdate(task, progress))));
       await someProgressCompleter.future;
       expect(await FileDownloader().pause(task), equals(true));
-      await Future.delayed(const Duration(milliseconds: 250));
+      await Future.delayed(const Duration(milliseconds: 500));
       expect(lastStatus, equals(TaskStatus.paused));
       expect(await FileDownloader().resume(task), equals(true));
       await statusCallbackCompleter.future;
@@ -2307,12 +2452,14 @@ void main() {
     });
   });
 
-  group('Persistence', () {
+  group('Fail background channel', () {
     testWidgets(
         'Local storage for resumeData, statusUpdates and progressUpdates',
         (widgetTester) async {
       if (Platform.isAndroid || Platform.isIOS) {
         final downloader = FileDownloader().downloaderForTesting;
+        // force fail triggers local storage, but does not prevent
+        // messages to be posted, so we can see the real value as well
         await downloader.setForceFailPostOnBackgroundChannel(true);
         FileDownloader().registerCallbacks(
             taskStatusCallback: statusCallback,
@@ -2338,8 +2485,8 @@ void main() {
         lastStatus = TaskStatus.enqueued; // must change to paused
         final oldLastProgress = lastProgress;
         lastProgress = -1; // must change to a real value
-        await downloader
-            .retrieveLocallyStoredData(); // triggers status & prog update
+        await downloader.retrieveLocallyStoredData(); // triggers updates
+        downloader.retrievedLocallyStoredData = false; // reset for testing
         await Future.delayed(const Duration(milliseconds: 500));
         expect(lastStatus, equals(TaskStatus.paused));
         expect(lastProgress, equals(oldLastProgress));
@@ -2357,6 +2504,86 @@ void main() {
             await downloader.popUndeliveredData(Undelivered.progressUpdates);
         expect(progressUpdateMap.length, equals(0));
         expect(await FileDownloader().cancelTaskWithId(task.taskId), isTrue);
+      }
+    });
+
+    testWidgets('Local storage for taskStatusUpdate - ok download',
+        (widgetTester) async {
+      if (Platform.isAndroid || Platform.isIOS) {
+        final downloader = FileDownloader().downloaderForTesting;
+        // force fail triggers local storage, but does not prevent
+        // messages to be posted, so we can see the real value as well
+        await downloader.setForceFailPostOnBackgroundChannel(true);
+        FileDownloader().registerCallbacks(
+            taskStatusCallback: statusCallback,
+            taskProgressCallback: progressCallback);
+        task = DownloadTask(
+            url: urlWithContentLength,
+            filename: defaultFilename,
+            allowPause: true);
+        var taskStatusUpdate = await FileDownloader().download(task);
+        expect(taskStatusUpdate.status, equals(TaskStatus.complete));
+        expect(taskStatusUpdate.exception, isNull);
+        expect(taskStatusUpdate.mimeType, equals('application/zip'));
+        expect(taskStatusUpdate.charSet, isNull);
+        expect(taskStatusUpdate.responseBody, isNull);
+        expect(taskStatusUpdate.responseHeaders?.containsKey('content-length'),
+            isTrue);
+        expect(taskStatusUpdate.responseStatusCode, equals(200));
+        // now get the locally stored taskStatus and check again
+        taskStatusUpdate = TaskStatusUpdate(task, TaskStatus.failed); // reset
+        FileDownloader().registerCallbacks(
+            taskStatusCallback: (update) => taskStatusUpdate = update);
+        await Future.delayed(const Duration(milliseconds: 500));
+        await downloader.retrieveLocallyStoredData(); // triggers status update
+        downloader.retrievedLocallyStoredData = false; // reset for testing
+        await Future.delayed(const Duration(milliseconds: 500));
+        expect(taskStatusUpdate.status, equals(TaskStatus.complete));
+        expect(taskStatusUpdate.exception, isNull);
+        expect(taskStatusUpdate.mimeType, equals('application/zip'));
+        expect(taskStatusUpdate.charSet, isNull);
+        expect(taskStatusUpdate.responseBody, isNull);
+        expect(taskStatusUpdate.responseHeaders?.containsKey('content-length'),
+            isTrue);
+        expect(taskStatusUpdate.responseStatusCode, equals(200));
+      }
+    });
+
+    testWidgets('Local storage for taskStatusUpdate - failed download',
+        (widgetTester) async {
+      if (Platform.isAndroid || Platform.isIOS) {
+        final downloader = FileDownloader().downloaderForTesting;
+        // force fail triggers local storage, but does not prevent
+        // messages to be posted, so we can see the real value as well
+        await downloader.setForceFailPostOnBackgroundChannel(true);
+        task = DownloadTask(url: failingUrl, filename: defaultFilename);
+        var taskStatusUpdate = await FileDownloader().download(task);
+        expect(taskStatusUpdate.status, equals(TaskStatus.failed));
+        var exception = taskStatusUpdate.exception as TaskHttpException;
+        expect(exception.description, equals('Not authorized'));
+        expect(exception.httpResponseCode, equals(403));
+        expect(taskStatusUpdate.mimeType, isNull);
+        expect(taskStatusUpdate.charSet, isNull);
+        expect(taskStatusUpdate.responseBody, isNull);
+        expect(taskStatusUpdate.responseHeaders, isNull);
+        expect(taskStatusUpdate.responseStatusCode, isNull);
+        // now get the locally stored taskStatus and check again
+        taskStatusUpdate = TaskStatusUpdate(task, TaskStatus.canceled); // reset
+        FileDownloader().registerCallbacks(
+            taskStatusCallback: (update) => taskStatusUpdate = update);
+        await Future.delayed(const Duration(milliseconds: 500));
+        await downloader.retrieveLocallyStoredData(); // triggers status update
+        downloader.retrievedLocallyStoredData = false; // reset for testing
+        await Future.delayed(const Duration(milliseconds: 500));
+        expect(taskStatusUpdate.status, equals(TaskStatus.failed));
+        exception = taskStatusUpdate.exception as TaskHttpException;
+        expect(exception.description, equals('Not authorized'));
+        expect(exception.httpResponseCode, equals(403));
+        expect(taskStatusUpdate.mimeType, isNull);
+        expect(taskStatusUpdate.charSet, isNull);
+        expect(taskStatusUpdate.responseBody, isNull);
+        expect(taskStatusUpdate.responseHeaders, isNull);
+        expect(taskStatusUpdate.responseStatusCode, isNull);
       }
     });
   });
@@ -2406,7 +2633,7 @@ void main() {
         success = await FileDownloader().openFile(task: task);
         expect(success, isFalse);
       } else {
-        expect(success, isFalse); // on Android cannot access docsdir
+        expect(success, isFalse); // on Android cannot access docs dir
         // change to a .txt file
         final filePath = await task.filePath();
         await File(filePath).rename(join(
@@ -2623,6 +2850,17 @@ void main() {
       expect((exception as TaskHttpException).httpResponseCode, equals(403));
     });
 
+    testWidgets('convenience download for httpResponse 403',
+        (widgetTester) async {
+      task = DownloadTask(url: failingUrl, filename: 'test');
+      final result = await FileDownloader().download(task);
+      final exception = result.exception!;
+      expect(exception is TaskHttpException, isTrue);
+      expect(exception.description, equals('Not authorized'));
+      expect((exception as TaskHttpException).httpResponseCode, equals(403));
+      expect(result.responseStatusCode, isNull);
+    });
+
     testWidgets('fileSystem: File to upload does not exist',
         (widgetTester) async {
       if (!Platform.isIOS) {
@@ -2748,7 +2986,9 @@ void main() {
       task = ParallelDownloadTask(
           url: urlWithContentLength, filename: DownloadTask.suggestedFilename);
       final result = await FileDownloader().download(task);
+      expect(result.status, equals(TaskStatus.complete));
       expect(result.task.filename, equals('5MB-test.ZIP'));
+      expect(result.responseStatusCode, equals(200));
       final file = File(await result.task.filePath());
       expect(await file.exists(), isTrue);
       expect(await file.length(), equals(urlWithContentLengthFileSize));
@@ -2894,7 +3134,7 @@ void main() {
       final response = await FileDownloader().request(task);
       print(response.headers['set-cookie']);
       final cookies = Request.cookieHeader(response, task.url);
-      expect(cookies['Cookie']?.startsWith('1P_JAR'), isTrue);
+      expect(cookies['Cookie']?.startsWith('AEC'), isTrue);
     });
   });
 
@@ -2948,6 +3188,362 @@ void main() {
         tq.add(downloadTask);
       }
       expect(await completer.future, isTrue);
+    });
+  });
+
+  group('HoldingQueue', () {
+    testWidgets('multiple maxConcurrent combinations', (widgetTester) async {
+      var start = DateTime.now();
+      var concurrent = 0;
+      var maxActual = 0;
+      var finished = 0;
+
+      // same callback used for group 0 and group 1
+      void callBack(TaskStatusUpdate update) {
+        if (update.status == TaskStatus.running) {
+          concurrent++;
+          print(
+              'Started ${update.task.taskId} in group ${update.task.group}, $concurrent concurrent');
+          maxActual = max(concurrent, maxActual);
+        }
+        if (update.status == TaskStatus.complete) {
+          concurrent--;
+          finished++;
+          print('Finished ${update.task.taskId}, $concurrent concurrent');
+        }
+      }
+
+      FileDownloader()
+          .registerCallbacks(group: 'group 0', taskStatusCallback: callBack);
+      FileDownloader()
+          .registerCallbacks(group: 'group 1', taskStatusCallback: callBack);
+
+      // test function: enqueues 10 times the same file from the same host, but
+      // with alternating group "group 0" and "group 1", watches the concurrency
+      // count and then waits for all downloads to complete
+      Future<void> runTest() async {
+        for (var n = 0; n < 10; n++) {
+          var downloadTask = DownloadTask(
+              url: urlWithContentLength,
+              group: 'group ${n % 2}',
+              priority: Random().nextInt(9));
+          print(
+              'Enqueuing ${downloadTask.taskId} with priority ${downloadTask.priority}');
+          FileDownloader().enqueue(downloadTask);
+        }
+        while (finished < 10) {
+          await Future.delayed(const Duration(milliseconds: 100));
+        }
+        print(
+            'Completed in ${DateTime.now().difference(start)} and maxActual=$maxActual');
+        finished = 0;
+      }
+
+      // baseline, unrestricted
+      await runTest();
+      expect(maxActual, greaterThan(3));
+      // configure for maxConcurrent
+      maxActual = 0;
+      expect(
+          (await FileDownloader().configure(
+                  globalConfig: (Config.holdingQueue, (3, null, null))))
+              .toString(),
+          equals('[(holdingQueue, )]'));
+      await runTest();
+      expect(maxActual, lessThan(4));
+      // configure for maxConcurrentByHost
+      maxActual = 0;
+      expect(
+          (await FileDownloader().configure(
+                  globalConfig: (Config.holdingQueue, (null, 3, null))))
+              .toString(),
+          equals('[(holdingQueue, )]'));
+      await runTest();
+      expect(maxActual, lessThan(4));
+      // configure for maxConcurrentByGroup. There are two groups, so now we can
+      // get up to 6 maxConcurrent (3 for each group)
+      maxActual = 0;
+      expect(
+          (await FileDownloader().configure(
+                  globalConfig: (Config.holdingQueue, (null, null, 3))))
+              .toString(),
+          equals('[(holdingQueue, )]'));
+      await runTest();
+      expect(maxActual, greaterThan(3));
+      expect(maxActual, lessThan(7));
+    });
+
+    test('holdingQueue allTaskIds and allTasks', () async {
+      expect(
+          (await FileDownloader().configure(
+                  globalConfig: (Config.holdingQueue, (1, null, null))))
+              .toString(),
+          equals('[(holdingQueue, )]'));
+      final taskIds = <String>[];
+      for (var n = 0; n < 10; n++) {
+        var downloadTask = DownloadTask(url: urlWithContentLength);
+        taskIds.add(downloadTask.taskId);
+        print('Enqueuing ${downloadTask.taskId}');
+        FileDownloader().enqueue(downloadTask);
+      }
+      await Future.delayed(const Duration(milliseconds: 100));
+      expect((await FileDownloader().allTaskIds()).length, equals(10));
+      expect((await FileDownloader().allTasks()).length, equals(10));
+      expect(await FileDownloader().allTaskIds(group: 'non-existent'), isEmpty);
+    });
+
+    test('holdingQueue cancel tasks', () async {
+      expect(
+          (await FileDownloader().configure(
+                  globalConfig: (Config.holdingQueue, (1, null, null))))
+              .toString(),
+          equals('[(holdingQueue, )]'));
+      var cancelCount = 0;
+      var completeCount = 0;
+      FileDownloader().registerCallbacks(taskStatusCallback: (update) {
+        if (update.status == TaskStatus.canceled) cancelCount++;
+        if (update.status == TaskStatus.complete) completeCount++;
+      });
+      final taskIds = <String>[];
+      for (var n = 0; n < 10; n++) {
+        var downloadTask = DownloadTask(url: urlWithContentLength);
+        taskIds.add(downloadTask.taskId);
+        print('Enqueuing ${downloadTask.taskId}');
+        FileDownloader().enqueue(downloadTask);
+      }
+      await Future.delayed(const Duration(milliseconds: 200));
+      expect(await FileDownloader().cancelTasksWithIds(taskIds), isTrue);
+      await Future.delayed(const Duration(milliseconds: 1500));
+      expect(await FileDownloader().allTaskIds(), isEmpty);
+      expect(cancelCount, greaterThan(2));
+      expect(cancelCount + completeCount, equals(10));
+    });
+
+    test('holdingQueue enqueue', () async {
+      expect(
+          (await FileDownloader().configure(
+                  globalConfig: (Config.holdingQueue, (1, null, null))))
+              .toString(),
+          equals('[(holdingQueue, )]'));
+      var enqueueCount = 0;
+      FileDownloader().registerCallbacks(taskStatusCallback: (update) {
+        if (update.status == TaskStatus.enqueued) enqueueCount++;
+      });
+      for (var n = 0; n < 10; n++) {
+        var downloadTask = DownloadTask(url: urlWithContentLength);
+        FileDownloader().enqueue(downloadTask);
+      }
+      await Future.delayed(const Duration(seconds: 1));
+      expect(enqueueCount, equals(10));
+    });
+  });
+
+  group('Task functions', () {
+    test('baseDirectoryPath', () async {
+      for (final baseDirectoryEnum in BaseDirectory.values) {
+        final task =
+            DownloadTask(url: workingUrl, baseDirectory: baseDirectoryEnum);
+        final path = await task.filePath();
+        final dir = dirname(path);
+        print('For $baseDirectoryEnum the dir is $dir');
+        expect(await Task.baseDirectoryPath(baseDirectoryEnum), equals(dir));
+      }
+    });
+
+    test('split with filePath parameter', () async {
+      for (final subdirName in ['something', '']) {
+        for (final baseDirectoryEnum in BaseDirectory.values) {
+          final task = DownloadTask(
+              url: workingUrl,
+              baseDirectory: baseDirectoryEnum,
+              directory: subdirName);
+          final path = await task.filePath();
+          print('Testing path $path');
+          final (baseDirectory, directory, filename) =
+              await Task.split(filePath: path);
+          expect(baseDirectory, equals(baseDirectoryEnum));
+          expect(directory, equals(subdirName));
+          expect(filename, equals(task.filename));
+        }
+      }
+    });
+
+    test('split with File parameter', () async {
+      for (final subdirName in ['something', '']) {
+        for (final baseDirectoryEnum in BaseDirectory.values) {
+          final task = DownloadTask(
+              url: workingUrl,
+              baseDirectory: baseDirectoryEnum,
+              directory: subdirName);
+          final path = await task.filePath();
+          print('Testing path $path');
+          final (baseDirectory, directory, filename) =
+              await Task.split(file: File(path));
+          expect(baseDirectory, equals(baseDirectoryEnum));
+          expect(directory, equals(subdirName));
+          expect(filename, equals(task.filename));
+        }
+      }
+    });
+  });
+
+  group('DataTask', () {
+    test('dataTask get', () async {
+      var lastUpdate = TaskStatusUpdate(task, TaskStatus.paused);
+      FileDownloader().registerCallbacks(taskStatusCallback: (update) {
+        lastUpdate = update;
+      });
+      final t = DataTask(url: dataTaskGetUrl, headers: dataTaskHeaders);
+      expect(await FileDownloader().enqueue(t), isTrue);
+      await Future.delayed(const Duration(seconds: 1));
+      expect(lastUpdate.status, equals(TaskStatus.complete));
+      final json = jsonDecode(lastUpdate.responseBody!);
+      final args = json['args'] as Map<String, dynamic>;
+      expect(args.isEmpty, isTrue);
+      expect(json['headers']['Accept'], equals('application/json'));
+    });
+
+    test('dataTask post no data', () async {
+      var lastUpdate = TaskStatusUpdate(task, TaskStatus.paused);
+      FileDownloader().registerCallbacks(taskStatusCallback: (update) {
+        lastUpdate = update;
+      });
+      final t = DataTask(
+          url: dataTaskPostUrl,
+          headers: dataTaskHeaders); // without 'POST' will fail
+      expect(await FileDownloader().enqueue(t), isTrue);
+      await Future.delayed(const Duration(seconds: 1));
+      expect(lastUpdate.status, equals(TaskStatus.failed));
+      final t2 = DataTask(
+          url: dataTaskPostUrl,
+          headers: dataTaskHeaders,
+          httpRequestMethod: 'POST'); // with 'POST' will succeed
+      expect(await FileDownloader().enqueue(t2), isTrue);
+      await Future.delayed(const Duration(seconds: 1));
+      expect(lastUpdate.status, equals(TaskStatus.complete));
+      print(lastUpdate.responseBody);
+      final json = jsonDecode(lastUpdate.responseBody!);
+      final args = json['args'] as Map<String, dynamic>;
+      expect(args.isEmpty, isTrue);
+      expect(json['headers']['Accept'], equals('application/json'));
+      expect((json['data'] as String).isEmpty, isTrue);
+    });
+
+    test('dataTask post with data', () async {
+      var lastUpdate = TaskStatusUpdate(task, TaskStatus.paused);
+      FileDownloader().registerCallbacks(taskStatusCallback: (update) {
+        lastUpdate = update;
+      });
+      final t = DataTask(
+          url: dataTaskPostUrl,
+          headers: dataTaskHeaders,
+          post: 'My data'); // should auto set 'POST' method
+      expect(await FileDownloader().enqueue(t), isTrue);
+      await Future.delayed(const Duration(seconds: 1));
+      print(lastUpdate.responseStatusCode);
+      expect(lastUpdate.status, equals(TaskStatus.complete));
+      print(lastUpdate.responseBody);
+      final json = jsonDecode(lastUpdate.responseBody!);
+      final args = json['args'] as Map<String, dynamic>;
+      expect(args.isEmpty, isTrue);
+      expect(json['headers']['Accept'], equals('application/json'));
+      expect((json['data'] as String), equals('My data'));
+    });
+
+    test('dataTask post with json data', () async {
+      var lastUpdate = TaskStatusUpdate(task, TaskStatus.paused);
+      FileDownloader().registerCallbacks(taskStatusCallback: (update) {
+        lastUpdate = update;
+      });
+      var jsonData = {'key': 'value'};
+      final t = DataTask(
+          url: dataTaskPostUrl, headers: dataTaskHeaders, json: jsonData);
+      expect(await FileDownloader().enqueue(t), isTrue);
+      await Future.delayed(const Duration(seconds: 1));
+      print(lastUpdate.responseStatusCode);
+      expect(lastUpdate.status, equals(TaskStatus.complete));
+      print(lastUpdate.responseBody);
+      final json = jsonDecode(lastUpdate.responseBody!);
+      final args = json['args'] as Map<String, dynamic>;
+      expect(args.isEmpty, isTrue);
+      expect(json['headers']['Accept'], equals('application/json'));
+      expect((json['data'] as String), equals("{\"key\":\"value\"}"));
+      expect((json['json'] as Map<String, dynamic>), equals(jsonData));
+    });
+
+    test('dataTask with error', () async {
+      var lastUpdate = TaskStatusUpdate(task, TaskStatus.paused);
+      FileDownloader().registerCallbacks(taskStatusCallback: (update) {
+        lastUpdate = update;
+      });
+      final t = DataTask(
+          url: 'https://httpbin.org/status/400', // force 400 code
+          headers: dataTaskHeaders);
+      expect(await FileDownloader().enqueue(t), isTrue);
+      await Future.delayed(const Duration(seconds: 1));
+      expect(lastUpdate.status, equals(TaskStatus.failed));
+      final exception = lastUpdate.exception!;
+      print(exception);
+      expect(exception is TaskHttpException, isTrue);
+      expect(exception.description.toUpperCase(), equals('BAD REQUEST'));
+      expect((exception as TaskHttpException).httpResponseCode, equals(400));
+    });
+
+    test('dataTask with retries', () async {
+      var lastUpdate = TaskStatusUpdate(task, TaskStatus.paused);
+      var retryCount = 0;
+      FileDownloader().registerCallbacks(taskStatusCallback: (update) {
+        lastUpdate = update;
+        if (update.status == TaskStatus.waitingToRetry) {
+          retryCount++;
+        }
+      });
+      final t = DataTask(
+          url: 'https://httpbin.org/status/400', // force 400 code
+          headers: dataTaskHeaders,
+          retries: 2);
+      expect(await FileDownloader().enqueue(t), isTrue);
+      await Future.delayed(const Duration(seconds: 10));
+      expect(lastUpdate.status, equals(TaskStatus.failed));
+      expect(lastUpdate.task.retries, equals(2));
+      expect(lastUpdate.task.retriesRemaining, equals(0));
+      expect(retryCount, equals(2));
+    });
+
+    test('cancel dataTask', () async {
+      /// Cancellation is only relevant when the task is waiting to retry.
+      /// Cancellation of a running DataTask has no effect
+      var lastUpdate = TaskStatusUpdate(task, TaskStatus.paused);
+      FileDownloader().registerCallbacks(taskStatusCallback: (update) {
+        lastUpdate = update;
+        if (update.status == TaskStatus.waitingToRetry) {
+          // cancel with some delay (otherwise the waitingToRetry status has
+          // not been registered yet)
+          Future.delayed(
+              const Duration(milliseconds: 500),
+              () => FileDownloader()
+                  .cancelTaskWithId(update.task.taskId)
+                  .then((success) => expect(success, isTrue)));
+        }
+      });
+      final t = DataTask(
+          url: 'https://httpbin.org/status/400', // force 400 code
+          headers: dataTaskHeaders,
+          retries: 2);
+      expect(await FileDownloader().enqueue(t), isTrue);
+      await Future.delayed(const Duration(seconds: 3));
+      expect(lastUpdate.status, equals(TaskStatus.canceled));
+      expect(lastUpdate.task.retriesRemaining, greaterThan(0));
+    });
+
+    test('transmit (wait for completion)', () async {
+      final t = DataTask(url: dataTaskGetUrl, headers: dataTaskHeaders);
+      final result = await FileDownloader().transmit(t);
+      expect(result.status, equals(TaskStatus.complete));
+      final json = jsonDecode(result.responseBody!);
+      final args = json['args'] as Map<String, dynamic>;
+      expect(args.isEmpty, isTrue);
+      expect(json['headers']['Accept'], equals('application/json'));
     });
   });
 }

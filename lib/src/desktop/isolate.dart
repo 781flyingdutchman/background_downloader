@@ -13,6 +13,7 @@ import 'package:logging/logging.dart';
 
 import '../models.dart';
 import '../task.dart';
+import 'data_isolate.dart';
 import 'desktop_downloader.dart';
 import 'download_isolate.dart';
 import 'parallel_download_isolate.dart';
@@ -35,6 +36,7 @@ var isCanceled = false;
 TaskException? taskException;
 String? responseBody;
 Map<String, String>? responseHeaders;
+int? responseStatusCode;
 String? mimeType; // derived from Content-Type header
 String? charSet; // derived from Content-Type header
 
@@ -94,7 +96,8 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
           sendPort),
       DownloadTask() => doDownloadTask(task, filePath, resumeData, isResume,
           requestTimeout ?? const Duration(seconds: 60), sendPort),
-      UploadTask() => doUploadTask(task, filePath, sendPort)
+      UploadTask() => doUploadTask(task, filePath, sendPort),
+      DataTask() => doDataTask(task, sendPort)
     };
   }
   receivePort.close();
@@ -239,6 +242,9 @@ void processStatusUpdateInIsolate(
           : null,
       status.isFinalState ? responseBody : null,
       status.isFinalState ? responseHeaders : null,
+      status == TaskStatus.complete || status == TaskStatus.notFound
+          ? responseStatusCode
+          : null,
       status.isFinalState ? mimeType : null,
       status.isFinalState ? charSet : null,
     ));
@@ -347,15 +353,15 @@ void logError(Task task, String error) {
 
 /// Set the [taskException] variable based on error e
 void setTaskError(dynamic e) {
-  switch (e.runtimeType) {
-    case HttpException _:
-    case TimeoutException _:
+  switch (e) {
+    case HttpException():
+    case TimeoutException():
       taskException = TaskConnectionException(e.toString());
 
-    case IOException _:
+    case IOException():
       taskException = TaskFileSystemException(e.toString());
 
-    case TaskException _:
+    case TaskException():
       taskException = e;
 
     default:

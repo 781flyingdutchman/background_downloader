@@ -6,7 +6,7 @@ Monitor progress by passing an `onProgress` listener, and monitor detailed statu
 
 Optionally, keep track of task status and progress in a persistent [database](#using-the-database-to-track-tasks), and show mobile [notifications](#notifications) to keep the user informed and in control when your app is in the background.
 
-To upload a file, create an [UploadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/UploadTask-class.html) and call `upload`. To make a regular [server request](#server-requests), create a [Request](https://pub.dev/documentation/background_downloader/latest/background_downloader/Request-class.html) and call `request`. To download in parallel from multiple servers, create a [ParallelDownloadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/ParallelDownloadTask-class.html).
+To upload a file, create an [UploadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/UploadTask-class.html) and call `upload`. To make a regular [server request](#server-requests), create a [Request](https://pub.dev/documentation/background_downloader/latest/background_downloader/Request-class.html) and call `request`, or a enqueue a [DataTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/DataTask-class.html). To download in parallel from multiple servers, create a [ParallelDownloadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/ParallelDownloadTask-class.html).
 
 The plugin supports [headers](#headers), [retries](#retries), [priority](#priority), [requiring WiFi](#requiring-wifi) before starting the up/download, user-defined [metadata and display name](#metadata-and-displayname) and GET, [POST](#post-requests) and other http(s) [requests](#http-request-method), and can be [configured](#configuration) by platform. You can [manage  the tasks in the queue](#managing-tasks-and-the-queue) (e.g. cancel, pause and resume), and have different handlers for updates by [group](#grouping-tasks) of tasks. Downloaded files can be moved to [shared storage](#shared-and-scoped-storage) to make them available outside the app.
 
@@ -65,23 +65,23 @@ switch (result.status) {
 // typically in your app's `initState()`:
 FileDownloader().updates.listen((update) {
       switch (update) {
-        case TaskStatusUpdate _:
+        case TaskStatusUpdate():
           // process the TaskStatusUpdate, e.g.
-        switch (update.status) {
-          case TaskStatus.complete:
-          print('Task ${update.task.taskId} success!');
-          
-          case TaskStatus.canceled:
-          print('Download was canceled');
-          
-          case TaskStatus.paused:
-          print('Download was paused');
-          
-          default:
-          print('Download not successful');
+          switch (update.status) {
+            case TaskStatus.complete:
+              print('Task ${update.task.taskId} success!');
+            
+            case TaskStatus.canceled:
+              print('Download was canceled');
+            
+            case TaskStatus.paused:
+              print('Download was paused');
+            
+            default:
+              print('Download not successful');
           }
 
-        case TaskProgressUpdate _:
+        case TaskProgressUpdate():
           // process the TaskProgressUpdate, e.g.
           progressUpdateStream.add(update); // pass on to widget for indicator
       }
@@ -186,7 +186,8 @@ FileDownloader().configureNotification(
 - [Managing tasks in the queue](#managing-tasks-and-the-queue)
   - [Canceling, pausing and resuming tasks](#canceling-pausing-and-resuming-tasks)
   - [Grouping tasks](#grouping-tasks)
-  - [Task queues](#task-queues)
+  - [Task queues and holding queues](#task-queues-and-holding-queues)
+  - [Changing WiFi requirements](#changing-wifi-requirements)
 - [Server requests](#server-requests)
 - [Cookies](#cookies)
 - [Optional parameters](#optional-parameters)
@@ -207,7 +208,7 @@ final result = await FileDownloader().download(task);  // do the download and wa
 ```
 
 The `result` will be a [TaskStatusUpdate](https://pub.dev/documentation/background_downloader/latest/background_downloader/TaskStatusUpdate-class.html), which has a field `status` that indicates how the download ended: `.complete`, `.failed`, `.canceled` or `.notFound`.
-It may also contain the `responseHeaders` (with lowercase header names) and a `mimeType` and `charSet`, if the server provided that information via the Content-Type header.
+It may also contain the `responseHeaders` (with lowercase header names), the `responseStatusCode`, and the `mimeType` and `charSet` if the server provided that information via the Content-Type header.
 If the `status` is `.failed`, the `result.exception` field will contain a `TaskException` with information about what went wrong. For uploads and some unsuccessful downloads, the `responseBody` will contain the server response.
 
 ### Monitoring the task
@@ -281,6 +282,16 @@ final task = DownloadTask(
         baseDirectory: BaseDirectory.temporary);
 ```
 
+If you already have a path to a file or a `File` object, you can extract the values for `baseDirectory`, `directory` and `filename` to create the task by using `Task.split`:
+```dart
+final (baseDirectory, directory, filename) = await Task.split(filePath: yourPath);
+final task = UploadTask(
+        url: 'https://google.com',
+        baseDirectory: baseDirectory,
+        directory: directory,
+        filename: filename);
+```
+
 The downloader will only store the file upon success (so there will be no partial files saved), and if so, the destination is overwritten if it already exists, and all intermediate directories will be created if needed.
 
 You can also pass an absolute path to the downloader by using `BaseDirectory.root` combined with the path in `directory`. This allows you to reach any file destination on your platform. However, be careful: the reason you should not normally do this (and use e.g. `BaseDirectory.applicationDocuments` instead) is that the location of the app's documents directory may change between application starts (on iOS, and on Android in some cases), and may therefore fail for downloads that complete while the app is suspended.  You should therefore never store permanently, or hard-code, an absolute path, unless you are absolutely sure that that path is 'stable'.
@@ -351,11 +362,12 @@ The rest of this section details [event listeners](#using-an-event-listener), [c
 Listen to updates from the downloader by listening to the `updates` stream, and process those updates centrally. For example, the following creates a listener to monitor status and progress updates for downloads, and then enqueues a task as an example:
 ```dart
     final subscription = FileDownloader().updates.listen((update) {
-        if (update is TaskStatusUpdate) {
-            print('Status update for ${update.task} with status ${update.status}');
-        } else if (update is TaskProgressUpdate) {
-            print('Progress update for ${update.task} with progress ${update.progress}');
-        }
+      switch(update) {
+        case TaskStatusUpdate():
+          print('Status update for ${update.task} with status ${update.status}');
+        case TaskProgressUpdate():
+          print('Progress update for ${update.task} with progress ${update.progress}');
+      }
     });
     
     // define the task
@@ -373,7 +385,7 @@ A TaskProgressUpdate includes `expectedFileSize`, `networkSpeed` and `timeRemain
 
 Note that `successFullyEnqueued` only refers to the enqueueing of the download task, not its result, which must be monitored via the listener. Also note that in order to get progress updates the task must set its `updates` field to a value that includes progress updates. In the example, we are asking for both status and progress updates, but other combinations are possible. For example, if you set `updates` to `Updates.status` then the task will only generate status updates and no progress updates. You define what updates to receive on a task by task basis via the `Task.updates` field, which defaults to status updates only.
 
-You can start your subscription in a convenient place, like a widget's `initState`, and don't forget to cancel your subscription to the stream using `subscription.cancel()`. Note the stream can only be listened to once, though you can reset the stream controller by calling `await FileDownloader().resetUpdates()` to start listening again.
+Best practice is to start your subscription in a singleton object that you initialize upon app startup, so that you only ever listen to the stream once, and use that singleton object to maintain state for your downloads. Note the stream can only be listened to once, though you can reset the stream controller by calling `await FileDownloader().resetUpdates()` to start listening again.
 
 ### Using callbacks
 
@@ -438,7 +450,7 @@ As an alternative to LocalStore, use `SqlitePersistentStorage`, included in [bac
 
 ## Notifications
 
-On iOS and Android, for downloads only, the downloader can generate notifications to keep the user informed of progress also when the app is in the background, and allow pause/resume and cancellation of an ongoing download from those notifications.
+On iOS and Android, for downloads and uploads, the downloader can generate notifications to keep the user informed of progress also when the app is in the background, and allow pause/resume and cancellation of an ongoing download from those notifications.
 
 Configure notifications by calling `FileDownloader().configureNotification` and supply a
 `TaskNotification` object for different states. For example, the following configures
@@ -464,12 +476,14 @@ There are four possible substitutions of the text in the `title` or `body` of a 
 * {metadata} is substituted by the `metaData` field of the `Task`
 
 Notifications on iOS follow Apple's [guidelines](https://developer.apple.com/design/human-interface-guidelines/components/system-experiences/notifications/), notably:
-* No progress bar is shown, and the {progress} substitution always substitutes to an empty string. In other words: only a single `running` notification is shown and it is not updated until the download state changes
-* When the app is in the foreground, on iOS 14 and above the notification will not be shown but will appear in the NotificationCenter. On older iOS versions the notification will be shown also in the foreground. Apple suggests showing progress and download controls within the app when it is in the foreground
+* No progress bar is shown, and the {progress} substitution always substitutes to an empty string. In other words: only a single `running` notification is shown and it is not updated until the download/upload state changes
+* When the app is in the foreground, on iOS 14 and above the notification will not be shown but will appear in the NotificationCenter. On older iOS versions the notification will be shown also in the foreground. Apple suggests showing progress and download/upload controls within the app when it is in the foreground
 
-While notifications are possible on desktop platforms, there is no true background mode, and progress updates and indicators can be shown within the app. Notifications are therefore ignored on desktop platforms.
+No notifications will be generated:
+* On desktop platforms, as there is no true background mode, and progress updates and indicators can be shown within the app
+* For a `DataTask`, as those are meant for short data exchanges
 
-The `configureNotification` call configures notification behavior for all download tasks. You can specify a separate configuration for a `group` of tasks by calling `configureNotificationForGroup` and for a single task by calling `configureNotificationForTask`. A `Task` configuration overrides a `group` configuration, which overrides the default configuration.
+The `configureNotification` call configures notification behavior for all tasks. You can specify a separate configuration for a `group` of tasks by calling `configureNotificationForGroup` and for a single task by calling `configureNotificationForTask`. A `Task` configuration overrides a `group` configuration, which overrides the default configuration.
 
 Make sure to check for, and if necessary request, permission to display notifications - see [permissions](#permissions). For Android, starting with API 33, you need to add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />` to your app's `AndroidManifest.xml`. Also on Android you can localize the button text by overriding string resources `bg_downloader_cancel`, `bg_downloader_pause`, `bg_downloader_resume` and descriptions `bg_downloader_notification_channel_name`, `bg_downloader_notification_channel_description`. Localization on iOS can be done through [configuration](#configuration).
 
@@ -524,7 +538,7 @@ register a `taskNotificationTapCallback`.
 
 ### Setup for notifications
 
-On iOS, add the following to your `AppDelegate.swift`:
+__On iOS__: Add the following to your `AppDelegate.swift`:
 ```swift
 UNUserNotificationCenter.current().delegate = self as UNUserNotificationCenterDelegate
 ```
@@ -532,6 +546,8 @@ or if using Objective C, add to `AppDelegate.m`:
 ```objective-c
 [UNUserNotificationCenter currentNotificationCenter].delegate = (id<UNUserNotificationCenterDelegate>) self;
 ```
+
+__On Android__: Optionally, supply your own notification icons by creating a version of the icons defined in `android/src/main/res/drawable`, e.g. `outline_download_done_24.xml`, and add those to your own app's `android/src/main/res/drawable` under the same name.
 
 
 ## Shared and scoped storage
@@ -670,9 +686,13 @@ Uploads are very similar to downloads, except:
 
 There are two ways to upload a file to a server: binary upload (where the file is included in the POST body) and form/multi-part upload. Which type of upload is appropriate depends on the server you are uploading to. The upload will be done using the binary upload method only if you have set the `post` field of the `UploadTask` to 'binary'.
 
-For multi-part uploads you can specify name/value pairs in the `fields` field of the `UploadTask` as a `Map<String, String>`. These will be uploaded as form fields along with the file. You can also set the field name used for the file itself by setting `fileField` (default is "file") and override the mimeType by setting `mimeType` (default is derived from filename extension).
+If you already have a `File` object, you can create your `UploadTask` using `UploadTask.fromFile`, though note that this will create a task with an absolute path reference and `BaseDirectory.root`, which can cause problems on mobile platforms (see [here](#specifying-the-location-of-the-file-to-download-or-upload)). Preferably, use `Task.split` to break your `File` or filePath into appropriate baseDirectory, directory and filename and use that to create your `UploadTask`.
 
-If you need to upload multiple files in a single request, create a [MultiUploadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/MultiUploadTask-class.html) instead of an `UploadTask`. It has similar parameters as the `UploadTask`, except you specifiy a list of files to upload as the `files` argument of the constructor, and do not use `fileName`, `fileField` and `mimeType`. Each element in the `files` list is either:
+For multi-part uploads you can specify name/value pairs in the `fields` property of the `UploadTask` as a `Map<String, String>`. These will be uploaded as form fields along with the file. To specify multiple values for a single name, format the value as `'"value1", "value2", "value3"'` (note the double quotes and the comma to separate the values).
+
+You can also set the field name used for the file itself by setting `fileField` (default is "file") and override the mimeType by setting `mimeType` (default is derived from filename extension).
+
+If you need to upload multiple files in a single request, create a [MultiUploadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/MultiUploadTask-class.html) instead of an `UploadTask`. It has similar parameters as the `UploadTask`, except you specify a list of files to upload as the `files` argument of the constructor, and do not use `fileName`, `fileField` and `mimeType`. Each element in the `files` list is either:
 * a filename (e.g. `"file1.txt"`). The `fileField` for that file will be set to the base name (i.e. "file1" for "file1.txt") and the mime type will be derived from the extension (i.e. "text/plain" for "file1.txt")
 * a record containing `(fileField, filename)`, e.g. `("document", "file1.txt")`. The `fileField` for that file will be set to "document" and the mime type derived from the file extension (i.e. "text/plain" for "file1.txt")
 * a record containing `(filefield, filename, mimeType)`, e.g. `("document", "file1.txt", "text/plain")`
@@ -741,9 +761,12 @@ The methods `registerCallBacks`, `unregisterCallBacks`, `reset`, `allTaskIds`, `
 
 If you listen to the `updates` stream instead of using callbacks, you can test for the task's `group` field in your listener, and process the update differently for different groups.
 
-### Task queues
-Once you `enqueue` a task with the `FileDownloader` it is added to an internal queue that is managed by the native platform you're running on (e.g. Android). Once enqueued, you have limited control over the execution order, the number of tasks running in parallel, etc, because all that is managed by the platform.  If you want more control over the queue, you need to add a `TaskQueue`.
+### Task queues and Holding queues
+Once you `enqueue` a task with the `FileDownloader` it is added to an internal queue that is managed by the native platform you're running on (e.g. Android). Once enqueued, you have limited control over the execution order, the number of tasks running in parallel, etc, because all that is managed by the platform.  If you want more control over the queue, you need to use a `TaskQueue` or a `HoldingQueue`:
+* A `TaskQueue` is a Dart object that you can add to the `FileDownloader`. You can create this object yourself (implementing the `TaskQueue` interface) or use the bundled `MemoryTaskQueue` implementation. This queue sits "in front of" the `FileDownloader` and instead of using the `enqueue` and `download` methods directly, you now simply `add` your tasks to the `TaskQueue`. Because this is a Dart object, the queue will suspend when the OS suspends your application, and if the app gets killed, tasks held in the `TaskQueue` will be lost (unless you have implemented persistence)
+* A `HoldingQueue` is native to the OS and can be configured using `FileDownloader().configure` to limit the number of concurrent tasks that are executed (in total, by host or by group). When using this queue you do not change how you interact with the FileDownloader, but you cannot implement your own holding queue. Because this queue is native, it will continue to run when your app is suspended by the OS, but if the app is killed then tasks held in the holding queue will be lost (unlike tasks already enqueued natively, which persist)
 
+#### TaskQueue
 The `MemoryTaskQueue` bundled with the `background_downloader` allows:
 * pacing the rate of enqueueing tasks, based on `minInterval`, to avoid 'choking' the FileDownloader when adding a large number of tasks
 * managing task priorities while waiting in the queue, such that higher priority tasks are enqueued before lower priority ones, even if they are added later
@@ -751,13 +774,13 @@ The `MemoryTaskQueue` bundled with the `background_downloader` allows:
 * managing the number of tasks that talk to the same host concurrently, by setting `maxConcurrentByHost`
 * managing the number of tasks running that are in the same `Task.group`, by setting `maxConcurrentByGroup`
 
-A `TaskQueue` conceptually sits 'before' the FileDownloader's queue, and the `TaskQueue` makes the call to `FileDownloader().enqueue`. To use it, add it to the `FileDownloader` and instead of enqueuing tasks with the `FileDownloader`, you now `add` tasks to the queue:
+A `TaskQueue` conceptually sits 'in front of' the FileDownloader queue, and the `TaskQueue` makes the call to `FileDownloader().enqueue`. To use it, add it to the `FileDownloader` and instead of enqueuing tasks with the `FileDownloader`, you now `add` tasks to the queue:
 ```dart
 final tq = MemoryTaskQueue();
 tq.maxConcurrent = 5; // no more than 5 tasks active at any one time
 tq.maxConcurrentByHost = 2; // no more than two tasks talking to the same host at the same time
 tq.maxConcurrentByGroup = 3; // no more than three tasks from the same group active at the same time
-FileDownloader().add(tq); // 'connects' the TaskQueue to the FileDownloader
+FileDownloader().addTaskQueue(tq); // 'connects' the TaskQueue to the FileDownloader
 FileDownloader().updates.listen((update) { // listen to updates as per usual
   print('Received update for ${update.task.taskId}: $update')
 });
@@ -771,14 +794,54 @@ Because it is possible that an error occurs when the taskQueue eventually actual
 
 A common use for the `MemoryTaskQueue` is enqueueing a large number of tasks. This can 'choke' the downloader if done in a loop, but is easy to do when adding all tasks to a queue. The `minInterval` field of the `MemoryTaskQueue` ensures that the tasks are fed to the `FileDownloader` at a rate that does not grind your app to a halt.
 
-The default `TaskQueue` is the `MemoryTaskQueue` which, as the  name suggests, keeps everything in memory. This is fine for most situations, but be aware that the queue may get dropped if the OS aggressively moves the app to the background. Tasks still waiting in the queue will not be enqueued, and will therefore be lost. If you want a `TaskQueue` with more persistence, or add different prioritzation and concurrency roles, then subclass the `MemoryTaskQueue` and add your own persistence or logic.
-In addition, if your app is supended by the OS due to resource constraints, tasks waiting in the queue will not be enqueued to the native platform and will not run in the background. TaskQueues are therefore best for situations where you expect the queue to be emptied while the app is still in the foreground.
+The default `TaskQueue` is the `MemoryTaskQueue` which, as the  name suggests, keeps everything in memory. This is fine for most situations, but be aware that the queue may get dropped if the OS aggressively moves the app to the background. Tasks still waiting in the queue will not be enqueued, and will therefore be lost. If you want a `TaskQueue` with more persistence, or add different prioritization and concurrency roles, then subclass the `MemoryTaskQueue` and add your own persistence or logic.
+In addition, if your app is suspended by the OS due to resource constraints, tasks waiting in the queue will not be enqueued to the native platform and will not run in the background. TaskQueues are therefore best for situations where you expect the queue to be emptied while the app is still in the foreground.
+
+#### Holding queue
+Use a holding queue to limit the number of tasks running concurrently. Calling `await FileDownloader().configure(globalConfig: (Config.holdingQueue, (3, 2, 1)))` activates the holding queue and sets the constraints `maxConcurrent` to 3, `maxConcurrentByHost` to 2, and `maxConcurrentByGroup` to 1. Pass `null` for no constraint for that parameter.
+
+Using the holding queue adds a queue on the native side where tasks may have to wait before being enqueued with the Android WorkManager or iOS URLSessions. Because the holding queue lives on the native side (not Dart) tasks will continue to get pulled from the holding queue even when the app is suspended by the OS. This is different from the `TaskQueue`, which lives on the Dart side and suspends when the app is suspended by the OS 
+
+When using a holding queue:
+* Tasks will be taken out of the queue based on their priority and time of creation, provided they pass the constraints imposed by the `maxConcurrent` values
+* Status messages will differ slightly. You will get the `TaskStatus.enqueued` update immediately upon enqueuing. Once the task gets enqueued with the Android WorkManager or iOS URLSessions you will not get another "enqueue" update, but if that enqueue fails the task will fail. Once the task starts running you will get `TaskStatus.running` as usual
+* The holding queue and the native queues managed by the Android WorkManager or iOS URLSessions are treated as a single queue for queries like `taskForId` and `cancelTasksWithIds`. There is no way to determine whether a task is in the holding queue or already enqueued with the Android WorkManager or iOS URLSessions
+
+### Changing WiFi requirements
+
+By default, whether a task requires WiFi or not is determined by its `requireWiFi` property (iOS and Android only). To override this globally, call `FileDownloader().requireWifi` and pass one of the `RequireWiFi` enums:
+* `asSetByTask` (default) lets the task's `requireWiFi` property determine if WiFi is required
+* `forAllTasks` requires WiFi for all tasks
+* `forNoTasks` does not require WiFi for any tasks
+
+When calling `FileDownloader().requireWifi`, all enqueued tasks will be canceled and rescheduled with the appropriate WiFi requirement setting, and if the `rescheduleRunningTasks` parameter is true, all running tasks will be paused (if possible, independent of the task's `allowPause` property) or canceled and resumed/restarted with the new WiFi requirement. All newly enqueued tasks will follow this setting as well.
+
+The global setting persists across application restarts. Check the current setting by calling `FileDownloader().getRequireWiFiSetting`.
 
 ## Server requests
 
-To make a regular server request (e.g. to obtain a response from an API end point that you process directly in your app) use the `request` method.  It works similar to the `download` method, except you pass a `Request` object that has fewer fields than the `DownloadTask`, but is similar in structure.  You `await` the response, which will be a [Response](https://pub.dev/documentation/http/latest/http/Response-class.html) object as defined in the dart [http package](https://pub.dev/packages/http), and includes getters for the response body (as a `String` or as `UInt8List`), `statusCode` and `reasonPhrase`.
+To make a regular server request (e.g. to obtain a response from an API end point that you process directly in your app) use:
+1. A `Request` object, for requests that are executed immediately, expecting an immediate return
+2. A `DataTask` object, for requests that are scheduled on the background queue, similar to `DownloadTask`
+
+### Request: immediate execution
+
+A regular foreground request works similar to the `download` method, except you pass a `Request` object that has fewer fields than the `DownloadTask`, but is similar in structure.  You `await` the response, which will be a [Response](https://pub.dev/documentation/http/latest/http/Response-class.html) object as defined in the dart [http package](https://pub.dev/packages/http), and includes getters for the response body (as a `String` or as `UInt8List`), `statusCode` and `reasonPhrase`.
 
 Because requests are meant to be immediate, they are not enqueued like a `Task` is, and do not allow for status/progress monitoring.
+
+### DataTask: scheduled execution
+
+To make a similar request using the background mechanism (e.g. if you want to wait for WiFi to be available), create and enqueue a `DataTask`.
+A `DataTask` is similar to a `DownloadTask` except it:
+* Does not accept file information, as there is no file involved
+* Does not allow progress updates
+* Accepts `post` data as a String, or
+* Accepts `json` data, which will be converted to a String and posted as content type `application/json`
+* Accepts `contentType` which will set the `Content-Type` header value
+* Returns the server `responseBody`, `responseHeaders` and possible `taskException` in the final `TaskStatusUpdate` fields
+
+Typically you would use `enqueue` to enqueue a `DataTask` and monitor the result using a listener or callback, but you can also use `transmit` to enqueue and wait for the final result of the `DataTask`.
 
 ## Cookies
 
@@ -839,7 +902,7 @@ Note that certain failures can be resumed, and retries will therefore attempt to
 
 #### Requiring WiFi
 
-If the `requiresWiFi` field of a `Task` is set to true, the task won't start unless a WiFi network is available. By default `requiresWiFi` is false, and downloads/uploads will use the cellular (or metered) network if WiFi is not available, which may incur cost.
+On Android and iOS only: If the `requiresWiFi` field of a `Task` is set to true, the task won't start unless a WiFi network is available. By default `requiresWiFi` is false, and downloads/uploads will use the cellular (or metered) network if WiFi is not available, which may incur cost. Note that every task requires a working internet connection: local server connections that do not reach the internet may not work.
 
 #### Priority
 
@@ -869,7 +932,23 @@ No setup is required for Windows or Linux.
 
 ### Android
 
-No setup is required if you don't use notifications. If you do:
+This package needs Kotlin 1.9.20 or above to compile.
+For modern Flutter projects this should be added to the `/android/settings.gradle` file.
+```gradle
+plugins {
+    // ...
+    id "org.jetbrains.kotlin.android" version "1.9.20" apply false
+    // ...
+}
+```
+For older flutter projects, the kotlin version is set in the `android/build.gradle` file as follows.
+```gradle
+buildScript {
+    ext.kotlin_version = '1.9.20'
+}
+```
+
+If using notifications you need to:
 * Starting with API 33, you need to add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />` to your app's `AndroidManifest.xml`
 * If needed, localize the button text by overriding string resources `bg_downloader_cancel`, `bg_downloader_pause`, `bg_downloader_resume` and descriptions `bg_downloader_notification_channel_name`, `bg_downloader_notification_channel_description`.
 
@@ -909,6 +988,7 @@ Then do the same thing in macos/Runner/Release.entitlements.
 Several aspects of the downloader can be configured on startup:
 * Setting the request timeout value and, for iOS only, the 'resourceTimeout'
 * Checking available space before attempting a download
+* Activating a holding queue to manage how many tasks are executed concurrently
 * On Android, when to use the `cacheDir` for temporary files
 * Setting a proxy
 * Bypassing TLS Certificate validation (for debug mode only, Android and Desktop only)

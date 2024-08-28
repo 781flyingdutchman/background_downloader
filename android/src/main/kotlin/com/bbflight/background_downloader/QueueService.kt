@@ -1,6 +1,5 @@
 package com.bbflight.background_downloader
 
-import android.os.Looper
 import android.util.Log
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -13,6 +12,7 @@ import kotlinx.coroutines.launch
  * Queue service that executes things on a queue, to ensure ordered execution
  * and potentially manage delay
  */
+@Suppress("ConstPropertyName")
 object QueueService {
     private val scope = CoroutineScope(Dispatchers.Default)
 
@@ -22,12 +22,14 @@ object QueueService {
 
     private val backgroundPostQueue = Channel<BackgroundPost>(capacity = Channel.UNLIMITED)
 
+
     /**
      * Starts listening to the queues and processes each item
      *
      * taskIdDeletionQueue:
      *    Each item is a taskId and it will be removed from the
-     *    BDPlugin.bgChannelByTaskId and BDPlugin.localResumeData maps
+     *    BDPlugin.bgChannelByTaskId, BDPlugin.localResumeData
+     *    and BDPlugin.notificationConfigs maps
      *
      * backgroundPostQueue:
      *    Each item is a [BackgroundPost] that will be posted on the UI thread, and its
@@ -43,6 +45,7 @@ object QueueService {
                 }
                 BDPlugin.bgChannelByTaskId.remove(taskId)
                 BDPlugin.localResumeData.remove(taskId)
+                BDPlugin.notificationConfigJsonStrings.remove(taskId)
             }
         }
         scope.launch {
@@ -79,13 +82,10 @@ object QueueService {
                             success.complete(false)
                         }
                     }
-                    // Complete the success completer that was part of the backgroundPost
-                    if (!bgPost.postedFromUIThread) {
-                        bgPost.success.complete(!BDPlugin.forceFailPostOnBackgroundChannel && success.await())
+                    val onFail = bgPost.onFail
+                    if (onFail != null && (BDPlugin.forceFailPostOnBackgroundChannel || !success.await())) {
+                        onFail.invoke()
                     }
-                }
-                if (bgPost.postedFromUIThread) {
-                    bgPost.success.complete(!BDPlugin.forceFailPostOnBackgroundChannel)
                 }
             }
         }
@@ -102,13 +102,11 @@ object QueueService {
     }
 
     /**
-     * Post this [BackgroundPost] on the background channel, on the main/UI thread, and
-     * complete the [BackgroundPost.success] completer with the result
+     * Post this [BackgroundPost] on the background channel
      */
     suspend fun postOnBackgroundChannel(bgPost: BackgroundPost) {
         backgroundPostQueue.send(bgPost)
     }
-
 }
 
 /**
@@ -118,7 +116,5 @@ data class BackgroundPost(
     val task: Task,
     val method: String,
     val arg: Any,
-) {
-    val postedFromUIThread = Looper.myLooper() == Looper.getMainLooper()
-    val success = CompletableDeferred<Boolean>()
-}
+    val onFail: (suspend () -> Unit)? = null
+)

@@ -22,6 +22,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     public static var keyConfigProxyAdress = "com.bbflight.background_downloader.config.proxyAddress"
     public static var keyConfigProxyPort = "com.bbflight.background_downloader.config.proxyPort"
     public static var keyConfigCheckAvailableSpace = "com.bbflight.background_downloader.config.checkAvailableSpace"
+    public static var keyRequireWiFi = "com.bbflight.background_downloader.requireWiFi"
     public static var forceFailPostOnBackgroundChannel = false
     
     static var progressInfo = [String: (lastProgressUpdateTime: TimeInterval,
@@ -30,8 +31,12 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                                         lastNetworkSpeed: Double)]() // time, bytes, speed
     static var uploaderForUrlSessionTaskIdentifier = [Int:Uploader]() // maps from UrlSessionTask TaskIdentifier
     static var haveregisteredNotificationCategories = false
+    static var requireWiFi = RequireWiFi.asSetByTask // global setting
     static var taskIdsThatCanResume = Set<String>() // taskIds that can resume
     static var taskIdsProgrammaticallyCancelled = Set<String>() // skips error handling for these tasks
+    static var tasksToReEnqueue = Set<Task>() // for when WiFi requirement changes
+    static var taskIdsRequiringWiFi = Set<String>() // ensures correctness when enqueueing task
+    static var notificationConfigJsonStrings = [String:String]() // by taskId
     static var localResumeData = [String : String]() // locally stored to enable notification resume
     static var remainingBytesToDownload = [String : Int64]()  // keyed by taskId
     static var responseBodyData = [String: [Data]]() // list of Data objects received for this UploadTask id
@@ -39,6 +44,9 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     static var tasksWithContentLengthOverride = [String : Int64]() // [taskId : Content length]
     static var mimeTypes = [String : String]() // [taskId : mimeType]
     static var charSets = [String : String]() // [taskId : charSet]
+    static var holdingQueue: HoldingQueue? = nil
+    
+    static var propertyLock: NSLock = NSLock() // used to synchronize access to static properties
     
     public static var flutterPluginRegistrantCallback: FlutterPluginRegistrantCallback?
     public static var backgroundChannel: FlutterMethodChannel?
@@ -48,6 +56,8 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         backgroundChannel = FlutterMethodChannel(name: "com.bbflight.background_downloader.background", binaryMessenger: registrar.messenger())
         registrar.addMethodCallDelegate(instance, channel: channel)
         registrar.addApplicationDelegate(instance)
+        let defaults = UserDefaults.standard
+        requireWiFi = RequireWiFi(rawValue: defaults.integer(forKey: BDPlugin.keyRequireWiFi))!
     }
     
     @objc
@@ -81,6 +91,10 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                     await methodPathInSharedStorage(call: call, result: result)
                 case "openFile":
                     methodOpenFile(call: call, result: result)
+                case "requireWiFi":
+                    methodRequireWiFi(call: call, result: result)
+                case "getRequireWiFiSetting":
+                    methodGetRequireWiFiSetting(result: result)
                     /// ParallelDownloadTask child updates
                 case "chunkStatusUpdate":
                     methodUpdateChunkStatus(call: call, result: result)
@@ -111,6 +125,8 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                     methodStoreConfig(key: BDPlugin.keyConfigProxyPort, value: call.arguments, result: result)
                 case "configCheckAvailableSpace":
                     methodStoreConfig(key: BDPlugin.keyConfigCheckAvailableSpace, value: call.arguments, result: result)
+                case "configHoldingQueue":
+                    methodConfigHoldingQueue(call: call, result: result)
                 case "platformVersion":
                     result(UIDevice.current.systemVersion)
                 case "forceFailPostOnBackgroundChannel":
@@ -135,23 +151,81 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         let resumeDataAsBase64String = isResume
         ? args[2] as? String ?? ""
         : ""
-        doEnqueue(taskJsonString: taskJsonString, notificationConfigJsonString: notificationConfigJsonString, resumeDataAsBase64String: resumeDataAsBase64String, result: result)
+        if BDPlugin.holdingQueue == nil {
+            postResult(result: result, value: await doEnqueue(taskJsonString: taskJsonString, notificationConfigJsonString: notificationConfigJsonString, resumeDataAsBase64String: resumeDataAsBase64String))
+        } else {
+            // add entry for HoldingQueue, after checks
+            guard let task = taskFrom(jsonString: taskJsonString)
+            else {
+                os_log("Could not decode %@ to Task", log: log, taskJsonString)
+                postResult(result: result, value: false)
+                return
+            }
+            guard let url = validateUrl(task) else
+            {
+                os_log("Invalid url: %@", log: log, type: .info, task.url)
+                postResult(result: result, value: false)
+                return
+            }
+            os_log("Enqueueing task with id %@ to the HoldingQueue", log: log, type: .info, task.taskId)
+            await BDPlugin.holdingQueue?.add(item: EnqueueItem(task: task, notificationConfigJsonString: notificationConfigJsonString, resumeDataAsBase64String: resumeDataAsBase64String))
+            processStatusUpdate(task: task, status: .enqueued)
+            postResult(result: result, value: true)
+        }
     }
     
-    public func doEnqueue(taskJsonString: String, notificationConfigJsonString: String?, resumeDataAsBase64String: String, result: FlutterResult?) {
+    /// Do the actual enqueue as a URLSessionTask
+    public func doEnqueue(taskJsonString: String, notificationConfigJsonString: String?, resumeDataAsBase64String: String) async -> Bool {
         let taskDescription = notificationConfigJsonString == nil ? taskJsonString : taskJsonString + separatorString + notificationConfigJsonString!
         var isResume = !resumeDataAsBase64String.isEmpty
         let resumeData = isResume ? Data(base64Encoded: resumeDataAsBase64String) : nil
         guard let task = taskFrom(jsonString: taskJsonString)
         else {
             os_log("Could not decode %@ to Task", log: log, taskJsonString)
-            postResult(result: result, value: false)
-            return
+            return false
+        }
+        if notificationConfigJsonString != nil {
+            BDPlugin.propertyLock.withLock {
+                BDPlugin.notificationConfigJsonStrings[task.taskId] = notificationConfigJsonString
+            }
         }
         isResume = isParallelDownloadTask(task: task) ? isResume : isResume && resumeData != nil
-        let verb = isResume ? "Resuming" : "Starting"
+        let verb = isResume ? "Enqueueing (to resume)" : "Enqueueing"
         os_log("%@ task with id %@", log: log, type: .info, verb, task.taskId)
         UrlSessionDelegate.createUrlSession()
+        guard let url = validateUrl(task) else
+        {
+            os_log("Invalid url: %@", log: log, type: .info, task.url)
+            return false
+        }
+        var baseRequest = URLRequest(url: url)
+        baseRequest.httpMethod = task.httpRequestMethod
+        baseRequest.networkServiceType = .responsiveData
+        for (key, value) in task.headers {
+            baseRequest.setValue(value, forHTTPHeaderField: key)
+        }
+        let requiresWiFi = taskRequiresWiFi(task: task)
+        if requiresWiFi {
+            baseRequest.allowsCellularAccess = false
+            BDPlugin.propertyLock.withLock {
+                _ = BDPlugin.taskIdsRequiringWiFi.insert(task.taskId)
+            }
+        }
+        if isParallelDownloadTask(task: task) {
+            // ParallelDownloadTask itself is not part of a urlSession, so handled separately
+            baseRequest.httpMethod = "HEAD" // override
+            return await scheduleParallelDownload(task: task, taskDescription: taskDescription, baseRequest: baseRequest, resumeData: resumeDataAsBase64String)
+        } else if isDownloadTask(task: task) || isDataTask(task: task)
+        {
+            return scheduleDownload(task: task, taskDescription: taskDescription, baseRequest: baseRequest, resumeData: resumeData)
+        } else
+        {
+            return scheduleUpload(task: task, taskDescription: taskDescription, baseRequest: baseRequest)
+        }
+    }
+    
+    /// Returns the task's URL if it can be parsed, otherwise null
+    private func validateUrl(_ task: Task) -> URL? {
         let url: URL?
         // encodingInvalidCharacters is only available when compiling with Xcode 15, which uses Swift version 5.9
         #if swift(>=5.9)
@@ -163,37 +237,11 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         #else
         url = URL(string: task.url)
         #endif
-        
-        guard let url = url else
-        {
-            os_log("Invalid url: %@", log: log, type: .info, task.url)
-            postResult(result: result, value: false)
-            return
-        }
-        var baseRequest = URLRequest(url: url)
-        baseRequest.httpMethod = task.httpRequestMethod
-        baseRequest.networkServiceType = .responsiveData
-        for (key, value) in task.headers {
-            baseRequest.setValue(value, forHTTPHeaderField: key)
-        }
-        if task.requiresWiFi {
-            baseRequest.allowsCellularAccess = false
-        }
-        if isParallelDownloadTask(task: task) {
-            // ParallelDownloadTask itself is not part of a urlSession, so handled separately
-            baseRequest.httpMethod = "HEAD" // override
-            scheduleParallelDownload(task: task, taskDescription: taskDescription, baseRequest: baseRequest, resumeData: resumeDataAsBase64String, result: result)
-        } else if isDownloadTask(task: task)
-        {
-            scheduleDownload(task: task, taskDescription: taskDescription, baseRequest: baseRequest, resumeData: resumeData, result: result)
-        } else
-        {
-            scheduleUpload(task: task, taskDescription: taskDescription, baseRequest: baseRequest, result: result)
-        }
+        return url
     }
     
     /// Schedule a download task
-    private func scheduleDownload(task: Task, taskDescription: String, baseRequest: URLRequest, resumeData: Data? , result: FlutterResult?) {
+    private func scheduleDownload(task: Task, taskDescription: String, baseRequest: URLRequest, resumeData: Data?) -> Bool {
         var request = baseRequest
         request.networkServiceType = .responsiveData
 
@@ -204,12 +252,12 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         urlSessionDownloadTask.taskDescription = taskDescription
         urlSessionDownloadTask.priority = 1 - Float(task.priority) / 10
         urlSessionDownloadTask.resume()
-        processStatusUpdate(task: task, status: TaskStatus.enqueued)
-        postResult(result: result, value: true)
+        postEnqueuedStatusIfNotAlreadyDone(task: task)
+        return true
     }
     
     /// Schedule an upload task
-    private func scheduleUpload(task: Task, taskDescription: String, baseRequest: URLRequest, result: FlutterResult?) {
+    private func scheduleUpload(task: Task, taskDescription: String, baseRequest: URLRequest) -> Bool {
         var request = baseRequest
         request.networkServiceType = .responsiveData
 
@@ -217,16 +265,15 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             os_log("Binary file upload", log: log, type: .debug)
             guard let directory = try? directoryForTask(task: task) else {
                 os_log("Could not find directory for taskId %@", log: log, type: .info, task.taskId)
-                postResult(result: result, value: false)
-                return
+                return false
             }
             let filePath = directory.appendingPath(task.filename)
             if !FileManager.default.fileExists(atPath: filePath.path) {
                 os_log("Could not find file %@ for taskId %@", log: log, type: .info, filePath.absoluteString, task.taskId)
-                postResult(result: result, value: false)
-                return
+                return false
             }
             // binary post can use uploadTask fromFile method
+            request.setValue(task.mimeType, forHTTPHeaderField: "Content-Type")
             request.setValue("attachment; filename=\"\(task.filename)\"", forHTTPHeaderField: "Content-Disposition")
             let urlSessionUploadTask = UrlSessionDelegate.urlSession!.uploadTask(with: request, fromFile: filePath)
             urlSessionUploadTask.taskDescription = taskDescription
@@ -238,8 +285,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             os_log("Multipart file upload", log: log, type: .debug)
             let uploader = Uploader(task: task)
             if !uploader.createMultipartFile() {
-                postResult(result: result, value: false)
-                return
+                return false
             }
             request.setValue("multipart/form-data; boundary=\(Uploader.boundary)", forHTTPHeaderField: "Content-Type")
             request.setValue("UTF-8", forHTTPHeaderField: "Accept-Charset")
@@ -247,12 +293,19 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
             let urlSessionUploadTask = UrlSessionDelegate.urlSession!.uploadTask(with: request, fromFile: uploader.outputFileUrl())
             urlSessionUploadTask.taskDescription = taskDescription
-            urlSessionUploadTask.priority = Float(task.priority) / 10
+            urlSessionUploadTask.priority = 1 - Float(task.priority) / 10
             BDPlugin.uploaderForUrlSessionTaskIdentifier[urlSessionUploadTask.taskIdentifier] = uploader
             urlSessionUploadTask.resume()
         }
-        processStatusUpdate(task: task, status: TaskStatus.enqueued)
-        postResult(result: result, value: true)
+        postEnqueuedStatusIfNotAlreadyDone(task: task)
+        return true
+    }
+    
+    /// Post [TaskStatus.enqueued] only if this was not already done when adding the task to the [holdingQueue]
+    func postEnqueuedStatusIfNotAlreadyDone(task: Task) {
+        if BDPlugin.holdingQueue?.enqueuedTaskIds.contains(task.taskId) != true {
+            processStatusUpdate(task: task, status: TaskStatus.enqueued)
+        }
     }
     
     /// Resets the downloadworker by cancelling all ongoing download tasks
@@ -260,24 +313,32 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     /// Returns the number of tasks canceled
     private func methodReset(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let group = call.arguments as! String
+        await BDPlugin.holdingQueue?.stateLock.lock()
+        var counter = BDPlugin.holdingQueue?.cancelAllTasks(group: group) ?? 0
         let tasksToCancel = await UrlSessionDelegate.getAllUrlSessionTasks(group: group)
         tasksToCancel.forEach({$0.cancel()})
-        let numTasks = tasksToCancel.count
-        os_log("reset removed %d unfinished tasks", log: log, type: .debug, numTasks)
-        result(numTasks)
+        await BDPlugin.holdingQueue?.stateLock.unlock()
+        counter += tasksToCancel.count
+        os_log("reset removed %d unfinished tasks", log: log, type: .debug, counter)
+        result(counter)
     }
     
     /// Returns a list with all tasks in progress, as a list of JSON strings
     private func methodAllTasks(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let group = call.arguments as! String
-        UrlSessionDelegate.createUrlSession()
-        guard let urlSessionTasks = await UrlSessionDelegate.urlSession?.allTasks else {
-            result(nil)
-            return
+        var tasksAsListOfJsonStrings = [String]()
+        await BDPlugin.holdingQueue?.stateLock.lock()
+        if let heldTasksJsonStrings = BDPlugin.holdingQueue?.allTasks(group: group).map({jsonStringFor(task: $0)}).filter({$0 != nil}).map({$0!}) {
+            tasksAsListOfJsonStrings.append(contentsOf:  heldTasksJsonStrings)
         }
-        let tasksAsListOfJsonStrings = urlSessionTasks.filter({ $0.state == .running || $0.state == .suspended }).map({ getTaskFrom(urlSessionTask: $0)}).filter({ $0?.group == group }).map({ jsonStringFor(task: $0!) }).filter({ $0 != nil }) as? [String] ?? []
+        UrlSessionDelegate.createUrlSession()
+        if let urlSessionTasks = await UrlSessionDelegate.urlSession?.allTasks {
+            tasksAsListOfJsonStrings.append(contentsOf: urlSessionTasks.filter({ $0.state == .running || $0.state == .suspended }).map({ getTaskFrom(urlSessionTask: $0)}).filter({ $0?.group == group }).map({ jsonStringFor(task: $0!) }).filter({ $0 != nil }).map({$0!}))
+        }
+        await BDPlugin.holdingQueue?.stateLock.unlock()
         os_log("Returning %d unfinished tasks", log: log, type: .debug, tasksAsListOfJsonStrings.count)
         result(tasksAsListOfJsonStrings)
+        
     }
     
     /// Cancels ongoing tasks whose taskId is in the list provided with this call
@@ -286,24 +347,32 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     private func methodCancelTasksWithIds(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let taskIds = call.arguments as! [String]
         os_log("Canceling taskIds %@", log: log, type: .info, taskIds)
+        await BDPlugin.holdingQueue?.stateLock.lock()
+        let taskIdsRemovedFromHoldingQueue = BDPlugin.holdingQueue?.cancelTasksWithIds(taskIds) ?? []
+        let taskIdsRemaining = taskIds.filter({ !taskIdsRemovedFromHoldingQueue.contains($0) })
         let tasksToCancel = await UrlSessionDelegate.getAllUrlSessionTasks().filter({
             guard let task = getTaskFrom(urlSessionTask: $0) else { return false }
-            return taskIds.contains(task.taskId)
+            return taskIdsRemaining.contains(task.taskId)
         })
         tasksToCancel.forEach({$0.cancel()})
         // cancel all ParallelDownloadTasks (they would not have shown up in tasksToCancel)
-        taskIds.forEach { ParallelDownloader.downloads[$0]?.cancelTask() }
+        taskIdsRemaining.forEach { ParallelDownloader.downloads[$0]?.cancelTask() }
         result(true)
+        await BDPlugin.holdingQueue?.stateLock.unlock()
     }
+    
+    
     
     /// Returns Task for this taskId, or nil
     private func methodTaskForId(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let taskId = call.arguments as! String
-        guard let task = await UrlSessionDelegate.getTaskWithId(taskId: taskId) else {
-            result(nil)
-            return
+        await BDPlugin.holdingQueue?.stateLock.lock()
+        var foundTask = BDPlugin.holdingQueue?.taskForId(taskId)
+        if (foundTask == nil) {
+            foundTask = await UrlSessionDelegate.getTaskWithId(taskId: taskId)
         }
-        result(jsonStringFor(task: task))
+        result(foundTask == nil ? nil : jsonStringFor(task: foundTask!))
+        await BDPlugin.holdingQueue?.stateLock.unlock()
     }
     
     /// Pauses Task for this taskId. Returns true of pause likely successful, false otherwise
@@ -426,7 +495,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         let args = call.arguments as! [Any]
         guard
             let filePath = args[0] as? String,
-            let destination = SharedStorage.init(rawValue: args[1] as? Int ?? 0),
+            let destination = SharedStorage(rawValue: args[1] as? Int ?? 0),
             let directory = args[2] as? String
         else {
             result(nil)
@@ -462,11 +531,41 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         success = doOpenFile(filePath: filePath!, mimeType: mimeType)
     }
     
+    /**
+     * Set WiFi requirement globally, based on requirement.
+     *
+     * Affects future tasks and reschedules enqueued, inactive tasks
+     * with the new setting.
+     * Reschedules active tasks if rescheduleRunning is true,
+     * otherwise leaves those running with their prior setting
+     *
+     * - requirement is first argument (enum)
+     * - rescheduleRunning is second argument (bool)
+     *
+     * Returns true if successful
+     */
+    private func methodRequireWiFi(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        let args = call.arguments as! [Any]
+        guard let newRequireWiFi = RequireWiFi(rawValue: args[0] as? Int ?? 0) else {
+            result(false)
+            return
+        }
+        let rescheduleRunning = args[1] as? Bool ?? false
+        WiFiQueue.shared.requireWiFiChange(requireWiFi: newRequireWiFi, rescheduleRunningTasks: rescheduleRunning)
+        result(true)
+    }
+    
+    /// Returns current globval setting for 'RequireWiFi' as an ordinal / rawValue
+    private func methodGetRequireWiFiSetting(result: @escaping FlutterResult) {
+        let defaults = UserDefaults.standard
+        result(defaults.integer(forKey: BDPlugin.keyRequireWiFi))
+    }
+    
     /// Update the status of one chunk (part of a ParallelDownloadTask), and returns
     /// the status of the parent task based on the 'sum' of its children, or null
     /// if unchanged
     ///
-    /// Arguments are the parent TaskId, chunk taskId, taskStatusOrdinal
+    /// Arguments are the parent TaskId, chunk taskId, taskStatusOrdinal, exceptionJsonString, responseBody
     private func methodUpdateChunkStatus(call: FlutterMethodCall, result: @escaping FlutterResult) {
         let args = call.arguments as! [Any]
         guard
@@ -500,6 +599,21 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         parallelDownloadTask.chunkProgressUpdate(chunkTaskId: chunkTaskId, progress: progress)
         result(nil)
     }
+        
+    /// Return the authorization status of a permission, passed as the rawValue of the
+    /// [Permissionequest] enum
+    private func methodPermissionStatus(call: FlutterMethodCall, result: @escaping FlutterResult) async {
+        let permissionType = PermissionType(rawValue: call.arguments as! Int)!
+        let status = await getPermissionStatus(for: permissionType)
+        result(status.rawValue)
+    }
+    
+    /// Request this permission, passed as the rawValue of the [Permissionequest] enum
+    private func methodRequestPermission(call: FlutterMethodCall, result: @escaping FlutterResult) async {
+        let permissionType = PermissionType(rawValue: call.arguments as! Int)!
+        let status = await requestPermission(for: permissionType)
+        result(status.rawValue)
+    }
     
     /// Store or remove a configuration in shared preferences
     ///
@@ -514,19 +628,14 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         result(nil)
     }
     
-    /// Return the authorization status of a permission, passed as the rawValue of the
-    /// [Permissionequest] enum
-    private func methodPermissionStatus(call: FlutterMethodCall, result: @escaping FlutterResult) async {
-        let permissionType = PermissionType(rawValue: call.arguments as! Int)!
-        let status = await getPermissionStatus(for: permissionType)
-        result(status.rawValue)
-    }
-    
-    /// Request this permission, passed as the rawValue of the [Permissionequest] enum
-    private func methodRequestPermission(call: FlutterMethodCall, result: @escaping FlutterResult) async {
-        let permissionType = PermissionType(rawValue: call.arguments as! Int)!
-        let status = await requestPermission(for: permissionType)
-        result(status.rawValue)
+    /// Configure the HoldingQueue (and create if necessary)
+    private func methodConfigHoldingQueue(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        let args = call.arguments as! [Any]
+        BDPlugin.holdingQueue = BDPlugin.holdingQueue ?? HoldingQueue()
+        BDPlugin.holdingQueue?.maxConcurrent = args[0] as! Int
+        BDPlugin.holdingQueue?.maxConcurrentByHost = args[1] as! Int
+        BDPlugin.holdingQueue?.maxConcurrentByGroup = args[2] as! Int
+        result(nil)
     }
     
     
@@ -603,12 +712,20 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                     processStatusUpdate(task: task, status: .canceled)
                     
                 case "resume_action":
-                    let resumeDataAsBase64String = BDPlugin.localResumeData[task.taskId] ?? ""
+                    var resumeDataAsBase64String = ""
+                    BDPlugin.propertyLock.withLock {
+                        resumeDataAsBase64String = BDPlugin.localResumeData[task.taskId] ?? ""
+                    }
                     if resumeDataAsBase64String.isEmpty {
-                        os_log("Resume data for taskId %@ no longer available: restarting", log: log, type: .info)
+                        os_log("Resume data for taskId %@ no longer available: restarting", log: log, type: .info, task.taskId)
                     }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        BDPlugin.instance.doEnqueue(taskJsonString: taskAsJsonString, notificationConfigJsonString: userInfo["notificationConfig"] as? String, resumeDataAsBase64String: resumeDataAsBase64String, result: nil)
+                        _Concurrency.Task {
+                            if await(BDPlugin.instance.doEnqueue(taskJsonString: taskAsJsonString, notificationConfigJsonString: userInfo["notificationConfig"] as? String, resumeDataAsBase64String: resumeDataAsBase64String)) == false {
+                                os_log("Could not enqueue taskId %@ to resume", log: log, type: .info, task.taskId)
+                                await BDPlugin.holdingQueue?.taskFinished(task)
+                            }
+                        }
                     }
                     
                 case UNNotificationDefaultActionIdentifier:

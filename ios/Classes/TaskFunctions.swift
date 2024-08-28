@@ -51,6 +51,11 @@ func isBinaryUploadTask(task: Task) -> Bool {
     return isUploadTask(task: task) && task.post?.lowercased() == "binary"
 }
 
+/// True if this is a DataTask
+func isDataTask(task: Task) -> Bool {
+    return task.taskType == "DataTask"
+}
+
 /// True if this state is not a final state (i.e. more changes may happen)
 func isNotFinalState(status: TaskStatus) -> Bool {
     return status == .enqueued || status == .running || status == .waitingToRetry || status == .paused
@@ -278,6 +283,11 @@ func extractFilesData(task: Task) -> [((String, String, String))] {
     return result
 }
 
+/// Return the host name for the task's url or ""
+func getHost(_ task: Task) -> String  {
+    return URL(string: task.url)?.host ?? ""
+}
+    
 /// Calculate progress, network speed and time remaining, and send this at an appropriate
 /// interval to the Dart side
 func updateProgress(task: Task, totalBytesExpected: Int64, totalBytesDone: Int64) {
@@ -305,7 +315,30 @@ func updateProgress(task: Task, totalBytesExpected: Int64, totalBytesDone: Int64
 /// Sends status update via the background channel to Dart, if requested
 /// If the task is finished, processes a final progressUpdate update and removes
 /// task from persistent storage
-func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskException? = nil, responseBody: String? = nil, responseHeaders: [AnyHashable:Any]? = nil, mimeType: String? = nil, charSet: String? = nil) {
+func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskException? = nil, responseBody: String? = nil, responseHeaders: [AnyHashable:Any]? = nil, responseStatusCode: Int? = nil, mimeType: String? = nil, charSet: String? = nil) {
+    // Intercept status updates resulting from re-enqueue requests, which
+    // themselves are triggered by a change in WiFi requirement
+    let intercepted = BDPlugin.propertyLock.withLock {
+        if BDPlugin.tasksToReEnqueue.remove(task) != nil {
+            defer {
+                if BDPlugin.tasksToReEnqueue.isEmpty {
+                    WiFiQueue.shared.reEnqueue(nil) // signal end of batch
+                }
+            }
+            if [TaskStatus.paused, TaskStatus.canceled, TaskStatus.failed].contains(status) {
+                let reEnqueueData = EnqueueItem(task: task, notificationConfigJsonString: BDPlugin.notificationConfigJsonStrings[task.taskId], resumeDataAsBase64String: BDPlugin.localResumeData[task.taskId] ?? "")
+                WiFiQueue.shared.reEnqueue(reEnqueueData)
+                return true // intercepted
+            }
+        }
+        return false // not intercepted
+    }
+    if intercepted {
+        return
+    }
+
+    // Normal status update
+
     // Post update if task expects one, or if failed and retry is needed
     let retryNeeded = status == TaskStatus.failed && task.retriesRemaining > 0
     // if task is in final state, process a final progressUpdate
@@ -330,15 +363,26 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
     }
     
     if providesStatusUpdates(downloadTask: task) || retryNeeded {
+        let finalResponseStatusCode = status == .complete || status == .notFound
+            ? responseStatusCode
+            : nil
         let finalTaskException = taskException == nil
-        ? TaskException(type: .general, httpResponseCode: -1, description: "")
-        : taskException
-        let arg: [Any?] = status == .failed
-        ? [status.rawValue, finalTaskException!.type.rawValue, finalTaskException!.description, finalTaskException!.httpResponseCode, responseBody] as [Any?]
-        : [status.rawValue, responseBody, responseHeaders, mimeType, charSet] as [Any?]
+            ? TaskException(type: .general, httpResponseCode: -1, description: "")
+            : taskException
+        let statusUpdate = isFinalState(status: status) 
+            ? TaskStatusUpdate(task: task,
+                               taskStatus: status,
+                               exception: status == .failed ? finalTaskException : nil,
+                               responseBody: responseBody,
+                               responseStatusCode: (status == .complete || status == .notFound) ? finalResponseStatusCode : nil,
+                               responseHeaders: lowerCasedStringStringMap(responseHeaders),
+                               mimeType: mimeType,
+                               charSet: charSet)
+            : TaskStatusUpdate(task: task, taskStatus: status)
+        let arg = statusUpdate.argList()
         if !postOnBackgroundChannel(method: "statusUpdate", task: task, arg: arg) {
             // store update locally as a merged task/status JSON string, without error info
-            guard let jsonData = try? JSONEncoder().encode(TaskStatusUpdate(task: task, taskStatus: status))
+            guard let jsonData = try? JSONEncoder().encode(statusUpdate)
             else {
                 os_log("Could not store status update locally", log: log, type: .debug)
                 return }
@@ -347,14 +391,17 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
     }
     if isFinalState(status: status) {
         // remove references to this task that are no longer needed
-        BDPlugin.progressInfo.removeValue(forKey: task.taskId)
-        BDPlugin.localResumeData.removeValue(forKey: task.taskId)
-        BDPlugin.remainingBytesToDownload.removeValue(forKey: task.taskId)
-        BDPlugin.tasksWithSuggestedFilename.removeValue(forKey: task.taskId)
-        BDPlugin.tasksWithContentLengthOverride.removeValue(forKey: task.taskId)
-        BDPlugin.responseBodyData.removeValue(forKey: task.taskId)
-        BDPlugin.taskIdsThatCanResume.remove(task.taskId)
-        BDPlugin.taskIdsProgrammaticallyCancelled.remove(task.taskId)
+        BDPlugin.propertyLock.withLock {
+            BDPlugin.progressInfo.removeValue(forKey: task.taskId)
+            BDPlugin.localResumeData.removeValue(forKey: task.taskId)
+            BDPlugin.remainingBytesToDownload.removeValue(forKey: task.taskId)
+            BDPlugin.tasksWithSuggestedFilename.removeValue(forKey: task.taskId)
+            BDPlugin.tasksWithContentLengthOverride.removeValue(forKey: task.taskId)
+            BDPlugin.responseBodyData.removeValue(forKey: task.taskId)
+            BDPlugin.notificationConfigJsonStrings.removeValue(forKey: task.taskId)
+            BDPlugin.taskIdsThatCanResume.remove(task.taskId)
+            BDPlugin.taskIdsProgrammaticallyCancelled.remove(task.taskId)
+        }
     }
 }
 
@@ -390,7 +437,9 @@ func processCanResume(task: Task, taskCanResume: Bool) {
 /// Sends the data via the background channel to Dart
 func processResumeData(task: Task, resumeData: Data) -> Bool {
     let resumeDataAsBase64String = resumeData.base64EncodedString()
-    BDPlugin.localResumeData[task.taskId] = resumeDataAsBase64String
+    BDPlugin.propertyLock.withLock {
+        BDPlugin.localResumeData[task.taskId] = resumeDataAsBase64String
+    }
     if !postOnBackgroundChannel(method: "resumeData", task: task, arg: resumeDataAsBase64String) {
         // store resume data locally
         guard let jsonData = try? JSONEncoder().encode(ResumeData(task: task, data: resumeDataAsBase64String))
@@ -552,7 +601,7 @@ func directoryForTask(task: Task) throws ->  URL {
         try FileManager.default.url(for: dir,
                                     in: .userDomainMask,
                                     appropriateFor: nil,
-                                    create: false)
+                                    create: true)
     } else {
         documentsURL = URL(fileURLWithPath: "/")
     }
@@ -560,6 +609,11 @@ func directoryForTask(task: Task) throws ->  URL {
     ? documentsURL
     : documentsURL.appendingPath(task.directory, isDirectory: true)
     
+}
+
+/// True if task requires WiFi, based on global and task-specific setting
+func taskRequiresWiFi(task: Task) -> Bool {
+    return BDPlugin.requireWiFi == .forAllTasks || (BDPlugin.requireWiFi == .asSetByTask && task.requiresWiFi)
 }
 
 /**

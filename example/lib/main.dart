@@ -51,7 +51,7 @@ class _MyAppState extends State<MyApp> {
     // FileDownloader(persistentStorage: SqlitePersistentStorage());
 
     // optional: configure the downloader with platform specific settings,
-    // see CONFIG.md
+    // see CONFIG.md - some examples shown here
     FileDownloader().configure(globalConfig: [
       (Config.requestTimeout, const Duration(seconds: 100)),
     ], androidConfig: [
@@ -96,7 +96,7 @@ class _MyAppState extends State<MyApp> {
     // Listen to updates and process
     FileDownloader().updates.listen((update) {
       switch (update) {
-        case TaskStatusUpdate _:
+        case TaskStatusUpdate():
           if (update.task == backgroundDownloadTask) {
             buttonState = switch (update.status) {
               TaskStatus.running || TaskStatus.enqueued => ButtonState.pause,
@@ -108,7 +108,7 @@ class _MyAppState extends State<MyApp> {
             });
           }
 
-        case TaskProgressUpdate _:
+        case TaskProgressUpdate():
           progressUpdateStream.add(update); // pass on to widget for indicator
       }
     });
@@ -142,6 +142,16 @@ class _MyAppState extends State<MyApp> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Text('RequireWiFi setting',
+                          style: Theme.of(context).textTheme.titleLarge),
+                      const RequireWiFiChoice(),
+                    ],
+                  ),
+                ),
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: Row(
@@ -368,6 +378,55 @@ class _MyAppState extends State<MyApp> {
       status = await FileDownloader().permissions.request(permissionType);
       debugPrint('Permission for $permissionType was $status');
     }
+  }
+}
+
+/// Segmented button with WiFi requirement states
+class RequireWiFiChoice extends StatefulWidget {
+  const RequireWiFiChoice({super.key});
+
+  @override
+  State<RequireWiFiChoice> createState() => _RequireWiFiChoiceState();
+}
+
+class _RequireWiFiChoiceState extends State<RequireWiFiChoice> {
+  RequireWiFi requireWiFi = RequireWiFi.asSetByTask;
+
+  @override
+  void initState() {
+    super.initState();
+    FileDownloader().getRequireWiFiSetting().then((value) {
+      setState(() {
+        requireWiFi = value;
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<RequireWiFi>(
+      segments: const <ButtonSegment<RequireWiFi>>[
+        ButtonSegment<RequireWiFi>(
+            value: RequireWiFi.asSetByTask, label: Text('Task')),
+        ButtonSegment<RequireWiFi>(
+            value: RequireWiFi.forAllTasks, label: Text('All')),
+        ButtonSegment<RequireWiFi>(
+          value: RequireWiFi.forNoTasks,
+          label: Text('None'),
+        ),
+      ],
+      selected: <RequireWiFi>{requireWiFi},
+      onSelectionChanged: (Set<RequireWiFi> newSelection) {
+        setState(() {
+          // By default there is only a single segment that can be
+          // selected at one time, so its value is always the first
+          // item in the selected set.
+          requireWiFi = newSelection.first;
+          unawaited(FileDownloader()
+              .requireWiFi(requireWiFi, rescheduleRunningTasks: true));
+        });
+      },
+    );
   }
 }
 
