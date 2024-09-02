@@ -1,3 +1,9 @@
+## 8.5.4
+
+* If the value of a `fields` entry of an `UploadTask` is in JSON format (defined as start/end with {} or []) then the field's mime-type will be set to `application/json`, whereas it would not have been set prior
+* Fixes an issue on iOS where use of the holding queue can lead to deadlock
+* For Windows, when using `BaseDirectory.root`, fixes an issue with `Task.split` and `Task.baseDirectoryPath`. When using `BaseDirectory.root` on Windows, your task's `directory` must contain the drive letter.
+
 ## 8.5.3
 
 * Bug fixes
@@ -14,7 +20,7 @@
 
 ## 8.5.0
 
-* Adds `DataTask` fro scheduled server requests
+* Adds `DataTask` for scheduled server requests
 * Fixes bug omitting Content-Type header for iOS uploads, and Content-Disposition header for desktop uploads
 
 ### DataTask
