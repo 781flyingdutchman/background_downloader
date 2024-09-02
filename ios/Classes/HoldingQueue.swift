@@ -53,9 +53,13 @@ class HoldingQueue {
      * Signals to the holdingQueue that a [task] has finished
      *
      * Adjusts the state variables and advances the queue
+     *
+     * To prevent deadlock when called when the lock is already obtained, set [reEntry]
      */
-    func taskFinished(_ task: Task) async {
-        await stateLock.lock()
+    func taskFinished(_ task: Task, reEntry: Bool = false) async {
+        if !reEntry {
+            await stateLock.lock()
+        }
         let host = getHost(task)
         concurrent -= 1
         concurrentByHost[host]? -= 1
@@ -64,7 +68,9 @@ class HoldingQueue {
             enqueuedTaskIds.remove(at: index)
         }
         advanceQueue()
-        await stateLock.unlock()
+        if (!reEntry) {
+            await stateLock.unlock()
+        }
     }
     
     /**
@@ -228,7 +234,7 @@ struct EnqueueItem : Comparable {
         if !success {
             os_log("Delayed or retried enqueue failed for taskId %@", log: log, type: .info, task.taskId)
             processStatusUpdate(task: task, status: .failed, taskException: TaskException(type: .general, description: "Delayed or retried enqueue failed"))
-            await BDPlugin.holdingQueue?.taskFinished(task)
+            await BDPlugin.holdingQueue?.taskFinished(task, reEntry: true)
         }
     }
 }
