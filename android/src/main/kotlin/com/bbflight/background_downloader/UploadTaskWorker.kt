@@ -15,6 +15,7 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
 
     companion object {
         private val asciiOnlyRegEx = Regex("^[\\x00-\\x7F]+$")
+        private val jsonStringRegEx = Regex("^\\s*(\\{.*\\}|\\[.*\\])\\s*$")
         private val newlineRegEx = Regex("\r\n|\r|\n")
         const val boundary = "-----background_downloader-akjhfw281onqciyhnIk"
         const val lineFeed = "\r\n"
@@ -282,6 +283,9 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
             header = "$header\r\n" +
                     "content-type: text/plain; charset=utf-8\r\n" +
                     "content-transfer-encoding: binary"
+        } else if (isJsonString(value)) {
+            header = "$header\r\n" +
+            "content-type: application/json; charset=utf-8\r\n";
         }
         return "$header\r\n\r\n"
     }
@@ -291,6 +295,13 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
      */
     private fun isPlainAscii(string: String): Boolean {
         return asciiOnlyRegEx.matches(string)
+    }
+
+    /**
+     * Returns whether [string] is a JSON formatted string
+     */
+    private fun isJsonString(string: String): Boolean {
+        return jsonStringRegEx.matches(string)
     }
 
     /**

@@ -26,6 +26,7 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
     static let boundary = "-----background_downloader-akjhfw281onqciyhnIk"
     let lineFeed = "\r\n"
     let asciiOnly = try! NSRegularExpression(pattern: "^[\\x00-\\x7F]+$")
+    let jsonString = try! NSRegularExpression(pattern: "^\\s*(\\{.*\\}|\\[.*\\])\\s*$")
     let newlineRegExp = try! NSRegularExpression(pattern: "\r\n|\r|\n")
     let bufferSize = 2 << 13
     
@@ -184,6 +185,9 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
             header = "\(header)\r\n" +
             "content-type: text/plain; charset=utf-8\r\n" +
             "content-transfer-encoding: binary"
+        } else if (isJsonString(value)) {
+            header = "\(header)\r\n" +
+            "content-type: application/json; charset=utf-8\r\n";
         }
         return "\(header)\r\n\r\n"
     }
@@ -192,6 +196,14 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
     /// Returns whether [string] is composed entirely of ASCII-compatible characters
     private func isPlainAscii(_ string: String)-> Bool {
         let result = asciiOnly.matches(in: string,
+                                       range: NSMakeRange(0, (string as NSString).length))
+        return !result.isEmpty
+    }
+
+    
+    /// Returns whether [string] is a JSON formatted string
+    private func isJsonString(_ string: String)-> Bool {
+        let result = jsonString.matches(in: string,
                                        range: NSMakeRange(0, (string as NSString).length))
         return !result.isEmpty
     }

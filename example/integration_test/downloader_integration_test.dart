@@ -1719,7 +1719,8 @@ void main() {
           taskProgressCallback: progressCallback);
       expect(
           await FileDownloader().enqueue(uploadTask.copyWith(
-              fields: {'field1': 'value1', 'field2': 'check\u2713'},
+              fields: {'field1': 'value1', 'field2': 'check\u2713',
+                'field3': '{"a":"b"}', 'field4': '["1", "2"]'},
               updates: Updates.statusAndProgress)),
           isTrue);
       await statusCallbackCompleter.future;

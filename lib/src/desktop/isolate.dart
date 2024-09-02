@@ -320,6 +320,9 @@ String headerForField(String name, String value) {
     header = '$header\r\n'
         'content-type: text/plain; charset=utf-8\r\n'
         'content-transfer-encoding: binary';
+  } else if (isJsonString(value)) {
+    header = '$header\r\n'
+        'content-type: application/json; charset=utf-8\r\n';
   }
   return '$header\r\n\r\n';
 }
@@ -328,11 +331,20 @@ String headerForField(String name, String value) {
 /// ASCII-compatible characters.
 final _asciiOnly = RegExp(r'^[\x00-\x7F]+$');
 
+/// A regular expression that matches strings that start and end with JSON object
+/// or JSON array characters, and that therefore are presumed to be in JSON
+/// format
+final _jsonString = RegExp(r'^\s*(\{.*\}|\[.*\])\s*$');
+
 final _newlineRegExp = RegExp(r'\r\n|\r|\n');
 
 /// Returns whether [string] is composed entirely of ASCII-compatible
 /// characters.
 bool isPlainAscii(String string) => _asciiOnly.hasMatch(string);
+
+/// Returns whether [string] is a JSON formatted string, based on simple
+/// test of start and end characters {} or []
+bool isJsonString(String string) => _jsonString.hasMatch(string);
 
 /// Encode [value] in the same way browsers do.
 String browserEncode(String value) =>
