@@ -360,6 +360,10 @@ sealed class Task extends Request implements Comparable {
   }
 
   /// Returns the path to the directory represented by [baseDirectory]
+  ///
+  /// On Windows, if [baseDirectory] is .root, returns the empty string
+  /// because the drive letter is required to be included in the directory
+  /// path
   static Future<String> baseDirectoryPath(BaseDirectory baseDirectory) async {
     Directory? externalStorageDirectory;
     Directory? externalCacheDirectory;
@@ -391,7 +395,9 @@ sealed class Task extends Request implements Comparable {
       (BaseDirectory.applicationLibrary, true) =>
         Directory(p.join(externalStorageDirectory!.path, 'Library'))
     };
-    return baseDir.absolute.path;
+    return (Platform.isWindows && baseDirectory == BaseDirectory.root)
+        ? ''
+        : baseDir.absolute.path;
   }
 
   /// Extract the baseDirectory, directory and filename from
@@ -412,19 +418,20 @@ sealed class Task extends Request implements Comparable {
     // try to match the start of the absoluteDirectory to one of the
     // directories represented by the BaseDirectory enum.
     // Order matters, as some may be subdirs of others
-    final testSequence = Platform.isAndroid || Platform.isLinux
-        ? [
-            BaseDirectory.temporary,
-            BaseDirectory.applicationLibrary,
-            BaseDirectory.applicationSupport,
-            BaseDirectory.applicationDocuments
-          ]
-        : [
-            BaseDirectory.temporary,
-            BaseDirectory.applicationSupport,
-            BaseDirectory.applicationLibrary,
-            BaseDirectory.applicationDocuments
-          ];
+    final testSequence =
+        Platform.isAndroid || Platform.isLinux || Platform.isWindows
+            ? [
+                BaseDirectory.temporary,
+                BaseDirectory.applicationLibrary,
+                BaseDirectory.applicationSupport,
+                BaseDirectory.applicationDocuments
+              ]
+            : [
+                BaseDirectory.temporary,
+                BaseDirectory.applicationSupport,
+                BaseDirectory.applicationLibrary,
+                BaseDirectory.applicationDocuments
+              ];
     for (final baseDirectoryEnum in testSequence) {
       final baseDirPath = await baseDirectoryPath(baseDirectoryEnum);
       final (match, directory) = _contains(baseDirPath, absoluteDirectoryPath);
@@ -451,7 +458,9 @@ sealed class Task extends Request implements Comparable {
   /// [dirPath] should not contain a filename - if it does, it is returned
   /// as part of the subdir.
   static (bool, String) _contains(String baseDirPath, String dirPath) {
-    final match = RegExp('^$baseDirPath/?(.*)').firstMatch(dirPath);
+    final escapedBaseDirPath =
+        '$baseDirPath${Platform.pathSeparator}?'.replaceAll(r'\', r'\\');
+    final match = RegExp('^$escapedBaseDirPath(.*)').firstMatch(dirPath);
     return (match != null, match?.group(1) ?? '');
   }
 

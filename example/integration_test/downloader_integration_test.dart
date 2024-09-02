@@ -1434,53 +1434,51 @@ void main() {
       expect(result['json'], equals({'field1': 1}));
     });
 
-    testWidgets('post DownloadTask with post is Map',
-            (widgetTester) async {
-          final task = DownloadTask(
-              url: postTestUrl,
-              urlQueryParameters: {'request-type': 'post-json'},
-              filename: postFilename,
-              headers: {
-                'Header1': 'headerValue1',
-                'content-type': 'application/json'
-              },
-              post: {"field1": 1});
-          final path =
+    testWidgets('post DownloadTask with post is Map', (widgetTester) async {
+      final task = DownloadTask(
+          url: postTestUrl,
+          urlQueryParameters: {'request-type': 'post-json'},
+          filename: postFilename,
+          headers: {
+            'Header1': 'headerValue1',
+            'content-type': 'application/json'
+          },
+          post: {"field1": 1});
+      final path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
-          expect((await FileDownloader().download(task)).status,
-              equals(TaskStatus.complete));
-          final result = jsonDecode(await File(path).readAsString());
-          print(result);
-          expect(result['args']['request-type'], equals('post-json'));
-          expect(result['headers']['Header1'], equals('headerValue1'));
-          expect(result['data'], equals('{"field1":1}'));
-          // confirm the server side interpreted this as JSON
-          expect(result['json'], equals({'field1': 1}));
-        });
+      expect((await FileDownloader().download(task)).status,
+          equals(TaskStatus.complete));
+      final result = jsonDecode(await File(path).readAsString());
+      print(result);
+      expect(result['args']['request-type'], equals('post-json'));
+      expect(result['headers']['Header1'], equals('headerValue1'));
+      expect(result['data'], equals('{"field1":1}'));
+      // confirm the server side interpreted this as JSON
+      expect(result['json'], equals({'field1': 1}));
+    });
 
-    testWidgets('post DownloadTask with post is List',
-            (widgetTester) async {
-          final task = DownloadTask(
-              url: postTestUrl,
-              urlQueryParameters: {'request-type': 'post-json'},
-              filename: postFilename,
-              headers: {
-                'Header1': 'headerValue1',
-                'content-type': 'application/json'
-              },
-              post: ['apple', 'orange']);
-          final path =
+    testWidgets('post DownloadTask with post is List', (widgetTester) async {
+      final task = DownloadTask(
+          url: postTestUrl,
+          urlQueryParameters: {'request-type': 'post-json'},
+          filename: postFilename,
+          headers: {
+            'Header1': 'headerValue1',
+            'content-type': 'application/json'
+          },
+          post: ['apple', 'orange']);
+      final path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
-          expect((await FileDownloader().download(task)).status,
-              equals(TaskStatus.complete));
-          final result = jsonDecode(await File(path).readAsString());
-          print(result);
-          expect(result['args']['request-type'], equals('post-json'));
-          expect(result['headers']['Header1'], equals('headerValue1'));
-          expect(result['data'], equals('["apple","orange"]'));
-          // confirm the server side interpreted this as JSON
-          expect(result['json'], equals(['apple', 'orange']));
-        });
+      expect((await FileDownloader().download(task)).status,
+          equals(TaskStatus.complete));
+      final result = jsonDecode(await File(path).readAsString());
+      print(result);
+      expect(result['args']['request-type'], equals('post-json'));
+      expect(result['headers']['Header1'], equals('headerValue1'));
+      expect(result['data'], equals('["apple","orange"]'));
+      // confirm the server side interpreted this as JSON
+      expect(result['json'], equals(['apple', 'orange']));
+    });
 
     testWidgets('post DownloadTask with post is invalid type',
         (widgetTester) async {
@@ -1575,14 +1573,14 @@ void main() {
     });
 
     testWidgets('post request with post is Map', (widgetTester) async {
-      final request = Request(
-          url: postTestUrl,
-          urlQueryParameters: {'request-type': 'post-json'},
-          headers: {
-            'Header1': 'headerValue1',
-            'content-type': 'application/json'
-          },
-          post: {'field': 1});
+      final request = Request(url: postTestUrl, urlQueryParameters: {
+        'request-type': 'post-json'
+      }, headers: {
+        'Header1': 'headerValue1',
+        'content-type': 'application/json'
+      }, post: {
+        'field': 1
+      });
       final response = await FileDownloader().request(request);
       expect(response.statusCode, equals(200));
       final result = jsonDecode(response.body);
@@ -1594,14 +1592,15 @@ void main() {
     });
 
     testWidgets('post request with post is List', (widgetTester) async {
-      final request = Request(
-          url: postTestUrl,
-          urlQueryParameters: {'request-type': 'post-json'},
-          headers: {
-            'Header1': 'headerValue1',
-            'content-type': 'application/json'
-          },
-          post: ['apple', 'orange']);
+      final request = Request(url: postTestUrl, urlQueryParameters: {
+        'request-type': 'post-json'
+      }, headers: {
+        'Header1': 'headerValue1',
+        'content-type': 'application/json'
+      }, post: [
+        'apple',
+        'orange'
+      ]);
       final response = await FileDownloader().request(request);
       expect(response.statusCode, equals(200));
       final result = jsonDecode(response.body);
@@ -1718,10 +1717,12 @@ void main() {
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
       expect(
-          await FileDownloader().enqueue(uploadTask.copyWith(
-              fields: {'field1': 'value1', 'field2': 'check\u2713',
-                'field3': '{"a":"b"}', 'field4': '["1", "2"]'},
-              updates: Updates.statusAndProgress)),
+          await FileDownloader().enqueue(uploadTask.copyWith(fields: {
+            'field1': 'value1',
+            'field2': 'check\u2713',
+            'field3': '{"a":"b"}',
+            'field4': '["1", "2"]'
+          }, updates: Updates.statusAndProgress)),
           isTrue);
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
@@ -3342,22 +3343,36 @@ void main() {
   group('Task functions', () {
     test('baseDirectoryPath', () async {
       for (final baseDirectoryEnum in BaseDirectory.values) {
-        final task =
-            DownloadTask(url: workingUrl, baseDirectory: baseDirectoryEnum);
+        final subdirName =
+            (Platform.isWindows && baseDirectoryEnum == BaseDirectory.root)
+                ? 'C:\\'
+                : '';
+        final task = DownloadTask(
+            url: workingUrl,
+            baseDirectory: baseDirectoryEnum,
+            directory: subdirName);
         final path = await task.filePath();
         final dir = dirname(path);
         print('For $baseDirectoryEnum the dir is $dir');
-        expect(await Task.baseDirectoryPath(baseDirectoryEnum), equals(dir));
+        if (Platform.isWindows && baseDirectoryEnum == BaseDirectory.root) {
+          expect(dir, equals('C:\\'));
+        } else {
+          expect(await Task.baseDirectoryPath(baseDirectoryEnum), equals(dir));
+        }
       }
     });
 
     test('split with filePath parameter', () async {
       for (final subdirName in ['something', '']) {
         for (final baseDirectoryEnum in BaseDirectory.values) {
+          final modifiedSubdirName =
+              (Platform.isWindows && baseDirectoryEnum == BaseDirectory.root)
+                  ? 'C:\\$subdirName'
+                  : subdirName;
           final task = DownloadTask(
               url: workingUrl,
               baseDirectory: baseDirectoryEnum,
-              directory: subdirName);
+              directory: modifiedSubdirName);
           final path = await task.filePath();
           print('Testing path $path');
           final (baseDirectory, directory, filename) =
@@ -3372,10 +3387,14 @@ void main() {
     test('split with File parameter', () async {
       for (final subdirName in ['something', '']) {
         for (final baseDirectoryEnum in BaseDirectory.values) {
+          final modifiedSubdirName =
+              (Platform.isWindows && baseDirectoryEnum == BaseDirectory.root)
+                  ? 'C:\\$subdirName'
+                  : subdirName;
           final task = DownloadTask(
               url: workingUrl,
               baseDirectory: baseDirectoryEnum,
-              directory: subdirName);
+              directory: modifiedSubdirName);
           final path = await task.filePath();
           print('Testing path $path');
           final (baseDirectory, directory, filename) =
