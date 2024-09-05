@@ -1,3 +1,7 @@
+## 8.5.5
+
+* Fixes concurrent database write bug for TaskRecords
+
 ## 8.5.4
 
 * If the value of a `fields` entry of an `UploadTask` is in JSON format (defined as start/end with {} or []) then the field's mime-type will be set to `application/json`, whereas it would not have been set prior

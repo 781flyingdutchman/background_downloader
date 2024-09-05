@@ -102,7 +102,12 @@ abstract base class BaseDownloader {
   /// Connected TaskQueues that will receive a signal upon task completion
   final taskQueues = <TaskQueue>[];
 
+  /// Permissions service object
   final permissionsService = PermissionsService.instance();
+
+  /// Stream to serialize database updates
+  final _databaseUpdates =
+      StreamController<(Task, TaskStatus?, double?, int, TaskException?)>();
 
   BaseDownloader();
 
@@ -125,13 +130,15 @@ abstract base class BaseDownloader {
   /// Initialize
   ///
   /// Initializes the PersistentStorage instance and if necessary perform database
-  /// migration, then initializes the subclassed implementation for
-  /// desktop or native
-  ///
-  ///
+  /// migration, starts listening for database update commands and
+  /// then initializes the subclassed implementation for desktop or native
   @mustCallSuper
   Future<void> initialize() async {
     await _storage.initialize();
+    _databaseUpdates.stream.asyncMap((data) async {
+      await _consumeUpdateTaskInDatabase(
+          data.$1, data.$2, data.$3, data.$4, data.$5);
+    }).listen((_) {});
     _readyCompleter.complete(true);
   }
 
@@ -866,17 +873,33 @@ abstract base class BaseDownloader {
   }
 
   /// Insert or update the [TaskRecord] in the tracking database
-  Future<void> _updateTaskInDatabase(Task task,
+  ///
+  /// To ensure serialized execution of updates, asynchronously, this
+  /// adds the parameters to the [_databaseUpdates] stream for later consumption
+  /// by method [_consumeUpdateTaskInDatabase]
+  void _updateTaskInDatabase(Task task,
       {TaskStatus? status,
       double? progress,
       int expectedFileSize = -1,
       TaskException? taskException}) async {
+    _databaseUpdates
+        .add((task, status, progress, expectedFileSize, taskException));
+  }
+
+  /// Execute one database update consumed from the [_databaseUpdates] stream
+  Future<void> _consumeUpdateTaskInDatabase(
+      Task task,
+      TaskStatus? status,
+      double? progress,
+      int expectedFileSize,
+      TaskException? taskException) async {
     if (trackedGroups.contains(null) || trackedGroups.contains(task.group)) {
       if (status == null && progress != null) {
         // update existing record with progress only (provided it's not 'paused')
         final existingRecord = await database.recordForId(task.taskId);
         if (existingRecord != null && progress != progressPaused) {
-          database.updateRecord(existingRecord.copyWith(progress: progress));
+          await database
+              .updateRecord(existingRecord.copyWith(progress: progress));
         }
         return;
       }
@@ -893,12 +916,12 @@ abstract base class BaseDownloader {
         };
       }
       if (status != TaskStatus.paused) {
-        database.updateRecord(TaskRecord(
+        await database.updateRecord(TaskRecord(
             task, status!, progress!, expectedFileSize, taskException));
       } else {
         // if paused, don't modify the stored progress
         final existingRecord = await database.recordForId(task.taskId);
-        database.updateRecord(TaskRecord(task, status!,
+        await database.updateRecord(TaskRecord(task, status!,
             existingRecord?.progress ?? 0, expectedFileSize, taskException));
       }
     }
