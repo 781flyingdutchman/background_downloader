@@ -50,7 +50,7 @@ Future<TaskStatus> binaryUpload(
     request.contentLength = fileSize;
     request.headers['Content-Type'] = task.mimeType;
     request.headers['Content-Disposition'] =
-        'attachment; filename="${task.filename}"';
+        'attachment; filename="${Uri.encodeComponent(task.filename)}"';
     // initiate the request and handle completion async
     final requestCompleter = Completer();
     var transferBytesResult = TaskStatus.failed;
@@ -135,7 +135,7 @@ Future<TaskStatus> multipartUpload(
     }
     contentDispositionStrings.add(
       'Content-Disposition: form-data; name="${browserEncode(fileField)}"; '
-      'filename="${browserEncode(p.basename(file.path))}"$lineFeed',
+      'filename="${Uri.encodeComponent(browserEncode(p.basename(file.path)))}"$lineFeed',
     );
     contentTypeStrings.add('Content-Type: $mimeType$lineFeed$lineFeed');
     fileLengths.add(file.lengthSync());
