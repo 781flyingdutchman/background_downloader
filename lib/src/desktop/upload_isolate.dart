@@ -78,14 +78,16 @@ Future<TaskStatus> binaryUpload(
     transferBytesResult =
         await transferBytes(inStream, request.sink, fileSize, task, sendPort);
     request.sink.close(); // triggers request completion, handled above
-    await requestCompleter.future; // wait for request to complete
+
+    if (isCanceled) {
+      // cancellation overrides other results
+      resultStatus = TaskStatus.canceled;
+    } else {
+      await requestCompleter.future; // wait for request to complete
+    }
   } catch (e) {
     resultStatus = TaskStatus.failed;
     setTaskError(e);
-  }
-  if (isCanceled) {
-    // cancellation overrides other results
-    resultStatus = TaskStatus.canceled;
   }
   return resultStatus;
 }
