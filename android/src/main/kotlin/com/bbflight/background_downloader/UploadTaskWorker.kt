@@ -1,6 +1,7 @@
 package com.bbflight.background_downloader
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
@@ -120,7 +121,7 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
         Log.d(TAG, "Binary upload for taskId ${task.taskId}")
         connection.setRequestProperty("Content-Type", task.mimeType)
         connection.setRequestProperty(
-            "Content-Disposition", "attachment; filename=\"" + task.filename + "\""
+            "Content-Disposition", "attachment; filename=\"" + Uri.encode(task.filename) + "\""
         )
         connection.setRequestProperty("Content-Length", fileSize.toString())
         connection.setFixedLengthStreamingMode(fileSize)
