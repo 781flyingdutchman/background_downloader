@@ -131,7 +131,7 @@ void main() {
 
     // copy the test files to upload from assets to documents directory
     Directory directory = await getApplicationDocumentsDirectory();
-    for (final filename in [uploadFilename, uploadFilename2]) {
+    for (final filename in [uploadFilename, uploadFilename2, largeFilename]) {
       var uploadFilePath = join(directory.path, filename);
       ByteData data = await rootBundle.load("assets/$filename");
       final buffer = data.buffer;
@@ -1748,6 +1748,23 @@ void main() {
       expect(progressCallbackCounter, greaterThan(1));
       expect(lastProgress, equals(progressComplete));
       print('Finished enqueue multipart with fields that have multiple values');
+    });
+
+    testWidgets('enqueue binary file, then cancel', (widgetTester) async {
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      final task = uploadTask.copyWith(
+        filename: largeFilename,
+          url: uploadBinaryTestUrl,
+          post: 'binary',
+          updates: Updates.statusAndProgress);
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await someProgressCompleter.future;
+      expect(await FileDownloader().cancelTaskWithId(task.taskId), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.canceled));
+      print('Finished enqueue binary file, then cancel');
     });
 
     testWidgets('upload task creation with errors', (widgetTester) async {
