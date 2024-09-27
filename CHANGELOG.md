@@ -1,3 +1,9 @@
+## 8.5.6
+
+* Fixes desktop upload cancellation bug
+* Adds Url-encoding of Content-Disposition header for binary uploads. Note for multipart uploads, filename is 'browserEncoded' which does not encode Non-ASCII characters
+* Fixes bug with creation of unique filename on iOS 
+
 ## 8.5.5
 
 * Fixes concurrent database write bug for TaskRecords

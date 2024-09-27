@@ -2094,7 +2094,8 @@ void main() {
           updates: Updates.statusAndProgress);
       expect(await FileDownloader().enqueue(task), equals(true));
       await someProgressCompleter.future;
-      await Future.delayed(const Duration(milliseconds: 10)); // allow db writeThe next one is 17
+      await Future.delayed(
+          const Duration(milliseconds: 10)); // allow db writeThe next one is 17
       // after some progress, expect nothing in database
       var record = await FileDownloader().database.recordForId(task.taskId);
       expect(record, isNull);

@@ -508,7 +508,7 @@ await FileDownloader().enqueue(DownloadTask(
             group: 'bunchOfFiles'));
 ```
 
-All tasks in group `bunchOfFiles` will now use the notification group configuration with ID `myNotificationGroup`. Any other task that uses a configuration with `groupNotificationId` set to 'myGroupNotification' will also be added to that group notification.
+All tasks in group `bunchOfFiles` will now use the notification group configuration with ID `myNotificationGroup`. Any other task that uses a configuration with `groupNotificationId` set to 'myGroupNotification' will also be added to that group notification. Notification tap detection is not implemented for notification groups.
 
 __On iOS__: If your `running` group notification contains a dynamic item (such as `{numFinished}` in the example above) then a new notification will be issued every time the notification message changes (different from Android, where the existing notification is updated so does not trigger a new one).
 
@@ -547,8 +547,9 @@ or if using Objective C, add to `AppDelegate.m`:
 [UNUserNotificationCenter currentNotificationCenter].delegate = (id<UNUserNotificationCenterDelegate>) self;
 ```
 
-__On Android__: Optionally, supply your own notification icons by creating a version of the icons defined in `android/src/main/res/drawable`, e.g. `outline_download_done_24.xml`, and add those to your own app's `android/src/main/res/drawable` under the same name.
+__On Android__: Starting with API 33, you need to add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />` to your app's `AndroidManifest.xml`
 
+If needed, localize the button text by overriding string resources `bg_downloader_cancel`, `bg_downloader_pause`, `bg_downloader_resume` and descriptions `bg_downloader_notification_channel_name`, `bg_downloader_notification_channel_description`. Optionally, supply your own notification icons by creating a version of the icons defined in `android/src/main/res/drawable`, e.g. `outline_download_done_24.xml`, and add those to your own app's `android/src/main/res/drawable` under the same name.
 
 ## Shared and scoped storage
 
@@ -948,10 +949,6 @@ buildScript {
 }
 ```
 
-If using notifications you need to:
-* Starting with API 33, you need to add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />` to your app's `AndroidManifest.xml`
-* If needed, localize the button text by overriding string resources `bg_downloader_cancel`, `bg_downloader_pause`, `bg_downloader_resume` and descriptions `bg_downloader_notification_channel_name`, `bg_downloader_notification_channel_description`.
-
 ### iOS
 
 On iOS, ensure that you have the Background Fetch capability enabled:
@@ -962,16 +959,6 @@ On iOS, ensure that you have the Background Fetch capability enabled:
 * Tick the 'Background Fetch' mode
 
 Note that iOS by default requires all URLs to be https (and not http). See [here](https://developer.apple.com/documentation/security/preventing_insecure_network_connections) for more details and how to address issues.
-
-If using notifications, add the following to your `AppDelegate.swift`:
-```swift
-UNUserNotificationCenter.current().delegate = self as UNUserNotificationCenterDelegate
-```
-or if using Objective C, add to `AppDelegate.m`:
-```objective-c
-[UNUserNotificationCenter currentNotificationCenter].delegate = (id<UNUserNotificationCenterDelegate>) self;
-```
-
 
 ### MacOS
 
