@@ -1755,7 +1755,7 @@ void main() {
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
       final task = uploadTask.copyWith(
-        filename: largeFilename,
+          filename: largeFilename,
           url: uploadBinaryTestUrl,
           post: 'binary',
           updates: Updates.statusAndProgress);
@@ -2898,6 +2898,7 @@ void main() {
 
   group('Content-disposition', () {
     testWidgets('Various content-dispositions', (widgetTester) async {
+      await deleteOld5MbDownloads();
       final downloader = FileDownloader().downloaderForTesting;
       final entries = {
         '': task.filename, // no last path segment in www.google.com
@@ -2920,21 +2921,7 @@ void main() {
     });
 
     testWidgets('DownloadTask withSuggestedFilename', (widgetTester) async {
-      // delete old downloads
-      task = DownloadTask(url: urlWithContentLength, filename: '5MB-test.ZIP');
-      try {
-        File(await task.filePath()).deleteSync();
-      } catch (e) {}
-      task =
-          DownloadTask(url: urlWithContentLength, filename: '5MB-test (1).ZIP');
-      try {
-        File(await task.filePath()).deleteSync();
-      } catch (e) {}
-      task =
-          DownloadTask(url: urlWithContentLength, filename: '5MB-test (2).ZIP');
-      try {
-        File(await task.filePath()).deleteSync();
-      } catch (e) {}
+      await deleteOld5MbDownloads();
       task = DownloadTask(url: urlWithContentLength);
       final startingFileName = task.filename;
       final task2 = await task.withSuggestedFilename();
@@ -2960,21 +2947,7 @@ void main() {
     });
 
     testWidgets('downloadTask with ? for filename', (widgetTester) async {
-      // delete old downloads
-      task = DownloadTask(url: urlWithContentLength, filename: '5MB-test.ZIP');
-      try {
-        File(await task.filePath()).deleteSync();
-      } catch (e) {}
-      task =
-          DownloadTask(url: urlWithContentLength, filename: '5MB-test (1).ZIP');
-      try {
-        File(await task.filePath()).deleteSync();
-      } catch (e) {}
-      task =
-          DownloadTask(url: urlWithContentLength, filename: '5MB-test (2).ZIP');
-      try {
-        File(await task.filePath()).deleteSync();
-      } catch (e) {}
+      await deleteOld5MbDownloads();
       task = DownloadTask(
           url: urlWithContentLength, filename: DownloadTask.suggestedFilename);
       final result = await FileDownloader().download(task);
@@ -2987,21 +2960,7 @@ void main() {
 
     testWidgets('parallelDownloadTask with ? for filename',
         (widgetTester) async {
-      // delete old downloads
-      task = DownloadTask(url: urlWithContentLength, filename: '5MB-test.ZIP');
-      try {
-        File(await task.filePath()).deleteSync();
-      } catch (e) {}
-      task =
-          DownloadTask(url: urlWithContentLength, filename: '5MB-test (1).ZIP');
-      try {
-        File(await task.filePath()).deleteSync();
-      } catch (e) {}
-      task =
-          DownloadTask(url: urlWithContentLength, filename: '5MB-test (2).ZIP');
-      try {
-        File(await task.filePath()).deleteSync();
-      } catch (e) {}
+      await deleteOld5MbDownloads();
       task = ParallelDownloadTask(
           url: urlWithContentLength, filename: DownloadTask.suggestedFilename);
       final result = await FileDownloader().download(task);
@@ -3583,6 +3542,21 @@ void main() {
       expect(json['headers']['Accept'], equals('application/json'));
     });
   });
+}
+
+Future<void> deleteOld5MbDownloads() async {
+  var t = DownloadTask(url: urlWithContentLength, filename: '5MB-test.ZIP');
+  try {
+    File(await t.filePath()).deleteSync();
+  } catch (e) {}
+  t = DownloadTask(url: urlWithContentLength, filename: '5MB-test (1).ZIP');
+  try {
+    File(await t.filePath()).deleteSync();
+  } catch (e) {}
+  t = DownloadTask(url: urlWithContentLength, filename: '5MB-test (2).ZIP');
+  try {
+    File(await t.filePath()).deleteSync();
+  } catch (e) {}
 }
 
 /// Helper: make sure [task] is set as desired, and this will enqueue, wait for

@@ -161,15 +161,13 @@ func uniqueFilename(task: Task, unique: Bool) -> Task {
         return task
     }
     var exists = FileManager.default.fileExists(atPath: filePath)
-    
     while exists {
         let range = NSMakeRange(0, newTask.filename.utf16.count)
         let extMatch = extensionRegEx.firstMatch(in: newTask.filename, options: [], range: range)
         let extString = extMatch != nil ? String(newTask.filename[Range(extMatch!.range, in: newTask.filename)!]) : ""
         let seqMatch = sequenceRegEx.firstMatch(in: newTask.filename, options: [], range: range)
-        let seqString = seqMatch != nil ? String(newTask.filename[Range(seqMatch!.range, in: newTask.filename)!]) : ""
+        let seqString = seqMatch != nil ? String(newTask.filename[Range(seqMatch!.range(at: 1), in: newTask.filename)!]) : ""
         let newSequence = seqString.isEmpty ? 1 : Int(seqString)! + 1
-        
         let newFilename: String
         if seqMatch == nil {
             let baseNameWithoutExtension = stripFileExtension(newTask.filename)
@@ -177,10 +175,10 @@ func uniqueFilename(task: Task, unique: Bool) -> Task {
         } else {
             let startOfSeq = seqMatch!.range.location
             let index = newTask.filename.index(newTask.filename.startIndex, offsetBy: startOfSeq)
-            newFilename = "\(newTask.filename.prefix(upTo: index)) (\(newSequence))\(extString)"
+            newFilename = "\(newTask.filename.prefix(upTo: index))(\(newSequence))\(extString)"
         }
         newTask = newTask.copyWith(filename: newFilename)
-        guard let filePath = getFilePath(for: task) else {
+        guard let filePath = getFilePath(for: newTask) else {
             return task
         }
         exists = FileManager.default.fileExists(atPath: filePath)
