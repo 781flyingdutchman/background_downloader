@@ -2057,6 +2057,7 @@ void main() {
           updates: Updates.statusAndProgress);
       expect(await FileDownloader().enqueue(task), equals(true));
       await someProgressCompleter.future;
+      await Future.delayed(const Duration(milliseconds: 10)); // allow db write
       // after some progress, expect status running and some progress in database
       final record = await FileDownloader().database.recordForId(task.taskId);
       expect(record, isNotNull);
@@ -2093,6 +2094,7 @@ void main() {
           updates: Updates.statusAndProgress);
       expect(await FileDownloader().enqueue(task), equals(true));
       await someProgressCompleter.future;
+      await Future.delayed(const Duration(milliseconds: 10)); // allow db writeThe next one is 17
       // after some progress, expect nothing in database
       var record = await FileDownloader().database.recordForId(task.taskId);
       expect(record, isNull);
@@ -2107,6 +2109,7 @@ void main() {
           updates: Updates.statusAndProgress);
       expect(await FileDownloader().enqueue(task), equals(true));
       await someProgressCompleter.future;
+      await Future.delayed(const Duration(milliseconds: 10)); // allow db write
       // now expect progress and status in the database
       record = await FileDownloader().database.recordForId(task.taskId);
       expect(record, isNotNull);
