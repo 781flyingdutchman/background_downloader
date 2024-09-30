@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:background_downloader/background_downloader.dart';
+import 'package:background_downloader_example/isolate.dart';
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
 
@@ -35,6 +36,8 @@ class _MyAppState extends State<MyApp> {
 
   bool loadAndOpenInProgress = false;
   bool loadABunchInProgress = false;
+  bool loadBackgroundInProgress = false;
+  String? loadBackgroundResult;
 
   @override
   void initState() {
@@ -216,6 +219,27 @@ class _MyAppState extends State<MyApp> {
                             loadABunchInProgress ? null : processLoadABunch,
                         child: const Text('Load a bunch'))),
                 Center(child: Text(loadABunchInProgress ? 'Enqueueing' : '')),
+                const Divider(
+                  height: 30,
+                  thickness: 5,
+                  color: Colors.blueGrey,
+                ),
+                Center(
+                  child: ElevatedButton(
+                    onPressed:
+                        loadBackgroundInProgress ? null : processLoadBackground,
+                    child: const Text(
+                      'Load in background',
+                    ),
+                  ),
+                ),
+                Center(
+                  child: Text(
+                    loadBackgroundInProgress
+                        ? 'Working...'
+                        : loadBackgroundResult ?? '',
+                  ),
+                ),
               ],
             ),
           )),
@@ -362,6 +386,20 @@ class _MyAppState extends State<MyApp> {
       }
       setState(() {
         loadABunchInProgress = false;
+      });
+    }
+  }
+
+  Future<void> processLoadBackground() async {
+    if (!loadBackgroundInProgress) {
+      setState(() {
+        loadBackgroundInProgress = true;
+      });
+      await getPermission(PermissionType.notifications);
+      final result = await testBackgroundUsage();
+      setState(() {
+        loadBackgroundResult = result;
+        loadBackgroundInProgress = false;
       });
     }
   }
