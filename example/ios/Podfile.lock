@@ -2,6 +2,8 @@ PODS:
   - background_downloader (0.0.1):
     - Flutter
   - Flutter (1.0.0)
+  - flutter_isolate (0.0.1):
+    - Flutter
   - integration_test (0.0.1):
     - Flutter
   - path_provider_foundation (0.0.1):
@@ -11,6 +13,7 @@ PODS:
 DEPENDENCIES:
   - background_downloader (from `.symlinks/plugins/background_downloader/ios`)
   - Flutter (from `Flutter`)
+  - flutter_isolate (from `.symlinks/plugins/flutter_isolate/ios`)
   - integration_test (from `.symlinks/plugins/integration_test/ios`)
   - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
 
@@ -19,6 +22,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/background_downloader/ios"
   Flutter:
     :path: Flutter
+  flutter_isolate:
+    :path: ".symlinks/plugins/flutter_isolate/ios"
   integration_test:
     :path: ".symlinks/plugins/integration_test/ios"
   path_provider_foundation:
@@ -27,6 +32,7 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   background_downloader: 9f788ffc5de45acf87d6380e91ca0841066c18cf
   Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
+  flutter_isolate: 0edf5081826d071adf21759d1eb10ff5c24503b5
   integration_test: 252f60fa39af5e17c3aa9899d35d908a0721b573
   path_provider_foundation: 2b6b4c569c0fb62ec74538f866245ac84301af46
 
