@@ -109,7 +109,7 @@ jobs:
           channel: ${{ matrix.sdk == 'min' && 'stable' || matrix.sdk }}
       - uses: maxim-lobanov/setup-cocoapods@v1
         with:
-          podfile-path: example/ios/Podfile.lock
+          version: latest
       - name: Build example iOS package
         run: flutter build ios --simulator
         working-directory: example
