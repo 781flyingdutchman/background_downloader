@@ -53,7 +53,13 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "com.bbflight.background_downloader", binaryMessenger: registrar.messenger())
-        backgroundChannel = FlutterMethodChannel(name: "com.bbflight.background_downloader.background", binaryMessenger: registrar.messenger())
+        if (backgroundChannel == nil) {
+            // This nil check fixes dead locking when used from multiple isolates
+            // by only tracking the primary isolate. This should in theory always
+            // be the Flutter main isolate.
+            // For full feature parity with Android see #382
+            backgroundChannel = FlutterMethodChannel(name: "com.bbflight.background_downloader.background", binaryMessenger: registrar.messenger())
+        }
         registrar.addMethodCallDelegate(instance, channel: channel)
         registrar.addApplicationDelegate(instance)
         let defaults = UserDefaults.standard
