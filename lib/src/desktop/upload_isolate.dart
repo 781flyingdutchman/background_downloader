@@ -43,11 +43,26 @@ Future<TaskStatus> binaryUpload(
   final fileSize = inFile.lengthSync();
   var resultStatus = TaskStatus.failed;
   try {
+    // Extract Range header information, if present, for partial upload
+    int start = 0;
+    int end = fileSize - 1; // Default to the whole file
+    if (task.headers.containsKey('Range')) {
+      final rangeHeader = task.headers['Range']!;
+      final match = RegExp(r'bytes=(\d+)-(\d*)').firstMatch(rangeHeader);
+      if (match != null) {
+        start = int.parse(match.group(1)!);
+        if (match.group(2)!.isNotEmpty) {
+          end = int.parse(match.group(2)!);
+        }
+      }
+      task.headers.remove('Range'); // not passed on to server
+    }
+    final contentLength = end - start + 1;
     final client = DesktopDownloader.httpClient;
     final request =
         http.StreamedRequest(task.httpRequestMethod, Uri.parse(task.url));
     request.headers.addAll(task.headers);
-    request.contentLength = fileSize;
+    request.contentLength = contentLength;
     request.headers['Content-Type'] = task.mimeType;
     request.headers['Content-Disposition'] =
         'attachment; filename="${Uri.encodeComponent(task.filename)}"';
@@ -74,7 +89,7 @@ Future<TaskStatus> binaryUpload(
       requestCompleter.complete();
     });
     // send the bytes to the request sink
-    final inStream = inFile.openRead();
+    final inStream = inFile.openRead(start, end + 1);
     transferBytesResult =
         await transferBytes(inStream, request.sink, fileSize, task, sendPort);
     request.sink.close(); // triggers request completion, handled above

@@ -1712,6 +1712,43 @@ void main() {
       print('Finished enqueue binary file');
     });
 
+    testWidgets('enqueue binary file partially bytes=2-4',
+        (widgetTester) async {
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      final task = uploadTask.copyWith(
+          url: uploadBinaryTestUrl,
+          headers: {'Range': 'bytes=2-4'},
+          post: 'binary',
+          updates: Updates.statusAndProgress);
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(statusCallbackCounter, equals(3));
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(progressCallbackCounter, greaterThan(1));
+      expect(lastProgress, equals(progressComplete));
+      print('Finished enqueue binary file partially');
+    });
+
+    testWidgets('enqueue binary file partially bytes=2-', (widgetTester) async {
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      final task = uploadTask.copyWith(
+          url: uploadBinaryTestUrl,
+          headers: {'Range': 'bytes=2-'},
+          post: 'binary',
+          updates: Updates.statusAndProgress);
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(statusCallbackCounter, equals(3));
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(progressCallbackCounter, greaterThan(1));
+      expect(lastProgress, equals(progressComplete));
+      print('Finished enqueue binary file partially bytes=2-');
+    });
+
     testWidgets('enqueue multipart with fields', (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
