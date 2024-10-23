@@ -6,10 +6,14 @@ import android.util.Log
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayInputStream
 import java.io.DataOutputStream
 import java.io.File
 import java.io.FileInputStream
+import java.io.InputStream
+import java.io.RandomAccessFile
 import java.net.HttpURLConnection
+import java.nio.channels.FileChannel
 
 class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParameters) :
     TaskWorker(applicationContext, workerParams) {
@@ -115,7 +119,21 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
             )
             return TaskStatus.failed
         }
-        determineRunInForeground(task, fileSize)
+        // Extract Range header information
+        var start = 0L
+        var end = fileSize - 1 // Default to the whole file
+        val rangeHeader = task.headers["Range"]
+        if (rangeHeader != null) {
+            val match = Regex("""bytes=(\d+)-(\d*)""").find(rangeHeader)
+            if (match != null) {
+                start = match.groupValues[1].toLong()
+                if (match.groupValues.size > 2 && match.groupValues[2].isNotEmpty()) {
+                    end = match.groupValues[2].toLong()
+                }
+            }
+        }
+        val contentLength = end - start + 1
+        determineRunInForeground(task, contentLength)
         // binary file upload posts file bytes directly
         // set Content-Type based on file extension
         Log.d(TAG, "Binary upload for taskId ${task.taskId}")
@@ -123,12 +141,31 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
         connection.setRequestProperty(
             "Content-Disposition", "attachment; filename=\"" + Uri.encode(task.filename) + "\""
         )
-        connection.setRequestProperty("Content-Length", fileSize.toString())
-        connection.setFixedLengthStreamingMode(fileSize)
-        return withContext(Dispatchers.IO) {
-            FileInputStream(file).use { inputStream ->
-                DataOutputStream(connection.outputStream.buffered()).use { outputStream ->
-                    return@withContext transferBytes(inputStream, outputStream, fileSize, task)
+        connection.setRequestProperty("Content-Length", contentLength.toString())
+        connection.setFixedLengthStreamingMode(contentLength)
+        if (rangeHeader != null) {
+            return withContext(Dispatchers.IO) {
+                FileInputStream(file).use { inputStream ->
+                    // Special treatment for partial uploads
+                    inputStream.skip(start)
+                    LimitedInputStream(inputStream, contentLength).use { limitedInputStream ->
+                        DataOutputStream(connection.outputStream.buffered()).use { outputStream ->
+                            return@withContext transferBytes(
+                                limitedInputStream,
+                                outputStream,
+                                contentLength,
+                                task
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            return withContext(Dispatchers.IO) {
+                FileInputStream(file).use { inputStream ->
+                    DataOutputStream(connection.outputStream.buffered()).use { outputStream ->
+                        return@withContext transferBytes(inputStream, outputStream, fileSize, task)
+                    }
                 }
             }
         }
@@ -286,7 +323,7 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                     "content-transfer-encoding: binary"
         } else if (isJsonString(value)) {
             header = "$header\r\n" +
-            "content-type: application/json; charset=utf-8\r\n";
+                    "content-type: application/json; charset=utf-8\r\n";
         }
         return "$header\r\n\r\n"
     }
@@ -322,5 +359,43 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
      */
     private fun lengthInBytes(string: String): Int {
         return string.toByteArray().size
+    }
+}
+
+/**
+ * InputStream that limits the number of bytes read
+ */
+class LimitedInputStream(
+    private val inputStream: InputStream,
+    private val limit: Long
+) : InputStream() {
+
+    private var bytesRead: Long = 0
+
+    override fun read(): Int {
+        if (bytesRead >= limit) {
+            return -1 // End of stream
+        }
+        val result = inputStream.read()
+        if (result != -1) {
+            bytesRead++
+        }
+        return result
+    }
+
+    override fun read(b: ByteArray, off: Int, len: Int): Int {
+        if (bytesRead >= limit) {
+            return -1
+        }
+
+        // Adjust length to not exceed limit
+        val maxBytesToRead = minOf(len, (limit - bytesRead).toInt())
+        val result = inputStream.read(b, off, maxBytesToRead)
+
+        if (result != -1) {
+            bytesRead += result
+        }
+
+        return result
     }
 }

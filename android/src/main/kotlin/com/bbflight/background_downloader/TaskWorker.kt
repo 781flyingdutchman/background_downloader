@@ -486,7 +486,10 @@ open class TaskWorker(
                 requestMethod = task.httpRequestMethod
                 connectTimeout = requestTimeoutSeconds * 1000
                 for (header in task.headers) {
-                    setRequestProperty(header.key, header.value)
+                    // copy headers unless Range header in UploadTask
+                    if (header.key != "Range" || task.taskType != "UploadTask") {
+                        setRequestProperty(header.key, header.value)
+                    }
                 }
                 return connectAndProcess(this)
             }

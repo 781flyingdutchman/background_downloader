@@ -1720,15 +1720,10 @@ void main() {
       final task = uploadTask.copyWith(
           url: uploadBinaryTestUrl,
           headers: {'Range': 'bytes=2-4'},
-          post: 'binary',
-          updates: Updates.statusAndProgress);
-      expect(await FileDownloader().enqueue(task), isTrue);
-      await statusCallbackCompleter.future;
-      expect(statusCallbackCounter, equals(3));
-      expect(lastStatus, equals(TaskStatus.complete));
-      expect(progressCallbackCounter, greaterThan(1));
-      expect(lastProgress, equals(progressComplete));
-      print('Finished enqueue binary file partially');
+          post: 'binary');
+      final result = await FileDownloader().upload(task);
+      expect(result.status, equals(TaskStatus.complete));
+      expect(result.responseBody, equals('fil'));
     });
 
     testWidgets('enqueue binary file partially bytes=2-', (widgetTester) async {
@@ -1738,35 +1733,27 @@ void main() {
       final task = uploadTask.copyWith(
           url: uploadBinaryTestUrl,
           headers: {'Range': 'bytes=2-'},
-          post: 'binary',
-          updates: Updates.statusAndProgress);
-      expect(await FileDownloader().enqueue(task), isTrue);
-      await statusCallbackCompleter.future;
-      expect(statusCallbackCounter, equals(3));
-      expect(lastStatus, equals(TaskStatus.complete));
-      expect(progressCallbackCounter, greaterThan(1));
-      expect(lastProgress, equals(progressComplete));
-      print('Finished enqueue binary file partially bytes=2-');
+          post: 'binary');
+      final result = await FileDownloader().upload(task);
+      expect(result.status, equals(TaskStatus.complete));
+      expect(result.responseBody, equals('file.'));
     });
 
     testWidgets('enqueue multipart with fields', (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
-      expect(
-          await FileDownloader().enqueue(uploadTask.copyWith(fields: {
-            'field1': 'value1',
-            'field2': 'check\u2713',
-            'field3': '{"a":"b"}',
-            'field4': '["1", "2"]'
-          }, updates: Updates.statusAndProgress)),
-          isTrue);
-      await statusCallbackCompleter.future;
-      expect(statusCallbackCounter, equals(3));
-      expect(lastStatus, equals(TaskStatus.complete));
-      expect(progressCallbackCounter, greaterThan(1));
-      expect(lastProgress, equals(progressComplete));
-      print('Finished enqueue multipart with fields');
+      final fields = {
+        'field1': 'value1',
+        'field2': 'check\u2713',
+        'field3': '{"a":"b"}',
+        'field4': '["1", "2"]'
+      };
+      final result =
+          await FileDownloader().upload(uploadTask.copyWith(fields: fields));
+      final jsonString = result.responseBody!.replaceAll(r'\r\n', '');
+      expect(result.status, equals(TaskStatus.complete));
+      expect(jsonDecode(jsonString), equals(fields));
     });
 
     testWidgets('enqueue multipart with fields that have multiple values',
@@ -1774,17 +1761,12 @@ void main() {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
-      expect(
-          await FileDownloader().enqueue(uploadTask.copyWith(
-              fields: {'field1': 'value1', 'field2': '"value2", "value3"'},
-              updates: Updates.statusAndProgress)),
-          isTrue);
-      await statusCallbackCompleter.future;
-      expect(statusCallbackCounter, equals(3));
-      expect(lastStatus, equals(TaskStatus.complete));
-      expect(progressCallbackCounter, greaterThan(1));
-      expect(lastProgress, equals(progressComplete));
-      print('Finished enqueue multipart with fields that have multiple values');
+      final fields = {'field1': 'value1', 'field2': '"value2", "value3"'};
+      final result =
+          await FileDownloader().upload(uploadTask.copyWith(fields: fields));
+      expect(result.status, equals(TaskStatus.complete));
+      expect(jsonDecode(result.responseBody!),
+          equals({'field1': 'value1', 'field2': 'value2'}));
     });
 
     testWidgets('enqueue binary file, then cancel', (widgetTester) async {
