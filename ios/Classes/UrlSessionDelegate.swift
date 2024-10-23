@@ -42,6 +42,9 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             os_log("Could not find task related to urlSessionTask %d", log: log, type: .error, task.taskIdentifier)
             return
         }
+        if let tempUploadUrl = BDPlugin.tasksWithTempUploadFile.removeValue(forKey: task.taskId) {
+            try? FileManager.default.removeItem(at: tempUploadUrl)
+        }
         if BDPlugin.holdingQueue != nil {
             _Concurrency.Task {
                 await BDPlugin.holdingQueue?.taskFinished(task)

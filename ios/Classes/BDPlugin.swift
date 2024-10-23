@@ -42,6 +42,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     static var responseBodyData = [String: [Data]]() // list of Data objects received for this UploadTask id
     static var tasksWithSuggestedFilename = [String : Task]() // [taskId : Task with suggested filename]
     static var tasksWithContentLengthOverride = [String : Int64]() // [taskId : Content length]
+    static var tasksWithTempUploadFile = [String : URL]() // [taskId : file URL]
     static var mimeTypes = [String : String]() // [taskId : mimeType]
     static var charSets = [String : String]() // [taskId : charSet]
     static var holdingQueue: HoldingQueue? = nil
@@ -207,7 +208,10 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         var baseRequest = URLRequest(url: url)
         baseRequest.httpMethod = task.httpRequestMethod
         for (key, value) in task.headers {
-            baseRequest.setValue(value, forHTTPHeaderField: key)
+            // copy headers unless Range header in UploadTask
+            if key != "Range" || task.taskType != "UploadTask" {
+                baseRequest.setValue(value, forHTTPHeaderField: key)
+            }
         }
         let requiresWiFi = taskRequiresWiFi(task: task)
         if requiresWiFi {
@@ -263,26 +267,72 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     private func scheduleUpload(task: Task, taskDescription: String, baseRequest: URLRequest) -> Bool {
         var request = baseRequest
         if isBinaryUploadTask(task: task) {
+            // binary post can use uploadTask fromFile method
             os_log("Binary file upload", log: log, type: .debug)
             guard let directory = try? directoryForTask(task: task) else {
                 os_log("Could not find directory for taskId %@", log: log, type: .info, task.taskId)
                 return false
             }
-            let filePath = directory.appendingPath(task.filename)
-            if !FileManager.default.fileExists(atPath: filePath.path) {
-                os_log("Could not find file %@ for taskId %@", log: log, type: .info, filePath.absoluteString, task.taskId)
+            let fileUrl = directory.appendingPath(task.filename)
+            if !FileManager.default.fileExists(atPath: fileUrl.path) {
+                os_log("Could not find file %@ for taskId %@", log: log, type: .info, fileUrl.absoluteString, task.taskId)
                 return false
             }
-            // binary post can use uploadTask fromFile method
             request.setValue(task.mimeType, forHTTPHeaderField: "Content-Type")
             if let encodedFilename = task.filename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
                 request.setValue("attachment; filename=\"\(encodedFilename)\"", forHTTPHeaderField: "Content-Disposition")
             } else {
-                os_log("Could not encode task.fileName %@", log: log, type: .debug, task.filename)
+                os_log("Could not encode task.fileName %@", log: log, type: .info, task.filename)
                 return false
             }
             request.setValue("attachment; filename=\"\(task.filename)\"", forHTTPHeaderField: "Content-Disposition")
-            let urlSessionUploadTask = UrlSessionDelegate.urlSession!.uploadTask(with: request, fromFile: filePath)
+            var uploadFileUrl = fileUrl // if no range given
+            if let rangeHeader = task.headers["Range"] {
+                // determine the start and content length from the range header
+                let regex = try? NSRegularExpression(pattern: #"bytes=(\d+)-(\d*)"#)
+                let range = NSRange(rangeHeader.startIndex..<rangeHeader.endIndex, in: rangeHeader)
+                if let match = regex?.firstMatch(in: rangeHeader, options: [], range: range) {
+                    if let startRange = Range(match.range(at: 1), in: rangeHeader),
+                       let start = UInt64(rangeHeader[startRange]) {
+                        let contentLength: UInt64
+                        if let endRange = Range(match.range(at: 2), in: rangeHeader),
+                           let end = UInt64(rangeHeader[endRange]) {
+                            contentLength = end - start + 1
+                        } else {
+                            // get file size to determine contentLength
+                            let fileManager = FileManager.default
+                            do {
+                                let attributes = try FileManager.default.attributesOfItem(atPath: fileUrl.path)
+                                if let fileSize = attributes[.size] as? UInt64 {
+                                    contentLength = fileSize - start
+                                } else {
+                                    os_log("Could not get file size", log: log, type: .info)
+                                    return false
+                                }
+                            } catch {
+                                os_log("Could not get file size", log: log, type: .info)
+                                return false
+                            }
+                        }
+                        // create the partial file for upload
+                        if let tempFileUrl = createTempFileWithRange(from: fileUrl, start: start, contentLength: contentLength) {
+                            BDPlugin.tasksWithTempUploadFile[task.taskId] = tempFileUrl
+                            uploadFileUrl = tempFileUrl
+                        }
+                        else {
+                            os_log("Could not create temp file for partial upload", log: log, type: .info)
+                            return false
+                        }
+                    } else {
+                        os_log("Invalid Range header %@", log: log, type: .info, rangeHeader)
+                        return false
+                    }
+                } else {
+                    os_log("Invalid Range header %@", log: log, type: .info, rangeHeader)
+                    return false
+                }
+            }
+            let urlSessionUploadTask = UrlSessionDelegate.urlSession!.uploadTask(with: request, fromFile: uploadFileUrl)
             urlSessionUploadTask.taskDescription = taskDescription
             urlSessionUploadTask.priority = 1 - Float(task.priority) / 10
             urlSessionUploadTask.resume()

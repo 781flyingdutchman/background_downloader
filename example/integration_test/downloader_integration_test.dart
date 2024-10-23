@@ -1712,8 +1712,7 @@ void main() {
       print('Finished enqueue binary file');
     });
 
-    testWidgets('enqueue binary file partially bytes=2-4',
-        (widgetTester) async {
+    testWidgets('upload binary file partially bytes=2-4', (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -1726,7 +1725,7 @@ void main() {
       expect(result.responseBody, equals('fil'));
     });
 
-    testWidgets('enqueue binary file partially bytes=2-', (widgetTester) async {
+    testWidgets('upload binary file partially bytes=2-', (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -1737,6 +1736,17 @@ void main() {
       final result = await FileDownloader().upload(task);
       expect(result.status, equals(TaskStatus.complete));
       expect(result.responseBody, equals('file.'));
+    });
+
+    testWidgets('upload binary file partially invalid headers',
+        (widgetTester) async {
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      final task = uploadTask.copyWith(
+          url: uploadBinaryTestUrl, headers: {'Range': 'z'}, post: 'binary');
+      final result = await FileDownloader().upload(task);
+      expect(result.status, equals(TaskStatus.failed));
     });
 
     testWidgets('enqueue multipart with fields', (widgetTester) async {
