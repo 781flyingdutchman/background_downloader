@@ -47,6 +47,7 @@ Future<void> doDownloadTask(
   var request =
       http.Request(downloadTask.httpRequestMethod, Uri.parse(downloadTask.url));
   request.headers.addAll(downloadTask.headers);
+  request.persistentConnection = false;
   if (isResume) {
     final taskRangeHeader = downloadTask.headers['Range'] ?? '';
     final taskRange = parseRange(taskRangeHeader);

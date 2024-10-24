@@ -80,8 +80,9 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
     processProgressUpdateInIsolate(task, 0.0, sendPort);
   }
   if (task.retriesRemaining < 0) {
-    logError(task, 'task has negative retries remaining');
-    taskException = TaskException('Task has negative retries remaining');
+    const message = 'Task has negative retries remaining';
+    logError(task, message);
+    taskException = TaskException(message);
     processStatusUpdateInIsolate(task, TaskStatus.failed, sendPort);
   } else {
     // allow immediate cancel message to come through
@@ -100,6 +101,7 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
       DataTask() => doDataTask(task, sendPort)
     };
   }
+  DesktopDownloader.httpClient.close();
   receivePort.close();
   sendPort.send('done'); // signals end
   Isolate.exit();
