@@ -1820,16 +1820,16 @@ void main() {
     testWidgets('multipart upload with await', (widgetTester) async {
       final result = await FileDownloader().upload(uploadTask);
       expect(result.status, equals(TaskStatus.complete));
-      expect(result.responseBody, equals('OK'));
+      expect(result.responseBody, equals('{}'));
       expect(result.responseHeaders?['server'], equals('Google Frontend'));
       expect(result.responseStatusCode, equals(200));
     });
 
     testWidgets('binary upload with await', (widgetTester) async {
-      final result = await FileDownloader()
-          .upload(uploadTask.copyWith(url: uploadBinaryTestUrl));
+      final result = await FileDownloader().upload(
+          uploadTask.copyWith(url: uploadBinaryTestUrl, post: 'binary'));
       expect(result.status, equals(TaskStatus.complete));
-      expect(result.responseBody, equals('OK'));
+      expect(result.responseBody, equals('A file.'));
       expect(result.responseHeaders?['server'], equals('Google Frontend'));
       expect(result.responseStatusCode, equals(200));
     });
@@ -1844,7 +1844,7 @@ void main() {
       var results = await Future.wait([taskFuture, secondTaskFuture]);
       for (var result in results) {
         expect(result.status, equals(TaskStatus.complete));
-        expect(result.responseBody, equals('OK'));
+        expect(result.responseBody, equals('{}'));
         expect(result.responseHeaders?['server'], equals('Google Frontend'));
         expect(result.responseStatusCode, equals(200));
       }
@@ -1972,13 +1972,14 @@ void main() {
     });
 
     testWidgets('upload 2 files using upload', (widgetTester) async {
+      final fields = {'key': 'value'};
       final multiTask = MultiUploadTask(
           url: uploadMultiTestUrl,
           files: [('f1', uploadFilename), ('f2', uploadFilename2)],
-          fields: {'key': 'value'});
+          fields: fields);
       final result = await FileDownloader().upload(multiTask);
       expect(result.status, equals(TaskStatus.complete));
-      expect(result.responseBody, equals('OK'));
+      expect(jsonDecode(result.responseBody!), equals(fields));
       expect(result.responseHeaders?['server'], equals('Google Frontend'));
       expect(result.responseStatusCode, equals(200));
     });
@@ -1986,13 +1987,14 @@ void main() {
     testWidgets('upload 2 files with full file path', (widgetTester) async {
       final docsDir = await getApplicationDocumentsDirectory();
       final fullPath = join(docsDir.path, uploadFilename);
+      final fields = {'key': 'value'};
       final multiTask = MultiUploadTask(
           url: uploadMultiTestUrl,
           files: [('f1', fullPath), ('f2', uploadFilename2)],
-          fields: {'key': 'value'});
+          fields: fields);
       final result = await FileDownloader().upload(multiTask);
       expect(result.status, equals(TaskStatus.complete));
-      expect(result.responseBody, equals('OK'));
+      expect(jsonDecode(result.responseBody!), equals(fields));
       expect(result.responseHeaders?['server'], equals('Google Frontend'));
       expect(result.responseStatusCode, equals(200));
     });

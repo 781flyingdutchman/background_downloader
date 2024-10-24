@@ -35,12 +35,18 @@ Future<TaskStatus> binaryUpload(
     UploadTask task, String filePath, SendPort sendPort) async {
   final inFile = File(filePath);
   if (!inFile.existsSync()) {
-    logError(task, 'file to upload does not exist: $filePath');
-    taskException =
-        TaskFileSystemException('File to upload does not exist: $filePath');
+    final message = 'File to upload does not exist: $filePath';
+    logError(task, message);
+    taskException = TaskFileSystemException(message);
     return TaskStatus.failed;
   }
   final fileSize = inFile.lengthSync();
+  if (fileSize == 0) {
+    final message = 'File $filePath has 0 length';
+    logError(task, message);
+    taskException = TaskFileSystemException(message);
+    return TaskStatus.failed;
+  }
   var resultStatus = TaskStatus.failed;
   try {
     // Extract Range header information, if present, for partial upload
@@ -54,6 +60,11 @@ Future<TaskStatus> binaryUpload(
         if (match.group(2)!.isNotEmpty) {
           end = int.parse(match.group(2)!);
         }
+      } else {
+        final message = 'Invalid Range header $rangeHeader';
+        logError(task, message);
+        taskException = TaskException(message);
+        return TaskStatus.failed;
       }
       task.headers.remove('Range'); // not passed on to server
     }
