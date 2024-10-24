@@ -1,3 +1,10 @@
+## 8.6.0
+
+* Adds option for partial uploads, for binary uploads only. Set the byte range by adding a "Range" header to your binary `UploadTask`, e.g. a value of "bytes=100-149" will upload 50 bytes starting at byte 100. You can omit the range end (but not the "-") to upload from the indicated start byte to the end of the file.  The "Range" header will not be passed on to the server. Note that on iOS an invalid range will cause enqueue to fail, whereas on Android and Desktop the task will fail when attempting to start.
+* Fixes issue in iOS when multiple Flutter engines register the plugin
+* Fixes issue with lingering HTTP connections on desktop
+* Adds CI workflow (formatting, lints, build Android, build iOS)
+
 ## 8.5.6
 
 * Fixes desktop upload cancellation bug
