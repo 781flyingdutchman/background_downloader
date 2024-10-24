@@ -207,6 +207,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         }
         var baseRequest = URLRequest(url: url)
         baseRequest.httpMethod = task.httpRequestMethod
+        baseRequest.networkServiceType = .responsiveData
         for (key, value) in task.headers {
             // copy headers unless Range header in UploadTask
             if key != "Range" || task.taskType != "UploadTask" {
@@ -252,6 +253,8 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     /// Schedule a download task
     private func scheduleDownload(task: Task, taskDescription: String, baseRequest: URLRequest, resumeData: Data?) -> Bool {
         var request = baseRequest
+        request.networkServiceType = .responsiveData
+
         if task.post != nil {
             request.httpBody = Data((task.post ?? "").data(using: .utf8)!)
         }
@@ -266,6 +269,8 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     /// Schedule an upload task
     private func scheduleUpload(task: Task, taskDescription: String, baseRequest: URLRequest) -> Bool {
         var request = baseRequest
+        request.networkServiceType = .responsiveData
+
         if isBinaryUploadTask(task: task) {
             // binary post can use uploadTask fromFile method
             os_log("Binary file upload", log: log, type: .debug)
