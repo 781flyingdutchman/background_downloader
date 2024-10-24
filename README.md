@@ -491,7 +491,7 @@ Make sure to check for, and if necessary request, permission to display notifica
 
 If you download or upload multiple files simultaneously, you may not want a notification for every task, but one notification representing the group of tasks.  To do this, set the `groupNotificationId` field in a `notificationConfig` and use that configuration for all tasks in this group. It is easiest to combine this with the `group` field of the task, e.g.:
 ```dart
-FileDownloader.configureNotificationForGroup('bunchOfFiles', // refers to the Task.group field
+FileDownloader().configureNotificationForGroup('bunchOfFiles', // refers to the Task.group field
             running: const TaskNotification(
                 '{numFinished} out of {numTotal}', 'Progress = {progress}'),
             complete:
