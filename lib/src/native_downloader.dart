@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -22,7 +23,11 @@ abstract base class NativeDownloader extends BaseDownloader {
       MethodChannel('com.bbflight.background_downloader');
   static const _backgroundChannel =
       MethodChannel('com.bbflight.background_downloader.background');
+  static const _callbackChannel =
+      MethodChannel('com.bbflight.background_downloader.callbacks');
 
+  /// Initializes the background channel and starts listening for messages from
+  /// the native side
   @override
   Future<void> initialize() async {
     await super.initialize();
@@ -217,6 +222,32 @@ abstract base class NativeDownloader extends BaseDownloader {
               'Background channel: no match for message $message');
       }
       return true;
+    });
+  }
+
+  /// Initialize the callbackDispatcher for task related callbacks (hooks)
+  ///
+  /// Establishes the methodChannel through which the native side will send its
+  /// callBacks, and teh listener that processes the different callback types.
+  ///
+  /// This method is called directly from the native platform prior to using
+  /// the [_callbackChannel] to post the actual callback
+  @pragma('vm:entrypoint')
+  static void initCallbackDispatcher() {
+    print('CallbackDispatcher init');
+    _callbackChannel.setMethodCallHandler((MethodCall call) async {
+      print('Callback received: ${call.method} with ${call.arguments}');
+      if (call.method == 'onTaskStartCallback') {
+        final taskJsonString = call.arguments as String;
+        final task = Task.createFromJson(jsonDecode(taskJsonString));
+        final callBack = task.options?.onTaskStartCallBack;
+        final newTask = await callBack?.call(task);
+        print('NewTask = $newTask');
+        if (newTask == null) {
+          return null;
+        }
+        return jsonEncode(newTask.toJson());
+      }
     });
   }
 
@@ -457,12 +488,37 @@ abstract base class NativeDownloader extends BaseDownloader {
 /// Android native downloader
 final class AndroidDownloader extends NativeDownloader {
   static final AndroidDownloader _singleton = AndroidDownloader._internal();
+  static int? _callbackDispatcherRawHandle;
 
   factory AndroidDownloader() {
     return _singleton;
   }
 
   AndroidDownloader._internal();
+
+  @override
+  Future<bool> enqueue(Task task) async {
+    // on Android, need to register [_callbackDispatcherRawHandle] upon first
+    // encounter of a task with callbacks
+    if (task.options?.hasCallback == true &&
+        _callbackDispatcherRawHandle == null) {
+      final rawHandle = PluginUtilities.getCallbackHandle(
+              NativeDownloader.initCallbackDispatcher)
+          ?.toRawHandle();
+      if (rawHandle != null) {
+        final success = await NativeDownloader.methodChannel
+            .invokeMethod<bool>('registerCallbackDispatcher', rawHandle);
+        if (success == true) {
+          _callbackDispatcherRawHandle = rawHandle;
+        } else {
+          log.warning('Could not register callbackDispatcher');
+        }
+      } else {
+        log.warning('Could not obtain rawHandle for initCallbackDispatcher');
+      }
+    }
+    return super.enqueue(task);
+  }
 
   @override
   dynamic platformConfig(
@@ -554,6 +610,17 @@ final class IOSDownloader extends NativeDownloader {
   }
 
   IOSDownloader._internal();
+
+  /// On iOS we immediately initialize the callback dispatcher and start
+  /// listening for callback messages from the native side
+  ///
+  /// Whereas on Android, the initialization is done directly by the native side
+  /// using a DartExecutor
+  @override
+  Future<void> initialize() async {
+    NativeDownloader.initCallbackDispatcher();
+    return super.initialize();
+  }
 
   @override
   dynamic platformConfig(

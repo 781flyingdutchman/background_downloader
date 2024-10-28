@@ -49,22 +49,24 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     
     static var propertyLock: NSLock = NSLock() // used to synchronize access to static properties
     
+    public static var backgroundChannel: FlutterMethodChannel? // for native <-> plugin comms
+    public static var callbackChannel: FlutterMethodChannel? // for native to trigger task callbacks
     public static var flutterPluginRegistrantCallback: FlutterPluginRegistrantCallback?
-    public static var backgroundChannel: FlutterMethodChannel?
     
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "com.bbflight.background_downloader", binaryMessenger: registrar.messenger())
+        registrar.addMethodCallDelegate(instance, channel: channel)
+        let callbackChannel = FlutterMethodChannel(name: "com.bbflight.background_downloader.callbacks", binaryMessenger: registrar.messenger())
+        registrar.addApplicationDelegate(instance)
         if (backgroundChannel == nil) {
             // This nil check fixes dead locking when used from multiple isolates
             // by only tracking the primary isolate. This should in theory always
             // be the Flutter main isolate.
             // For full feature parity with Android see #382
             backgroundChannel = FlutterMethodChannel(name: "com.bbflight.background_downloader.background", binaryMessenger: registrar.messenger())
+            BDPlugin.callbackChannel = callbackChannel
         }
-        registrar.addMethodCallDelegate(instance, channel: channel)
-        registrar.addApplicationDelegate(instance)
-        let defaults = UserDefaults.standard
-        requireWiFi = RequireWiFi(rawValue: defaults.integer(forKey: BDPlugin.keyRequireWiFi))!
+        requireWiFi = RequireWiFi(rawValue: UserDefaults.standard.integer(forKey: BDPlugin.keyRequireWiFi))!
     }
     
     @objc
@@ -121,17 +123,17 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                     await methodRequestPermission(call: call, result: result)
                     /// configuration
                 case "configLocalize":
-                    methodStoreConfig(key: BDPlugin.keyConfigLocalize, value: call.arguments, result: result)
+                    storeInUserDefaults(key: BDPlugin.keyConfigLocalize, value: call.arguments, result: result)
                 case "configResourceTimeout":
-                    methodStoreConfig(key: BDPlugin.keyConfigResourceTimeout, value: call.arguments, result: result)
+                    storeInUserDefaults(key: BDPlugin.keyConfigResourceTimeout, value: call.arguments, result: result)
                 case "configRequestTimeout":
-                    methodStoreConfig(key: BDPlugin.keyConfigRequestTimeout, value: call.arguments, result: result)
+                    storeInUserDefaults(key: BDPlugin.keyConfigRequestTimeout, value: call.arguments, result: result)
                 case "configProxyAddress":
-                    methodStoreConfig(key: BDPlugin.keyConfigProxyAdress, value: call.arguments, result: result)
+                    storeInUserDefaults(key: BDPlugin.keyConfigProxyAdress, value: call.arguments, result: result)
                 case "configProxyPort":
-                    methodStoreConfig(key: BDPlugin.keyConfigProxyPort, value: call.arguments, result: result)
+                    storeInUserDefaults(key: BDPlugin.keyConfigProxyPort, value: call.arguments, result: result)
                 case "configCheckAvailableSpace":
-                    methodStoreConfig(key: BDPlugin.keyConfigCheckAvailableSpace, value: call.arguments, result: result)
+                    storeInUserDefaults(key: BDPlugin.keyConfigCheckAvailableSpace, value: call.arguments, result: result)
                 case "configHoldingQueue":
                     methodConfigHoldingQueue(call: call, result: result)
                 case "platformVersion":
@@ -233,21 +235,6 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         }
     }
     
-    /// Returns the task's URL if it can be parsed, otherwise null
-    private func validateUrl(_ task: Task) -> URL? {
-        let url: URL?
-        // encodingInvalidCharacters is only available when compiling with Xcode 15, which uses Swift version 5.9
-        #if swift(>=5.9)
-        if #available(iOS 17.0, *) {
-            url = URL(string: task.url, encodingInvalidCharacters: false)
-        } else {
-            url = URL(string: task.url)
-        }
-        #else
-        url = URL(string: task.url)
-        #endif
-        return url
-    }
     
     /// Schedule a download task
     private func scheduleDownload(task: Task, taskDescription: String, baseRequest: URLRequest, resumeData: Data?) -> Bool {
@@ -258,6 +245,12 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         let urlSessionDownloadTask = resumeData == nil ? UrlSessionDelegate.urlSession!.downloadTask(with: request) : UrlSessionDelegate.urlSession!.downloadTask(withResumeData: resumeData!)
         urlSessionDownloadTask.taskDescription = taskDescription
         urlSessionDownloadTask.priority = 1 - Float(task.priority) / 10
+        urlSessionDownloadTask.earliestBeginDate = Date()
+        if #available(iOS 15.0, *) {
+            os_log("Begin date %@", log: log, type: .info, urlSessionDownloadTask.earliestBeginDate?.ISO8601Format() ?? "??")
+        } else {
+            // Fallback on earlier versions
+        }
         urlSessionDownloadTask.resume()
         postEnqueuedStatusIfNotAlreadyDone(task: task)
         return true
@@ -335,6 +328,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             let urlSessionUploadTask = UrlSessionDelegate.urlSession!.uploadTask(with: request, fromFile: uploadFileUrl)
             urlSessionUploadTask.taskDescription = taskDescription
             urlSessionUploadTask.priority = 1 - Float(task.priority) / 10
+            urlSessionUploadTask.earliestBeginDate = Date()
             urlSessionUploadTask.resume()
         }
         else {
@@ -351,6 +345,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             let urlSessionUploadTask = UrlSessionDelegate.urlSession!.uploadTask(with: request, fromFile: uploader.outputFileUrl())
             urlSessionUploadTask.taskDescription = taskDescription
             urlSessionUploadTask.priority = 1 - Float(task.priority) / 10
+            urlSessionUploadTask.earliestBeginDate = Date()
             BDPlugin.uploaderForUrlSessionTaskIdentifier[urlSessionUploadTask.taskIdentifier] = uploader
             urlSessionUploadTask.resume()
         }
@@ -530,7 +525,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         result(jsonString)
         return
     }
-    
+
     /// Moves a file represented by the first argument to a SharedStorage destination
     ///
     /// Results in the new filePath if successful, or nil
@@ -675,7 +670,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     /// Store or remove a configuration in shared preferences
     ///
     /// If the value is nil, the configuration is removed
-    private func methodStoreConfig(key: String, value: Any?, result: @escaping FlutterResult) {
+    private func storeInUserDefaults(key: String, value: Any?, result: @escaping FlutterResult) {
         let defaults = UserDefaults.standard
         if value != nil {
             defaults.set(value, forKey: key)

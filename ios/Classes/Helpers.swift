@@ -20,6 +20,22 @@ extension URL {
     }
 }
 
+/// Returns the task's URL if it can be parsed, otherwise null
+func validateUrl(_ task: Task) -> URL? {
+    let url: URL?
+    // encodingInvalidCharacters is only available when compiling with Xcode 15, which uses Swift version 5.9
+#if swift(>=5.9)
+    if #available(iOS 17.0, *) {
+        url = URL(string: task.url, encodingInvalidCharacters: false)
+    } else {
+        url = URL(string: task.url)
+    }
+#else
+    url = URL(string: task.url)
+#endif
+    return url
+}
+
 /// Converts the [map] to a [String:String] map with lowercased keys
 func lowerCasedStringStringMap(_ map: [AnyHashable: Any]?) -> [String: String]? {
     if map == nil {return nil}

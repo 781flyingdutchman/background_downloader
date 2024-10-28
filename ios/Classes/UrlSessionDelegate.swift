@@ -18,6 +18,40 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
     
     //MARK: URLSessionTaskDelegate
     
+    public func urlSession(_ session: URLSession, task: URLSessionTask, willBeginDelayedRequest request: URLRequest) async -> (URLSession.DelayedRequestDisposition, URLRequest?) {
+        os_log("willbegin delayed request", log: log, type: .error)
+        guard let bgdTask = getTaskFrom(urlSessionTask: task),
+              bgdTask.options?.hasCallback() == true
+        else {
+            return (.continueLoading, nil)
+        }
+        os_log("delayed request has options", log: log, type: .error)
+        guard let newTask = await invokeOnTaskStartCallback(task: bgdTask)
+        else {
+            return (.continueLoading, nil)
+        }
+        // modify the request, copying the unmodified data from the original request
+        guard let url = validateUrl(newTask)
+        else {
+            os_log("Invalid url in modified task returned from onTaskStartCallback", log: log, type: .info)
+            return (.continueLoading, nil)
+        }
+        var newRequest = URLRequest(url: url)
+        // all original request headers are copied, then the newTask headers are set:
+        // you can change or add a header, but not remove one
+        if request.allHTTPHeaderFields != nil {
+            for (key, value) in request.allHTTPHeaderFields! {
+                newRequest.setValue(value, forHTTPHeaderField: key)
+            }}
+        for (key, value) in newTask.headers {
+            newRequest.setValue(value, forHTTPHeaderField: key)
+        }
+        newRequest.httpMethod = request.httpMethod
+        newRequest.httpBody = request.httpBody
+        newRequest.allowsCellularAccess = request.allowsCellularAccess
+        return (URLSession.DelayedRequestDisposition.useNewRequest, newRequest)
+    }
+    
     /// Handle task completion
     ///
     /// DownloadTasks handle task completion in the :didFinishDownloadingTo function, so for download tasks
