@@ -6,6 +6,8 @@ Future<Task?> onTaskStartFunction(Task original) async {
   return original;
 }
 
+Future<void> onTaskFinishedCallback(TaskStatusUpdate statusUpdate) async {}
+
 void main() {
   test('onTaskStartCallback', () async {
     final options = TaskOptions(onTaskStart: onTaskStartFunction);
@@ -14,5 +16,14 @@ void main() {
     final task = DownloadTask(url: 'https://google.com');
     final result = await options.onTaskStartCallBack?.call(task);
     expect(result, equals(task));
+  });
+
+  test('onTaskFinishedCallback', () async {
+    final options = TaskOptions(onTaskFinished: onTaskFinishedCallback);
+    expect(options.onTaskFinishedCallBack, isNotNull);
+    expect(options.onTaskFinishedCallBack, equals(onTaskFinishedCallback));
+    final task = DownloadTask(url: 'https://google.com');
+    final statusUpdate = TaskStatusUpdate(task, TaskStatus.complete);
+    final result = await options.onTaskFinishedCallBack?.call(statusUpdate);
   });
 }

@@ -237,16 +237,26 @@ abstract base class NativeDownloader extends BaseDownloader {
     print('CallbackDispatcher init');
     _callbackChannel.setMethodCallHandler((MethodCall call) async {
       print('Callback received: ${call.method} with ${call.arguments}');
-      if (call.method == 'onTaskStartCallback') {
-        final taskJsonString = call.arguments as String;
-        final task = Task.createFromJson(jsonDecode(taskJsonString));
-        final callBack = task.options?.onTaskStartCallBack;
-        final newTask = await callBack?.call(task);
-        print('NewTask = $newTask');
-        if (newTask == null) {
+      switch (call.method) {
+        case 'onTaskStartCallback':
+          final taskJsonString = call.arguments as String;
+          final task = Task.createFromJson(jsonDecode(taskJsonString));
+          final callBack = task.options?.onTaskStartCallBack;
+          final newTask = await callBack?.call(task);
+          print('NewTask = $newTask');
+          if (newTask == null) {
+            return null;
+          }
+          return jsonEncode(newTask.toJson());
+
+        case 'onTaskFinishedCallback':
+          final taskUpdateJsonString = call.arguments as String;
+          final taskStatusUpdate =
+              TaskStatusUpdate.fromJsonString(taskUpdateJsonString);
+          final callBack =
+              taskStatusUpdate.task.options?.onTaskFinishedCallBack;
+          await callBack?.call(taskStatusUpdate);
           return null;
-        }
-        return jsonEncode(newTask.toJson());
       }
     });
   }

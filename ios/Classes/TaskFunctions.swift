@@ -360,24 +360,24 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
         default:
             break
     }
-    
+    // determine the TaskStatusUpdate
+    let finalResponseStatusCode = status == .complete || status == .notFound
+        ? responseStatusCode
+        : nil
+    let finalTaskException = taskException == nil
+        ? TaskException(type: .general, httpResponseCode: -1, description: "")
+        : taskException
+    let statusUpdate = isFinalState(status: status)
+        ? TaskStatusUpdate(task: task,
+                           taskStatus: status,
+                           exception: status == .failed ? finalTaskException : nil,
+                           responseBody: responseBody,
+                           responseStatusCode: (status == .complete || status == .notFound) ? finalResponseStatusCode : nil,
+                           responseHeaders: lowerCasedStringStringMap(responseHeaders),
+                           mimeType: mimeType,
+                           charSet: charSet)
+        : TaskStatusUpdate(task: task, taskStatus: status)
     if providesStatusUpdates(downloadTask: task) || retryNeeded {
-        let finalResponseStatusCode = status == .complete || status == .notFound
-            ? responseStatusCode
-            : nil
-        let finalTaskException = taskException == nil
-            ? TaskException(type: .general, httpResponseCode: -1, description: "")
-            : taskException
-        let statusUpdate = isFinalState(status: status) 
-            ? TaskStatusUpdate(task: task,
-                               taskStatus: status,
-                               exception: status == .failed ? finalTaskException : nil,
-                               responseBody: responseBody,
-                               responseStatusCode: (status == .complete || status == .notFound) ? finalResponseStatusCode : nil,
-                               responseHeaders: lowerCasedStringStringMap(responseHeaders),
-                               mimeType: mimeType,
-                               charSet: charSet)
-            : TaskStatusUpdate(task: task, taskStatus: status)
         let arg = statusUpdate.argList()
         if !postOnBackgroundChannel(method: "statusUpdate", task: task, arg: arg) {
             // store update locally as a merged task/status JSON string, without error info
@@ -400,6 +400,14 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
             BDPlugin.notificationConfigJsonStrings.removeValue(forKey: task.taskId)
             BDPlugin.taskIdsThatCanResume.remove(task.taskId)
             BDPlugin.taskIdsProgrammaticallyCancelled.remove(task.taskId)
+        }
+        // invoke onTaskFinished callback if needed
+        if task.options?.hasFinishedCallback() == true {
+            _Concurrency.Task {
+                if !(await invokeOnTaskFinishedCallback(taskStatusUpdate: statusUpdate)) {
+                    os_log("Could not invoke onTaskFinishedCallback", log: log, type: .error)
+                }
+            }
         }
     }
 }
@@ -516,6 +524,16 @@ func storeLocally(prefsKey: String, taskId: String,
 func jsonStringFor(task: Task) -> String? {
     let jsonEncoder = JSONEncoder()
     guard let jsonResultData = try? jsonEncoder.encode(task)
+    else {
+        return nil
+    }
+    return String(data: jsonResultData, encoding: .utf8)
+}
+
+/// Returns a JSON string for this TaskStatusUpdate, or nil
+func jsonStringFor(taskStatusUpdate: TaskStatusUpdate) -> String? {
+    let jsonEncoder = JSONEncoder()
+    guard let jsonResultData = try? jsonEncoder.encode(taskStatusUpdate)
     else {
         return nil
     }

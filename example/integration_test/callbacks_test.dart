@@ -27,6 +27,12 @@ Future<Task?> onTaskStartCallbackHeaderChange(Task original) async {
   return original.copyWith(headers: {'Auth': 'newBearer'});
 }
 
+Future<void> onTaskFinishedCallback(TaskStatusUpdate statusUpdate) async {
+  expect(statusUpdate.status, equals(TaskStatus.complete));
+  expect(statusUpdate.responseStatusCode, equals(200));
+  callbackCounter++;
+}
+
 void main() {
   setUp(() async {
     callbackCounter = 0;
@@ -78,6 +84,24 @@ void main() {
           equals(TaskStatus.complete));
       var result = jsonDecode(await File(path).readAsString());
       expect(result['headers']['Auth'], equals('newBearer'));
+      expect(callbackCounter, equals(1));
+      await File(path).delete();
+    });
+  });
+
+  group('onFinishedCallback', () {
+    test('onFinishedCallback', () async {
+      final task = DownloadTask(
+          url: getTestUrl,
+          urlQueryParameters: {'json': 'true', 'param1': 'original'},
+          filename: defaultFilename,
+          options: TaskOptions(onTaskFinished: onTaskFinishedCallback));
+      final path =
+          join((await getApplicationDocumentsDirectory()).path, task.filename);
+      expect((await FileDownloader().download(task)).status,
+          equals(TaskStatus.complete));
+      var result = jsonDecode(await File(path).readAsString());
+      expect(result['args']['param1'], equals('original'));
       expect(callbackCounter, equals(1));
       await File(path).delete();
     });

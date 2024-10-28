@@ -21,11 +21,11 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
     public func urlSession(_ session: URLSession, task: URLSessionTask, willBeginDelayedRequest request: URLRequest) async -> (URLSession.DelayedRequestDisposition, URLRequest?) {
         os_log("willbegin delayed request", log: log, type: .error)
         guard let bgdTask = getTaskFrom(urlSessionTask: task),
-              bgdTask.options?.hasCallback() == true
+              bgdTask.options?.hasStartOrAuthCallback() == true
         else {
             return (.continueLoading, nil)
         }
-        os_log("delayed request has options", log: log, type: .error)
+        os_log("delayed request has start or auth callback", log: log, type: .error)
         guard let newTask = await invokeOnTaskStartCallback(task: bgdTask)
         else {
             return (.continueLoading, nil)
