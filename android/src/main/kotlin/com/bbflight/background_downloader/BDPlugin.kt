@@ -21,6 +21,7 @@ import com.bbflight.background_downloader.TaskWorker.Companion.taskToJsonString
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
+import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
@@ -64,6 +65,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         const val keyProgressUpdateMap = "com.bbflight.background_downloader.progressUpdateMap.v2"
         const val keyRequireWiFi =
             "com.bbflight.background_downloader.requireWifi"
+        const val keyCallbackDispatcherRawHandle = "com.bbflight.background_downloader.callbackDispatcherRawHandle"
         const val keyConfigForegroundFileSize =
             "com.bbflight.background_downloader.config.foregroundFileSize"
         const val keyConfigProxyAddress = "com.bbflight.background_downloader.config.proxyAddress"
@@ -319,6 +321,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
     private var channel: MethodChannel? = null
     private var backgroundChannel: MethodChannel? = null
+    private var callbackChannel: MethodChannel? = null
+    private var binaryMessenger: BinaryMessenger? = null
     private lateinit var applicationContext: Context
     private var scope: CoroutineScope? = null
     var activity: Activity? = null
@@ -329,6 +333,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         applicationContext = flutterPluginBinding.applicationContext
+        binaryMessenger = flutterPluginBinding.binaryMessenger
         backgroundChannel =
             MethodChannel(
                 flutterPluginBinding.binaryMessenger,
@@ -369,6 +374,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             firstBackgroundChannel = null
         }
         backgroundChannel = null
+        binaryMessenger = null
     }
 
     /** Processes the methodCall coming from Dart */
@@ -400,6 +406,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 "popStatusUpdates" -> methodPopStatusUpdates(result)
                 "popProgressUpdates" -> methodPopProgressUpdates(result)
                 "getTaskTimeout" -> methodGetTaskTimeout(result)
+                "registerCallbackDispatcher" -> methodRegisterCallbackDispatcher(call, result)
                 // configuration
                 "configForegroundFileSize" -> methodConfigForegroundFileSize(call, result)
                 "configProxyAddress" -> methodConfigProxyAddress(call, result)
@@ -907,6 +914,25 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private fun methodGetTaskTimeout(result: Result) {
         result.success(TaskWorker.taskTimeoutMillis)
+    }
+
+    /**
+     * Store rawHandle for callbackDispatcher in shared preferences
+     *
+     * Dispatcher is called just before passing callback via methodChannel, to ensure
+     * that Dart is listening to the methodChannel before calling the callback.
+     */
+    private fun methodRegisterCallbackDispatcher(call: MethodCall, result: Result) {
+        PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
+            val handle = call.arguments as Long?
+            if (handle != null) {
+                putLong(keyCallbackDispatcherRawHandle, handle)
+            } else {
+                remove(keyConfigProxyAddress)
+            }
+            apply()
+        }
+        result.success(null)
     }
 
 

@@ -64,6 +64,17 @@ private class UpdatesSerializer : EnumAsIntSerializer<Updates>(
 )
 
 /**
+ * Holds various options related to the task that are not included in the
+ * task's properties, as they are rare
+ */
+@Serializable
+class TaskOptions(val onTaskStartRawHandle: Long?, val onTaskFinishedRawHandle: Long?) {
+    fun hasStartOrAuthCallback() : Boolean {
+        return onTaskStartRawHandle != null
+    }
+}
+
+/**
  * The Dart side Task
  *
  * A blend of UploadTask, DownloadTask and ParallelDownloadTask with [taskType] indicating what kind
@@ -95,6 +106,7 @@ class Task(
     val metaData: String = "",
     val displayName: String = "",
     val creationTime: Long = System.currentTimeMillis(), // untouched, so kept as integer on Android side
+    val options: TaskOptions? = null,
     val taskType: String
 ) {
 
@@ -125,6 +137,7 @@ class Task(
         metaData: String? = null,
         displayName: String? = null,
         creationTime: Long? = null,
+        options: TaskOptions? = null,
         taskType: String? = null
     ): Task {
         return Task(
@@ -151,6 +164,7 @@ class Task(
             metaData = metaData ?: this.metaData,
             displayName = displayName ?: this.displayName,
             creationTime = creationTime ?: this.creationTime,
+            options = options ?: this.options,
             taskType = taskType ?: this.taskType
         )
     }
@@ -376,8 +390,6 @@ class Task(
     override fun hashCode(): Int {
         return taskId.hashCode()
     }
-
-
 }
 
 /** Defines a set of possible states which a [Task] can be in.
