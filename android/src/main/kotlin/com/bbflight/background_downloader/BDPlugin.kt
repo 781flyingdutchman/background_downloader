@@ -18,6 +18,7 @@ import androidx.work.WorkManager
 import com.bbflight.background_downloader.BDPlugin.Companion.backgroundChannel
 import com.bbflight.background_downloader.TaskWorker.Companion.processStatusUpdate
 import com.bbflight.background_downloader.TaskWorker.Companion.taskToJsonString
+import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -83,6 +84,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         var notificationButtonText = mutableMapOf<String, String>() // for localization
         var firstBackgroundChannel: MethodChannel? = null
         var bgChannelByTaskId = mutableMapOf<String, MethodChannel>()
+        var flutterEngineByTaskId = mutableMapOf<String, FlutterEngine>()
         var requireWifi = RequireWiFi.asSetByTask // global setting
         val localResumeData =
             mutableMapOf<String, ResumeData>() // by taskId, for pause notifications
@@ -290,7 +292,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         suspend fun cancelInactiveTask(context: Context, task: Task) {
             Log.d(TAG, "Canceling inactive task")
             val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-            processStatusUpdate(task, TaskStatus.canceled, prefs)
+            processStatusUpdate(task, TaskStatus.canceled, prefs, context = context)
         }
 
         /**
@@ -321,10 +323,10 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
     private var channel: MethodChannel? = null
     private var backgroundChannel: MethodChannel? = null
-    private var callbackChannel: MethodChannel? = null
-    private var binaryMessenger: BinaryMessenger? = null
     private lateinit var applicationContext: Context
     private var scope: CoroutineScope? = null
+    var callbackChannel: MethodChannel? = null
+    var binaryMessenger: BinaryMessenger? = null
     var activity: Activity? = null
 
 
@@ -338,6 +340,11 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             MethodChannel(
                 flutterPluginBinding.binaryMessenger,
                 "com.bbflight.background_downloader.background"
+            )
+        callbackChannel =
+            MethodChannel(
+                flutterPluginBinding.binaryMessenger,
+                "com.bbflight.background_downloader.callbacks"
             )
         if (firstBackgroundChannel == null) {
             firstBackgroundChannel = backgroundChannel
@@ -363,6 +370,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     /**
      * Free up resources.
      *
+     * BinaryMessenger and Plugin references are set to null and removed.
      * BackgroundChannel is set to null, and references to it removed if it no longer in use anywhere
      * */
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -926,6 +934,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
             val handle = call.arguments as Long?
             if (handle != null) {
+                Log.d(TAG, "Registering callbackDispatcher handle $handle")
                 putLong(keyCallbackDispatcherRawHandle, handle)
             } else {
                 remove(keyConfigProxyAddress)
@@ -1118,7 +1127,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                                     backgroundChannel?.invokeMethod(
                                         "notificationTap",
                                         listOf(taskJsonMapString, notificationTypeOrdinal),
-                                        FlutterResultHandler(resultCompleter)
+                                        FlutterBooleanResultHandler(resultCompleter)
                                     )
                                 }
                                 success = resultCompleter.await()

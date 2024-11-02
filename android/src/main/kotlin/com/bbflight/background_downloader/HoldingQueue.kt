@@ -137,7 +137,7 @@ class HoldingQueue(private val workManager: WorkManager) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         toRemove.forEach {
             queue.remove(it)
-            TaskWorker.processStatusUpdate(it.task, TaskStatus.canceled, prefs)
+            TaskWorker.processStatusUpdate(it.task, TaskStatus.canceled, prefs, context = context)
             Log.i(BDPlugin.TAG, "Canceled task with id ${it.task.taskId}")
         }
         removedTaskIds = toRemove.map { it.task.taskId }.toMutableList()

@@ -27,7 +27,7 @@ object QueueService {
      * Starts listening to the queues and processes each item
      *
      * taskIdDeletionQueue:
-     *    Each item is a taskId and it will be removed from the
+     *    Each item is a taskId and it will be removed from the BDPlugin.pluginByTaskId,
      *    BDPlugin.bgChannelByTaskId, BDPlugin.localResumeData
      *    and BDPlugin.notificationConfigs maps
      *
@@ -43,6 +43,7 @@ object QueueService {
                 if (elapsed < minTaskIdDeletionDelay) {
                     delay(minTaskIdDeletionDelay - elapsed)
                 }
+                BDPlugin.flutterEngineByTaskId.remove(taskId)
                 BDPlugin.bgChannelByTaskId.remove(taskId)
                 BDPlugin.localResumeData.remove(taskId)
                 BDPlugin.notificationConfigJsonStrings.remove(taskId)
@@ -64,7 +65,7 @@ object QueueService {
                         val bgChannel = BDPlugin.backgroundChannel(taskId = bgPost.task.taskId)
                         if (bgChannel != null) {
                             bgChannel.invokeMethod(
-                                bgPost.method, argList, FlutterResultHandler(success)
+                                bgPost.method, argList, FlutterBooleanResultHandler(success)
                             )
                         } else {
                             Log.i(

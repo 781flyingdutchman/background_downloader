@@ -208,10 +208,10 @@ fun <K, V> Map<K, V>?.filterNotNull(): Map<K, V> {
 }
 
 /**
- * Simple Flutter result handler, completes the [completer] with the result
- * of the MethodChannel call
+ * Simple Flutter result handler, completes the [completer] with true if the result of the
+ * method call is true, and false otherwise
  */
-class FlutterResultHandler(private val completer: CompletableDeferred<Boolean>) :
+class FlutterBooleanResultHandler(private val completer: CompletableDeferred<Boolean>) :
     MethodChannel.Result {
 
     override fun success(result: Any?) {
@@ -226,5 +226,28 @@ class FlutterResultHandler(private val completer: CompletableDeferred<Boolean>) 
     override fun notImplemented() {
         Log.i(BDPlugin.TAG, "Flutter method not implemented")
         completer.complete(false)
+    }
+}
+
+/**
+ * Flutter result handler, completes the [completer] with the result of the method call
+ */
+class FlutterResultHandler<T>(private val completer: CompletableDeferred<T?>) :
+    MethodChannel.Result {
+
+    override fun success(result: Any?) {
+        @Suppress("UNCHECKED_CAST")
+        val castedResult = result as? T?
+        completer.complete(castedResult)
+    }
+
+    override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
+        Log.i(BDPlugin.TAG, "Flutter result error $errorCode: $errorMessage")
+        completer.complete(null)
+    }
+
+    override fun notImplemented() {
+        Log.i(BDPlugin.TAG, "Flutter method not implemented")
+        completer.complete(null)
     }
 }

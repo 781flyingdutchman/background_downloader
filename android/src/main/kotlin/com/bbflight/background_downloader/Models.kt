@@ -68,9 +68,14 @@ private class UpdatesSerializer : EnumAsIntSerializer<Updates>(
  * task's properties, as they are rare
  */
 @Serializable
-class TaskOptions(val onTaskStartRawHandle: Long?, val onTaskFinishedRawHandle: Long?) {
-    fun hasStartOrAuthCallback() : Boolean {
+class TaskOptions(private val onTaskStartRawHandle: Long?, val onTaskFinishedRawHandle: Long?) {
+
+    fun hasStartCallback() : Boolean {
         return onTaskStartRawHandle != null
+    }
+
+    fun hasFinishCallback() : Boolean {
+        return onTaskFinishedRawHandle != null
     }
 }
 
