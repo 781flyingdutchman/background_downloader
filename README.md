@@ -447,6 +447,29 @@ By default, the downloader uses a modified version of the [localstore](https://p
 
 As an alternative to LocalStore, use `SqlitePersistentStorage`, included in [background_downloader_sql](https://pub.dev/packages/background_downloader_sql), which supports SQLite storage and migration from Flutter Downloader.
 
+## OnTaskStart and OnTaskFinished "native" callbacks
+
+For more complex situations you can use OnTaskStart and OnTaskFinished callbacks. This is only required if you need to - for example - refresh an expired auth token just before an enqueued task starts, or conditionally call your server to confirm an upload has finished successfully, which requires the callback to be called even when the main application has been suspended by the OS.
+To add a callback to a `Task`, set its `options` property, e.g. to add an onTaskStart callback:
+```dart
+final task = DownloadTask(url: 'https://google.com',
+   options: TaskOptions(onTaskStart: myStartCallback));
+```
+where `myStartCallback` must be a top level or static function.
+
+For most situations, using the event listeners or registered "regular" callbacks is recommended, as they run in the normal application context on the main isolate. Native callbacks are called directly from native code (iOS, Android or Desktop) and therefore behave differently:
+* Callbacks are called even when an application is suspended
+* On iOS, the callbacks runs in the main isolate
+* On Android, callbacks run in a shared background isolate, though there is no guarantee that every callback shares the same isolate as another callback
+* On Desktop, callbacks run in the same isolate as the task, and every task has its own isolate
+
+You should assume that the callback runs in an isolate, and has no access to application state or to plugins. Native callbacks are really only meant to perform simple "local" functions, operating only on the parameter passed into the callback function.
+
+### OnTaskStart
+Callback with signature`Future<Task?> Function(Task original)`, called just before the task starts executing. Your callback receives the `original` task about to start, and can modify this task if necessary (for example to refresh an auth token). If you make modifications, you return the modified task - otherwise return null to continue execution with the original task. You can only change the task's `url` (including query parameters) and `headers` properties - making changes to any other property may lead to undefined behavior.
+
+### OnTaskFinished
+Callback with signature `Future<void> Function(TaskStatusUpdate taskStatusUpdate)`, called when the task has reached a final state (regardless of outcome). Your callback receives the final `TaskStatusUpdate` and can act on that.
 
 ## Notifications
 
