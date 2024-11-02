@@ -111,11 +111,8 @@ class Callbacks {
             task: Task? = null,
             statusUpdate: TaskStatusUpdate? = null,
         ): Task? {
-            Log.d(TAG, "invokeCallback: $methodName")
             val methodChannel = getMethodChannel(context) ?: return null
-            Log.d(TAG, "invokeCallback: $methodName waiting for lock")
             methodChannelMutex.withLock {
-                Log.d(TAG, "invokeCallback: $methodName with methodChannel")
                 val resultingTaskAsJsonStringCompleter = CompletableDeferred<String?>()
                 Handler(Looper.getMainLooper()).post {
                     // Run on UI thread
@@ -127,9 +124,7 @@ class Callbacks {
                         arg, // either task or update
                         FlutterResultHandler(resultingTaskAsJsonStringCompleter)
                     )
-                    Log.d(TAG, "invokeCallback: $methodName invokeMethod done")
                 }
-                Log.d(TAG, "invokeCallback: $methodName completed, awaiting result")
                 val taskAsJsonString = resultingTaskAsJsonStringCompleter.await()
                 return if (taskAsJsonString == null) null else Json.decodeFromString<Task>(
                     taskAsJsonString

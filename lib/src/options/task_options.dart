@@ -1,7 +1,6 @@
 import 'dart:ui';
 
-import 'package:background_downloader/background_downloader.dart';
-
+import '../models.dart';
 import '../task.dart';
 
 typedef OnTaskStartCallback = Future<Task?> Function(Task original);
@@ -30,14 +29,14 @@ class TaskOptions {
       : _onTaskStartRawHandle = json['onTaskStartRawHandle'] as int?,
         _onTaskFinishedRawHandle = json['onTaskFinishedRawHandle'] as int?;
 
-  /// Returns the [OnTaskStartCallback] registered with this [TaskOption]
+  /// Returns the [OnTaskStartCallback] registered with this [TaskOption], or null
   OnTaskStartCallback? get onTaskStartCallBack => _onTaskStartRawHandle != null
       ? PluginUtilities.getCallbackFromHandle(
               CallbackHandle.fromRawHandle(_onTaskStartRawHandle))
           as OnTaskStartCallback
       : null;
 
-  /// Returns the [OnTaskFinishedCallback] registered with this [TaskOption]
+  /// Returns the [OnTaskFinishedCallback] registered with this [TaskOption], or null
   OnTaskFinishedCallback? get onTaskFinishedCallBack =>
       _onTaskFinishedRawHandle != null
           ? PluginUtilities.getCallbackFromHandle(

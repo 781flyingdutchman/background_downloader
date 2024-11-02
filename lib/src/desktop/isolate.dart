@@ -57,7 +57,7 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
   final messagesToIsolate = StreamQueue<dynamic>(receivePort);
   // get the arguments list and parse each argument
   final (
-    Task task,
+    Task originalTask,
     String filePath,
     ResumeData? resumeData,
     bool isResume,
@@ -73,6 +73,7 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
       sendPort.send(('log', (rec.message)));
     }
   });
+  final task = await getModifiedTask(originalTask);
   // start listener/processor for incoming messages
   unawaited(listenToIncomingMessages(task, messagesToIsolate, sendPort));
   processStatusUpdateInIsolate(task, TaskStatus.running, sendPort);
@@ -233,24 +234,33 @@ void processStatusUpdateInIsolate(
     default:
       {}
   }
-// Post update if task expects one, or if failed and retry is needed
+  final statusUpdate = TaskStatusUpdate(
+    task,
+    status,
+    status == TaskStatus.failed ? taskException ?? TaskException('None') : null,
+    status.isFinalState ? responseBody : null,
+    status.isFinalState ? responseHeaders : null,
+    status == TaskStatus.complete || status == TaskStatus.notFound
+        ? responseStatusCode
+        : null,
+    status.isFinalState ? mimeType : null,
+    status.isFinalState ? charSet : null,
+  );
+  // Post update if task expects one, or if failed and retry is needed
   if (task.providesStatusUpdates || retryNeeded) {
     sendPort.send((
       'statusUpdate',
-      task,
-      status,
-      status == TaskStatus.failed
-          ? taskException ?? TaskException('None')
-          : null,
-      status.isFinalState ? responseBody : null,
-      status.isFinalState ? responseHeaders : null,
-      status == TaskStatus.complete || status == TaskStatus.notFound
-          ? responseStatusCode
-          : null,
-      status.isFinalState ? mimeType : null,
-      status.isFinalState ? charSet : null,
+      statusUpdate.task,
+      statusUpdate.status,
+      statusUpdate.exception,
+      statusUpdate.responseBody,
+      statusUpdate.responseHeaders,
+      statusUpdate.responseStatusCode,
+      statusUpdate.mimeType,
+      statusUpdate.charSet,
     ));
   }
+  task.options?.onTaskFinishedCallBack?.call(statusUpdate);
 }
 
 /// Processes a progress update for the [task]
@@ -303,6 +313,16 @@ void processProgressUpdateInIsolate(
       ));
     }
   }
+}
+
+/// Returns a [task] that may be modified through callbacks
+///
+/// Callbacks would be attached to the task via its [Task.options] property, and if
+/// present will be invoked by starting a taskDispatcher on a background isolate, then
+/// sending the callback request via the MethodChannel
+Future<Task> getModifiedTask(Task task) async {
+  final modifiedTask = await task.options?.onTaskStartCallBack?.call(task);
+  return modifiedTask ?? task;
 }
 
 // The following functions are related to multipart uploads and are

@@ -640,18 +640,14 @@ const _callbackChannel =
 /// the [_callbackChannel] to post the actual callback
 @pragma('vm:entry-point')
 void initCallbackDispatcher() {
-  print('CallbackDispatcher init');
   WidgetsFlutterBinding.ensureInitialized();
   _callbackChannel.setMethodCallHandler((MethodCall call) async {
-    print('Callback received: ${call.method} with ${call.arguments}');
     switch (call.method) {
       case 'onTaskStartCallback':
         final taskJsonString = call.arguments as String;
         final task = Task.createFromJson(jsonDecode(taskJsonString));
         final callBack = task.options?.onTaskStartCallBack;
-        print('callback=$callBack');
         final newTask = await callBack?.call(task);
-        print('NewTask = $newTask');
         if (newTask == null) {
           return null;
         }

@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
@@ -32,9 +34,13 @@ ReceivePort? receivePort;
 /// and because we cannot set a value in the background isolate we maintain
 /// a variable [mainIsolateCallbackCounterAtStartOfTest] that holds the value
 /// of [mainIsolateCallbackCounter] when the test starts. To confirm the
-/// callback was called once, we therefore test:
+/// callback was called once, we therefore test (on iOS and Android):
 ///   expect(mainIsolateCallbackCounter,
 ///     equals(mainIsolateCallbackCounterAtStartOfTest + 1))
+///
+/// On desktop, each download runs in its own isolate, so the callback is
+/// called from a 'fresh' isolate, and therefore we set the
+/// mainIsolateCallbackCounterAtStartOfTest to 0 in setUp on desktop
 void _sendCounterToMainIsolate() {
   final sendPort = IsolateNameServer.lookupPortByName('callbackPort');
   sendPort?.send(callbackCounter);
@@ -87,7 +93,9 @@ void main() {
         mainIsolateCallbackCounter = value as int;
       });
     }
-    mainIsolateCallbackCounterAtStartOfTest = mainIsolateCallbackCounter;
+    mainIsolateCallbackCounterAtStartOfTest =
+        (Platform.isAndroid || Platform.isIOS) ? mainIsolateCallbackCounter : 0;
+    mainIsolateCallbackCounter = mainIsolateCallbackCounterAtStartOfTest;
   });
 
   group('onStartCallback', () {
@@ -122,7 +130,6 @@ void main() {
       expect(result['args']['param1'], equals('changed'));
       expect(mainIsolateCallbackCounter,
           equals(mainIsolateCallbackCounterAtStartOfTest + 1));
-
       await File(path).delete();
     });
 

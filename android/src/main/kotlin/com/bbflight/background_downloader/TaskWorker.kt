@@ -801,6 +801,10 @@ fun getTaskMap(prefs: SharedPreferences): MutableMap<String, Task> {
 
 /**
  * Returns a [task] that may be modified through callbacks
+ *
+ * Callbacks would be attached to the task via its [Task.options] property, and if
+ * present will be invoked by starting a taskDispatcher on a background isolate, then
+ * sending the callback request via the MethodChannel
  */
 suspend fun getModifiedTask(context: Context, task: Task): Task {
     if (task.options?.hasStartCallback() != true) {

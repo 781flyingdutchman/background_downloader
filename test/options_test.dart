@@ -1,5 +1,5 @@
+
 import 'package:background_downloader/background_downloader.dart';
-import 'package:background_downloader/src/options/task_options.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Future<Task?> onTaskStartFunction(Task original) async {
@@ -24,6 +24,6 @@ void main() {
     expect(options.onTaskFinishedCallBack, equals(onTaskFinishedCallback));
     final task = DownloadTask(url: 'https://google.com');
     final statusUpdate = TaskStatusUpdate(task, TaskStatus.complete);
-    final result = await options.onTaskFinishedCallBack?.call(statusUpdate);
+    await options.onTaskFinishedCallBack?.call(statusUpdate);
   });
 }
