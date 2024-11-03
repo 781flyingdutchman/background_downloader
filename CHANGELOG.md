@@ -2,7 +2,7 @@
 
 * Adds option to specify a file location for upload using a Mediastore URI on Android, using `UploadTask.fromUri`. A Mediastore URI can also be requested from methods `moveToSharedStorage` and `pathInSharedStorage` by adding `asAndroidUri = true` to the call.
 * Fixes bug with ParallelDownload when an error occurs
-* Updates dependency on package mime to 2.0. Use `dependency_overrides` in pubspec.yaml to resolve (background_downloader works with 1.0 and 2.0)
+* Updates dependency on package mime to 2.0, therefore also Dart 3.2 (Flutter 3.16.0) or greater. Use `dependency_overrides` in pubspec.yaml to resolve (background_downloader works with 1.0 and 2.0)
 
 ## 8.6.0
 
