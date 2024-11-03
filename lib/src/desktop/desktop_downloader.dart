@@ -392,8 +392,12 @@ final class DesktopDownloader extends BaseDownloader {
       Future.value({});
 
   @override
-  Future<String?> moveToSharedStorage(String filePath,
-      SharedStorage destination, String directory, String? mimeType) async {
+  Future<String?> moveToSharedStorage(
+      String filePath,
+      SharedStorage destination,
+      String directory,
+      String? mimeType,
+      bool asAndroidUri) async {
     final destDirectoryPath =
         await getDestinationDirectoryPath(destination, directory);
     if (destDirectoryPath == null) {
@@ -414,8 +418,8 @@ final class DesktopDownloader extends BaseDownloader {
   }
 
   @override
-  Future<String?> pathInSharedStorage(
-      String filePath, SharedStorage destination, String directory) async {
+  Future<String?> pathInSharedStorage(String filePath,
+      SharedStorage destination, String directory, bool asAndroidUri) async {
     final destDirectoryPath =
         await getDestinationDirectoryPath(destination, directory);
     if (destDirectoryPath == null) {

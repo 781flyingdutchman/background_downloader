@@ -6,14 +6,11 @@ import android.util.Log
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayInputStream
 import java.io.DataOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.InputStream
-import java.io.RandomAccessFile
 import java.net.HttpURLConnection
-import java.nio.channels.FileChannel
 
 class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParameters) :
     TaskWorker(applicationContext, workerParams) {
@@ -101,9 +98,39 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
     private suspend fun processBinaryUpload(
         connection: HttpURLConnection, filePath: String
     ): TaskStatus {
-        val file = File(filePath)
+        val filePathToUse: String // possibly extracted from URI instead of filePath parameter
+        val usesAndroidUri =
+            task.baseDirectory == BaseDirectory.root && task.directory.startsWith("content://")
+        if (usesAndroidUri) {
+            try {
+                val uri = Uri.parse(task.directory)
+                val path = pathFromUri(applicationContext, uri)
+                if (path == null) {
+                    val message = "URI not found: $uri"
+                    Log.w(TAG, message)
+                    taskException = TaskException(
+                        ExceptionType.fileSystem,
+                        description = message
+                    )
+                    return TaskStatus.failed
+                }
+                filePathToUse = path
+                Log.i(TAG, "Using filepath $filePathToUse from URI $uri")
+            } catch (e: IllegalArgumentException) {
+                val message = "Invalid URI: ${task.filename}"
+                Log.w(TAG, message)
+                taskException = TaskException(
+                    ExceptionType.fileSystem,
+                    description = message
+                )
+                return TaskStatus.failed
+            }
+        } else {
+            filePathToUse = filePath // no change
+        }
+        val file = File(filePathToUse)
         if (!file.exists() || !file.isFile) {
-            val message = "File to upload does not exist: $filePath"
+            val message = "File to upload does not exist: $filePathToUse"
             Log.w(TAG, message)
             taskException = TaskException(
                 ExceptionType.fileSystem,
@@ -113,7 +140,7 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
         }
         val fileSize = file.length()
         if (fileSize <= 0) {
-            val message = "File $filePath has 0 length"
+            val message = "File $filePathToUse has 0 length"
             Log.w(TAG, message)
             taskException = TaskException(
                 ExceptionType.fileSystem,

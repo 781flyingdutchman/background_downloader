@@ -1712,6 +1712,42 @@ void main() {
       print('Finished enqueue binary file');
     });
 
+    testWidgets('enqueue binary file using Android URI', (widgetTester) async {
+      if (Platform.isAndroid) {
+        FileDownloader().registerCallbacks(
+            taskStatusCallback: statusCallback,
+            taskProgressCallback: progressCallback);
+        // move file to shared storage and obtain the URI
+        final dummy =
+            DownloadTask(url: uploadTestUrl, filename: uploadFilename);
+        final uriString = await FileDownloader().moveFileToSharedStorage(
+            await dummy.filePath(), SharedStorage.downloads,
+            asAndroidUri: true);
+        print('URI: $uriString');
+        final task = UploadTask.fromAndroidUri(
+            url: uploadBinaryTestUrl, uri: Uri.parse(uriString!));
+        expect(await FileDownloader().enqueue(task), isTrue);
+        await statusCallbackCompleter.future;
+        expect(statusCallbackCounter, equals(3));
+        expect(lastStatus, equals(TaskStatus.complete));
+        print('Finished enqueue binary file using Android URI');
+      }
+    });
+
+    testWidgets('enqueue binary file using incorrect Android URI',
+        (widgetTester) async {
+      if (Platform.isAndroid) {
+        final task = UploadTask.fromAndroidUri(
+            url: uploadBinaryTestUrl,
+            uri: Uri.parse('content://some/invalid/path'));
+        final result = await FileDownloader().upload(task);
+        print(result.exception?.description);
+        expect(result.status, equals(TaskStatus.failed));
+        expect(
+            result.exception?.exceptionType, equals('TaskFileSystemException'));
+      }
+    });
+
     testWidgets('upload binary file partially bytes=2-4', (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
@@ -1947,7 +1983,7 @@ void main() {
           await FileDownloader().upload(uploadTask, onElapsedTime: (elapsed) {
         print('Elapsed time: $elapsed');
         ticks++;
-      }, elapsedTimeInterval: const Duration(milliseconds: 200));
+      }, elapsedTimeInterval: const Duration(milliseconds: 20));
       expect(result.status, equals(TaskStatus.complete));
       expect(ticks, greaterThan(0));
     });
@@ -2801,6 +2837,21 @@ void main() {
       Directory(dirname(path)).deleteSync();
     });
 
+    test('move task to shared storage with Android URI', () async {
+      // note: moved file is not deleted in this test
+      if (Platform.isAndroid) {
+        var filePath = await task.filePath();
+        await FileDownloader().download(task);
+        final path = await FileDownloader().moveToSharedStorage(
+            task, SharedStorage.downloads,
+            asAndroidUri: true);
+        print('Uri is $path');
+        expect(path, isNotNull);
+        expect(path?.startsWith('content://'), isTrue);
+        expect(File(filePath).existsSync(), isFalse);
+      }
+    });
+
     test('[*] try to move text file to images -> error', () async {
       // Note: this test will fail on Android API below 30, as that API
       // does not have a problem storing a text file in images
@@ -2889,6 +2940,25 @@ void main() {
           .pathInSharedStorage(path, SharedStorage.downloads);
       expect(filePath, equals(path));
       File(path).deleteSync();
+    });
+
+    testWidgets('path in shared storage with Android URI',
+        (widgetTester) async {
+      if (Platform.isAndroid) {
+        await FileDownloader().download(task);
+        final path = await FileDownloader()
+            .moveToSharedStorage(task, SharedStorage.downloads);
+        print('Path in downloads is $path');
+        expect(path, isNotNull);
+        expect(File(path!).existsSync(), isTrue);
+        final uri = await FileDownloader().pathInSharedStorage(
+            path, SharedStorage.downloads,
+            asAndroidUri: true);
+        print('Uri is $uri');
+        expect(uri, isNotNull);
+        expect(uri?.startsWith('content://'), isTrue);
+        File(path).deleteSync();
+      }
     });
   });
 

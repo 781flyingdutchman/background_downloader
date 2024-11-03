@@ -2,6 +2,7 @@ package com.bbflight.background_downloader
 
 import android.content.ContentValues
 import android.content.Context
+import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -9,7 +10,8 @@ import android.provider.MediaStore
 import android.util.Log
 import android.webkit.MimeTypeMap
 import androidx.annotation.RequiresApi
-import androidx.loader.content.CursorLoader
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
 import java.io.OutputStream
@@ -23,16 +25,18 @@ val trailingPathSeparatorRegEx = Regex("""/$""")
 
 /**
  * Moves the file from filePath to the shared storage destination and returns the path to
- * that file if successful, or null if not
+ * that file if successful, or null if not. If [asAndroidUri] is true, the URI will be returned
+ * instead of the file path, if possible, otherwise falls back to the file path
  *
  * If successful, the original file will have been deleted
  */
-fun moveToSharedStorage(
+suspend fun moveToSharedStorage(
     context: Context,
     filePath: String,
     destination: SharedStorage,
     directory: String,
-    mimeType: String?
+    mimeType: String?,
+    asAndroidUri: Boolean
 ): String? {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
         return moveToPublicDirectory(filePath, destination, directory)
@@ -89,8 +93,10 @@ fun moveToSharedStorage(
     // If the file was moved successfully, remove the original
     if (success) {
         file.delete()
+        return if (asAndroidUri) uri!!.toString() else pathFromUri(context, uri!!)
+    } else {
+        return null
     }
-    return if (success) pathFromUri(context, uri!!) else null
 }
 
 /**
@@ -158,7 +164,8 @@ fun pathInSharedStorage(
     context: Context,
     filePath: String,
     destination: SharedStorage,
-    directory: String
+    directory: String,
+    asAndroidUri: Boolean
 ): String? {
     val fileName = File(filePath).name
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
@@ -173,14 +180,19 @@ fun pathInSharedStorage(
         getMediaStoreUri(destination),
         arrayOf(
             MediaStore.Images.Media.DATA,
-            MediaStore.MediaColumns.DISPLAY_NAME
+            MediaStore.MediaColumns._ID
         ), // same for all collections AFAIK
         "${MediaStore.MediaColumns.DISPLAY_NAME} = ?",
         arrayOf(fileName),
         null
     )?.use { cursor ->
         if (cursor.moveToFirst()) {
-            return cursor.getString(0)
+            return if (asAndroidUri) {
+                Uri.withAppendedPath(
+                    getMediaStoreUri(destination),
+                    cursor.getLong(1).toString()
+                ).toString()
+            } else cursor.getString(0)
         }
     }
     return null
@@ -257,13 +269,27 @@ fun getMimeType(fileName: String): String {
 /**
  * Returns the file path related to this MediaStore [uri], or null
  */
-private fun pathFromUri(context: Context, uri: Uri): String? {
-    val proj = arrayOf(MediaStore.Images.Media.DATA)
-    val loader = CursorLoader(context, uri, proj, null, null, null)
-    val cursor = loader.loadInBackground() ?: return null
-    val columnIndex: Int = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA)
-    cursor.moveToFirst()
-    val result = cursor.getString(columnIndex)
-    cursor.close()
-    return result
+suspend fun pathFromUri(context: Context, uri: Uri): String? = withContext(Dispatchers.IO) {
+    val projection = arrayOf(MediaStore.Images.Media.DATA)
+    val cursor: Cursor? = context.contentResolver.query(uri, projection, null, null, null)
+    cursor?.use {
+        if (it.moveToFirst()) {
+            val columnIndex = it.getColumnIndexOrThrow(MediaStore.Images.Media.DATA)
+            return@withContext it.getString(columnIndex)
+        }
+    }
+    return@withContext null
 }
+
+
+//suspend fun pathFromUri(context: Context, uri: Uri): String? {
+//    val proj = arrayOf(MediaStore.Images.Media.DATA)
+//    val loader = CursorLoader(context, uri, proj, null, null, null)
+//    val cursor = withContext(Dispatchers.IO) { loader.loadInBackground() }
+//        ?: return null
+//    val columnIndex: Int = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA)
+//    cursor.moveToFirst()
+//    val result = cursor.getString(columnIndex)
+//    cursor.close()
+//    return result
+//}

@@ -166,6 +166,20 @@ void main() {
     expect(t.post, equals('a'));
   });
 
+  test('uploadTask.fromAndroidUri', () async {
+    var t = UploadTask.fromAndroidUri(
+        uri: Uri.parse('content://some/path'), url: workingUrl);
+    expect(t.baseDirectory, equals(BaseDirectory.root));
+    expect(t.directory, equals('content://some/path'));
+    expect(t.filename, equals('path'));
+    expect(await t.filePath(), equals('/content://some/path/path'));
+    // check invalid URI scheme
+    expect(
+        () => UploadTask.fromAndroidUri(
+            uri: Uri.parse('other://some/path'), url: workingUrl),
+        throwsAssertionError);
+  });
+
   test('dataTask creation', () {
     var t = DataTask(url: workingUrl);
     expect(t.headers['Content-Type'], isNull);

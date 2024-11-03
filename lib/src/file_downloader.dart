@@ -795,7 +795,10 @@ interface class FileDownloader {
   /// the [mimeType] is not provided we will attempt to derive it from the
   /// [Task.filePath] extension
   ///
-  /// Returns the path to the stored file, or null if not successful
+  /// Returns the path to the stored file, or null if not successful.
+  /// If [asAndroidUri] is true, on Android returns the URI of the stored file
+  /// instead of the filePath, if possible, otherwise falls back to the file
+  /// path.
   ///
   /// NOTE: on iOS, using [destination] [SharedStorage.images] or
   /// [SharedStorage.video] adds the photo or video file to the Photos
@@ -811,13 +814,12 @@ interface class FileDownloader {
   ///
   /// Platform-dependent, not consistent across all platforms
   Future<String?> moveToSharedStorage(
-    DownloadTask task,
-    SharedStorage destination, {
-    String directory = '',
-    String? mimeType,
-  }) async =>
+          DownloadTask task, SharedStorage destination,
+          {String directory = '',
+          String? mimeType,
+          bool asAndroidUri = false}) async =>
       moveFileToSharedStorage(await task.filePath(), destination,
-          directory: directory, mimeType: mimeType);
+          directory: directory, mimeType: mimeType, asAndroidUri: asAndroidUri);
 
   /// Move the file represented by [filePath] to a shared storage
   /// [destination] and potentially a [directory] within that destination. If
@@ -825,6 +827,10 @@ interface class FileDownloader {
   /// [filePath] extension
   ///
   /// Returns the path to the stored file, or null if not successful
+  /// If [asAndroidUri] is true, on Android returns the URI of the stored file
+  /// instead of the filePath, if possible, otherwise falls back to the file
+  /// path.
+  ///
   /// NOTE: on iOS, using [destination] [SharedStorage.images] or
   /// [SharedStorage.video] adds the photo or video file to the Photos
   /// library. This requires the user to grant permission, and requires the
@@ -839,13 +845,12 @@ interface class FileDownloader {
   ///
   /// Platform-dependent, not consistent across all platforms
   Future<String?> moveFileToSharedStorage(
-    String filePath,
-    SharedStorage destination, {
-    String directory = '',
-    String? mimeType,
-  }) async =>
+          String filePath, SharedStorage destination,
+          {String directory = '',
+          String? mimeType,
+          bool asAndroidUri = false}) async =>
       _downloader.moveToSharedStorage(
-          filePath, destination, directory, mimeType);
+          filePath, destination, directory, mimeType, asAndroidUri);
 
   /// Returns the filePath to the file represented by [filePath] in shared
   /// storage [destination] and potentially a [directory] within that
@@ -853,14 +858,18 @@ interface class FileDownloader {
   ///
   /// Returns the path to the stored file, or null if not successful
   ///
+  /// If [asAndroidUri] is true, returns the URI if possible, otherwise falls
+  /// back to the file path
+  ///
   /// See the documentation for [moveToSharedStorage] for special use case
   /// on iOS for .images and .video
   ///
   /// Platform-dependent, not consistent across all platforms
   Future<String?> pathInSharedStorage(
           String filePath, SharedStorage destination,
-          {String directory = ''}) async =>
-      _downloader.pathInSharedStorage(filePath, destination, directory);
+          {String directory = '', asAndroidUri = false}) async =>
+      _downloader.pathInSharedStorage(
+          filePath, destination, directory, asAndroidUri);
 
   /// Open the file represented by [task] or [filePath] using the application
   /// available on the platform.

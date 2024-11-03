@@ -83,7 +83,7 @@ class Task(
     val fileField: String = "",
     val mimeType: String = "",
     val fields: Map<String, String> = mapOf(),
-    private val directory: String = "",
+    val directory: String = "",
     val baseDirectory: BaseDirectory,
     val group: String,
     val updates: Updates,
