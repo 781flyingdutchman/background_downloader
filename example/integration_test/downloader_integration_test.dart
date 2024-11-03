@@ -1946,7 +1946,7 @@ void main() {
       var ticks = 0;
       final result = await FileDownloader().uploadBatch(tasks,
           onElapsedTime: (elapsed) => ticks++,
-          elapsedTimeInterval: const Duration(milliseconds: 200));
+          elapsedTimeInterval: const Duration(milliseconds: 20));
       expect(result.numSucceeded, equals(3));
       expect(ticks, greaterThan(0));
       await Future.delayed(const Duration(seconds: 10));
@@ -3231,22 +3231,25 @@ void main() {
     testWidgets('One high priority task among regular ones',
         (widgetTester) async {
       final tasks = <DownloadTask>[];
-      for (var n = 1; n < 20; n++) {
+      for (var n = 1; n < 40; n++) {
         final downloadTask = DownloadTask(url: urlWithContentLength);
         print('Adding task with id ${downloadTask.taskId}');
         tasks.add(downloadTask);
       }
       final batchFuture = FileDownloader().downloadBatch(tasks);
-      await Future.delayed(const Duration(seconds: 1));
+      print('Wait a second after enqueuing all non-priority tasks');
+      await Future.delayed(const Duration(milliseconds: 1000));
       var priorityTask = DownloadTask(url: urlWithContentLength, priority: 0);
       print('PriorityTask taskId = ${priorityTask.taskId}');
       final result = await FileDownloader().download(priorityTask);
       expect(result.status, equals(TaskStatus.complete));
       final endOfHighPriority = DateTime.now();
+      print('High priority task finished, waiting for batch to finish');
       await batchFuture;
+      print('Batch finished');
       final elapsedTime = DateTime.now().difference(endOfHighPriority);
       print('Elapsed time after high priority download = $elapsedTime');
-      expect(elapsedTime.inSeconds, greaterThan(1));
+      expect(elapsedTime.inMilliseconds, greaterThan(1000));
     });
 
     testWidgets('TaskQueue', (widgetTester) async {

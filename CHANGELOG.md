@@ -1,3 +1,9 @@
+## 8.7.0
+
+* Adds option to specify a file location for upload using a Mediastore URI on Android, using `UploadTask.fromUri`. A Mediastore URI can also be requested from methods `moveToSharedStorage` and `pathInSharedStorage` by adding `asAndroidUri = true` to the call.
+* Fixes bug with ParallelDownload when an error occurs
+* Updates dependency on package mime to 2.0. Use `dependency_overrides` in pubspec.yaml to resolve (background_downloader works with 1.0 and 2.0)
+
 ## 8.6.0
 
 * Adds option for partial uploads, for binary uploads only. Set the byte range by adding a "Range" header to your binary `UploadTask`, e.g. a value of "bytes=100-149" will upload 50 bytes starting at byte 100. You can omit the range end (but not the "-") to upload from the indicated start byte to the end of the file.  The "Range" header will not be passed on to the server. Note that on iOS an invalid range will cause enqueue to fail, whereas on Android and Desktop the task will fail when attempting to start.
