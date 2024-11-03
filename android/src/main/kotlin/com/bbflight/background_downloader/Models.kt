@@ -512,21 +512,7 @@ class TaskException(
     val type: ExceptionType,
     val httpResponseCode: Int = -1,
     val description: String = ""
-) {
-    constructor(jsonMap: Map<String, Any?>) : this(
-        type = when (jsonMap["type"] as String) {
-            "TaskFileSystemException" -> ExceptionType.fileSystem
-            "TaskUrlException" -> ExceptionType.url
-            "TaskConnectionException" -> ExceptionType.connection
-            "TaskResumeException" -> ExceptionType.resume
-            "TaskHttpException" -> ExceptionType.httpResponse
-
-            else -> ExceptionType.general
-        }, httpResponseCode = (jsonMap["httpResponseCode"] as Double? ?: -1).toInt(),
-        description = jsonMap["description"] as String? ?: ""
-    )
-}
-
+)
 
 object TaskExceptionSerializer : KSerializer<TaskException> {
     override val descriptor = buildClassSerialDescriptor("TaskException") {

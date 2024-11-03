@@ -140,7 +140,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             val constraints = Constraints.Builder().setRequiredNetworkType(
                 if (taskRequiresWifi) NetworkType.UNMETERED else NetworkType.CONNECTED
             ).build()
-            val requestBuilder = when(task.taskType) {
+            val requestBuilder = when (task.taskType) {
                 "ParallelDownloadTask" -> OneTimeWorkRequestBuilder<ParallelDownloadTaskWorker>()
                 "DownloadTask" -> OneTimeWorkRequestBuilder<DownloadTaskWorker>()
                 "UploadTask" -> OneTimeWorkRequestBuilder<UploadTaskWorker>()
@@ -829,18 +829,22 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val chunkTaskId = args[1] as String
         val statusOrdinal = args[2] as Int
         val exceptionJson = args[3] as String?
-        val exception = if (exceptionJson != null) {
-            TaskException(
-                Json.decodeFromString<Map<String, Any>>(exceptionJson)
+        try {
+            val exception = if (exceptionJson != null) {
+                Json.decodeFromString<TaskException>(exceptionJson)
+            } else null
+            val responseBody = args[4] as String?
+            parallelDownloadTaskWorkers[taskId]?.chunkStatusUpdate(
+                chunkTaskId,
+                TaskStatus.entries[statusOrdinal],
+                exception,
+                responseBody
             )
-        } else null
-        val responseBody = args[4] as String?
-        parallelDownloadTaskWorkers[taskId]?.chunkStatusUpdate(
-            chunkTaskId,
-            TaskStatus.entries[statusOrdinal],
-            exception,
-            responseBody
-        )
+        } catch (e: Exception) {
+            Log.w(TAG, "Exception $e")
+            Log.w(TAG, "exceptionJson = $exceptionJson")
+            e.printStackTrace()
+        }
         result.success(null)
     }
 
