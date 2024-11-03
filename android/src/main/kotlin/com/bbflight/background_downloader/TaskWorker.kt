@@ -100,7 +100,7 @@ open class TaskWorker(
             // Intercept status updates resulting from re-enqueue request, which
             // themselves are triggered by a change in WiFi requirement
             if (BDPlugin.tasksToReEnqueue.remove(task)) {
-                if ((status == TaskStatus.paused || status == TaskStatus.canceled || status == TaskStatus.failed) && context != null) {
+                if (status == TaskStatus.paused || status == TaskStatus.canceled || status == TaskStatus.failed) {
                     WiFi.reEnqueue(
                         EnqueueItem(
                             context,
@@ -201,7 +201,7 @@ open class TaskWorker(
             // remove task from persistent storage, clean up references to taskId
             // and invoke the onTaskFinishedCallback if necessary
             if (status.isFinalState()) {
-                if (context != null && status == TaskStatus.failed) {
+                if (status == TaskStatus.failed) {
                     // Cancel the WorkManager job.
                     // This is to avoid the WorkManager restarting a job that was
                     // canceled because job constraints are violated (e.g. network unavailable)
@@ -230,7 +230,7 @@ open class TaskWorker(
                     editor.apply()
                 }
                 QueueService.cleanupTaskId(task.taskId)
-                if (task.options?.hasFinishCallback() == true && context !=null) {
+                if (task.options?.hasFinishCallback() == true) {
                     Callbacks.invokeOnTaskFinishedCallback(context, taskStatusUpdate)
                 }
             }

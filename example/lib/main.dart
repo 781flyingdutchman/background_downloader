@@ -269,8 +269,7 @@ class _MyAppState extends State<MyApp> {
             retries: 3,
             allowPause: true,
             metaData: '<example metaData>',
-            displayName: 'My display name',
-            options: TaskOptions(onTaskStart: (task) => Future.value(null)));
+            displayName: 'My display name');
         await FileDownloader().enqueue(backgroundDownloadTask!);
         break;
       case ButtonState.cancel:

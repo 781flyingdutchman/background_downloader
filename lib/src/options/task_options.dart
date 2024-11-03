@@ -22,7 +22,15 @@ class TaskOptions {
             : null,
         _onTaskFinishedRawHandle = onTaskFinished != null
             ? PluginUtilities.getCallbackHandle(onTaskFinished)?.toRawHandle()
-            : null;
+            : null {
+    assert(onTaskStart == null || _onTaskStartRawHandle != null,
+        _notTopLevel('onTaskStart'));
+    assert(onTaskFinished == null || _onTaskFinishedRawHandle != null,
+        _notTopLevel('onTaskFinished'));
+  }
+
+  static String _notTopLevel(String callbackName) =>
+      '$callbackName callback must be a top level or static function';
 
   /// Create the object from JSON
   TaskOptions.fromJson(Map<String, dynamic> json)
