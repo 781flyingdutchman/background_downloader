@@ -321,8 +321,29 @@ void processProgressUpdateInIsolate(
 /// present will be invoked by starting a taskDispatcher on a background isolate, then
 /// sending the callback request via the MethodChannel
 Future<Task> getModifiedTask(Task task) async {
-  final modifiedTask = await task.options?.onTaskStartCallBack?.call(task);
-  return modifiedTask ?? task;
+  Task? authTask;
+  final auth = task.options?.auth;
+  if (auth != null) {
+    // refresh token if needed
+    if (auth.isTokenExpired() && auth.onAuthCallback != null) {
+      authTask = await auth.onAuthCallback?.call(task);
+    }
+    authTask ??= task; // either original or newly authorized
+    final newAuth = authTask.options?.auth;
+    if (newAuth == null) {
+      // no auth object on authorized task
+      return authTask;
+    }
+    // insert query parameters and headers
+    final uri = newAuth.addOrUpdateQueryParams(
+        url: authTask.url, queryParams: newAuth.getAccessQueryParams());
+    final headers = {...authTask.headers, ...newAuth.getAccessHeaders()};
+    authTask = authTask.copyWith(url: uri.toString(), headers: headers);
+  }
+  authTask = authTask ??= task;
+  final modifiedTask =
+      await authTask.options?.onTaskStartCallBack?.call(authTask);
+  return modifiedTask ?? authTask;
 }
 
 // The following functions are related to multipart uploads and are

@@ -35,6 +35,7 @@ dependencies:
   provider: ^6.0.3
   path_provider: ^2.0.2
   path: ^1.8.1
+  http: ^1.2.2
 
 dev_dependencies:
   flutter_test:

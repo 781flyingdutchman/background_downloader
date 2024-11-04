@@ -9,10 +9,13 @@ import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' hide equals;
 import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
 
 const defaultFilename = 'get_result.txt';
 const getTestUrl =
     'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_get_data';
+const refreshTestUrl =
+    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_refresh';
 
 var callbackCounter = 0;
 var mainIsolateCallbackCounter = 0;
@@ -79,6 +82,13 @@ Future<void> onTaskFinishedCallback(TaskStatusUpdate statusUpdate) async {
   }
   print('In onTaskFinishedCallback. Callback counter is now $callbackCounter');
   _sendCounterToMainIsolate();
+}
+
+Future<Task?> onAuthCallbackNoChange(Task original) async {
+  callbackCounter++;
+  print('In onAuthCallbackNoChange. Callback counter is now $callbackCounter');
+  _sendCounterToMainIsolate();
+  return null;
 }
 
 void main() {
@@ -169,6 +179,121 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 100));
       expect(mainIsolateCallbackCounter,
           equals(mainIsolateCallbackCounterAtStartOfTest + 1));
+      await File(path).delete();
+    });
+  });
+
+  group('onAuth callbacks', () {
+    late Auth auth;
+
+    setUp(() {
+      auth = Auth(
+        accessToken: 'initialAccessToken',
+        accessQueryParams: {'auth': '{accessToken}'},
+        accessHeaders: {'Authorization': 'Bearer {accessToken}'},
+        refreshToken: 'initialRefreshToken',
+        refreshHeaders: {
+          'Authorization': 'Bearer {accessToken}',
+          'Refresh': 'Bearer {refreshToken}'
+        },
+        refreshUrl: refreshTestUrl,
+        accessTokenExpiryTime: DateTime.now()
+            .subtract(const Duration(seconds: 10)), // expired token
+      );
+    });
+
+    test('refresh request', () async {
+      final result = await http.post(Uri.parse(refreshTestUrl),
+          headers: {'Auth': 'Bearer abcd', 'Content-type': 'application/json'},
+          body: jsonEncode({'refresh_token': 'myRefreshToken'}));
+      final json = jsonDecode(result.body);
+      expect(json['headers']['Auth'], equals('Bearer abcd'));
+      expect(json['access_token'], equals('new_access_token'));
+      expect(json['expires_in'], equals(3600));
+      expect(json['post_body']['refresh_token'], equals('myRefreshToken'));
+    });
+
+    test('default handler with unexpired token -> no callback', () async {
+      // no callback makes no change to the original task, so only
+      // the known arguments and headers should be present, as well as the
+      // original auth argument and header (because no refresh took place)
+      auth.onAuthCallback = onAuthCallbackNoChange;
+      auth.accessTokenExpiryTime =
+          DateTime.now().add(const Duration(minutes: 1));
+      final task = DownloadTask(
+          url: getTestUrl,
+          urlQueryParameters: {'json': 'true'},
+          headers: {'H1': 'value1'},
+          filename: defaultFilename,
+          options: TaskOptions(auth: auth));
+      final path =
+          join((await getApplicationDocumentsDirectory()).path, task.filename);
+      expect((await FileDownloader().download(task)).status,
+          equals(TaskStatus.complete));
+      var resultAsString = await File(path).readAsString();
+      print(resultAsString);
+      var result = jsonDecode(resultAsString);
+      expect(result['args']['json'], equals('true'));
+      expect(result['args']['auth'], equals('initialAccessToken')); // not added
+      expect(result['headers']['H1'], equals('value1'));
+      expect(result['headers']['Authorization'],
+          equals('Bearer initialAccessToken'));
+      expect(mainIsolateCallbackCounter,
+          equals(mainIsolateCallbackCounterAtStartOfTest)); // no callback
+      await File(path).delete();
+    });
+
+    test('default handler with null auth callback', () async {
+      // null auth callback makes no change to the original task, so only
+      // the known arguments and headers should be present, as well as the
+      // original auth argument and header (because no refresh took place)
+      auth.onAuthCallback = onAuthCallbackNoChange; // returns null
+      final task = DownloadTask(
+          url: getTestUrl,
+          urlQueryParameters: {'json': 'true'},
+          headers: {'H1': 'value1'},
+          filename: defaultFilename,
+          options: TaskOptions(auth: auth));
+      final path =
+          join((await getApplicationDocumentsDirectory()).path, task.filename);
+      expect((await FileDownloader().download(task)).status,
+          equals(TaskStatus.complete));
+      var resultAsString = await File(path).readAsString();
+      print(resultAsString);
+      var result = jsonDecode(resultAsString);
+      expect(result['args']['json'], equals('true'));
+      expect(result['args']['auth'], equals('initialAccessToken')); // not added
+      expect(result['headers']['H1'], equals('value1'));
+      expect(result['headers']['Authorization'],
+          equals('Bearer initialAccessToken'));
+      expect(mainIsolateCallbackCounter,
+          equals(mainIsolateCallbackCounterAtStartOfTest + 1)); // called once
+      await File(path).delete();
+    });
+
+    test('default handler with refresh auth callback', () async {
+      // refresh auth callback changes the original task, so only
+      // the known arguments and headers should be present, as well as the
+      // original auth argument and header (because no refresh took place)
+      auth.onAuthCallback = defaultOnAuth;
+      final task = DownloadTask(
+          url: getTestUrl,
+          urlQueryParameters: {'json': 'true'},
+          headers: {'H1': 'value1'},
+          filename: defaultFilename,
+          options: TaskOptions(auth: auth));
+      final path =
+          join((await getApplicationDocumentsDirectory()).path, task.filename);
+      expect((await FileDownloader().download(task)).status,
+          equals(TaskStatus.complete));
+      var resultAsString = await File(path).readAsString();
+      print(resultAsString);
+      var result = jsonDecode(resultAsString);
+      expect(result['args']['json'], equals('true'));
+      expect(result['args']['auth'], equals('new_access_token')); // not added
+      expect(result['headers']['H1'], equals('value1'));
+      expect(result['headers']['Authorization'],
+          equals('Bearer new_access_token'));
       await File(path).delete();
     });
   });
