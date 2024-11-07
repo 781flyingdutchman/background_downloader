@@ -1,3 +1,7 @@
+## 8.7.1
+
+* Fix for compilation issue on Kotlin 2
+
 ## 8.7.0
 
 * Adds option to specify a file location for upload using a Mediastore URI on Android, using `UploadTask.fromUri`. A Mediastore URI can also be requested from methods `moveToSharedStorage` and `pathInSharedStorage` by adding `asAndroidUri = true` to the call.

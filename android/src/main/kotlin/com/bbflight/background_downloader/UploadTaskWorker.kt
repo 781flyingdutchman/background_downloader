@@ -98,10 +98,9 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
     private suspend fun processBinaryUpload(
         connection: HttpURLConnection, filePath: String
     ): TaskStatus {
-        val filePathToUse: String // possibly extracted from URI instead of filePath parameter
         val usesAndroidUri =
             task.baseDirectory == BaseDirectory.root && task.directory.startsWith("content://")
-        if (usesAndroidUri) {
+        val filePathToUse = if (usesAndroidUri) {
             try {
                 val uri = Uri.parse(task.directory)
                 val path = pathFromUri(applicationContext, uri)
@@ -114,8 +113,8 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                     )
                     return TaskStatus.failed
                 }
-                filePathToUse = path
-                Log.i(TAG, "Using filepath $filePathToUse from URI $uri")
+                Log.i(TAG, "Using filepath $path from URI $uri")
+                path
             } catch (e: IllegalArgumentException) {
                 val message = "Invalid URI: ${task.filename}"
                 Log.w(TAG, message)
@@ -126,7 +125,7 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                 return TaskStatus.failed
             }
         } else {
-            filePathToUse = filePath // no change
+            filePath // no change
         }
         val file = File(filePathToUse)
         if (!file.exists() || !file.isFile) {
@@ -360,7 +359,7 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                     "content-transfer-encoding: binary"
         } else if (isJsonString(value)) {
             header = "$header\r\n" +
-                    "content-type: application/json; charset=utf-8\r\n";
+                    "content-type: application/json; charset=utf-8\r\n"
         }
         return "$header\r\n\r\n"
     }
