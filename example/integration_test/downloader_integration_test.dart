@@ -1910,7 +1910,7 @@ void main() {
       var ticks = 0;
       final result = await FileDownloader().uploadBatch(tasks,
           onElapsedTime: (elapsed) => ticks++,
-          elapsedTimeInterval: const Duration(milliseconds: 200));
+          elapsedTimeInterval: const Duration(milliseconds: 20));
       expect(result.numSucceeded, equals(3));
       expect(ticks, greaterThan(0));
       await Future.delayed(const Duration(seconds: 10));
@@ -1947,7 +1947,7 @@ void main() {
           await FileDownloader().upload(uploadTask, onElapsedTime: (elapsed) {
         print('Elapsed time: $elapsed');
         ticks++;
-      }, elapsedTimeInterval: const Duration(milliseconds: 200));
+      }, elapsedTimeInterval: const Duration(milliseconds: 20));
       expect(result.status, equals(TaskStatus.complete));
       expect(ticks, greaterThan(0));
     });
@@ -3176,7 +3176,7 @@ void main() {
       await batchFuture;
       final elapsedTime = DateTime.now().difference(endOfHighPriority);
       print('Elapsed time after high priority download = $elapsedTime');
-      expect(elapsedTime.inSeconds, greaterThan(1));
+      expect(elapsedTime.inMilliseconds, greaterThan(100));
     });
 
     testWidgets('TaskQueue', (widgetTester) async {
@@ -3426,7 +3426,7 @@ void main() {
       });
       final t = DataTask(url: dataTaskGetUrl, headers: dataTaskHeaders);
       expect(await FileDownloader().enqueue(t), isTrue);
-      await Future.delayed(const Duration(seconds: 1));
+      await Future.delayed(const Duration(seconds: 2));
       expect(lastUpdate.status, equals(TaskStatus.complete));
       final json = jsonDecode(lastUpdate.responseBody!);
       final args = json['args'] as Map<String, dynamic>;

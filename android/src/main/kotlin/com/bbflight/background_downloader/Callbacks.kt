@@ -133,6 +133,18 @@ class Callbacks {
         }
 
         /**
+         * Invoke the invokeOnAuthCallback and return the result
+         */
+        suspend fun invokeOnAuthCallback(context: Context, task: Task): Task? {
+            try {
+                return invokeCallback(context, "onAuthCallback", task = task)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in invokeOnAuthCallback", e)
+            }
+            return null
+        }
+
+        /**
          * Invoke the onTaskStartCallback and return the result
          */
         suspend fun invokeOnTaskStartCallback(context: Context, task: Task): Task? {

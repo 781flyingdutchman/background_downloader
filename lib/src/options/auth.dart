@@ -119,17 +119,24 @@ class Auth {
   /// Create an Auth instance from JSON
   Auth.fromJson(Map<String, dynamic> json)
       : accessToken = json['accessToken'],
-        accessHeaders = Map<String, String>.from(json['authHeaders']),
-        accessQueryParams = Map<String, String>.from(json['accessQueryParams']),
+        accessHeaders = json['accessHeaders'] != null
+            ? Map<String, String>.from(json['accessHeaders'])
+            : const {},
+        accessQueryParams = json['accessQueryParams'] != null
+            ? Map<String, String>.from(json['accessQueryParams'])
+            : const {},
         accessTokenExpiryTime = json['accessTokenExpiryTime'] != null
             ? DateTime.fromMillisecondsSinceEpoch(
                 json['accessTokenExpiryTime'] as int)
             : null,
-        refreshToken = json['reAuthToken'],
-        refreshUrl = json['tokenRefreshUrl'],
-        refreshHeaders = Map<String, String>.from(json['refreshHeaders']),
-        refreshQueryParams =
-            Map<String, String>.from(json['refreshQueryParams']),
+        refreshToken = json['refreshToken'],
+        refreshUrl = json['refreshUrl'],
+        refreshHeaders = json['refreshHeaders'] != null
+            ? Map<String, String>.from(json['refreshHeaders'])
+            : const {},
+        refreshQueryParams = json['refreshQueryParams'] != null
+            ? Map<String, String>.from(json['refreshQueryParams'])
+            : const {},
         _onAuthRawHandle = json['onAuthRawHandle'] as int?;
 
   /// Returns the [OnAuthCallback] registered with this [Auth], or null

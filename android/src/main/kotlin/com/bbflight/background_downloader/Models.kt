@@ -68,15 +68,15 @@ private class UpdatesSerializer : EnumAsIntSerializer<Updates>(
  * task's properties, as they are rare
  */
 @Serializable
-class TaskOptions(private val onTaskStartRawHandle: Long?, val onTaskFinishedRawHandle: Long?) {
+class TaskOptions(
+    private val onTaskStartRawHandle: Long?,
+    private val onTaskFinishedRawHandle: Long?,
+    var auth: Auth?
+) {
 
-    fun hasStartCallback() : Boolean {
-        return onTaskStartRawHandle != null
-    }
+    fun hasStartCallback(): Boolean = onTaskStartRawHandle != null
 
-    fun hasFinishCallback() : Boolean {
-        return onTaskFinishedRawHandle != null
-    }
+    fun hasFinishCallback(): Boolean = onTaskFinishedRawHandle != null
 }
 
 /**
@@ -118,7 +118,7 @@ class Task(
     /**
      * Returns a copy of the [Task] with optional changes to specific fields
      */
-    private fun copyWith(
+    fun copyWith(
         taskId: String? = null,
         url: String? = null,
         urls: List<String>? = null,

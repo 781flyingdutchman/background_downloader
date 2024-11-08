@@ -39,7 +39,7 @@ class TaskOptions {
   TaskOptions.fromJson(Map<String, dynamic> json)
       : _onTaskStartRawHandle = json['onTaskStartRawHandle'] as int?,
         _onTaskFinishedRawHandle = json['onTaskFinishedRawHandle'] as int?,
-        auth = json['auth'] != null ? Auth.fromJson(json) : null;
+        auth = json['auth'] != null ? Auth.fromJson(json['auth']) : null;
 
   /// Returns the [OnTaskStartCallback] registered with this [TaskOption], or null
   OnTaskStartCallback? get onTaskStartCallBack => _onTaskStartRawHandle != null

@@ -234,7 +234,7 @@ void main() {
       print(resultAsString);
       var result = jsonDecode(resultAsString);
       expect(result['args']['json'], equals('true'));
-      expect(result['args']['auth'], equals('initialAccessToken')); // not added
+      expect(result['args']['auth'], equals('initialAccessToken'));
       expect(result['headers']['H1'], equals('value1'));
       expect(result['headers']['Authorization'],
           equals('Bearer initialAccessToken'));

@@ -644,9 +644,12 @@ void initCallbackDispatcher() {
   _callbackChannel.setMethodCallHandler((MethodCall call) async {
     switch (call.method) {
       case 'onTaskStartCallback':
+      case 'onAuthCallback':
         final taskJsonString = call.arguments as String;
         final task = Task.createFromJson(jsonDecode(taskJsonString));
-        final callBack = task.options?.onTaskStartCallBack;
+        final callBack = call.method == 'onTaskStartCallback'
+            ? task.options?.onTaskStartCallBack
+            : task.options?.auth?.onAuthCallback;
         final newTask = await callBack?.call(task);
         if (newTask == null) {
           return null;

@@ -7,6 +7,7 @@ import androidx.preference.PreferenceManager
 import androidx.work.CoroutineWorker
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.bbflight.background_downloader.TaskWorker.Companion.TAG
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -805,12 +806,41 @@ fun getTaskMap(prefs: SharedPreferences): MutableMap<String, Task> {
  * Callbacks would be attached to the task via its [Task.options] property, and if
  * present will be invoked by starting a taskDispatcher on a background isolate, then
  * sending the callback request via the MethodChannel
+ *
+ * First test is for auth refresh (the onAuth callback), then the onStart callback. Both
+ * callbacks run in a Dart isolate, and may return a modified task, which will be used
+ * for the actual task execution
  */
 suspend fun getModifiedTask(context: Context, task: Task): Task {
+    var authTask: Task? = null
+    val auth = task.options?.auth
+    if (auth != null) {
+        // Refresh token if needed
+        if (auth.isTokenExpired() && auth.hasOnAuthCallback()) {
+            Log.i(TAG, "onAuth callback for taskId ${task.taskId}")
+            authTask = withContext(Dispatchers.IO) {
+                Callbacks.invokeOnAuthCallback(context, task)
+            }
+        }
+        authTask = authTask ?: task // Either original or newly authorized
+        val newAuth = authTask.options?.auth ?: return authTask
+        // Insert query parameters and headers
+        val uri = newAuth.addOrUpdateQueryParams(
+            url = authTask.url,
+            queryParams = newAuth.getExpandedAccessQueryParams()
+        )
+        val headers =
+            authTask.headers.toMutableMap().apply { putAll(newAuth.getExpandedAccessHeaders()) }
+        authTask = authTask.copyWith(url = uri.toString(), headers = headers)
+    }
+    authTask = authTask ?: task
     if (task.options?.hasStartCallback() != true) {
-        return task
+        return authTask
     }
-    return withContext(Dispatchers.IO) {
-        Callbacks.invokeOnTaskStartCallback(context, task) ?: task
+    // onStart callback
+    Log.i(TAG, "onTaskStart callback for taskId ${authTask.taskId}")
+    val modifiedTask = withContext(Dispatchers.IO) {
+        Callbacks.invokeOnTaskStartCallback(context, authTask)
     }
+    return modifiedTask ?: authTask
 }
