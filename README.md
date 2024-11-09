@@ -447,30 +447,6 @@ By default, the downloader uses a modified version of the [localstore](https://p
 
 As an alternative to LocalStore, use `SqlitePersistentStorage`, included in [background_downloader_sql](https://pub.dev/packages/background_downloader_sql), which supports SQLite storage and migration from Flutter Downloader.
 
-## OnTaskStart and OnTaskFinished "native" callbacks
-
-For more complex situations you can use OnTaskStart and OnTaskFinished callbacks. This is only required if you need to - for example - refresh an expired auth token just before an enqueued task starts, or conditionally call your server to confirm an upload has finished successfully, which requires the callback to be called even when the main application has been suspended by the OS.
-To add a callback to a `Task`, set its `options` property, e.g. to add an onTaskStart callback:
-```dart
-final task = DownloadTask(url: 'https://google.com',
-   options: TaskOptions(onTaskStart: myStartCallback));
-```
-where `myStartCallback` must be a top level or static function.
-
-For most situations, using the event listeners or registered "regular" callbacks is recommended, as they run in the normal application context on the main isolate. Native callbacks are called directly from native code (iOS, Android or Desktop) and therefore behave differently:
-* Callbacks are called even when an application is suspended
-* On iOS, the callbacks runs in the main isolate
-* On Android, callbacks run in a shared background isolate, though there is no guarantee that every callback shares the same isolate as another callback
-* On Desktop, callbacks run in the same isolate as the task, and every task has its own isolate
-
-You should assume that the callback runs in an isolate, and has no access to application state or to plugins. Native callbacks are really only meant to perform simple "local" functions, operating only on the parameter passed into the callback function.
-
-### OnTaskStart
-Callback with signature`Future<Task?> Function(Task original)`, called just before the task starts executing. Your callback receives the `original` task about to start, and can modify this task if necessary (for example to refresh an auth token). If you make modifications, you return the modified task - otherwise return null to continue execution with the original task. You can only change the task's `url` (including query parameters) and `headers` properties - making changes to any other property may lead to undefined behavior.
-
-### OnTaskFinished
-Callback with signature `Future<void> Function(TaskStatusUpdate taskStatusUpdate)`, called when the task has reached a final state (regardless of outcome). Your callback receives the final `TaskStatusUpdate` and can act on that.
-
 ## Notifications
 
 On iOS and Android, for downloads and uploads, the downloader can generate notifications to keep the user informed of progress also when the app is in the background, and allow pause/resume and cancellation of an ongoing download from those notifications.
@@ -843,6 +819,76 @@ By default, whether a task requires WiFi or not is determined by its `requireWiF
 When calling `FileDownloader().requireWifi`, all enqueued tasks will be canceled and rescheduled with the appropriate WiFi requirement setting, and if the `rescheduleRunningTasks` parameter is true, all running tasks will be paused (if possible, independent of the task's `allowPause` property) or canceled and resumed/restarted with the new WiFi requirement. All newly enqueued tasks will follow this setting as well.
 
 The global setting persists across application restarts. Check the current setting by calling `FileDownloader().getRequireWiFiSetting`.
+
+## Authentication and pre- and post-execution callbacks
+
+A task may be waiting a long time before it gets executed, or before it has finished, and you may need to modify the task before it actually starts (e.g. to refresh an access token) or do something when it finishes (e.g. conditionally call your server to confirm an upload has finished). The normal listener or registered callback approach does not enable that functionality, and does not execute when the app is in a suspended state.
+
+To facilitate more complex task management functions, consider:
+* `onTaskStart`: a callback called before a task starts executing. The callback receives the `Task` and returns `null` if it did not change anything, or a modified `Task` if it needs to use a different url or header. It is called after `onAuth` for token refresh, if that is set
+* `onTaskFinished`: a callback called when the task has finished. The callback receives the final `TaskStatusUpdate`.
+* `auth`: a class that facilitates management of authorization tokens and refresh tokens, and includes an `onAuth` callback similar to `onTaskStart`
+
+To add a callback to a `Task`, set its `options` property, e.g. to add an onTaskStart callback:
+```dart
+final task = DownloadTask(url: 'https://google.com',
+   options: TaskOptions(onTaskStart: myStartCallback));
+```
+where `myStartCallback` must be a top level or static function.
+
+For most situations, using the event listeners or registered "regular" callbacks is recommended, as they run in the normal application context on the main isolate. Native callbacks are called directly from native code (iOS, Android or Desktop) and therefore behave differently:
+* Callbacks are called even when an application is suspended
+* On iOS, the callbacks runs in the main isolate
+* On Android, callbacks run in a shared background isolate, though there is no guarantee that every callback shares the same isolate as another callback
+* On Desktop, callbacks run in the same isolate as the task, and every task has its own isolate
+
+You should assume that the callback runs in an isolate, and has no access to application state or to plugins. Native callbacks are really only meant to perform simple "local" functions, operating only on the parameter passed into the callback function.
+
+### OnTaskStart
+Callback with signature`Future<Task?> Function(Task original)`, called just before the task starts executing. Your callback receives the `original` task about to start, and can modify this task if necessary. If you make modifications, you return the modified task - otherwise return null to continue execution with the original task. You can only change the task's `url` (including query parameters) and `headers` properties - making changes to any other property may lead to undefined behavior.
+
+### OnTaskFinished
+Callback with signature `Future<void> Function(TaskStatusUpdate taskStatusUpdate)`, called when the task has reached a final state (regardless of outcome). Your callback receives the final `TaskStatusUpdate` and can act on that.
+
+### Authorization
+
+The `Auth` object (which can be set as the `auth` property in `TaskOptions`) contains several properties that can optionally be set:
+* `accessToken`: the token created by your auth mechanism to provide access.  It is typically passed as part of a request in the `Authorization` header, but different mechanisms exist
+* `accessHeaders`: the headers specific to authorization. In these headers, the template `{accessToken}` will be replaced by the actual `accessToken` property, so a common value would be `{'Authorization': 'Bearer {accessToken}'`
+* `accessQueryParams`: the query parameters specific to authorization. In these headers, the template `{accessToken}` will be replaced by the actual `accessToken` property
+* `accessTokenExpiryTime`: the time at which the `accessToken` will expire.
+* `refreshToken`, `refreshHeaders` and `refreshQueryParams` are similar to those for access (and replace the `{refreshToken}` template)
+* `refreshUrl`: url to use for refresh, including query parameters not related to the auth tokens
+* `onAuth`: callback that will be called when token refresh is required
+
+The downloader uses the `auth` object on the native side as follows:
+* Just before the task starts, we check the `accessTokenExpiryTime`
+* If it is close to this time, the downloader will call the `onAuth` callback (your code) to refresh the access token
+  - A `defaultOnAuth` function is included that calls `auth.refreshAccessToken` using a common approach, but use your own `onAuth` callback if your auth mechanism differs
+  - The `Task` returned by the `onAuth` call can change the `Auth` object itself (e.g. replace the `accessToken` with a refreshed one) and those values will be used to construct the task's request
+* The `Task` request is built as follows:
+  - Start with the headers and query parameters of the original task. You should have all headers and query parameters that are not related to authentication here
+  - Add or replace every header and query parameter from the `accessHeaders` and `accessQueryParams` to the task's headers and query parameters, substituting the templates for `accessToken` and `refreshToken`
+  - Construct the task's server request using these merged headers and query parameters
+
+A typical way to construct a task with authorization and default `onAuth` refresh approach then is:
+```dart
+final auth = Auth(
+    accessToken: 'initialAccessToken',
+    accessHeaders: {'Authorization': 'Bearer {accessToken}'},
+    refreshToken: 'initialRefreshToken',
+    refreshUrl: 'https://your.server/refresh_endpoint',
+    accessTokenExpiryTime: DateTime.now()
+            .add(const Duration(minutes: 10)), // typically extracted from token
+    onAuth: defaultOnAuth // to use typical default callback
+);
+final task = DownloadTask(
+    url: 'https://your.server/download_endpoint',
+    urlQueryParameters: {'param1': 'value1'},
+    headers: {'Header1': 'value2'},
+    filename: 'my_file.txt',
+    options: TaskOptions(auth: auth));
+```
 
 ## Server requests
 
