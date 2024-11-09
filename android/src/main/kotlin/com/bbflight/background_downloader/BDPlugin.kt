@@ -537,10 +537,11 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     }
 
     /**
-     * Returns a list of tasks for all tasks in progress, as a list of JSON strings
+     * Returns a list of tasks for all tasks in progress, as a list of JSON strings,
+     * optionally filtered by group
      */
     private suspend fun methodAllTasks(call: MethodCall, result: Result) {
-        val group = call.arguments as String
+        val group = call.arguments as String?
         val tasksAsListOfJsonStrings = mutableListOf<String>()
         holdingQueue?.stateMutex?.lock()
         holdingQueue?.allTasks(group)
@@ -549,7 +550,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val workInfos = withContext(Dispatchers.IO) {
             workManager.getWorkInfosByTag(TAG).get()
         }
-            .filter { !it.state.isFinished && it.tags.contains("group=$group") }
+            .filter { !it.state.isFinished && (group == null || it.tags.contains("group=$group")) }
         val tasksMap: MutableMap<String, Task>
         val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
         prefsLock.read {

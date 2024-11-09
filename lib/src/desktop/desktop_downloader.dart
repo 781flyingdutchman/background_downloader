@@ -300,9 +300,12 @@ final class DesktopDownloader extends BaseDownloader {
 
   @override
   Future<List<Task>> allTasks(
-      String group, bool includeTasksWaitingToRetry) async {
+      String group, bool includeTasksWaitingToRetry, allGroups) async {
     final retryAndPausedTasks =
-        await super.allTasks(group, includeTasksWaitingToRetry);
+        await super.allTasks(group, includeTasksWaitingToRetry, allGroups);
+    if (allGroups) {
+      return [...retryAndPausedTasks, ..._queue.unorderedElements, ..._running];
+    }
     final inQueue =
         _queue.unorderedElements.where((task) => task.group == group);
     final running = _running.where((task) => task.group == group);

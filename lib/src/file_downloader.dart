@@ -411,12 +411,16 @@ interface class FileDownloader {
   ///
   /// This method acts on a [group] of tasks. If omitted, the [defaultGroup]
   /// is used, which is the group used when you [enqueue] a task
+  /// To get all tasks regardless of group, set [allGroups] to true as the
+  /// only parameter
   Future<List<String>> allTaskIds(
           {String group = defaultGroup,
-          bool includeTasksWaitingToRetry = true}) async =>
+          bool includeTasksWaitingToRetry = true,
+          allGroups = false}) async =>
       (await allTasks(
               group: group,
-              includeTasksWaitingToRetry: includeTasksWaitingToRetry))
+              includeTasksWaitingToRetry: includeTasksWaitingToRetry,
+              allGroups: allGroups))
           .map((task) => task.taskId)
           .toList();
 
@@ -427,10 +431,13 @@ interface class FileDownloader {
   ///
   /// This method acts on a [group] of tasks. If omitted, the [defaultGroup]
   /// is used, which is the group used when you [enqueue] a task.
+  /// To get all tasks regardless of group, set [allGroups] to true as the
+  /// only parameter
   Future<List<Task>> allTasks(
           {String group = defaultGroup,
-          bool includeTasksWaitingToRetry = true}) =>
-      _downloader.allTasks(group, includeTasksWaitingToRetry);
+          bool includeTasksWaitingToRetry = true,
+          allGroups = false}) =>
+      _downloader.allTasks(group, includeTasksWaitingToRetry, allGroups);
 
   /// Returns true if tasks in this [group] are finished
   ///

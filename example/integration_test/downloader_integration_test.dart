@@ -666,7 +666,33 @@ void main() {
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
       expect(lastStatus, equals(TaskStatus.complete));
-      print('Finished alTasks');
+      print('Finished allTasks');
+    });
+
+    testWidgets('allTasks and allTaskIds with allGroups set to true',
+        (widgetTester) async {
+      print('Starting allTasks with allGroups set to true');
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
+      final task2 = task.copyWith(group: 'group2');
+      expect(await FileDownloader().enqueue(task), isTrue);
+      expect(await FileDownloader().enqueue(task2), isTrue);
+      expect(await FileDownloader().allTasks(group: 'non-default'), isEmpty);
+      expect(() => FileDownloader().allTasks(group: 'some', allGroups: true),
+          throwsAssertionError);
+      expect(
+          () => FileDownloader()
+              .allTasks(includeTasksWaitingToRetry: false, allGroups: true),
+          throwsAssertionError);
+      final tasks = await FileDownloader().allTasks(allGroups: true);
+      expect(tasks.length, equals(2));
+      expect(tasks.contains(task), isTrue);
+      expect(tasks.contains(task2), isTrue);
+      final taskIds = await FileDownloader().allTaskIds(allGroups: true);
+      expect(taskIds.length, equals(2));
+      expect(taskIds.contains(task.taskId), isTrue);
+      expect(taskIds.contains(task2.taskId), isTrue);
+      await Future.delayed(const Duration(seconds: 3));
+      print('Finished allTasks with allGroups set to true');
     });
 
     testWidgets('tasksFinished', (widgetTester) async {
