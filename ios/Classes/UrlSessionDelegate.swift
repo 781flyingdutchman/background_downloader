@@ -19,21 +19,19 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
     //MARK: URLSessionTaskDelegate
     
     public func urlSession(_ session: URLSession, task: URLSessionTask, willBeginDelayedRequest request: URLRequest) async -> (URLSession.DelayedRequestDisposition, URLRequest?) {
-        os_log("willbegin delayed request", log: log, type: .error)
         guard let bgdTask = getTaskFrom(urlSessionTask: task),
-              bgdTask.options?.hasStartOrAuthCallback() == true
+              bgdTask.options?.hasStartCallback() == true || bgdTask.options?.auth?.hasOnAuthCallback() == true
         else {
             return (.continueLoading, nil)
         }
-        os_log("delayed request has start or auth callback", log: log, type: .error)
-        guard let newTask = await invokeOnTaskStartCallback(task: bgdTask)
-        else {
+        let (newTask, taskWasModified) = await getModifiedTask(task: bgdTask)
+        if !taskWasModified {
             return (.continueLoading, nil)
         }
         // modify the request, copying the unmodified data from the original request
         guard let url = validateUrl(newTask)
         else {
-            os_log("Invalid url in modified task returned from onTaskStartCallback", log: log, type: .info)
+            os_log("Invalid url in modified task", log: log, type: .info)
             return (.continueLoading, nil)
         }
         var newRequest = URLRequest(url: url)
@@ -470,5 +468,45 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             return task.taskId == taskId
         }) else { return nil }
         return urlSessionTask
+    }
+
+    /// Returns a `task` that may be modified through callbacks, and a bool to indicate that the task was modified.
+    ///
+    /// Callbacks would be attached to the task via its `Task.options` property, and if
+    /// present will be invoked by starting a taskDispatcher on a background isolate, then
+    /// sending the callback request via the MethodChannel.
+    ///
+    /// First test is for auth refresh (the onAuth callback), then the onStart callback. Both
+    /// callbacks run in a Dart isolate, and may return a modified task, which will be used
+    /// for the actual task execution.
+    func getModifiedTask(task: Task) async -> (Task, Bool) {
+        var authTask: Task?
+        var taskWasModified: Bool = false
+        if let auth = task.options?.auth {
+            // Refresh token if needed
+            if auth.isTokenExpired() && auth.hasOnAuthCallback() == true {
+                os_log("onAuth callback for taskId %@", log: log, type: .info, task.taskId)
+                authTask = await invokeOnAuthCallback(task: task)
+            }
+            taskWasModified = authTask != nil
+            authTask = authTask ?? task // Either original or newly authorized
+            guard let newAuth = authTask?.options?.auth else { return (authTask ?? task, taskWasModified) }
+            // Insert query parameters and headers
+            taskWasModified = true
+            let uri = newAuth.addOrUpdateQueryParams(
+                url: authTask!.url,
+                queryParams: newAuth.getExpandedAccessQueryParams()
+            )
+            var headers = authTask!.headers
+            headers.merge(newAuth.getExpandedAccessHeaders()) { (_, new) in new }
+            authTask = authTask!.copyWith(url: uri.absoluteString, headers: headers)
+        }
+        authTask = authTask ?? task
+        guard task.options?.hasStartCallback() == true else { return (authTask!, taskWasModified) }
+        // onStart callback
+        os_log("onTaskStart callback for taskId %@", log: log, type: .info, authTask!.taskId)
+        let modifiedTask = await invokeOnTaskStartCallback(task: authTask!)
+        taskWasModified = taskWasModified || modifiedTask != nil
+        return (modifiedTask ?? authTask!, taskWasModified)
     }
 }

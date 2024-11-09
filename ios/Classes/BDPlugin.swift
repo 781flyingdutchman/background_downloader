@@ -245,12 +245,6 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         let urlSessionDownloadTask = resumeData == nil ? UrlSessionDelegate.urlSession!.downloadTask(with: request) : UrlSessionDelegate.urlSession!.downloadTask(withResumeData: resumeData!)
         urlSessionDownloadTask.taskDescription = taskDescription
         urlSessionDownloadTask.priority = 1 - Float(task.priority) / 10
-        urlSessionDownloadTask.earliestBeginDate = Date()
-        if #available(iOS 15.0, *) {
-            os_log("Begin date %@", log: log, type: .info, urlSessionDownloadTask.earliestBeginDate?.ISO8601Format() ?? "??")
-        } else {
-            // Fallback on earlier versions
-        }
         urlSessionDownloadTask.resume()
         postEnqueuedStatusIfNotAlreadyDone(task: task)
         return true
@@ -328,7 +322,6 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             let urlSessionUploadTask = UrlSessionDelegate.urlSession!.uploadTask(with: request, fromFile: uploadFileUrl)
             urlSessionUploadTask.taskDescription = taskDescription
             urlSessionUploadTask.priority = 1 - Float(task.priority) / 10
-            urlSessionUploadTask.earliestBeginDate = Date()
             urlSessionUploadTask.resume()
         }
         else {
@@ -345,7 +338,6 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             let urlSessionUploadTask = UrlSessionDelegate.urlSession!.uploadTask(with: request, fromFile: uploader.outputFileUrl())
             urlSessionUploadTask.taskDescription = taskDescription
             urlSessionUploadTask.priority = 1 - Float(task.priority) / 10
-            urlSessionUploadTask.earliestBeginDate = Date()
             BDPlugin.uploaderForUrlSessionTaskIdentifier[urlSessionUploadTask.taskIdentifier] = uploader
             urlSessionUploadTask.resume()
         }

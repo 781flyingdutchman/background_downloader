@@ -195,9 +195,10 @@ enum Updates: Int {
 struct TaskOptions : Codable, Hashable {
     var onTaskStartRawHandle: Int64?
     var onTaskFinishedRawHandle: Int64?
+    var auth: Auth?
     
     /// True if [TaskOptions] contains a callback for Start or Auth that happens before the task starts
-    func hasStartOrAuthCallback() -> Bool {
+    func hasStartCallback() -> Bool {
         onTaskStartRawHandle != nil
     }
     
