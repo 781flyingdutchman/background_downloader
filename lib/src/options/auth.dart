@@ -231,7 +231,8 @@ class Auth {
       final response = await client.post(
         uri,
         headers: headers,
-        body: jsonEncode({'refresh_token': refreshToken}),
+        body: jsonEncode(
+            {'grant_type': 'refresh_token', 'refresh_token': refreshToken}),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
