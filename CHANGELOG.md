@@ -1,3 +1,9 @@
+## 8.8.0
+
+* [iOS] Adds configuration option to exclude downloaded files from iCloud backup
+* Adds `allGroups` parameter to `allTasks` and `allTaskIds` methods, to retrieve all tasks regardless of `group`
+* [Android] Fixes issue with un-commanded restart of a download in specific scenarios
+
 ## 8.7.1
 
 * Fix for compilation issue on Kotlin 2

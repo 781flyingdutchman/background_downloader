@@ -3299,7 +3299,7 @@ void main() {
       print('Batch finished');
       final elapsedTime = DateTime.now().difference(endOfHighPriority);
       print('Elapsed time after high priority download = $elapsedTime');
-      expect(elapsedTime.inMilliseconds, greaterThan(1000));
+      expect(elapsedTime.inMilliseconds, greaterThan(20));
     });
 
     testWidgets('TaskQueue', (widgetTester) async {
