@@ -22,6 +22,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     public static var keyConfigProxyAdress = "com.bbflight.background_downloader.config.proxyAddress"
     public static var keyConfigProxyPort = "com.bbflight.background_downloader.config.proxyPort"
     public static var keyConfigCheckAvailableSpace = "com.bbflight.background_downloader.config.checkAvailableSpace"
+    public static var keyConfigExcludeFromCloudBackup = "com.bbflight.background_downloader.config.excludeFromCloudBackup"
     public static var keyRequireWiFi = "com.bbflight.background_downloader.requireWiFi"
     public static var forceFailPostOnBackgroundChannel = false
     
@@ -121,19 +122,21 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                     await methodRequestPermission(call: call, result: result)
                     /// configuration
                 case "configLocalize":
-                    methodStoreConfig(key: BDPlugin.keyConfigLocalize, value: call.arguments, result: result)
+                    storeConfig(key: BDPlugin.keyConfigLocalize, value: call.arguments, result: result)
                 case "configResourceTimeout":
-                    methodStoreConfig(key: BDPlugin.keyConfigResourceTimeout, value: call.arguments, result: result)
+                    storeConfig(key: BDPlugin.keyConfigResourceTimeout, value: call.arguments, result: result)
                 case "configRequestTimeout":
-                    methodStoreConfig(key: BDPlugin.keyConfigRequestTimeout, value: call.arguments, result: result)
+                    storeConfig(key: BDPlugin.keyConfigRequestTimeout, value: call.arguments, result: result)
                 case "configProxyAddress":
-                    methodStoreConfig(key: BDPlugin.keyConfigProxyAdress, value: call.arguments, result: result)
+                    storeConfig(key: BDPlugin.keyConfigProxyAdress, value: call.arguments, result: result)
                 case "configProxyPort":
-                    methodStoreConfig(key: BDPlugin.keyConfigProxyPort, value: call.arguments, result: result)
+                    storeConfig(key: BDPlugin.keyConfigProxyPort, value: call.arguments, result: result)
                 case "configCheckAvailableSpace":
-                    methodStoreConfig(key: BDPlugin.keyConfigCheckAvailableSpace, value: call.arguments, result: result)
+                    storeConfig(key: BDPlugin.keyConfigCheckAvailableSpace, value: call.arguments, result: result)
                 case "configHoldingQueue":
                     methodConfigHoldingQueue(call: call, result: result)
+                case "configExcludeFromCloudBackup":
+                    storeConfig(key: BDPlugin.keyConfigExcludeFromCloudBackup, value: call.arguments, result: result)
                 case "platformVersion":
                     result(UIDevice.current.systemVersion)
                 case "forceFailPostOnBackgroundChannel":
@@ -672,19 +675,6 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         result(status.rawValue)
     }
     
-    /// Store or remove a configuration in shared preferences
-    ///
-    /// If the value is nil, the configuration is removed
-    private func methodStoreConfig(key: String, value: Any?, result: @escaping FlutterResult) {
-        let defaults = UserDefaults.standard
-        if value != nil {
-            defaults.set(value, forKey: key)
-        } else {
-            defaults.removeObject(forKey: key)
-        }
-        result(nil)
-    }
-    
     /// Configure the HoldingQueue (and create if necessary)
     private func methodConfigHoldingQueue(call: FlutterMethodCall, result: @escaping FlutterResult) {
         let args = call.arguments as! [Any]
@@ -694,7 +684,6 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         BDPlugin.holdingQueue?.maxConcurrentByGroup = args[2] as! Int
         result(nil)
     }
-    
     
     /// Sets or resets flag to force failing posting on background channel
     ///
@@ -717,6 +706,19 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         }
         let resultTask = suggestedFilenameFromResponseHeaders(task: task, responseHeaders: ["Content-Disposition" : contentDisposition], unique: true)
         result(resultTask.filename)
+    }
+    
+    /// Store or remove a configuration in shared preferences
+    ///
+    /// If the value is nil, the configuration is removed
+    private func storeConfig(key: String, value: Any?, result: @escaping FlutterResult) {
+        let defaults = UserDefaults.standard
+        if value != nil {
+            defaults.set(value, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+        result(nil)
     }
     
     //MARK: UNUserNotificationCenterDelegate

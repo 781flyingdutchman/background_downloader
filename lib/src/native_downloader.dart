@@ -582,6 +582,19 @@ final class IOSDownloader extends NativeDownloader {
         await NativeDownloader.methodChannel
             .invokeMethod('configLocalize', translation);
 
+      case (Config.excludeFromCloudBackup, dynamic exclude):
+        assert(
+            exclude is bool || [Config.always, Config.never].contains(exclude),
+            '${Config.excludeFromCloudBackup} expects one of ${[
+              'true',
+              'false',
+              Config.never,
+              Config.always
+            ]}');
+        final boolValue = (exclude == true || exclude == Config.always);
+        await NativeDownloader.methodChannel
+            .invokeMethod('configExcludeFromCloudBackup', boolValue);
+
       default:
         return (
           configItem.$1,

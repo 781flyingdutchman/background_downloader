@@ -626,6 +626,30 @@ void main() {
       await FileDownloader().cancelTaskWithId(task.taskId);
       await Future.delayed(const Duration(seconds: 2));
     });
+
+    testWidgets('iOS exclude from Cloud backup', (widgetTester) async {
+      // Check the logs for evidence of the bit being set
+      final configResult = await FileDownloader()
+          .configure(globalConfig: (Config.excludeFromCloudBackup, true));
+      if (!Platform.isIOS) {
+        expect(configResult.first,
+            equals((Config.excludeFromCloudBackup, 'not implemented')));
+        return;
+      }
+      expect(configResult.first, equals((Config.excludeFromCloudBackup, '')));
+      expect(
+          () => FileDownloader().configure(
+              globalConfig: (Config.excludeFromCloudBackup, "invalid")),
+          throwsAssertionError);
+      final result = await FileDownloader().download(task);
+      expect(result.status, equals(TaskStatus.complete));
+      // Cache directory will not set bit, but cannot see that in logs
+      task = task.copyWith(baseDirectory: BaseDirectory.temporary);
+      await FileDownloader().download(task);
+      var configResult2 = await FileDownloader()
+          .configure(iOSConfig: (Config.excludeFromCloudBackup, Config.never));
+      expect(configResult2.first.$1, equals(Config.excludeFromCloudBackup));
+    });
   });
 
   group('Queue and task management', () {
