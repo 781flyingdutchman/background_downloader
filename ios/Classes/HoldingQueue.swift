@@ -118,13 +118,13 @@ class HoldingQueue {
     }
     
     /**
-     * Return list of [Task] for this [group]
+     * Return list of [Task] for this [group]. If [group] is nil al tasks are returned
      *
      * Because this is used in combination with the UrlSessions tasks, use of this method
      * requires the caller to acquire the [stateLock]
      */
-    func allTasks(group: String) -> [Task] {
-        return queue.filter( { $0.task.group == group } ).map { $0.task }
+    func allTasks(group: String?) -> [Task] {
+        return queue.filter( { group == nil || $0.task.group == group } ).map { $0.task }
     }
     
     /**

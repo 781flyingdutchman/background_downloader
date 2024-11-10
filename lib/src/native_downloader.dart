@@ -243,12 +243,12 @@ abstract base class NativeDownloader extends BaseDownloader {
 
   @override
   Future<List<Task>> allTasks(
-      String group, bool includeTasksWaitingToRetry) async {
+      String group, bool includeTasksWaitingToRetry, allGroups) async {
     final retryAndPausedTasks =
-        await super.allTasks(group, includeTasksWaitingToRetry);
-    final result =
-        await methodChannel.invokeMethod<List<dynamic>?>('allTasks', group) ??
-            [];
+        await super.allTasks(group, includeTasksWaitingToRetry, allGroups);
+    final result = await methodChannel.invokeMethod<List<dynamic>?>(
+            'allTasks', allGroups ? null : group) ??
+        [];
     final tasks = result
         .map((e) => Task.createFromJson(jsonDecode(e as String)))
         .toList();

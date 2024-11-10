@@ -173,13 +173,13 @@ class HoldingQueue(private val workManager: WorkManager) {
     }
 
     /**
-     * Return list of [Task] for this [group]
+     * Return list of [Task] for this [group]. If [group] is null, all tasks will be returned
      *
      * Because this is used in combination with the WorkManager tasks, use of this method
      * requires the caller to acquire the [stateMutex]
      */
-    fun allTasks(group: String): List<Task> {
-        return queue.filter { it.task.group == group }.map { it.task }
+    fun allTasks(group: String?): List<Task> {
+        return queue.filter { group == null || it.task.group == group }.map { it.task }
     }
 
     /**
