@@ -229,12 +229,12 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 Log.d(TAG, "Could not find tasks to cancel")
                 return false
             }
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            val tasksMap = getTaskMap(prefs)
             for (workInfo in workInfos) {
                 if (workInfo.state != WorkInfo.State.SUCCEEDED) {
                     // send cancellation update for tasks that have not yet succeeded
                     // and remove associated notification
-                    val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-                    val tasksMap = getTaskMap(prefs)
                     val task = tasksMap[taskId]
                     if (task != null) {
                         processStatusUpdate(
