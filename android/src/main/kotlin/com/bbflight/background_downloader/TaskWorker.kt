@@ -531,11 +531,19 @@ open class TaskWorker(
                 )
 
                 is CancellationException -> {
-                    Log.i(
-                        TAG,
-                        "Canceled task with id ${task.taskId}: ${e.message}"
-                    )
-                    return TaskStatus.canceled
+                    if (BDPlugin.canceledTaskIds.contains(task.taskId)) {
+                        Log.i(
+                            TAG,
+                            "Canceled task with id ${task.taskId}: ${e.message}"
+                        )
+                        return TaskStatus.canceled
+                    } else {
+                        Log.i(
+                            TAG,
+                            "WorkManager CancellationException for task with id ${task.taskId} without manual cancellation: failing task"
+                        )
+                        return TaskStatus.failed
+                    }
                 }
 
                 else -> {
