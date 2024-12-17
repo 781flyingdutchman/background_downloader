@@ -350,6 +350,7 @@ open class TaskWorker(
     private var nextProgressUpdateTime = 0L
     var networkSpeed = -1.0 // in MB/s
     private var isTimedOut = false
+    private var timerForTimeOut: Timer? = null
 
     // properties related to notifications
     var notificationConfigJsonString: String? = null
@@ -393,9 +394,12 @@ open class TaskWorker(
         runInForegroundFileSize =
             prefs.getInt(BDPlugin.keyConfigForegroundFileSize, -1)
         withContext(Dispatchers.IO) {
-            Timer().schedule(taskTimeoutMillis) {
+            timerForTimeOut = Timer()
+            timerForTimeOut?.schedule(taskTimeoutMillis) {
                 isTimedOut =
                     true // triggers .failed in [TransferBytes] method if not runInForeground
+                timerForTimeOut?.cancel()
+                timerForTimeOut?.purge()
             }
             task = Json.decodeFromString(inputData.getString(keyTask)!!)
             notificationConfigJsonString = inputData.getString(keyNotificationConfig)
@@ -531,19 +535,11 @@ open class TaskWorker(
                 )
 
                 is CancellationException -> {
-                    if (BDPlugin.canceledTaskIds.contains(task.taskId)) {
-                        Log.i(
-                            TAG,
-                            "Canceled task with id ${task.taskId}: ${e.message}"
-                        )
-                        return TaskStatus.canceled
-                    } else {
-                        Log.i(
-                            TAG,
-                            "WorkManager CancellationException for task with id ${task.taskId} without manual cancellation: failing task"
-                        )
-                        return TaskStatus.failed
-                    }
+                    Log.i(
+                        TAG,
+                        "Canceled task with id ${task.taskId}: ${e.message}"
+                    )
+                    return TaskStatus.canceled
                 }
 
                 else -> {
@@ -630,6 +626,11 @@ open class TaskWorker(
                         }
                     }
                     doneCompleter.complete(TaskStatus.complete)
+                }.apply {
+                    invokeOnCompletion {
+                        timerForTimeOut?.cancel()
+                        timerForTimeOut?.purge()
+                    }
                 }
                 testerJob = launch {
                     while (isActive) {
