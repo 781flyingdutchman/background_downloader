@@ -9,6 +9,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -29,8 +30,6 @@ import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.SocketException
 import java.net.URL
-import java.util.Timer
-import kotlin.concurrent.schedule
 import kotlin.concurrent.write
 import java.lang.Double.min as doubleMin
 
@@ -393,9 +392,9 @@ open class TaskWorker(
         runInForegroundFileSize =
             prefs.getInt(BDPlugin.keyConfigForegroundFileSize, -1)
         withContext(Dispatchers.IO) {
-            Timer().schedule(taskTimeoutMillis) {
-                isTimedOut =
-                    true // triggers .failed in [TransferBytes] method if not runInForeground
+            CoroutineScope(Dispatchers.Default).launch {
+                delay(taskTimeoutMillis)
+                isTimedOut = true
             }
             task = Json.decodeFromString(inputData.getString(keyTask)!!)
             notificationConfigJsonString = inputData.getString(keyNotificationConfig)

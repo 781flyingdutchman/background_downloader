@@ -1,3 +1,7 @@
+## 8.8.1
+
+* Fixes Android bug where timeout timer is not cleaned up after use
+
 ## 8.8.0
 
 * [iOS] Adds configuration option to exclude downloaded files from iCloud backup
