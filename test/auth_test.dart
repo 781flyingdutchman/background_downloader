@@ -29,7 +29,7 @@ void main() {
       // Set up mock response for refresh request
       when(mockClient.post(
         Uri.parse(auth.refreshUrl!),
-        headers: auth.getRefreshHeaders(),
+        headers: auth.refreshHeaders,
         body: jsonEncode({'refresh_token': auth.refreshToken}),
       )).thenAnswer((_) async => http.Response(
           jsonEncode({'access_token': 'newAccessToken', 'expires_in': 3600}),
@@ -49,7 +49,7 @@ void main() {
       // Set up mock response for refresh request
       when(mockClient.post(
         Uri.parse(auth.refreshUrl!),
-        headers: auth.getRefreshHeaders(),
+        headers: auth.refreshHeaders,
         body: jsonEncode({'refresh_token': auth.refreshToken}),
       )).thenAnswer((_) async => http.Response('', 400));
       auth.accessQueryParams = {'accessToken': '{accessToken}'};
@@ -66,8 +66,11 @@ void main() {
       // Set up mock response for refresh request
       when(mockClient.post(
         Uri.parse(auth.refreshUrl!),
-        headers: auth.getRefreshHeaders(),
-        body: jsonEncode({'refresh_token': auth.refreshToken}),
+        headers: {'Content-type': 'application/json'},
+        body: jsonEncode({
+          'grant_type': 'refresh_token',
+          'refresh_token': auth.refreshToken
+        }),
       )).thenAnswer((_) async => http.Response(
           jsonEncode({
             'access_token': 'newAccessToken',
@@ -91,8 +94,11 @@ void main() {
       // Set up mock response for refresh request
       when(mockClient.post(
         Uri.parse(auth.refreshUrl!),
-        headers: auth.getRefreshHeaders(),
-        body: jsonEncode({'refresh_token': auth.refreshToken}),
+        headers: {'Content-type': 'application/json'},
+        body: jsonEncode({
+          'grant_type': 'refresh_token',
+          'refresh_token': auth.refreshToken
+        }),
       )).thenAnswer((_) async => http.Response(
           jsonEncode({'access_token': 'newAccessToken', 'expires_in': 3600}),
           200));
@@ -164,11 +170,11 @@ void main() {
     test('fromJson creates an Auth object from JSON map', () {
       final json = {
         'accessToken': 'testAccessToken',
-        'authHeaders': {'Authorization': 'Bearer {accessToken}'},
+        'accessHeaders': {'Authorization': 'Bearer {accessToken}'},
         'accessQueryParams': {'token': '{accessToken}'},
         'accessTokenExpiryTime': 1672531199000,
-        'reAuthToken': 'testRefreshToken',
-        'tokenRefreshUrl': 'https://example.com/refresh',
+        'refreshToken': 'testRefreshToken',
+        'refreshUrl': 'https://example.com/refresh',
         'refreshHeaders': {'Content-Type': 'application/json'},
         'refreshQueryParams': {'grant_type': 'refresh_token'},
       };
@@ -201,11 +207,11 @@ void main() {
       final json = originalAuth.toJson();
       final newAuth = Auth.fromJson({
         'accessToken': json['accessToken'],
-        'authHeaders': json['accessHeaders'],
+        'accessHeaders': json['accessHeaders'],
         'accessQueryParams': json['accessQueryParams'],
         'accessTokenExpiryTime': json['accessTokenExpiryTime'],
-        'reAuthToken': json['refreshToken'],
-        'tokenRefreshUrl': json['refreshUrl'],
+        'refreshToken': json['refreshToken'],
+        'refreshUrl': json['refreshUrl'],
         'refreshHeaders': json['refreshHeaders'],
         'refreshQueryParams': json['refreshQueryParams'],
       });

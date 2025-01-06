@@ -138,7 +138,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                 case "configHoldingQueue":
                     methodConfigHoldingQueue(call: call, result: result)
                 case "configExcludeFromCloudBackup":
-                    storeConfig(key: BDPlugin.keyConfigExcludeFromCloudBackup, value: call.arguments, result: result)
+                storeInUserDefaults(key: BDPlugin.keyConfigExcludeFromCloudBackup, value: call.arguments, result: result)
                 case "platformVersion":
                     result(UIDevice.current.systemVersion)
                 case "forceFailPostOnBackgroundChannel":
@@ -708,18 +708,6 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         result(resultTask.filename)
     }
     
-    /// Store or remove a configuration in shared preferences
-    ///
-    /// If the value is nil, the configuration is removed
-    private func storeConfig(key: String, value: Any?, result: @escaping FlutterResult) {
-        let defaults = UserDefaults.standard
-        if value != nil {
-            defaults.set(value, forKey: key)
-        } else {
-            defaults.removeObject(forKey: key)
-        }
-        result(nil)
-    }
 
     //MARK: UNUserNotificationCenterDelegate
     
