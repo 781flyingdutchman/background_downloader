@@ -551,6 +551,7 @@ final class Config {
   static const runInForegroundIfFileLargerThan =
       'runInForegroundIfFileLargerThan';
   static const localize = 'localize';
+  static const excludeFromCloudBackup = 'excludeFromCloudBackup';
   static const useCacheDir = 'useCacheDir';
   static const useExternalStorage = 'useExternalStorage';
   static const holdingQueue = 'holdingQueue';

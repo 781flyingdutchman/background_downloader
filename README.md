@@ -315,6 +315,10 @@ print('Suggested filename=${result.task.filename}'); // note we don't use 'task'
 print('Wrong use filename=${task.filename}'); // this will print '?' as 'task' hasn't changed
 ```
 
+#### Android file URIs
+
+From Android 11 on, you can upload a file using the Mediastore URI instead of the file name. To create such an `UploadTask`, use `UploadTask.fromAndroidUri` and supply the 'content://' URI. To make this easier, methods `moveToSharedStorage` and `pathInSharedStorage` can now return a URI if `asAndroidUri` is set to true. Note that if for whatever reason the URI cannot be obtained, the regular file path will be returned, so you need to confirm the returned value starts with 'content://' before using it as a URI.
+
 ### A batch of files
 
 To download a batch of files and wait for completion of all, create a `List` of `DownloadTask` objects and call `downloadBatch`:
@@ -687,6 +691,7 @@ Uploads are very similar to downloads, except:
 There are two ways to upload a file to a server: binary upload (where the file is included in the POST body) and form/multi-part upload. Which type of upload is appropriate depends on the server you are uploading to. The upload will be done using the binary upload method only if you have set the `post` field of the `UploadTask` to 'binary'.
 
 If you already have a `File` object, you can create your `UploadTask` using `UploadTask.fromFile`, though note that this will create a task with an absolute path reference and `BaseDirectory.root`, which can cause problems on mobile platforms (see [here](#specifying-the-location-of-the-file-to-download-or-upload)). Preferably, use `Task.split` to break your `File` or filePath into appropriate baseDirectory, directory and filename and use that to create your `UploadTask`.
+On Android, you can use Mediastore URIs for binary uploads by creating the task using `UploadTask.fromAndroidUri`.
 
 For multi-part uploads you can specify name/value pairs in the `fields` property of the `UploadTask` as a `Map<String, String>`. These will be uploaded as form fields along with the file. To specify multiple values for a single name, format the value as `'"value1", "value2", "value3"'` (note the double quotes and the comma to separate the values).
 
@@ -731,6 +736,7 @@ To manage or query the queue of waiting or running tasks, call:
 * `tasksFinished` to check if all tasks have finished (successfully or otherwise)
 
 Each of these methods accept a `group` parameter that targets the method to a specific group. If tasks are enqueued with a `group` other than default, calling any of these methods without a group parameter will not affect/include those tasks - only the default tasks.
+Methods `allTasks` and `allTaskId` return all tasks regardless of group if argument `allGroups` is set to `true`.
 
 **NOTE:** Only tasks that are active (ie. not in a final state) are guaranteed to be returned or counted, but returning a task does not guarantee that it is active.
 This means that if you check `tasksFinished` when processing a task update, the task you received an update for may still show as 'active', even though it just finished, and result in `false` being returned. To fix this, pass that task's taskId as `ignoreTaskId` to the `tasksFinished` call, and it will be ignored for the purpose of testing if all tasks are finished: 

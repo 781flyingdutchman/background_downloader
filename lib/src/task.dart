@@ -858,6 +858,41 @@ final class UploadTask extends Task {
             httpRequestMethod: httpRequestMethod ?? 'POST',
             allowPause: false);
 
+  /// Creates [UploadTask] from an Android 'content' URI, for binary upload
+  ///
+  /// The [uri] must be a 'content://' scheme and will be stored in the
+  /// [directory] property. The task's [filename] will be set to the last
+  /// path segment of the [uri].
+  ///
+  /// Note that the result of [Task.filePath] is undefined when using a URI
+  UploadTask.fromAndroidUri(
+      {required Uri uri,
+      super.taskId,
+      required super.url,
+      super.urlQueryParameters,
+      super.headers,
+      String? mimeType,
+      super.group,
+      super.updates,
+      super.requiresWiFi,
+      super.retries,
+      super.priority,
+      super.metaData,
+      super.displayName,
+      super.creationTime})
+      : mimeType = mimeType ?? 'application/octet-stream',
+        fields = {},
+        fileField = '',
+        super(
+            baseDirectory: BaseDirectory.root,
+            directory: uri.toString(),
+            filename: uri.pathSegments.last,
+            httpRequestMethod: 'POST',
+            post: 'binary',
+            allowPause: false) {
+    assert(uri.scheme == 'content', 'Android URI scheme must be "content"');
+  }
+
   /// Creates [UploadTask] object from [json]
   UploadTask.fromJson(super.json)
       : assert(

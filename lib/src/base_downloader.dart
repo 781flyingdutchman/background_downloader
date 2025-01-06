@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:background_downloader/src/file_downloader.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
@@ -365,10 +366,16 @@ abstract base class BaseDownloader {
     return retryCount + pausedCount + awaitTasksToRemove.length;
   }
 
-  /// Returns a list of all tasks in progress, matching [group]
+  /// Returns a list of all tasks in progress, filtered by [group] unless
+  /// [allGroups] is true
   @mustCallSuper
   Future<List<Task>> allTasks(
-      String group, bool includeTasksWaitingToRetry) async {
+      String group, bool includeTasksWaitingToRetry, bool allGroups) async {
+    assert(
+        !allGroups ||
+            (group == FileDownloader.defaultGroup &&
+                includeTasksWaitingToRetry == true),
+        'If allGroups is true, no other arguments can be set');
     final tasks = <Task>[];
     if (includeTasksWaitingToRetry) {
       tasks.addAll(tasksWaitingToRetry.where((task) => task.group == group));
@@ -609,15 +616,19 @@ abstract base class BaseDownloader {
   /// [destination] and potential subdirectory [directory]
   ///
   /// Returns the path to the file in shared storage, or null
-  Future<String?> moveToSharedStorage(String filePath,
-      SharedStorage destination, String directory, String? mimeType) {
+  Future<String?> moveToSharedStorage(
+      String filePath,
+      SharedStorage destination,
+      String directory,
+      String? mimeType,
+      bool asAndroidUri) {
     return Future.value(null);
   }
 
   /// Returns the path to the file at [filePath] in shared storage
   /// [destination] and potential subdirectory [directory], or null
-  Future<String?> pathInSharedStorage(
-      String filePath, SharedStorage destination, String directory) {
+  Future<String?> pathInSharedStorage(String filePath,
+      SharedStorage destination, String directory, bool asAndroidUri) {
     return Future.value(null);
   }
 

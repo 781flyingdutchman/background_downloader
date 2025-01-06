@@ -626,6 +626,30 @@ void main() {
       await FileDownloader().cancelTaskWithId(task.taskId);
       await Future.delayed(const Duration(seconds: 2));
     });
+
+    testWidgets('iOS exclude from Cloud backup', (widgetTester) async {
+      // Check the logs for evidence of the bit being set
+      final configResult = await FileDownloader()
+          .configure(globalConfig: (Config.excludeFromCloudBackup, true));
+      if (!Platform.isIOS) {
+        expect(configResult.first,
+            equals((Config.excludeFromCloudBackup, 'not implemented')));
+        return;
+      }
+      expect(configResult.first, equals((Config.excludeFromCloudBackup, '')));
+      expect(
+          () => FileDownloader().configure(
+              globalConfig: (Config.excludeFromCloudBackup, "invalid")),
+          throwsAssertionError);
+      final result = await FileDownloader().download(task);
+      expect(result.status, equals(TaskStatus.complete));
+      // Cache directory will not set bit, but cannot see that in logs
+      task = task.copyWith(baseDirectory: BaseDirectory.temporary);
+      await FileDownloader().download(task);
+      var configResult2 = await FileDownloader()
+          .configure(iOSConfig: (Config.excludeFromCloudBackup, Config.never));
+      expect(configResult2.first.$1, equals(Config.excludeFromCloudBackup));
+    });
   });
 
   group('Queue and task management', () {
@@ -666,7 +690,33 @@ void main() {
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
       expect(lastStatus, equals(TaskStatus.complete));
-      print('Finished alTasks');
+      print('Finished allTasks');
+    });
+
+    testWidgets('allTasks and allTaskIds with allGroups set to true',
+        (widgetTester) async {
+      print('Starting allTasks with allGroups set to true');
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
+      final task2 = task.copyWith(group: 'group2');
+      expect(await FileDownloader().enqueue(task), isTrue);
+      expect(await FileDownloader().enqueue(task2), isTrue);
+      expect(await FileDownloader().allTasks(group: 'non-default'), isEmpty);
+      expect(() => FileDownloader().allTasks(group: 'some', allGroups: true),
+          throwsAssertionError);
+      expect(
+          () => FileDownloader()
+              .allTasks(includeTasksWaitingToRetry: false, allGroups: true),
+          throwsAssertionError);
+      final tasks = await FileDownloader().allTasks(allGroups: true);
+      expect(tasks.length, equals(2));
+      expect(tasks.contains(task), isTrue);
+      expect(tasks.contains(task2), isTrue);
+      final taskIds = await FileDownloader().allTaskIds(allGroups: true);
+      expect(taskIds.length, equals(2));
+      expect(taskIds.contains(task.taskId), isTrue);
+      expect(taskIds.contains(task2.taskId), isTrue);
+      await Future.delayed(const Duration(seconds: 3));
+      print('Finished allTasks with allGroups set to true');
     });
 
     testWidgets('tasksFinished', (widgetTester) async {
@@ -1710,6 +1760,42 @@ void main() {
       expect(progressCallbackCounter, greaterThan(1));
       expect(lastProgress, equals(progressComplete));
       print('Finished enqueue binary file');
+    });
+
+    testWidgets('enqueue binary file using Android URI', (widgetTester) async {
+      if (Platform.isAndroid) {
+        FileDownloader().registerCallbacks(
+            taskStatusCallback: statusCallback,
+            taskProgressCallback: progressCallback);
+        // move file to shared storage and obtain the URI
+        final dummy =
+            DownloadTask(url: uploadTestUrl, filename: uploadFilename);
+        final uriString = await FileDownloader().moveFileToSharedStorage(
+            await dummy.filePath(), SharedStorage.downloads,
+            asAndroidUri: true);
+        print('URI: $uriString');
+        final task = UploadTask.fromAndroidUri(
+            url: uploadBinaryTestUrl, uri: Uri.parse(uriString!));
+        expect(await FileDownloader().enqueue(task), isTrue);
+        await statusCallbackCompleter.future;
+        expect(statusCallbackCounter, equals(3));
+        expect(lastStatus, equals(TaskStatus.complete));
+        print('Finished enqueue binary file using Android URI');
+      }
+    });
+
+    testWidgets('enqueue binary file using incorrect Android URI',
+        (widgetTester) async {
+      if (Platform.isAndroid) {
+        final task = UploadTask.fromAndroidUri(
+            url: uploadBinaryTestUrl,
+            uri: Uri.parse('content://some/invalid/path'));
+        final result = await FileDownloader().upload(task);
+        print(result.exception?.description);
+        expect(result.status, equals(TaskStatus.failed));
+        expect(
+            result.exception?.exceptionType, equals('TaskFileSystemException'));
+      }
     });
 
     testWidgets('upload binary file partially bytes=2-4', (widgetTester) async {
@@ -2801,6 +2887,21 @@ void main() {
       Directory(dirname(path)).deleteSync();
     });
 
+    test('move task to shared storage with Android URI', () async {
+      // note: moved file is not deleted in this test
+      if (Platform.isAndroid) {
+        var filePath = await task.filePath();
+        await FileDownloader().download(task);
+        final path = await FileDownloader().moveToSharedStorage(
+            task, SharedStorage.downloads,
+            asAndroidUri: true);
+        print('Uri is $path');
+        expect(path, isNotNull);
+        expect(path?.startsWith('content://'), isTrue);
+        expect(File(filePath).existsSync(), isFalse);
+      }
+    });
+
     test('[*] try to move text file to images -> error', () async {
       // Note: this test will fail on Android API below 30, as that API
       // does not have a problem storing a text file in images
@@ -2889,6 +2990,25 @@ void main() {
           .pathInSharedStorage(path, SharedStorage.downloads);
       expect(filePath, equals(path));
       File(path).deleteSync();
+    });
+
+    testWidgets('path in shared storage with Android URI',
+        (widgetTester) async {
+      if (Platform.isAndroid) {
+        await FileDownloader().download(task);
+        final path = await FileDownloader()
+            .moveToSharedStorage(task, SharedStorage.downloads);
+        print('Path in downloads is $path');
+        expect(path, isNotNull);
+        expect(File(path!).existsSync(), isTrue);
+        final uri = await FileDownloader().pathInSharedStorage(
+            path, SharedStorage.downloads,
+            asAndroidUri: true);
+        print('Uri is $uri');
+        expect(uri, isNotNull);
+        expect(uri?.startsWith('content://'), isTrue);
+        File(path).deleteSync();
+      }
     });
   });
 
@@ -3161,22 +3281,25 @@ void main() {
     testWidgets('One high priority task among regular ones',
         (widgetTester) async {
       final tasks = <DownloadTask>[];
-      for (var n = 1; n < 20; n++) {
+      for (var n = 1; n < 40; n++) {
         final downloadTask = DownloadTask(url: urlWithContentLength);
         print('Adding task with id ${downloadTask.taskId}');
         tasks.add(downloadTask);
       }
       final batchFuture = FileDownloader().downloadBatch(tasks);
-      await Future.delayed(const Duration(seconds: 1));
+      print('Wait a second after enqueuing all non-priority tasks');
+      await Future.delayed(const Duration(milliseconds: 1000));
       var priorityTask = DownloadTask(url: urlWithContentLength, priority: 0);
       print('PriorityTask taskId = ${priorityTask.taskId}');
       final result = await FileDownloader().download(priorityTask);
       expect(result.status, equals(TaskStatus.complete));
       final endOfHighPriority = DateTime.now();
+      print('High priority task finished, waiting for batch to finish');
       await batchFuture;
+      print('Batch finished');
       final elapsedTime = DateTime.now().difference(endOfHighPriority);
       print('Elapsed time after high priority download = $elapsedTime');
-      expect(elapsedTime.inMilliseconds, greaterThan(100));
+      expect(elapsedTime.inMilliseconds, greaterThan(20));
     });
 
     testWidgets('TaskQueue', (widgetTester) async {

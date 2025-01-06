@@ -300,9 +300,12 @@ final class DesktopDownloader extends BaseDownloader {
 
   @override
   Future<List<Task>> allTasks(
-      String group, bool includeTasksWaitingToRetry) async {
+      String group, bool includeTasksWaitingToRetry, allGroups) async {
     final retryAndPausedTasks =
-        await super.allTasks(group, includeTasksWaitingToRetry);
+        await super.allTasks(group, includeTasksWaitingToRetry, allGroups);
+    if (allGroups) {
+      return [...retryAndPausedTasks, ..._queue.unorderedElements, ..._running];
+    }
     final inQueue =
         _queue.unorderedElements.where((task) => task.group == group);
     final running = _running.where((task) => task.group == group);
@@ -392,8 +395,12 @@ final class DesktopDownloader extends BaseDownloader {
       Future.value({});
 
   @override
-  Future<String?> moveToSharedStorage(String filePath,
-      SharedStorage destination, String directory, String? mimeType) async {
+  Future<String?> moveToSharedStorage(
+      String filePath,
+      SharedStorage destination,
+      String directory,
+      String? mimeType,
+      bool asAndroidUri) async {
     final destDirectoryPath =
         await getDestinationDirectoryPath(destination, directory);
     if (destDirectoryPath == null) {
@@ -414,8 +421,8 @@ final class DesktopDownloader extends BaseDownloader {
   }
 
   @override
-  Future<String?> pathInSharedStorage(
-      String filePath, SharedStorage destination, String directory) async {
+  Future<String?> pathInSharedStorage(String filePath,
+      SharedStorage destination, String directory, bool asAndroidUri) async {
     final destDirectoryPath =
         await getDestinationDirectoryPath(destination, directory);
     if (destDirectoryPath == null) {

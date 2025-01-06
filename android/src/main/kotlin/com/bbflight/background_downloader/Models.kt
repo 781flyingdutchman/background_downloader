@@ -99,7 +99,7 @@ class Task(
     val fileField: String = "",
     val mimeType: String = "",
     val fields: Map<String, String> = mapOf(),
-    private val directory: String = "",
+    val directory: String = "",
     val baseDirectory: BaseDirectory,
     val group: String,
     val updates: Updates,
@@ -529,21 +529,7 @@ class TaskException(
     val type: ExceptionType,
     val httpResponseCode: Int = -1,
     val description: String = ""
-) {
-    constructor(jsonMap: Map<String, Any?>) : this(
-        type = when (jsonMap["type"] as String) {
-            "TaskFileSystemException" -> ExceptionType.fileSystem
-            "TaskUrlException" -> ExceptionType.url
-            "TaskConnectionException" -> ExceptionType.connection
-            "TaskResumeException" -> ExceptionType.resume
-            "TaskHttpException" -> ExceptionType.httpResponse
-
-            else -> ExceptionType.general
-        }, httpResponseCode = (jsonMap["httpResponseCode"] as Double? ?: -1).toInt(),
-        description = jsonMap["description"] as String? ?: ""
-    )
-}
-
+)
 
 object TaskExceptionSerializer : KSerializer<TaskException> {
     override val descriptor = buildClassSerialDescriptor("TaskException") {

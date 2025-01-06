@@ -293,17 +293,26 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
                                                   description: "Failed to create directory \(directory.path)")
                     return
                 }
-                let filePath = directory.appendingPath(task.filename)
-                if FileManager.default.fileExists(atPath: filePath.path) {
-                    try? FileManager.default.removeItem(at: filePath)
+                var fileUrl = directory.appendingPath(task.filename)
+                if FileManager.default.fileExists(atPath: fileUrl.path) {
+                    try? FileManager.default.removeItem(at: fileUrl)
                 }
                 do {
-                    try FileManager.default.moveItem(at: location, to: filePath)
+                    try FileManager.default.moveItem(at: location, to: fileUrl)
                 } catch {
-                    os_log("Failed to move file from %@ to %@: %@", log: log, type: .error, location.path, filePath.path, error.localizedDescription)
+                    os_log("Failed to move file from %@ to %@: %@", log: log, type: .error, location.path, fileUrl.path, error.localizedDescription)
                     taskException = TaskException(type: .fileSystem, httpResponseCode: -1,
-                                                  description: "Failed to move file from \(location.path) to \(filePath.path): \(error.localizedDescription)")
+                                                  description: "Failed to move file from \(location.path) to \(fileUrl.path): \(error.localizedDescription)")
                     return
+                }
+                do {
+                    if UserDefaults.standard.bool(forKey: BDPlugin.keyConfigExcludeFromCloudBackup)
+                    {
+                        try fileUrl.setCloudBackup(exclude: true)
+                        os_log("Excluded from iCloud backup: %@", log: log, type: .info, fileUrl.path)
+                    }
+                } catch {
+                    os_log("Could not exclude from iCloud backup: %@ - %@", log: log, type: .info, fileUrl.path, error.localizedDescription)
                 }
                 finalStatus = TaskStatus.complete
             } else {

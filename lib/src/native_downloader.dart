@@ -246,12 +246,12 @@ abstract base class NativeDownloader extends BaseDownloader {
 
   @override
   Future<List<Task>> allTasks(
-      String group, bool includeTasksWaitingToRetry) async {
+      String group, bool includeTasksWaitingToRetry, allGroups) async {
     final retryAndPausedTasks =
-        await super.allTasks(group, includeTasksWaitingToRetry);
-    final result =
-        await methodChannel.invokeMethod<List<dynamic>?>('allTasks', group) ??
-            [];
+        await super.allTasks(group, includeTasksWaitingToRetry, allGroups);
+    final result = await methodChannel.invokeMethod<List<dynamic>?>(
+            'allTasks', allGroups ? null : group) ??
+        [];
     final tasks = result
         .map((e) => Task.createFromJson(jsonDecode(e as String)))
         .toList();
@@ -358,16 +358,20 @@ abstract base class NativeDownloader extends BaseDownloader {
   }
 
   @override
-  Future<String?> moveToSharedStorage(String filePath,
-          SharedStorage destination, String directory, String? mimeType) =>
+  Future<String?> moveToSharedStorage(
+          String filePath,
+          SharedStorage destination,
+          String directory,
+          String? mimeType,
+          bool asAndroidUri) =>
       methodChannel.invokeMethod<String?>('moveToSharedStorage',
-          [filePath, destination.index, directory, mimeType]);
+          [filePath, destination.index, directory, mimeType, asAndroidUri]);
 
   @override
-  Future<String?> pathInSharedStorage(
-          String filePath, SharedStorage destination, String directory) =>
-      methodChannel.invokeMethod<String?>(
-          'pathInSharedStorage', [filePath, destination.index, directory]);
+  Future<String?> pathInSharedStorage(String filePath,
+          SharedStorage destination, String directory, bool asAndroidUri) =>
+      methodChannel.invokeMethod<String?>('pathInSharedStorage',
+          [filePath, destination.index, directory, asAndroidUri]);
 
   @override
   Future<bool> openFile(Task? task, String? filePath, String? mimeType) async {
@@ -617,6 +621,19 @@ final class IOSDownloader extends NativeDownloader {
       case (Config.localize, Map<String, String>? translation):
         await NativeDownloader.methodChannel
             .invokeMethod('configLocalize', translation);
+
+      case (Config.excludeFromCloudBackup, dynamic exclude):
+        assert(
+            exclude is bool || [Config.always, Config.never].contains(exclude),
+            '${Config.excludeFromCloudBackup} expects one of ${[
+              'true',
+              'false',
+              Config.never,
+              Config.always
+            ]}');
+        final boolValue = (exclude == true || exclude == Config.always);
+        await NativeDownloader.methodChannel
+            .invokeMethod('configExcludeFromCloudBackup', boolValue);
 
       default:
         return (

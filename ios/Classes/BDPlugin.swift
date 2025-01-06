@@ -22,6 +22,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     public static var keyConfigProxyAdress = "com.bbflight.background_downloader.config.proxyAddress"
     public static var keyConfigProxyPort = "com.bbflight.background_downloader.config.proxyPort"
     public static var keyConfigCheckAvailableSpace = "com.bbflight.background_downloader.config.checkAvailableSpace"
+    public static var keyConfigExcludeFromCloudBackup = "com.bbflight.background_downloader.config.excludeFromCloudBackup"
     public static var keyRequireWiFi = "com.bbflight.background_downloader.requireWiFi"
     public static var forceFailPostOnBackgroundChannel = false
     
@@ -136,6 +137,8 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                     storeInUserDefaults(key: BDPlugin.keyConfigCheckAvailableSpace, value: call.arguments, result: result)
                 case "configHoldingQueue":
                     methodConfigHoldingQueue(call: call, result: result)
+                case "configExcludeFromCloudBackup":
+                    storeConfig(key: BDPlugin.keyConfigExcludeFromCloudBackup, value: call.arguments, result: result)
                 case "platformVersion":
                     result(UIDevice.current.systemVersion)
                 case "forceFailPostOnBackgroundChannel":
@@ -234,7 +237,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             return scheduleUpload(task: task, taskDescription: taskDescription, baseRequest: baseRequest)
         }
     }
-    
+
     
     /// Schedule a download task
     private func scheduleDownload(task: Task, taskDescription: String, baseRequest: URLRequest, resumeData: Data?) -> Bool {
@@ -367,9 +370,9 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         result(counter)
     }
     
-    /// Returns a list with all tasks in progress, as a list of JSON strings
+    /// Returns a list with all tasks in progress, as a list of JSON strings, optionally filtered by [group]
     private func methodAllTasks(call: FlutterMethodCall, result: @escaping FlutterResult) async {
-        let group = call.arguments as! String
+        let group = call.arguments as? String
         var tasksAsListOfJsonStrings = [String]()
         await BDPlugin.holdingQueue?.stateLock.lock()
         if let heldTasksJsonStrings = BDPlugin.holdingQueue?.allTasks(group: group).map({jsonStringFor(task: $0)}).filter({$0 != nil}).map({$0!}) {
@@ -377,7 +380,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         }
         UrlSessionDelegate.createUrlSession()
         if let urlSessionTasks = await UrlSessionDelegate.urlSession?.allTasks {
-            tasksAsListOfJsonStrings.append(contentsOf: urlSessionTasks.filter({ $0.state == .running || $0.state == .suspended }).map({ getTaskFrom(urlSessionTask: $0)}).filter({ $0?.group == group }).map({ jsonStringFor(task: $0!) }).filter({ $0 != nil }).map({$0!}))
+            tasksAsListOfJsonStrings.append(contentsOf: urlSessionTasks.filter({ $0.state == .running || $0.state == .suspended }).map({ getTaskFrom(urlSessionTask: $0)}).filter({group == nil || $0?.group == group }).map({ jsonStringFor(task: $0!) }).filter({ $0 != nil }).map({$0!}))
         }
         await BDPlugin.holdingQueue?.stateLock.unlock()
         os_log("Returning %d unfinished tasks", log: log, type: .debug, tasksAsListOfJsonStrings.count)
@@ -681,8 +684,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         BDPlugin.holdingQueue?.maxConcurrentByGroup = args[2] as! Int
         result(nil)
     }
-    
-    
+
     /// Sets or resets flag to force failing posting on background channel
     ///
     /// For testing only
@@ -706,6 +708,19 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         result(resultTask.filename)
     }
     
+    /// Store or remove a configuration in shared preferences
+    ///
+    /// If the value is nil, the configuration is removed
+    private func storeConfig(key: String, value: Any?, result: @escaping FlutterResult) {
+        let defaults = UserDefaults.standard
+        if value != nil {
+            defaults.set(value, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+        result(nil)
+    }
+
     //MARK: UNUserNotificationCenterDelegate
     
     @MainActor

@@ -144,7 +144,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             val constraints = Constraints.Builder().setRequiredNetworkType(
                 if (taskRequiresWifi) NetworkType.UNMETERED else NetworkType.CONNECTED
             ).build()
-            val requestBuilder = when(task.taskType) {
+            val requestBuilder = when (task.taskType) {
                 "ParallelDownloadTask" -> OneTimeWorkRequestBuilder<ParallelDownloadTaskWorker>()
                 "DownloadTask" -> OneTimeWorkRequestBuilder<DownloadTaskWorker>()
                 "UploadTask" -> OneTimeWorkRequestBuilder<UploadTaskWorker>()
@@ -233,12 +233,12 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 Log.d(TAG, "Could not find tasks to cancel")
                 return false
             }
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            val tasksMap = getTaskMap(prefs)
             for (workInfo in workInfos) {
                 if (workInfo.state != WorkInfo.State.SUCCEEDED) {
                     // send cancellation update for tasks that have not yet succeeded
                     // and remove associated notification
-                    val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-                    val tasksMap = getTaskMap(prefs)
                     val task = tasksMap[taskId]
                     if (task != null) {
                         processStatusUpdate(
@@ -552,10 +552,11 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     }
 
     /**
-     * Returns a list of tasks for all tasks in progress, as a list of JSON strings
+     * Returns a list of tasks for all tasks in progress, as a list of JSON strings,
+     * optionally filtered by group
      */
     private suspend fun methodAllTasks(call: MethodCall, result: Result) {
-        val group = call.arguments as String
+        val group = call.arguments as String?
         val tasksAsListOfJsonStrings = mutableListOf<String>()
         holdingQueue?.stateMutex?.lock()
         holdingQueue?.allTasks(group)
@@ -564,7 +565,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val workInfos = withContext(Dispatchers.IO) {
             workManager.getWorkInfosByTag(TAG).get()
         }
-            .filter { !it.state.isFinished && it.tags.contains("group=$group") }
+            .filter { !it.state.isFinished && (group == null || it.tags.contains("group=$group")) }
         val tasksMap: MutableMap<String, Task>
         val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
         prefsLock.read {
@@ -730,13 +731,15 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * - destination (Int as index into [SharedStorage] enum)
      * - directory (String): subdirectory within scoped storage
      * - mimeType (String?): mimeType of the file, overrides derived mimeType
+     * - asAndroidUri (Boolean): if set, returns the path not as a filePath but as a Uri
      */
-    private fun methodMoveToSharedStorage(call: MethodCall, result: Result) {
+    private suspend fun methodMoveToSharedStorage(call: MethodCall, result: Result) {
         val args = call.arguments as List<*>
         val filePath = args[0] as String
         val destination = SharedStorage.entries[args[1] as Int]
         val directory = args[2] as String
         val mimeType = args[3] as String?
+        val asAndroidUri = args[4] as Boolean
         // first check and potentially ask for permissions
         val status = PermissionsService.getPermissionStatus(
             applicationContext,
@@ -749,7 +752,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     filePath,
                     destination,
                     directory,
-                    mimeType
+                    mimeType,
+                    asAndroidUri
                 )
             )
         } else {
@@ -761,10 +765,13 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     /**
      * Returns path to file in Android scoped/shared storage, or null
      *
+     * If asAndroidUri is true, returns the URI if possible, otherwise falls back to file path
+     *
      * Call arguments:
      * - filePath (String): full path to file (only the name is used)
      * - destination (Int as index into [SharedStorage] enum)
      * - directory (String): subdirectory within scoped storage (ignored for Q+)
+     * - asAndroidUri (Boolean): if true, returns the URI instead of the path, if possible
      *
      * For Android Q+ uses the MediaStore, matching on filename only, i.e. ignoring
      * the directory
@@ -774,7 +781,16 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val filePath = args[0] as String
         val destination = SharedStorage.entries[args[1] as Int]
         val directory = args[2] as String
-        result.success(pathInSharedStorage(applicationContext, filePath, destination, directory))
+        val asAndroidUri = args[3] as Boolean
+        result.success(
+            pathInSharedStorage(
+                applicationContext,
+                filePath,
+                destination,
+                directory,
+                asAndroidUri
+            )
+        )
     }
 
     /**
@@ -844,18 +860,22 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val chunkTaskId = args[1] as String
         val statusOrdinal = args[2] as Int
         val exceptionJson = args[3] as String?
-        val exception = if (exceptionJson != null) {
-            TaskException(
-                Json.decodeFromString<Map<String, Any>>(exceptionJson)
+        try {
+            val exception = if (exceptionJson != null) {
+                Json.decodeFromString<TaskException>(exceptionJson)
+            } else null
+            val responseBody = args[4] as String?
+            parallelDownloadTaskWorkers[taskId]?.chunkStatusUpdate(
+                chunkTaskId,
+                TaskStatus.entries[statusOrdinal],
+                exception,
+                responseBody
             )
-        } else null
-        val responseBody = args[4] as String?
-        parallelDownloadTaskWorkers[taskId]?.chunkStatusUpdate(
-            chunkTaskId,
-            TaskStatus.entries[statusOrdinal],
-            exception,
-            responseBody
-        )
+        } catch (e: Exception) {
+            Log.w(TAG, "Exception $e")
+            Log.w(TAG, "exceptionJson = $exceptionJson")
+            e.printStackTrace()
+        }
         result.success(null)
     }
 

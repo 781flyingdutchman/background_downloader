@@ -1,3 +1,23 @@
+## 8.8.1
+
+* Fixes Android bug where timeout timer is not cleaned up after use
+
+## 8.8.0
+
+* [iOS] Adds configuration option to exclude downloaded files from iCloud backup
+* Adds `allGroups` parameter to `allTasks` and `allTaskIds` methods, to retrieve all tasks regardless of `group`
+* [Android] Fixes issue with un-commanded restart of a download in specific scenarios
+
+## 8.7.1
+
+* Fix for compilation issue on Kotlin 2
+
+## 8.7.0
+
+* Adds option to specify a file location for upload using a Mediastore URI on Android, using `UploadTask.fromUri`. A Mediastore URI can also be requested from methods `moveToSharedStorage` and `pathInSharedStorage` by adding `asAndroidUri = true` to the call.
+* Fixes bug with ParallelDownload when an error occurs
+* Updates dependency on package mime to 2.0, therefore also Dart 3.2 (Flutter 3.16.0) or greater. Use `dependency_overrides` in pubspec.yaml to resolve (background_downloader works with 1.0 and 2.0)
+
 ## 8.6.0
 
 * Adds option for partial uploads, for binary uploads only. Set the byte range by adding a "Range" header to your binary `UploadTask`, e.g. a value of "bytes=100-149" will upload 50 bytes starting at byte 100. You can omit the range end (but not the "-") to upload from the indicated start byte to the end of the file.  The "Range" header will not be passed on to the server. Note that on iOS an invalid range will cause enqueue to fail, whereas on Android and Desktop the task will fail when attempting to start.

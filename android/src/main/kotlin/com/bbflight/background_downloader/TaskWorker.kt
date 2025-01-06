@@ -10,6 +10,7 @@ import androidx.work.WorkerParameters
 import com.bbflight.background_downloader.TaskWorker.Companion.TAG
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -30,8 +31,6 @@ import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.SocketException
 import java.net.URL
-import java.util.Timer
-import kotlin.concurrent.schedule
 import kotlin.concurrent.write
 import java.lang.Double.min as doubleMin
 
@@ -398,9 +397,9 @@ open class TaskWorker(
         runInForegroundFileSize =
             prefs.getInt(BDPlugin.keyConfigForegroundFileSize, -1)
         withContext(Dispatchers.IO) {
-            Timer().schedule(taskTimeoutMillis) {
-                isTimedOut =
-                    true // triggers .failed in [TransferBytes] method if not runInForeground
+            CoroutineScope(Dispatchers.Default).launch {
+                delay(taskTimeoutMillis)
+                isTimedOut = true
             }
             task = getModifiedTask(
                 context = applicationContext,
@@ -539,11 +538,19 @@ open class TaskWorker(
                 )
 
                 is CancellationException -> {
-                    Log.i(
-                        TAG,
-                        "Canceled task with id ${task.taskId}: ${e.message}"
-                    )
-                    return TaskStatus.canceled
+                    if (BDPlugin.canceledTaskIds.contains(task.taskId)) {
+                        Log.i(
+                            TAG,
+                            "Canceled task with id ${task.taskId}: ${e.message}"
+                        )
+                        return TaskStatus.canceled
+                    } else {
+                        Log.i(
+                            TAG,
+                            "WorkManager CancellationException for task with id ${task.taskId} without manual cancellation: failing task"
+                        )
+                        return TaskStatus.failed
+                    }
                 }
 
                 else -> {

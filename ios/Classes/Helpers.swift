@@ -8,9 +8,9 @@
 import Foundation
 import os.log
 
-/// Uses .appending for iOS 16 and up, and .appendingPathComponent
-/// for earlier versions
 extension URL {
+    /// Uses .appending for iOS 16 and up, and .appendingPathComponent
+    /// for earlier versions
     func appendingPath(_ component: String, isDirectory: Bool = false) -> URL {
         if #available(iOS 16.0, *) {
             return appending(path: component, directoryHint: isDirectory ? .isDirectory : .notDirectory)
@@ -18,6 +18,13 @@ extension URL {
             return appendingPathComponent(component, isDirectory: isDirectory)
         }
     }
+
+    /// Excludes URL from backup
+    mutating func setCloudBackup(exclude: Bool) throws {
+            var resource = URLResourceValues()
+            resource.isExcludedFromBackup = exclude
+            try self.setResourceValues(resource)
+        }
 }
 
 /// Returns the task's URL if it can be parsed, otherwise null

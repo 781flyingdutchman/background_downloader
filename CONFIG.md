@@ -45,6 +45,8 @@ The following configurations are supported:
   - `(Config.useExternalStorage, String whenToUse)` with values 'never' or 'always'. Default is `Config.never`. See [here](#android-external-storage) for important details
 * [iOS] Localization
   - `(Config.localize, Map<String, String> translation)` localizes the words 'Cancel', 'Pause' and 'Resume' as used in notifications, presented as a map (iOS only, see docs for Android notifications)
+* [iOS] Exclude downloaded file from iCloud backup
+  - `(Config.excludeFromCloudBackup, bool exclude)` or `(Config.excludeFromCloudBackup, Config.always)` or `(Config.excludeFromCloudBackup, Config.never)` 
 
 On Android and iOS, most configurations are stored in native 'shared preferences' to ensure that background tasks have access to the configuration. This means that configuration persists across application restarts, and this can lead to some surprising results. For example, if during testing you set a proxy and then remove that configuration line, the proxy configuration is not removed from persistent storage on your test device. You need to explicitly set `('proxy', false)` to remove the stored configuration on that device.
 
