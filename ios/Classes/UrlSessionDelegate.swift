@@ -74,7 +74,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             os_log("Could not find task related to urlSessionTask %d", log: log, type: .error, task.taskIdentifier)
             return
         }
-        if let tempUploadUrl = BDPlugin.tasksWithTempUploadFile.removeValue(forKey: task.taskId) {
+        if let tempUploadUrl = BDPlugin.propertyLock.withLock({ BDPlugin.tasksWithTempUploadFile.removeValue(forKey: task.taskId) }) {
             try? FileManager.default.removeItem(at: tempUploadUrl)
         }
         if BDPlugin.holdingQueue != nil {
@@ -83,7 +83,9 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             }
         }
         let responseBody = getResponseBody(taskId: task.taskId)
-        let taskWasProgramaticallyCanceled: Bool = BDPlugin.taskIdsProgrammaticallyCancelled.remove(task.taskId) != nil
+        let taskWasProgramaticallyCanceled = BDPlugin.propertyLock.withLock( {
+            BDPlugin.taskIdsProgrammaticallyCancelled.remove(task.taskId) != nil
+        })
         guard error == nil else {
             // handle the error if this task wasn't programatically cancelled (in which
             // case the error has been handled already)
@@ -108,7 +110,9 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
                                 updateNotification(task: task, notificationType: .paused, notificationConfig: notificationConfig)
                             }
                         }
-                        BDPlugin.progressInfo.removeValue(forKey: task.taskId) // ensure .running update on resume
+                        BDPlugin.propertyLock.withLock({
+                            _ = BDPlugin.progressInfo.removeValue(forKey: task.taskId) // ensure .running update on resume
+                        })
                         return
                     }
                     // cancelled without resumedata implies 'cancel'
@@ -151,7 +155,10 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         // task is var because the filename can be changed on the first 'didWriteData' call
         guard var task = getTaskFrom(urlSessionTask: downloadTask) else { return }
-        if BDPlugin.progressInfo[task.taskId] == nil {
+        let progressInfo = BDPlugin.propertyLock.withLock({
+            BDPlugin.progressInfo[task.taskId]
+        })
+        if progressInfo == nil {
             // first 'didWriteData' call
             os_log("Starting/resuming taskId %@", log: log, type: .info, task.taskId)
             let response = downloadTask.response as! HTTPURLResponse
@@ -161,7 +168,9 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
                 os_log("Suggested task filename for taskId %@ is %@", log: log, type: .info, newTask.taskId, newTask.filename)
                 if newTask.filename != task.filename {
                     // store for future replacement, and replace now
-                    BDPlugin.tasksWithSuggestedFilename[newTask.taskId] = newTask
+                    BDPlugin.propertyLock.withLock({
+                        BDPlugin.tasksWithSuggestedFilename[newTask.taskId] = newTask
+                    })
                     task = newTask
                 }
             }
@@ -170,15 +179,22 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             if totalBytesExpectedToWrite == -1 {
                 let contentLength = getContentLength(responseHeaders: response.allHeaderFields, task: task)
                 if contentLength != -1 {
-                    BDPlugin.tasksWithContentLengthOverride[task.taskId] = contentLength
+                    BDPlugin.propertyLock.withLock({
+                        BDPlugin.tasksWithContentLengthOverride[task.taskId] = contentLength
+                    })
                 }
             }
             // Check if there is enough space
             if insufficientSpace(contentLength: totalBytesExpectedToWrite) {
-                if !BDPlugin.taskIdsProgrammaticallyCancelled.contains(task.taskId) {
+                let notProgrammaticallyCancelled = BDPlugin.propertyLock.withLock({
+                    !BDPlugin.taskIdsProgrammaticallyCancelled.contains(task.taskId)
+                })
+                if notProgrammaticallyCancelled {
                     os_log("Error for taskId %@: Insufficient space to store the file to be downloaded", log: log, type: .error, task.taskId)
                     processStatusUpdate(task: task, status: .failed, taskException: TaskException(type: .fileSystem, httpResponseCode: -1, description: "Insufficient space to store the file to be downloaded for taskId \(task.taskId)"))
-                    BDPlugin.taskIdsProgrammaticallyCancelled.insert(task.taskId)
+                    BDPlugin.propertyLock.withLock({
+                        _ = BDPlugin.taskIdsProgrammaticallyCancelled.insert(task.taskId)
+                    })
                     downloadTask.cancel()
                 }
                 return
@@ -186,13 +202,17 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             // Send 'running' status update and check if the task is resumable
             processStatusUpdate(task: task, status: TaskStatus.running)
             processProgressUpdate(task: task, progress: 0.0)
-            BDPlugin.progressInfo[task.taskId] = (lastProgressUpdateTime: 0, lastProgressValue: 0.0, lastTotalBytesDone: 0, lastNetworkSpeed: -1.0)
+            BDPlugin.propertyLock.withLock({
+                BDPlugin.progressInfo[task.taskId] = (lastProgressUpdateTime: 0, lastProgressValue: 0.0, lastTotalBytesDone: 0, lastNetworkSpeed: -1.0)
+            })
             if task.allowPause {
                 let acceptRangesHeader = (downloadTask.response as? HTTPURLResponse)?.allHeaderFields["Accept-Ranges"]
                 let taskCanResume = acceptRangesHeader as? String == "bytes"
                 processCanResume(task: task, taskCanResume: taskCanResume)
                 if taskCanResume {
-                    BDPlugin.taskIdsThatCanResume.insert(task.taskId)
+                    BDPlugin.propertyLock.withLock({
+                        _ = BDPlugin.taskIdsThatCanResume.insert(task.taskId)
+                    })
                 }
             }
             // notify if needed
@@ -201,8 +221,11 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
                 updateNotification(task: task, notificationType: .running, notificationConfig: notificationConfig)
             }
         }
-        let contentLength = totalBytesExpectedToWrite != -1 ? totalBytesExpectedToWrite : BDPlugin.tasksWithContentLengthOverride[task.taskId] ?? -1
-        BDPlugin.remainingBytesToDownload[task.taskId] = contentLength - totalBytesWritten
+        let contentLength = BDPlugin.propertyLock.withLock({
+            let l = totalBytesExpectedToWrite != -1 ? totalBytesExpectedToWrite : BDPlugin.tasksWithContentLengthOverride[task.taskId] ?? -1
+            BDPlugin.remainingBytesToDownload[task.taskId] = l - totalBytesWritten
+            return l
+        })
         updateProgress(task: task, totalBytesExpected: contentLength, totalBytesDone: totalBytesWritten)
     }
     
@@ -214,11 +237,16 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
         let urlSessionTask = task
         guard let task = getTaskFrom(urlSessionTask: task) else {return}
         let taskId = task.taskId
-        if BDPlugin.progressInfo[taskId] == nil {
+        let progressInfo = BDPlugin.propertyLock.withLock({
+            return BDPlugin.progressInfo[taskId]
+        })
+        if progressInfo == nil {
             // first call to this method: send 'running' status update
             processStatusUpdate(task: task, status: TaskStatus.running)
             processProgressUpdate(task: task, progress: 0.0)
-            BDPlugin.progressInfo[task.taskId] = (lastProgressUpdateTime: 0, lastProgressValue: 0.0, lastTotalBytesDone: 0, lastNetworkSpeed: -1.0)
+            BDPlugin.propertyLock.withLock({
+                BDPlugin.progressInfo[task.taskId] = (lastProgressUpdateTime: 0, lastProgressValue: 0.0, lastTotalBytesDone: 0, lastNetworkSpeed: -1.0)
+            })
             // notify if needed
             let notificationConfig = getNotificationConfigFrom(urlSessionTask: urlSessionTask)
             if (notificationConfig != nil) {
@@ -241,12 +269,13 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             return}
         let responseHeaders = response.allHeaderFields
         let taskId = task.taskId
-        let mimeType = BDPlugin.mimeTypes[taskId]
-        let charSet = BDPlugin.charSets[taskId]
-        BDPlugin.mimeTypes.removeValue(forKey: taskId)
-        BDPlugin.charSets.removeValue(forKey: taskId)
-        BDPlugin.tasksWithSuggestedFilename.removeValue(forKey: taskId)
-        BDPlugin.tasksWithContentLengthOverride.removeValue(forKey: taskId)
+        let (mimeType, charSet) = BDPlugin.propertyLock.withLock({
+            let mimeType = BDPlugin.mimeTypes.removeValue(forKey: taskId)
+            let charSet = BDPlugin.charSets.removeValue(forKey: taskId)
+            BDPlugin.tasksWithSuggestedFilename.removeValue(forKey: taskId)
+            BDPlugin.tasksWithContentLengthOverride.removeValue(forKey: taskId)
+            return (mimeType, charSet)
+        })
         let notificationConfig = getNotificationConfigFrom(urlSessionTask: downloadTask)
         if response.statusCode == 404 {
             let responseBody = readFile(url: location)
@@ -340,9 +369,11 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             os_log("Could not find task associated urlSessionTask %d", log: log,  type: .info, dataTask.taskIdentifier)
             return
         }
-        var dataList = BDPlugin.responseBodyData[task.taskId] ?? []
-        dataList.append(data)
-        BDPlugin.responseBodyData[task.taskId] = dataList
+        BDPlugin.propertyLock.withLock({
+            var dataList = BDPlugin.responseBodyData[task.taskId] ?? []
+            dataList.append(data)
+            BDPlugin.responseBodyData[task.taskId] = dataList
+        })
     }
     
     //MARK: URLSessionDelegate
@@ -388,7 +419,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
     
     /// Get response body for upload task with this [taskId]
     private func getResponseBody(taskId: String) -> String? {
-        guard let dataList = BDPlugin.responseBodyData[taskId] else {
+        guard let dataList = BDPlugin.propertyLock.withLock( { BDPlugin.responseBodyData[taskId] }) else {
             return nil
         }
         var allData: Data? = nil

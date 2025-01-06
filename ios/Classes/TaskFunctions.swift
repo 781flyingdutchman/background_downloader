@@ -237,14 +237,16 @@ func extractContentType(responseHeaders: [AnyHashable: Any], task: Task)  {
     let regEx = try! NSRegularExpression(pattern: #"(.*);\s*charset\s*=(.*)"#)
     let range = NSMakeRange(0, contentType.utf16.count)
     let match = regEx.firstMatch(in: contentType, options: [], range: range)
-    if let match = match {
-        let mimeType = String(contentType[Range(match.range(at: 1), in: contentType)!])
-        let charSet = String(contentType[Range(match.range(at: 2), in: contentType)!])
-        BDPlugin.mimeTypes[task.taskId] = mimeType
-        BDPlugin.charSets[task.taskId] = charSet
-    } else {
-        BDPlugin.mimeTypes[task.taskId] = contentType
-    }
+    BDPlugin.propertyLock.withLock({
+        if let match = match {
+            let mimeType = String(contentType[Range(match.range(at: 1), in: contentType)!])
+            let charSet = String(contentType[Range(match.range(at: 2), in: contentType)!])
+            BDPlugin.mimeTypes[task.taskId] = mimeType
+            BDPlugin.charSets[task.taskId] = charSet
+        } else {
+            BDPlugin.mimeTypes[task.taskId] = contentType
+        }
+    })
 }
 
 
@@ -290,7 +292,9 @@ func getHost(_ task: Task) -> String  {
 /// Calculate progress, network speed and time remaining, and send this at an appropriate
 /// interval to the Dart side
 func updateProgress(task: Task, totalBytesExpected: Int64, totalBytesDone: Int64) {
-    let info = BDPlugin.progressInfo[task.taskId] ?? (lastProgressUpdateTime: 0.0, lastProgressValue: 0.0, lastTotalBytesDone: 0, lastNetworkSpeed: -1.0)
+    let info = BDPlugin.propertyLock.withLock({
+        return BDPlugin.progressInfo[task.taskId] ?? (lastProgressUpdateTime: 0.0, lastProgressValue: 0.0, lastTotalBytesDone: 0, lastNetworkSpeed: -1.0)
+    })
     if totalBytesExpected != NSURLSessionTransferSizeUnknown && Date().timeIntervalSince1970 > info.lastProgressUpdateTime + 0.5 {
         let progress = min(Double(totalBytesDone) / Double(totalBytesExpected), 0.999)
         if progress - info.lastProgressValue > 0.02 {
@@ -302,7 +306,9 @@ func updateProgress(task: Task, totalBytesExpected: Int64, totalBytesDone: Int64
             let newNetworkSpeed = info.lastNetworkSpeed == -1.0 ? currentNetworkSpeed : (info.lastNetworkSpeed * 3.0 + currentNetworkSpeed) / 4.0
             let remainingBytes = (1.0 - progress) * Double(totalBytesExpected)
             let timeRemaining: TimeInterval = newNetworkSpeed == -1.0 ? -1.0 : (remainingBytes / newNetworkSpeed / 1000000.0)
-            BDPlugin.progressInfo[task.taskId] = (lastProgressUpdateTime: now, lastProgressValue: progress, lastTotalBytesDone: totalBytesDone, lastNetworkSpeed: newNetworkSpeed)
+            BDPlugin.propertyLock.withLock({
+                BDPlugin.progressInfo[task.taskId] = (lastProgressUpdateTime: now, lastProgressValue: progress, lastTotalBytesDone: totalBytesDone, lastNetworkSpeed: newNetworkSpeed)
+            })
             processProgressUpdate(task: task, progress: progress, expectedFileSize: totalBytesExpected, networkSpeed: newNetworkSpeed, timeRemaining: timeRemaining)
         }
     }
@@ -557,7 +563,10 @@ func getTaskFrom(urlSessionTask: URLSessionTask) -> Task? {
     }
     let decoder = JSONDecoder()
     if let task = try? decoder.decode(Task.self, from: jsonData) {
-        return BDPlugin.tasksWithSuggestedFilename[task.taskId] ?? task
+        let taskWithSuggestedFilename = BDPlugin.propertyLock.withLock({
+            BDPlugin.tasksWithSuggestedFilename[task.taskId]
+        })
+        return taskWithSuggestedFilename ?? task
     }
     return nil
 }
@@ -656,7 +665,9 @@ func insufficientSpace(contentLength: Int64) -> Bool {
         return false
     }
     // Calculate the total remaining bytes to download
-    let remainingBytesToDownload = BDPlugin.remainingBytesToDownload.values.reduce(0, +)
+    let remainingBytesToDownload = BDPlugin.propertyLock.withLock( {
+        BDPlugin.remainingBytesToDownload.values.reduce(0, +)
+    })
     // Return true if there is insufficient space to store the file
     return available - (remainingBytesToDownload + contentLength) < checkValue << 20
 }

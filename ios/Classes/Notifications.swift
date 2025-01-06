@@ -287,7 +287,8 @@ private func updateGroupNotification(
 ///
 /// Which button(s) depends on the [notificationType]. Action buttons are defined when defining the notification categories
 func addNotificationActions(task: Task, notificationType: NotificationType, content: UNMutableNotificationContent, notificationConfig: NotificationConfig) {
-    switch notificationType {
+    BDPlugin.propertyLock.withLock( {
+        switch notificationType {
         case .running:
             content.categoryIdentifier = BDPlugin.taskIdsThatCanResume.contains(task.taskId) && notificationConfig.paused != nil ? NotificationCategory.runningWithPause.rawValue : NotificationCategory.runningWithoutPause.rawValue
         case .paused:
@@ -296,7 +297,8 @@ func addNotificationActions(task: Task, notificationType: NotificationType, cont
             content.categoryIdentifier = NotificationCategory.complete.rawValue
         case .error:
             content.categoryIdentifier = NotificationCategory.error.rawValue
-    }
+        }
+    })
 }
 
 /// Add cancel action button to the notificationGroup

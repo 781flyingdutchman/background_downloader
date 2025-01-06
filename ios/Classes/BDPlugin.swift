@@ -306,7 +306,9 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                         }
                         // create the partial file for upload
                         if let tempFileUrl = createTempFileWithRange(from: fileUrl, start: start, contentLength: contentLength) {
-                            BDPlugin.tasksWithTempUploadFile[task.taskId] = tempFileUrl
+                            BDPlugin.propertyLock.withLock({
+                                BDPlugin.tasksWithTempUploadFile[task.taskId] = tempFileUrl
+                            })
                             uploadFileUrl = tempFileUrl
                         }
                         else {
@@ -428,13 +430,17 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     private func methodPause(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let taskId = call.arguments as! String
         UrlSessionDelegate.createUrlSession()
-        BDPlugin.taskIdsProgrammaticallyCancelled.insert(taskId)
+        BDPlugin.propertyLock.withLock({
+            _ = BDPlugin.taskIdsProgrammaticallyCancelled.insert(taskId)
+        })
         guard let urlSessionTask = await UrlSessionDelegate.getUrlSessionTaskWithId(taskId: taskId) as? URLSessionDownloadTask,
               let task = await UrlSessionDelegate.getTaskWithId(taskId: taskId),
               let resumeData = await urlSessionTask.cancelByProducingResumeData()
         else {
             // no regular task found, return if there's no ParalleldownloadTask either
-            BDPlugin.taskIdsProgrammaticallyCancelled.remove(taskId)
+            BDPlugin.propertyLock.withLock({
+                _ = BDPlugin.taskIdsProgrammaticallyCancelled.remove(taskId)
+            })
             if ParallelDownloader.downloads[taskId] == nil {
                 os_log("Could not pause task %@", log: log, type: .info, taskId)
                 result(false)

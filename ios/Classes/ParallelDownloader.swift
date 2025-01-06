@@ -104,7 +104,9 @@ public class ParallelDownloader: NSObject {
             os_log("Suggested task filename for taskId %@ is %@", log: log, type: .info, newTask.taskId, newTask.filename)
             if newTask.filename != parentTask.filename {
                 // store for future replacement, and replace now
-                BDPlugin.tasksWithSuggestedFilename[newTask.taskId] = newTask
+                BDPlugin.propertyLock.withLock({
+                    BDPlugin.tasksWithSuggestedFilename[newTask.taskId] = newTask
+                })
                 parentTask = newTask
             }
         }
@@ -404,8 +406,9 @@ public class ParallelDownloader: NSObject {
     /// Finish the [ParallelDownloadTask] by posting a statusUpdate and clearning up
     private func finishTask(status: TaskStatus) {
         let taskId = parentTask.taskId
-        let mimeType = BDPlugin.mimeTypes[taskId]
-        let charSet = BDPlugin.charSets[taskId]
+        let (mimeType, charSet) = BDPlugin.propertyLock.withLock({
+            (BDPlugin.mimeTypes[taskId], BDPlugin.charSets[taskId])
+        })
         var responseStatusCode: Int? = nil
         switch status {
             case .complete:
@@ -418,10 +421,12 @@ public class ParallelDownloader: NSObject {
                 responseStatusCode = nil
         }
         processStatusUpdate(task: parentTask, status: status, taskException: taskException, responseBody: responseBody, responseHeaders: responseHeaders, responseStatusCode: responseStatusCode, mimeType: mimeType, charSet: charSet)
-        BDPlugin.mimeTypes.removeValue(forKey: taskId)
-        BDPlugin.charSets.removeValue(forKey: taskId)
-        BDPlugin.tasksWithSuggestedFilename.removeValue(forKey: taskId)
-        ParallelDownloader.downloads.removeValue(forKey: taskId)
+        BDPlugin.propertyLock.withLock({
+            BDPlugin.mimeTypes.removeValue(forKey: taskId)
+            BDPlugin.charSets.removeValue(forKey: taskId)
+            BDPlugin.tasksWithSuggestedFilename.removeValue(forKey: taskId)
+            ParallelDownloader.downloads.removeValue(forKey: taskId)
+        })
     }
 }
 
