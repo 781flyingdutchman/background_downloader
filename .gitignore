@@ -36,3 +36,6 @@ build/
 # Ruby/Bundler for cocoa pods
 .ruby-version
 Gemfile*
+
+# generated files
+*.mocks.dart

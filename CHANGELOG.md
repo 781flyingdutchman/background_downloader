@@ -1,3 +1,10 @@
+## 8.9.0
+* Adds `options` field to Task, which take a `TaskOptions` object to configure less common task specific options - currently `onTaskStart`, `onTaskFinished` and `auth`
+  - `onTaskStart` is a callback with signature`Future<Task?> Function(Task original)`, called just before the task starts executing. Your callback receives the `original` task about to start, and can modify this task if necessary. If you make modifications, you return the modified task - otherwise return null to continue execution with the original task. You can only change the task's `url` (including query parameters) and `headers` properties - making changes to any other property may lead to undefined behavior.
+  - `onTaskFinished` is a callback with signature `Future<void> Function(TaskStatusUpdate taskStatusUpdate)`, called when the task has reached a final state (regardless of outcome). Your callback receives the final `TaskStatusUpdate` and can act on that.
+  - `auth` is an optional `Auth` object that helps manage accessToken and accessToken refresh - see the README for details
+* Upgrades Android JAVA version to version 17 (modifies build.gradle)
+
 ## 8.8.1
 
 * Fixes Android bug where timeout timer is not cleaned up after use
