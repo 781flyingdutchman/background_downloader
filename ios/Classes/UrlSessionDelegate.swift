@@ -14,7 +14,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
     static let instance = UrlSessionDelegate()
     static var urlSession: URLSession?
     public static var sessionIdentifier = "com.bbflight.background_downloader.Downloader"
-    private static var backgroundCompletionHandler: (() -> Void)?
+    public static var backgroundCompletionHandler: (() -> Void)?
     
     //MARK: URLSessionTaskDelegate
     
@@ -378,18 +378,6 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
     
     //MARK: URLSessionDelegate
     
-    /// When the app restarts, recreate the urlSession if needed, and store the completion handler
-    public func application(_ application: UIApplication,
-                            handleEventsForBackgroundURLSession identifier: String,
-                            completionHandler: @escaping () -> Void) -> Bool {
-        if (identifier == UrlSessionDelegate.sessionIdentifier) {
-            UrlSessionDelegate.backgroundCompletionHandler = completionHandler
-            UrlSessionDelegate.createUrlSession()
-            return true
-        }
-        return false
-    }
-    
     /// Upon completion of download of all files, call the completion handler
     public func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
         DispatchQueue.main.async {
@@ -440,7 +428,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
     
     /// Creates a urlSession
     ///
-    /// Configues defaultResourceTimeout, defaultRequestTimeout and proxy based on configuration parameters,
+    /// Configures defaultResourceTimeout, defaultRequestTimeout and proxy based on configuration parameters,
     /// or defaults
     static func createUrlSession() -> Void {
         if UrlSessionDelegate.urlSession != nil {

@@ -282,6 +282,21 @@ private func updateGroupNotification(
 }
 
 
+/// Register that [task] was enqueued, with [success] or failure
+///
+/// This is only relevant for tasks that are part of a group notification, so that the
+/// 'numTotal' count is based on enqueued tasks, not on running tasks (which may be limited
+/// by holdingQueue or OS restrictions).
+/// [notificationConfigJsonString] is only used to detect if this task has a group notification
+func registerEnqueue(task: Task, notificationConfigJsonString: String?, success: Bool) async {
+    guard let notificationConfigJsonString = notificationConfigJsonString,
+          let notificationConfig = notificationConfigFrom(jsonString: notificationConfigJsonString),
+          !notificationConfig.groupNotificationId.isEmpty
+    else { return }
+    await updateGroupNotification(task: task, notificationType: success ? .running : .error, notificationConfig: notificationConfig)
+}
+
+
 
 /// Add action buttons to the notification
 ///

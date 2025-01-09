@@ -173,7 +173,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                 postResult(result: result, value: false)
                 return
             }
-            guard let url = validateUrl(task) else
+            guard validateUrl(task) != nil else
             {
                 os_log("Invalid url: %@", log: log, type: .info, task.url)
                 postResult(result: result, value: false)
@@ -231,16 +231,16 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             return await scheduleParallelDownload(task: task, taskDescription: taskDescription, baseRequest: baseRequest, resumeData: resumeDataAsBase64String)
         } else if isDownloadTask(task: task) || isDataTask(task: task)
         {
-            return scheduleDownload(task: task, taskDescription: taskDescription, baseRequest: baseRequest, resumeData: resumeData)
+            return await scheduleDownload(task: task, taskDescription: taskDescription, baseRequest: baseRequest, resumeData: resumeData, notificationConfigJsonString: notificationConfigJsonString)
         } else
         {
-            return scheduleUpload(task: task, taskDescription: taskDescription, baseRequest: baseRequest)
+            return await scheduleUpload(task: task, taskDescription: taskDescription, baseRequest: baseRequest, notificationConfigJsonString: notificationConfigJsonString)
         }
     }
 
     
     /// Schedule a download task
-    private func scheduleDownload(task: Task, taskDescription: String, baseRequest: URLRequest, resumeData: Data?) -> Bool {
+    private func scheduleDownload(task: Task, taskDescription: String, baseRequest: URLRequest, resumeData: Data?, notificationConfigJsonString: String?) async -> Bool {
         var request = baseRequest
         if task.post != nil {
             request.httpBody = Data((task.post ?? "").data(using: .utf8)!)
@@ -249,12 +249,12 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         urlSessionDownloadTask.taskDescription = taskDescription
         urlSessionDownloadTask.priority = 1 - Float(task.priority) / 10
         urlSessionDownloadTask.resume()
-        postEnqueuedStatusIfNotAlreadyDone(task: task)
+        await postEnqueuedStatusIfNotAlreadyDone(task: task, notificationConfigJsonString: notificationConfigJsonString)
         return true
     }
     
     /// Schedule an upload task
-    private func scheduleUpload(task: Task, taskDescription: String, baseRequest: URLRequest) -> Bool {
+    private func scheduleUpload(task: Task, taskDescription: String, baseRequest: URLRequest, notificationConfigJsonString: String?) async -> Bool  {
         var request = baseRequest
         if isBinaryUploadTask(task: task) {
             // binary post can use uploadTask fromFile method
@@ -290,7 +290,6 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                             contentLength = end - start + 1
                         } else {
                             // get file size to determine contentLength
-                            let fileManager = FileManager.default
                             do {
                                 let attributes = try FileManager.default.attributesOfItem(atPath: fileUrl.path)
                                 if let fileSize = attributes[.size] as? UInt64 {
@@ -346,15 +345,17 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             BDPlugin.uploaderForUrlSessionTaskIdentifier[urlSessionUploadTask.taskIdentifier] = uploader
             urlSessionUploadTask.resume()
         }
-        postEnqueuedStatusIfNotAlreadyDone(task: task)
+        await postEnqueuedStatusIfNotAlreadyDone(task: task, notificationConfigJsonString: notificationConfigJsonString)
         return true
     }
     
     /// Post [TaskStatus.enqueued] only if this was not already done when adding the task to the [holdingQueue]
-    func postEnqueuedStatusIfNotAlreadyDone(task: Task) {
+    func postEnqueuedStatusIfNotAlreadyDone(task: Task, notificationConfigJsonString: String?) async {
         if BDPlugin.holdingQueue?.enqueuedTaskIds.contains(task.taskId) != true {
             processStatusUpdate(task: task, status: TaskStatus.enqueued)
         }
+        // register the enqueue with the notification service (for accurate groupnotification count)
+        await registerEnqueue(task: task, notificationConfigJsonString: notificationConfigJsonString, success: true)
     }
     
     /// Resets the downloadworker by cancelling all ongoing download tasks
@@ -712,6 +713,21 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         }
         let resultTask = suggestedFilenameFromResponseHeaders(task: task, responseHeaders: ["Content-Disposition" : contentDisposition], unique: true)
         result(resultTask.filename)
+    }
+    
+    //MARK: UIApplicationDelegate
+    
+    /// When the app restarts, recreate the urlSession if needed, and store the completion handler
+    public func application(_ application: UIApplication,
+                            handleEventsForBackgroundURLSession identifier: String,
+                            completionHandler: @escaping () -> Void) -> Bool {
+        if (identifier == UrlSessionDelegate.sessionIdentifier) {
+            os_log("Application asked to handleEventsForBackgroundURLSession", log: log, type: .info)
+            UrlSessionDelegate.backgroundCompletionHandler = completionHandler
+            UrlSessionDelegate.createUrlSession()
+            return true
+        }
+        return false
     }
     
 

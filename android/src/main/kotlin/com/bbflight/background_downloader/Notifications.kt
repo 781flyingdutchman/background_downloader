@@ -426,8 +426,7 @@ object NotificationService {
      *
      * This is only relevant for tasks that are part of a group notification, so that the
      * 'numTotal' count is based on enqueued tasks, not on running tasks (which may be limited
-     * by holdingQueue or OS restrictions). No actual notification is done, so this will
-     * only get reflected with the next state change of the group notification
+     * by holdingQueue or OS restrictions).
      */
     fun registerEnqueue(item: EnqueueItem, success: Boolean) {
         val notificationConfigJsonString = item.notificationConfigJsonString ?: return
