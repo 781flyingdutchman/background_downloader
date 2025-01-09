@@ -32,6 +32,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 
@@ -351,6 +352,10 @@ object NotificationService {
             }
             return
         }
+        // Ignore 'enqueued' status for normal notifications
+        if (taskStatus == TaskStatus.enqueued) {
+            return
+        }
         // regular notification
         val notification = when (notificationType) {
             NotificationType.running -> taskWorker.notificationConfig?.running
@@ -414,6 +419,31 @@ object NotificationService {
         }
         addNotificationActions(taskWorker, notificationType, builder)
         addToNotificationQueue(taskWorker, notificationType, builder)
+    }
+
+    /**
+     * Register that [item] was enqueued, with [success] or failure
+     *
+     * This is only relevant for tasks that are part of a group notification, so that the
+     * 'numTotal' count is based on enqueued tasks, not on running tasks (which may be limited
+     * by holdingQueue or OS restrictions). No actual notification is done, so this will
+     * only get reflected with the next state change of the group notification
+     */
+    fun registerEnqueue(item: EnqueueItem, success: Boolean) {
+        val notificationConfigJsonString = item.notificationConfigJsonString ?: return
+        val notificationConfig =
+            Json.decodeFromString<NotificationConfig>(notificationConfigJsonString)
+        val groupNotificationId = notificationConfig.groupNotificationId
+        if (groupNotificationId.isNotEmpty()) {
+            // update the notification status for this task (requires a worker because we are
+            // not within a worker when this function is called)
+            createUpdateNotificationWorker(
+                context = item.context,
+                taskJson = Json.encodeToString(item.task),
+                notificationConfigJson = notificationConfigJsonString,
+                taskStatusOrdinal = if (success) TaskStatus.enqueued.ordinal else TaskStatus.failed.ordinal
+            )
+        }
     }
 
     /**
@@ -855,8 +885,10 @@ object NotificationService {
             val seconds = (timeRemaining.mod(60000L)).div(1000L)
             val timeRemainingString =
                 if (timeRemaining < 0) "--:--" else if (hours > 0) String.format(
+                    Locale.US,
                     "%02d:%02d:%02d", hours, minutes, seconds
                 ) else String.format(
+                    Locale.US,
                     "%02d:%02d", minutes, seconds
                 )
             output4 = timeRemainingRegEx.replace(output3, timeRemainingString)

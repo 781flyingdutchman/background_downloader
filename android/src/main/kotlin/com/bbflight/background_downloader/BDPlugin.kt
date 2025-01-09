@@ -66,7 +66,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         const val keyProgressUpdateMap = "com.bbflight.background_downloader.progressUpdateMap.v2"
         const val keyRequireWiFi =
             "com.bbflight.background_downloader.requireWifi"
-        const val keyCallbackDispatcherRawHandle = "com.bbflight.background_downloader.callbackDispatcherRawHandle"
+        const val keyCallbackDispatcherRawHandle =
+            "com.bbflight.background_downloader.callbackDispatcherRawHandle"
         const val keyConfigForegroundFileSize =
             "com.bbflight.background_downloader.config.foregroundFileSize"
         const val keyConfigProxyAddress = "com.bbflight.background_downloader.config.proxyAddress"
@@ -183,6 +184,14 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 )
                 return false
             }
+            // Register the enqueue with the NotificationService
+            NotificationService.registerEnqueue(
+                EnqueueItem(
+                    context = context,
+                    task = task,
+                    notificationConfigJsonString = notificationConfigJsonString
+                ), success = true
+            )
             // store Task in persistent storage, as Json representation keyed by taskId
             prefsLock.write {
                 val prefs = PreferenceManager.getDefaultSharedPreferences(context)
@@ -325,8 +334,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private var backgroundChannel: MethodChannel? = null
     private lateinit var applicationContext: Context
     private var scope: CoroutineScope? = null
-    var callbackChannel: MethodChannel? = null
-    var binaryMessenger: BinaryMessenger? = null
+    private var binaryMessenger: BinaryMessenger? = null
     var activity: Activity? = null
 
 
@@ -340,11 +348,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             MethodChannel(
                 flutterPluginBinding.binaryMessenger,
                 "com.bbflight.background_downloader.background"
-            )
-        callbackChannel =
-            MethodChannel(
-                flutterPluginBinding.binaryMessenger,
-                "com.bbflight.background_downloader.callbacks"
             )
         if (firstBackgroundChannel == null) {
             firstBackgroundChannel = backgroundChannel

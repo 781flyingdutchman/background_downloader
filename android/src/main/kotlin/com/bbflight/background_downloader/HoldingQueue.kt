@@ -109,6 +109,10 @@ class HoldingQueue(private val workManager: WorkManager) {
         stateMutex.withLock {
             queue.add(item)
             enqueuedTaskIds.add(item.task.taskId)
+            NotificationService.registerEnqueue(
+                item,
+                success = true
+            ) // for group notification count
         }
         advanceQueue()
     }
@@ -276,10 +280,10 @@ class HoldingQueue(private val workManager: WorkManager) {
  * and in the context of the [HoldingQueue]
  */
 class EnqueueItem(
-    private val context: Context,
+    val context: Context,
     val task: Task,
-    private val notificationConfigJsonString: String?,
-    private val resumeData: ResumeData?,
+    val notificationConfigJsonString: String?,
+    private val resumeData: ResumeData? = null,
     private val plugin: BDPlugin? = null,
     private val created: Date = Date()
 ) : Comparable<EnqueueItem> {
@@ -307,6 +311,7 @@ class EnqueueItem(
                 ), context = context
             )
             BDPlugin.holdingQueue?.taskFinished(task)
+            NotificationService.registerEnqueue(this, success = false)
         }
         delay(20)
     }
