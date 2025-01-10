@@ -3634,7 +3634,7 @@ void main() {
           url: 'https://httpbin.org/status/400', // force 400 code
           headers: dataTaskHeaders);
       expect(await FileDownloader().enqueue(t), isTrue);
-      await Future.delayed(const Duration(seconds: 1));
+      await Future.delayed(const Duration(seconds: 2));
       expect(lastUpdate.status, equals(TaskStatus.failed));
       final exception = lastUpdate.exception!;
       print(exception);

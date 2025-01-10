@@ -2,6 +2,7 @@ package com.bbflight.background_downloader
 
 import android.content.Context
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.util.Log
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
@@ -100,51 +101,77 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
     ): TaskStatus {
         val usesAndroidUri =
             task.baseDirectory == BaseDirectory.root && task.directory.startsWith("content://")
-        val filePathToUse = if (usesAndroidUri) {
-            try {
-                val uri = Uri.parse(task.directory)
-                val path = pathFromUri(applicationContext, uri)
-                if (path == null) {
-                    val message = "URI not found: $uri"
+        val (fileSize, inputStream) = withContext(Dispatchers.IO) { // Use Dispatchers.IO for file operations
+            if (usesAndroidUri) {
+                try {
+                    val uri = Uri.parse(task.directory)
+                    val contentResolver = applicationContext.contentResolver
+
+                    // Get file size from URI
+                    val fileSize =
+                        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                            val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+                            cursor.moveToFirst()
+                            if (sizeIndex != -1) cursor.getLong(sizeIndex) else null
+                        } ?: run {
+                            val message = "Could not open file or determine file size for URI: $uri"
+                            Log.w(TAG, message)
+                            taskException = TaskException(
+                                ExceptionType.fileSystem,
+                                description = message
+                            )
+                            return@withContext Pair(null, null) // Return nulls to indicate failure
+                        }
+
+                    // Get InputStream from URI
+                    val inputStream = contentResolver.openInputStream(uri) ?: run {
+                        val message = "Could not open input stream for URI: $uri"
+                        Log.w(TAG, message)
+                        taskException = TaskException(
+                            ExceptionType.fileSystem,
+                            description = message
+                        )
+                        return@withContext Pair(null, null) // Return nulls to indicate failure
+                    }
+
+                    Log.i(TAG, "Using InputStream from URI $uri")
+                    Pair(fileSize, inputStream)
+
+                } catch (e: Exception) {
+                    val message = "Error processing URI: ${task.directory}"
+                    Log.w(TAG, message, e)
+                    taskException = TaskException(
+                        ExceptionType.fileSystem,
+                        description = message
+                    )
+                    return@withContext Pair(null, null) // Return nulls to indicate failure
+                }
+            } else {
+                val file = File(filePath)
+                if (!file.exists() || !file.isFile) {
+                    val message = "File to upload does not exist: $filePath"
                     Log.w(TAG, message)
                     taskException = TaskException(
                         ExceptionType.fileSystem,
                         description = message
                     )
-                    return TaskStatus.failed
+                    return@withContext Pair(null, null) // Return nulls to indicate failure
                 }
-                Log.i(TAG, "Using filepath $path from URI $uri")
-                path
-            } catch (e: IllegalArgumentException) {
-                val message = "Invalid URI: ${task.filename}"
-                Log.w(TAG, message)
-                taskException = TaskException(
-                    ExceptionType.fileSystem,
-                    description = message
-                )
-                return TaskStatus.failed
+                val fileSize = file.length()
+                if (fileSize <= 0) {
+                    val message = "File $filePath has 0 length"
+                    Log.w(TAG, message)
+                    taskException = TaskException(
+                        ExceptionType.fileSystem,
+                        description = message
+                    )
+                    return@withContext Pair(null, null)
+                }
+                Pair(fileSize, FileInputStream(file))
             }
-        } else {
-            filePath // no change
         }
-        val file = File(filePathToUse)
-        if (!file.exists() || !file.isFile) {
-            val message = "File to upload does not exist: $filePathToUse"
-            Log.w(TAG, message)
-            taskException = TaskException(
-                ExceptionType.fileSystem,
-                description = message
-            )
-            return TaskStatus.failed
-        }
-        val fileSize = file.length()
-        if (fileSize <= 0) {
-            val message = "File $filePathToUse has 0 length"
-            Log.w(TAG, message)
-            taskException = TaskException(
-                ExceptionType.fileSystem,
-                description = message
-            )
+        // Check for failures in getting fileSize and inputStream
+        if (fileSize == null || inputStream == null) {
             return TaskStatus.failed
         }
         // Extract Range header information
@@ -170,8 +197,6 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
         }
         val contentLength = end - start + 1
         determineRunInForeground(task, contentLength)
-        // binary file upload posts file bytes directly
-        // set Content-Type based on file extension
         Log.d(TAG, "Binary upload for taskId ${task.taskId}")
         connection.setRequestProperty("Content-Type", task.mimeType)
         connection.setRequestProperty(
@@ -179,28 +204,21 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
         )
         connection.setRequestProperty("Content-Length", contentLength.toString())
         connection.setFixedLengthStreamingMode(contentLength)
-        if (rangeHeader != null) {
-            return withContext(Dispatchers.IO) {
-                FileInputStream(file).use { inputStream ->
+        return withContext(Dispatchers.IO) {
+            inputStream.use { fis ->
+                if (rangeHeader != null) {
                     // Special treatment for partial uploads
-                    inputStream.skip(start)
-                    LimitedInputStream(inputStream, contentLength).use { limitedInputStream ->
-                        DataOutputStream(connection.outputStream.buffered()).use { outputStream ->
-                            return@withContext transferBytes(
-                                limitedInputStream,
-                                outputStream,
-                                contentLength,
-                                task
-                            )
-                        }
-                    }
+                    fis.skip(start)
                 }
-            }
-        } else {
-            return withContext(Dispatchers.IO) {
-                FileInputStream(file).use { inputStream ->
+
+                LimitedInputStream(fis, contentLength).use { limitedInputStream ->
                     DataOutputStream(connection.outputStream.buffered()).use { outputStream ->
-                        return@withContext transferBytes(inputStream, outputStream, fileSize, task)
+                        return@withContext transferBytes(
+                            limitedInputStream,
+                            outputStream,
+                            if (rangeHeader != null) contentLength else fileSize,
+                            task
+                        )
                     }
                 }
             }

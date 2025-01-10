@@ -3,7 +3,11 @@
   - `onTaskStart` is a callback with signature`Future<Task?> Function(Task original)`, called just before the task starts executing. Your callback receives the `original` task about to start, and can modify this task if necessary. If you make modifications, you return the modified task - otherwise return null to continue execution with the original task. You can only change the task's `url` (including query parameters) and `headers` properties - making changes to any other property may lead to undefined behavior.
   - `onTaskFinished` is a callback with signature `Future<void> Function(TaskStatusUpdate taskStatusUpdate)`, called when the task has reached a final state (regardless of outcome). Your callback receives the final `TaskStatusUpdate` and can act on that.
   - `auth` is an optional `Auth` object that helps manage accessToken and accessToken refresh - see the README for details
-* Upgrades Android JAVA version to version 17 (modifies build.gradle)
+  - __NOTE:__ The callback functionality is experimental for now, and its behavior may change without warning in future updates. Please provide feedback on callbacks
+* Upgrades Android Java version to version 17 (modifies build.gradle)
+* Fixes concurrency issue on iOS
+* Changes how `numTotal` is calculated for group notifications: `numTotal` is now increment when a task is enqueued, instead of when it starts running. Note that this can lead to a '0/20 files' type notification if the tasks are enqueued but cannot start due to a constraint such as requiring WiFi
+* Expands type of Android URI that can be used to upload a file (was MediaStore URIs only, now accepts any Android URI, e.g. one provided by a document provider such as a file picker)
 
 ## 8.8.1
 

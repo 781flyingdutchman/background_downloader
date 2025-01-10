@@ -188,6 +188,7 @@ FileDownloader().configureNotification(
   - [Grouping tasks](#grouping-tasks)
   - [Task queues and holding queues](#task-queues-and-holding-queues)
   - [Changing WiFi requirements](#changing-wifi-requirements)
+- [Authentication and pre- and post-execution callbacks](#authentication-and-pre--and-post-execution-callbacks)
 - [Server requests](#server-requests)
 - [Cookies](#cookies)
 - [Optional parameters](#optional-parameters)
@@ -317,7 +318,7 @@ print('Wrong use filename=${task.filename}'); // this will print '?' as 'task' h
 
 #### Android file URIs
 
-From Android 11 on, you can upload a file using the Mediastore URI instead of the file name. To create such an `UploadTask`, use `UploadTask.fromAndroidUri` and supply the 'content://' URI. To make this easier, methods `moveToSharedStorage` and `pathInSharedStorage` can now return a URI if `asAndroidUri` is set to true. Note that if for whatever reason the URI cannot be obtained, the regular file path will be returned, so you need to confirm the returned value starts with 'content://' before using it as a URI.
+From Android 11 on, you can upload a file using a Storage Access Framework URI instead of the file name. To create such an `UploadTask`, use `UploadTask.fromAndroidUri` and supply the 'content://' URI. To make this easier, methods `moveToSharedStorage` and `pathInSharedStorage` can now return a URI if `asAndroidUri` is set to true. Note that if for whatever reason the URI cannot be obtained, the regular file path will be returned, so you need to confirm the returned value starts with 'content://' before using it as a URI.
 
 ### A batch of files
 
@@ -691,7 +692,7 @@ Uploads are very similar to downloads, except:
 There are two ways to upload a file to a server: binary upload (where the file is included in the POST body) and form/multi-part upload. Which type of upload is appropriate depends on the server you are uploading to. The upload will be done using the binary upload method only if you have set the `post` field of the `UploadTask` to 'binary'.
 
 If you already have a `File` object, you can create your `UploadTask` using `UploadTask.fromFile`, though note that this will create a task with an absolute path reference and `BaseDirectory.root`, which can cause problems on mobile platforms (see [here](#specifying-the-location-of-the-file-to-download-or-upload)). Preferably, use `Task.split` to break your `File` or filePath into appropriate baseDirectory, directory and filename and use that to create your `UploadTask`.
-On Android, you can use Mediastore URIs for binary uploads by creating the task using `UploadTask.fromAndroidUri`.
+On Android, you can use Storage Access Framework URIs for binary uploads by creating the task using `UploadTask.fromAndroidUri`.
 
 For multi-part uploads you can specify name/value pairs in the `fields` property of the `UploadTask` as a `Map<String, String>`. These will be uploaded as form fields along with the file. To specify multiple values for a single name, format the value as `'"value1", "value2", "value3"'` (note the double quotes and the comma to separate the values).
 
@@ -830,7 +831,7 @@ The global setting persists across application restarts. Check the current setti
 
 A task may be waiting a long time before it gets executed, or before it has finished, and you may need to modify the task before it actually starts (e.g. to refresh an access token) or do something when it finishes (e.g. conditionally call your server to confirm an upload has finished). The normal listener or registered callback approach does not enable that functionality, and does not execute when the app is in a suspended state.
 
-To facilitate more complex task management functions, consider:
+To facilitate more complex task management functions, consider using "native" callbacks:
 * `onTaskStart`: a callback called before a task starts executing. The callback receives the `Task` and returns `null` if it did not change anything, or a modified `Task` if it needs to use a different url or header. It is called after `onAuth` for token refresh, if that is set
 * `onTaskFinished`: a callback called when the task has finished. The callback receives the final `TaskStatusUpdate`.
 * `auth`: a class that facilitates management of authorization tokens and refresh tokens, and includes an `onAuth` callback similar to `onTaskStart`
@@ -843,7 +844,7 @@ final task = DownloadTask(url: 'https://google.com',
 where `myStartCallback` must be a top level or static function.
 
 For most situations, using the event listeners or registered "regular" callbacks is recommended, as they run in the normal application context on the main isolate. Native callbacks are called directly from native code (iOS, Android or Desktop) and therefore behave differently:
-* Callbacks are called even when an application is suspended
+* Native callbacks are called even when an application is suspended
 * On iOS, the callbacks runs in the main isolate
 * On Android, callbacks run in a shared background isolate, though there is no guarantee that every callback shares the same isolate as another callback
 * On Desktop, callbacks run in the same isolate as the task, and every task has its own isolate
@@ -863,7 +864,7 @@ The `Auth` object (which can be set as the `auth` property in `TaskOptions`) con
 * `accessHeaders`: the headers specific to authorization. In these headers, the template `{accessToken}` will be replaced by the actual `accessToken` property, so a common value would be `{'Authorization': 'Bearer {accessToken}'`
 * `accessQueryParams`: the query parameters specific to authorization. In these headers, the template `{accessToken}` will be replaced by the actual `accessToken` property
 * `accessTokenExpiryTime`: the time at which the `accessToken` will expire.
-* `refreshToken`, `refreshHeaders` and `refreshQueryParams` are similar to those for access (and replace the `{refreshToken}` template)
+* `refreshToken`, `refreshHeaders` and `refreshQueryParams` are similar to those for access (the template `{refreshToken}` will be replaced with the actual `refreshToken`)
 * `refreshUrl`: url to use for refresh, including query parameters not related to the auth tokens
 * `onAuth`: callback that will be called when token refresh is required
 
@@ -895,6 +896,10 @@ final task = DownloadTask(
     filename: 'my_file.txt',
     options: TaskOptions(auth: auth));
 ```
+
+There are limitations to the auth functionality, as the original task is not updated on the Dart side. For example, if a token refresh was performed and subsequently the task is paused, the resumed task with have the original accessToken and expiry time and will therefore trigger another token refresh.
+
+__NOTE:__ The callback functionality is experimental for now, and its behavior may change without warning in future updates. Please provide feedback on callbacks.
 
 ## Server requests
 
