@@ -127,7 +127,7 @@ base class Request {
   /// Returns the cookie header appropriate for this [request],
   /// taken from the [cookies] list.
   ///
-  /// [cookies] can be a List<Cookie> or the 'Set-Cookie' header value
+  /// [cookies] can be a `List<Cookie>` or the 'Set-Cookie' header value
   ///
   /// The returned map is the 'Cookie:' header, with the
   /// value=name; value2=name2 as the value.

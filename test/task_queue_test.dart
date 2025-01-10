@@ -1,4 +1,6 @@
 @Timeout(Duration(minutes: 2))
+library;
+
 // ignore_for_file: avoid_print
 
 import 'dart:math';

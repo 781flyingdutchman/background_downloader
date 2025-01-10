@@ -65,7 +65,7 @@ class Chunk {
         status = TaskStatus.values[(json['status'] as num? ?? 0).toInt()],
         progress = (json['progress'] as num? ?? 0.0).toDouble();
 
-  /// Revive List<Chunk> from a JSON map in a jsonDecode operation,
+  /// Revive `List<Chunk>` from a JSON map in a jsonDecode operation,
   /// where each element is a map representing the [Chunk]
   static Object? listReviver(Object? key, Object? value) =>
       key is int ? Chunk.fromJson(value as Map<String, dynamic>) : value;
