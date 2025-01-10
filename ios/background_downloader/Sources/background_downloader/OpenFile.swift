@@ -7,6 +7,7 @@
 
 import Foundation
 import MobileCoreServices
+import UIKit
 
 ///
 func doOpenFile(filePath: String, mimeType: String?) -> Bool {

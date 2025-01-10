@@ -37,5 +37,9 @@ build/
 .ruby-version
 Gemfile*
 
+# Swift package manager
+.build/
+.swiftpm/
+
 # generated files
 *.mocks.dart

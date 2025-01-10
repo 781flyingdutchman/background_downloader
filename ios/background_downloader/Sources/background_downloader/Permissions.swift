@@ -7,6 +7,7 @@
 
 import Foundation
 import Photos
+import UserNotifications
 import os.log
 
 public enum PermissionType: Int {

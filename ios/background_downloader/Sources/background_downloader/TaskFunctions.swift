@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Flutter
 import os.log
 
 let updatesQueue = DispatchQueue(label: "updatesProcessingQueue")

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Flutter
 import os.log
 
 import UIKit
