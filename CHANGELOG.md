@@ -1,3 +1,7 @@
+## 8.9.1
+* [iOS] Adds Privacy Manifest
+* [iOS] Adds support for Swift Package Manager
+
 ## 8.9.0
 * Adds `options` field to Task, which take a `TaskOptions` object to configure less common task specific options - currently `onTaskStart`, `onTaskFinished` and `auth`
   - `onTaskStart` is a callback with signature`Future<Task?> Function(Task original)`, called just before the task starts executing. Your callback receives the `original` task about to start, and can modify this task if necessary. If you make modifications, you return the modified task - otherwise return null to continue execution with the original task. You can only change the task's `url` (including query parameters) and `headers` properties - making changes to any other property may lead to undefined behavior.
