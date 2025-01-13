@@ -1,3 +1,6 @@
+## next
+* Upgraded minimum Dart SDK to 3.3.0
+
 ## 8.9.1
 * [iOS] Adds Privacy Manifest
 * [iOS] Adds support for Swift Package Manager

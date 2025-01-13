@@ -16,8 +16,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # This is Dart 3.2.x
-  FLUTTER_MIN_SDK: '3.16.0'
+  # This is Dart 3.5.0
+  FLUTTER_MIN_SDK: '3.24.0'
 
 jobs:
   format:
@@ -40,6 +40,7 @@ jobs:
         with:
           cache: true
       - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
       - run: flutter analyze
       - run: flutter pub get
         working-directory: example
@@ -52,7 +53,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The example Android project setup ist not supported by Flutter 3.10.x
         sdk: [ min, stable, beta ]
     steps:
       - uses: actions/checkout@v4
@@ -66,6 +66,8 @@ jobs:
           cache: true
           flutter-version: ${{ matrix.sdk == 'min' && env.FLUTTER_MIN_SDK || '' }}
           channel: ${{ matrix.sdk == 'min' && 'stable' || matrix.sdk }}
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
       - name: Build example APK
         working-directory: example
         run: flutter build apk
@@ -93,6 +95,8 @@ jobs:
       - uses: maxim-lobanov/setup-cocoapods@v1
         with:
           version: latest
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
       - name: Build example iOS package
         run: flutter build ios --simulator
         working-directory: example
@@ -123,6 +127,8 @@ jobs:
           sudo apt-get install -y ninja-build
           sudo apt-get install -y libgtk-3-dev
           export CMAKE_CXX_COMPILER=$(which g++)
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
       - name: Build example Linux package
         run: flutter build linux
         working-directory: example
