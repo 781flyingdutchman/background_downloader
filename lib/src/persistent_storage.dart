@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:background_downloader/src/base_downloader.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'base_downloader.dart';
 import 'database.dart';
 import 'localstore/localstore.dart';
 import 'models.dart';

@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:background_downloader/src/exceptions.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 
+import '../exceptions.dart';
 import '../models.dart';
 import '../task.dart';
 import 'desktop_downloader.dart';

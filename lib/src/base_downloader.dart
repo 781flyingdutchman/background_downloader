@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:background_downloader/src/file_downloader.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
@@ -11,6 +10,7 @@ import 'package:logging/logging.dart';
 import 'chunk.dart';
 import 'database.dart';
 import 'exceptions.dart';
+import 'file_downloader.dart';
 import 'models.dart';
 import 'native_downloader.dart';
 import 'permissions.dart';
