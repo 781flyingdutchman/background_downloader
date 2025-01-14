@@ -540,6 +540,52 @@ interface class FileDownloader {
   Future<void> resumeFromBackground() =>
       _downloader.retrieveLocallyStoredData();
 
+  /// Reschedules tasks that are present in the database but missing from
+  /// the native task queue. Typically called on app start, 5s after establishing
+  /// the updates listener, calling [trackTasks] or [trackTasksInGroup] and
+  /// calling [resumeFromBackground].
+  ///
+  /// This function retrieves all tasks from the database that are in enqueued
+  /// or running states and compares these tasks with the
+  /// list of tasks currently present in the native task queue.
+  ///
+  /// For each task found only in the database, the function:
+  /// 1. Deletes the corresponding record from the database.
+  /// 2. Enqueues the task back into the native task queue.
+  ///
+  /// Finally, the function returns two lists of Tasks in a record. The first
+  /// item is the list of successfully re-enqueued tasks, the second item
+  /// is the list of tasks that failed to enqueue.
+  ///
+  /// Throws assertion error if you are not currently tracking tasks, as that
+  /// makes this function a no-op that always returns empty lists.
+  Future<(List<Task>, List<Task>)> rescheduleMissingTasks() async {
+    assert(
+        _downloader.isTrackingTasks,
+        'rescheduleMissingTasks should only be called if you are tracking tasks. '
+        'Did you call trackTasks or trackTasksInGroup?');
+    final databaseTasks = (await database.allRecords())
+        .where((record) => const [
+              TaskStatus.enqueued,
+              TaskStatus.running,
+            ].contains(record.status))
+        .map((record) => record.task)
+        .toSet();
+    final nativeTasks = Set<Task>.from(await FileDownloader().allTasks());
+    final missingTasks = databaseTasks.difference(nativeTasks);
+    final successfullyEnqueued = <Task>[];
+    final failedToEnqueue = <Task>[];
+    for (final task in missingTasks) {
+      await database.deleteRecordWithId(task.taskId);
+      if (await FileDownloader().enqueue(task)) {
+        successfullyEnqueued.add(task);
+      } else {
+        failedToEnqueue.add(task);
+      }
+    }
+    return (successfullyEnqueued, failedToEnqueue);
+  }
+
   /// Returns true if task can be resumed on pause
   ///
   /// This future only completes once the task is running and has received

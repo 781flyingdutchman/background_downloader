@@ -357,8 +357,9 @@ To ensure your callbacks or listener capture events that may have happened when 
 In summary, to track your tasks persistently, follow these steps in order, immediately after app startup:
 1. If using a non-default `PersistentStorage` backend, initialize with `FileDownloader(persistentStorage: MyPersistentStorage())` and wait for the initialization to complete by calling `await FileDownloader().ready` (see [using the database](#using-the-database-to-track-tasks) for details on `PersistentStorage`).
 2. Register an event listener or callback(s) to process status and progress updates
-3. call `await FileDownloader().trackTasks()` if you want to track the tasks in a persistent database
-4. call `await FileDownloader().resumeFromBackground()` to ensure events that happened while your app was in the background are processed
+3. Call `await FileDownloader().trackTasks()` if you want to track the tasks in a persistent database
+4. Call `await FileDownloader().resumeFromBackground()` to ensure events that happened while your app was in the background are processed
+5. If you are tracking tasks in the database, after ~5 seconds, call `await FileDownloader().rescheduleMissingTasks()` to reschedule tasks that are in the database as `enqueued` or `running` yet are not enqueued or running on the native side. These tasks have been "lost", most likely because the user killed your app (which kills tasks on the native side without warning)
 
 The rest of this section details [event listeners](#using-an-event-listener), [callbacks](#using-callbacks) and the [database](#using-the-database-to-track-tasks) in detail.
 
@@ -440,13 +441,15 @@ final successfullyEnqueued = await FileDownloader().enqueue(task);
 // somewhere else: query the task status by getting a `TaskRecord`
 // from the database
 final record = await FileDownloader().database.recordForId(task.taskId);
-print('Taskid ${record.taskId} with task ${record.task} has '
+print('TaskId ${record.taskId} with task ${record.task} has '
     'status ${record.status} and progress ${record.progress} '
     'with an expected file size of ${record.expectedFileSize} bytes'
 ```
 
 You can interact with the `database` using `allRecords`, `allRecordsOlderThan`, `recordForId`,`deleteAllRecords`,
 `deleteRecordWithId` etc. If you only want to track tasks in a specific [group](#grouping-tasks), call `trackTasksInGroup` instead.
+
+If a user kills your app (e.g. by swiping it away in the app tray) then tasks that are running (natively) are killed, and no indication is given to your application. This cannot be avoided. To guard for this, upon app startup you can ask the downloader to reschedule missing tasks, i.e. tasks that show up as `enqueued` or `running` in the database, yet are not enqueued or running on the native side. Method `rescheduleMissingTasks` returns a record with two lists, 1) successfully rescheduled tasks and 2) tasks that failed to reschedule. Together, those are the missing tasks. Reschedule missing tasks a few seconds after you have called `resumeFromBackground`, as that gives the downloader time to processes updates that may have happened while the app was suspended.
 
 By default, the downloader uses a modified version of the [localstore](https://pub.dev/packages/localstore) package to store the `TaskRecord` and other objects. To use a different persistent storage solution, create a class that implements the [PersistentStorage](https://pub.dev/documentation/background_downloader/latest/background_downloader/PersistentStorage-class.html) interface, and initialize the downloader by calling `FileDownloader(persistentStorage: MyPersistentStorage())` as the first use of the `FileDownloader`.
 

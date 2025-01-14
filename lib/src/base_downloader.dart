@@ -516,6 +516,9 @@ abstract base class BaseDownloader {
     }
   }
 
+  /// Return true if we are tracking tasks
+  bool get isTrackingTasks => trackedGroups.isNotEmpty;
+
   /// Attempt to pause this [task]
   ///
   /// Returns true if successful
