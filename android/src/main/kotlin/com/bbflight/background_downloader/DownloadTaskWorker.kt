@@ -1,8 +1,10 @@
 package com.bbflight.background_downloader
 
 import android.content.Context
+import android.net.Uri
 import android.os.Build
 import android.os.storage.StorageManager
+import android.provider.DocumentsContract
 import android.util.Log
 import androidx.preference.PreferenceManager
 import androidx.work.WorkerParameters
@@ -10,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.BufferedInputStream
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.RandomAccessFile
@@ -92,16 +95,26 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
                 )
                 return TaskStatus.failed
             }
+            val usesAndroidUri =
+                task.baseDirectory == BaseDirectory.root && task.directory.startsWith("content://")
             // if no filename is set, get from headers or url, update task and set new destFilePath
             var destFilePath = filePath
             if (!task.hasFilename()) {
                 task = task.withSuggestedFilenameFromResponseHeaders(
                     applicationContext,
                     connection.headerFields,
-                    unique = true
+                    unique = !usesAndroidUri
                 )
-                val dirName = File(filePath).parent ?: ""
-                destFilePath = "$dirName/${task.filename}"
+                val dirName = if (usesAndroidUri) {
+                    ""  // No separate directory if using URI
+                } else {
+                    File(filePath).parent ?: ""
+                }
+                destFilePath = if (usesAndroidUri) {
+                    task.directory // URI of destination directory
+                } else {
+                    if (dirName.isEmpty()) task.filename else "$dirName/${task.filename}"
+                }
                 Log.d(TAG, "Suggested filename for taskId ${task.taskId}: ${task.filename}")
             }
             extractResponseHeaders(connection.headerFields)
@@ -168,27 +181,80 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
             // act on the result of the bytes transfer
             when (transferBytesResult) {
                 TaskStatus.complete -> {
-                    // move file from its temp location to the destination
-                    val destFile = File(destFilePath)
-                    val dir = destFile.parentFile!!
-                    if (!dir.exists()) {
-                        dir.mkdirs()
-                    }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        withContext(Dispatchers.IO) {
-                            Files.move(
-                                tempFile.toPath(),
-                                destFile.toPath(),
-                                StandardCopyOption.REPLACE_EXISTING
+                    if (usesAndroidUri) {
+                        // Use SAF to copy to destination URI
+                        val resolver = applicationContext.contentResolver
+                        val destUri = DocumentsContract.createDocument(
+                            resolver,
+                            Uri.parse(task.directory),
+                            task.mimeType,
+                            task.filename.replace(" ", "_")
+                        ) ?: run {
+                            val message = "Failed to create document within directory with URI: ${task.directory}"
+                            Log.e(TAG, message)
+                            taskException = TaskException(
+                                ExceptionType.fileSystem,
+                                description = message
                             )
+                            deleteTempFile()
+                            return TaskStatus.failed
                         }
-                    } else {
-                        tempFile.copyTo(destFile, overwrite = true)
+                        try {
+                            resolver.openOutputStream(destUri)?.use { outputStream ->
+                                FileInputStream(tempFile).use { inputStream ->
+                                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                                    var bytesRead: Int
+                                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                                        outputStream.write(buffer, 0, bytesRead)
+                                    }
+                                }
+                            } ?: run {
+                                val message = "Failed to open output stream for URI: $destUri"
+                                Log.e(TAG, message)
+                                taskException = TaskException(
+                                    ExceptionType.fileSystem,
+                                    description = message
+                                )
+                                deleteTempFile()
+                                return TaskStatus.failed
+                            }
+                        } catch (e: Exception) {
+                            val message = "Error copying to destination URI: $destUri - ${e.message}"
+                            Log.e(TAG, message)
+                            taskException = TaskException(
+                                ExceptionType.fileSystem,
+                                description = message
+                            )
+                            deleteTempFile()
+                            return TaskStatus.failed
+                        }
                         deleteTempFile()
+                        Log.i(
+                            TAG, "Successfully downloaded taskId ${task.taskId} to URI $destUri"
+                        )
+                    } else {
+                        // move file from its temp location to the destination
+                        val destFile = File(destFilePath)
+                        val dir = destFile.parentFile!!
+                        if (!dir.exists()) {
+                            dir.mkdirs()
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            withContext(Dispatchers.IO) {
+                                Files.move(
+                                    tempFile.toPath(),
+                                    destFile.toPath(),
+                                    StandardCopyOption.REPLACE_EXISTING
+                                )
+                            }
+                        } else {
+                            tempFile.copyTo(destFile, overwrite = true)
+                            deleteTempFile()
+                        }
+                        Log.i(
+                            TAG, "Successfully downloaded taskId ${task.taskId} to $destFilePath"
+                        )
                     }
-                    Log.i(
-                        TAG, "Successfully downloaded taskId ${task.taskId} to $destFilePath"
-                    )
                     return TaskStatus.complete
                 }
 

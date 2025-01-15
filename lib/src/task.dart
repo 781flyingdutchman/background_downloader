@@ -532,6 +532,10 @@ sealed class Task extends Request implements Comparable {
         'taskType': taskType
       };
 
+  /// True if this task was created with an Android content URI instead of
+  /// regular `baseDirectory` and `directory`
+  bool get usesAndroidUri => directory.startsWith('content://');
+
   /// If true, task expects progress updates
   bool get providesProgressUpdates =>
       updates == Updates.progress || updates == Updates.statusAndProgress;
@@ -634,6 +638,46 @@ final class DownloadTask extends Task {
       super.displayName,
       super.creationTime,
       super.options});
+
+  /// Creates [DownloadTask] using an Android 'content' URI as the destination.
+  /// Content URIs are related to the Android Storage Framework that makes it
+  /// easier to get access to a file system location without the need for
+  /// app permissions, provided the user has chosen that location using a
+  /// file picker.
+  ///
+  /// Example: explore package saf_util at https://pub.dev/packages/saf_util to
+  /// see how to obtain a persistent URI for the directory the user selected in
+  /// a file picker.
+  ///
+  /// The [uri] must be a 'content://' scheme and will be stored in the
+  /// [directory] property.
+  ///
+  /// Note that the result of [Task.filePath] is undefined when using a URI
+  DownloadTask.fromAndroidUri({
+    super.taskId,
+    required super.url,
+    super.urlQueryParameters,
+    super.filename,
+    super.headers,
+    super.httpRequestMethod,
+    super.post,
+    required Uri uri,
+    super.group,
+    super.updates,
+    super.requiresWiFi,
+    super.retries,
+    super.allowPause,
+    super.priority,
+    super.metaData,
+    super.displayName,
+    super.creationTime,
+    super.options
+}) : super(
+      baseDirectory: BaseDirectory.root,
+      directory: uri.toString())
+  {
+    assert(uri.scheme == 'content', 'Android URI scheme must be "content"');
+  }
 
   /// Creates [DownloadTask] object from [json]
   DownloadTask.fromJson(super.json)
