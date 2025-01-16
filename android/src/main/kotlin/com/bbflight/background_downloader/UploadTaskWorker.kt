@@ -443,7 +443,8 @@ class LimitedInputStream(
         }
 
         // Adjust length to not exceed limit
-        val maxBytesToRead = minOf(len, (limit - bytesRead).toInt())
+        val remainingBytes: Long = limit - bytesRead // Declare remainingBytes explicitly as a Long
+        val maxBytesToRead = minOf(len.toLong(), remainingBytes).toInt() // Safely cast after taking min
         val result = inputStream.read(b, off, maxBytesToRead)
 
         if (result != -1) {
