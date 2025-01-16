@@ -8,6 +8,7 @@
 * [iOS] Removes limit on range of partial file uploads using the Range header (was 2GB)
 
 ## 8.9.2
+* Adds `rescheduleMissingTasks`, which compares tasks in the `database` with tasks in the native downloader, and reschedules those tasks that are present in the database (and therefore should be enqueued or running) but are not present in the native downloader. Returns two lists of `Task` - successfully rescheduled ones, and tasks that failed to reschedule.
 * Upgraded minimum Dart SDK to 3.5.0 / Flutter SDK 3.24.0 to stay in sync with dependency updates
 * [Android] Fix bug when uploading files greater than 2GB, that was introduced in V8.9.0
 

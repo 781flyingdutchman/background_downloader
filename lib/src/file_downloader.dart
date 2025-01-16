@@ -964,6 +964,11 @@ interface class FileDownloader {
       _downloader.pathInSharedStorage(
           filePath, destination, directory, asAndroidUri);
 
+  /// Pick a directory to download to, and return the path to it or the
+  /// Android URI
+  Future<String?> pickDirectory({SharedStorage? startDirectory}) =>
+      _downloader.pickDirectory(startDirectory);
+
   /// Open the file represented by [task] or [filePath] using the application
   /// available on the platform.
   ///

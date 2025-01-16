@@ -188,7 +188,7 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
                             resolver,
                             Uri.parse(task.directory),
                             task.mimeType,
-                            task.filename.replace(" ", "_")
+                            task.filename
                         ) ?: run {
                             val message = "Failed to create document within directory with URI: ${task.directory}"
                             Log.e(TAG, message)

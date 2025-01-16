@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:background_downloader/background_downloader.dart';
 import 'package:background_downloader_example/isolate.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
 
@@ -245,6 +246,21 @@ class _MyAppState extends State<MyApp> {
                         : loadBackgroundResult ?? '',
                   ),
                 ),
+                if (Platform.isAndroid)
+                  const Divider(
+                    height: 30,
+                    thickness: 5,
+                    color: Colors.blueGrey,
+                  ),
+                if (Platform.isAndroid)
+                  Center(
+                    child: ElevatedButton(
+                      onPressed: processPickDirectory,
+                      child: const Text(
+                        'Pick destination',
+                      ),
+                    ),
+                  ),
               ],
             ),
           )),
@@ -407,6 +423,23 @@ class _MyAppState extends State<MyApp> {
         loadBackgroundInProgress = false;
       });
     }
+  }
+
+  Future<void> processPickDirectory() async {
+    final uri = await FileDownloader().pickDirectory();
+    if (uri == null) {
+      log.warning('Could not get a URI');
+      return;
+    }
+    print(uri.isFile);
+    log.fine('Uri = $uri');
+    // final task = DownloadTask.fromUri(
+    //     url:
+    //         'https://i2.wp.com/www.skiptomylou.org/wp-content/uploads/2019/06/dog-drawing.jpg',
+    //     directoryUri: Uri.parse(uri),
+    //     filename: '?');
+    // final result = await FileDownloader().download(task);
+    // log.info('Download to URI completed with taskStatus ${result.status}');
   }
 
   /// Attempt to get permissions if not already granted

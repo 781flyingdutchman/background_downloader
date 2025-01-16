@@ -202,7 +202,7 @@ fun pathInSharedStorage(
  * Returns path to media store [destination] for Android versions at or above Q
  */
 @RequiresApi(Build.VERSION_CODES.Q)
-private fun getMediaStoreUri(destination: SharedStorage): Uri {
+fun getMediaStoreUri(destination: SharedStorage): Uri {
     return when (destination) {
         SharedStorage.files -> MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         SharedStorage.downloads -> MediaStore.Downloads.getContentUri(

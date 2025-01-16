@@ -639,44 +639,46 @@ final class DownloadTask extends Task {
       super.creationTime,
       super.options});
 
-  /// Creates [DownloadTask] using an Android 'content' URI as the destination.
+  /// Creates [DownloadTask] using a URI as the destination directory
+  /// 
+  /// For Android:
   /// Content URIs are related to the Android Storage Framework that makes it
   /// easier to get access to a file system location without the need for
   /// app permissions, provided the user has chosen that location using a
-  /// file picker.
+  /// file picker.  They follow the content:// scheme, and can be obtained
+  /// by calling [pickDirectory] from [FileDownloader].
   ///
-  /// Example: explore package saf_util at https://pub.dev/packages/saf_util to
-  /// see how to obtain a persistent URI for the directory the user selected in
-  /// a file picker.
-  ///
-  /// The [uri] must be a 'content://' scheme and will be stored in the
-  /// [directory] property.
+  /// For other platforms:
+  /// File URIs follow the file:// scheme and point to a destination on the
+  /// file system. A file:// URI is returned from [pickDirectory] on platfomrs
+  /// other than Android.
+  /// 
+  /// The [directoryUri] will be stored in the [directory] property and should represent
+  /// a directory, not a specific file.
   ///
   /// Note that the result of [Task.filePath] is undefined when using a URI
-  DownloadTask.fromAndroidUri({
-    super.taskId,
-    required super.url,
-    super.urlQueryParameters,
-    super.filename,
-    super.headers,
-    super.httpRequestMethod,
-    super.post,
-    required Uri uri,
-    super.group,
-    super.updates,
-    super.requiresWiFi,
-    super.retries,
-    super.allowPause,
-    super.priority,
-    super.metaData,
-    super.displayName,
-    super.creationTime,
-    super.options
-}) : super(
-      baseDirectory: BaseDirectory.root,
-      directory: uri.toString())
-  {
-    assert(uri.scheme == 'content', 'Android URI scheme must be "content"');
+  DownloadTask.fromUri(
+      {super.taskId,
+      required super.url,
+      super.urlQueryParameters,
+      super.filename,
+      super.headers,
+      super.httpRequestMethod,
+      super.post,
+      required Uri directoryUri,
+      super.group,
+      super.updates,
+      super.requiresWiFi,
+      super.retries,
+      super.allowPause,
+      super.priority,
+      super.metaData,
+      super.displayName,
+      super.creationTime,
+      super.options})
+      : super(baseDirectory: BaseDirectory.root, directory: directoryUri.toString()) {
+    assert(directoryUri.scheme == 'content' || directoryUri.scheme == 'file',
+        'Directory URI scheme must be content:// or file://');
   }
 
   /// Creates [DownloadTask] object from [json]

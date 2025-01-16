@@ -635,6 +635,12 @@ abstract base class BaseDownloader {
     return Future.value(null);
   }
 
+  /// Pick a directory to download to, and return the path to it or the
+  /// Android URI
+  Future<String?> pickDirectory(SharedStorage? startDirectory) async {
+    return null;
+  }
+
   /// Open the file represented by [task] or [filePath] using the application
   /// available on the platform.
   ///
