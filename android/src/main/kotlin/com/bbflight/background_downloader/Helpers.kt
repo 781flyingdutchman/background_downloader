@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Environment
 import android.os.StatFs
 import android.util.Log
+import androidx.core.content.FileProvider.getUriForFile
 import androidx.preference.PreferenceManager
 import com.bbflight.background_downloader.TaskWorker.Companion.TAG
 import io.flutter.plugin.common.MethodChannel
@@ -200,6 +201,24 @@ fun getBasenameWithoutExtension(file: File): String {
     val fileName = file.name
     val extension = file.extension
     return fileName.substringBeforeLast(".$extension")
+}
+
+/**
+ * Returns the Uri for the given [filePath], or null if not allowed/possible
+ */
+fun getUriFromFilePath(context: Context, filePath: String): String? {
+    try {
+        val contentUri = getUriForFile(
+            context,
+            context.packageName + ".com.bbflight.background_downloader.fileprovider",
+            File(filePath)
+        )
+        return contentUri.toString()
+    }
+    catch (e: Exception) {
+        Log.i(BDPlugin.TAG, "Failed to get Uri for file $filePath: $e")
+        return null
+    }
 }
 
 // Helper extension to filter out null values from Maps
