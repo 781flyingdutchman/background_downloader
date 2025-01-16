@@ -1,6 +1,6 @@
 ## 8.9.2
 * Upgraded minimum Dart SDK to 3.5.0 / Flutter SDK 3.24.0 to stay in sync with dependency updates
-* 
+* Fix bug when uploading files greater than 2GB, that was introduced in V8.9.0
 
 ## 8.9.1
 * [iOS] Adds Privacy Manifest
