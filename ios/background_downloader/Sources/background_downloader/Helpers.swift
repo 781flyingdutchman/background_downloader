@@ -67,26 +67,65 @@ func createTempFileWithRange(from fileURL: URL, start: UInt64, contentLength: UI
     let tempDir = fileManager.temporaryDirectory
     let tempFileURL = tempDir.appendingPathComponent(UUID().uuidString) // Create a unique temporary file
     
-    do {
-        // Open the original file for reading
-        let fileHandle = try FileHandle(forReadingFrom: fileURL)
-        
-        // Move to the start position
-        try fileHandle.seek(toOffset: start)
-        
-        // Read the contentLength number of bytes
-        let data = fileHandle.readData(ofLength: Int(contentLength))
-        
-        // Create the temporary file
-        fileManager.createFile(atPath: tempFileURL.path, contents: data, attributes: nil)
-        
-        // Close the file handle
-        fileHandle.closeFile()
-        
-        // Return the URL to the temp file
-        return tempFileURL
-    } catch {
-        os_log("Error processing file: %@", log: log, type: .info, error.localizedDescription)
+    // Create the temporary file
+    fileManager.createFile(atPath: tempFileURL.path, contents: nil, attributes: nil)
+    
+    guard let inputStream = InputStream(url: fileURL) else {
+        os_log("Cannot create input stream for partial upload temporary file creation", log: log, type: .info)
         return nil
     }
+    
+    guard let outputStream = OutputStream(toFileAtPath: tempFileURL.path, append: false) else {
+        os_log("Cannot create output stream for partial upload temporary file creation", log: log, type: .info)
+        return nil
+    }
+
+    inputStream.open()
+    outputStream.open()
+    
+    defer {
+        inputStream.close()
+        outputStream.close()
+    }
+    
+    let chunkSize = 1024 * 1024 // 1MB chunks
+    let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: chunkSize)
+        defer { buffer.deallocate() }
+    
+    var remainingBytes = contentLength
+    var totalRead: UInt64 = 0
+
+    // Seek to the start position
+    while totalRead < start {
+        let seekBytes = min(chunkSize, Int(start - totalRead))
+        let bytesRead = inputStream.read(buffer, maxLength: seekBytes)
+        if bytesRead < 0 {
+            os_log("Cannot read data up to desired start from original file for partial upload temporary file creation", log: log, type: .info)
+            return nil
+        }
+        if bytesRead == 0 { break } // EOF
+        totalRead += UInt64(bytesRead)
+    }
+
+    // Now read only the required range
+    while remainingBytes > 0 {
+        let bytesToRead = min(chunkSize, Int(remainingBytes))
+        let bytesRead = inputStream.read(buffer, maxLength: bytesToRead)
+
+        if bytesRead < 0 {
+            os_log("Cannot read data from original file for partial upload temporary file creation", log: log, type: .info)
+            return nil
+        }
+        if bytesRead == 0 { break } // EOF
+
+        let bytesWritten = outputStream.write(buffer, maxLength: bytesRead)
+        if bytesWritten < 0 {
+            os_log("Cannot write data to new temporary file for partial upload", log: log, type: .error)
+            return nil
+        }
+
+        remainingBytes -= UInt64(bytesWritten)
+    }
+
+    return tempFileURL
 }
