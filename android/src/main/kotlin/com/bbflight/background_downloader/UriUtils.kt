@@ -29,6 +29,9 @@ object DirectoryPicker {
      * @param result The MethodChannel result to complete when the picker is closed.
      *
      * Returns true if the picker was launched successfully, false otherwise.
+     *
+     * The result of the picker is handled in [handleActivityResult], and is either
+     * a URI string, null (if the picker was cancelled) or an error
      */
     fun pickDirectory(
         activity: Activity,
@@ -63,7 +66,8 @@ object DirectoryPicker {
 
     /**
      * Handles the result from the directory picker activity, buy setting the [pendingResult] to the
-     * result value
+     * result value. Returns null if the request was cancelled by the user, and errors if something
+     * unusual happened
      *
      * @param requestCode The request code passed to startActivityForResult().
      * @param resultCode The result code returned by the child activity.
@@ -87,12 +91,9 @@ object DirectoryPicker {
                 }
                 pendingResult?.success(directoryUri?.toString())
             } else {
-                pendingResult?.error(
-                    "CANCELLED", "User cancelled directory picker",
-                    null
-                )
+                pendingResult?.success(null)
             }
-            pendingResult = null
+            pendingResult = null // cancelled
             return true
         }
         return false
@@ -121,6 +122,9 @@ object FilePicker {
      * @param result The MethodChannel result to complete when the picker is closed.
      *
      * Returns true if the picker was launched successfully, false otherwise.
+     *
+     * The result posted back is either a list of URIs as a String, or null (if the user has
+     * cancelled the picker) or an error
      */
     fun pickFiles(
         activity: Activity,
@@ -216,7 +220,7 @@ object FilePicker {
                 }
                 pendingResult?.success(uris)
             } else {
-                pendingResult?.error("CANCELLED", "User cancelled file picker", null)
+                pendingResult?.success(null) // cancelled
             }
             pendingResult = null // Reset the pending result
             return true
@@ -255,6 +259,8 @@ object DirectoryCreator {
      * @param result The MethodChannel result to complete when the operation is finished.
      *
      * Returns true if the directory creation was initiated successfully, false otherwise.
+     *
+     * The result posted back is either a URI string, or an error
      */
     fun createDirectory(
         context: Context,
