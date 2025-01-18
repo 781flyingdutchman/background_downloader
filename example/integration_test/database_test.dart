@@ -132,16 +132,16 @@ void main() {
   test('rescheduleMissingTasks', () async {
     expect(await FileDownloader().allTasks(), isEmpty);
     // without task tracking activated, throws assertionError
-    expect(() async => await FileDownloader().rescheduleMissingTasks(),
+    expect(() async => await FileDownloader().rescheduleKilledTasks(),
         throwsAssertionError);
     await FileDownloader().trackTasks();
     // test empty
-    final result = await FileDownloader().rescheduleMissingTasks();
+    final result = await FileDownloader().rescheduleKilledTasks();
     expect(result.$1, isEmpty);
     expect(result.$2, isEmpty);
     // add a record to the database that is not enqueued
     await FileDownloader().database.updateRecord(record);
-    final result2 = await FileDownloader().rescheduleMissingTasks();
+    final result2 = await FileDownloader().rescheduleKilledTasks();
     expect(result2.$1.length, equals(1));
     expect(result2.$2, isEmpty);
     expect(result2.$1.first.taskId, equals(task.taskId));
@@ -152,7 +152,7 @@ void main() {
     // add a record to the database that is also enqueued
     expect(await FileDownloader().enqueue(task2), isTrue);
     expect(await FileDownloader().database.allRecords(), isNotEmpty);
-    final result3 = await FileDownloader().rescheduleMissingTasks();
+    final result3 = await FileDownloader().rescheduleKilledTasks();
     expect(result3.$1, isEmpty);
     expect(result3.$2, isEmpty);
   });

@@ -488,6 +488,34 @@ interface class FileDownloader {
   /// the status of tasks, use a [TaskStatusCallback]
   Future<Task?> taskForId(String taskId) => _downloader.taskForId(taskId);
 
+  /// Convenience start method for using the database. Must be called AFTER
+  /// registering update callbacks or listener.
+  ///
+  /// Calls in order:
+  /// [trackTasks] to start database tracking, with [markDownloadedComplete] to
+  ///     ensure fully downloaded tasks are marked as complete in the database
+  /// [resumeFromBackground] to fetch status and progress updates that may have
+  ///     happened while the app was suspended
+  /// [rescheduleKilledTasks] (after a 5 second delay) to ensure tasks that were
+  ///     killed by the user are rescheduled
+  ///
+  /// [doTrackTasks] and [doRescheduleKilledTasks] can be set to false to skip
+  /// that step.  [resumeFromBackground] is always called.
+  Future<void> start(
+      {bool doTrackTasks = true,
+      bool markDownloadedComplete = true,
+      bool doRescheduleKilledTasks = true}) async {
+    if (doTrackTasks) {
+      await FileDownloader()
+          .trackTasks(markDownloadedComplete: markDownloadedComplete);
+      if (doRescheduleKilledTasks) {
+        Timer(const Duration(seconds: 5),
+            () => FileDownloader().rescheduleKilledTasks());
+      }
+    }
+    await FileDownloader().resumeFromBackground();
+  }
+
   /// Activate tracking for tasks in this [group]
   ///
   /// All subsequent tasks in this group will be recorded in persistent storage.
@@ -559,10 +587,10 @@ interface class FileDownloader {
   ///
   /// Throws assertion error if you are not currently tracking tasks, as that
   /// makes this function a no-op that always returns empty lists.
-  Future<(List<Task>, List<Task>)> rescheduleMissingTasks() async {
+  Future<(List<Task>, List<Task>)> rescheduleKilledTasks() async {
     assert(
         _downloader.isTrackingTasks,
-        'rescheduleMissingTasks should only be called if you are tracking tasks. '
+        'rescheduleKilledTasks should only be called if you are tracking tasks. '
         'Did you call trackTasks or trackTasksInGroup?');
     final databaseTasks = (await database.allRecords())
         .where((record) => const [

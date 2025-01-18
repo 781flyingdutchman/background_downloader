@@ -1,10 +1,15 @@
+## 8.9.3
+* Adds `start` which ensures the various start-up calls are executed in the correct order. Use this instead of calling `trackTasks`, `resumeFromBackground` and `rescheduleKilledTasks` separately
+* Adds `rescheduleKilledTasks` which will compare enqueued/running tasks in the database with those active in the downloader, and reschedules those that have been killed by the user
+* [iOS] Removes limit on range of partial file uploads using the Range header (was 2GB)
+
 ## 8.9.2
 * Upgraded minimum Dart SDK to 3.5.0 / Flutter SDK 3.24.0 to stay in sync with dependency updates
-* Fix bug when uploading files greater than 2GB, that was introduced in V8.9.0
+* [Android] Fix bug when uploading files greater than 2GB, that was introduced in V8.9.0
 
 ## 8.9.1
 * [iOS] Adds Privacy Manifest
-* [iOS] Adds support for Swift Package Manager
+* [iOS] Adds support for Swift Package Manager and defaults the example app to using it
 
 ## 8.9.0
 * Adds `options` field to Task, which take a `TaskOptions` object to configure less common task specific options - currently `onTaskStart`, `onTaskFinished` and `auth`

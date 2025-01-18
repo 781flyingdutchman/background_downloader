@@ -115,6 +115,11 @@ class _MyAppState extends State<MyApp> {
           progressUpdateStream.add(update); // pass on to widget for indicator
       }
     });
+    // Start the FileDownloader. Default start means database tracking and
+    // proper handling of events that happened while the app was suspended,
+    // and rescheduling of tasks that were killed by the user.
+    // Start behavior can be configured with parameters
+    FileDownloader().start();
   }
 
   /// Process the user tapping on a notification by printing a message

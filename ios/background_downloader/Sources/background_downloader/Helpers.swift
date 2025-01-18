@@ -18,13 +18,13 @@ extension URL {
             return appendingPathComponent(component, isDirectory: isDirectory)
         }
     }
-
+    
     /// Excludes URL from backup
     mutating func setCloudBackup(exclude: Bool) throws {
-            var resource = URLResourceValues()
-            resource.isExcludedFromBackup = exclude
-            try self.setResourceValues(resource)
-        }
+        var resource = URLResourceValues()
+        resource.isExcludedFromBackup = exclude
+        try self.setResourceValues(resource)
+    }
 }
 
 /// Returns the task's URL if it can be parsed, otherwise null
@@ -59,73 +59,52 @@ func lowerCasedStringStringMap(_ map: [AnyHashable: Any]?) -> [String: String]? 
 ///
 /// Returns the URL of the temp file, or nil if there was a problem (problem is logged)
 func createTempFileWithRange(from fileURL: URL, start: UInt64, contentLength: UInt64) -> URL? {
-    if contentLength > UInt64(Int.max) {
-        os_log("Content length for partial upload cannot exceed %d bytes", log: log, type: .info, Int.max)
-        return nil
-    }
     let fileManager = FileManager.default
     let tempDir = fileManager.temporaryDirectory
     let tempFileURL = tempDir.appendingPathComponent(UUID().uuidString) // Create a unique temporary file
     
     // Create the temporary file
     fileManager.createFile(atPath: tempFileURL.path, contents: nil, attributes: nil)
-    
-    guard let inputStream = InputStream(url: fileURL) else {
-        os_log("Cannot create input stream for partial upload temporary file creation", log: log, type: .info)
+    guard let inputStream = InputStream(url: fileURL),
+          let outputStream = OutputStream(toFileAtPath: tempFileURL.path, append: false) else {
+        os_log("Cannot create input or output stream for partial upload temporary file creation", log: log, type: .error)
         return nil
     }
-    
-    guard let outputStream = OutputStream(toFileAtPath: tempFileURL.path, append: false) else {
-        os_log("Cannot create output stream for partial upload temporary file creation", log: log, type: .info)
-        return nil
-    }
-
     inputStream.open()
     outputStream.open()
-    
     defer {
         inputStream.close()
         outputStream.close()
     }
-    
     let chunkSize = 1024 * 1024 // 1MB chunks
     let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: chunkSize)
-        defer { buffer.deallocate() }
-    
+    defer { buffer.deallocate() }
     var remainingBytes = contentLength
     var totalRead: UInt64 = 0
-
+    
     // Seek to the start position
     while totalRead < start {
         let seekBytes = min(chunkSize, Int(start - totalRead))
         let bytesRead = inputStream.read(buffer, maxLength: seekBytes)
         if bytesRead < 0 {
-            os_log("Cannot read data up to desired start from original file for partial upload temporary file creation", log: log, type: .info)
+            os_log("Cannot read data up to desired start from original file for partial upload temporary file creation", log: log, type: .error)
             return nil
         }
         if bytesRead == 0 { break } // EOF
         totalRead += UInt64(bytesRead)
     }
-
-    // Now read only the required range
+    
+    // Read only the required range
     while remainingBytes > 0 {
         let bytesToRead = min(chunkSize, Int(remainingBytes))
         let bytesRead = inputStream.read(buffer, maxLength: bytesToRead)
-
-        if bytesRead < 0 {
-            os_log("Cannot read data from original file for partial upload temporary file creation", log: log, type: .info)
-            return nil
-        }
-        if bytesRead == 0 { break } // EOF
-
+        if bytesRead <= 0 { break } // EOF
         let bytesWritten = outputStream.write(buffer, maxLength: bytesRead)
         if bytesWritten < 0 {
             os_log("Cannot write data to new temporary file for partial upload", log: log, type: .error)
             return nil
         }
-
         remainingBytes -= UInt64(bytesWritten)
     }
-
     return tempFileURL
 }
