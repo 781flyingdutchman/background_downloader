@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
@@ -358,6 +357,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             flutterPluginBinding.binaryMessenger, "com.bbflight.background_downloader"
         )
         channel?.setMethodCallHandler(this)
+        val uriUtilsChannel = MethodChannel(flutterPluginBinding.binaryMessenger, "com.bbflight.background_downloader.uriutils")
+        uriUtilsChannel.setMethodCallHandler(UriUtilsMethodCallHelper(this))
         // clear expired items
         val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
         val workManager = WorkManager.getInstance(applicationContext)
@@ -414,10 +415,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 "permissionStatus" -> methodPermissionStatus(call, result)
                 "requestPermission" -> methodRequestPermission(call, result)
                 "shouldShowPermissionRationale" -> methodShouldShowPermissionRationale(call, result)
-                // file pickers and functions
-                "pickDirectory" -> methodPickDirectory(call, result)
-                "pickFiles" -> methodPickFiles(call, result)
-                "createDirectory" -> methodCreateDirectory(call, result)
                 // internal use
                 "popResumeData" -> methodPopResumeData(result)
                 "popStatusUpdates" -> methodPopStatusUpdates(result)
@@ -941,96 +938,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 this,
                 permissionType
             )
-        )
-    }
-
-    /**
-     * Returns selected directory URI (or null) for the [SharedStorage] starting location, which
-     * may be null for no selection. If persistedUriPermission is true, the URI will be persisted
-     *
-     * Arguments are startLocationOrdinal (of [SharedStorage]) and persistedUriPermission (bool)
-     */
-    private fun methodPickDirectory(call: MethodCall, result: Result) {
-        val args = call.arguments as List<*>
-        val startLocationOrdinal = args[0] as Int?
-        val persistedUriPermission = args[1] as Boolean
-        val startDirectory =
-            if (startLocationOrdinal != null) SharedStorage.entries[startLocationOrdinal] else null
-        if (activity != null) {
-            val launched = DirectoryPicker.pickDirectory(
-                activity!!,
-                startDirectory,
-                persistedUriPermission,
-                result // callback
-            )
-            if (launched) {
-                return
-            }
-        }
-        result.error(
-            "NO_LAUNCH",
-            "Could not launch directory picker",
-            null
-        ) // failed to launch directory picker
-    }
-
-    /**
-     * Returns selected file URI(s) for the [SharedStorage] starting location, which
-     * may be null for no selection. If allowedExtensions is not null, only files with the
-     * given extensions will be allowed. If multipleAllowed is true, multiple files can be
-     * selected. If persistedUriPermission is true, the URI will be persisted.
-     *
-     * Arguments are startLocationOrdinal (of [SharedStorage]), allowedExtensions (list of
-     * strings, or null), multipleAllowed (bool), and persistedUriPermission (bool).
-     */
-    private fun methodPickFiles(call: MethodCall, result: Result) {
-        val args = call.arguments as List<*>
-        val startLocationOrdinal = args[0] as Int?
-        val allowedExtensionsAnyList = args[1] as? List<*>
-        val allowedExtensions = allowedExtensionsAnyList?.map { it as String }
-        val multipleAllowed = args[2] as Boolean
-        val persistedUriPermission = args[3] as Boolean
-        val startLocation =
-            if (startLocationOrdinal != null) SharedStorage.entries[startLocationOrdinal] else null
-        if (activity != null) {
-            val launched = FilePicker.pickFiles(
-                activity!!,
-                startLocation,
-                allowedExtensions,
-                multipleAllowed,
-                persistedUriPermission,
-                result // callback
-            )
-            if (launched) {
-                return
-            }
-        }
-        result.error(
-            "NO_LAUNCH",
-            "Could not launch file picker",
-            null
-        ) // failed to launch file picker
-    }
-
-    /**
-     * Creates a new directory with the given name inside the specified parent directory URI.
-     *
-     * Arguments are parentDirectoryUri (string), newDirectoryName (string), and
-     * persistedUriPermission (bool).
-     */
-    private fun methodCreateDirectory(call: MethodCall, result: Result) {
-        val args = call.arguments as List<*>
-        val parentDirectoryUriString = args[0] as String
-        val newDirectoryName = args[1] as String
-        val persistedUriPermission = args[2] as Boolean
-
-        val parentDirectoryUri = Uri.parse(parentDirectoryUriString)
-        DirectoryCreator.createDirectory(
-            applicationContext,
-            parentDirectoryUri,
-            newDirectoryName,
-            persistedUriPermission,
-            result
         )
     }
 

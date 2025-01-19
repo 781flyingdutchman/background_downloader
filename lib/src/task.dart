@@ -676,7 +676,9 @@ final class DownloadTask extends Task {
       super.displayName,
       super.creationTime,
       super.options})
-      : super(baseDirectory: BaseDirectory.root, directory: directoryUri.toString()) {
+      : super(
+            baseDirectory: BaseDirectory.root,
+            directory: directoryUri.toString()) {
     assert(directoryUri.scheme == 'content' || directoryUri.scheme == 'file',
         'Directory URI scheme must be content:// or file://');
   }

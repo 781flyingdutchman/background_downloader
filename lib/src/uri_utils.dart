@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 
 import 'base_downloader.dart';
 import 'models.dart';
+import 'package:path/path.dart' as p;
 import 'native_downloader.dart';
 
 /// Base implementation of the utilities related to File, Uri and filePath
@@ -24,62 +25,125 @@ sealed class UriUtils {
   factory UriUtils.withDownloader(BaseDownloader downloader) =>
       switch (downloader) {
         AndroidDownloader() => AndroidUriUtils(downloader),
+        IOSDownloader() => IOSUriUtils(downloader),
+        _ => DesktopUriUtils(downloader)
+      };
 
-      }
+  Future<Uri?> pickDirectory(
+      {SharedStorage? startLocation,
+      Uri? startLocationUri,
+      bool persistedUriPermission = false});
 
-  Future<Uri?> pickDirectory({SharedStorage? startLocation,
-    bool persistedUriPermission = false}) =>
+  Future<List<Uri>?> pickFiles(
+      {SharedStorage? startLocation,
+      Uri? startLocationUri,
+      List<String>? allowedExtensions,
+      bool multipleAllowed = false,
+      bool persistedUriPermission = false});
+
+  Future<Uri> createDirectory(Uri parentDirectoryUri, String newDirectoryName,
+      {bool persistedUriPermission = false});
+}
+
+final class DesktopUriUtils extends UriUtils {
+  DesktopUriUtils(super.downloader);
+
+  @override
+  Future<Uri?> pickDirectory(
+          {SharedStorage? startLocation,
+          Uri? startLocationUri,
+          bool persistedUriPermission = false}) =>
       throw UnimplementedError(
           'pickDirectory not implemented for this platform. '
-              'Use the file_picker package and convert the resulting filePath '
-              'to a URI using the .toFileUri extension');
+          'Use the file_picker package and convert the resulting filePath '
+          'to a URI using the .toFileUri extension');
+
+  @override
+  Future<List<Uri>?> pickFiles(
+          {SharedStorage? startLocation,
+          Uri? startLocationUri,
+          List<String>? allowedExtensions,
+          bool multipleAllowed = false,
+          bool persistedUriPermission = false}) =>
+      throw UnimplementedError('pickFiles not implemented for this platform. '
+          'Use the file_picker package and convert the resulting filePath '
+          'to a URI using the .toFileUri extension');
+
+  @override
+  Future<Uri> createDirectory(Uri parentDirectoryUri, String newDirectoryName,
+      {bool persistedUriPermission = false}) async {
+    final parentPath =
+        parentDirectoryUri.toFilePath(windows: Platform.isWindows);
+    final cleanedSegments = newDirectoryName
+        .split(RegExp(r'[\\/]+'))
+        .where((segment) => segment.isNotEmpty)
+        .toList();
+    final fullPath = p.joinAll([parentPath, ...cleanedSegments]);
+    final createdDirectory = await Directory(fullPath).create(recursive: true);
+    return createdDirectory.uri;
+  }
 }
 
-class NativeUriUtils extends UriUtils {
-  final _methodChannel = MethodChannel(
-      'com.bbflight.background_downloader/file_picker');
+final class NativeUriUtils extends UriUtils {
+  final _methodChannel =
+      MethodChannel('com.bbflight.background_downloader.uriutils');
 
   NativeUriUtils(super.downloader);
-}
 
-
-class AndroidUriUtils extends NativeUriUtils {
-  AndroidUriUtils(super.downloader);
-
-  Future<Uri?> pickDirectory({SharedStorage? startLocation,
-    bool persistedUriPermission = false}) async {
-    final uriString = (await _methodChannel.invokeMethod('pickDirectory', {
-      'startLocation': startLocation?.toString(),
-      'persistedUriPermission': persistedUriPermission,
-    })) as String?;
+  @override
+  Future<Uri?> pickDirectory(
+      {SharedStorage? startLocation,
+      Uri? startLocationUri,
+      bool persistedUriPermission = false}) async {
+    final uriString = (await _methodChannel.invokeMethod('pickDirectory', [
+      startLocation?.index,
+      startLocationUri?.toString(),
+      persistedUriPermission
+    ])) as String?;
     return (uriString != null) ? Uri.parse(uriString) : null;
   }
 
-  Future<List<Uri>?> pickFiles(SharedStorage? startLocation,
+  @override
+  Future<List<Uri>?> pickFiles(
+      {SharedStorage? startLocation,
+      Uri? startLocationUri,
       List<String>? allowedExtensions,
-      bool multipleAllowed,
-      bool persistedUriPermission) async {
-    final uriStrings = (await _methodChannel.invokeMethod('pickFiles', {
-      'startLocation': startLocation?.toString(),
-      'allowedExtensions': allowedExtensions,
-      'multipleAllowed': multipleAllowed,
-      'persistedUriPermission': persistedUriPermission,
-    })) as List<String>?;
-    return (uriStrings != null && uriStrings.isNotEmpty) ? uriStrings.map((e) =>
-        Uri.parse(e)).toList(growable: false) : null;
+      bool multipleAllowed = false,
+      bool persistedUriPermission = false}) async {
+    final uriStrings = (await _methodChannel.invokeMethod('pickFiles', [
+      startLocation?.index,
+      startLocationUri?.toString(),
+      allowedExtensions,
+      multipleAllowed,
+      persistedUriPermission
+    ])) as List<Object?>?;
+    return (uriStrings != null && uriStrings.isNotEmpty)
+        ? uriStrings
+            .where((e) => e != null)
+            .map((e) => Uri.parse(e as String))
+            .toList(growable: false)
+        : null;
   }
 
-  Future<String> createDirectory(String parentDirectoryUri,
-      String newDirectoryName,
-      bool persistedUriPermission) async {
-    return (await _methodChannel.invokeMethod('createDirectory', {
-      'parentDirectoryUri': parentDirectoryUri,
-      'newDirectoryName': newDirectoryName,
-      'persistedUriPermission': persistedUriPermission,
-    })) as String;
+  @override
+  Future<Uri> createDirectory(Uri parentDirectoryUri, String newDirectoryName,
+      {bool persistedUriPermission = false}) async {
+    final uriString = (await _methodChannel.invokeMethod('createDirectory', [
+      parentDirectoryUri.toString(),
+      newDirectoryName,
+      persistedUriPermission
+    ])) as String;
+    return Uri.parse(uriString);
   }
 }
 
+final class AndroidUriUtils extends NativeUriUtils {
+  AndroidUriUtils(super.downloader);
+}
+
+final class IOSUriUtils extends NativeUriUtils {
+  IOSUriUtils(super.downloader);
+}
 
 /// Extensions on String related to Uri and File
 extension StringUriExtensions on String {
@@ -89,14 +153,8 @@ extension StringUriExtensions on String {
 
 /// Extensions on Uri related to File and String
 extension UriExtensions on Uri {
-  /// Returns the filePath represented by this [uri]
-  String toFilePath() =>
-      isFileUri
-          ? path
-          : throw ArgumentError.value(this, 'uri', 'Not a file URI');
-
   /// Returns the File represented by this [uri]
-  File toFile() => File(toFilePath());
+  File toFile() => File(toFilePath(windows: Platform.isWindows));
 
   /// True if Uri scheme is file
   bool get isFileUri => scheme == 'file';
