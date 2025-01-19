@@ -9,6 +9,7 @@ import Flutter
 import UIKit
 import UniformTypeIdentifiers
 import MobileCoreServices
+import os.log
 
 public class UriUtilsMethodCallHelper: NSObject, FlutterPlugin, UIDocumentPickerDelegate {
     private var flutterResult: FlutterResult?
@@ -30,6 +31,12 @@ public class UriUtilsMethodCallHelper: NSObject, FlutterPlugin, UIDocumentPicker
             pickFiles(call, result: result)
         case "createDirectory":
             createDirectory(call, result: result)
+        case "getFileBytes":
+            if let uriString = call.arguments as? String {
+                result(getFile(uriString: uriString))
+            } else {
+                result(FlutterError(code: "INVALID_ARGUMENTS", message: "Invalid arguments for getFile", details: nil))
+            }
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -64,8 +71,7 @@ public class UriUtilsMethodCallHelper: NSObject, FlutterPlugin, UIDocumentPicker
             documentPicker.directoryURL = startLocation
         }
         
-        // This code assumes the current view controller is accessible through the key window's root view controller.
-        // Adjust this as needed based on your app's view hierarchy.
+        // Present the document picker
         if let rootViewController = UIApplication.shared.keyWindow?.rootViewController {
             rootViewController.present(documentPicker, animated: true, completion: nil)
         } else {
@@ -119,7 +125,6 @@ public class UriUtilsMethodCallHelper: NSObject, FlutterPlugin, UIDocumentPicker
         }
         
         // Present the document picker
-        // Similar to `pickDirectory`, this code assumes access to the current view controller through the key window's root view controller.
         if let rootViewController = UIApplication.shared.keyWindow?.rootViewController {
             rootViewController.present(documentPicker, animated: true, completion: nil)
         } else {
@@ -168,6 +173,33 @@ public class UriUtilsMethodCallHelper: NSObject, FlutterPlugin, UIDocumentPicker
         }
     }
     
+    /**
+     * Retrieves the file data (bytes) for a given URI string.
+     *
+     * - Parameter uriString: The URI string representing the file. This can be a regular file:// URI or a urlbookmark:// URI.
+     * - Returns: The file data as a FlutterStandardTypedData (wrapping Data) if successful, or a FlutterError if an error occurs.
+     */
+    private func getFile(uriString: String) -> Any {
+        guard let fileUrl = decodeUriParameter(uriString: uriString) else {
+            return FlutterError(code: "INVALID_URI", message: "Invalid or unresolvable URI: \(uriString)", details: nil)
+        }
+        
+        // If this is a bookmark URI, we need to start accessing the security-scoped resource.
+        if uriString.starts(with: "urlbookmark://") {
+            if !fileUrl.startAccessingSecurityScopedResource() {
+                return FlutterError(code: "ACCESS_DENIED", message: "Failed to access security-scoped resource: \(fileUrl)", details: nil)
+            }
+            accessedSecurityScopedUrls.insert(fileUrl)
+        }
+        
+        do {
+            let fileData = try Data(contentsOf: fileUrl)
+            return FlutterStandardTypedData(bytes: fileData)
+        } catch {
+            return FlutterError(code: "FILE_READ_ERROR", message: "Failed to read file data: \(error.localizedDescription)", details: nil)
+        }
+    }
+    
     // MARK: - UIDocumentPickerDelegate
     
     public func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
@@ -179,7 +211,7 @@ public class UriUtilsMethodCallHelper: NSObject, FlutterPlugin, UIDocumentPicker
                 // Start accessing the security-scoped resource.
                 if !url.startAccessingSecurityScopedResource() {
                     // Handle access error (e.g., by skipping this URL and logging an error message)
-                    print("Failed to access security-scoped resource: \(url)")
+                    os_log("Failed to access security-scoped resource for %@", log: log, type: .info, url.absoluteString)
                     continue
                 }
                 accessedSecurityScopedUrls.insert(url)
@@ -254,15 +286,12 @@ public class UriUtilsMethodCallHelper: NSObject, FlutterPlugin, UIDocumentPicker
         }
     }
     
-    /**
-     * Creates a bookmark URI from a file URL on iOS.
-     *
-     * - Parameter fileURL: The file URL to create a bookmark from.
-     * - Returns: A URI with the `urlbookmark` scheme containing the bookmark data.
-     */
     private func createBookmarkUriFromUrl(fileURL: URL) throws -> URL {
-        let bookmarkData = try fileURL.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
+        
+        let bookmarkData = try fileURL.bookmarkData(options: .suitableForBookmarkFile, includingResourceValuesForKeys: nil, relativeTo: nil)
+        os_log("Raw bookmarkData is %d bytes", log: log, type: .info, bookmarkData.count)
         let bookmarkDataBase64 = bookmarkData.base64EncodedString()
+        os_log("base64String: %d characters:%@", log: log, type: .info,bookmarkDataBase64.count, bookmarkDataBase64)
         let bookmarkUriString = "urlbookmark://\(bookmarkDataBase64)"
         
         guard let bookmarkUri = URL(string: bookmarkUriString) else {
@@ -283,27 +312,29 @@ public class UriUtilsMethodCallHelper: NSObject, FlutterPlugin, UIDocumentPicker
     private func decodeUriParameter(uriString: String) -> URL? {
         if uriString.starts(with: "urlbookmark://") {
             // Decode base64 bookmark data
+            os_log("Decoding bookmark data from URI: %@", log: log, type: .info, uriString)
             let base64String = String(uriString.dropFirst("urlbookmark://".count))
+            os_log("base64String: %d characters:%@", log: log, type: .info,base64String.count, base64String)
             guard let bookmarkData = Data(base64Encoded: base64String) else {
                 return nil
             }
+            os_log("Decoded %d bytes", log: log, type: .info, bookmarkData.count)
             
             do {
                 var isStale = false
-                let resolvedUrl = try URL(resolvingBookmarkData: bookmarkData, options: [], relativeTo: nil, bookmarkDataIsStale: &isStale)
+                let resolvedUrl = try URL(resolvingBookmarkData: bookmarkData, options: .withoutUI, relativeTo: nil, bookmarkDataIsStale: &isStale)
                 
                 if isStale {
-                    // Handle stale bookmark data appropriately.
-                    print("Warning: Bookmark data is stale for \(resolvedUrl)")
+                    os_log("Warning: Bookmark data is stale for %@", log: log, type: .info, resolvedUrl.absoluteString)
                     return nil
                 }
                 
                 // Access to resolved URLs that are not persisted, is started when they are actually used
-                // (i.e. when creating a subdirectory in it, or picking it to download a file into)
+                // (i.e. when creating a subdirectory in it, or picking it)
                 // And stopped in the deinit
                 return resolvedUrl
             } catch {
-                print("Error resolving bookmark data: \(error)")
+                os_log("Error resolving bookmark data: %@", log: log, type: .info, error.localizedDescription)
                 return nil
             }
         } else {

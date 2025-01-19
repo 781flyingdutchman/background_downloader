@@ -43,6 +43,8 @@ sealed class UriUtils {
 
   Future<Uri> createDirectory(Uri parentDirectoryUri, String newDirectoryName,
       {bool persistedUriPermission = false});
+
+  Future<Uint8List?> getFileBytes(Uri uri);
 }
 
 final class DesktopUriUtils extends UriUtils {
@@ -82,6 +84,12 @@ final class DesktopUriUtils extends UriUtils {
     final createdDirectory = await Directory(fullPath).create(recursive: true);
     return createdDirectory.uri;
   }
+
+  @override
+  Future<Uint8List?> getFileBytes(Uri uri) {
+    //TODO: Implement this for desktop
+    throw UnimplementedError('Not done yet');
+  }
 }
 
 final class NativeUriUtils extends UriUtils {
@@ -95,11 +103,12 @@ final class NativeUriUtils extends UriUtils {
       {SharedStorage? startLocation,
       Uri? startLocationUri,
       bool persistedUriPermission = false}) async {
-    final uriString = (await _methodChannel.invokeMethod('pickDirectory', [
+    final uriString = (await _methodChannel.invokeMethod<String>(
+        'pickDirectory', [
       startLocation?.index,
       startLocationUri?.toString(),
       persistedUriPermission
-    ])) as String?;
+    ]));
     return (uriString != null) ? Uri.parse(uriString) : null;
   }
 
@@ -117,6 +126,8 @@ final class NativeUriUtils extends UriUtils {
       multipleAllowed,
       persistedUriPermission
     ]));
+    print(uriStrings);
+    // uriStrings can be a list of Strings or just one String, or null
     return switch (uriStrings) {
       String uri => [Uri.parse(uri)],
       List<Object?>? uris => uris
@@ -131,12 +142,30 @@ final class NativeUriUtils extends UriUtils {
   @override
   Future<Uri> createDirectory(Uri parentDirectoryUri, String newDirectoryName,
       {bool persistedUriPermission = false}) async {
-    final uriString = (await _methodChannel.invokeMethod('createDirectory', [
+    final uriString = (await _methodChannel.invokeMethod<String>(
+        'createDirectory', [
       parentDirectoryUri.toString(),
       newDirectoryName,
       persistedUriPermission
-    ])) as String;
-    return Uri.parse(uriString);
+    ]));
+    return Uri.parse(uriString!);
+  }
+
+  /// Retrieves the file data (bytes) for a given URI.
+  ///
+  /// [uri] is the URI of the file.
+  ///
+  /// Returns a [Uint8List] containing the file data, or `null` if an error occurred.
+  @override
+  Future<Uint8List?> getFileBytes(Uri uri) async {
+    try {
+      final result = await _methodChannel.invokeMethod<Uint8List>(
+          'getFileBytes', uri.toString());
+      return result;
+    } catch (e) {
+      print('Error reading file: $e');
+      return null;
+    }
   }
 }
 
