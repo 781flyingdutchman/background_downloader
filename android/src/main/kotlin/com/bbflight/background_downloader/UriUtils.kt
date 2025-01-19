@@ -16,6 +16,7 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import java.io.File
+import java.io.IOException
 
 
 /**
@@ -26,6 +27,12 @@ class UriUtilsMethodCallHelper(private val plugin: BDPlugin) : MethodCallHandler
     private val TAG = "MethodCallHelper"
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+        val activity = plugin.activity
+        if (activity == null) {
+            result.error("NO_ACTIVITY", "No activity found", null)
+            return
+        }
+
         when (call.method) {
             "pickDirectory" -> {
                 /**
@@ -34,12 +41,6 @@ class UriUtilsMethodCallHelper(private val plugin: BDPlugin) : MethodCallHandler
                  *
                  * Arguments are startLocationOrdinal (of [SharedStorage]) and persistedUriPermission (bool)
                  */
-                val activity = plugin.activity
-                if (activity == null) {
-                    result.error("NO_ACTIVITY", "No activity found", null)
-                    return
-                }
-
                 val args = call.arguments as? List<*>
                 val startLocationOrdinal = args?.get(0) as Int?
                 val startLocationUriString = args?.get(1) as? String
@@ -79,12 +80,6 @@ class UriUtilsMethodCallHelper(private val plugin: BDPlugin) : MethodCallHandler
                  * Arguments are startLocationOrdinal (of [SharedStorage]), allowedExtensions (list of
                  * strings, or null), multipleAllowed (bool), and persistedUriPermission (bool).
                  */
-                val activity = plugin.activity
-                if (activity == null) {
-                    result.error("NO_ACTIVITY", "No activity found", null)
-                    return
-                }
-
                 val args = call.arguments as? List<*>
                 val startLocationOrdinal = args?.get(0) as Int?
                 val startLocationUriString = args?.get(1) as? String
@@ -119,11 +114,6 @@ class UriUtilsMethodCallHelper(private val plugin: BDPlugin) : MethodCallHandler
                  * Arguments are parentDirectoryUri (string), newDirectoryName (string), and
                  * persistedUriPermission (bool).
                  */
-                val activity = plugin.activity
-                if (activity == null) {
-                    result.error("NO_ACTIVITY", "No activity found", null)
-                    return
-                }
                 val args = call.arguments as? List<*>
                 val parentDirectoryUriString = args?.get(0) as? String
                 val newDirectoryName = args?.get(1) as? String
@@ -149,7 +139,37 @@ class UriUtilsMethodCallHelper(private val plugin: BDPlugin) : MethodCallHandler
                 )
             }
 
+            "getFileBytes" -> {
+                val uriString = call.arguments as? String
+                if (uriString == null) {
+                    result.error("INVALID_ARGUMENTS", "URI string is required", null)
+                    return
+                }
+                val fileBytes = getFile(activity, Uri.parse(uriString))
+                if (fileBytes != null) {
+                    result.success(fileBytes)
+                } else {
+                    result.error("GET_FILE_FAILED", "Failed to get file", null)
+                }
+            }
+
             else -> result.notImplemented()
+        }
+    }
+
+    /**
+     * Gets the file content as a byte array for a given URI.
+     *
+     * @param context The application context.
+     * @param uri The URI of the file.
+     * @return The file content as a byte array, or null if an error occurred.
+     */
+    private fun getFile(context: Context, uri: Uri): ByteArray? {
+        return try {
+            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        } catch (e: IOException) {
+            Log.e(TAG, "Error reading file: $uri", e)
+            null
         }
     }
 }

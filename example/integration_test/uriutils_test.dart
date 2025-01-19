@@ -67,9 +67,7 @@ void main() {
       expect(pickedFilesUri, isNotNull);
       print(
           'Picked ${pickedFilesUri!.length} files: ${pickedFilesUri.map((uri) => uri.toString()).join(', ')}');
-    },
-        // Some tests could require some manual setup as the SAF can behave in unexpected ways
-        skip: false);
+    }, skip: false);
 
     testWidgets(
         'pickFiles with null startLocation then create new dir and pick again',
@@ -83,9 +81,7 @@ void main() {
       expect(pickedFilesUri, isNotNull);
       print(
           'Picked ${pickedFilesUri!.length} files: ${pickedFilesUri.map((uri) => uri.toString()).join(', ')}');
-    },
-        // Some tests could require some manual setup as the SAF can behave in unexpected ways
-        skip: false);
+    }, skip: false);
 
     testWidgets('pickFiles with SharedStorage.images and no extensions',
         (WidgetTester tester) async {
@@ -97,6 +93,29 @@ void main() {
     },
         // Some tests could require some manual setup as the SAF can behave in unexpected ways
         skip: false);
+
+    testWidgets('pickFiles and get the file data (bytes)',
+        (WidgetTester tester) async {
+      final pickedFilesUri = await uriUtils.pickFiles();
+      expect(pickedFilesUri, isNotNull);
+      print(
+          'Picked ${pickedFilesUri!.length} files: ${pickedFilesUri.map((uri) => uri.toString()).join(', ')}');
+      final bytes = await uriUtils.getFileBytes(pickedFilesUri.first);
+      expect(bytes, isNotNull);
+      print('File data: ${bytes!.length} bytes');
+    }, skip: false);
+
+    testWidgets('pickFiles and get the file data (bytes) with persistence',
+        (WidgetTester tester) async {
+      final pickedFilesUri =
+          await uriUtils.pickFiles(persistedUriPermission: true);
+      expect(pickedFilesUri, isNotNull);
+      print(
+          'Picked ${pickedFilesUri!.length} files: ${pickedFilesUri.map((uri) => uri.toString()).join(', ')}');
+      final bytes = await uriUtils.getFileBytes(pickedFilesUri.first);
+      expect(bytes, isNotNull);
+      print('File data: ${bytes!.length} bytes');
+    }, skip: false);
 
     testWidgets('createDirectory with single level',
         (WidgetTester tester) async {
@@ -136,6 +155,6 @@ void main() {
       // This test simulates user cancellation by returning null from the native side
       final result = await uriUtils.pickFiles();
       expect(result, isNull);
-    }, skip: kIsWeb || !Platform.isAndroid);
+    }, skip: false);
   });
 }
