@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "background_downloader",
     platforms: [
-        .iOS("13.0")
+        .iOS("14.0")
     ],
     products: [
         .library(name: "background-downloader", targets: ["background_downloader"])

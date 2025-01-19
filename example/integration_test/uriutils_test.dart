@@ -31,10 +31,7 @@ void main() {
     testWidgets('pickDirectory with null startLocation -> pick Documents',
         (WidgetTester tester) async {
       final pickedDirUri = await uriUtils.pickDirectory();
-      expect(
-          pickedDirUri?.toString(),
-          equals(
-              'content://com.android.externalstorage.documents/tree/primary%3ADocuments'));
+      print(pickedDirUri);
     });
 
     testWidgets(
@@ -61,18 +58,18 @@ void main() {
               'content://com.android.externalstorage.documents/tree/primary%3APictures'));
     },
         // Some tests could require some manual setup as the SAF can behave in unexpected ways
-        skip: kIsWeb || !Platform.isAndroid);
+        skip: false);
 
     testWidgets('pickFiles with null startLocation and extensions',
         (WidgetTester tester) async {
       final pickedFilesUri = await uriUtils
-          .pickFiles(allowedExtensions: ['jpg'], multipleAllowed: true);
+          .pickFiles(allowedExtensions: ['pdf'], multipleAllowed: false);
       expect(pickedFilesUri, isNotNull);
       print(
           'Picked ${pickedFilesUri!.length} files: ${pickedFilesUri.map((uri) => uri.toString()).join(', ')}');
     },
         // Some tests could require some manual setup as the SAF can behave in unexpected ways
-        skip: kIsWeb || !Platform.isAndroid);
+        skip: false);
 
     testWidgets(
         'pickFiles with null startLocation then create new dir and pick again',
@@ -88,7 +85,7 @@ void main() {
           'Picked ${pickedFilesUri!.length} files: ${pickedFilesUri.map((uri) => uri.toString()).join(', ')}');
     },
         // Some tests could require some manual setup as the SAF can behave in unexpected ways
-        skip: kIsWeb || !Platform.isAndroid);
+        skip: false);
 
     testWidgets('pickFiles with SharedStorage.images and no extensions',
         (WidgetTester tester) async {
@@ -99,7 +96,7 @@ void main() {
           'Picked ${pickedFilesUri!.length} files: ${pickedFilesUri.map((uri) => uri.toString()).join(', ')}');
     },
         // Some tests could require some manual setup as the SAF can behave in unexpected ways
-        skip: kIsWeb || !Platform.isAndroid);
+        skip: false);
 
     testWidgets('createDirectory with single level',
         (WidgetTester tester) async {

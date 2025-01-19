@@ -67,6 +67,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             backgroundChannel = FlutterMethodChannel(name: "com.bbflight.background_downloader.background", binaryMessenger: registrar.messenger())
             BDPlugin.callbackChannel = callbackChannel
         }
+        UriUtilsMethodCallHelper.register(with: registrar) // not a real plugin, but has a methodCallHandler
         requireWiFi = RequireWiFi(rawValue: UserDefaults.standard.integer(forKey: BDPlugin.keyRequireWiFi))!
     }
     

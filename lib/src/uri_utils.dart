@@ -116,13 +116,16 @@ final class NativeUriUtils extends UriUtils {
       allowedExtensions,
       multipleAllowed,
       persistedUriPermission
-    ])) as List<Object?>?;
-    return (uriStrings != null && uriStrings.isNotEmpty)
-        ? uriStrings
-            .where((e) => e != null)
-            .map((e) => Uri.parse(e as String))
-            .toList(growable: false)
-        : null;
+    ]));
+    return switch (uriStrings) {
+      String uri => [Uri.parse(uri)],
+      List<Object?>? uris => uris
+          ?.where((e) => e != null)
+          .map((e) => Uri.parse(e as String))
+          .toList(growable: false),
+      _ => throw ArgumentError(
+          'pickFiles returned invalid value $uriStrings of type ${uriStrings.runtimeType}')
+    };
   }
 
   @override
