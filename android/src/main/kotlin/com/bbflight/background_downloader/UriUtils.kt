@@ -1,14 +1,158 @@
 package com.bbflight.background_downloader
 
+
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.provider.DocumentsContract
+import android.provider.MediaStore
 import android.util.Log
+import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
+import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugin.common.MethodChannel.MethodCallHandler
+import java.io.File
+
+
+/**
+ * Handles method calls from Flutter related to file and directory picking/creation.
+ */
+class UriUtilsMethodCallHelper(private val plugin: BDPlugin) : MethodCallHandler {
+
+    private val TAG = "MethodCallHelper"
+
+    override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+        when (call.method) {
+            "pickDirectory" -> {
+                /**
+                 * results in selected directory URI (or null) for the [SharedStorage] starting location, which
+                 * may be null for no selection. If persistedUriPermission is true, the URI will be persisted
+                 *
+                 * Arguments are startLocationOrdinal (of [SharedStorage]) and persistedUriPermission (bool)
+                 */
+                val activity = plugin.activity
+                if (activity == null) {
+                    result.error("NO_ACTIVITY", "No activity found", null)
+                    return
+                }
+
+                val args = call.arguments as? List<*>
+                val startLocationOrdinal = args?.get(0) as Int?
+                val startLocationUriString = args?.get(1) as? String
+                val persistedUriPermission = args?.get(2) as? Boolean ?: false
+                Log.wtf(
+                    DirectoryPicker.TAG,
+                    "pickDirectory with $args and  startLocation $startLocationOrdinal and persist $persistedUriPermission"
+                )
+
+                val startLocation =
+                    if (startLocationOrdinal != null) SharedStorage.entries[startLocationOrdinal] else null
+                val startLocationUri = startLocationUriString?.toUri()
+
+                if (!DirectoryPicker.pickDirectory(
+                        activity,
+                        startLocation,
+                        startLocationUri,
+                        persistedUriPermission,
+                        result
+                    )
+                ) {
+                    result.error(
+                        "PICK_DIRECTORY_FAILED",
+                        "Failed to launch directory picker",
+                        null
+                    )
+                }
+            }
+
+            "pickFiles" -> {
+                /**
+                 * Results in selected file URI(s) for the [SharedStorage] starting location, which
+                 * may be null for no selection. If allowedExtensions is not null, only files with the
+                 * given extensions will be allowed. If multipleAllowed is true, multiple files can be
+                 * selected. If persistedUriPermission is true, the URI will be persisted.
+                 *
+                 * Arguments are startLocationOrdinal (of [SharedStorage]), allowedExtensions (list of
+                 * strings, or null), multipleAllowed (bool), and persistedUriPermission (bool).
+                 */
+                val activity = plugin.activity
+                if (activity == null) {
+                    result.error("NO_ACTIVITY", "No activity found", null)
+                    return
+                }
+
+                val args = call.arguments as? List<*>
+                val startLocationOrdinal = args?.get(0) as Int?
+                val startLocationUriString = args?.get(1) as? String
+                val allowedExtensionsAnyList = args?.get(2) as? List<*>
+                val allowedExtensions = allowedExtensionsAnyList?.map { it as String }
+                val multipleAllowed = args?.get(3) as? Boolean == true
+                val persistedUriPermission = args?.get(4) as? Boolean == true
+
+                val startLocation =
+                    if (startLocationOrdinal != null) SharedStorage.entries[startLocationOrdinal] else null
+                val startLocationUri = startLocationUriString?.toUri()
+
+                if (!FilePicker.pickFiles(
+                        activity,
+                        startLocation,
+                        startLocationUri,
+                        allowedExtensions,
+                        multipleAllowed,
+                        persistedUriPermission,
+                        result
+                    )
+                ) {
+                    result.error("PICK_FILES_FAILED", "Failed to launch file picker", null)
+                }
+            }
+
+            "createDirectory" -> {
+                /**
+                 * Creates a new directory with the given name inside the specified parent directory
+                 * URI. Results in the URI of the new directory
+                 *
+                 * Arguments are parentDirectoryUri (string), newDirectoryName (string), and
+                 * persistedUriPermission (bool).
+                 */
+                val activity = plugin.activity
+                if (activity == null) {
+                    result.error("NO_ACTIVITY", "No activity found", null)
+                    return
+                }
+                val args = call.arguments as? List<*>
+                val parentDirectoryUriString = args?.get(0) as? String
+                val newDirectoryName = args?.get(1) as? String
+                val persistedUriPermission = args?.get(2) as? Boolean == true
+
+                if (parentDirectoryUriString == null || newDirectoryName == null) {
+                    result.error(
+                        "INVALID_ARGUMENTS",
+                        "Parent directory URI and new directory name are required",
+                        null
+                    )
+                    return
+                }
+
+                val parentDirectoryUri = Uri.parse(parentDirectoryUriString)
+
+                DirectoryCreator.createDirectory(
+                    activity,
+                    parentDirectoryUri,
+                    newDirectoryName,
+                    persistedUriPermission,
+                    result
+                )
+            }
+
+            else -> result.notImplemented()
+        }
+    }
+}
 
 
 /**
@@ -36,6 +180,7 @@ object DirectoryPicker {
     fun pickDirectory(
         activity: Activity,
         startLocation: SharedStorage?,
+        startLocationUri: Uri?,
         persistedUriPermission: Boolean = false,
         result: MethodChannel.Result
     ): Boolean {
@@ -44,6 +189,10 @@ object DirectoryPicker {
             return false
         }
         pendingResult = result
+        Log.wtf(
+            TAG,
+            "pickDirectory with startLocation $startLocation and persist $persistedUriPermission"
+        )
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
             flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
                     Intent.FLAG_GRANT_WRITE_URI_PERMISSION
@@ -51,10 +200,12 @@ object DirectoryPicker {
                 flags = flags or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
             }
             // Set the starting directory (for API 26+).
-            if (startLocation != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if ((startLocation != null || startLocationUri != null) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 putExtra(
                     DocumentsContract.EXTRA_INITIAL_URI,
-                    getMediaStoreUri(startLocation)
+                    if (startLocationUri != null) startLocationUri else getInitialDirectoryUri(
+                        startLocation!!
+                    )
                 )
             }
         }
@@ -62,7 +213,6 @@ object DirectoryPicker {
         activity.startActivityForResult(intent, REQUEST_CODE_PICK_DIRECTORY)
         return true
     }
-
 
     /**
      * Handles the result from the directory picker activity, buy setting the [pendingResult] to the
@@ -129,6 +279,7 @@ object FilePicker {
     fun pickFiles(
         activity: Activity,
         startLocation: SharedStorage?,
+        startLocationUri: Uri?,
         allowedExtensions: List<String>?,
         multipleAllowed: Boolean = false,
         persistedUriPermission: Boolean = false,
@@ -162,10 +313,12 @@ object FilePicker {
             }
 
             // Set the starting directory (for API 26+).
-            if (startLocation != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if ((startLocation != null || startLocationUri != null) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 putExtra(
                     DocumentsContract.EXTRA_INITIAL_URI,
-                    getMediaStoreUri(startLocation)
+                    if (startLocationUri != null) startLocationUri else getInitialDirectoryUri(
+                        startLocation!!
+                    )
                 )
             }
         }
@@ -251,10 +404,11 @@ object DirectoryCreator {
 
     /**
      * Creates a new directory within the given parent directory.
+     * If the new directory path contains multiple levels, it creates all intermediate directories as needed.
      *
      * @param context The application context.
      * @param parentDirectoryUri The URI of the parent directory.
-     * @param newDirectoryName The name of the new directory to create.
+     * @param newDirectoryName The name of the new directory to create (can be a path).
      * @param persistedUriPermission Whether to persist the URI permission across device reboots.
      * @param result The MethodChannel result to complete when the operation is finished.
      *
@@ -279,23 +433,47 @@ object DirectoryCreator {
             return
         }
 
+        // Sanitize the new directory name by removing leading/trailing path separators
+        val sanitizedDirectoryName = newDirectoryName.trim(File.separatorChar)
+
         try {
-            val newDir = parentDir.createDirectory(newDirectoryName)
-            if (newDir != null) {
+            var currentDir: DocumentFile = parentDir
+            val directoryPathParts = sanitizedDirectoryName.split(File.separatorChar)
+
+            for (directoryName in directoryPathParts) {
+                var newDir = currentDir.findFile(directoryName)
+
+                if (newDir == null || !newDir.exists()) {
+                    newDir = currentDir.createDirectory(directoryName)
+                } else if (!newDir.isDirectory) {
+                    result.error(
+                        "INVALID_PATH",
+                        "Invalid path: $directoryName is not a directory",
+                        null
+                    )
+                    return
+                }
+                if (newDir == null) {
+                    result.error(
+                        "CREATE_FAILED",
+                        "Failed to create directory: $directoryName",
+                        null
+                    )
+                    return
+                }
+                currentDir = newDir
+                // Grant permissions to intermediate directories as well
                 if (persistedUriPermission) {
                     context.contentResolver.takePersistableUriPermission(
                         newDir.uri,
                         Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                     )
                 }
-                result.success(newDir.uri.toString())
-            } else {
-                result.error(
-                    "CREATE_FAILED",
-                    "Failed to create directory",
-                    null
-                )
             }
+
+            // Return the URI of the final directory
+            result.success(currentDir.uri.toString())
+
         } catch (e: Exception) {
             Log.e(TAG, "Error creating directory", e)
             result.error(
@@ -304,5 +482,70 @@ object DirectoryCreator {
                 null
             )
         }
+    }
+}
+
+
+/**
+ * Gets the initial directory URI based on the specified shared storage location.
+ *
+ * @param location The shared storage location.
+ * @return The URI of the corresponding directory, or null if the location is unknown or not applicable.
+ */
+private fun getInitialDirectoryUri(location: SharedStorage): Uri? {
+    return when (location) {
+        SharedStorage.downloads -> {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI
+            } else {
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                    .toUri()
+            }
+        }
+
+        SharedStorage.images -> {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                "content://com.android.externalstorage.documents/tree/primary%3APictures".toUri()
+            } else {
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                    .toUri()
+            }
+        }
+
+        SharedStorage.video -> {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                "content://com.android.externalstorage.documents/tree/primary%3AMovies".toUri()
+            } else {
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
+                    .toUri()
+            }
+        }
+
+        SharedStorage.audio -> {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                "content://com.android.externalstorage.documents/tree/primary%3AMusic".toUri()
+            } else {
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
+                    .toUri()
+            }
+        }
+
+        SharedStorage.external -> {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                "content://com.android.externalstorage.documents/tree/secondary%3A".toUri()
+            } else {
+                Environment.getExternalStorageDirectory().toUri()
+            }
+        }
+
+        SharedStorage.files -> {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                "content://com.android.externalstorage.documents/tree/primary%3A".toUri()
+            } else {
+                Environment.getDataDirectory().toUri()
+            }
+        }
+
+        else -> null // Handle unknown or unsupported locations
     }
 }

@@ -497,14 +497,6 @@ final class AndroidDownloader extends NativeDownloader {
     return super.enqueue(task);
   }
 
-
-  @override
-  Future<String?> pickDirectory(SharedStorage? startDirectory) {
-    final startDirectoryOrdinal = startDirectory?.index;
-    return NativeDownloader.methodChannel.invokeMethod<String?>(
-        'pickDirectory', startDirectoryOrdinal);
-  }
-
   @override
   dynamic platformConfig(
           {dynamic globalConfig,

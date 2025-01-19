@@ -1,0 +1,144 @@
+import 'dart:io';
+
+import 'package:background_downloader/background_downloader.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
+import 'package:integration_test/integration_test.dart';
+
+void main() {
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  group('UriUtils integration tests', () {
+    late Directory documentsDir;
+    late UriUtils uriUtils;
+
+    setUp(() async {
+      documentsDir = await getApplicationDocumentsDirectory();
+      uriUtils = FileDownloader().uriUtils;
+    });
+
+    tearDown(() async {
+      // Clean up any created directories after each test
+      final testDirectory = Directory(p.join(documentsDir.path, 'testDir'));
+      if (await testDirectory.exists()) {
+        await testDirectory.delete(recursive: true);
+      }
+    });
+
+    testWidgets('pickDirectory with null startLocation -> pick Documents',
+        (WidgetTester tester) async {
+      final pickedDirUri = await uriUtils.pickDirectory();
+      expect(
+          pickedDirUri?.toString(),
+          equals(
+              'content://com.android.externalstorage.documents/tree/primary%3ADocuments'));
+    });
+
+    testWidgets(
+        'pickDirectory with null startLocation, then new directory and pick again',
+        (WidgetTester tester) async {
+      final pickedDirUri = await uriUtils.pickDirectory();
+      final newDirUri = await uriUtils.createDirectory(pickedDirUri!, 'NewDir');
+      expect(newDirUri, isNotNull);
+      expect(newDirUri.toString(), contains('NewDir'));
+      final pick2DirUri =
+          await uriUtils.pickDirectory(startLocationUri: newDirUri);
+      expect(pick2DirUri, isNotNull);
+      expect(pick2DirUri.toString(), contains('NewDir'));
+    });
+
+    testWidgets(
+        'pickDirectory with SharedStorage.images startLocation -> pick Images',
+        (WidgetTester tester) async {
+      final pickedDirUri =
+          await uriUtils.pickDirectory(startLocation: SharedStorage.images);
+      expect(
+          pickedDirUri?.toString(),
+          equals(
+              'content://com.android.externalstorage.documents/tree/primary%3APictures'));
+    },
+        // Some tests could require some manual setup as the SAF can behave in unexpected ways
+        skip: kIsWeb || !Platform.isAndroid);
+
+    testWidgets('pickFiles with null startLocation and extensions',
+        (WidgetTester tester) async {
+      final pickedFilesUri = await uriUtils
+          .pickFiles(allowedExtensions: ['jpg'], multipleAllowed: true);
+      expect(pickedFilesUri, isNotNull);
+      print(
+          'Picked ${pickedFilesUri!.length} files: ${pickedFilesUri.map((uri) => uri.toString()).join(', ')}');
+    },
+        // Some tests could require some manual setup as the SAF can behave in unexpected ways
+        skip: kIsWeb || !Platform.isAndroid);
+
+    testWidgets(
+        'pickFiles with null startLocation then create new dir and pick again',
+        (WidgetTester tester) async {
+      final pickedDirUri = await uriUtils.pickDirectory();
+      final newDirUri = await uriUtils.createDirectory(pickedDirUri!, 'NewDir');
+      expect(newDirUri, isNotNull);
+      expect(newDirUri.toString(), contains('NewDir'));
+      final pickedFilesUri =
+          await uriUtils.pickFiles(startLocationUri: newDirUri);
+      expect(pickedFilesUri, isNotNull);
+      print(
+          'Picked ${pickedFilesUri!.length} files: ${pickedFilesUri.map((uri) => uri.toString()).join(', ')}');
+    },
+        // Some tests could require some manual setup as the SAF can behave in unexpected ways
+        skip: kIsWeb || !Platform.isAndroid);
+
+    testWidgets('pickFiles with SharedStorage.images and no extensions',
+        (WidgetTester tester) async {
+      final pickedFilesUri = await uriUtils.pickFiles(
+          startLocation: SharedStorage.images, multipleAllowed: false);
+      expect(pickedFilesUri, isNotNull);
+      print(
+          'Picked ${pickedFilesUri!.length} files: ${pickedFilesUri.map((uri) => uri.toString()).join(', ')}');
+    },
+        // Some tests could require some manual setup as the SAF can behave in unexpected ways
+        skip: kIsWeb || !Platform.isAndroid);
+
+    testWidgets('createDirectory with single level',
+        (WidgetTester tester) async {
+      final testDirUri =
+          await uriUtils.pickDirectory(); // must be created from picker
+      final newDirUri = await uriUtils.createDirectory(testDirUri!, 'testDir');
+      expect(newDirUri, isNotNull);
+      expect(newDirUri.toString(), contains('testDir'));
+      print(newDirUri.toString());
+    });
+
+    testWidgets('createDirectory with multiple levels',
+        (WidgetTester tester) async {
+      final testDirUri =
+          await uriUtils.pickDirectory(); // must be created from picker
+      final newDirUri =
+          await uriUtils.createDirectory(testDirUri!, 'testDir/level2/level3');
+
+      expect(newDirUri, isNotNull);
+      print(newDirUri.toString());
+      expect(newDirUri.toString(), contains('testDir%2Flevel2%2Flevel3'));
+    });
+
+    testWidgets('createDirectory with leading/trailing separators',
+        (WidgetTester tester) async {
+      final testDirUri =
+          await uriUtils.pickDirectory(); // must be created from picker
+      final newDirUri =
+          await uriUtils.createDirectory(testDirUri!, '/testDir/level2/');
+      expect(newDirUri, isNotNull);
+      print(newDirUri.toString());
+      expect(newDirUri.toString(), contains('testDir%2Flevel2'));
+    });
+
+    testWidgets('pickFiles returns null when cancelled',
+        (WidgetTester tester) async {
+      // This test simulates user cancellation by returning null from the native side
+      final result = await uriUtils.pickFiles();
+      expect(result, isNull);
+    }, skip: kIsWeb || !Platform.isAndroid);
+  });
+}

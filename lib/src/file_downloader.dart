@@ -14,6 +14,7 @@ import 'permissions.dart';
 import 'persistent_storage.dart';
 import 'queue/task_queue.dart';
 import 'task.dart';
+import 'uri_utils.dart';
 import 'web_downloader.dart'
     if (dart.library.io) 'desktop/desktop_downloader.dart';
 
@@ -42,7 +43,13 @@ interface class FileDownloader {
   /// rationale for this permission should be shown
   Permissions get permissions => _downloader.permissionsService;
 
+  /// Platform-specific implementation of the downloader itself
   late final BaseDownloader _downloader;
+
+  /// Utilities for working with URIs. URIs make working with file pickers and
+  /// shared storage easier, as they abstract permissions and are coherent
+  /// across platforms.
+  late final UriUtils uriUtils;
 
   /// Do not use: for testing only
   @visibleForTesting
@@ -61,6 +68,7 @@ interface class FileDownloader {
   FileDownloader._internal(PersistentStorage persistentStorage) {
     database = Database(persistentStorage);
     _downloader = BaseDownloader.instance(persistentStorage, database);
+    uriUtils = UriUtils.withDownloader(_downloader);
   }
 
   /// True when initialization is complete and downloader ready for use
@@ -963,11 +971,6 @@ interface class FileDownloader {
           {String directory = '', asAndroidUri = false}) async =>
       _downloader.pathInSharedStorage(
           filePath, destination, directory, asAndroidUri);
-
-  /// Pick a directory to download to, and return the path to it or the
-  /// Android URI
-  Future<String?> pickDirectory({SharedStorage? startDirectory}) =>
-      _downloader.pickDirectory(startDirectory);
 
   /// Open the file represented by [task] or [filePath] using the application
   /// available on the platform.
