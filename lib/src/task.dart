@@ -325,7 +325,9 @@ sealed class Task extends Request implements Comparable {
     if (filename?.isEmpty == true) {
       throw ArgumentError('Filename cannot be empty');
     }
-    if (!(UriUtils.containsUri(this.filename)) &&_pathSeparator.hasMatch(this.filename) && this is! MultiUploadTask) {
+    if (!(UriUtils.containsUri(this.filename)) &&
+        _pathSeparator.hasMatch(this.filename) &&
+        this is! MultiUploadTask) {
       throw ArgumentError('Filename cannot contain path separators');
     }
     if (allowPause && post != null) {
@@ -1076,7 +1078,7 @@ final class UploadTask extends Task {
   /// no filename was set
   String? get uploadFilename {
     final (filename: storedFilename, :uri) = UriUtils.unpack(filename);
-    return (UriUtils.containsUri(storedFilename)) ? null : storedFilename;
+    return storedFilename;
   }
 }
 

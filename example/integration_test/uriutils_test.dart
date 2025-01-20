@@ -26,7 +26,6 @@ void main() {
       }
     });
 
-
     testWidgets('pickDirectory with null startLocation -> pick Documents',
         (WidgetTester tester) async {
       final pickedDirUri = await uriUtils.pickDirectory();
@@ -156,6 +155,4 @@ void main() {
       expect(result, isNull);
     }, skip: false);
   });
-
-
 }

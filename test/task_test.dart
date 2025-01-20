@@ -313,7 +313,9 @@ void main() {
       expect(task.usesUri, isFalse);
     });
 
-    test('directoryUri should return the correct Uri for valid directory strings', () {
+    test(
+        'directoryUri should return the correct Uri for valid directory strings',
+        () {
       final contentUri = Uri.parse('content://downloads');
       final taskWithContentUri = DownloadTask.fromUri(
         url: 'https://example.com/file.txt',
@@ -347,11 +349,15 @@ void main() {
       expect(task.directoryUri, isNull);
     });
 
-    test('constructing DownloadTask.fromUri with invalid scheme throws AssertionError', () {
-      expect(() => DownloadTask.fromUri(
-        url: 'https://example.com/file.txt',
-        directoryUri: Uri.parse('ftp://invalid/scheme'),
-      ), throwsA(isA<AssertionError>()));
+    test(
+        'constructing DownloadTask.fromUri with invalid scheme throws AssertionError',
+        () {
+      expect(
+          () => DownloadTask.fromUri(
+                url: 'https://example.com/file.txt',
+                directoryUri: Uri.parse('ftp://invalid/scheme'),
+              ),
+          throwsA(isA<AssertionError>()));
     });
   });
 
@@ -379,7 +385,9 @@ void main() {
       expect(task.usesUri, isFalse);
     });
 
-    test('fileUri should return the correct Uri for valid packed strings with Uris', () {
+    test(
+        'fileUri should return the correct Uri for valid packed strings with Uris',
+        () {
       final contentUri = Uri.parse('content://uploads');
       final taskWithContentUri = UploadTask.fromUri(
         url: 'https://example.com/upload',
@@ -415,7 +423,8 @@ void main() {
       expect(task.fileUri, isNull);
     });
 
-    test('uploadFilename should return filename when set during construction', () {
+    test('uploadFilename should return filename when set during construction',
+        () {
       final task = UploadTask.fromUri(
         url: 'https://example.com/upload',
         uri: Uri.parse('content://uploads'),
@@ -424,7 +433,9 @@ void main() {
       expect(task.uploadFilename, 'myFile.txt');
     });
 
-    test('uploadFilename should return null when no filename was set during construction', () {
+    test(
+        'uploadFilename should return null when no filename was set during construction',
+        () {
       final task = UploadTask.fromUri(
         url: 'https://example.com/upload',
         uri: Uri.parse('content://uploads'),
@@ -432,12 +443,14 @@ void main() {
       expect(task.uploadFilename, isNull);
     });
 
-    test('constructing UploadTask.fromUri with invalid scheme throws AssertionError', () {
+    test(
+        'constructing UploadTask.fromUri with invalid scheme throws AssertionError',
+        () {
       expect(
-              () => UploadTask.fromUri(
-            url: 'https://example.com/upload',
-            uri: Uri.parse('ftp://invalid/scheme'),
-          ),
+          () => UploadTask.fromUri(
+                url: 'https://example.com/upload',
+                uri: Uri.parse('ftp://invalid/scheme'),
+              ),
           throwsA(isA<AssertionError>()));
     });
   });

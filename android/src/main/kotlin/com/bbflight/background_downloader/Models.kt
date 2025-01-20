@@ -3,11 +3,6 @@
 package com.bbflight.background_downloader
 
 import android.content.Context
-import android.net.Uri
-import android.util.Log
-import com.bbflight.background_downloader.TaskWorker.Companion.TAG
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -25,7 +20,6 @@ import kotlinx.serialization.json.Json
 import java.io.File
 import java.net.MalformedURLException
 import java.net.URL
-import java.net.URLDecoder
 import kotlin.math.absoluteValue
 import kotlin.random.Random
 
@@ -256,7 +250,7 @@ class Task(
         //
         // If [unique], filename will sequence up in "filename (8).txt" format,
         // otherwise returns the [task]
-        fun uniqueFilename(task: Task, unique: Boolean): Task {
+        fun taskWithUniqueFilename(task: Task, unique: Boolean): Task {
             if (!unique) {
                 return task
             }
@@ -286,55 +280,11 @@ class Task(
         }
 
         // start of main method
-        try {
-            val disposition = (responseHeaders["Content-Disposition"]
-                ?: responseHeaders["content-disposition"])?.get(0)
-            if (disposition != null) {
-                // Try filename*=UTF-8'language'"encodedFilename"
-                val encodedFilenameRegEx =
-                    Regex("""filename\*=\s*([^']+)'([^']*)'"?([^"]+)"?""", RegexOption.IGNORE_CASE)
-                var match = encodedFilenameRegEx.find(disposition)
-                if (match != null && match.groupValues[1].isNotEmpty() && match.groupValues[3].isNotEmpty()) {
-                    try {
-                        val suggestedFilename = if (match.groupValues[1].uppercase() == "UTF-8") {
-                            withContext(Dispatchers.IO) {
-                                URLDecoder.decode(match!!.groupValues[3], "UTF-8")
-                            }
-                        } else {
-                            match.groupValues[3]
-                        }
-                        return uniqueFilename(this.copyWith(filename = suggestedFilename), true)
-                    } catch (e: IllegalArgumentException) {
-                        Log.d(
-                            TAG,
-                            "Could not interpret suggested filename (UTF-8 url encoded) ${match.groupValues[3]}"
-                        )
-                    }
-                }
-                // Try filename="filename"
-                val plainFilenameRegEx =
-                    Regex("""filename=\s*"?([^"]+)"?.*$""", RegexOption.IGNORE_CASE)
-                match = plainFilenameRegEx.find(disposition)
-                if (match != null && match.groupValues[1].isNotEmpty()) {
-                    return uniqueFilename(this.copyWith(filename = match.groupValues[1]), unique)
-                }
-            }
-        } catch (_: Throwable) {
-        }
-        Log.d(TAG, "Could not determine suggested filename from server")
-        // Try filename derived from last path segment of the url
-        try {
-            val uri = Uri.parse(url)
-            val suggestedFilename = uri.lastPathSegment
-            if (suggestedFilename != null) {
-                return uniqueFilename(this.copyWith(filename = suggestedFilename), unique)
-            }
-        } catch (_: Throwable) {
-        }
-        Log.d(TAG, "Could not parse URL pathSegment for suggested filename")
-        // if everything fails, return the task with unchanged filename
-        // except for possibly making it unique
-        return uniqueFilename(this, unique)
+        val suggestedFilename = suggestFilename(responseHeaders, url)
+        return taskWithUniqueFilename(
+            this.copyWith(filename = if (suggestedFilename.isNotEmpty()) suggestedFilename else this.filename),
+            unique
+        )
     }
 
     /**
@@ -377,7 +327,14 @@ class Task(
         ""
     }
 
-    fun hasFilename() = filename != "?"
+    /** True if this task has a filename
+     *  False if it has only a URI, or if the filename is '?'
+     */
+    fun hasFilename(): Boolean {
+        val filename = UriUtils.unpack(filename).first
+        return filename != null && filename != "?"
+    }
+
 
     override fun toString(): String {
         return "Task(taskId='$taskId', url='$url', filename='$filename', headers=$headers, httpRequestMethod=$httpRequestMethod, post=$post, fileField='$fileField', mimeType='$mimeType', fields=$fields, directory='$directory', baseDirectory=$baseDirectory, group='$group', updates=$updates, requiresWiFi=$requiresWiFi, retries=$retries, retriesRemaining=$retriesRemaining, allowPause=$allowPause, metaData='$metaData', creationTime=$creationTime, taskType='$taskType')"

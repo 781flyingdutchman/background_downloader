@@ -12,6 +12,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -68,7 +69,6 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
 
     override suspend fun process(
         connection: HttpURLConnection,
-        filePath: String
     ): TaskStatus {
         return withContext(Dispatchers.Default) {
             var enqueueJob: Job? = null
@@ -390,7 +390,7 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                     try {
                         val file = File(chunk.task.filePath(applicationContext))
                         file.delete()
-                    } catch (e: FileSystemException) {
+                    } catch (_: FileSystemException) {
                         // ignore
                     }
                 }
@@ -421,7 +421,7 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
             try {
                 headers.entries
                     .first { (it.key == "accept-ranges" || it.key == "Accept-Ranges") && it.value.first() == "bytes" }
-            } catch (e: NoSuchElementException) {
+            } catch (_: NoSuchElementException) {
                 throw IllegalStateException("Server does not accept ranges - cannot chunk download")
             }
             val chunkSize = (contentLength / numChunks) + 1
@@ -434,13 +434,14 @@ class ParallelDownloadTaskWorker(applicationContext: Context, workerParams: Work
                     to = min(i * chunkSize + chunkSize - 1, contentLength - 1)
                 )
             }
-        } catch (e: NoSuchElementException) {
+        } catch (_: NoSuchElementException) {
             throw IllegalStateException("Server does not provide content length - cannot chunk download. If you know the length, set Range or Known-Content-Length header")
         }
     }
 }
 
 @Suppress("unused")
+@OptIn(InternalSerializationApi::class)
 @Serializable
 class Chunk private constructor(
     private val parentTaskId: String,
@@ -497,5 +498,6 @@ class Chunk private constructor(
 }
 
 @Serializable
+@OptIn(InternalSerializationApi::class)
 /// Holder for metaData for [Task] related to a [Chunk]
 data class ChunkTaskMetaData(val parentTaskId: String, val from: Long, val to: Long)
