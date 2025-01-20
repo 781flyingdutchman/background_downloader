@@ -31,13 +31,23 @@ class UriUtilsTest {
     }
 
     @Test
-    fun unpack_should_return_original_string_and_null_uri_for_invalid_packed_string() {
+    fun unpack_should_return_original_string_and_null_uri_for_simple_filename_string() {
         val invalidPackedString = "This is not a packed string"
 
         val (filename, uri) = UriUtils.unpack(invalidPackedString)
 
         assertEquals(invalidPackedString, filename)
         assertNull(uri)
+    }
+
+    @Test
+    fun unpack_should_return_null_and_uri_for_simple_uri_string() {
+        val uriString = "https://www.example.com/path/to/resource"
+
+        val (filename, uri) = UriUtils.unpack(uriString)
+
+        assertNull(filename)
+        assertEquals(uri.toString(), uriString)
     }
 
     @Test

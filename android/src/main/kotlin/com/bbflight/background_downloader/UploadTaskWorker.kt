@@ -37,18 +37,18 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
      * Returns the [TaskStatus]
      */
     override suspend fun process(
-        connection: HttpURLConnection, filePath: String
+        connection: HttpURLConnection
     ): TaskStatus {
         connection.doOutput = true
         val transferBytesResult =
             if (task.post?.lowercase() == "binary") {
-                processBinaryUpload(connection, filePath)
+                processBinaryUpload(connection)
             } else {
-                processMultipartUpload(connection, filePath)
+                processMultipartUpload(connection)
             }
         when (transferBytesResult) {
             TaskStatus.canceled -> {
-                Log.i(TAG, "Canceled taskId ${task.taskId} for $filePath")
+                Log.i(TAG, "Canceled taskId ${task.taskId}")
                 return TaskStatus.canceled
             }
 
@@ -62,13 +62,13 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                 responseStatusCode = connection.responseCode
                 if (connection.responseCode in 200..206) {
                     Log.i(
-                        TAG, "Successfully uploaded taskId ${task.taskId} from $filePath"
+                        TAG, "Successfully uploaded taskId ${task.taskId}"
                     )
                     return TaskStatus.complete
                 }
                 Log.i(
                     TAG,
-                    "Response code ${connection.responseCode} for upload of $filePath to ${task.url}"
+                    "Response code ${connection.responseCode} for taskId ${task.taskId}"
                 )
                 val errorContent = responseErrorContent(connection)
                 taskException = TaskException(
@@ -97,7 +97,7 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
      * Returns the [TaskStatus]
      */
     private suspend fun processBinaryUpload(
-        connection: HttpURLConnection, filePath: String
+        connection: HttpURLConnection
     ): TaskStatus {
         val fileUri = UriUtils.uriFromStringValue(task.filename)
         val (fileSize, inputStream) = withContext(Dispatchers.IO) { // Use Dispatchers.IO for file operations
@@ -145,6 +145,7 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                     return@withContext Pair(null, null) // Return nulls to indicate failure
                 }
             } else {
+                val filePath = task.filePath(applicationContext)
                 val file = File(filePath)
                 if (!file.exists() || !file.isFile) {
                     val message = "File to upload does not exist: $filePath"
@@ -240,7 +241,6 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
      */
     private suspend fun processMultipartUpload(
         connection: HttpURLConnection,
-        filePath: String
     ): TaskStatus {
         // field portion of the multipart, all in one string
         // multiple values should be encoded as '"value1", "value2", ...'
@@ -265,6 +265,7 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
         // and file length, so that we can calculate total size of upload
         val separator = "$lineFeed--$boundary$lineFeed" // between files
         val terminator = "$lineFeed--$boundary--$lineFeed" // after last file
+        val filePath = task.filePath(applicationContext) // "" for MultiUploadTask
         val filesData = if (filePath.isNotEmpty()) {
             listOf(
                 Triple(task.fileField, filePath, task.mimeType)

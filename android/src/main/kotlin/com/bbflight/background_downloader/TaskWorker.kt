@@ -516,25 +516,25 @@ open class TaskWorker(
      * Returns the [TaskStatus]
      * */
     open suspend fun connectAndProcess(connection: HttpURLConnection): TaskStatus {
-        val filePath = task.filePath(applicationContext) // "" for MultiUploadTask
+
         try {
             if ((task.isDownloadTask() || task.isDataTask()) && task.post != null) {
                 connection.doOutput = true
                 connection.setFixedLengthStreamingMode(task.post!!.length)
                 DataOutputStream(connection.outputStream).use { it.writeBytes(task.post) }
             }
-            return process(connection, filePath)
+            return process(connection)
         } catch (e: Exception) {
             setTaskException(e)
             when (e) {
                 is FileSystemException -> Log.w(
                     TAG,
-                    "Filesystem exception for taskId ${task.taskId} and $filePath: ${e.message}"
+                    "Filesystem exception for taskId ${task.taskId}: ${e.message}"
                 )
 
                 is SocketException -> Log.i(
                     TAG,
-                    "Socket exception for taskId ${task.taskId} and $filePath: ${e.message}"
+                    "Socket exception for taskId ${task.taskId}: ${e.message}"
                 )
 
                 is CancellationException -> {
@@ -560,7 +560,7 @@ open class TaskWorker(
                     )
                     taskException = TaskException(
                         ExceptionType.general, description =
-                        "Error for url ${task.url} and $filePath: ${e.message}"
+                        "Error for url ${task.url}: ${e.message}"
                     )
                 }
             }
@@ -579,8 +579,7 @@ open class TaskWorker(
      * Overridden by subclasses
      */
     open suspend fun process(
-        connection: HttpURLConnection,
-        filePath: String
+        connection: HttpURLConnection
     ): TaskStatus {
         throw NotImplementedError()
     }

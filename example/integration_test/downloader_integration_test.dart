@@ -1764,23 +1764,22 @@ void main() {
     });
 
     testWidgets('enqueue binary file using URI', (widgetTester) async {
-        FileDownloader().registerCallbacks(
-            taskStatusCallback: statusCallback,
-            taskProgressCallback: progressCallback);
-        // move file to shared storage and obtain the URI
-        final dummy =
-            DownloadTask(url: uploadTestUrl, filename: uploadFilename);
-        final uriString = await FileDownloader().moveFileToSharedStorage(
-            await dummy.filePath(), SharedStorage.downloads,
-            asAndroidUri: true);
-        print('URI: $uriString');
-        final task = UploadTask.fromUri(
-            url: uploadBinaryTestUrl, uri: Uri.parse(uriString!), post: 'binary');
-        expect(await FileDownloader().enqueue(task), isTrue);
-        await statusCallbackCompleter.future;
-        expect(statusCallbackCounter, equals(3));
-        expect(lastStatus, equals(TaskStatus.complete));
-        print('Finished enqueue binary file using Android URI');
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      // move file to shared storage and obtain the URI
+      final dummy = DownloadTask(url: uploadTestUrl, filename: uploadFilename);
+      final uriString = await FileDownloader().moveFileToSharedStorage(
+          await dummy.filePath(), SharedStorage.downloads,
+          asAndroidUri: true);
+      print('URI: $uriString');
+      final task = UploadTask.fromUri(
+          url: uploadBinaryTestUrl, uri: Uri.parse(uriString!), post: 'binary');
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(statusCallbackCounter, equals(3));
+      expect(lastStatus, equals(TaskStatus.complete));
+      print('Finished enqueue binary file using Android URI');
     });
 
     testWidgets('enqueue binary file using incorrect Android URI',

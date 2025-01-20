@@ -29,10 +29,10 @@ object UriUtils {
     fun pack(filename: String, uri: Uri): String = ":::$filename::::::${uri.toString()}:::"
 
     /**
-     * Unpacks [packedString] into a [filename] and [uri]. If this is not a packed
-     * string, returns the original [packedString] as the [filename] and null.
+     * Unpacks [packedString] into a filename and uri. If this is not a packed
+     * string, returns the original [packedString] as the filename and null.
      */
-    fun unpack(packedString: String): Pair<String, Uri?> {
+    fun unpack(packedString: String): Pair<String?, Uri?> {
         val regex = Regex(":::([\\s\\S]*?)::::::([\\s\\S]*?):::")
         val match = regex.find(packedString)
 
@@ -40,9 +40,13 @@ object UriUtils {
             val filename = match.groupValues[1]
             val uriString = match.groupValues[2]
             val uri = Uri.parse(uriString)
-            Pair(filename, if (uri.scheme != null) uri else null)
+            val scheme = uri?.scheme
+            Pair(filename, if (scheme?.isNotEmpty() == true) uri else null)
         } else {
-            Pair(packedString, null)
+            val uri = Uri.parse(packedString)
+            val scheme = uri?.scheme
+            if (scheme?.isNotEmpty() == true) Pair(null, uri)
+            else Pair(packedString, null)
         }
     }
 
@@ -54,15 +58,6 @@ object UriUtils {
      * a Uri (see [pack]).
      */
     fun uriFromStringValue(value: String): Uri? {
-        val possibleUri = try {
-            Uri.parse(value)
-        } catch (_: Exception) {
-            null
-        }
-        val scheme = possibleUri?.scheme
-        if (scheme?.isNotEmpty() == true) {
-            return possibleUri
-        }
         val (_, uri) = unpack(value)
         return uri
     }
