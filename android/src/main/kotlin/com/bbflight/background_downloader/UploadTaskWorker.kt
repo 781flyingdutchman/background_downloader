@@ -99,22 +99,20 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
     private suspend fun processBinaryUpload(
         connection: HttpURLConnection, filePath: String
     ): TaskStatus {
-        val usesAndroidUri =
-            task.baseDirectory == BaseDirectory.root && task.directory.startsWith("content://")
+        val fileUri = UriUtils.uriFromStringValue(task.filename)
         val (fileSize, inputStream) = withContext(Dispatchers.IO) { // Use Dispatchers.IO for file operations
-            if (usesAndroidUri) {
+            if (fileUri != null) {
                 try {
-                    val uri = Uri.parse(task.directory)
                     val contentResolver = applicationContext.contentResolver
 
                     // Get file size from URI
                     val fileSize =
-                        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                        contentResolver.query(fileUri, null, null, null, null)?.use { cursor ->
                             val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
                             cursor.moveToFirst()
                             if (sizeIndex != -1) cursor.getLong(sizeIndex) else null
                         } ?: run {
-                            val message = "Could not open file or determine file size for URI: $uri"
+                            val message = "Could not open file or determine file size for URI: $fileUri"
                             Log.w(TAG, message)
                             taskException = TaskException(
                                 ExceptionType.fileSystem,
@@ -124,8 +122,8 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                         }
 
                     // Get InputStream from URI
-                    val inputStream = contentResolver.openInputStream(uri) ?: run {
-                        val message = "Could not open input stream for URI: $uri"
+                    val inputStream = contentResolver.openInputStream(fileUri) ?: run {
+                        val message = "Could not open input stream for URI: $fileUri"
                         Log.w(TAG, message)
                         taskException = TaskException(
                             ExceptionType.fileSystem,
@@ -134,7 +132,7 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                         return@withContext Pair(null, null) // Return nulls to indicate failure
                     }
 
-                    Log.i(TAG, "Using InputStream from URI $uri")
+                    Log.i(TAG, "Using InputStream from URI $fileUri")
                     Pair(fileSize, inputStream)
 
                 } catch (e: Exception) {

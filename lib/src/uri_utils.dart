@@ -45,6 +45,47 @@ sealed class UriUtils {
       {bool persistedUriPermission = false});
 
   Future<Uint8List?> getFileBytes(Uri uri);
+
+  /// Packs [filename] and [uri] into a single String
+  ///
+  /// use [unpack] to retrieve the filename and uri from the packed String
+  static String pack(String filename, Uri uri) => ':::$filename::::::${uri.toString()}:::';
+
+  /// Unpacks [packedString] into a [filename] and [uri]. If this is not a packed
+  /// string, returns the original [packedString] as the [filename] and null
+  static ({String filename, Uri? uri}) unpack(String packedString) {
+    final regex = RegExp(r':::([\s\S]*?)::::::([\s\S]*?):::');
+    final match = regex.firstMatch(packedString);
+
+    if (match != null && match.groupCount == 2) {
+      final filename = match.group(1)!;
+      final uriString = match.group(2)!;
+      final uri = Uri.tryParse(uriString);
+      return (filename: filename, uri: uri?.hasScheme == true ? uri : null);
+    } else {
+      return (filename: packedString, uri: null);
+    }
+  }
+
+  /// Returns the Uri represented by [value], or null if the String is not a
+  /// valid Uri or packed Uri string.
+  ///
+  /// [value] should be a full Uri string, or a packed String containing
+  /// a Uri (see [pack])
+  static Uri? uriFromStringValue(String value) {
+    final possibleUri = Uri.tryParse(value);
+    if (possibleUri?.hasScheme == true) {
+      return possibleUri;
+    }
+    final (:filename, :uri) = unpack(value);
+    return uri;
+  }
+
+  /// Returns true if [value] is a valid Uri or packed Uri string.
+  ///
+  /// [value] should be a full Uri string, or a packed String containing
+  /// a Uri (see [pack])
+  static bool containsUri(String value) => uriFromStringValue(value) != null;
 }
 
 final class DesktopUriUtils extends UriUtils {

@@ -166,20 +166,6 @@ void main() {
     expect(t.post, equals('a'));
   });
 
-  test('uploadTask.fromAndroidUri', () async {
-    var t = UploadTask.fromAndroidUri(
-        uri: Uri.parse('content://some/path'), url: workingUrl);
-    expect(t.baseDirectory, equals(BaseDirectory.root));
-    expect(t.directory, equals('content://some/path'));
-    expect(t.filename, equals('path'));
-    expect(await t.filePath(), equals('/content://some/path/path'));
-    // check invalid URI scheme
-    expect(
-        () => UploadTask.fromAndroidUri(
-            uri: Uri.parse('other://some/path'), url: workingUrl),
-        throwsAssertionError);
-  });
-
   test('dataTask creation', () {
     var t = DataTask(url: workingUrl);
     expect(t.headers['Content-Type'], isNull);
@@ -301,5 +287,158 @@ void main() {
     expect(cookies.first.expires, equals(DateTime.utc(2024, 1, 6, 4, 35, 39)));
     expect(cookies.first.path, equals('/'));
     expect(cookies.first.domain, equals('.google.com'));
+  });
+
+  group('DownloadTask with URI', () {
+    test('usesUri should be true for allowed URI schemes', () {
+      final taskWithContentUri = DownloadTask.fromUri(
+        url: 'https://example.com/file.txt',
+        directoryUri: Uri.parse('content://downloads'),
+      );
+      expect(taskWithContentUri.usesUri, isTrue);
+
+      final taskWithFileUri = DownloadTask.fromUri(
+        url: 'https://example.com/file.txt',
+        directoryUri: Uri.parse('file:///path/to/directory'),
+      );
+      expect(taskWithFileUri.usesUri, isTrue);
+    });
+
+    test('usesUri should be false for non-URI tasks', () {
+      final task = DownloadTask(
+        url: 'https://example.com/file.txt',
+        directory: '/path/to/directory',
+        baseDirectory: BaseDirectory.temporary,
+      );
+      expect(task.usesUri, isFalse);
+    });
+
+    test('directoryUri should return the correct Uri for valid directory strings', () {
+      final contentUri = Uri.parse('content://downloads');
+      final taskWithContentUri = DownloadTask.fromUri(
+        url: 'https://example.com/file.txt',
+        directoryUri: contentUri,
+      );
+      expect(taskWithContentUri.directoryUri, contentUri);
+
+      final fileUri = Uri.parse('file:///path/to/directory');
+      final taskWithFileUri = DownloadTask.fromUri(
+        url: 'https://example.com/file.txt',
+        directoryUri: fileUri,
+      );
+      expect(taskWithFileUri.directoryUri, fileUri);
+    });
+
+    test('directoryUri should return null for invalid directory strings', () {
+      final task = DownloadTask(
+        url: 'https://example.com/file.txt',
+        directory: 'not a uri',
+        baseDirectory: BaseDirectory.temporary,
+      );
+      expect(task.directoryUri, isNull);
+    });
+
+    test('directoryUri should return null for non-URI tasks', () {
+      final task = DownloadTask(
+        url: 'https://example.com/file.txt',
+        directory: '/path/to/directory',
+        baseDirectory: BaseDirectory.temporary,
+      );
+      expect(task.directoryUri, isNull);
+    });
+
+    test('constructing DownloadTask.fromUri with invalid scheme throws AssertionError', () {
+      expect(() => DownloadTask.fromUri(
+        url: 'https://example.com/file.txt',
+        directoryUri: Uri.parse('ftp://invalid/scheme'),
+      ), throwsA(isA<AssertionError>()));
+    });
+  });
+
+  group('UploadTask with URI', () {
+    test('usesUri should be true for allowed URI schemes', () {
+      final taskWithContentUri = UploadTask.fromUri(
+        url: 'https://example.com/upload',
+        uri: Uri.parse('content://uploads'),
+      );
+      expect(taskWithContentUri.usesUri, isTrue);
+
+      final taskWithFileUri = UploadTask.fromUri(
+        url: 'https://example.com/upload',
+        uri: Uri.parse('file:///path/to/file.txt'),
+      );
+      expect(taskWithFileUri.usesUri, isTrue);
+    });
+
+    test('usesUri should be false for non-URI tasks', () {
+      final task = UploadTask(
+        url: 'https://example.com/upload',
+        filename: 'file.txt',
+        baseDirectory: BaseDirectory.temporary,
+      );
+      expect(task.usesUri, isFalse);
+    });
+
+    test('fileUri should return the correct Uri for valid packed strings with Uris', () {
+      final contentUri = Uri.parse('content://uploads');
+      final taskWithContentUri = UploadTask.fromUri(
+        url: 'https://example.com/upload',
+        uri: contentUri,
+        filename: 'test.txt',
+      );
+      expect(taskWithContentUri.fileUri, contentUri);
+
+      final fileUri = Uri.parse('file:///path/to/file.txt');
+      final taskWithFileUri = UploadTask.fromUri(
+        url: 'https://example.com/upload',
+        uri: fileUri,
+      );
+
+      expect(taskWithFileUri.fileUri, fileUri);
+    });
+
+    test('fileUri should return null for invalid packed strings', () {
+      final task = UploadTask(
+        url: 'https://example.com/upload',
+        filename: 'not a uri',
+        baseDirectory: BaseDirectory.temporary,
+      );
+      expect(task.fileUri, isNull);
+    });
+
+    test('fileUri should return null for non-URI tasks', () {
+      final task = UploadTask(
+        url: 'https://example.com/upload',
+        filename: 'file.txt',
+        baseDirectory: BaseDirectory.temporary,
+      );
+      expect(task.fileUri, isNull);
+    });
+
+    test('uploadFilename should return filename when set during construction', () {
+      final task = UploadTask.fromUri(
+        url: 'https://example.com/upload',
+        uri: Uri.parse('content://uploads'),
+        filename: 'myFile.txt',
+      );
+      expect(task.uploadFilename, 'myFile.txt');
+    });
+
+    test('uploadFilename should return null when no filename was set during construction', () {
+      final task = UploadTask.fromUri(
+        url: 'https://example.com/upload',
+        uri: Uri.parse('content://uploads'),
+      );
+      expect(task.uploadFilename, isNull);
+    });
+
+    test('constructing UploadTask.fromUri with invalid scheme throws AssertionError', () {
+      expect(
+              () => UploadTask.fromUri(
+            url: 'https://example.com/upload',
+            uri: Uri.parse('ftp://invalid/scheme'),
+          ),
+          throwsA(isA<AssertionError>()));
+    });
   });
 }
