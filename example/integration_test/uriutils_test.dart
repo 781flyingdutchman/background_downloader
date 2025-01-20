@@ -1,8 +1,6 @@
 import 'dart:io';
 
 import 'package:background_downloader/background_downloader.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
@@ -11,7 +9,7 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  group('UriUtils integration tests', () {
+  group('pickers and directory functions', () {
     late Directory documentsDir;
     late UriUtils uriUtils;
 
@@ -27,6 +25,7 @@ void main() {
         await testDirectory.delete(recursive: true);
       }
     });
+
 
     testWidgets('pickDirectory with null startLocation -> pick Documents',
         (WidgetTester tester) async {
@@ -157,4 +156,6 @@ void main() {
       expect(result, isNull);
     }, skip: false);
   });
+
+
 }

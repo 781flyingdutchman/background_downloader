@@ -19,6 +19,63 @@ import java.io.File
 import java.io.IOException
 
 
+object UriUtils {
+
+    /**
+     * Packs [filename] and [uri] into a single String.
+     *
+     * Use [unpack] to retrieve the filename and uri from the packed String.
+     */
+    fun pack(filename: String, uri: Uri): String = ":::$filename::::::${uri.toString()}:::"
+
+    /**
+     * Unpacks [packedString] into a [filename] and [uri]. If this is not a packed
+     * string, returns the original [packedString] as the [filename] and null.
+     */
+    fun unpack(packedString: String): Pair<String, Uri?> {
+        val regex = Regex(":::([\\s\\S]*?)::::::([\\s\\S]*?):::")
+        val match = regex.find(packedString)
+
+        return if (match != null && match.groupValues.size == 3) {
+            val filename = match.groupValues[1]
+            val uriString = match.groupValues[2]
+            val uri = Uri.parse(uriString)
+            Pair(filename, if (uri.scheme != null) uri else null)
+        } else {
+            Pair(packedString, null)
+        }
+    }
+
+    /**
+     * Returns the Uri represented by [value], or null if the String is not a
+     * valid Uri or packed Uri string.
+     *
+     * [value] should be a full Uri string, or a packed String containing
+     * a Uri (see [pack]).
+     */
+    fun uriFromStringValue(value: String): Uri? {
+        val possibleUri = try {
+            Uri.parse(value)
+        } catch (_: Exception) {
+            null
+        }
+        val scheme = possibleUri?.scheme
+        if (scheme?.isNotEmpty() == true) {
+            return possibleUri
+        }
+        val (_, uri) = unpack(value)
+        return uri
+    }
+
+    /**
+     * Returns true if [value] is a valid Uri or packed Uri string.
+     *
+     * [value] should be a full Uri string, or a packed String containing
+     * a Uri (see [pack]).
+     */
+    fun containsUri(value: String): Boolean = uriFromStringValue(value) != null
+}
+
 /**
  * Handles method calls from Flutter related to file and directory picking/creation.
  */

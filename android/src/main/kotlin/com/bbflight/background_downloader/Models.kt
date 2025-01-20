@@ -8,6 +8,7 @@ import android.util.Log
 import com.bbflight.background_downloader.TaskWorker.Companion.TAG
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -67,6 +68,7 @@ private class UpdatesSerializer : EnumAsIntSerializer<Updates>(
  * Holds various options related to the task that are not included in the
  * task's properties, as they are rare
  */
+@OptIn(InternalSerializationApi::class)
 @Serializable
 class TaskOptions(
     private val onTaskStartRawHandle: Long?,
@@ -86,6 +88,7 @@ class TaskOptions(
  * of task this is
  */
 @Suppress("SameParameterValue")
+@OptIn(InternalSerializationApi::class)
 @Serializable
 class Task(
     val taskId: String = "${Random.nextInt().absoluteValue}",
@@ -427,13 +430,14 @@ private class TaskStatusSerializer : EnumAsIntSerializer<TaskStatus>(
     { v -> TaskStatus.entries.first { it.ordinal == v } }
 )
 
-@Serializable
 /** Holds data associated with a task status update
  *
  * Stored locally in JSON format if posting on background channel fails,
  * otherwise getter [argList] is used to extract the list of arguments
  * to be passed to the background channel as arguments to the "statusUpdate" method invocation
  */
+@Serializable
+@OptIn(InternalSerializationApi::class)
 data class TaskStatusUpdate(
     val task: Task,
     val taskStatus: TaskStatus,  // note Dart field name is 'status'
@@ -472,12 +476,14 @@ data class TaskStatusUpdate(
     }
 }
 
-@Serializable
 /** Holds data associated with a task progress update, for local storage */
+@Serializable
+@OptIn(InternalSerializationApi::class)
 data class TaskProgressUpdate(val task: Task, val progress: Double, val expectedFileSize: Long)
 
 /// Holds data associated with a resume
 @Serializable
+@OptIn(InternalSerializationApi::class)
 data class ResumeData(
     val task: Task,
     val data: String,

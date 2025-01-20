@@ -13,6 +13,7 @@ import 'package:path_provider/path_provider.dart';
 import 'file_downloader.dart';
 import 'models.dart';
 import 'options/task_options.dart';
+import 'uri_utils.dart';
 import 'utils.dart';
 import 'web_downloader.dart'
     if (dart.library.io) 'desktop/desktop_downloader.dart';
@@ -257,6 +258,10 @@ sealed class Task extends Request implements Comparable {
 
   static bool useExternalStorage = false; // for Android configuration only
 
+  /// Uri schemes that are supported by the downloader in the context of
+  /// a [Task] download directory or upload file
+  static const allowedUriSchemes = ['file', 'content', 'urlbookmark'];
+
   /// Creates a [Task]
   ///
   /// [taskId] must be unique. A unique id will be generated if omitted
@@ -320,7 +325,7 @@ sealed class Task extends Request implements Comparable {
     if (filename?.isEmpty == true) {
       throw ArgumentError('Filename cannot be empty');
     }
-    if (_pathSeparator.hasMatch(this.filename) && this is! MultiUploadTask) {
+    if (!(UriUtils.containsUri(this.filename)) &&_pathSeparator.hasMatch(this.filename) && this is! MultiUploadTask) {
       throw ArgumentError('Filename cannot contain path separators');
     }
     if (allowPause && post != null) {
@@ -532,9 +537,9 @@ sealed class Task extends Request implements Comparable {
         'taskType': taskType
       };
 
-  /// True if this task was created with an Android content URI instead of
-  /// regular `baseDirectory` and `directory`
-  bool get usesAndroidUri => directory.startsWith('content://');
+  /// True if this task uses a Uri to define its download directory or upload
+  /// filename
+  bool get usesUri;
 
   /// If true, task expects progress updates
   bool get providesProgressUpdates =>
@@ -650,13 +655,15 @@ final class DownloadTask extends Task {
   ///
   /// For other platforms:
   /// File URIs follow the file:// scheme and point to a destination on the
-  /// file system. A file:// URI is returned from [pickDirectory] on platfomrs
+  /// file system. A file:// URI is returned from [pickDirectory] on platforms
   /// other than Android.
   /// 
   /// The [directoryUri] will be stored in the [directory] property and should represent
-  /// a directory, not a specific file.
+  /// a directory, not a specific file. It can be obtained using the
+  /// [directoryUri] getter.
   ///
-  /// Note that the result of [Task.filePath] is undefined when using a URI
+  /// Note that the result of [Task.filePath] is undefined when using a URI, as
+  /// not all Uri types can be converted to a file name
   DownloadTask.fromUri(
       {super.taskId,
       required super.url,
@@ -679,8 +686,8 @@ final class DownloadTask extends Task {
       : super(
             baseDirectory: BaseDirectory.root,
             directory: directoryUri.toString()) {
-    assert(directoryUri.scheme == 'content' || directoryUri.scheme == 'file',
-        'Directory URI scheme must be content:// or file://');
+    assert(Task.allowedUriSchemes.contains(directoryUri.scheme),
+        'Directory URI scheme must be one of ${Task.allowedUriSchemes}');
   }
 
   /// Creates [DownloadTask] object from [json]
@@ -790,6 +797,14 @@ final class DownloadTask extends Task {
 
   /// True if this task has a filename, or false if set to `suggest`
   bool get hasFilename => filename != suggestedFilename;
+
+  @override
+  bool get usesUri {
+    return Task.allowedUriSchemes.contains(directoryUri?.scheme);
+  }
+
+  /// Returns the Uri contained in the [directory] field, or null if it does not
+  Uri? get directoryUri => UriUtils.uriFromStringValue(directory);
 }
 
 /// Information related to an upload task
@@ -906,20 +921,23 @@ final class UploadTask extends Task {
             httpRequestMethod: httpRequestMethod ?? 'POST',
             allowPause: false);
 
-  /// Creates [UploadTask] from an Android 'content' URI, for binary upload
+  /// Creates [UploadTask] from a URI
   ///
-  /// The [uri] must be a 'content://' scheme and will be stored in the
-  /// [directory] property. The task's [filename] will be set to the last
-  /// path segment of the [uri].
-  ///
-  /// Note that the result of [Task.filePath] is undefined when using a URI
-  UploadTask.fromAndroidUri(
+  /// The [uri] will be stored in the [filename] property and can be obtained
+  /// using [fileUri] (do not access the [filename] property directly).
+  /// If a [filename] argument is supplied in this constructor,
+  /// it will be used, otherwise the filename will be derived from the URL
+  UploadTask.fromUri(
       {required Uri uri,
       super.taskId,
       required super.url,
       super.urlQueryParameters,
+      String? filename,
       super.headers,
+      String? httpRequestMethod,
+      String? super.post,
       String? mimeType,
+      Map<String, String>? fields,
       super.group,
       super.updates,
       super.requiresWiFi,
@@ -929,16 +947,17 @@ final class UploadTask extends Task {
       super.displayName,
       super.creationTime})
       : mimeType = mimeType ?? 'application/octet-stream',
-        fields = {},
+        fields = fields ?? {},
         fileField = '',
         super(
             baseDirectory: BaseDirectory.root,
-            directory: uri.toString(),
-            filename: uri.pathSegments.last,
-            httpRequestMethod: 'POST',
-            post: 'binary',
+            filename: filename != null
+                ? UriUtils.pack(filename, uri)
+                : uri.toString(),
+            httpRequestMethod: httpRequestMethod ?? 'POST',
             allowPause: false) {
-    assert(uri.scheme == 'content', 'Android URI scheme must be "content"');
+    assert(Task.allowedUriSchemes.contains(uri.scheme),
+        'URI scheme must be one of ${Task.allowedUriSchemes}');
   }
 
   /// Creates [UploadTask] object from [json]
@@ -1043,6 +1062,22 @@ final class UploadTask extends Task {
   @override
   String toString() => '${super.toString()} and fileField $fileField, '
       'mimeType $mimeType and fields $fields';
+
+  @override
+  bool get usesUri {
+    return Task.allowedUriSchemes.contains(fileUri?.scheme);
+  }
+
+  /// Returns the Uri contained in the [filename] field, or null if it does not
+  Uri? get fileUri => UriUtils.uriFromStringValue(filename);
+
+  /// Returns the filename set during construction of the task, or that
+  /// was set by the uploader based on the provided URI, or null if
+  /// no filename was set
+  String? get uploadFilename {
+    final (filename: storedFilename, :uri) = UriUtils.unpack(filename);
+    return (UriUtils.containsUri(storedFilename)) ? null : storedFilename;
+  }
 }
 
 /// Information related to an UploadTask, containing multiple files to upload
@@ -1476,4 +1511,7 @@ final class DataTask extends Task {
 
   @override
   String get taskType => 'DataTask';
+
+  @override
+  bool get usesUri => false;
 }

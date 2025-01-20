@@ -1763,8 +1763,7 @@ void main() {
       print('Finished enqueue binary file');
     });
 
-    testWidgets('enqueue binary file using Android URI', (widgetTester) async {
-      if (Platform.isAndroid) {
+    testWidgets('enqueue binary file using URI', (widgetTester) async {
         FileDownloader().registerCallbacks(
             taskStatusCallback: statusCallback,
             taskProgressCallback: progressCallback);
@@ -1775,20 +1774,19 @@ void main() {
             await dummy.filePath(), SharedStorage.downloads,
             asAndroidUri: true);
         print('URI: $uriString');
-        final task = UploadTask.fromAndroidUri(
-            url: uploadBinaryTestUrl, uri: Uri.parse(uriString!));
+        final task = UploadTask.fromUri(
+            url: uploadBinaryTestUrl, uri: Uri.parse(uriString!), post: 'binary');
         expect(await FileDownloader().enqueue(task), isTrue);
         await statusCallbackCompleter.future;
         expect(statusCallbackCounter, equals(3));
         expect(lastStatus, equals(TaskStatus.complete));
         print('Finished enqueue binary file using Android URI');
-      }
     });
 
     testWidgets('enqueue binary file using incorrect Android URI',
         (widgetTester) async {
       if (Platform.isAndroid) {
-        final task = UploadTask.fromAndroidUri(
+        final task = UploadTask.fromUri(
             url: uploadBinaryTestUrl,
             uri: Uri.parse('content://some/invalid/path'));
         final result = await FileDownloader().upload(task);
