@@ -575,9 +575,12 @@ interface class FileDownloader {
   ///
   /// This function retrieves all tasks from the database that are in enqueued
   /// or running states and compares these tasks with the
-  /// list of tasks currently present in the native task queue.
+  /// list of tasks currently present in the native task queue, and all tasks
+  /// that are in waitingToRetry state that are not actually waiting to retry
+  /// in the downloader
   ///
-  /// For each task found only in the database, the function:
+  /// For each task found only in the database (or waitingToRetry yet not
+  /// actually waiting), the function:
   /// 1. Deletes the corresponding record from the database.
   /// 2. Enqueues the task back into the native task queue.
   ///
@@ -592,7 +595,10 @@ interface class FileDownloader {
         _downloader.isTrackingTasks,
         'rescheduleKilledTasks should only be called if you are tracking tasks. '
         'Did you call trackTasks or trackTasksInGroup?');
-    final databaseTasks = (await database.allRecords())
+    final missingTasks = <Task>{};
+    final databaseTasks = await database.allRecords();
+    // find missing enqueued/running tasks
+    final enqueuedOrRunningDatabaseTasks = databaseTasks
         .where((record) => const [
               TaskStatus.enqueued,
               TaskStatus.running,
@@ -600,7 +606,13 @@ interface class FileDownloader {
         .map((record) => record.task)
         .toSet();
     final nativeTasks = Set<Task>.from(await FileDownloader().allTasks());
-    final missingTasks = databaseTasks.difference(nativeTasks);
+    missingTasks.addAll(enqueuedOrRunningDatabaseTasks.difference(nativeTasks));
+    // find missing tasks waiting to retry
+    missingTasks.addAll(databaseTasks
+        .where((record) =>
+            record.status == TaskStatus.waitingToRetry &&
+            !_downloader.tasksWaitingToRetry.contains(record.task))
+        .map((record) => record.task));
     final successfullyEnqueued = <Task>[];
     final failedToEnqueue = <Task>[];
     for (final task in missingTasks) {
