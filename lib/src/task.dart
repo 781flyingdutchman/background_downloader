@@ -364,7 +364,11 @@ sealed class Task extends Request implements Comparable {
   ///
   /// Throws a FileSystemException if using external storage on Android (via
   /// configuration at startup), and external storage is not available.
+  ///
+  /// Should not be called when teh task uses a URI scheme to specify the
+  /// file location
   Future<String> filePath({String? withFilename}) async {
+    assert(!usesUri, 'Cannot call filePath when using a URI scheme');
     if (this is MultiUploadTask && withFilename == null) {
       return '';
     }

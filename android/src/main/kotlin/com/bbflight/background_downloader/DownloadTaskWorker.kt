@@ -6,6 +6,8 @@ import android.os.Build
 import android.os.storage.StorageManager
 import android.provider.DocumentsContract
 import android.util.Log
+import androidx.core.net.toFile
+import androidx.documentfile.provider.DocumentFile
 import androidx.preference.PreferenceManager
 import androidx.work.WorkerParameters
 import com.bbflight.background_downloader.UriUtils.unpack
@@ -177,36 +179,51 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
             val outputStream = if (tempFile != null) {
                 FileOutputStream(tempFile, isResume)
             } else {
-                val resolver = applicationContext.contentResolver
-                val (filename, _) = unpack(task.filename)
-                // create destination Uri if not already exists
-                destUri ?: DocumentsContract.createDocument(
-                    resolver,
-                    directoryUri!!,
-                    task.mimeType,
-                    filename ?: "unknown"
-                )
-                if (destUri == null) {
-                    val message =
-                        "Failed to create document within directory with URI: $directoryUri"
-                    Log.e(TAG, message)
-                    taskException = TaskException(
-                        ExceptionType.fileSystem,
-                        description = message
-                    )
-                    return TaskStatus.failed
+                // no tempFile, because we have a Uri
+                uriFilename = uriFilename ?: "unknown"
+                if (directoryUri!!.scheme == "file") {
+                    // fileUri is converted to a File, then to a FileOutputStream
+                    if (destUri == null) {
+                        // need to create file at directory
+                        val dirObject = directoryUri.toFile()
+                        val destFile = File(dirObject, uriFilename)
+                        destUri = Uri.fromFile(destFile)
+                        // Store destination Uri in task
+                        task = task.copyWith(filename = UriUtils.pack(uriFilename, destUri))
+                        FileOutputStream(destFile) // return outputStream
+                    } else {
+                        // use destination Uri that was set in previous attempt
+                        FileOutputStream(destUri.toFile())
+                    }
+                } else {
+                    // other URL scheme will be attempted to resolve using content resolver
+                    val resolver = applicationContext.contentResolver
+                    // create destination Uri if not already exists
+                    Log.wtf(TAG, "directoryUri = $directoryUri")
+                    var documentFile = DocumentFile.fromTreeUri(applicationContext, directoryUri)
+                    destUri = destUri ?: documentFile?.createFile(task.mimeType, uriFilename)?.uri;
+                    if (destUri == null) {
+                        val message =
+                            "Failed to create document within directory with URI: $directoryUri"
+                        Log.e(TAG, message)
+                        taskException = TaskException(
+                            ExceptionType.fileSystem,
+                            description = message
+                        )
+                        return TaskStatus.failed
+                    }
+                    task = task.copyWith(filename = UriUtils.pack(uriFilename, destUri))
+                    val os = resolver.openOutputStream(destUri)
+                    if (os == null) {
+                        val message = "Failed to open output stream for URI: $destUri"
+                        Log.e(TAG, message)
+                        taskException = TaskException(
+                            ExceptionType.fileSystem,
+                            description = message
+                        )
+                        return TaskStatus.failed
+                    } else os
                 }
-                task = task.copyWith(filename = UriUtils.pack(filename ?: "unknown", destUri))
-                val os = resolver.openOutputStream(destUri)
-                if (os == null) {
-                    val message = "Failed to open output stream for URI: $destUri"
-                    Log.e(TAG, message)
-                    taskException = TaskException(
-                        ExceptionType.fileSystem,
-                        description = message
-                    )
-                    return TaskStatus.failed
-                } else os
             }
             BDPlugin.remainingBytesToDownload[task.taskId] = contentLength
             determineRunInForeground(task, contentLength) // sets 'runInForeground'
@@ -217,6 +234,8 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
                     inputStream, outputStream, contentLength, task
                 )
             }
+            outputStream.flush()
+            outputStream.close()
             // act on the result of the bytes transfer
             when (transferBytesResult) {
                 TaskStatus.complete -> {
@@ -422,7 +441,8 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
         }
         val contentRanges = connection.headerFields["Content-Range"]
         if (contentRanges == null || contentRanges.size > 1) {
-            Log.i(TAG, "Could not process partial response Content-Range")
+            Log.i(TAG, "Could not " +
+                    "process partial response Content-Range")
             return false
         }
         val range = contentRanges.first()
