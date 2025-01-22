@@ -6,6 +6,7 @@ library;
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:logging/logging.dart';
 
 import 'base_downloader.dart';
 import 'models.dart';
@@ -18,6 +19,7 @@ import 'native_downloader.dart';
 /// Use the [withDownloader] factory constructor to get the appropriate subclass
 /// for the platform you're on
 sealed class UriUtils {
+  final log = Logger('UriUtils');
   final BaseDownloader _downloader;
 
   UriUtils(BaseDownloader downloader) : _downloader = downloader;
@@ -45,6 +47,8 @@ sealed class UriUtils {
       {bool persistedUriPermission = false});
 
   Future<Uint8List?> getFileBytes(Uri uri);
+
+  Future<bool> deleteFile(Uri uri);
 
   /// Packs [filename] and [uri] into a single String
   ///
@@ -133,6 +137,12 @@ final class DesktopUriUtils extends UriUtils {
     //TODO: Implement this for desktop
     throw UnimplementedError('Not done yet');
   }
+
+  @override
+  Future<bool> deleteFile(Uri uri) {
+    // TODO: implement deleteFile
+    throw UnimplementedError();
+  }
 }
 
 final class NativeUriUtils extends UriUtils {
@@ -208,6 +218,17 @@ final class NativeUriUtils extends UriUtils {
     } catch (e) {
       print('Error reading file: $e');
       return null;
+    }
+  }
+
+  @override
+  Future<bool> deleteFile(Uri uri) async {
+    try {
+      await _methodChannel.invokeMethod('deleteFile', uri.toString());
+      return true;
+    } catch (e) {
+      log.fine('Error deleting file at URI $uri: $e');
+      return false;
     }
   }
 }

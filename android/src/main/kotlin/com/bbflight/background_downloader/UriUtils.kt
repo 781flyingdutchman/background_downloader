@@ -179,8 +179,9 @@ class UriUtilsMethodCallHelper(private val plugin: BDPlugin) : MethodCallHandler
                     )
                     return
                 }
-
+                Log.wtf(TAG, "parent dir URIstring: $parentDirectoryUriString")
                 val parentDirectoryUri = Uri.parse(parentDirectoryUriString)
+                Log.wtf(TAG, "parent dir URI: $parentDirectoryUri")
 
                 DirectoryCreator.createDirectory(
                     activity,
@@ -203,6 +204,34 @@ class UriUtilsMethodCallHelper(private val plugin: BDPlugin) : MethodCallHandler
                 } else {
                     result.error("GET_FILE_FAILED", "Failed to get file", null)
                 }
+            }
+
+            "deleteFile" -> {
+                val uriString = call.arguments as? String
+                if (uriString == null) {
+                    result.error("INVALID_ARGUMENTS", "URI string is required", null)
+                    return
+                }
+                val uri = Uri.parse(uriString)
+                if (uri.scheme == "content") {
+                    val docFile = DocumentFile.fromSingleUri(activity, Uri.parse(uriString))
+                    if (docFile != null && docFile.delete()) {
+                        result.success(null)
+                    } else {
+                        result.error("DELETE_FILE_FAILED", "Failed to delete file", null)
+                    }
+                    return
+                }
+                if (uri.scheme == "file") {
+                    val file = File(uri.path!!)
+                    if (file.delete()) {
+                        result.success(null)
+                    } else {
+                        result.error("DELETE_FILE_FAILED", "Failed to delete file", null)
+                    }
+                    return
+                }
+                result.error("DELETE_FILE_FAILED", "Invalid URI: $uri", null)
             }
 
             else -> result.notImplemented()
@@ -366,8 +395,7 @@ object FilePicker {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             putExtra(Intent.EXTRA_ALLOW_MULTIPLE, multipleAllowed)
-            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
             if (persistedUriPermission) {
                 flags = flags or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
             }
@@ -513,7 +541,9 @@ object DirectoryCreator {
             val directoryPathParts = sanitizedDirectoryName.split(File.separatorChar)
 
             for (directoryName in directoryPathParts) {
+                Log.wtf(TAG, "direName=$directoryName, currentDir=$currentDir")
                 var newDir = currentDir.findFile(directoryName)
+                Log.wtf(TAG, "newDir=$newDir")
 
                 if (newDir == null || !newDir.exists()) {
                     newDir = currentDir.createDirectory(directoryName)
@@ -525,6 +555,7 @@ object DirectoryCreator {
                     )
                     return
                 }
+                Log.wtf(TAG, "newDir after createDirectory=$newDir")
                 if (newDir == null) {
                     result.error(
                         "CREATE_FAILED",
@@ -542,6 +573,7 @@ object DirectoryCreator {
                     )
                 }
             }
+            Log.wtf(TAG, "currentDir after loop=$currentDir and uri=${currentDir.uri}")
 
             // Return the URI of the final directory
             result.success(currentDir.uri.toString())

@@ -36,11 +36,14 @@ void main() {
         'pickDirectory with null startLocation, then new directory and pick again',
         (WidgetTester tester) async {
       final pickedDirUri = await uriUtils.pickDirectory();
+      print(pickedDirUri);
       final newDirUri = await uriUtils.createDirectory(pickedDirUri!, 'NewDir');
       expect(newDirUri, isNotNull);
       expect(newDirUri.toString(), contains('NewDir'));
+      print(newDirUri);
       final pick2DirUri =
           await uriUtils.pickDirectory(startLocationUri: newDirUri);
+      print(pick2DirUri);
       expect(pick2DirUri, isNotNull);
       expect(pick2DirUri.toString(), contains('NewDir'));
     });

@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
+import androidx.core.net.toFile
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -103,16 +104,32 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
         val (fileSize, inputStream) = withContext(Dispatchers.IO) { // Use Dispatchers.IO for file operations
             if (fileUri != null) {
                 try {
-                    val contentResolver = applicationContext.contentResolver
+                    if (fileUri.scheme != "file") {
+                        // a content:// URI scheme is resolved via the contentResolver
+                        val contentResolver = applicationContext.contentResolver
+                        // Get file size from URI
+                        val fileSize =
+                            contentResolver.query(fileUri, null, null, null, null)?.use { cursor ->
+                                val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+                                cursor.moveToFirst()
+                                if (sizeIndex != -1) cursor.getLong(sizeIndex) else null
+                            } ?: run {
+                                val message =
+                                    "Could not open file or determine file size for URI: $fileUri"
+                                Log.w(TAG, message)
+                                taskException = TaskException(
+                                    ExceptionType.fileSystem,
+                                    description = message
+                                )
+                                return@withContext Pair(
+                                    null,
+                                    null
+                                ) // Return nulls to indicate failure
+                            }
 
-                    // Get file size from URI
-                    val fileSize =
-                        contentResolver.query(fileUri, null, null, null, null)?.use { cursor ->
-                            val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
-                            cursor.moveToFirst()
-                            if (sizeIndex != -1) cursor.getLong(sizeIndex) else null
-                        } ?: run {
-                            val message = "Could not open file or determine file size for URI: $fileUri"
+                        // Get InputStream from URI
+                        val inputStream = contentResolver.openInputStream(fileUri) ?: run {
+                            val message = "Could not open input stream for URI: $fileUri"
                             Log.w(TAG, message)
                             taskException = TaskException(
                                 ExceptionType.fileSystem,
@@ -120,21 +137,15 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                             )
                             return@withContext Pair(null, null) // Return nulls to indicate failure
                         }
-
-                    // Get InputStream from URI
-                    val inputStream = contentResolver.openInputStream(fileUri) ?: run {
-                        val message = "Could not open input stream for URI: $fileUri"
-                        Log.w(TAG, message)
-                        taskException = TaskException(
-                            ExceptionType.fileSystem,
-                            description = message
-                        )
-                        return@withContext Pair(null, null) // Return nulls to indicate failure
+                        Log.i(TAG, "Using InputStream from URI $fileUri")
+                        Pair(fileSize, inputStream)
+                    } else {
+                        // a file:// Uri scheme is interpreted as a regular file path
+                        val file = fileUri.toFile()
+                        val fileSize = file.length()
+                        Log.i(TAG, "Using FileInputStream from URI $fileUri")
+                        Pair(fileSize, FileInputStream(file))
                     }
-
-                    Log.i(TAG, "Using InputStream from URI $fileUri")
-                    Pair(fileSize, inputStream)
-
                 } catch (e: Exception) {
                     val message = "Error processing URI: ${task.directory}"
                     Log.w(TAG, message, e)
