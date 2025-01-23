@@ -31,11 +31,31 @@ sealed class UriUtils {
         _ => DesktopUriUtils(downloader)
       };
 
+  /// Opens a directory picker dialog and returns the selected directory's URI.
+  ///
+  /// [startLocation] (optional) specifies a [SharedStorage] location to open the picker at.
+  /// [startLocationUri] (optional) specifies a URI to open the picker at.
+  /// Only one of [startLocation] or [startLocationUri] should be provided.
+  /// [persistedUriPermission] (optional, defaults to `false`) indicates whether to take persisted URI permission
+  /// for the selected directory, if the platform supports it.
+  ///
+  /// Returns the selected directory's URI, or `null` if the user canceled the operation.
   Future<Uri?> pickDirectory(
       {SharedStorage? startLocation,
       Uri? startLocationUri,
       bool persistedUriPermission = false});
 
+  /// Opens a file picker dialog and returns a list of the selected files' URIs.
+  ///
+  /// [startLocation] (optional) specifies a [SharedStorage] location to open the picker at.
+  /// [startLocationUri] (optional) specifies a URI to open the picker at.
+  /// Only one of [startLocation] or [startLocationUri] should be provided.
+  /// [allowedExtensions] (optional) specifies a list of file extensions to filter the picker by.
+  /// [multipleAllowed] (optional, defaults to `false`) indicates whether to allow multiple file selection.
+  /// [persistedUriPermission] (optional, defaults to `false`) indicates whether to take persisted URI permission
+  /// for the selected files, if the platform supports it.
+  ///
+  /// Returns a list of the selected files' URIs, or `null` if the user canceled the operation.
   Future<List<Uri>?> pickFiles(
       {SharedStorage? startLocation,
       Uri? startLocationUri,
@@ -43,11 +63,29 @@ sealed class UriUtils {
       bool multipleAllowed = false,
       bool persistedUriPermission = false});
 
+  /// Creates a new directory with the given name within the specified parent directory.
+  ///
+  /// [parentDirectoryUri] is the URI of the parent directory.
+  /// [newDirectoryName] is the name of the new directory to create.
+  /// [persistedUriPermission] (optional, defaults to `false`) indicates whether to take persisted URI permission
+  /// for the created directory, if the platform supports it.
+  ///
+  /// Returns the URI of the newly created directory.
   Future<Uri> createDirectory(Uri parentDirectoryUri, String newDirectoryName,
       {bool persistedUriPermission = false});
 
+  /// Retrieves the file data (bytes) for a given URI.
+  ///
+  /// [uri] is the URI of the file.
+  ///
+  /// Returns a [Uint8List] containing the file data, or `null` if an error occurred.
   Future<Uint8List?> getFileBytes(Uri uri);
 
+  /// Deletes the file at the given URI.
+  ///
+  /// [uri] is the URI of the file to delete.
+  ///
+  /// Returns `true` if the file was deleted successfully, `false` otherwise.
   Future<bool> deleteFile(Uri uri);
 
   /// Packs [filename] and [uri] into a single String

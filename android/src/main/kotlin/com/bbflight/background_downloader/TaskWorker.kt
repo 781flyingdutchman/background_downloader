@@ -585,11 +585,14 @@ open class TaskWorker(
     }
 
     /**
-     * Transfer [contentLength] bytes from [inputStream] to [outputStream] and provide
+     * Transfer all bytes from [inputStream] to [outputStream] and provide
      * progress updates for the [task]
      *
      * Will return [TaskStatus.canceled], [TaskStatus.paused], [TaskStatus.failed],
      * [TaskStatus.complete], or special [TaskStatus.enqueued] which signals the task timed out
+     *
+     * [contentLength] is used to calculate progress. If [contentLength] is 0, no progress updates
+     * will be provided
      */
     suspend fun transferBytes(
         inputStream: InputStream, outputStream: OutputStream, contentLength: Long, task: Task

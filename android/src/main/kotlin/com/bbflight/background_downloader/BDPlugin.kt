@@ -15,7 +15,6 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
-import com.bbflight.background_downloader.BDPlugin.Companion.backgroundChannel
 import com.bbflight.background_downloader.TaskWorker.Companion.processStatusUpdate
 import com.bbflight.background_downloader.TaskWorker.Companion.taskToJsonString
 import io.flutter.embedding.engine.FlutterEngine

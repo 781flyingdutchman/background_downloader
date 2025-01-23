@@ -108,7 +108,7 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
                 if (usesUri) {
                     uriFilename = suggestFilename(connection.headerFields, task.url)
                     if (uriFilename.isEmpty()) {
-                        uriFilename = "File ${Random.nextInt().absoluteValue}"
+                        uriFilename = "${Random.nextInt().absoluteValue}"
                     }
                     task = task.copyWith(
                         filename = if (destUri == null) uriFilename else UriUtils.pack(

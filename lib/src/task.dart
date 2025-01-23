@@ -1092,18 +1092,19 @@ final class UploadTask extends Task {
 /// only - all other fields are ignored in that test
 ///
 /// A [MultiUploadTask] is initialized with a list representing the files to upload.
-/// Each element is either a filename/path, or a (fileField, filename/path),
-/// or a (fileField, filename/path, mimeType).
+/// Each element is either a filename/path/Uri, or a (fileField, filename/path/Uri),
+/// or a (fileField, filename/path/Uri, mimeType).
 /// When instantiating a [MultiUploadTask], this list is converted into
 /// three lists: [fileFields], [filenames], and [mimeTypes], available
 /// as fields. These lists are also encoded to a JSON string representation in
 /// the fields [fileField], [filename] and [mimeType],so - different from
 /// a single [UploadTask] - these fields now contain a JSON object representing all
 /// files.
-/// filename/path means either a filename without directory (and the
+/// filename/path/Uri means either a filename without directory (and the
 /// directory will be based on the [Task.baseDirectory] and [Task.directory]
-/// fields), or you specify a full file path. For example: "hello.txt" or
-/// "/data/com.myapp/data/dir/hello.txt"
+/// fields), or you specify a full file path or a Uri (which will be converted
+/// to a Uri string). For example: "hello.txt" or
+/// "/data/com.myapp/data/dir/hello.txt" or "content://some/path/to/file.txt"
 final class MultiUploadTask extends UploadTask {
   final List<String> fileFields, filenames, mimeTypes;
 
@@ -1117,12 +1118,17 @@ final class MultiUploadTask extends UploadTask {
   /// [url] properly encoded if necessary, can include query parameters
   /// [urlQueryParameters] may be added and will be appended to the [url], must
   ///   be properly encoded if necessary
-  /// [files] list of objects representing each file to upload. The object must
+  /// [files] list of objects representing each file to upload. If not using Uri,
+  ///   The object must
   ///   be either a String representing the filename/path (and the fileField will
   ///   be the filename without extension), a Record of type
   ///   (String fileField, String filename/path) or a Record with a third String
   ///   for the mimeType (if omitted, mimeType will be derived from the filename
   ///   extension).
+  ///   If using Uri, the object must be a Uri (and the fileField will be
+  ///   "file1", "file2" etc), or a Record with fileField and Uri, and the
+  ///   mimeType will be attempted to be derived from the Uri, or
+  ///   a Record with fileField, Uri and mimetype
   ///   Each file must be based in the directory represented by the combination
   ///   of [baseDirectory] and [directory], unless a full filepath is given
   ///   instead of only the filename. For example: "hello.txt" or
@@ -1166,25 +1172,37 @@ final class MultiUploadTask extends UploadTask {
       : fileFields = files
             .map((e) => switch (e) {
                   String filename => p.basenameWithoutExtension(filename),
-                  (String fileField, String _, String _) => fileField,
-                  (String fileField, String _) => fileField,
+                  (String fileField, String _) ||
+                  (String fileField, String _, String _) ||
+                  (String fileField, Uri _) ||
+                  (String fileField, Uri _, String _) =>
+                    fileField,
+                  Uri _ => 'file${files.indexOf(e) + 1}',
                   _ => throw ArgumentError(_filesArgumentError)
                 })
             .toList(growable: false),
         filenames = files
             .map((e) => switch (e) {
-                  String filename => filename,
-                  (String _, String filename, String _) => filename,
-                  (String _, String filename) => filename,
+                  String filename ||
+                  (String _, String filename) ||
+                  (String _, String filename, String _) =>
+                    filename,
+                  Uri uri ||
+                  (String _, Uri uri) ||
+                  (String _, Uri uri, String _) =>
+                    uri.toString(),
                   _ => throw ArgumentError(_filesArgumentError)
                 })
             .toList(growable: false),
         mimeTypes = files
             .map((e) => switch (e) {
-                  (String _, String _, String mimeType) => mimeType,
                   String filename ||
                   (String _, String filename) =>
                     lookupMimeType(filename) ?? 'application/octet-stream',
+                  (String _, String _, String mimeType) ||
+                  (String _, Uri _, String mimeType) =>
+                    mimeType,
+                  Uri _ || (String _, Uri _) => '',
                   _ => throw ArgumentError(_filesArgumentError)
                 })
             .toList(growable: false),

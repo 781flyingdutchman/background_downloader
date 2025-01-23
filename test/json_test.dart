@@ -72,7 +72,7 @@ void main() {
       expect(jsonEncode(task3.toJson()), equals(uploadTaskJsonString));
     });
 
-    test('MultiUploadTask', () async {
+    test('MultiUploadTask using file or filePath', () async {
       // try with list of Strings
       var muTask = MultiUploadTask(
           taskId: 'task1',
@@ -125,6 +125,81 @@ void main() {
       expect(muTask.filename, equals('["f1.txt","f2"]'));
       expect(
           muTask.mimeType, equals('["text/plain","application/octet-stream"]'));
+      muTask2 = MultiUploadTask.fromJson(muTask.toJson());
+      expect(muTask2.taskId, equals(muTask.taskId));
+      expect(muTask2.fileFields, equals(muTask.fileFields));
+      expect(muTask2.filenames, equals(muTask.filenames));
+      expect(muTask2.mimeTypes, equals(muTask.mimeTypes));
+      expect(muTask2.fileField, equals(muTask.fileField));
+      expect(muTask2.filename, equals(muTask.filename));
+      expect(muTask2.mimeType, equals(muTask.mimeType));
+      // check taskType
+      expect(muTask.toJson()['taskType'], equals('MultiUploadTask'));
+    });
+
+    test('MultiUploadTask using Uri', () async {
+      final uri = Uri.file('/f1.txt');
+      expect(uri.path, equals('/f1.txt'));
+      expect(uri.scheme, equals('file'));
+      expect(uri.toString(), equals('file:///f1.txt'));
+      // try with list of Uris
+      var muTask = MultiUploadTask(
+          taskId: 'task1',
+          url: urlWithContentLength,
+          files: [Uri.file('/f1.txt'), Uri.file('/f2.txt')]);
+      expect(muTask.fileFields, equals(['file1', 'file2']));
+      expect(muTask.filenames, equals(['file:///f1.txt', 'file:///f2.txt']));
+      expect(muTask.mimeTypes, equals(['', '']));
+      expect(muTask.fileField, equals('["file1","file2"]')); // json string
+      expect(muTask.filename,
+          equals('["file:///f1.txt","file:///f2.txt"]')); // json string
+      expect(muTask.mimeType, equals('["",""]')); // json string
+      var muTask2 = MultiUploadTask.fromJson(muTask.toJson());
+      expect(muTask2.taskId, equals(muTask.taskId));
+      expect(muTask2.fileFields, equals(muTask.fileFields));
+      expect(muTask2.filenames, equals(muTask.filenames));
+      expect(muTask2.mimeTypes, equals(muTask.mimeTypes));
+      expect(muTask2.fileField, equals(muTask.fileField));
+      expect(muTask2.filename, equals(muTask.filename));
+      expect(muTask2.mimeType, equals(muTask.mimeType));
+      // try with list of (String, Uri)
+      muTask = MultiUploadTask(
+          taskId: 'task2',
+          url: urlWithContentLength,
+          files: [
+            ('file1', Uri.file('/f1.txt')),
+            ('file2', Uri.file('/f2.txt'))
+          ]);
+      expect(muTask.fileFields, equals(['file1', 'file2']));
+      expect(muTask.filenames, equals(['file:///f1.txt', 'file:///f2.txt']));
+      expect(muTask.mimeTypes, equals(['', '']));
+      expect(muTask.fileField, equals('["file1","file2"]'));
+      expect(muTask.filename,
+          equals('["file:///f1.txt","file:///f2.txt"]')); // json string
+      expect(muTask.mimeType, equals('["",""]')); // json string
+      muTask2 = MultiUploadTask.fromJson(muTask.toJson());
+      expect(muTask2.taskId, equals(muTask.taskId));
+      expect(muTask2.fileFields, equals(muTask.fileFields));
+      expect(muTask2.filenames, equals(muTask.filenames));
+      expect(muTask2.mimeTypes, equals(muTask.mimeTypes));
+      expect(muTask2.fileField, equals(muTask.fileField));
+      expect(muTask2.filename, equals(muTask.filename));
+      expect(muTask2.mimeType, equals(muTask.mimeType));
+      //try with list of (String, Uri, String)
+      muTask = MultiUploadTask(
+          taskId: 'task3',
+          url: urlWithContentLength,
+          files: [
+            ('file1', Uri.file('/f1.txt'), 'text/plain'),
+            ('file2', Uri.file('/f2'))
+          ]);
+      expect(muTask.fileFields, equals(['file1', 'file2']));
+      expect(muTask.filenames, equals(['file:///f1.txt', 'file:///f2']));
+      expect(muTask.mimeTypes, equals(['text/plain', '']));
+      expect(muTask.fileField, equals('["file1","file2"]'));
+      expect(muTask.filename,
+          equals('["file:///f1.txt","file:///f2"]')); // json string
+      expect(muTask.mimeType, equals('["text/plain",""]'));
       muTask2 = MultiUploadTask.fromJson(muTask.toJson());
       expect(muTask2.taskId, equals(muTask.taskId));
       expect(muTask2.fileFields, equals(muTask.fileFields));

@@ -3,6 +3,7 @@
 package com.bbflight.background_downloader
 
 import android.content.Context
+import android.net.Uri
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -289,13 +290,14 @@ class Task(
 
     /**
      * Returns a list of fileData elements, one for each file to upload.
-     * Each element is a triple containing fileField, full filePath, mimeType
+     * Each element is a triple containing fileField, full filePath or Uri, mimeType
      *
      * The lists are stored in the similarly named String fields as a JSON list,
      * with each list the same length. For the filenames list, if a filename refers
      * to a file that exists (i.e. it is a full path) then that is the filePath used,
      * otherwise the filename is appended to the [Task.baseDirectory] and [Task.directory]
-     * to form a full file path
+     * to form a full file path. If instead the filePath is given as a Uri string, then
+     * that string is used
      */
     fun extractFilesData(context: Context): List<Triple<String, String, String>> {
         val fileFields = Json.decodeFromString<List<String>>(fileField)
@@ -303,16 +305,24 @@ class Task(
         val mimeTypes = Json.decodeFromString<List<String>>(mimeType)
         val result = ArrayList<Triple<String, String, String>>()
         for (i in fileFields.indices) {
-            if (File(filenames[i]).exists()) {
-                result.add(Triple(fileFields[i], filenames[i], mimeTypes[i]))
+            val filenameOrPathOrUriString = filenames[i]
+            val maybeUri = Uri.parse(filenameOrPathOrUriString)
+            if (maybeUri.scheme == "content" || maybeUri.scheme == "file") {
+                // for Uri, keep the Uri string
+                result.add(Triple(fileFields[i], filenameOrPathOrUriString, mimeTypes[i]))
             } else {
-                result.add(
-                    Triple(
-                        fileFields[i],
-                        filePath(context, withFilename = filenames[i]),
-                        mimeTypes[i]
+                // For filePath, check if full path or construct it
+                if (File(filenameOrPathOrUriString).exists()) {
+                    result.add(Triple(fileFields[i], filenameOrPathOrUriString, mimeTypes[i]))
+                } else {
+                    result.add(
+                        Triple(
+                            fileFields[i],
+                            filePath(context, withFilename = filenameOrPathOrUriString),
+                            mimeTypes[i]
+                        )
                     )
-                )
+                }
             }
         }
         return result
