@@ -15,7 +15,7 @@ void main() {
 
     setUp(() async {
       documentsDir = await getApplicationDocumentsDirectory();
-      uriUtils = FileDownloader().uriUtils;
+      uriUtils = FileDownloader().uri;
     });
 
     tearDown(() async {

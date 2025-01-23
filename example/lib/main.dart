@@ -426,7 +426,7 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> processPickDirectory() async {
-    final uri = await FileDownloader().uriUtils.pickDirectory();
+    final uri = await FileDownloader().uri.pickDirectory();
     if (uri == null) {
       log.warning('Could not get a URI');
       return;

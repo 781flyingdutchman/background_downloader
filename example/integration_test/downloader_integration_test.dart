@@ -1660,8 +1660,8 @@ void main() {
       };
       final result =
           await FileDownloader().upload(uploadTask.copyWith(fields: fields));
-      final jsonString = result.responseBody!.replaceAll(r'\r\n', '');
       expect(result.status, equals(TaskStatus.complete));
+      final jsonString = result.responseBody!.replaceAll(r'\r\n', '');
       expect(jsonDecode(jsonString), equals(fields));
     });
 

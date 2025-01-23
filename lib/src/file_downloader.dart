@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
@@ -46,10 +47,10 @@ interface class FileDownloader {
   /// Platform-specific implementation of the downloader itself
   late final BaseDownloader _downloader;
 
-  /// Utilities for working with URIs. URIs make working with file pickers and
+  /// Accesses utilities for working with URIs. URIs make working with file pickers and
   /// shared storage easier, as they abstract permissions and are coherent
   /// across platforms.
-  late final UriUtils uriUtils;
+  late final UriUtils uri;
 
   /// Do not use: for testing only
   @visibleForTesting
@@ -68,7 +69,7 @@ interface class FileDownloader {
   FileDownloader._internal(PersistentStorage persistentStorage) {
     database = Database(persistentStorage);
     _downloader = BaseDownloader.instance(persistentStorage, database);
-    uriUtils = UriUtils.withDownloader(_downloader);
+    uri = UriUtils.withDownloader(_downloader);
   }
 
   /// True when initialization is complete and downloader ready for use
