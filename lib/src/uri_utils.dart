@@ -88,6 +88,11 @@ sealed class UriUtils {
   /// Returns `true` if the file was deleted successfully, `false` otherwise.
   Future<bool> deleteFile(Uri uri);
 
+  /// Opens the file at [uri] with the given [mimeType].
+  ///
+  /// Returns true if successful, false otherwise.
+  Future<bool> openFile(Uri uri, {String mimeType});
+
   /// Packs [filename] and [uri] into a single String
   ///
   /// use [unpack] to retrieve the filename and uri from the packed String
@@ -182,6 +187,12 @@ final class DesktopUriUtils extends UriUtils {
     // TODO: implement deleteFile
     throw UnimplementedError();
   }
+
+  @override
+  Future<bool> openFile(Uri uri, {String? mimeType}) {
+    // TODO: implement openFile
+    throw UnimplementedError();
+  }
 }
 
 final class NativeUriUtils extends UriUtils {
@@ -267,6 +278,17 @@ final class NativeUriUtils extends UriUtils {
       return true;
     } catch (e) {
       log.fine('Error deleting file at URI $uri: $e');
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> openFile(Uri uri, {String? mimeType}) async {
+    try {
+      await _methodChannel.invokeMethod('openFile', [uri.toString(), mimeType]);
+      return true;
+    } catch (e) {
+      log.fine('Error opening file at URI $uri: $e');
       return false;
     }
   }

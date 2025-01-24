@@ -295,4 +295,20 @@ void main() {
       expect(task.fileUri, equals(fileUri.first));
     });
   });
+
+  group('Other utils', () {
+    testWidgets('open file from URI', (widgetTester) async {
+      // move file to shared storage and obtain the URI
+      final dummy = DownloadTask(url: uploadTestUrl, filename: uploadFilename);
+      final uriString = await FileDownloader().moveFileToSharedStorage(
+          await dummy.filePath(), SharedStorage.downloads,
+          asAndroidUri: true);
+      print('URI: $uriString');
+      var uri = Uri.parse(uriString!);
+      final result =
+          await FileDownloader().uri.openFile(uri, mimeType: 'text/plain');
+      expect(result, isTrue);
+      await Future.delayed(const Duration(seconds: 2));
+    });
+  });
 }
