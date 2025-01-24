@@ -2707,7 +2707,7 @@ void main() {
         await FileDownloader().download(task);
         final path = await FileDownloader().moveToSharedStorage(
             task, SharedStorage.downloads,
-            asAndroidUri: true);
+            asUriString: true);
         print('Uri is $path');
         expect(path, isNotNull);
         expect(path?.startsWith('content://'), isTrue);
@@ -2816,7 +2816,7 @@ void main() {
         expect(File(path!).existsSync(), isTrue);
         final uri = await FileDownloader().pathInSharedStorage(
             path, SharedStorage.downloads,
-            asAndroidUri: true);
+            asUriString: true);
         print('Uri is $uri');
         expect(uri, isNotNull);
         expect(uri?.startsWith('content://'), isTrue);

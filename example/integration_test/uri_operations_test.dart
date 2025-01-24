@@ -20,7 +20,7 @@ void main() {
       final dummy = DownloadTask(url: uploadTestUrl, filename: uploadFilename);
       final uriString = await FileDownloader().moveFileToSharedStorage(
           await dummy.filePath(), SharedStorage.downloads,
-          asAndroidUri: true); //TODO make this work for any file URI
+          asUriString: true); //TODO make this work for any file URI
       print('URI: $uriString');
       final task = UploadTask.fromUri(
           url: uploadBinaryTestUrl, uri: Uri.parse(uriString!), post: 'binary');
@@ -66,7 +66,7 @@ void main() {
       final dummy = DownloadTask(url: uploadTestUrl, filename: uploadFilename);
       final uriString = await FileDownloader().moveFileToSharedStorage(
           await dummy.filePath(), SharedStorage.downloads,
-          asAndroidUri: true);
+          asUriString: true);
       print('URI: $uriString');
       final task = UploadTask.fromUri(
           url: uploadBinaryTestUrl, uri: Uri.parse(uriString!));
@@ -105,13 +105,13 @@ void main() {
       final dummy = DownloadTask(url: uploadTestUrl, filename: uploadFilename);
       final uriString = await FileDownloader().moveFileToSharedStorage(
           await dummy.filePath(), SharedStorage.downloads,
-          asAndroidUri: true);
+          asUriString: true);
       // move second file to shared storage and obtain the URI
       final dummy2 =
           DownloadTask(url: uploadTestUrl, filename: uploadFilename2);
       final uriString2 = await FileDownloader().moveFileToSharedStorage(
           await dummy2.filePath(), SharedStorage.downloads,
-          asAndroidUri: true);
+          asUriString: true);
       final task = MultiUploadTask(url: uploadMultiTestUrl, files: [
         ('f1', Uri.parse(uriString!)),
         ('f2', Uri.parse(uriString2!))
@@ -302,7 +302,7 @@ void main() {
       final dummy = DownloadTask(url: uploadTestUrl, filename: uploadFilename);
       final uriString = await FileDownloader().moveFileToSharedStorage(
           await dummy.filePath(), SharedStorage.downloads,
-          asAndroidUri: true);
+          asUriString: true);
       print('URI: $uriString');
       var uri = Uri.parse(uriString!);
       final result =

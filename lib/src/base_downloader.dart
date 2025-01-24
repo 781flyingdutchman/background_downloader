@@ -615,23 +615,32 @@ abstract base class BaseDownloader {
     removePausedTask(task.taskId);
   }
 
-  /// Move the file at [filePath] to the shared storage
-  /// [destination] and potential subdirectory [directory]
+  /// Move the file represented by [filePath] to a shared storage
+  /// [destination] and potentially a [directory] within that destination. If
+  /// the [mimeType] is not provided we will attempt to derive it from the
+  /// [filePath] extension
   ///
-  /// Returns the path to the file in shared storage, or null
+  /// Returns the path to the stored file, or null if not successful
+  /// If [asUriString] is true, returns the URI of the stored file
+  /// instead of the filePath
   Future<String?> moveToSharedStorage(
       String filePath,
       SharedStorage destination,
       String directory,
       String? mimeType,
-      bool asAndroidUri) {
+      bool asUriString) {
     return Future.value(null);
   }
 
-  /// Returns the path to the file at [filePath] in shared storage
-  /// [destination] and potential subdirectory [directory], or null
+  /// Returns the filePath to the file represented by [filePath] in shared
+  /// storage [destination] and potentially a [directory] within that
+  /// destination.
+  ///
+  /// Returns the path to the stored file, or null if not successful
+  /// If [asUriString] is true, returns the URI of the stored file
+  /// instead of the filePath
   Future<String?> pathInSharedStorage(String filePath,
-      SharedStorage destination, String directory, bool asAndroidUri) {
+      SharedStorage destination, String directory, bool asUriString) {
     return Future.value(null);
   }
 

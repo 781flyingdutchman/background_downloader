@@ -363,15 +363,15 @@ abstract base class NativeDownloader extends BaseDownloader {
           SharedStorage destination,
           String directory,
           String? mimeType,
-          bool asAndroidUri) =>
+          bool asUriString) =>
       methodChannel.invokeMethod<String?>('moveToSharedStorage',
-          [filePath, destination.index, directory, mimeType, asAndroidUri]);
+          [filePath, destination.index, directory, mimeType, asUriString]);
 
   @override
   Future<String?> pathInSharedStorage(String filePath,
-          SharedStorage destination, String directory, bool asAndroidUri) =>
+          SharedStorage destination, String directory, bool asUriString) =>
       methodChannel.invokeMethod<String?>('pathInSharedStorage',
-          [filePath, destination.index, directory, asAndroidUri]);
+          [filePath, destination.index, directory, asUriString]);
 
   @override
   Future<bool> openFile(Task? task, String? filePath, String? mimeType) async {
