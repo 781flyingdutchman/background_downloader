@@ -250,6 +250,27 @@ class UriUtilsMethodCallHelper(private val plugin: BDPlugin) : MethodCallHandler
                 result.error("DELETE_FILE_FAILED", "Invalid URI: $uri", null)
             }
 
+            "openFile" -> {
+                /**
+                 * Opens the file at the given URI.
+                 *
+                 * Arguments are uriString (string) and mimeType (string, nullable).
+                 */
+                val args = call.arguments as? List<*>
+                val uriString = args?.get(0) as? String
+                val mimeType = args?.get(1) as? String
+
+                if (uriString == null) {
+                    result.error("INVALID_ARGUMENTS", "URI string is required", null)
+                    return
+                }
+
+                if (!doOpenFile(activity, uriString, mimeType ?: getMimeType(uriString))) {
+                    result.error("OPEN_FILE_FAILED", "Failed to open file", null)
+                }
+                result.success(true)
+            }
+
             else -> result.notImplemented()
         }
     }
