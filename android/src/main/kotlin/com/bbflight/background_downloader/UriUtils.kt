@@ -7,9 +7,12 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.ext.SdkExtensions
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.util.Log
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresExtension
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import io.flutter.plugin.common.MethodCall
@@ -144,17 +147,30 @@ class UriUtilsMethodCallHelper(private val plugin: BDPlugin) : MethodCallHandler
                     if (startLocationOrdinal != null) SharedStorage.entries[startLocationOrdinal] else null
                 val startLocationUri = startLocationUriString?.toUri()
 
-                if (!FilePicker.pickFiles(
-                        activity,
-                        startLocation,
-                        startLocationUri,
-                        allowedExtensions,
-                        multipleAllowed,
-                        persistedUriPermission,
-                        result
-                    )
-                ) {
-                    result.error("PICK_FILES_FAILED", "Failed to launch file picker", null)
+                if (startLocation == SharedStorage.images || startLocation == SharedStorage.video) {
+                    if (!FilePicker.pickMedia(
+                            activity,
+                            startLocation,
+                            multipleAllowed,
+                            persistedUriPermission,
+                            result
+                        )
+                    ) {
+                        result.error("PICK_FILES_FAILED", "Failed to launch media picker", null)
+                    }
+                } else {
+                    if (!FilePicker.pickFiles(
+                            activity,
+                            startLocation,
+                            startLocationUri,
+                            allowedExtensions,
+                            multipleAllowed,
+                            persistedUriPermission,
+                            result
+                        )
+                    ) {
+                        result.error("PICK_FILES_FAILED", "Failed to launch file picker", null)
+                    }
                 }
             }
 
@@ -360,6 +376,7 @@ object FilePicker {
     private var multipleAllowed: Boolean = false
     private var persistedUriPermission: Boolean = false
     private const val REQUEST_CODE_PICK_FILES = 265465106
+    private const val REQUEST_CODE_PICK_MEDIA = 36546510
 
     /**
      * Launches the Android file picker to select one or more files. Only read access is granted
@@ -390,7 +407,6 @@ object FilePicker {
             Log.w(TAG, "File picker already in progress")
             return false
         }
-        pendingResult = result
         this.multipleAllowed = multipleAllowed
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
@@ -424,8 +440,81 @@ object FilePicker {
         }
         this.persistedUriPermission = persistedUriPermission // for later reference
         this.multipleAllowed = multipleAllowed // for later reference
+        pendingResult = result
         activity.startActivityForResult(intent, REQUEST_CODE_PICK_FILES)
         return true
+    }
+
+    /**
+     * Launches the Android photo picker to select one or more media files (images or videos).
+     *
+     * @param activity The current activity.
+     * @param startLocation The shared storage location to start the picker in (images or video).
+     * @param multipleAllowed Whether to allow the user to select multiple files.
+     * @param persistedUriPermission Whether to persist the URI permission across device reboots.
+     * @param result The MethodChannel result to complete when the picker is closed.
+     *
+     * Returns true if the picker was launched successfully, false otherwise.
+     *
+     * The result posted back is either a list of URIs as a String, or null (if the user has
+     * cancelled the picker) or an error
+     */
+    fun pickMedia(
+        activity: Activity,
+        startLocation: SharedStorage,
+        multipleAllowed: Boolean = false,
+        persistedUriPermission: Boolean = false,
+        result: MethodChannel.Result
+    ): Boolean {
+        if (pendingResult != null) {
+            Log.w(TAG, "Media picker already in progress")
+            return false
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(
+                Build.VERSION_CODES.R
+            ) >= 2
+        ) {
+            // on Android version >R.2 we use the new photo picker
+            val photoPickerIntent = Intent(MediaStore.ACTION_PICK_IMAGES).apply {
+                if (multipleAllowed) {
+                    val maxImages = MediaStore.getPickImagesMaxLimit()
+                    putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, maxImages)
+                }
+            }
+            photoPickerIntent.apply {
+                if (startLocation == SharedStorage.images) {
+                    type = "image/*"
+                } else if (startLocation == SharedStorage.video) {
+                    type = "video/*"
+                }
+            }
+            this.persistedUriPermission = persistedUriPermission // for later reference
+            this.multipleAllowed = multipleAllowed // for later reference
+            pendingResult = result
+            activity.startActivityForResult(photoPickerIntent, REQUEST_CODE_PICK_MEDIA)
+            return true
+        } else {
+            // for older Android versions we use the filePicker with image or video extensions
+            return pickFiles(
+                activity,
+                startLocation,
+                null,
+                if (startLocation == SharedStorage.images) listOf(
+                    "jpg",
+                    "jpeg",
+                    "png",
+                    "gif",
+                    "webp",
+                    "bmp",
+                    "heic",
+                    "heif",
+                    "svg"
+                ) else listOf("mp4", "webm", "ogg", "webm", "mov", "avi", "mkv"),
+                multipleAllowed,
+                persistedUriPermission,
+                result
+            )
+        }
     }
 
     /**
@@ -444,7 +533,7 @@ object FilePicker {
         resultCode: Int,
         data: Intent?
     ): Boolean {
-        if (requestCode == REQUEST_CODE_PICK_FILES) {
+        if (requestCode == REQUEST_CODE_PICK_FILES || requestCode == REQUEST_CODE_PICK_MEDIA) {
             if (resultCode == Activity.RESULT_OK) {
                 val uris = mutableListOf<String>()
                 if (multipleAllowed && data?.clipData != null) {
@@ -477,9 +566,41 @@ object FilePicker {
             }
             pendingResult = null // Reset the pending result
             return true
+        } else if (requestCode == REQUEST_CODE_PICK_MEDIA) {
+            if (resultCode == Activity.RESULT_OK) {
+                val uris = mutableListOf<String>()
+                if (multipleAllowed && data?.clipData != null) {
+                    val clipData = data.clipData!!
+                    for (i in 0 until clipData.itemCount) {
+                        val uri = clipData.getItemAt(i).uri
+                        if (persistedUriPermission) {
+                            context.contentResolver.takePersistableUriPermission(
+                                uri,
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            )
+                        }
+                        uris.add(uri.toString())
+                    }
+                } else if (data?.data != null) {
+                    val uri = data.data!!
+                    if (persistedUriPermission) {
+                        context.contentResolver.takePersistableUriPermission(
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    }
+                    uris.add(uri.toString())
+                }
+                pendingResult?.success(uris)
+            } else {
+                pendingResult?.success(null)
+            }
+            pendingResult = null
+            return true
         }
         return false
     }
+
 
     /**
      * Converts a list of file extensions to a list of corresponding MIME types using the provided `getMimeType` function.

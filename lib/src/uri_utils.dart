@@ -115,21 +115,22 @@ sealed class UriUtils {
     }
   }
 
-  /// Returns the Uri represented by [value], or null if the String is not a
+  /// Returns the Uri represented by [maybePacked], or null if the String is not a
   /// valid Uri or packed Uri string.
   ///
-  /// [value] should be a full Uri string, or a packed String containing
+  /// [maybePacked] should be a full Uri string, or a packed String containing
   /// a Uri (see [pack])
-  static Uri? uriFromStringValue(String value) {
-    final (:filename, :uri) = unpack(value);
+  static Uri? uriFromStringValue(String maybePacked) {
+    final (:filename, :uri) = unpack(maybePacked);
     return uri;
   }
 
-  /// Returns true if [value] is a valid Uri or packed Uri string.
+  /// Returns true if [maybePacked] is a valid Uri or packed Uri string.
   ///
-  /// [value] should be a full Uri string, or a packed String containing
+  /// [maybePacked] should be a full Uri string, or a packed String containing
   /// a Uri (see [pack])
-  static bool containsUri(String value) => uriFromStringValue(value) != null;
+  static bool containsUri(String maybePacked) =>
+      uriFromStringValue(maybePacked) != null;
 }
 
 final class DesktopUriUtils extends UriUtils {

@@ -101,10 +101,17 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
     private suspend fun processBinaryUpload(
         connection: HttpURLConnection
     ): TaskStatus {
-        val fileUri = UriUtils.uriFromStringValue(task.filename)
+        val (filename, fileUri) = UriUtils.unpack(task.filename)
         val (fileSize, inputStream) = withContext(Dispatchers.IO) { // Use Dispatchers.IO for file operations
             if (fileUri != null) {
                 try {
+                    if (filename == null) {
+                        // attempt to set a filename for the uploaded file in the task object
+                        val derivedFilename = getFileNameFromUri(fileUri)
+                        if (derivedFilename != null) {
+                            task = task.copyWith(filename = UriUtils.pack(derivedFilename, fileUri))
+                        }
+                    }
                     if (fileUri.scheme != "file") {
                         // a content:// URI scheme is resolved via the contentResolver
                         val contentResolver = applicationContext.contentResolver
