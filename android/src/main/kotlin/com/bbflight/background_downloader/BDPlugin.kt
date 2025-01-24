@@ -736,7 +736,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * - destination (Int as index into [SharedStorage] enum)
      * - directory (String): subdirectory within scoped storage
      * - mimeType (String?): mimeType of the file, overrides derived mimeType
-     * - asAndroidUri (Boolean): if set, returns the path not as a filePath but as a Uri
+     * - asUriString (Boolean): if set, returns the path not as a filePath but as a Uri
      */
     private suspend fun methodMoveToSharedStorage(call: MethodCall, result: Result) {
         val args = call.arguments as List<*>
@@ -744,7 +744,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val destination = SharedStorage.entries[args[1] as Int]
         val directory = args[2] as String
         val mimeType = args[3] as String?
-        val asAndroidUri = args[4] as Boolean
+        val asUriString = args[4] as Boolean
         // first check and potentially ask for permissions
         val status = PermissionsService.getPermissionStatus(
             applicationContext,
@@ -758,7 +758,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     destination,
                     directory,
                     mimeType,
-                    asAndroidUri
+                    asUriString
                 )
             )
         } else {
@@ -776,7 +776,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * - filePath (String): full path to file (only the name is used)
      * - destination (Int as index into [SharedStorage] enum)
      * - directory (String): subdirectory within scoped storage (ignored for Q+)
-     * - asAndroidUri (Boolean): if true, returns the URI instead of the path, if possible
+     * - asUriString (Boolean): if true, returns the URI instead of the path
      *
      * For Android Q+ uses the MediaStore, matching on filename only, i.e. ignoring
      * the directory
@@ -786,14 +786,14 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val filePath = args[0] as String
         val destination = SharedStorage.entries[args[1] as Int]
         val directory = args[2] as String
-        val asAndroidUri = args[3] as Boolean
+        val asUriString = args[3] as Boolean
         result.success(
             pathInSharedStorage(
                 applicationContext,
                 filePath,
                 destination,
                 directory,
-                asAndroidUri
+                asUriString
             )
         )
     }

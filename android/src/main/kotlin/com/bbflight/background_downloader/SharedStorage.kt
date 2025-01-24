@@ -25,8 +25,8 @@ val trailingPathSeparatorRegEx = Regex("""/$""")
 
 /**
  * Moves the file from filePath to the shared storage destination and returns the path to
- * that file if successful, or null if not. If [asAndroidUri] is true, the URI will be returned
- * instead of the file path, if possible, otherwise falls back to the file path
+ * that file if successful, or null if not. If [asUriString] is true, the URI will be returned
+ * instead of the file path
  *
  * If successful, the original file will have been deleted
  */
@@ -36,7 +36,7 @@ suspend fun moveToSharedStorage(
     destination: SharedStorage,
     directory: String,
     mimeType: String?,
-    asAndroidUri: Boolean
+    asUriString: Boolean
 ): String? {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
         return moveToPublicDirectory(filePath, destination, directory)
@@ -93,7 +93,7 @@ suspend fun moveToSharedStorage(
     // If the file was moved successfully, remove the original
     if (success) {
         file.delete()
-        return if (asAndroidUri) uri!!.toString() else pathFromUri(context, uri!!)
+        return if (asUriString) uri!!.toString() else pathFromUri(context, uri!!)
     } else {
         return null
     }
@@ -159,13 +159,15 @@ private fun moveToPublicDirectory(
 
 /**
  * Returns the path to the file in shared storage, or null
+ *
+ * If [asUriString] is true, returns the URI as a String
  */
 fun pathInSharedStorage(
     context: Context,
     filePath: String,
     destination: SharedStorage,
     directory: String,
-    asAndroidUri: Boolean
+    asUriString: Boolean
 ): String? {
     val fileName = File(filePath).name
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
@@ -187,7 +189,7 @@ fun pathInSharedStorage(
         null
     )?.use { cursor ->
         if (cursor.moveToFirst()) {
-            return if (asAndroidUri) {
+            return if (asUriString) {
                 Uri.withAppendedPath(
                     getMediaStoreUri(destination),
                     cursor.getLong(1).toString()
