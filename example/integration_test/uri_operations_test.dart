@@ -230,4 +230,69 @@ void main() {
       expect(await FileDownloader().uri.deleteFile(uri), isTrue);
     }, skip: !Platform.isAndroid);
   });
+
+  group('Uploads via picker', () {
+    test('upload a photo', () async {
+      print('Pick a photo to upload');
+      final fileUri = await FileDownloader()
+          .uri
+          .pickFiles(startLocation: SharedStorage.images);
+      expect(fileUri, isNotNull);
+      expect(fileUri!.length, equals(1));
+      final task = UploadTask.fromUri(
+          url: uploadBinaryTestUrl,
+          uri: fileUri.first,
+          post: 'binary',
+          mimeType: 'image/jpeg');
+      expect(task.usesUri, isTrue);
+      expect(task.fileUri, equals(fileUri.first));
+      expect(task.mimeType, equals('image/jpeg'));
+      final result = await FileDownloader().upload(task);
+      expect(result.status, equals(TaskStatus.complete));
+      var (:filename, :uri) = UriUtils.unpack(result.task.filename);
+      print('filename=$filename');
+      print('uri=$uri');
+      expect(filename, isNotNull);
+      expect(uri!.scheme, equals('content'));
+      expect(uri.toString().contains(fileUri.first.toString()), isTrue);
+    });
+
+    test('pick multiple photos (no upload)', () async {
+      print('Pick 2 photos');
+      final fileUri = await FileDownloader().uri.pickFiles(
+          startLocation: SharedStorage.images, multipleAllowed: true);
+      expect(fileUri, isNotNull);
+      expect(fileUri!.length, equals(2));
+      final task = UploadTask.fromUri(
+          url: uploadBinaryTestUrl, uri: fileUri.first, post: 'binary');
+      expect(task.usesUri, isTrue);
+      expect(task.fileUri, equals(fileUri.first));
+    });
+
+    test('pick a video (no upload)', () async {
+      print('Pick a video');
+      final fileUri = await FileDownloader()
+          .uri
+          .pickFiles(startLocation: SharedStorage.video);
+      expect(fileUri, isNotNull);
+      expect(fileUri!.length, equals(1));
+      final task = UploadTask.fromUri(
+          url: uploadBinaryTestUrl, uri: fileUri.first, post: 'binary');
+      expect(task.usesUri, isTrue);
+      expect(task.fileUri, equals(fileUri.first));
+    });
+
+    test('pick multiple videos (no upload)', () async {
+      print('Pick 2 videos');
+      final fileUri = await FileDownloader()
+          .uri
+          .pickFiles(startLocation: SharedStorage.video, multipleAllowed: true);
+      expect(fileUri, isNotNull);
+      expect(fileUri!.length, equals(2));
+      final task = UploadTask.fromUri(
+          url: uploadBinaryTestUrl, uri: fileUri.first, post: 'binary');
+      expect(task.usesUri, isTrue);
+      expect(task.fileUri, equals(fileUri.first));
+    });
+  });
 }
