@@ -41,7 +41,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     static var localResumeData = [String : String]() // locally stored to enable notification resume
     static var remainingBytesToDownload = [String : Int64]()  // keyed by taskId
     static var responseBodyData = [String: [Data]]() // list of Data objects received for this UploadTask id
-    static var tasksWithSuggestedFilename = [String : Task]() // [taskId : Task with suggested filename]
+    static var tasksWithModifications = [String : Task]() // [taskId : Task with suggested filename]
     static var tasksWithContentLengthOverride = [String : Int64]() // [taskId : Content length]
     static var tasksWithTempUploadFile = [String : URL]() // [taskId : file URL]
     static var mimeTypes = [String : String]() // [taskId : mimeType]
@@ -712,7 +712,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             result("")
             return
         }
-        let resultTask = suggestedFilenameFromResponseHeaders(task: task, responseHeaders: ["Content-Disposition" : contentDisposition], unique: true)
+        let resultTask = taskWithSuggestedFilenameFromResponseHeaders(task: task, responseHeaders: ["Content-Disposition" : contentDisposition], unique: true)
         result(resultTask.filename)
     }
     
