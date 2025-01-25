@@ -296,9 +296,10 @@ func updateProgress(task: Task, totalBytesExpected: Int64, totalBytesDone: Int64
     let info = BDPlugin.propertyLock.withLock({
         return BDPlugin.progressInfo[task.taskId] ?? (lastProgressUpdateTime: 0.0, lastProgressValue: 0.0, lastTotalBytesDone: 0, lastNetworkSpeed: -1.0)
     })
-    if totalBytesExpected != NSURLSessionTransferSizeUnknown && Date().timeIntervalSince1970 > info.lastProgressUpdateTime + 0.5 {
+    let now = Date().timeIntervalSince1970
+    if totalBytesExpected != NSURLSessionTransferSizeUnknown && now > info.lastProgressUpdateTime + 0.5 {
         let progress = min(Double(totalBytesDone) / Double(totalBytesExpected), 0.999)
-        if progress - info.lastProgressValue > 0.02 {
+        if (progress - info.lastProgressValue > 0.02) || (progress > info.lastProgressValue && now > info.lastProgressUpdateTime + 2.5) {
             // calculate network speed and time remaining
             let now = Date().timeIntervalSince1970
             let timeSinceLastUpdate = now - info.lastProgressUpdateTime

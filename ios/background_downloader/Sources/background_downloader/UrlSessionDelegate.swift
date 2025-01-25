@@ -150,8 +150,8 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
     
     /// Process taskdelegate progress update for download task
     ///
-    /// If the task requires progress updates, provide these at a reasonable interval
-    /// If this is the first update for this file, also emit a 'running' status update
+    /// If the task requires progress updates, provides these at a reasonable interval
+    /// If this is the first update for this file, also emits a 'running' status update
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         // task is var because the filename can be changed on the first 'didWriteData' call
         guard var task = getTaskFrom(urlSessionTask: downloadTask) else { return }

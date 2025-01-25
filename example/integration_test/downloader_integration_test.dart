@@ -505,6 +505,7 @@ void main() {
       final subscription = FileDownloader().updates.listen((update) {
         expect(update is TaskProgressUpdate, isTrue);
         if (update is TaskProgressUpdate) {
+          print("ProgressUpdate ${update.progress} at ${DateTime.now()}");
           progressCallback(update);
         }
       });

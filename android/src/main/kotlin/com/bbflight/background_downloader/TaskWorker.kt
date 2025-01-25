@@ -671,12 +671,14 @@ open class TaskWorker(
     }
 
     /**
-     * Returns true if [currentProgress] > [lastProgressUpdate] + threshold and
-     * [now] > [nextProgressUpdateTime]
+     * Returns true if [currentProgress] > [lastProgressUpdate] + 2% and
+     * [now] > [nextProgressUpdateTime], or if there was progress and
+     * [now] > [nextProgressUpdateTime] + 2 seconds
      */
     open fun shouldSendProgressUpdate(currentProgress: Double, now: Long): Boolean {
-        return currentProgress - lastProgressUpdate > 0.02 &&
-                now > nextProgressUpdateTime
+        return (currentProgress - lastProgressUpdate > 0.02 &&
+                now > nextProgressUpdateTime) || (currentProgress > lastProgressUpdate &&
+                now > nextProgressUpdateTime + 2000)
     }
 
     /**
