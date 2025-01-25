@@ -163,14 +163,20 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             os_log("Starting/resuming taskId %@", log: log, type: .info, task.taskId)
             let response = downloadTask.response as! HTTPURLResponse
             // get suggested filename if needed
-            if task.filename == "?" {
-                let newTask = suggestedFilenameFromResponseHeaders(task: task, responseHeaders: response.allHeaderFields)
-                os_log("Suggested task filename for taskId %@ is %@", log: log, type: .info, newTask.taskId, newTask.filename)
-                if newTask.filename != task.filename {
-                    // store for future replacement, and replace now
-                    BDPlugin.propertyLock.withLock({
-                        BDPlugin.tasksWithSuggestedFilename[newTask.taskId] = newTask
-                    })
+            let (filename, uri) = unpack(packedString: task.filename)
+            if filename == "?" {
+                if (uri == nil) {
+                    let newTask = taskWithSuggestedFilenameFromResponseHeaders(task: task, responseHeaders: response.allHeaderFields)
+                    os_log("Suggested task filename for taskId %@ is %@", log: log, type: .info, newTask.taskId, newTask.filename)
+                    if newTask.filename != task.filename {
+                        markTaskModified(task: newTask)
+                        task = newTask
+                    }
+                } else {
+                    let suggestedFilename = suggestFilename(responseHeaders: response.allHeaderFields, urlString: task.url)
+                    let packed = pack(filename: suggestedFilename.isEmpty ? "unknown" : suggestedFilename, uri: uri!)
+                    let newTask = task.copyWith(filename: packed)
+                    markTaskModified(task: newTask)
                     task = newTask
                 }
             }
@@ -262,7 +268,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
     public func urlSession(_ session: URLSession,
                            downloadTask: URLSessionDownloadTask,
                            didFinishDownloadingTo location: URL) {
-        guard let task = getTaskFrom(urlSessionTask: downloadTask),
+        guard var task = getTaskFrom(urlSessionTask: downloadTask),
               let response = downloadTask.response as? HTTPURLResponse
         else {
             os_log("Could not find task associated urlSessionTask %d, or did not get HttpResponse", log: log,  type: .info, downloadTask.taskIdentifier)
@@ -272,7 +278,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
         let (mimeType, charSet) = BDPlugin.propertyLock.withLock({
             let mimeType = BDPlugin.mimeTypes.removeValue(forKey: taskId)
             let charSet = BDPlugin.charSets.removeValue(forKey: taskId)
-            BDPlugin.tasksWithSuggestedFilename.removeValue(forKey: taskId)
+            BDPlugin.tasksWithModifications.removeValue(forKey: taskId)
             BDPlugin.tasksWithContentLengthOverride.removeValue(forKey: taskId)
             return (mimeType, charSet)
         })
@@ -298,7 +304,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             var taskException: TaskException? = nil
             var responseBody: String? = nil
             defer {
-                processStatusUpdate(task: task, 
+                processStatusUpdate(task: task,
                                     status: finalStatus,
                                     taskException: taskException,
                                     responseBody: responseBody,
@@ -312,38 +318,80 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
                 }
             }
             if (isDownloadTask(task: task)) {
-                let directory = try directoryForTask(task: task)
-                do
-                {
-                    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories:  true)
-                } catch {
-                    os_log("Failed to create directory %@", log: log, type: .error, directory.path)
-                    taskException = TaskException(type: .fileSystem, httpResponseCode: -1,
-                                                  description: "Failed to create directory \(directory.path)")
-                    return
-                }
-                var fileUrl = directory.appendingPath(task.filename)
-                if FileManager.default.fileExists(atPath: fileUrl.path) {
-                    try? FileManager.default.removeItem(at: fileUrl)
-                }
-                do {
-                    try FileManager.default.moveItem(at: location, to: fileUrl)
-                } catch {
-                    os_log("Failed to move file from %@ to %@: %@", log: log, type: .error, location.path, fileUrl.path, error.localizedDescription)
-                    taskException = TaskException(type: .fileSystem, httpResponseCode: -1,
-                                                  description: "Failed to move file from \(location.path) to \(fileUrl.path): \(error.localizedDescription)")
-                    return
-                }
-                do {
-                    if UserDefaults.standard.bool(forKey: BDPlugin.keyConfigExcludeFromCloudBackup)
-                    {
-                        try fileUrl.setCloudBackup(exclude: true)
-                        os_log("Excluded from iCloud backup: %@", log: log, type: .info, fileUrl.path)
+                // Determine directoryUri and fileUrl based on URI mode or filepath mode
+                var directoryUrl: URL?
+                var fileUrl: URL?
+                
+                // filename field can contain filename and/or a file url (if already started)
+                let unpackedFilename = unpack(packedString: task.filename)
+                let filename = unpackedFilename.filename ?? "unknown"
+                fileUrl = unpackedFilename.uri
+                // directory may contain a path or a Uri representing the full destination directory
+                let unpackDirectory = unpack(packedString: task.directory)
+                
+                if let unpackedUri = unpackDirectory.uri {
+                    // URI mode
+                    let uri = decodePossibleBookmarkUri(uri: unpackedUri)
+                    os_log("URI mode", log: log, type: .error)
+                    guard let uri = uri else {
+                        os_log("Invalid directory URI (could not convert bookmark): %@", log: log, type: .error, unpackedUri.absoluteString)
+                        taskException = TaskException(type: .fileSystem, httpResponseCode: -1,
+                                                      description: "Invalid directory URI (could not convert bookmark): %@ \(unpackedUri.absoluteString)")
+                        return
                     }
-                } catch {
-                    os_log("Could not exclude from iCloud backup: %@ - %@", log: log, type: .info, fileUrl.path, error.localizedDescription)
+                    guard uri.isFileURL else {
+                        os_log("Invalid directory URI (not a file URL): %@", log: log, type: .error, uri.absoluteString)
+                        taskException = TaskException(type: .fileSystem, httpResponseCode: -1,
+                                                      description: "Invalid directory URI (not a file URL): \(uri.absoluteString)")
+                        return
+                    }
+                    directoryUrl = uri
+                    fileUrl = uri.appendingPathComponent(filename)
+                    // store the full Uri in the task.filename so it can be retrieved
+                    let newTask = task.copyWith(filename: pack(filename: filename, uri: fileUrl!))
+                    os_log("newTask filename: %@", log: log, type: .error, newTask.filename)
+                    task = newTask
+                } else {
+                    // Filepath mode
+                    directoryUrl = try directoryForTask(task: task)
+                    fileUrl = directoryUrl?.appendingPathComponent(filename)
                 }
-                finalStatus = TaskStatus.complete
+                
+                // Guard against directoryUri or fileUrl being nil
+                guard let directoryUri = directoryUrl, var fileUrl = fileUrl else {
+                    os_log("Could not determine directory Uri or file Uri", log: log, type: .error)
+                    taskException = TaskException(type: .fileSystem, httpResponseCode: -1,
+                                                  description: "Could not determine directory or file Uri")
+                    return
+                }
+                
+                do {
+                    if !FileManager.default.fileExists(atPath: directoryUri.path) {
+                        try FileManager.default.createDirectory(at: directoryUri, withIntermediateDirectories: true)
+                    }
+                    
+                    if FileManager.default.fileExists(atPath: fileUrl.path) {
+                        try FileManager.default.removeItem(at: fileUrl)
+                    }
+                    
+                    try FileManager.default.moveItem(at: location, to: fileUrl)
+                    
+                    do {
+                        if UserDefaults.standard.bool(forKey: BDPlugin.keyConfigExcludeFromCloudBackup)
+                        {
+                            try fileUrl.setCloudBackup(exclude: true)
+                            os_log("Excluded from iCloud backup: %@", log: log, type: .info, fileUrl.path)
+                        }
+                    } catch {
+                        os_log("Could not exclude from iCloud backup: %@ - %@", log: log, type: .info, fileUrl.path, error.localizedDescription)
+                    }
+                    finalStatus = TaskStatus.complete
+                    
+                } catch {
+                    os_log("File operation failed: %@", log: log, type: .error, error.localizedDescription)
+                    taskException = TaskException(type: .fileSystem, httpResponseCode: -1, description: "File operation failed: \(error.localizedDescription)")
+                    return
+                }
             } else {
                 // this is a DataTask, so we read the file as the responseBody
                 responseBody = readFile(url: location)
@@ -497,7 +545,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
         }) else { return nil }
         return urlSessionTask
     }
-
+    
     /// Returns a `task` that may be modified through callbacks, and a bool to indicate that the task was modified.
     ///
     /// Callbacks would be attached to the task via its `Task.options` property, and if
