@@ -459,7 +459,7 @@ By default, the downloader uses a modified version of the [localstore](https://p
 As an alternative to LocalStore, use `SqlitePersistentStorage`, included in [background_downloader_sql](https://pub.dev/packages/background_downloader_sql), which supports SQLite storage and migration from Flutter Downloader.
 
 ## Notifications
-
+Pub
 On iOS and Android, for downloads and uploads, the downloader can generate notifications to keep the user informed of progress also when the app is in the background, and allow pause/resume and cancellation of an ongoing download from those notifications.
 
 Configure notifications by calling `FileDownloader().configureNotification` and supply a

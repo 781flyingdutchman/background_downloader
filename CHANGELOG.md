@@ -1,3 +1,7 @@
+## 8.9.4
+* Modifies the interval between `TaskProgressUpdate` such that an update is sent at least once every 2.5 seconds if progress has been made, even if it less than 2% of the file size
+* Improves `rescheduleKilledTasks` to also reschedule tasks marked as `waitingToRetry` but not registered as such
+
 ## 8.9.3
 * Adds `start` which ensures the various start-up calls are executed in the correct order. Use this instead of calling `trackTasks`, `resumeFromBackground` and `rescheduleKilledTasks` separately
 * Adds `rescheduleKilledTasks` which will compare enqueued/running tasks in the database with those active in the downloader, and reschedules those that have been killed by the user
