@@ -172,9 +172,54 @@ void main() {
           directoryUri: directoryUri,
           filename: DownloadTask.suggestedFilename);
       expect(task.usesUri, isTrue);
-      expect(task.filename,
-          equals(DownloadTask.suggestedFilename)); // filename omitted
+      expect(task.filename, equals(DownloadTask.suggestedFilename));
       expect(task.directoryUri, equals(directoryUri));
+      final result = await FileDownloader().download(task);
+      expect(result.status, equals(TaskStatus.complete));
+      var (:filename, :uri) = UriUtils.unpack(result.task.filename);
+      print('filename=$filename');
+      print('uri=$uri');
+      expect(filename, equals('5MB-test.ZIP'));
+      expect(uri!.scheme, equals('file'));
+      expect(uri.path, contains(filename));
+      expect(uri.toString().contains(directoryUri.toString()), isTrue);
+      expect(await FileDownloader().uri.deleteFile(uri), isTrue);
+    });
+
+    test('Download and pause/resume file with suggested filename', () async {
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      final directory = await getApplicationDocumentsDirectory();
+      final directoryUri = Uri.file(directory.path);
+      task = DownloadTask.fromUri(
+          url: urlWithContentLength,
+          directoryUri: directoryUri,
+          filename: DownloadTask.suggestedFilename);
+      expect(task.usesUri, isTrue);
+      expect(task.filename, equals(DownloadTask.suggestedFilename));
+      expect(task.directoryUri, equals(directoryUri));
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await someProgressCompleter.future;
+      expect(await FileDownloader().pause(task), isTrue);
+      await Future.delayed(const Duration(milliseconds: 500));
+      expect(lastStatus, equals(TaskStatus.paused));
+      print("paused");
+      await Future.delayed(const Duration(seconds: 2));
+      // resume
+      expect(await FileDownloader().resume(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(lastTaskWithStatus, isNotNull);
+      var file = File(await lastTaskWithStatus!.filePath());
+      expect(await fileEqualsLargeTestFile(file), isTrue);
+      await file.delete();
+
+      await Future.delayed(const Duration(milliseconds: 500));
+      expect(await FileDownloader().pause(task), isTrue);
+      await Future.delayed(const Duration(milliseconds: 500));
+      expect(await FileDownloader().resume(task), isTrue);
+      await Future.delayed(const Duration(milliseconds: 500));
       final result = await FileDownloader().download(task);
       expect(result.status, equals(TaskStatus.complete));
       var (:filename, :uri) = UriUtils.unpack(result.task.filename);
@@ -215,8 +260,7 @@ void main() {
       expect(await FileDownloader().uri.deleteFile(uri), isTrue);
     });
 
-    test('download file with suggested filename using URI',
-        () async {
+    test('download file with suggested filename using URI', () async {
       print('Pick a directory to store a file to download');
       final directoryUri = await FileDownloader().uri.pickDirectory();
       expect(directoryUri, isNotNull);

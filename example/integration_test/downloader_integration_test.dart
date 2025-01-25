@@ -3354,6 +3354,159 @@ void main() {
     });
   });
 
+  group('filePath', () {
+    late String tempBasePath;
+
+    setUp(() async {
+      // Create temporary directories for testing
+      final tempDir = await Directory.systemTemp.createTemp('upload_test_');
+      tempBasePath = tempDir.path;
+    });
+
+    tearDown(() async {
+      // Clean up the temporary directory after tests
+      Directory(tempBasePath).deleteSync(recursive: true);
+    });
+
+    test(
+        'returns correct path for single upload task with default filename in applicationDocuments',
+        () async {
+      final task = DownloadTask(
+          url: workingUrl,
+          filename: 'test.txt',
+          directory: 'uploads',
+          baseDirectory: BaseDirectory.applicationDocuments);
+      final path = await task.filePath();
+      final expectedPath = join(
+          await Task.baseDirectoryPath(BaseDirectory.applicationDocuments),
+          'uploads',
+          'test.txt');
+      expect(path, expectedPath);
+    });
+
+    test(
+        'returns correct path for single upload task with custom filename in temporary',
+        () async {
+      final task = UploadTask(
+          url: workingUrl,
+          filename: 'test.txt',
+          directory: 'uploads',
+          baseDirectory: BaseDirectory.temporary);
+      final path = await task.filePath(withFilename: 'custom.txt');
+      final expectedPath = join(
+          await Task.baseDirectoryPath(BaseDirectory.temporary),
+          'uploads',
+          'custom.txt');
+      expect(path, expectedPath);
+    });
+
+    test(
+        'returns correct path for single upload task with default filename in applicationSupport',
+        () async {
+      final task = DownloadTask(
+          url: workingUrl,
+          filename: 'test.txt',
+          baseDirectory: BaseDirectory.applicationSupport);
+      final path = await task.filePath();
+      final expectedPath = join(
+          await Task.baseDirectoryPath(BaseDirectory.applicationSupport),
+          'test.txt');
+      expect(path, expectedPath);
+    });
+
+    test(
+        'returns correct path for single upload task with custom filename in applicationLibrary',
+        () async {
+      final task = DownloadTask(
+          url: workingUrl,
+          filename: 'test.txt',
+          baseDirectory: BaseDirectory.applicationLibrary);
+      final path = await task.filePath(withFilename: 'custom.txt');
+      final expectedPath = join(
+          await Task.baseDirectoryPath(BaseDirectory.applicationLibrary),
+          'custom.txt');
+      expect(path, expectedPath);
+    });
+
+    test(
+        'returns empty string for multi upload task without custom filename in temporary',
+        () async {
+      final task = MultiUploadTask(
+          url: workingUrl,
+          files: ['a.text'],
+          directory: 'uploads',
+          baseDirectory: BaseDirectory.temporary);
+      final path = await task.filePath();
+      expect(path, '');
+    });
+
+    test(
+        'returns correct path for multi upload task with custom filename in applicationDocuments',
+        () async {
+      final task = MultiUploadTask(
+          url: workingUrl,
+          files: ['a.text'],
+          directory: 'uploads',
+          baseDirectory: BaseDirectory.applicationDocuments);
+      final path = await task.filePath(withFilename: 'custom.txt');
+      final expectedPath = join(
+          await Task.baseDirectoryPath(BaseDirectory.applicationDocuments),
+          'uploads',
+          'custom.txt');
+      expect(path, expectedPath);
+    });
+
+    test('returns correct file path for task using file URI', () async {
+      final task = UploadTask.fromUri(
+          url: workingUrl, uri: Uri.file('/my/file/uri.txt'));
+      final path = await task.filePath();
+      expect(path, '/my/file/uri.txt');
+    });
+
+    test('returns correct file path for UploadTask using packed file URI',
+        () async {
+      final uri = Uri.file('/my/file/uri.txt');
+      final packed = UriUtils.pack('testFilename.txt', uri);
+      final task = UploadTask(url: workingUrl, filename: packed);
+      final path = await task.filePath();
+      expect(path, '/my/file/uri.txt');
+      expect(task.fileUri, equals(uri));
+      expect(task.directoryUri, isNull);
+    });
+
+    test(
+        'returns correct file path for DownloadTask using packed directory URI',
+        () async {
+      final uri = Uri.file('/my/directory');
+      final task = DownloadTask(
+          url: workingUrl,
+          filename: 'testFilename.txt',
+          directory: uri.toString());
+      expect(task.usesUri, isTrue);
+      expect(task.directoryUri?.scheme, equals('file'));
+      final path = await task.filePath();
+      expect(path, '/my/directory/testFilename.txt');
+      expect(task.directoryUri, equals(uri));
+      expect(task.fileUri, isNull);
+    });
+
+    test('throws assertion error for task using non-file URI', () async {
+      final task = UploadTask.fromUri(
+          url: workingUrl, uri: Uri.parse('content://example.com'));
+      expect(() async => await task.filePath(), throwsA(isA<AssertionError>()));
+    });
+
+    test('returns correct path for task using root directory', () async {
+      final task = DownloadTask(
+          url: workingUrl,
+          filename: 'test.txt',
+          directory: 'uploads',
+          baseDirectory: BaseDirectory.root);
+      final path = await task.filePath();
+      expect(path, join(separator, 'uploads', 'test.txt'));
+    });
+  });
+
   group('DataTask', () {
     test('dataTask get', () async {
       var lastUpdate = TaskStatusUpdate(task, TaskStatus.paused);
