@@ -365,15 +365,24 @@ sealed class Task extends Request implements Comparable {
   /// Throws a FileSystemException if using external storage on Android (via
   /// configuration at startup), and external storage is not available.
   ///
-  /// Should not be called when teh task uses a URI scheme to specify the
-  /// file location
+  /// If called when the task uses a URI, will return the filePath of a file
+  /// scheme Uri, but may throw if unavailable or the scheme is not 'file'
   Future<String> filePath({String? withFilename}) async {
-    assert(!usesUri, 'Cannot call filePath when using a URI scheme');
+    assert(
+        !usesUri || fileUri?.scheme == 'file' || directoryUri?.scheme == 'file',
+        'Cannot call filePath when using a URI scheme, unless the scheme is "file"');
     if (this is MultiUploadTask && withFilename == null) {
       return '';
     }
-    final baseDirPath = await baseDirectoryPath(baseDirectory);
-    return p.join(baseDirPath, directory, withFilename ?? filename);
+    if (!usesUri) {
+      final baseDirPath = await baseDirectoryPath(baseDirectory);
+      return p.join(baseDirPath, directory, withFilename ?? filename);
+    } else {
+      if (fileUri != null) {
+        return fileUri!.path;
+      }
+      return '${directoryUri!.path}/${withFilename ?? filename}';
+    }
   }
 
   /// Returns the path to the directory represented by [baseDirectory]
@@ -545,7 +554,15 @@ sealed class Task extends Request implements Comparable {
 
   /// True if this task uses a Uri to define its download directory or upload
   /// filename
-  bool get usesUri;
+  bool get usesUri => false;
+
+  /// Returns the Uri represented by the [directory] field, or null if it does not
+  /// represent a valid uri
+  Uri? get directoryUri => null;
+
+  /// Returns the Uri represented by the [filename] field, or null if it does not
+  /// represent a valid uri
+  Uri? get fileUri => null;
 
   /// If true, task expects progress updates
   bool get providesProgressUpdates =>
@@ -809,7 +826,7 @@ final class DownloadTask extends Task {
     return Task.allowedUriSchemes.contains(directoryUri?.scheme);
   }
 
-  /// Returns the Uri contained in the [directory] field, or null if it does not
+  @override
   Uri? get directoryUri => UriUtils.uriFromStringValue(directory);
 }
 
@@ -1074,7 +1091,7 @@ final class UploadTask extends Task {
     return Task.allowedUriSchemes.contains(fileUri?.scheme);
   }
 
-  /// Returns the Uri contained in the [filename] field, or null if it does not
+  @override
   Uri? get fileUri => UriUtils.uriFromStringValue(filename);
 
   /// Returns the filename set during construction of the task, or that
@@ -1535,7 +1552,4 @@ final class DataTask extends Task {
 
   @override
   String get taskType => 'DataTask';
-
-  @override
-  bool get usesUri => false;
 }
