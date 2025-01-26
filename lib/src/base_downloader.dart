@@ -623,12 +623,9 @@ abstract base class BaseDownloader {
   /// Returns the path to the stored file, or null if not successful
   /// If [asUriString] is true, returns the URI of the stored file
   /// instead of the filePath
-  Future<String?> moveToSharedStorage(
-      String filePath,
-      SharedStorage destination,
-      String directory,
-      String? mimeType,
-      bool asUriString) {
+  Future<String?> moveToSharedStorage(String filePath,
+      SharedStorage destination, String directory, String? mimeType,
+      {bool asUriString = false}) {
     return Future.value(null);
   }
 
@@ -639,8 +636,9 @@ abstract base class BaseDownloader {
   /// Returns the path to the stored file, or null if not successful
   /// If [asUriString] is true, returns the URI of the stored file
   /// instead of the filePath
-  Future<String?> pathInSharedStorage(String filePath,
-      SharedStorage destination, String directory, bool asUriString) {
+  Future<String?> pathInSharedStorage(
+      String filePath, SharedStorage destination, String directory,
+      {bool asUriString = false}) {
     return Future.value(null);
   }
 

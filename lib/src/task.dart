@@ -558,11 +558,18 @@ sealed class Task extends Request implements Comparable {
 
   /// Returns the Uri represented by the [directory] field, or null if it does not
   /// represent a valid uri
-  Uri? get directoryUri => null;
+  Uri? get directoryUri => UriUtils.uriFromStringValue(directory);
 
   /// Returns the Uri represented by the [filename] field, or null if it does not
   /// represent a valid uri
-  Uri? get fileUri => null;
+  Uri? get fileUri => UriUtils.uriFromStringValue(filename);
+
+  /// Returns the filename of the file represented by the Task when in URI mode,
+  /// or null if not available
+  String? get uriFilename {
+    final (filename: storedFilename, :uri) = UriUtils.unpack(filename);
+    return storedFilename ?? uri?.pathSegments.last;
+  }
 
   /// If true, task expects progress updates
   bool get providesProgressUpdates =>
@@ -825,9 +832,6 @@ final class DownloadTask extends Task {
   bool get usesUri {
     return Task.allowedUriSchemes.contains(directoryUri?.scheme);
   }
-
-  @override
-  Uri? get directoryUri => UriUtils.uriFromStringValue(directory);
 }
 
 /// Information related to an upload task
@@ -1090,9 +1094,6 @@ final class UploadTask extends Task {
   bool get usesUri {
     return Task.allowedUriSchemes.contains(fileUri?.scheme);
   }
-
-  @override
-  Uri? get fileUri => UriUtils.uriFromStringValue(filename);
 
   /// Returns the filename set during construction of the task, or that
   /// was set by the uploader based on the provided URI, or null if

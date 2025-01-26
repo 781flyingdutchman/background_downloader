@@ -32,20 +32,22 @@ val trailingPathSeparatorRegEx = Regex("""/$""")
  */
 suspend fun moveToSharedStorage(
     context: Context,
-    filePath: String,
+    filePathOrUriString: String,
     destination: SharedStorage,
     directory: String,
     mimeType: String?,
     asUriString: Boolean
 ): String? {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-        return moveToPublicDirectory(filePath, destination, directory)
+        return moveToPublicDirectory(filePathOrUriString, destination, directory)
     }
-    val file = File(filePath)
+    val file = if (filePathOrUriString.startsWith("file://")) {
+        File(Uri.parse(filePathOrUriString).path!!)
+    } else  File(filePathOrUriString)
     if (!file.exists()) {
         Log.i(
             BDPlugin.TAG,
-            "File $filePath does not exist -> cannot move to shared storage"
+            "File $filePathOrUriString does not exist -> cannot move to shared storage"
         )
         return null
     }
@@ -64,7 +66,7 @@ suspend fun moveToSharedStorage(
     val uri = try {
         resolver.insert(getMediaStoreUri(destination), contentValues)
     } catch (e: Exception) {
-        Log.i(BDPlugin.TAG, "Cannot insert $filePath in MediaStore: $e")
+        Log.i(BDPlugin.TAG, "Cannot insert $filePathOrUriString in MediaStore: $e")
         return null
     }
     if (uri != null) {
@@ -82,7 +84,7 @@ suspend fun moveToSharedStorage(
         } catch (e: Exception) {
             Log.i(
                 BDPlugin.TAG,
-                "Error moving file $filePath to shared storage: $e"
+                "Error moving file $filePathOrUriString to shared storage: $e"
             )
         } finally {
             contentValues.clear()

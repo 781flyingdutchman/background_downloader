@@ -12,6 +12,7 @@ import 'base_downloader.dart';
 import 'models.dart';
 import 'package:path/path.dart' as p;
 import 'native_downloader.dart';
+import 'task.dart';
 
 /// Base implementation of the utilities related to File, Uri and filePath
 /// manipulation.
@@ -92,6 +93,83 @@ sealed class UriUtils {
   ///
   /// Returns true if successful, false otherwise.
   Future<bool> openFile(Uri uri, {String mimeType});
+
+  /// Move the file represented by the [task] to a shared storage
+  /// [destination] and potentially a [directory] within that destination. If
+  /// the [mimeType] is not provided we will attempt to derive it from the
+  /// [Task.fileUri]
+  ///
+  /// Returns the Uri of the stored file, or null if not successful.
+  ///
+  /// NOTE: on iOS, using [destination] [SharedStorage.images] or
+  /// [SharedStorage.video] adds the photo or video file to the Photos
+  /// library. This requires the user to grant permission, and requires the
+  /// "NSPhotoLibraryAddUsageDescription" key to be set in Info.plist. The
+  /// returned value is NOT a filePath but an identifier. If the full filepath
+  /// is required, follow the [moveToSharedStorage] call with a call to
+  /// [pathInSharedStorage], passing the identifier obtained from the call
+  /// to [moveToSharedStorage] as the filePath parameter. This requires the user to
+  /// grant additional permissions, and requires the "NSPhotoLibraryUsageDescription"
+  /// key to be set in Info.plist. The returned value is the actual file path
+  /// of the photo or video in the Photos Library.
+  ///
+  /// Platform-dependent, not consistent across all platforms
+  Future<Uri?> moveToSharedStorage(DownloadTask task, SharedStorage destination,
+      {String directory = '', String? mimeType}) async {
+    return await moveFileToSharedStorage(
+        task.fileUri ?? Uri.file(await task.filePath()), destination,
+        directory: directory, mimeType: mimeType);
+  }
+
+  /// Move the file represented by [fileUri] to a shared storage
+  /// [destination] and potentially a [directory] within that destination. If
+  /// the [mimeType] is not provided we will attempt to derive it from the
+  /// [fileUri] extension
+  ///
+  /// Returns the URI of the stored file, or null if not successful
+  ///
+  /// NOTE: on iOS, using [destination] [SharedStorage.images] or
+  /// [SharedStorage.video] adds the photo or video file to the Photos
+  /// library. This requires the user to grant permission, and requires the
+  /// "NSPhotoLibraryAddUsageDescription" key to be set in Info.plist. The
+  /// returned value is NOT a filePath but an identifier. If the full filepath
+  /// is required, follow the [moveToSharedStorage] call with a call to
+  /// [pathInSharedStorage], passing the identifier obtained from the call
+  /// to [moveToSharedStorage] as the filePath parameter. This requires the user to
+  /// grant additional permissions, and requires the "NSPhotoLibraryUsageDescription"
+  /// key to be set in Info.plist. The returned value is the actual file path
+  /// of the photo or video in the Photos Library.
+  ///
+  /// Platform-dependent, not consistent across all platforms
+  Future<Uri?> moveFileToSharedStorage(Uri fileUri, SharedStorage destination,
+      {String directory = '', String? mimeType}) async {
+    assert(fileUri.scheme == 'file',
+        'uri.moveFileToSharedStorage requires a file scheme uri, got $fileUri');
+    final uriString = await _downloader.moveToSharedStorage(
+        fileUri.toString(), destination, directory, mimeType,
+        asUriString: true);
+    return uriString != null ? Uri.tryParse(uriString) : null;
+  }
+
+  /// Returns the Uri of the file represented by [filePath] in shared
+  /// storage [destination] and potentially a [directory] within that
+  /// destination.
+  ///
+  /// Returns the path to the stored file, or null if not successful
+  ///
+  /// See the documentation for [moveToSharedStorage] for special use case
+  /// on iOS for .images and .video
+  ///
+  /// Platform-dependent, not consistent across all platforms
+  Future<Uri?> pathInSharedStorage(Uri fileUri, SharedStorage destination,
+      {String directory = ''}) async {
+    assert(fileUri.scheme == 'file',
+        'uri.pathInSharedStorage requires a file scheme uri, got $fileUri');
+    final uriString = await _downloader.pathInSharedStorage(
+        fileUri.toString(), destination, directory,
+        asUriString: true);
+    return uriString != null ? Uri.tryParse(uriString) : null;
+  }
 
   /// Packs [filename] and [uri] into a single String
   ///
