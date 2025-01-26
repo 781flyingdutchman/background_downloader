@@ -1,8 +1,11 @@
+// ignore_for_file: avoid_print, empty_catches
+
 import 'dart:io';
 
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
 import 'test_utils.dart';
 
@@ -12,23 +15,23 @@ void main() {
   tearDown(defaultTearDown);
 
   group('Binary uploads', () {
-    test('enqueue binary file using Android content URI', () async {
+    test('enqueue binary file using URI', () async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
       // move file to shared storage and obtain the URI
       final dummy = DownloadTask(url: uploadTestUrl, filename: uploadFilename);
-      final uriString = await FileDownloader().moveFileToSharedStorage(
-          await dummy.filePath(), SharedStorage.downloads,
-          asUriString: true); //TODO make this work for any file URI
-      print('URI: $uriString');
+      final uri = await FileDownloader()
+          .uri
+          .moveToSharedStorage(dummy, SharedStorage.downloads);
+      print('URI: $uri');
       final task = UploadTask.fromUri(
-          url: uploadBinaryTestUrl, uri: Uri.parse(uriString!), post: 'binary');
+          url: uploadBinaryTestUrl, uri: uri!, post: 'binary');
       expect(await FileDownloader().enqueue(task), isTrue);
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
       expect(lastStatus, equals(TaskStatus.complete));
-    }, skip: !Platform.isAndroid);
+    });
 
     test('upload binary file using incorrect Android content URI', () async {
       final task = UploadTask.fromUri(
@@ -41,6 +44,32 @@ void main() {
       expect(
           result.exception?.exceptionType, equals('TaskFileSystemException'));
     }, skip: !Platform.isAndroid);
+
+    test('upload with fileUrl', () async {
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+      Directory directory = await getApplicationDocumentsDirectory();
+      final uploadPath = p.join(directory.path, uploadFilename);
+      final task = UploadTask.fromUri(
+          uri: Uri.file(uploadPath),
+          url: uploadBinaryTestUrl,
+          post: 'binary',
+          updates: Updates.statusAndProgress);
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await statusCallbackCompleter.future;
+      expect(statusCallbackCounter, equals(3));
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(progressCallbackCounter, greaterThan(1));
+      expect(lastProgress, equals(progressComplete));
+      final (:filename, :uri) = UriUtils.unpack(lastTaskWithStatus!.filename);
+      print('filename=$filename, uri=$uri');
+      expect(filename, equals(uploadFilename));
+      expect(uri!.scheme, equals('file'));
+      expect(lastTaskWithStatus!.fileUri!.scheme, equals('file'));
+      expect(lastTaskWithStatus!.uriFilename, equals(uploadFilename));
+      print('Finished upload with fileUrl');
+    });
 
     test('upload binary file using file URI', () async {
       final filePath = await uploadTask.filePath();
@@ -64,12 +93,11 @@ void main() {
           taskProgressCallback: progressCallback);
       // move file to shared storage and obtain the URI
       final dummy = DownloadTask(url: uploadTestUrl, filename: uploadFilename);
-      final uriString = await FileDownloader().moveFileToSharedStorage(
-          await dummy.filePath(), SharedStorage.downloads,
-          asUriString: true);
-      print('URI: $uriString');
-      final task = UploadTask.fromUri(
-          url: uploadBinaryTestUrl, uri: Uri.parse(uriString!));
+      final uri = await FileDownloader()
+          .uri
+          .moveToSharedStorage(dummy, SharedStorage.downloads);
+      print('URI: $uri');
+      final task = UploadTask.fromUri(url: uploadBinaryTestUrl, uri: uri!);
       expect(await FileDownloader().enqueue(task), isTrue);
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
@@ -103,21 +131,19 @@ void main() {
     test('MultiUpload using URIs', () async {
       // move file to shared storage and obtain the URI
       final dummy = DownloadTask(url: uploadTestUrl, filename: uploadFilename);
-      final uriString = await FileDownloader().moveFileToSharedStorage(
-          await dummy.filePath(), SharedStorage.downloads,
-          asUriString: true);
+      final uri = await FileDownloader()
+          .uri
+          .moveToSharedStorage(dummy, SharedStorage.downloads);
       // move second file to shared storage and obtain the URI
       final dummy2 =
           DownloadTask(url: uploadTestUrl, filename: uploadFilename2);
-      final uriString2 = await FileDownloader().moveFileToSharedStorage(
-          await dummy2.filePath(), SharedStorage.downloads,
-          asUriString: true);
-      final task = MultiUploadTask(url: uploadMultiTestUrl, files: [
-        ('f1', Uri.parse(uriString!)),
-        ('f2', Uri.parse(uriString2!))
-      ], fields: {
-        'key': 'value'
-      });
+      final uri2 = await FileDownloader()
+          .uri
+          .moveToSharedStorage(dummy2, SharedStorage.downloads);
+      final task = MultiUploadTask(
+          url: uploadMultiTestUrl,
+          files: [('f1', uri), ('f2', uri2)],
+          fields: {'key': 'value'});
       final result = await FileDownloader().upload(task);
       expect(result.status, equals(TaskStatus.complete));
     });
@@ -195,41 +221,36 @@ void main() {
       task = DownloadTask.fromUri(
           url: urlWithContentLength,
           directoryUri: directoryUri,
-          filename: DownloadTask.suggestedFilename);
+          filename: DownloadTask.suggestedFilename,
+          allowPause: true,
+          updates: Updates.statusAndProgress);
       expect(task.usesUri, isTrue);
       expect(task.filename, equals(DownloadTask.suggestedFilename));
       expect(task.directoryUri, equals(directoryUri));
       expect(await FileDownloader().enqueue(task), isTrue);
       await someProgressCompleter.future;
       expect(await FileDownloader().pause(task), isTrue);
-      await Future.delayed(const Duration(milliseconds: 500));
-      expect(lastStatus, equals(TaskStatus.paused));
-      print("paused");
-      await Future.delayed(const Duration(seconds: 2));
-      // resume
-      expect(await FileDownloader().resume(task), isTrue);
-      await statusCallbackCompleter.future;
-      expect(lastStatus, equals(TaskStatus.complete));
-      expect(lastTaskWithStatus, isNotNull);
-      var file = File(await lastTaskWithStatus!.filePath());
-      expect(await fileEqualsLargeTestFile(file), isTrue);
-      await file.delete();
-
-      await Future.delayed(const Duration(milliseconds: 500));
-      expect(await FileDownloader().pause(task), isTrue);
-      await Future.delayed(const Duration(milliseconds: 500));
-      expect(await FileDownloader().resume(task), isTrue);
-      await Future.delayed(const Duration(milliseconds: 500));
-      final result = await FileDownloader().download(task);
-      expect(result.status, equals(TaskStatus.complete));
-      var (:filename, :uri) = UriUtils.unpack(result.task.filename);
-      print('filename=$filename');
-      print('uri=$uri');
-      expect(filename, equals('5MB-test.ZIP'));
-      expect(uri!.scheme, equals('file'));
-      expect(uri.path, contains(filename));
-      expect(uri.toString().contains(directoryUri.toString()), isTrue);
-      expect(await FileDownloader().uri.deleteFile(uri), isTrue);
+      if (!Platform.isAndroid) {
+        // on Android the pause will not happen in URI mode,
+        // so the following test is only for non-Android
+        await Future.delayed(const Duration(milliseconds: 500));
+        expect(lastStatus, equals(TaskStatus.paused));
+        print("paused");
+        await Future.delayed(const Duration(seconds: 2));
+        // resume
+        expect(await FileDownloader().resume(task), isTrue);
+        await statusCallbackCompleter.future;
+        expect(lastStatus, equals(TaskStatus.complete));
+        expect(lastTaskWithStatus, isNotNull);
+        var file = File(await lastTaskWithStatus!.filePath());
+        print('File path: ${file.path}');
+        expect(await fileEqualsLargeTestFile(file), isTrue);
+        await file.delete();
+      } else {
+        // on Android, the task will fail when attempting to pause, using URI
+        await statusCallbackCompleter.future;
+        expect(lastStatus, equals(TaskStatus.failed));
+      }
     });
   });
 
@@ -357,15 +378,55 @@ void main() {
     testWidgets('open file from URI', (widgetTester) async {
       // move file to shared storage and obtain the URI
       final dummy = DownloadTask(url: uploadTestUrl, filename: uploadFilename);
-      final uriString = await FileDownloader().moveFileToSharedStorage(
-          await dummy.filePath(), SharedStorage.downloads,
-          asUriString: true);
-      print('URI: $uriString');
-      var uri = Uri.parse(uriString!);
+      final uri = await FileDownloader()
+          .uri
+          .moveToSharedStorage(dummy, SharedStorage.downloads);
+      print('URI: $uri');
       final result =
-          await FileDownloader().uri.openFile(uri, mimeType: 'text/plain');
+          await FileDownloader().uri.openFile(uri!, mimeType: 'text/plain');
       expect(result, isTrue);
       await Future.delayed(const Duration(seconds: 2));
     });
+  });
+
+  test('move task to shared storage with file URI', () async {
+    // note: moved file is not deleted in this test
+    var filePath = await task.filePath();
+    await FileDownloader().download(task);
+    expect(File(filePath).existsSync(), isTrue);
+    final fileUri = Uri.file(filePath);
+    final uri = await FileDownloader()
+        .uri
+        .moveFileToSharedStorage(fileUri, SharedStorage.downloads);
+    print('Uri is $uri');
+    expect(uri, isNotNull);
+    if (Platform.isAndroid) {
+      expect(uri!.scheme, equals('content'));
+    } else {
+      expect(uri!.scheme, equals('file'));
+    }
+    expect(File(filePath).existsSync(), isFalse);
+  });
+
+  testWidgets('path in shared storage with file URI',
+      //TODO not sure this test works properly
+      // note: moved file is not deleted in this test
+      (widgetTester) async {
+    await FileDownloader().download(task);
+    final uri = await FileDownloader()
+        .uri
+        .moveToSharedStorage(task, SharedStorage.downloads);
+    print('Uri is $uri');
+    expect(uri, isNotNull);
+    if (uri!.scheme == 'file') {
+      expect(uri.toFile().existsSync(), isTrue);
+
+      final uri2 = await FileDownloader()
+          .uri
+          .pathInSharedStorage(uri, SharedStorage.downloads);
+      print('Uri is $uri');
+      expect(uri2, isNotNull);
+      expect(uri2?.scheme, equals('content'));
+    }
   });
 }

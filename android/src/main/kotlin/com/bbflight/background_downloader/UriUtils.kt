@@ -230,11 +230,15 @@ class UriUtilsMethodCallHelper(private val plugin: BDPlugin) : MethodCallHandler
                 }
                 val uri = Uri.parse(uriString)
                 if (uri.scheme == "content") {
-                    val docFile = DocumentFile.fromSingleUri(activity, Uri.parse(uriString))
+                    val docFile = DocumentFile.fromSingleUri(activity, uri)
                     if (docFile != null && docFile.delete()) {
                         result.success(null)
                     } else {
-                        result.error("DELETE_FILE_FAILED", "Failed to delete file", null)
+                        if (docFile == null) {
+                            result.error("DELETE_FILE_FAILED", "File at $uri does not exist", null)
+                        } else {
+                            result.error("DELETE_FILE_FAILED", "Failed to delete file", null)
+                        }
                     }
                     return
                 }

@@ -602,7 +602,7 @@ func getTaskFrom(urlSessionTask: URLSessionTask) -> Task? {
 
 /// Marks the task as modified such that [getTaskFrom] a UrlSession wlll get the modified task, not the one'
 /// immutably stored with the urlSession
-func markTaskModified(task: Task) {
+func storeModifiedTask(task: Task) {
     BDPlugin.propertyLock.withLock({
         BDPlugin.tasksWithModifications[task.taskId] = task
     })

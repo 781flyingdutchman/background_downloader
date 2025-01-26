@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:background_downloader/background_downloader.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart';
@@ -106,6 +107,15 @@ void progressCallback(TaskProgressUpdate update) {
       (progress < 0 || progress == 1)) {
     progressCallbackCompleter.complete();
   }
+}
+
+/// Returns true if the supplied file equals the large test file
+Future<bool> fileEqualsLargeTestFile(File file) async {
+  ByteData data = await rootBundle.load("assets/$largeFilename");
+  final targetData = data.buffer.asUint8List();
+  final fileData = file.readAsBytesSync();
+  print('target= ${targetData.length} and file= ${fileData.length}');
+  return listEquals(targetData, fileData);
 }
 
 Future<void> defaultSetup() async {

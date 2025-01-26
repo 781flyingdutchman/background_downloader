@@ -169,14 +169,14 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
                     let newTask = taskWithSuggestedFilenameFromResponseHeaders(task: task, responseHeaders: response.allHeaderFields)
                     os_log("Suggested task filename for taskId %@ is %@", log: log, type: .info, newTask.taskId, newTask.filename)
                     if newTask.filename != task.filename {
-                        markTaskModified(task: newTask)
+                        storeModifiedTask(task: newTask)
                         task = newTask
                     }
                 } else {
                     let suggestedFilename = suggestFilename(responseHeaders: response.allHeaderFields, urlString: task.url)
                     let packed = pack(filename: suggestedFilename.isEmpty ? "unknown" : suggestedFilename, uri: uri!)
                     let newTask = task.copyWith(filename: packed)
-                    markTaskModified(task: newTask)
+                    storeModifiedTask(task: newTask)
                     task = newTask
                 }
             }

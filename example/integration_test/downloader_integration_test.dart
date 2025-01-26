@@ -2700,21 +2700,6 @@ void main() {
       Directory(dirname(path)).deleteSync();
     });
 
-    test('move task to shared storage with Android URI', () async {
-      // note: moved file is not deleted in this test
-      if (Platform.isAndroid) {
-        var filePath = await task.filePath();
-        await FileDownloader().download(task);
-        final path = await FileDownloader().moveToSharedStorage(
-            task, SharedStorage.downloads,
-            asUriString: true);
-        print('Uri is $path');
-        expect(path, isNotNull);
-        expect(path?.startsWith('content://'), isTrue);
-        expect(File(filePath).existsSync(), isFalse);
-      }
-    });
-
     test('[*] try to move text file to images -> error', () async {
       // Note: this test will fail on Android API below 30, as that API
       // does not have a problem storing a text file in images
@@ -2803,25 +2788,6 @@ void main() {
           .pathInSharedStorage(path, SharedStorage.downloads);
       expect(filePath, equals(path));
       File(path).deleteSync();
-    });
-
-    testWidgets('path in shared storage with Android URI',
-        (widgetTester) async {
-      if (Platform.isAndroid) {
-        await FileDownloader().download(task);
-        final path = await FileDownloader()
-            .moveToSharedStorage(task, SharedStorage.downloads);
-        print('Path in downloads is $path');
-        expect(path, isNotNull);
-        expect(File(path!).existsSync(), isTrue);
-        final uri = await FileDownloader().pathInSharedStorage(
-            path, SharedStorage.downloads,
-            asUriString: true);
-        print('Uri is $uri');
-        expect(uri, isNotNull);
-        expect(uri?.startsWith('content://'), isTrue);
-        File(path).deleteSync();
-      }
     });
   });
 
@@ -3354,7 +3320,7 @@ void main() {
     });
   });
 
-  group('filePath', () {
+  group('FilePath', () {
     late String tempBasePath;
 
     setUp(() async {
@@ -3703,13 +3669,4 @@ Future<void> enqueueAndFileExists(String path) async {
   } on FileSystemException {}
   // Expect 3 status callbacks: enqueued + running + complete
   expect(statusCallbackCounter, equals(3));
-}
-
-/// Returns true if the supplied file equals the large test file
-Future<bool> fileEqualsLargeTestFile(File file) async {
-  ByteData data = await rootBundle.load("assets/$largeFilename");
-  final targetData = data.buffer.asUint8List();
-  final fileData = file.readAsBytesSync();
-  print('target= ${targetData.length} and file= ${fileData.length}');
-  return listEquals(targetData, fileData);
 }
