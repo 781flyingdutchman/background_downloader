@@ -331,7 +331,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
                 
                 if let unpackedUri = unpackDirectory.uri {
                     // URI mode
-                    let uri = decodePossibleBookmarkUri(uri: unpackedUri)
+                    let uri = decodeToFileUrl(uri: unpackedUri)
                     os_log("URI mode", log: log, type: .error)
                     guard let uri = uri else {
                         os_log("Invalid directory URI (could not convert bookmark): %@", log: log, type: .error, unpackedUri.absoluteString)

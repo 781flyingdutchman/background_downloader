@@ -260,7 +260,7 @@ sealed class Task extends Request implements Comparable {
 
   /// Uri schemes that are supported by the downloader in the context of
   /// a [Task] download directory or upload file
-  static const allowedUriSchemes = ['file', 'content', 'urlbookmark'];
+  static const allowedUriSchemes = ['file', 'content', 'urlbookmark', 'media'];
 
   /// Creates a [Task]
   ///
@@ -963,6 +963,7 @@ final class UploadTask extends Task {
       super.headers,
       String? httpRequestMethod,
       String? super.post,
+      this.fileField = 'file',
       String? mimeType,
       Map<String, String>? fields,
       super.group,
@@ -975,7 +976,6 @@ final class UploadTask extends Task {
       super.creationTime})
       : mimeType = mimeType ?? 'application/octet-stream',
         fields = fields ?? {},
-        fileField = '',
         super(
             baseDirectory: BaseDirectory.root,
             filename: filename != null

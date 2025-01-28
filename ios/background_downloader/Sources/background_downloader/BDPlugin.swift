@@ -274,9 +274,9 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                 fileUrl = directory.appendingPath(task.filename) // and filename is already unpacked
             } else {
                 // URI mode
-                maybeFileUrl = decodePossibleBookmarkUri(uri: maybeFileUrl!)
+                maybeFileUrl = decodeToFileUrl(uri: maybeFileUrl!)
                 if maybeFileUrl == nil {
-                    os_log("Could not convert persistent boomark uri to url for taskId %@", log: log, type: .info, task.taskId)
+                    os_log("Could not convert uri to file url for taskId %@", log: log, type: .info, task.taskId)
                     return false
                 }
                 if maybeFileUrl!.scheme != "file" {
@@ -293,10 +293,13 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                 fileUrl = maybeFileUrl!
             }
             if !FileManager.default.fileExists(atPath: fileUrl.path) {
-                os_log("Could not find file %@ for taskId %@", log: log, type: .info, fileUrl.absoluteString, task.taskId)
+                os_log("Could not find file %@ for taskId %@", log: log, type: .info, fileUrl.path, task.taskId)
                 return false
             }
-            request.setValue(task.mimeType, forHTTPHeaderField: "Content-Type")
+            let resolvedMimeType = task.mimeType?.isEmpty == true
+                ? getMimeType(fromFilename: fileUrl.path)
+                : task.mimeType ?? "application/octet-stream"
+            request.setValue(resolvedMimeType, forHTTPHeaderField: "Content-Type")
             if let encodedFilename = filename?.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
                 request.setValue("attachment; filename=\"\(encodedFilename)\"", forHTTPHeaderField: "Content-Disposition")
             } else {

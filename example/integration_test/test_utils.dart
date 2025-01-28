@@ -38,11 +38,11 @@ const getRedirectTestUrl =
     'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_get_redirect';
 const postTestUrl =
     'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_post_data';
-const uploadTestUrl =
+const uploadTestUrl = // for multipart
     'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_upload_file';
-const uploadBinaryTestUrl =
+const uploadBinaryTestUrl = // for binary
     'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_upload_binary_file';
-const uploadMultiTestUrl =
+const uploadMultiTestUrl = // for multipart with multiple files
     'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_multi_upload_file';
 const dataTaskGetUrl = 'https://httpbin.org/get';
 const dataTaskPostUrl = 'https://httpbin.org/post';

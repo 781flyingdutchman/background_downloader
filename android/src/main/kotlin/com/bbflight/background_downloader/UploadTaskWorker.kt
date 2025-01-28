@@ -102,6 +102,7 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
         connection: HttpURLConnection
     ): TaskStatus {
         val (filename, fileUri) = UriUtils.unpack(task.filename)
+        var resolvedMimeType = task.mimeType
         val (fileSize, inputStream) = withContext(Dispatchers.IO) { // Use Dispatchers.IO for file operations
             if (fileUri != null) {
                 try {
@@ -111,6 +112,8 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                         if (derivedFilename != null) {
                             task = task.copyWith(filename = UriUtils.pack(derivedFilename, fileUri))
                         }
+                        if (resolvedMimeType.isEmpty()) resolvedMimeType =
+                            getMimeType(derivedFilename ?: "")
                     }
                     if (fileUri.scheme != "file") {
                         // a content:// URI scheme is resolved via the contentResolver
@@ -134,7 +137,8 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                                     null
                                 ) // Return nulls to indicate failure
                             }
-
+                        if (resolvedMimeType.isEmpty()) resolvedMimeType =
+                            getMimeType(contentResolver, fileUri)
                         // Get InputStream from URI
                         val inputStream = contentResolver.openInputStream(fileUri) ?: run {
                             val message = "Could not open input stream for URI: $fileUri"
@@ -151,6 +155,8 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                         // a file:// Uri scheme is interpreted as a regular file path
                         val file = fileUri.toFile()
                         val fileSize = file.length()
+                        if (resolvedMimeType.isEmpty()) resolvedMimeType =
+                            getMimeType(file.name)
                         Log.v(TAG, "Using FileInputStream from URI $fileUri")
                         Pair(fileSize, FileInputStream(file))
                     }
@@ -185,6 +191,8 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                     )
                     return@withContext Pair(null, null)
                 }
+                if (resolvedMimeType.isEmpty()) resolvedMimeType =
+                    getMimeType(file.name)
                 Pair(fileSize, FileInputStream(file))
             }
         }
@@ -216,7 +224,7 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
         val contentLength = end - start + 1
         determineRunInForeground(task, contentLength)
         Log.d(TAG, "Binary upload for taskId ${task.taskId}")
-        connection.setRequestProperty("Content-Type", task.mimeType)
+        connection.setRequestProperty("Content-Type", resolvedMimeType)
         connection.setRequestProperty(
             "Content-Disposition", "attachment; filename=\"" + Uri.encode(task.filename) + "\""
         )

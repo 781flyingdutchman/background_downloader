@@ -298,14 +298,25 @@ func extractFilesData(task: Task) -> [((String, String, String))] {
     }
     var result = [(String, String, String)]()
     for i in 0 ..< fileFields.count {
-        if FileManager.default.fileExists(atPath: filenames[i]) {
-            result.append((fileFields[i], filenames[i], mimeTypes[i]))
+        os_log("Filename in extractFilesData %@", log: log, type: .error, filenames[i])
+        let fileUrl = URL(string: filenames[i])
+        let decodedFileUrl = fileUrl != nil ? decodeToFileUrl(uri: fileUrl!) : nil
+        if decodedFileUrl?.scheme == "file" {
+            // URI mode, return path
+            os_log("Appending %@", log: log, type: .error, decodedFileUrl!.path)
+            result.append((fileFields[i], decodedFileUrl!.path, mimeTypes[i]))
         } else {
-            result.append((
-                fileFields[i],
-                getFilePath(for: task, withFilename: filenames[i]) ?? "",
-                mimeTypes[i]
-            ))
+            // file path mode
+            if FileManager.default.fileExists(atPath: filenames[i]) {
+                result.append((fileFields[i], filenames[i], mimeTypes[i]))
+            } else {
+                os_log("Appending %@", log: log, type: .error, getFilePath(for: task, withFilename: filenames[i]) ?? "")
+                result.append((
+                    fileFields[i],
+                    getFilePath(for: task, withFilename: filenames[i]) ?? "",
+                    mimeTypes[i]
+                ))
+            }
         }
     }
     return result
