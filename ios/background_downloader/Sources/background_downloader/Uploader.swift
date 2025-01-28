@@ -80,10 +80,12 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
         // and file length, so that we can calculate total size of upload
         let separator = "\(lineFeed)--\(Uploader.boundary)\(lineFeed)" // between files
         let terminator = "\(lineFeed)--\(Uploader.boundary)--\(lineFeed)" // after last file
+        let maybeFileUri = uriFromStringValue(maybePacked: task.filename)
+        let maybeDecodedFileUri = maybeFileUri != nil ? decodeToFileUrl(uri: maybeFileUri!) : nil
         guard let filePath = getFilePath(for: task) else {return false}
         let filesData = filePath.isEmpty
         ? extractFilesData(task: task) // MultiUpload case
-        : [(task.fileField!, filePath, task.mimeType!)] // one file Upload case
+        : [(task.fileField!,maybeDecodedFileUri?.path ?? filePath, task.mimeType!)] // one file Upload case
         for (fileField, path, mimeType) in filesData {
             if !FileManager.default.fileExists(atPath: path) {
                 os_log("File to upload does not exist at %@", log: log, type: .error, path)
@@ -92,7 +94,8 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
             let contentDispositionString =
             "Content-Disposition: form-data; name=\"\(browserEncode(fileField))\"; "
             + "filename=\"\(browserEncode(path.components(separatedBy: "/").last!))\"\(lineFeed)"
-            let contentTypeString = "Content-Type: \(mimeType)\(lineFeed)\(lineFeed)"
+            let resolvedMimeType = mimeType.isEmpty ? getMimeType(fromFilename: path) : mimeType
+            let contentTypeString = "Content-Type: \(resolvedMimeType)\(lineFeed)\(lineFeed)"
             let fileUrl = URL(fileURLWithPath: path)
             guard let inputStream = InputStream(url: fileUrl) else {
                 os_log("Could not open file to upload at %@", log: log, type: .error, path)
@@ -199,12 +202,11 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
                                        range: NSMakeRange(0, (string as NSString).length))
         return !result.isEmpty
     }
-
     
     /// Returns whether [string] is a JSON formatted string
     private func isJsonString(_ string: String)-> Bool {
         let result = jsonString.matches(in: string,
-                                       range: NSMakeRange(0, (string as NSString).length))
+                                        range: NSMakeRange(0, (string as NSString).length))
         return !result.isEmpty
     }
     

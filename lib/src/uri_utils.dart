@@ -35,6 +35,8 @@ sealed class UriUtils {
   /// Opens a directory picker dialog and returns the selected directory's URI.
   ///
   /// [startLocation] (optional) specifies a [SharedStorage] location to open the picker at.
+  ///    [SharedStorage.images] and [SharedStorage.video] will launch the media
+  ///    picker instead of the file picker, and allow selection of the respective media type.
   /// [startLocationUri] (optional) specifies a URI to open the picker at.
   /// Only one of [startLocation] or [startLocationUri] should be provided.
   /// [persistedUriPermission] (optional, defaults to `false`) indicates whether to take persisted URI permission
@@ -74,6 +76,33 @@ sealed class UriUtils {
   /// Returns the URI of the newly created directory.
   Future<Uri> createDirectory(Uri parentDirectoryUri, String newDirectoryName,
       {bool persistedUriPermission = false});
+
+  /// Activate a previously accessed directory or file (applies previously
+  /// obtained permissions) and return the Uri, or null if this was not
+  /// possible
+  ///
+  /// This is a no-op except on iOS, where it is required to re-activate the
+  /// permission obtained when setting `persistedUriPermission` to `true`,
+  /// when using the directory or file picker.  In those instances, the returned
+  /// URI will have a 'urlbookmark' scheme instead of a file scheme, and that
+  /// bookmark contains security information. When you store that bookmark (for
+  /// later use) then you must make sure that you still have access to that
+  /// resource when - for example - using [getFileBytes] to get the data, or
+  /// to upload a file from a previously selected directory.
+  ///
+  /// This method also converts a media:// scheme URI on iOS to a file:// URI,
+  /// allowing you to access (and delete) it.  Media URIs on iOS are generated when
+  /// using [pickFiles] with a .images or .videos startingLocation (which
+  /// launches the media picker). Selected media is copied into the Application
+  /// Support directory, subdirectory "com.bbflight.downloader.media" and
+  /// returned as a media:// URI.  To access the actual copied file,
+  /// use [activateUri]
+  ///
+  /// If you are using persistedUriPermission, then any time you want to access
+  /// a URI that you obtained using that permission, call [activateUri] first.
+  Future<Uri?> activateUri(Uri uri) async {
+    return uri;
+  }
 
   /// Retrieves the file data (bytes) for a given URI.
   ///
@@ -378,6 +407,18 @@ final class AndroidUriUtils extends NativeUriUtils {
 
 final class IOSUriUtils extends NativeUriUtils {
   IOSUriUtils(super.downloader);
+
+  @override
+  Future<Uri?> activateUri(Uri uri) async {
+    try {
+      final result = await _methodChannel.invokeMethod<String?>(
+          'activateUri', uri.toString());
+      return result != null ? Uri.parse(result) : uri;
+    } catch (e) {
+      log.fine('Error activating URI $uri: $e');
+    }
+    return null;
+  }
 }
 
 /// Extensions on String related to Uri and File

@@ -70,20 +70,6 @@ void main() {
       expect(lastTaskWithStatus!.uriFilename, equals(uploadFilename));
       print('Finished upload with fileUrl');
     });
-
-    test('upload binary file using file URI', () async {
-      final filePath = await uploadTask.filePath();
-      final fileUri = Uri.file(filePath);
-      final task = UploadTask.fromUri(
-          url: uploadBinaryTestUrl, uri: fileUri, post: 'binary');
-      expect(task.usesUri, isTrue);
-      expect(task.fileUri, equals(fileUri));
-      final result = await FileDownloader().upload(task);
-      expect(result.status, equals(TaskStatus.complete));
-      final fileName = result.task.filename;
-      expect(fileName.startsWith('file://'), isTrue);
-      expect(fileName.endsWith(uploadFilename), isTrue);
-    });
   });
 
   group('Multipart uploads', () {
@@ -97,7 +83,7 @@ void main() {
           .uri
           .moveToSharedStorage(dummy, SharedStorage.downloads);
       print('URI: $uri');
-      final task = UploadTask.fromUri(url: uploadBinaryTestUrl, uri: uri!);
+      final task = UploadTask.fromUri(url: uploadMultiTestUrl, uri: uri!);
       expect(await FileDownloader().enqueue(task), isTrue);
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
@@ -106,7 +92,7 @@ void main() {
 
     test('upload multipart file using incorrect Android content URI', () async {
       final task = UploadTask.fromUri(
-          url: uploadBinaryTestUrl,
+          url: uploadMultiTestUrl,
           uri: Uri.parse('content://some/invalid/path'));
       final result = await FileDownloader().upload(task);
       print(result.exception?.description);
@@ -115,17 +101,17 @@ void main() {
           result.exception?.exceptionType, equals('TaskFileSystemException'));
     }, skip: !Platform.isAndroid);
 
-    test('upload multipart file using file URI', () async {
+    test('upload single multipart file using file URI', () async {
       final filePath = await uploadTask.filePath();
       final fileUri = Uri.file(filePath);
-      final task = UploadTask.fromUri(url: uploadBinaryTestUrl, uri: fileUri);
+      final task = UploadTask.fromUri(url: uploadTestUrl, uri: fileUri);
       expect(task.usesUri, isTrue);
       expect(task.fileUri, equals(fileUri));
       final result = await FileDownloader().upload(task);
       expect(result.status, equals(TaskStatus.complete));
-      final fileName = result.task.filename;
-      expect(fileName.startsWith('file://'), isTrue);
-      expect(fileName.endsWith(uploadFilename), isTrue);
+      final (:filename, :uri) = UriUtils.unpack(result.task.filename);
+      expect(uri!.scheme, equals('file'));
+      expect(filename, isNull);
     });
 
     test('MultiUpload using URIs', () async {
@@ -148,7 +134,7 @@ void main() {
       expect(result.status, equals(TaskStatus.complete));
     });
 
-    test('multiUpload using file uri', () async {
+    test('multiUpload using file uris', () async {
       final dummy = DownloadTask(url: uploadTestUrl, filename: uploadFilename);
       final uri1 = Uri.file(await dummy.filePath());
       print('URI: $uri1');
@@ -309,7 +295,7 @@ void main() {
     });
   });
 
-  group('Uploads via picker', () {
+  group('Uploads via photo/video picker', () {
     test('upload a photo', () async {
       print('Pick a photo to upload');
       final fileUri = await FileDownloader()
@@ -317,6 +303,7 @@ void main() {
           .pickFiles(startLocation: SharedStorage.images);
       expect(fileUri, isNotNull);
       expect(fileUri!.length, equals(1));
+      print(fileUri.first);
       final task = UploadTask.fromUri(
           url: uploadBinaryTestUrl,
           uri: fileUri.first,
@@ -325,14 +312,20 @@ void main() {
       expect(task.usesUri, isTrue);
       expect(task.fileUri, equals(fileUri.first));
       expect(task.mimeType, equals('image/jpeg'));
-      // final result = await FileDownloader().upload(task);
-      // expect(result.status, equals(TaskStatus.complete));
-      // var (:filename, :uri) = UriUtils.unpack(result.task.filename);
-      // print('filename=$filename');
-      // print('uri=$uri');
-      // expect(filename, isNotNull);
-      // expect(uri!.scheme, equals('content'));
-      // expect(uri.toString().contains(fileUri.first.toString()), isTrue);
+      final result = await FileDownloader().upload(task);
+      expect(result.status, equals(TaskStatus.complete));
+      var (:filename, :uri) = UriUtils.unpack(result.task.filename);
+      print('filename=$filename');
+      print('uri=$uri');
+      expect(filename, isNotNull);
+      if (Platform.isAndroid) {
+        expect(uri!.scheme, equals('content'));
+      } else {
+        expect(uri!.scheme, equals('file'));
+      }
+      if (!Platform.isIOS) {
+        expect(uri.toString().contains(fileUri.first.toString()), isTrue);
+      }
     });
 
     test('pick multiple photos (no upload)', () async {
@@ -386,6 +379,38 @@ void main() {
           await FileDownloader().uri.openFile(uri!, mimeType: 'text/plain');
       expect(result, isTrue);
       await Future.delayed(const Duration(seconds: 2));
+    });
+
+    test('iOS persistence', () async {
+      print('Pick a directory to store a file to download');
+      final directoryUri = await FileDownloader()
+          .uri
+          .pickDirectory(persistedUriPermission: true);
+      print('directoryUri=$directoryUri');
+      expect(directoryUri, isNotNull);
+      if (Platform.isIOS) {
+        expect(directoryUri!.scheme, equals('urlbookmark'));
+      }
+      task = DownloadTask.fromUri(url: workingUrl, directoryUri: directoryUri!);
+      expect(task.usesUri, isTrue);
+      expect(
+          allDigitsRegex.hasMatch(task.filename), isTrue); // filename omitted
+      expect(task.directoryUri, equals(directoryUri));
+      expect(task.uriFilename, equals(task.filename));
+      final result = await FileDownloader().download(task);
+      expect(result.status, equals(TaskStatus.complete));
+      print('Raw filename: ${result.task.filename}');
+      var (:filename, :uri) = UriUtils.unpack(result.task.filename);
+      print('Resulting file uri: $uri');
+      expect(filename, equals(task.filename));
+      if (Platform.isAndroid) {
+        expect(uri!.scheme, equals('content'));
+      } else {
+        expect(uri!.scheme, equals('file'));
+      }
+      expect(uri.path, contains(filename));
+      expect(uri.toString().contains(directoryUri.toString()), isTrue);
+      expect(await FileDownloader().uri.deleteFile(uri), isTrue);
     });
   });
 
