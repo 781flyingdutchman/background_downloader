@@ -871,6 +871,7 @@ final class UploadTask extends Task {
       required super.url,
       super.urlQueryParameters,
       super.headers,
+      String? httpRequestMethod,
       String? mimeType,
       super.group,
       super.updates,
@@ -887,7 +888,7 @@ final class UploadTask extends Task {
             baseDirectory: BaseDirectory.root,
             directory: uri.toString(),
             filename: uri.pathSegments.last,
-            httpRequestMethod: 'POST',
+            httpRequestMethod: httpRequestMethod ?? 'POST',
             post: 'binary',
             allowPause: false) {
     assert(uri.scheme == 'content', 'Android URI scheme must be "content"');
