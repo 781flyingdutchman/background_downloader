@@ -220,20 +220,19 @@ public class UriUtilsMethodCallHelper: NSObject,
      * before directly accessing a media:// scheme URI
      */
     private func activateUri(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-        guard let args = call.arguments as? [Any],
-              let directoryUriString = args[0] as? String,
-              let directoryUri = decodeToFileUrl(uriString: directoryUriString)
+        guard let uriString = call.arguments as? String,
+              let uri = decodeToFileUrl(uriString: uriString)
         else {
-            result(FlutterError(code: "INVALID_ARGUMENTS", message: "Invalid arguments for activateDirectory", details: nil))
+            result(FlutterError(code: "INVALID_ARGUMENTS", message: "Invalid arguments for activateUri", details: nil))
             return
         }
         // Start accessing the security-scoped resource.
-        if !directoryUri.startAccessingSecurityScopedResource() {
-            completeFlutterResult(FlutterError(code: "ACCESS_DENIED", message: "Failed to access security-scoped resource: \(directoryUri)", details: nil))
+        if !uri.startAccessingSecurityScopedResource() {
+            completeFlutterResult(FlutterError(code: "ACCESS_DENIED", message: "activateUri failed to access security-scoped resource: \(uri)", details: nil))
             return
         }
-        accessedSecurityScopedUrls.insert(directoryUri)
-        result(directoryUri.absoluteString)
+        accessedSecurityScopedUrls.insert(uri)
+        result(uri.absoluteString)
     }
     
     /**

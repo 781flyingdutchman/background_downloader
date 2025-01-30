@@ -48,9 +48,37 @@ sealed class UriUtils {
       Uri? startLocationUri,
       bool persistedUriPermission = false});
 
-  /// Opens a file picker dialog and returns a list of the selected files' URIs.
+  /// Opens a file picker dialog and returns the Uri of the selected file,
+  /// or null if the user canceled the operation.
   ///
   /// [startLocation] (optional) specifies a [SharedStorage] location to open the picker at.
+  ///   Only .videos and .images will launch the media picker instead of the file picker.
+  /// [startLocationUri] (optional) specifies a URI to open the picker at.
+  /// Only one of [startLocation] or [startLocationUri] should be provided.
+  /// [allowedExtensions] (optional) specifies a list of file extensions to filter the picker by.
+  /// [persistedUriPermission] (optional, defaults to `false`) indicates whether to take persisted URI permission
+  /// for the selected files, if the platform supports it.
+  ///
+  /// Returns the URI of the selected file, or `null` if the user canceled the operation.
+  Future<Uri?> pickFile(
+      {SharedStorage? startLocation,
+      Uri? startLocationUri,
+      List<String>? allowedExtensions,
+      bool persistedUriPermission = false}) async {
+    final list = await pickFiles(
+        startLocation: startLocation,
+        startLocationUri: startLocationUri,
+        allowedExtensions: allowedExtensions,
+        persistedUriPermission: persistedUriPermission,
+        multipleAllowed: false);
+    return list?.isNotEmpty == true ? list!.first : null;
+  }
+
+  /// Opens a file picker dialog and returns a list of the selected files' URIs,
+  /// or null if the user canceled the operation.
+  ///
+  /// [startLocation] (optional) specifies a [SharedStorage] location to open the picker at.
+  ///   Only .videos and .images will launch the media picker instead of the file picker.
   /// [startLocationUri] (optional) specifies a URI to open the picker at.
   /// Only one of [startLocation] or [startLocationUri] should be provided.
   /// [allowedExtensions] (optional) specifies a list of file extensions to filter the picker by.
@@ -97,9 +125,6 @@ sealed class UriUtils {
   /// Support directory, subdirectory "com.bbflight.downloader.media" and
   /// returned as a media:// URI.  To access the actual copied file,
   /// use [activateUri]
-  ///
-  /// If you are using persistedUriPermission, then any time you want to access
-  /// a URI that you obtained using that permission, call [activateUri] first.
   Future<Uri?> activateUri(Uri uri) async {
     return uri;
   }

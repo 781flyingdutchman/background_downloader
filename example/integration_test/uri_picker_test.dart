@@ -108,6 +108,19 @@ void main() {
       }
     });
 
+    test('pick single photo (no upload) using pickFile', () async {
+      print('Pick a photo to upload');
+      final fileUri = await FileDownloader()
+          .uri
+          .pickFile(startLocation: SharedStorage.images);
+      expect(fileUri, isNotNull);
+      print(fileUri);
+      if (Platform.isIOS) {
+        // on iOS, delete the local copy of the file
+        expect(await FileDownloader().uri.deleteFile(fileUri!), isTrue);
+      }
+    });
+
     test('pick multiple photos (no upload)', () async {
       print('Pick 2 photos');
       final fileUris = await FileDownloader().uri.pickFiles(
@@ -178,5 +191,30 @@ void main() {
     }
     expect(uri.path, contains(filename));
     expect(await FileDownloader().uri.deleteFile(uri), isTrue);
+  });
+
+  test('Activate URI', () async {
+    print('Pick a photo to upload');
+    final fileUri = await FileDownloader()
+        .uri
+        .pickFile(startLocation: SharedStorage.images);
+    print('Uri from picker: ${fileUri!}');
+    if (Platform.isIOS) {
+      expect(fileUri.scheme, equals('media'));
+    }
+    final activatedUri = await FileDownloader().uri.activateUri(fileUri);
+    if (!Platform.isIOS) {
+      expect(activatedUri, equals(fileUri));
+    }
+    print('Activated uri: ${activatedUri!}');
+    if (!Platform.isAndroid) {
+      expect(activatedUri.scheme, equals('file'));
+      final file = File.fromUri(activatedUri);
+      expect(file.existsSync(), isTrue);
+      file.deleteSync();
+    } else {
+      // on Android, expect the original Uri
+      expect(activatedUri, equals(fileUri));
+    }
   });
 }
