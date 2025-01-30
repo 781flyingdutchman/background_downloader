@@ -327,16 +327,14 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
                 let filename = unpackedFilename.filename ?? "unknown"
                 fileUrl = unpackedFilename.uri
                 // directory may contain a path or a Uri representing the full destination directory
-                let unpackDirectory = unpack(packedString: task.directory)
-                
-                if let unpackedUri = unpackDirectory.uri {
+                if let directoryUri = uriFromStringValue(maybePacked: task.directory) {
                     // URI mode
-                    let uri = decodeToFileUrl(uri: unpackedUri)
+                    let uri = decodeToFileUrl(uri: directoryUri)
                     os_log("URI mode", log: log, type: .error)
                     guard let uri = uri else {
-                        os_log("Invalid directory URI (could not convert bookmark): %@", log: log, type: .error, unpackedUri.absoluteString)
+                        os_log("Invalid directory URI (could not convert bookmark): %@", log: log, type: .error, directoryUri.absoluteString)
                         taskException = TaskException(type: .fileSystem, httpResponseCode: -1,
-                                                      description: "Invalid directory URI (could not convert bookmark): %@ \(unpackedUri.absoluteString)")
+                                                      description: "Invalid directory URI (could not convert bookmark): %@ \(directoryUri.absoluteString)")
                         return
                     }
                     guard uri.isFileURL else {

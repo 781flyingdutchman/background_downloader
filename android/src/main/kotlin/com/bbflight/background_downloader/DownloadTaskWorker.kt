@@ -529,7 +529,7 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
     private fun deleteDestinationUri(uri: Uri) {
         try {
             applicationContext.contentResolver.delete(uri, null, null)
-        } catch (_: IOException) {
+        } catch (_: Exception) {
             Log.i(TAG, "Could not delete file at $uri")
         }
     }

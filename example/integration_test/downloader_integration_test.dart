@@ -3423,32 +3423,29 @@ void main() {
     });
 
     test('returns correct file path for task using file URI', () async {
-      final task = UploadTask.fromUri(
-          url: workingUrl, uri: Uri.file('/my/file/uri.txt'));
+      final task =
+          UriUploadTask(url: workingUrl, fileUri: Uri.file('/my/file/uri.txt'));
       final path = await task.filePath();
       expect(path, '/my/file/uri.txt');
     });
 
-    test('returns correct file path for UploadTask using packed file URI',
+    test('returns correct file path for UriUploadTask with URI and filename',
         () async {
       final uri = Uri.file('/my/file/uri.txt');
-      final packed = UriUtils.pack('testFilename.txt', uri);
-      final task = UploadTask(url: workingUrl, filename: packed);
+      final task = UriUploadTask(
+          url: workingUrl, fileUri: uri, filename: uploadFilename);
       final path = await task.filePath();
       expect(path, '/my/file/uri.txt');
+      expect(task.filename, equals(uploadFilename));
       expect(task.fileUri, equals(uri));
       expect(task.directoryUri, isNull);
     });
 
-    test(
-        'returns correct file path for DownloadTask using packed directory URI',
+    test('returns correct file path for UriDownloadTask with URI and filename',
         () async {
       final uri = Uri.file('/my/directory');
-      final task = DownloadTask(
-          url: workingUrl,
-          filename: 'testFilename.txt',
-          directory: uri.toString());
-      expect(task.usesUri, isTrue);
+      final task = UriDownloadTask(
+          url: workingUrl, directoryUri: uri, filename: 'testFilename.txt');
       expect(task.directoryUri?.scheme, equals('file'));
       final path = await task.filePath();
       expect(path, '/my/directory/testFilename.txt');
@@ -3457,8 +3454,8 @@ void main() {
     });
 
     test('throws assertion error for task using non-file URI', () async {
-      final task = UploadTask.fromUri(
-          url: workingUrl, uri: Uri.parse('content://example.com'));
+      final task = UriUploadTask(
+          url: workingUrl, fileUri: Uri.parse('content://example.com'));
       expect(() async => await task.filePath(), throwsA(isA<AssertionError>()));
     });
 

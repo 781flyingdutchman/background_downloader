@@ -99,7 +99,8 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
       DownloadTask() => doDownloadTask(task, filePath, resumeData, isResume,
           requestTimeout ?? const Duration(seconds: 60), sendPort),
       UploadTask() => doUploadTask(task, filePath, sendPort),
-      DataTask() => doDataTask(task, sendPort)
+      DataTask() => doDataTask(task, sendPort),
+      _ => throw UnimplementedError(),
     };
   }
   DesktopDownloader.httpClient.close();

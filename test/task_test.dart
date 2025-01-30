@@ -2,9 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:background_downloader/background_downloader.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:path/path.dart' as p;
 
 const workingUrl = 'https://google.com';
 const failingUrl = 'https://avmaps-dot-bbflightserver-hrd.appspot'
@@ -296,71 +294,30 @@ void main() {
     });
   });
 
-  group('DownloadTask with URI', () {
-    test('usesUri should be true for allowed URI schemes', () {
-      final taskWithContentUri = DownloadTask.fromUri(
-        url: 'https://example.com/file.txt',
-        directoryUri: Uri.parse('content://downloads'),
-      );
-      expect(taskWithContentUri.usesUri, isTrue);
-
-      final taskWithFileUri = DownloadTask.fromUri(
-        url: 'https://example.com/file.txt',
-        directoryUri: Uri.parse('file:///path/to/directory'),
-      );
-      expect(taskWithFileUri.usesUri, isTrue);
-    });
-
-    test('usesUri should be false for non-URI tasks', () {
-      final task = DownloadTask(
-        url: 'https://example.com/file.txt',
-        directory: '/path/to/directory',
-        baseDirectory: BaseDirectory.temporary,
-      );
-      expect(task.usesUri, isFalse);
-    });
-
+  group('UriDownloadTask', () {
     test(
         'directoryUri should return the correct Uri for valid directory strings',
         () {
       final contentUri = Uri.parse('content://downloads');
-      final taskWithContentUri = DownloadTask.fromUri(
+      final taskWithContentUri = UriDownloadTask(
         url: 'https://example.com/file.txt',
         directoryUri: contentUri,
       );
       expect(taskWithContentUri.directoryUri, contentUri);
 
       final fileUri = Uri.parse('file:///path/to/directory');
-      final taskWithFileUri = DownloadTask.fromUri(
+      final taskWithFileUri = UriDownloadTask(
         url: 'https://example.com/file.txt',
         directoryUri: fileUri,
       );
       expect(taskWithFileUri.directoryUri, fileUri);
     });
 
-    test('directoryUri should return null for invalid directory strings', () {
-      final task = DownloadTask(
-        url: 'https://example.com/file.txt',
-        directory: 'not a uri',
-        baseDirectory: BaseDirectory.temporary,
-      );
-      expect(task.directoryUri, isNull);
-    });
-
-    test('directoryUri should return null for non-URI tasks', () {
-      final task = DownloadTask(
-        url: 'https://example.com/file.txt',
-        directory: '/path/to/directory',
-        baseDirectory: BaseDirectory.temporary,
-      );
-      expect(task.directoryUri, isNull);
-    });
-
     test(
-        'constructing DownloadTask.fromUri with invalid scheme throws AssertionError',
+        'constructing UriDownloadTask with invalid scheme throws AssertionError',
         () {
       expect(
-          () => DownloadTask.fromUri(
+          () => UriDownloadTask(
                 url: 'https://example.com/file.txt',
                 directoryUri: Uri.parse('ftp://invalid/scheme'),
               ),
@@ -368,95 +325,55 @@ void main() {
     });
   });
 
-  group('UploadTask with URI', () {
-    test('usesUri should be true for allowed URI schemes', () {
-      final taskWithContentUri = UploadTask.fromUri(
-        url: 'https://example.com/upload',
-        uri: Uri.parse('content://uploads'),
-      );
-      expect(taskWithContentUri.usesUri, isTrue);
-
-      final taskWithFileUri = UploadTask.fromUri(
-        url: 'https://example.com/upload',
-        uri: Uri.parse('file:///path/to/file.txt'),
-      );
-      expect(taskWithFileUri.usesUri, isTrue);
-    });
-
-    test('usesUri should be false for non-URI tasks', () {
-      final task = UploadTask(
-        url: 'https://example.com/upload',
-        filename: 'file.txt',
-        baseDirectory: BaseDirectory.temporary,
-      );
-      expect(task.usesUri, isFalse);
-    });
-
+  group('UriUploadTask', () {
     test(
         'fileUri should return the correct Uri for valid packed strings with Uris',
         () {
       final contentUri = Uri.parse('content://uploads');
-      final taskWithContentUri = UploadTask.fromUri(
+      final taskWithContentUri = UriUploadTask(
         url: 'https://example.com/upload',
-        uri: contentUri,
+        fileUri: contentUri,
         filename: 'test.txt',
       );
       expect(taskWithContentUri.fileUri, contentUri);
 
       final fileUri = Uri.parse('file:///path/to/file.txt');
-      final taskWithFileUri = UploadTask.fromUri(
+      final taskWithFileUri = UriUploadTask(
         url: 'https://example.com/upload',
-        uri: fileUri,
+        fileUri: fileUri,
       );
 
       expect(taskWithFileUri.fileUri, fileUri);
     });
 
-    test('fileUri should return null for invalid packed strings', () {
-      final task = UploadTask(
-        url: 'https://example.com/upload',
-        filename: 'not a uri',
-        baseDirectory: BaseDirectory.temporary,
-      );
-      expect(task.fileUri, isNull);
-    });
-
-    test('fileUri should return null for non-URI tasks', () {
-      final task = UploadTask(
-        url: 'https://example.com/upload',
-        filename: 'file.txt',
-        baseDirectory: BaseDirectory.temporary,
-      );
-      expect(task.fileUri, isNull);
-    });
-
     test('uploadFilename should return filename when set during construction',
         () {
-      final task = UploadTask.fromUri(
+      final task = UriUploadTask(
         url: 'https://example.com/upload',
-        uri: Uri.parse('content://uploads'),
+        fileUri: Uri.parse('content://uploads'),
         filename: 'myFile.txt',
       );
       expect(task.uploadFilename, 'myFile.txt');
+      expect(task.fileUri, Uri.parse('content://uploads'));
     });
 
     test(
-        'uploadFilename should return null when no filename was set during construction',
+        'uploadFilename should return empty string when no filename was set during construction',
         () {
-      final task = UploadTask.fromUri(
+      final task = UriUploadTask(
         url: 'https://example.com/upload',
-        uri: Uri.parse('content://uploads'),
+        fileUri: Uri.parse('content://uploads'),
       );
-      expect(task.uploadFilename, isNull);
+      expect(task.uploadFilename, isEmpty);
+      expect(task.fileUri, Uri.parse('content://uploads'));
     });
 
-    test(
-        'constructing UploadTask.fromUri with invalid scheme throws AssertionError',
+    test('constructing UriUploadTask with invalid scheme throws AssertionError',
         () {
       expect(
-          () => UploadTask.fromUri(
+          () => UriUploadTask(
                 url: 'https://example.com/upload',
-                uri: Uri.parse('ftp://invalid/scheme'),
+                fileUri: Uri.parse('ftp://invalid/scheme'),
               ),
           throwsA(isA<AssertionError>()));
     });

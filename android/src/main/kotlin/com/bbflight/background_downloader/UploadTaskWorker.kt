@@ -375,7 +375,7 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                     }
                     Pair(file.length(), FileInputStream(file))
                 }
-
+                // we now have a possible content length and InputStream for this file
                 if (!useChunkedEncoding && fileSize == null) {
                     val message = "Could not determine file size for $pathOrUriString"
                     Log.w(TAG, message)
@@ -385,6 +385,7 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                     )
                     return TaskStatus.failed
                 }
+                // determine the file name
                 val name = if (fileUri != null /*&& fileUri.scheme != "file"*/) {  //TODO check
                     getFileNameFromUri(fileUri) ?: "unknown"
                 } else {
@@ -394,6 +395,15 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                     "Content-Disposition: form-data; name=\"${browserEncode(fileField)}\"; " +
                             "filename=\"${browserEncode(name)}\"$lineFeed"
                 )
+                if (filesData.size == 1) {
+                    // only for single file uploads do we set the task's filename property
+                    task = task.copyWith(
+                        filename = if (fileUri != null) UriUtils.pack(
+                            name,
+                            fileUri
+                        ) else name
+                    )
+                }
                 contentTypeStrings.add("Content-Type: $resolvedMimeType$lineFeed$lineFeed")
                 fileLengthsOrStreams.add(Pair(fileSize, inputStream))
             } catch (_: Exception) {

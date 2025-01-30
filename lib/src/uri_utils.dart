@@ -145,9 +145,14 @@ sealed class UriUtils {
   /// Platform-dependent, not consistent across all platforms
   Future<Uri?> moveToSharedStorage(DownloadTask task, SharedStorage destination,
       {String directory = '', String? mimeType}) async {
-    return await moveFileToSharedStorage(
-        task.fileUri ?? Uri.file(await task.filePath()), destination,
-        directory: directory, mimeType: mimeType);
+    final uri = switch (task) {
+      UriTask t => t.fileUri,
+      _ => Uri.file(await task.filePath())
+    };
+    return uri != null
+        ? await moveFileToSharedStorage(uri, destination,
+            directory: directory, mimeType: mimeType)
+        : null;
   }
 
   /// Move the file represented by [fileUri] to a shared storage

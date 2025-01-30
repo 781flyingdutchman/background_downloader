@@ -148,7 +148,9 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             val requestBuilder = when (task.taskType) {
                 "ParallelDownloadTask" -> OneTimeWorkRequestBuilder<ParallelDownloadTaskWorker>()
                 "DownloadTask" -> OneTimeWorkRequestBuilder<DownloadTaskWorker>()
+                "UriDownloadTask" -> OneTimeWorkRequestBuilder<DownloadTaskWorker>()
                 "UploadTask" -> OneTimeWorkRequestBuilder<UploadTaskWorker>()
+                "UriUploadTask" -> OneTimeWorkRequestBuilder<UploadTaskWorker>()
                 "MultiUploadTask" -> OneTimeWorkRequestBuilder<UploadTaskWorker>()
                 "DataTask" -> OneTimeWorkRequestBuilder<DataTaskWorker>()
                 else -> {

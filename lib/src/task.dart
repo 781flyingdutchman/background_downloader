@@ -18,6 +18,8 @@ import 'utils.dart';
 import 'web_downloader.dart'
     if (dart.library.io) 'desktop/desktop_downloader.dart';
 
+part 'uri_task.dart';
+
 final _log = Logger('FileDownloader');
 
 /// A server Request
@@ -342,7 +344,9 @@ sealed class Task extends Request implements Comparable {
   factory Task.createFromJson(Map<String, dynamic> json) =>
       switch (json['taskType']) {
         'DownloadTask' => DownloadTask.fromJson(json),
+        'UriDownloadTask' => UriDownloadTask.fromJson(json),
         'UploadTask' => UploadTask.fromJson(json),
+        'UriUploadTask' => UriUploadTask.fromJson(json),
         'MultiUploadTask' => MultiUploadTask.fromJson(json),
         'ParallelDownloadTask' => ParallelDownloadTask.fromJson(json),
         'DataTask' => DataTask.fromJson(json),
@@ -365,23 +369,26 @@ sealed class Task extends Request implements Comparable {
   /// Throws a FileSystemException if using external storage on Android (via
   /// configuration at startup), and external storage is not available.
   ///
-  /// If called when the task uses a URI, will return the filePath of a file
+  /// If called when the task is a [UriTask], will return the filePath of a file
   /// scheme Uri, but may throw if unavailable or the scheme is not 'file'
   Future<String> filePath({String? withFilename}) async {
-    assert(
-        !usesUri || fileUri?.scheme == 'file' || directoryUri?.scheme == 'file',
-        'Cannot call filePath when using a URI scheme, unless the scheme is "file"');
     if (this is MultiUploadTask && withFilename == null) {
       return '';
     }
-    if (!usesUri) {
-      final baseDirPath = await baseDirectoryPath(baseDirectory);
-      return p.join(baseDirPath, directory, withFilename ?? filename);
-    } else {
-      if (fileUri != null) {
-        return fileUri!.path;
-      }
-      return '${directoryUri!.path}/${withFilename ?? filename}';
+    switch (this) {
+      case UriTask t:
+        if (t.fileUri != null) {
+          assert(t.fileUri?.scheme == 'file',
+              'fileUri must be a URI scheme to return a path');
+          return t.fileUri!.path;
+        } else {
+          assert(t.directoryUri?.scheme == 'file',
+              'directoryUri must be a URI scheme to return a path');
+          return '${t.directoryUri!.path}/${withFilename ?? filename}';
+        }
+      default:
+        return p.join(await baseDirectoryPath(baseDirectory), directory,
+            withFilename ?? filename);
     }
   }
 
@@ -552,25 +559,6 @@ sealed class Task extends Request implements Comparable {
         'taskType': taskType
       };
 
-  /// True if this task uses a Uri to define its download directory or upload
-  /// filename
-  bool get usesUri => false;
-
-  /// Returns the Uri represented by the [directory] field, or null if it does not
-  /// represent a valid uri
-  Uri? get directoryUri => UriUtils.uriFromStringValue(directory);
-
-  /// Returns the Uri represented by the [filename] field, or null if it does not
-  /// represent a valid uri
-  Uri? get fileUri => UriUtils.uriFromStringValue(filename);
-
-  /// Returns the filename of the file represented by the Task when in URI mode,
-  /// or null if not available
-  String? get uriFilename {
-    final (filename: storedFilename, :uri) = UriUtils.unpack(filename);
-    return storedFilename ?? uri?.pathSegments.last;
-  }
-
   /// If true, task expects progress updates
   bool get providesProgressUpdates =>
       updates == Updates.progress || updates == Updates.statusAndProgress;
@@ -674,58 +662,19 @@ final class DownloadTask extends Task {
       super.creationTime,
       super.options});
 
-  /// Creates [DownloadTask] using a URI as the destination directory
-  /// 
-  /// For Android:
-  /// Content URIs are related to the Android Storage Framework that makes it
-  /// easier to get access to a file system location without the need for
-  /// app permissions, provided the user has chosen that location using a
-  /// file picker.  They follow the content:// scheme, and can be obtained
-  /// by calling [pickDirectory] from [FileDownloader].
-  ///
-  /// For other platforms:
-  /// File URIs follow the file:// scheme and point to a destination on the
-  /// file system. A file:// URI is returned from [pickDirectory] on platforms
-  /// other than Android.
-  /// 
-  /// The [directoryUri] will be stored in the [directory] property and should represent
-  /// a directory, not a specific file. It can be obtained using the
-  /// [directoryUri] getter.
-  ///
-  /// Note that the result of [Task.filePath] is undefined when using a URI, as
-  /// not all Uri types can be converted to a file name
-  DownloadTask.fromUri(
-      {super.taskId,
-      required super.url,
-      super.urlQueryParameters,
-      super.filename,
-      super.headers,
-      super.httpRequestMethod,
-      super.post,
-      required Uri directoryUri,
-      super.group,
-      super.updates,
-      super.requiresWiFi,
-      super.retries,
-      super.allowPause,
-      super.priority,
-      super.metaData,
-      super.displayName,
-      super.creationTime,
-      super.options})
-      : super(
-            baseDirectory: BaseDirectory.root,
-            directory: directoryUri.toString()) {
-    assert(Task.allowedUriSchemes.contains(directoryUri.scheme),
-        'Directory URI scheme must be one of ${Task.allowedUriSchemes}');
-  }
+  /// List of task types supported by [DownloadTask.fromJson]
+  static final _taskTypes = [
+    'DownloadTask',
+    'ParallelDownloadTask',
+    'UriDownloadTask'
+  ];
 
   /// Creates [DownloadTask] object from [json]
   DownloadTask.fromJson(super.json)
       : assert(
-            ['DownloadTask', 'ParallelDownloadTask'].contains(json['taskType']),
-            'The provided JSON map is not'
-            ' a DownloadTask, because key "taskType" is not "DownloadTask" or "ParallelDownloadTask".'),
+            _taskTypes.contains(json['taskType']),
+            'The provided JSON map is not an UploadTask, '
+            'because key "taskType" is not in ${_taskTypes.join(',')}'),
         super.fromJson();
 
   @override
@@ -827,11 +776,6 @@ final class DownloadTask extends Task {
 
   /// True if this task has a filename, or false if set to `suggest`
   bool get hasFilename => filename != suggestedFilename;
-
-  @override
-  bool get usesUri {
-    return Task.allowedUriSchemes.contains(directoryUri?.scheme);
-  }
 }
 
 /// Information related to an upload task
@@ -948,51 +892,19 @@ final class UploadTask extends Task {
             httpRequestMethod: httpRequestMethod ?? 'POST',
             allowPause: false);
 
-  /// Creates [UploadTask] from a URI
-  ///
-  /// The [uri] will be stored in the [filename] property and can be obtained
-  /// using [fileUri] (do not access the [filename] property directly).
-  /// If a [filename] argument is supplied in this constructor,
-  /// it will be used, otherwise the filename will be derived from the URL
-  UploadTask.fromUri(
-      {required Uri uri,
-      super.taskId,
-      required super.url,
-      super.urlQueryParameters,
-      String? filename,
-      super.headers,
-      String? httpRequestMethod,
-      String? super.post,
-      this.fileField = 'file',
-      String? mimeType,
-      Map<String, String>? fields,
-      super.group,
-      super.updates,
-      super.requiresWiFi,
-      super.retries,
-      super.priority,
-      super.metaData,
-      super.displayName,
-      super.creationTime})
-      : mimeType = mimeType ?? 'application/octet-stream',
-        fields = fields ?? {},
-        super(
-            baseDirectory: BaseDirectory.root,
-            filename: filename != null
-                ? UriUtils.pack(filename, uri)
-                : uri.toString(),
-            httpRequestMethod: httpRequestMethod ?? 'POST',
-            allowPause: false) {
-    assert(Task.allowedUriSchemes.contains(uri.scheme),
-        'URI scheme must be one of ${Task.allowedUriSchemes}');
-  }
+  /// List of task types  supported by [UploadTask.fromJson]
+  static final _taskTypes = [
+    'UploadTask',
+    'MultiUploadTask',
+    'UriUploadTask',
+  ];
 
   /// Creates [UploadTask] object from [json]
   UploadTask.fromJson(super.json)
       : assert(
-            ['UploadTask', 'MultiUploadTask'].contains(json['taskType']),
+            _taskTypes.contains(json['taskType']),
             'The provided JSON map is not an UploadTask, '
-            'because key "taskType" is not "UploadTask" or "MultiUploadTask.'),
+            'because key "taskType" is not in ${_taskTypes.join(',')}'),
         fileField = json['fileField'] ?? 'file',
         mimeType = json['mimeType'] ?? 'application/octet-stream',
         fields = Map<String, String>.from(json['fields'] ?? {}),
@@ -1090,11 +1002,6 @@ final class UploadTask extends Task {
   String toString() => '${super.toString()} and fileField $fileField, '
       'mimeType $mimeType and fields $fields';
 
-  @override
-  bool get usesUri {
-    return Task.allowedUriSchemes.contains(fileUri?.scheme);
-  }
-
   /// Returns the filename set during construction of the task, or that
   /// was set by the uploader based on the provided URI, or null if
   /// no filename was set
@@ -1130,7 +1037,8 @@ final class MultiUploadTask extends UploadTask {
       'files must be a list of filenames, or a list of records of type '
       '(fileField, filename) or (fileField, filename, mimeType)';
 
-  /// Creates [UploadTask]
+  /// Creates [MultiUploadTask] to upload more than one file using
+  /// multipart/form-data
   ///
   /// [taskId] must be unique. A unique id will be generated if omitted
   /// [url] properly encoded if necessary, can include query parameters
