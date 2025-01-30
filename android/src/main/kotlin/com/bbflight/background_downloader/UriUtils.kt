@@ -100,11 +100,6 @@ class UriUtilsMethodCallHelper(private val plugin: BDPlugin) : MethodCallHandler
                 val startLocationOrdinal = args?.get(0) as Int?
                 val startLocationUriString = args?.get(1) as? String
                 val persistedUriPermission = args?.get(2) as? Boolean ?: false
-                Log.wtf(
-                    DirectoryPicker.TAG,
-                    "pickDirectory with $args and  startLocation $startLocationOrdinal and persist $persistedUriPermission"
-                )
-
                 val startLocation =
                     if (startLocationOrdinal != null) SharedStorage.entries[startLocationOrdinal] else null
                 val startLocationUri = startLocationUriString?.toUri()
@@ -195,10 +190,7 @@ class UriUtilsMethodCallHelper(private val plugin: BDPlugin) : MethodCallHandler
                     )
                     return
                 }
-                Log.wtf(TAG, "parent dir URIstring: $parentDirectoryUriString")
                 val parentDirectoryUri = Uri.parse(parentDirectoryUriString)
-                Log.wtf(TAG, "parent dir URI: $parentDirectoryUri")
-
                 DirectoryCreator.createDirectory(
                     activity,
                     parentDirectoryUri,
@@ -331,10 +323,6 @@ object DirectoryPicker {
             return false
         }
         pendingResult = result
-        Log.wtf(
-            TAG,
-            "pickDirectory with startLocation $startLocation and persist $persistedUriPermission"
-        )
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
             flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
                     Intent.FLAG_GRANT_WRITE_URI_PERMISSION
@@ -687,10 +675,7 @@ object DirectoryCreator {
             val directoryPathParts = sanitizedDirectoryName.split(File.separatorChar)
 
             for (directoryName in directoryPathParts) {
-                Log.wtf(TAG, "direName=$directoryName, currentDir=$currentDir")
                 var newDir = currentDir.findFile(directoryName)
-                Log.wtf(TAG, "newDir=$newDir")
-
                 if (newDir == null || !newDir.exists()) {
                     newDir = currentDir.createDirectory(directoryName)
                 } else if (!newDir.isDirectory) {
@@ -701,7 +686,6 @@ object DirectoryCreator {
                     )
                     return
                 }
-                Log.wtf(TAG, "newDir after createDirectory=$newDir")
                 if (newDir == null) {
                     result.error(
                         "CREATE_FAILED",
@@ -719,11 +703,8 @@ object DirectoryCreator {
                     )
                 }
             }
-            Log.wtf(TAG, "currentDir after loop=$currentDir and uri=${currentDir.uri}")
-
             // Return the URI of the final directory
             result.success(currentDir.uri.toString())
-
         } catch (e: Exception) {
             Log.e(TAG, "Error creating directory", e)
             result.error(

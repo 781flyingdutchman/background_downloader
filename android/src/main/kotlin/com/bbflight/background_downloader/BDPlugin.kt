@@ -833,7 +833,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val args = call.arguments as List<*>
         val newRequireWiFi = RequireWiFi.entries[args[0] as Int]
         val rescheduleRunning = args[1] as Boolean
-        Log.d(TAG, "RequireWiFi=$newRequireWiFi and rescheduleRunning=$rescheduleRunning")
         WiFi.requireWiFiChange(
             RequireWiFiChange(
                 applicationContext,

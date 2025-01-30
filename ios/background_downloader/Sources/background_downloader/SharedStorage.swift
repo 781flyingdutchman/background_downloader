@@ -188,6 +188,5 @@ private func moveToFakeSharedStorage(filePath: String, destination: SharedStorag
         os_log("Failed to move file %@ to %@: %@", log: log, type: .error, filePath, destUrl.path, error.localizedDescription)
         return nil
     }
-    os_log("Moved from %@ to %@", log: log, type: .info, fileUrl, destUrl.path)
     return asUriString ? destUrl.absoluteString : destUrl.path
 }

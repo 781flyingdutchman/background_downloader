@@ -26,7 +26,7 @@ func providesStatusUpdates(downloadTask: Task) -> Bool {
 ///
 /// A ParallelDownloadTask is also a DownloadTask
 func isDownloadTask(task: Task) -> Bool {
-    return task.taskType == "DownloadTask" || task.taskType == "ParallelDownloadTask"
+    return task.taskType == "DownloadTask" || task.taskType == "UriDownloadTask" || task.taskType == "ParallelDownloadTask"
 }
 
 /// True if this task is a ParallelDownloadTask, false if not
@@ -39,7 +39,7 @@ func isParallelDownloadTask(task: Task) -> Bool
 ///
 /// A MultiUploadTask is also an UploadTask
 func isUploadTask(task: Task) -> Bool {
-    return task.taskType == "UploadTask" || task.taskType == "MultiUploadTask"
+    return task.taskType == "UploadTask" || task.taskType == "UriUploadTask" || task.taskType == "MultiUploadTask"
 }
 
 /// True if this task is a MultiUploadTask, false if not
@@ -298,19 +298,16 @@ func extractFilesData(task: Task) -> [((String, String, String))] {
     }
     var result = [(String, String, String)]()
     for i in 0 ..< fileFields.count {
-        os_log("Filename in extractFilesData %@", log: log, type: .error, filenames[i])
         let fileUrl = URL(string: filenames[i])
         let decodedFileUrl = fileUrl != nil ? decodeToFileUrl(uri: fileUrl!) : nil
         if decodedFileUrl?.scheme == "file" {
             // URI mode, return path
-            os_log("Appending %@", log: log, type: .error, decodedFileUrl!.path)
             result.append((fileFields[i], decodedFileUrl!.path, mimeTypes[i]))
         } else {
             // file path mode
             if FileManager.default.fileExists(atPath: filenames[i]) {
                 result.append((fileFields[i], filenames[i], mimeTypes[i]))
             } else {
-                os_log("Appending %@", log: log, type: .error, getFilePath(for: task, withFilename: filenames[i]) ?? "")
                 result.append((
                     fileFields[i],
                     getFilePath(for: task, withFilename: filenames[i]) ?? "",

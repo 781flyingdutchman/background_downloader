@@ -268,12 +268,11 @@ public class UriUtilsMethodCallHelper: NSObject,
     
     private func deleteFile(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         guard let uriString = call.arguments as? String,
-              let fileUrl = URL(string: uriString),
+              let fileUrl = decodeToFileUrl(uriString: uriString),
               fileUrl.scheme == "file" else {
             result(FlutterError(code: "INVALID_ARGUMENTS", message: "Invalid or non-file URI provided for deleteFile", details: nil))
             return
         }
-        
         do {
             try FileManager.default.removeItem(at: fileUrl)
             result(true)
@@ -285,26 +284,19 @@ public class UriUtilsMethodCallHelper: NSObject,
     private func openFile(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         guard let args = call.arguments as? [Any],
               let uriString = args[0] as? String,
-              let fileUrl = decodeToFileUrl(uriString: uriString) else {
+              let mimeType = args[1] as? String?,
+              let fileUrl = decodeToFileUrl(uriString: uriString)
+        else {
             result(FlutterError(code: "INVALID_ARGUMENTS", message: "Invalid arguments for openFile", details: nil))
             return
         }
-        
-        // For simplicity, we just open the file with the default application.
-        // You might want to use QLPreviewController for a better preview experience.
-        DispatchQueue.main.async {
-            if UIApplication.shared.canOpenURL(fileUrl) {
-                UIApplication.shared.open(fileUrl, options: [:]) { success in
-                    if success {
-                        result(true)
-                    } else {
-                        result(FlutterError(code: "OPEN_FILE_FAILED", message: "Failed to open file", details: nil))
-                    }
-                }
-            } else {
-                result(FlutterError(code: "OPEN_FILE_FAILED", message: "Could not open file with default application", details: nil))
-            }
+        let filePath = fileUrl.path
+        if !FileManager.default.fileExists(atPath: fileUrl.path) {
+            os_log("File does not exist at %@", log: log, type: .info, filePath)
+            result(FlutterError(code: "FILE_NOT_FOUND", message: "File does not exist at \(filePath)", details: nil))
+            return
         }
+        result(doOpenFile(filePath: filePath, mimeType: mimeType != nil ? mimeType : getMimeType(fromFilename: filePath)))
     }
     
     /**
@@ -496,7 +488,6 @@ public class UriUtilsMethodCallHelper: NSObject,
             
             // Copy the file from source to destination, and return the media URI to this location
             try fileManager.copyItem(at: url, to: destinationURL)
-            os_log("Copied file to %@", log: log, type: .info, destinationURL.path)
             return URL(string: "media://support/\(destinationURL.lastPathComponent)")
         } catch {
             completeFlutterResult(FlutterError(code: "PICK_FAILED", message: "Error copying file: \(error)", details: nil))

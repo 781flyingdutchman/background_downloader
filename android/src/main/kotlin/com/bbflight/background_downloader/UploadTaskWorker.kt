@@ -149,7 +149,6 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                             )
                             return@withContext Pair(null, null) // Return nulls to indicate failure
                         }
-                        Log.v(TAG, "Using InputStream from URI $fileUri")
                         Pair(fileSize, inputStream)
                     } else {
                         // a file:// Uri scheme is interpreted as a regular file path
@@ -157,7 +156,6 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                         val fileSize = file.length()
                         if (resolvedMimeType.isEmpty()) resolvedMimeType =
                             getMimeType(file.name)
-                        Log.v(TAG, "Using FileInputStream from URI $fileUri")
                         Pair(fileSize, FileInputStream(file))
                     }
                 } catch (e: Exception) {
@@ -330,10 +328,6 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                             }
                         useChunkedEncoding = useChunkedEncoding ||
                                 fileSize == null // Use chunked encoding if file size is unknown
-                        Log.wtf(
-                            TAG,
-                            "Filesize $fileSize and useChunkedEncoding $useChunkedEncoding"
-                        )
                         if (mimeType.isEmpty()) {
                             resolvedMimeType = getMimeType(contentResolver, fileUri)
                         }
@@ -386,7 +380,7 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                     return TaskStatus.failed
                 }
                 // determine the file name
-                val name = if (fileUri != null /*&& fileUri.scheme != "file"*/) {  //TODO check
+                val name = if (fileUri != null) {
                     getFileNameFromUri(fileUri) ?: "unknown"
                 } else {
                     File(pathOrUriString).name
@@ -437,12 +431,10 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                 lengthInBytes(fieldsString) + "--$boundary$lineFeed".length + fileDataLength
             determineRunInForeground(task, contentLength)
             connection.setRequestProperty("Content-Length", contentLength.toString())
-            Log.wtf(TAG, "contentLength = $contentLength")
             connection.setFixedLengthStreamingMode(contentLength)
         } else {
             determineRunInForeground(task, 1024 * 1024 * 20) // assume at least 20MB
             connection.setChunkedStreamingMode(0) // Use default chunk size
-            Log.wtf(TAG, "Using chunked mode")
         }
         connection.useCaches = false
         // transfer the bytes
@@ -451,23 +443,12 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                 val writer = outputStream.writer()
                 // write form fields
                 writer.append(fieldsString).append("--${boundary}").append(lineFeed)
-                Log.wtf(TAG, "${fieldsString.length + 2 + boundary.length}+2")
                 // write each file
                 for (i in filesData.indices) {
-                    Log.wtf(
-                        TAG,
-                        "fileField = ${filesData[i].first}, uri = ${filesData[i].second}, mimeType = ${filesData[i].third}"
-                    )
-                    Log.wtf(TAG, "contentDispositionStrings = ${contentDispositionStrings[i]}")
-                    Log.wtf(TAG, "contentTypeStrings = ${contentTypeStrings[i]}")
                     fileLengthsOrStreams[i].second.use { inputStream ->
                         if (inputStream != null) {
                             writer.append(contentDispositionStrings[i])
                                 .append(contentTypeStrings[i]).flush()
-                            Log.wtf(
-                                TAG,
-                                "${contentDispositionStrings[i].length + contentTypeStrings[i].length}"
-                            )
                             val transferBytesResult =
                                 transferBytes(
                                     inputStream,
@@ -475,10 +456,6 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                                     fileLengthsOrStreams[i].first ?: 0,
                                     task
                                 )
-                            Log.wtf(
-                                TAG,
-                                "transferBytesResult bytes = ${fileLengthsOrStreams[i].first ?: 0}"
-                            )
                             if (transferBytesResult == TaskStatus.complete) {
                                 if (i < filesData.size - 1) {
                                     writer.append(separator)

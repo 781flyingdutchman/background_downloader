@@ -26,7 +26,6 @@ fun doOpenFile(activity: Activity, filePathOrUriString: String, mimeType: String
                     activity.packageName + ".com.bbflight.background_downloader.fileprovider",
                     File(filePathOrUriString)
                 )
-        Log.wtf("TAG", "content URI: $contentUri")
         intent.setDataAndType(contentUri, mimeType)
         intent.addFlags(
             Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION

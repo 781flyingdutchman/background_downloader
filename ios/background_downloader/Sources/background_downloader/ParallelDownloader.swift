@@ -101,12 +101,9 @@ public class ParallelDownloader: NSObject {
         // get suggested filename if needed
         if parentTask.filename == "?" {
             let newTask = taskWithSuggestedFilenameFromResponseHeaders(task: parentTask, responseHeaders: responseHeaders)
-            os_log("Suggested task filename for taskId %@ is %@", log: log, type: .info, newTask.taskId, newTask.filename)
             if newTask.filename != parentTask.filename {
                 // store for future replacement, and replace now
-                BDPlugin.propertyLock.withLock({
-                    BDPlugin.tasksWithModifications[newTask.taskId] = newTask
-                })
+                storeModifiedTask(task: newTask)
                 parentTask = newTask
             }
         }

@@ -91,9 +91,18 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
                 os_log("File to upload does not exist at %@", log: log, type: .error, path)
                 return false
             }
+            let derivedFilename = path.components(separatedBy: "/").last!
+            if filesData.count == 1 {
+                // only for single file uploads do we set the task's filename property
+                
+                let newTask = task.copyWith(filename: maybeFileUri != nil
+                                            ? pack(filename: derivedFilename, uri: maybeFileUri!)
+                                            : derivedFilename)
+                storeModifiedTask(task: newTask)
+            }
             let contentDispositionString =
             "Content-Disposition: form-data; name=\"\(browserEncode(fileField))\"; "
-            + "filename=\"\(browserEncode(path.components(separatedBy: "/").last!))\"\(lineFeed)"
+            + "filename=\"\(browserEncode(derivedFilename))\"\(lineFeed)"
             let resolvedMimeType = mimeType.isEmpty ? getMimeType(fromFilename: path) : mimeType
             let contentTypeString = "Content-Type: \(resolvedMimeType)\(lineFeed)\(lineFeed)"
             let fileUrl = URL(fileURLWithPath: path)
@@ -148,7 +157,7 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
             let bytesRead = inputStream.read(buffer, maxLength: bufferSize)
             if bytesRead < 0 {
                 // Stream error occured
-                os_log("Error reading from file for taskId %@", log: log, type: .info, task.taskId)
+                os_log("Error reading from file for taskId %@", log: log, type: .error, task.taskId)
                 inputStream.close()
                 return false
             } else if bytesRead == 0 {
@@ -165,7 +174,6 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
     /// Write text to the [fileHandle] and return true if successful
     private func writeText(fileHandle: FileHandle, text: String) -> Bool {
         guard let epilogue = text.data(using: .utf8) else {
-            os_log("Could not create text")
             return false
         }
         fileHandle.write(epilogue)

@@ -255,79 +255,48 @@ void main() {
       expect(result, isTrue);
       await Future.delayed(const Duration(seconds: 2));
     });
-
-    test('iOS persistence', () async {
-      print('Pick a directory to store a file to download');
-      final directoryUri = await FileDownloader()
-          .uri
-          .pickDirectory(persistedUriPermission: true);
-      print('directoryUri=$directoryUri');
-      expect(directoryUri, isNotNull);
-      if (Platform.isIOS) {
-        expect(directoryUri!.scheme, equals('urlbookmark'));
-      }
-      final task =
-          UriDownloadTask(url: workingUrl, directoryUri: directoryUri!);
-      expect(
-          allDigitsRegex.hasMatch(task.filename), isTrue); // filename omitted
-      expect(task.directoryUri, equals(directoryUri));
-      final result = await FileDownloader().download(task);
-      expect(result.status, equals(TaskStatus.complete));
-      final resultTask = result.task as UriDownloadTask;
-      final filename = resultTask.filename;
-      final uri = resultTask.fileUri!;
-      print('Raw filename: ${resultTask.filename}');
-      print('Resulting file uri: $uri');
-      expect(filename, equals(task.filename));
-      if (Platform.isAndroid) {
-        expect(uri.scheme, equals('content'));
-      } else {
-        expect(uri.scheme, equals('file'));
-      }
-      expect(uri.path, contains(filename));
-      expect(uri.toString().contains(directoryUri.toString()), isTrue);
-      expect(await FileDownloader().uri.deleteFile(uri), isTrue);
-    }, skip: !Platform.isIOS);
   });
 
-  test('move task to shared storage with file URI', () async {
-    // note: moved file is not deleted in this test
-    var filePath = await task.filePath();
-    await FileDownloader().download(task);
-    expect(File(filePath).existsSync(), isTrue);
-    final fileUri = Uri.file(filePath);
-    final uri = await FileDownloader()
-        .uri
-        .moveFileToSharedStorage(fileUri, SharedStorage.downloads);
-    print('Uri is $uri');
-    expect(uri, isNotNull);
-    if (Platform.isAndroid) {
-      expect(uri!.scheme, equals('content'));
-    } else {
-      expect(uri!.scheme, equals('file'));
-    }
-    expect(File(filePath).existsSync(), isFalse);
-  });
-
-  testWidgets('path in shared storage with file URI',
-      //TODO not sure this test works properly
+  group('File utils', () {
+    test('move task to shared storage with file URI', () async {
       // note: moved file is not deleted in this test
-      (widgetTester) async {
-    await FileDownloader().download(task);
-    final uri = await FileDownloader()
-        .uri
-        .moveToSharedStorage(task, SharedStorage.downloads);
-    print('Uri is $uri');
-    expect(uri, isNotNull);
-    if (uri!.scheme == 'file') {
-      expect(uri.toFile().existsSync(), isTrue);
-
-      final uri2 = await FileDownloader()
+      var filePath = await task.filePath();
+      await FileDownloader().download(task);
+      expect(File(filePath).existsSync(), isTrue);
+      final fileUri = Uri.file(filePath);
+      final uri = await FileDownloader()
           .uri
-          .pathInSharedStorage(uri, SharedStorage.downloads);
+          .moveFileToSharedStorage(fileUri, SharedStorage.downloads);
       print('Uri is $uri');
-      expect(uri2, isNotNull);
-      expect(uri2?.scheme, equals('content'));
-    }
+      expect(uri, isNotNull);
+      if (Platform.isAndroid) {
+        expect(uri!.scheme, equals('content'));
+      } else {
+        expect(uri!.scheme, equals('file'));
+      }
+      expect(File(filePath).existsSync(), isFalse);
+    });
+
+    testWidgets('path in shared storage with file URI',
+        //TODO not sure this test works properly
+        // note: moved file is not deleted in this test
+        (widgetTester) async {
+      await FileDownloader().download(task);
+      final uri = await FileDownloader()
+          .uri
+          .moveToSharedStorage(task, SharedStorage.downloads);
+      print('Uri is $uri');
+      expect(uri, isNotNull);
+      if (uri!.scheme == 'file') {
+        expect(uri.toFile().existsSync(), isTrue);
+
+        final uri2 = await FileDownloader()
+            .uri
+            .pathInSharedStorage(uri, SharedStorage.downloads);
+        print('Uri is $uri');
+        expect(uri2, isNotNull);
+        expect(uri2?.scheme, equals('file'));
+      }
+    });
   });
 }

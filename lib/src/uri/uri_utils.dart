@@ -297,7 +297,6 @@ final class NativeUriUtils extends UriUtils {
       multipleAllowed,
       persistedUriPermission
     ]));
-    print(uriStrings);
     // uriStrings can be a list of Strings or just one String, or null
     return switch (uriStrings) {
       String uri => [Uri.parse(uri)],

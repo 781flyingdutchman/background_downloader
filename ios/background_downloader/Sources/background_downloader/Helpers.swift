@@ -117,11 +117,9 @@ func createTempFileWithRange(from fileURL: URL, start: UInt64, contentLength: UI
 func getMimeType(fromFilename filename: String) -> String {
     // Extract the file extension from the filename
     let fileExtension = (filename as NSString).pathExtension
-
-        // For newer OS versions, use the modern UTType API
-        if let type = UTType(filenameExtension: fileExtension) {
-            return type.preferredMIMEType ?? "application/octet-stream"
-        }
+    if let type = UTType(filenameExtension: fileExtension) {
+        return type.preferredMIMEType ?? "application/octet-stream"
+    }
     // Default MIME type if unable to determine
     return "application/octet-stream"
 }

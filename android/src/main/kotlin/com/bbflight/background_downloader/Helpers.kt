@@ -267,7 +267,6 @@ fun suggestFilename(responseHeaders: Map<String, List<String>>, url: String): St
         }
     } catch (_: Throwable) {
     }
-    Log.d(TAG, "Could not determine suggested filename from server")
     // Try filename derived from last path segment of the url
     try {
         val uri = Uri.parse(url)
@@ -277,7 +276,6 @@ fun suggestFilename(responseHeaders: Map<String, List<String>>, url: String): St
         }
     } catch (_: Throwable) {
     }
-    Log.d(TAG, "Could not parse URL pathSegment for suggested filename")
     return "" // Default fallback
 }
 

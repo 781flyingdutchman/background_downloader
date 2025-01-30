@@ -167,7 +167,6 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             if filename == "?" {
                 if (uri == nil) {
                     let newTask = taskWithSuggestedFilenameFromResponseHeaders(task: task, responseHeaders: response.allHeaderFields)
-                    os_log("Suggested task filename for taskId %@ is %@", log: log, type: .info, newTask.taskId, newTask.filename)
                     if newTask.filename != task.filename {
                         storeModifiedTask(task: newTask)
                         task = newTask
@@ -330,7 +329,6 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
                 if let directoryUri = uriFromStringValue(maybePacked: task.directory) {
                     // URI mode
                     let uri = decodeToFileUrl(uri: directoryUri)
-                    os_log("URI mode", log: log, type: .error)
                     guard let uri = uri else {
                         os_log("Invalid directory URI (could not convert bookmark): %@", log: log, type: .error, directoryUri.absoluteString)
                         taskException = TaskException(type: .fileSystem, httpResponseCode: -1,
@@ -347,7 +345,6 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
                     fileUrl = uri.appendingPathComponent(filename)
                     // store the full Uri in the task.filename so it can be retrieved
                     let newTask = task.copyWith(filename: pack(filename: filename, uri: fileUrl!))
-                    os_log("newTask filename: %@", log: log, type: .error, newTask.filename)
                     task = newTask
                 } else {
                     // Filepath mode

@@ -199,7 +199,6 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
                     // other URL scheme will be attempted to resolve using content resolver
                     val resolver = applicationContext.contentResolver
                     // create destination Uri if not already exists
-                    Log.wtf(TAG, "directoryUri = $directoryUri")
                     var documentFile = DocumentFile.fromTreeUri(applicationContext, directoryUri)
                     destUri = destUri ?: documentFile?.createFile(task.mimeType, uriFilename)?.uri;
                     if (destUri == null) {
@@ -381,7 +380,6 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
             unique = true
         )
         val dirName = File(destFilePath).parent ?: ""
-        Log.d(TAG, "Suggested filename for taskId ${task.taskId}: ${task.filename}")
         return if (dirName.isEmpty()) task.filename else "$dirName/${task.filename}"
     }
 
@@ -461,10 +459,6 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
         val total = matchResult.groups[3]?.value?.toLong()!!
         val tempFile = File(tempFilePath)
         val tempFileLength = tempFile.length()
-        Log.d(
-            TAG,
-            "Resume start=$start, end=$end of total=$total bytes, tempFile = $tempFileLength bytes"
-        )
         startByte = start - taskRangeStartByte // relative to start of range
         if (startByte > tempFileLength) {
             Log.i(TAG, "Offered range not feasible: $range with startByte $startByte")
