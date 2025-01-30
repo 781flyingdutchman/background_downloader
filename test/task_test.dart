@@ -353,7 +353,7 @@ void main() {
         fileUri: Uri.parse('content://uploads'),
         filename: 'myFile.txt',
       );
-      expect(task.uploadFilename, 'myFile.txt');
+      expect(task.filename, 'myFile.txt');
       expect(task.fileUri, Uri.parse('content://uploads'));
     });
 
@@ -364,7 +364,7 @@ void main() {
         url: 'https://example.com/upload',
         fileUri: Uri.parse('content://uploads'),
       );
-      expect(task.uploadFilename, isEmpty);
+      expect(task.filename, isEmpty);
       expect(task.fileUri, Uri.parse('content://uploads'));
     });
 

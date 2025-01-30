@@ -13,12 +13,12 @@ import 'package:path_provider/path_provider.dart';
 import 'file_downloader.dart';
 import 'models.dart';
 import 'options/task_options.dart';
-import 'uri_utils.dart';
+import 'uri/uri_helpers.dart';
 import 'utils.dart';
 import 'web_downloader.dart'
     if (dart.library.io) 'desktop/desktop_downloader.dart';
 
-part 'uri_task.dart';
+part 'uri/uri_task.dart';
 
 final _log = Logger('FileDownloader');
 
@@ -327,9 +327,9 @@ sealed class Task extends Request implements Comparable {
     if (filename?.isEmpty == true) {
       throw ArgumentError('Filename cannot be empty');
     }
-    if (!(UriUtils.containsUri(this.filename)) &&
-        _pathSeparator.hasMatch(this.filename) &&
-        this is! MultiUploadTask) {
+    if (this is! UriTask &&
+        this is! MultiUploadTask &&
+        _pathSeparator.hasMatch(this.filename)) {
       throw ArgumentError('Filename cannot contain path separators');
     }
     if (allowPause && post != null) {
@@ -1001,14 +1001,6 @@ final class UploadTask extends Task {
   @override
   String toString() => '${super.toString()} and fileField $fileField, '
       'mimeType $mimeType and fields $fields';
-
-  /// Returns the filename set during construction of the task, or that
-  /// was set by the uploader based on the provided URI, or null if
-  /// no filename was set
-  String? get uploadFilename {
-    final (filename: storedFilename, :uri) = UriUtils.unpack(filename);
-    return storedFilename;
-  }
 }
 
 /// Information related to an UploadTask, containing multiple files to upload

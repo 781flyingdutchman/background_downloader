@@ -1,6 +1,4 @@
-part of 'task.dart';
-
-//TODO think about Task.filePath
+part of '../task.dart';
 
 /// Interface for tasks that operate with [Uri] instead of file and directory
 /// paths.
@@ -27,7 +25,7 @@ base mixin _UriTaskMixin on Task implements UriTask {
 
   @override
   Uri? get fileUri {
-    final (:filename, :uri) = UriUtils.unpack(super.filename);
+    final (:filename, :uri) = unpack(super.filename);
     return uri;
   }
 
@@ -36,7 +34,7 @@ base mixin _UriTaskMixin on Task implements UriTask {
 
   @override
   String get filename {
-    final (:filename, :uri) = UriUtils.unpack(super.filename);
+    final (:filename, :uri) = unpack(super.filename);
     return filename ?? '';
   }
 
@@ -134,9 +132,8 @@ final class UriUploadTask extends UploadTask with _UriTaskMixin {
       super.creationTime})
       : super(
             baseDirectory: BaseDirectory.root,
-            filename: filename != null
-                ? UriUtils.pack(filename, fileUri)
-                : fileUri.toString(),
+            filename:
+                filename != null ? pack(filename, fileUri) : fileUri.toString(),
             httpRequestMethod: httpRequestMethod ?? 'POST',
             mimeType: mimeType ?? 'application/octet-stream',
             fields: fields ?? {}) {

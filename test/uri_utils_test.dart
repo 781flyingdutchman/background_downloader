@@ -1,4 +1,5 @@
 import 'package:background_downloader/background_downloader.dart';
+import 'package:background_downloader/src/uri/uri_helpers.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -7,7 +8,7 @@ void main() {
       const filename = 'myFile.txt';
       final uri = Uri.parse('content://com.example.app/document/123');
 
-      final packedString = UriUtils.pack(filename, uri);
+      final packedString = pack(filename, uri);
 
       expect(packedString, ':::$filename::::::${uri.toString()}:::');
     });
@@ -19,7 +20,7 @@ void main() {
       final packedString = ':::$filename::::::${uri.toString()}:::';
 
       final (filename: unpackedFilename, uri: unpackedUri) =
-          UriUtils.unpack(packedString);
+          unpack(packedString);
 
       expect(unpackedFilename, filename);
       expect(unpackedUri, uri);
@@ -30,7 +31,7 @@ void main() {
         () {
       const invalidPackedString = 'This is not a packed string';
 
-      final (:filename, :uri) = UriUtils.unpack(invalidPackedString);
+      final (:filename, :uri) = unpack(invalidPackedString);
 
       expect(filename, invalidPackedString);
       expect(uri, isNull);
@@ -39,7 +40,7 @@ void main() {
     test('unpack should return null and a uri for simple uri string', () {
       const uriString = 'https://www.example.com/path/to/resource';
 
-      final (:filename, :uri) = UriUtils.unpack(uriString);
+      final (:filename, :uri) = unpack(uriString);
 
       expect(filename, isNull);
       expect(uri.toString(), equals(uriString));
@@ -49,7 +50,7 @@ void main() {
       const uriString = 'https://www.example.com/path/to/resource';
       final expectedUri = Uri.parse(uriString);
 
-      final resultUri = UriUtils.uriFromStringValue(uriString);
+      final resultUri = uriFromStringValue(uriString);
 
       expect(resultUri, expectedUri);
     });
@@ -57,9 +58,9 @@ void main() {
     test('uriFromStringValue should return Uri from a valid packed string', () {
       const filename = 'myFile.txt';
       final uri = Uri.parse('content://com.example.app/document/123');
-      final packedString = UriUtils.pack(filename, uri);
+      final packedString = pack(filename, uri);
 
-      final resultUri = UriUtils.uriFromStringValue(packedString);
+      final resultUri = uriFromStringValue(packedString);
 
       expect(resultUri, uri);
     });
@@ -67,7 +68,7 @@ void main() {
     test('uriFromStringValue should return null for an invalid string', () {
       const invalidString = 'This is not a Uri or packed string';
 
-      final resultUri = UriUtils.uriFromStringValue(invalidString);
+      final resultUri = uriFromStringValue(invalidString);
 
       expect(resultUri, isNull);
     });
@@ -79,7 +80,7 @@ void main() {
       const invalidUri = 'invalid';
       const packedString = ':::$filename::::::$invalidUri:::';
 
-      final resultUri = UriUtils.uriFromStringValue(packedString);
+      final resultUri = uriFromStringValue(packedString);
 
       expect(resultUri, isNull);
     });

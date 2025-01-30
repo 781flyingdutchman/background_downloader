@@ -15,7 +15,7 @@ import 'permissions.dart';
 import 'persistent_storage.dart';
 import 'queue/task_queue.dart';
 import 'task.dart';
-import 'uri_utils.dart';
+import 'uri/uri_utils.dart';
 import 'web_downloader.dart'
     if (dart.library.io) 'desktop/desktop_downloader.dart';
 
