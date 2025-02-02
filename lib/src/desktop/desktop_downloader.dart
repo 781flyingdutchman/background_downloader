@@ -121,7 +121,6 @@ final class DesktopDownloader extends BaseDownloader {
       await removeResumeData(task.taskId);
     }
     final isResume = _resume.remove(task) && resumeData != null;
-    final filePath = await task.filePath(); // "" for MultiUploadTask
     // spawn an isolate to do the task
     final receivePort = ReceivePort();
     final errorPort = ReceivePort();
@@ -147,7 +146,6 @@ final class DesktopDownloader extends BaseDownloader {
     final sendPort = await messagesFromIsolate.next as SendPort;
     sendPort.send((
       task,
-      filePath,
       resumeData,
       isResume,
       requestTimeout,

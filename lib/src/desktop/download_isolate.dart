@@ -22,16 +22,12 @@ late DownloadTask downloadTask; // global because filename may change
 ///
 /// Sends updates via the [sendPort] and can be commanded to cancel/pause via
 /// the [messagesToIsolate] queue
-Future<void> doDownloadTask(
-    DownloadTask task,
-    String filePath,
-    ResumeData? resumeData,
-    bool isResume,
-    Duration requestTimeout,
-    SendPort sendPort) async {
+Future<void> doDownloadTask(DownloadTask task, ResumeData? resumeData,
+    bool isResume, Duration requestTimeout, SendPort sendPort) async {
   // use downloadTask from here on as a 'global' variable in this isolate,
   // as we may change the filename of the task
   downloadTask = task;
+  var filePath = await downloadTask.filePath();
   // tempFilePath is taken from [resumeDataString] if this is a resuming task.
   // Otherwise, it is a generated full path to the temp directory
   final tempFilePath = isResume && resumeData != null
@@ -80,7 +76,9 @@ Future<void> doDownloadTask(
       }
       if (!downloadTask.hasFilename) {
         downloadTask = await taskWithSuggestedFilename(
-            downloadTask, response.headers, true);
+            downloadTask,
+            response.headers,
+            true);
         // update the filePath by replacing the last segment with the new filename
         filePath = p.join(p.dirname(filePath), downloadTask.filename);
         log.finest(

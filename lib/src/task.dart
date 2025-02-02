@@ -380,11 +380,11 @@ sealed class Task extends Request implements Comparable {
         if (t.fileUri != null) {
           assert(t.fileUri?.scheme == 'file',
               'fileUri must be a URI scheme to return a path');
-          return t.fileUri!.path;
+          return t.fileUri!.toFilePath(windows: Platform.isWindows);
         } else {
           assert(t.directoryUri?.scheme == 'file',
               'directoryUri must be a URI scheme to return a path');
-          return '${t.directoryUri!.path}/${withFilename ?? filename}';
+          return '${t.directoryUri!.toFilePath(windows: Platform.isWindows)}${Platform.pathSeparator}${withFilename ?? filename}';
         }
       default:
         return p.join(await baseDirectoryPath(baseDirectory), directory,
@@ -881,7 +881,8 @@ final class UploadTask extends Task {
       super.priority,
       super.metaData,
       super.displayName,
-      super.creationTime})
+      super.creationTime,
+      super.options})
       : fields = fields ?? {},
         mimeType =
             mimeType ?? lookupMimeType(file.path) ?? 'application/octet-stream',
@@ -917,21 +918,28 @@ final class UploadTask extends Task {
   /// with each list the same length. For the filenames list, if a filename refers
   /// to a file that exists (i.e. it is a full path) then that is the filePath used,
   /// otherwise the filename is appended to the [Task.baseDirectory] and [Task.directory]
-  /// to form a full file path
+  /// to form a full file path. If the filename is represented as a file:// uri
+  /// then that Uri's filePath is used
   Future<List<(String, String, String)>> extractFilesData() async {
     final List<String> fileFields = List.from(jsonDecode(fileField));
     final List<String> filenames = List.from(jsonDecode(filename));
     final List<String> mimeTypes = List.from(jsonDecode(mimeType));
     final result = <(String, String, String)>[];
     for (int i = 0; i < fileFields.length; i++) {
-      final file = File(filenames[i]);
+      final fileUri = Uri.tryParse(filenames[i]);
+      final filenameOrPath = (fileUri?.scheme == 'file')
+          ? fileUri!.toFilePath(windows: Platform.isWindows)
+          : filenames[i];
+      final file = File(filenameOrPath);
       if (await file.exists()) {
-        result.add((fileFields[i], filenames[i], mimeTypes[i]));
+        result.add((fileFields[i], filenameOrPath, mimeTypes[i]));
       } else {
+        // if file does not exist, assume it is a filename only relative path) and
+        // append to baseDirectory and directory
         result.add(
           (
             fileFields[i],
-            await filePath(withFilename: filenames[i]),
+            await filePath(withFilename: filenameOrPath),
             mimeTypes[i],
           ),
         );

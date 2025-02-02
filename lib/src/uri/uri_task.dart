@@ -71,7 +71,7 @@ final class UriDownloadTask extends DownloadTask with _UriTaskMixin {
       {super.taskId,
       required super.url,
       super.urlQueryParameters,
-      super.filename,
+      String? filename,
       super.headers,
       super.httpRequestMethod,
       super.post,
@@ -87,10 +87,28 @@ final class UriDownloadTask extends DownloadTask with _UriTaskMixin {
       super.creationTime,
       super.options})
       : super(
-            baseDirectory: BaseDirectory.root,
-            directory: directoryUri.toString()) {
+          baseDirectory: BaseDirectory.root,
+          directory: directoryUri.toString(),
+          filename: switch ((filename, directoryUri)) {
+            (null, Uri(scheme: 'file')) => () {
+                final randomFilename = Random().nextInt(1 << 32).toString();
+                return pack(
+                    randomFilename,
+                    Uri.file('${directoryUri.path}/$randomFilename',
+                        windows: Platform.isWindows));
+              }(),
+            (String filename, Uri(scheme: 'file')) => pack(
+                filename,
+                Uri.file('${directoryUri.path}/$filename',
+                    windows: Platform.isWindows)),
+            _ => filename
+          },
+        ) {
     assert(Task.allowedUriSchemes.contains(directoryUri.scheme),
         'Directory URI scheme must be one of ${Task.allowedUriSchemes}');
+    if (_pathSeparator.hasMatch(filename ?? '')) {
+      throw ArgumentError('Filename cannot contain path separators');
+    }
   }
 
   /// Creates [Task] object from JsonMap
@@ -99,7 +117,47 @@ final class UriDownloadTask extends DownloadTask with _UriTaskMixin {
   /// subclassed [Task] from the [json]
   UriDownloadTask.fromJson(super.json) : super.fromJson();
 
-  //TODO copyWith should handle fileName and directoryUri properly
+  @override
+  UriDownloadTask copyWith(
+          {String? taskId,
+          String? url,
+          String? filename,
+          Map<String, String>? headers,
+          String? httpRequestMethod,
+          Object? post,
+          Uri? directoryUri,
+          String? directory,
+          BaseDirectory? baseDirectory,
+          String? group,
+          Updates? updates,
+          bool? requiresWiFi,
+          int? retries,
+          int? retriesRemaining,
+          bool? allowPause,
+          int? priority,
+          String? metaData,
+          String? displayName,
+          DateTime? creationTime,
+          TaskOptions? options}) =>
+      UriDownloadTask(
+          taskId: taskId ?? this.taskId,
+          url: url ?? this.url,
+          filename: filename ?? this.filename,
+          headers: headers ?? this.headers,
+          httpRequestMethod: httpRequestMethod ?? this.httpRequestMethod,
+          post: post ?? this.post,
+          directoryUri: directoryUri ?? this.directoryUri ?? Uri.base,
+          group: group ?? this.group,
+          updates: updates ?? this.updates,
+          requiresWiFi: requiresWiFi ?? this.requiresWiFi,
+          retries: retries ?? this.retries,
+          allowPause: allowPause ?? this.allowPause,
+          priority: priority ?? this.priority,
+          metaData: metaData ?? this.metaData,
+          displayName: displayName ?? this.displayName,
+          creationTime: creationTime ?? this.creationTime,
+          options: options ?? this.options)
+        ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 
   @override
   String get taskType => 'UriDownloadTask';
@@ -131,7 +189,8 @@ final class UriUploadTask extends UploadTask with _UriTaskMixin {
       super.priority,
       super.metaData,
       super.displayName,
-      super.creationTime})
+      super.creationTime,
+      super.options})
       : super(
             baseDirectory: BaseDirectory.root,
             filename:
@@ -149,7 +208,52 @@ final class UriUploadTask extends UploadTask with _UriTaskMixin {
   /// subclassed [Task] from the [json]
   UriUploadTask.fromJson(super.json) : super.fromJson();
 
-  //TODO copyWith should handle fileName properly
+  @override
+  UriUploadTask copyWith(
+          {Uri? fileUri,
+          String? taskId,
+          String? url,
+          String? filename,
+          Map<String, String>? headers,
+          String? httpRequestMethod,
+          Object? post,
+          String? fileField,
+          String? mimeType,
+          Map<String, String>? fields,
+          String? directory,
+          BaseDirectory? baseDirectory,
+          String? group,
+          Updates? updates,
+          bool? requiresWiFi,
+          int? retries,
+          int? retriesRemaining,
+          bool? allowPause,
+          int? priority,
+          String? metaData,
+          String? displayName,
+          DateTime? creationTime,
+          TaskOptions? options}) =>
+      UriUploadTask(
+          fileUri: fileUri ?? this.fileUri ?? Uri.base,
+          taskId: taskId ?? this.taskId,
+          url: url ?? this.url,
+          filename: filename ?? this.filename,
+          headers: headers ?? this.headers,
+          httpRequestMethod: httpRequestMethod ?? this.httpRequestMethod,
+          post: post as String? ?? this.post,
+          fileField: fileField ?? this.fileField,
+          mimeType: mimeType ?? this.mimeType,
+          fields: fields ?? this.fields,
+          group: group ?? this.group,
+          updates: updates ?? this.updates,
+          requiresWiFi: requiresWiFi ?? this.requiresWiFi,
+          priority: priority ?? this.priority,
+          retries: retries ?? this.retries,
+          metaData: metaData ?? this.metaData,
+          displayName: displayName ?? this.displayName,
+          creationTime: creationTime ?? this.creationTime,
+          options: options ?? this.options)
+        ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 
   @override
   String get taskType => 'UriUploadTask';

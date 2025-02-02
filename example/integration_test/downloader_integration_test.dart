@@ -3450,7 +3450,8 @@ void main() {
       final path = await task.filePath();
       expect(path, '/my/directory/testFilename.txt');
       expect(task.directoryUri, equals(uri));
-      expect(task.fileUri, isNull);
+      expect(task.fileUri!.toFilePath(windows: Platform.isWindows),
+          equals('/my/directory/testFilename.txt'));
     });
 
     test('throws assertion error for task using non-file URI', () async {

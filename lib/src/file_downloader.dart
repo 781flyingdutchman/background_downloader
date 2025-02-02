@@ -50,7 +50,7 @@ interface class FileDownloader {
   /// Accesses utilities for working with URIs. URIs make working with file pickers and
   /// shared storage easier, as they abstract permissions and are coherent
   /// across platforms.
-  late final UriUtils uri;
+  UriUtils? _uri;
 
   /// Do not use: for testing only
   @visibleForTesting
@@ -69,7 +69,6 @@ interface class FileDownloader {
   FileDownloader._internal(PersistentStorage persistentStorage) {
     database = Database(persistentStorage);
     _downloader = BaseDownloader.instance(persistentStorage, database);
-    uri = UriUtils.withDownloader(_downloader);
   }
 
   /// True when initialization is complete and downloader ready for use
@@ -78,6 +77,14 @@ interface class FileDownloader {
   /// Stream of [TaskUpdate] updates for downloads that do
   /// not have a registered callback
   Stream<TaskUpdate> get updates => _downloader.updates.stream;
+
+  /// Accesses utilities for working with URIs. URIs make working with file pickers and
+  /// shared storage easier, as they abstract permissions and are coherent
+  /// across platforms.
+  UriUtils get uri {
+    _uri ??= UriUtils.withDownloader(_downloader);
+    return _uri!;
+  }
 
   /// Configures the downloader
   ///

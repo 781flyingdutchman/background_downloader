@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+final testUriWithFileScheme = Uri.parse('file:///test_file.txt');
+
 const workingUrl = 'https://google.com';
 const failingUrl = 'https://avmaps-dot-bbflightserver-hrd.appspot'
     '.com/public/get_current_app_data?key=background_downloader_integration_test';
@@ -323,6 +325,41 @@ void main() {
               ),
           throwsA(isA<AssertionError>()));
     });
+
+    test('Constructing UriDownloadTask with file scheme should set fileUri',
+        () {
+      final task = UriDownloadTask(
+          directoryUri: testUriWithFileScheme,
+          url: workingUrl,
+          filename: defaultFilename);
+      expect(task.fileUri!.path,
+          equals('${testUriWithFileScheme.path}/$defaultFilename'));
+      // without a filename in the constructor
+      final task2 =
+          UriDownloadTask(directoryUri: testUriWithFileScheme, url: workingUrl);
+      expect(task2.fileUri!.path,
+          equals('${testUriWithFileScheme.path}/${task2.filename}'));
+    });
+
+    test('UriDownloadTask copyWith should handle filename correctly', () {
+      // no filename
+      final task =
+          UriDownloadTask(directoryUri: testUriWithFileScheme, url: workingUrl);
+      expect(task.filename, isNotEmpty);
+      expect(task.fileUri, isNull);
+      expect(task.directoryUri, equals(testUriWithFileScheme));
+      final updatedTask = task.copyWith(filename: 'new_filename.txt');
+      expect(updatedTask.filename, 'new_filename.txt');
+      expect(updatedTask.directoryUri, testUriWithFileScheme);
+      // with filename
+      final task2 = UriDownloadTask(
+          directoryUri: testUriWithFileScheme,
+          url: workingUrl,
+          filename: 'old_filename.txt');
+      final updatedTask2 = task2.copyWith(filename: 'new_filename.txt');
+      expect(updatedTask2.filename, 'new_filename.txt');
+      expect(updatedTask2.directoryUri, testUriWithFileScheme);
+    });
   });
 
   group('UriUploadTask', () {
@@ -376,6 +413,26 @@ void main() {
                 fileUri: Uri.parse('ftp://invalid/scheme'),
               ),
           throwsA(isA<AssertionError>()));
+    });
+
+    test('UriUploadTask copyWith should handle filename correctly', () {
+      // no filename
+      final task =
+          UriUploadTask(fileUri: testUriWithFileScheme, url: workingUrl);
+      expect(task.filename, isEmpty);
+      expect(task.fileUri, equals(testUriWithFileScheme));
+      expect(task.directoryUri, isNull);
+      final updatedTask = task.copyWith(filename: 'new_filename.txt');
+      expect(updatedTask.filename, 'new_filename.txt');
+      expect(updatedTask.fileUri, testUriWithFileScheme);
+      // with filename
+      final task2 = UriUploadTask(
+          fileUri: testUriWithFileScheme,
+          url: workingUrl,
+          filename: 'old_filename.txt');
+      final updatedTask2 = task2.copyWith(filename: 'new_filename.txt');
+      expect(updatedTask2.filename, 'new_filename.txt');
+      expect(updatedTask2.fileUri, testUriWithFileScheme);
     });
   });
 }

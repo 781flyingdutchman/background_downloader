@@ -2,6 +2,9 @@ import 'package:background_downloader/background_downloader.dart';
 import 'package:background_downloader/src/uri/uri_helpers.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+final testUrl = 'https://google.com';
+final testUriWithFileScheme = Uri.parse('file:///test_file.txt');
+
 void main() {
   group('pack and unpack', () {
     test('pack should pack filename and uri into a single string', () {

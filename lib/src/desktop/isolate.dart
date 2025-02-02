@@ -58,7 +58,6 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
   // get the arguments list and parse each argument
   final (
     Task originalTask,
-    String filePath,
     ResumeData? resumeData,
     bool isResume,
     Duration? requestTimeout,
@@ -89,16 +88,11 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
     // allow immediate cancel message to come through
     await Future.delayed(const Duration(milliseconds: 0));
     await switch (task) {
-      ParallelDownloadTask() => doParallelDownloadTask(
-          task,
-          filePath,
-          resumeData,
-          isResume,
-          requestTimeout ?? const Duration(seconds: 60),
-          sendPort),
-      DownloadTask() => doDownloadTask(task, filePath, resumeData, isResume,
+      ParallelDownloadTask() => doParallelDownloadTask(task, resumeData,
+          isResume, requestTimeout ?? const Duration(seconds: 60), sendPort),
+      DownloadTask() => doDownloadTask(task, resumeData, isResume,
           requestTimeout ?? const Duration(seconds: 60), sendPort),
-      UploadTask() => doUploadTask(task, filePath, sendPort),
+      UploadTask() => doUploadTask(task, sendPort),
       DataTask() => doDataTask(task, sendPort),
       _ => throw UnimplementedError(),
     };

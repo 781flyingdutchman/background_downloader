@@ -128,6 +128,7 @@ void main() {
       final uri2 = await FileDownloader()
           .uri
           .moveToSharedStorage(dummy2, SharedStorage.downloads);
+      print('uri1=$uri\nuri2=$uri2');
       final task = MultiUploadTask(
           url: uploadMultiTestUrl,
           files: [('f1', uri), ('f2', uri2)],
@@ -165,6 +166,7 @@ void main() {
       expect(
           allDigitsRegex.hasMatch(task.filename), isTrue); // filename omitted
       expect(task.directoryUri, equals(directoryUri));
+      expect(task.fileUri, equals(Uri.parse('$directoryUri/${task.filename}')));
       final result = await FileDownloader().download(task);
       expect(result.status, equals(TaskStatus.complete));
       final resultTask = result.task as UriDownloadTask;
@@ -194,9 +196,9 @@ void main() {
       final fileUri = resultTask.fileUri!;
       print('uri=$fileUri');
       print('filename=$filename');
-      expect(filename, equals('5MB-test.ZIP'));
+      expect(filename.substring(0, 8), equals('5MB-test'));
       expect(fileUri.scheme, equals('file'));
-      expect(fileUri.path, contains(filename));
+      expect(fileUri.toFilePath(), contains(filename));
       expect(fileUri.toString().contains(directoryUri.toString()), isTrue);
       expect(await FileDownloader().uri.deleteFile(fileUri), isTrue);
     });

@@ -304,15 +304,7 @@ final class DesktopUriUtils extends UriUtils {
   Future<bool> openFile(Uri uri, {String? mimeType}) async {
     try {
       final filePath = uri.toFilePath();
-      final processResult = await Process.run('open', [filePath]);
-
-      if (processResult.exitCode == 0) {
-        return true;
-      } else {
-        log.warning(
-            'Failed to open file. Exit code: ${processResult.exitCode}, Error: ${processResult.stderr}');
-        return false;
-      }
+      return await _downloader.openFile(null, filePath, mimeType);
     } catch (e) {
       log.severe('Error opening file: $uri', e);
       return false;
