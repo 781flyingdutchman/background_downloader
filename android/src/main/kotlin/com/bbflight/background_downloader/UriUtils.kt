@@ -579,37 +579,6 @@ object FilePicker {
             }
             pendingResult = null // Reset the pending result
             return true
-        } else if (requestCode == REQUEST_CODE_PICK_MEDIA) {
-            if (resultCode == Activity.RESULT_OK) {
-                val uris = mutableListOf<String>()
-                if (multipleAllowed && data?.clipData != null) {
-                    val clipData = data.clipData!!
-                    for (i in 0 until clipData.itemCount) {
-                        val uri = clipData.getItemAt(i).uri
-                        if (persistedUriPermission) {
-                            context.contentResolver.takePersistableUriPermission(
-                                uri,
-                                Intent.FLAG_GRANT_READ_URI_PERMISSION
-                            )
-                        }
-                        uris.add(uri.toString())
-                    }
-                } else if (data?.data != null) {
-                    val uri = data.data!!
-                    if (persistedUriPermission) {
-                        context.contentResolver.takePersistableUriPermission(
-                            uri,
-                            Intent.FLAG_GRANT_READ_URI_PERMISSION
-                        )
-                    }
-                    uris.add(uri.toString())
-                }
-                pendingResult?.success(uris)
-            } else {
-                pendingResult?.success(null)
-            }
-            pendingResult = null
-            return true
         }
         return false
     }
@@ -631,7 +600,7 @@ object FilePicker {
 }
 
 /**
- * Helper class for creating a new directory using the Android SAF.
+ * Helper class for creating a new directory using the Android SAF or file system.
  */
 object DirectoryCreator {
     const val TAG = "DirectoryCreator"
@@ -641,7 +610,7 @@ object DirectoryCreator {
      * If the new directory path contains multiple levels, it creates all intermediate directories as needed.
      *
      * @param context The application context.
-     * @param parentDirectoryUri The URI of the parent directory.
+     * @param parentDirectoryUri The URI of the parent directory (file:// or content://).
      * @param newDirectoryName The name of the new directory to create (can be a path).
      * @param persistedUriPermission Whether to persist the URI permission across device reboots.
      * @param result The MethodChannel result to complete when the operation is finished.
@@ -657,61 +626,96 @@ object DirectoryCreator {
         persistedUriPermission: Boolean,
         result: MethodChannel.Result
     ) {
-        val parentDir = DocumentFile.fromTreeUri(context, parentDirectoryUri)
-        if (parentDir == null || !parentDir.exists() || !parentDir.isDirectory) {
-            result.error(
-                "INVALID_PARENT_URI",
-                "Invalid or inaccessible parent directory URI",
-                null
-            )
-            return
-        }
-
-        // Sanitize the new directory name by removing leading/trailing path separators
-        val sanitizedDirectoryName = newDirectoryName.trim(File.separatorChar)
-
-        try {
-            var currentDir: DocumentFile = parentDir
-            val directoryPathParts = sanitizedDirectoryName.split(File.separatorChar)
-
-            for (directoryName in directoryPathParts) {
-                var newDir = currentDir.findFile(directoryName)
-                if (newDir == null || !newDir.exists()) {
-                    newDir = currentDir.createDirectory(directoryName)
-                } else if (!newDir.isDirectory) {
-                    result.error(
-                        "INVALID_PATH",
-                        "Invalid path: $directoryName is not a directory",
-                        null
-                    )
-                    return
-                }
-                if (newDir == null) {
-                    result.error(
-                        "CREATE_FAILED",
-                        "Failed to create directory: $directoryName",
-                        null
-                    )
-                    return
-                }
-                currentDir = newDir
-                // Grant permissions to intermediate directories as well
-                if (persistedUriPermission) {
-                    context.contentResolver.takePersistableUriPermission(
-                        newDir.uri,
-                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                    )
-                }
+        if (parentDirectoryUri.scheme == "file") {
+            // Handle file scheme URIs using standard file operations
+            val parentDir = File(parentDirectoryUri.path!!)
+            if (!parentDir.exists() || !parentDir.isDirectory) {
+                result.error(
+                    "INVALID_PARENT_URI",
+                    "Invalid or inaccessible parent directory URI",
+                    null
+                )
+                return
             }
-            // Return the URI of the final directory
-            result.success(currentDir.uri.toString())
-        } catch (e: Exception) {
-            Log.e(TAG, "Error creating directory", e)
-            result.error(
-                "CREATE_FAILED",
-                "Error creating directory: ${e.message}",
-                null
-            )
+            val sanitizedDirectoryName = newDirectoryName.trim(File.separatorChar)
+            val newDir = File(parentDir, sanitizedDirectoryName)
+            try {
+                if (!newDir.exists()) {
+                    if (!newDir.mkdirs()) {
+                        result.error(
+                            "CREATE_FAILED",
+                            "Failed to create directory: ${newDir.absolutePath}",
+                            null
+                        )
+                        return
+                    }
+                }
+                result.success(Uri.fromFile(newDir).toString())
+            } catch (e: Exception) {
+                Log.e(TAG, "Error creating directory", e)
+                result.error(
+                    "CREATE_FAILED",
+                    "Error creating directory: ${e.message}",
+                    null
+                )
+            }
+        } else {
+            // handle content Uri scheme using DocumentFile API
+            val parentDir = DocumentFile.fromTreeUri(context, parentDirectoryUri)
+            if (parentDir == null || !parentDir.exists() || !parentDir.isDirectory) {
+                result.error(
+                    "INVALID_PARENT_URI",
+                    "Invalid or inaccessible parent directory URI",
+                    null
+                )
+                return
+            }
+
+            // Sanitize the new directory name by removing leading/trailing path separators
+            val sanitizedDirectoryName = newDirectoryName.trim(File.separatorChar)
+
+            try {
+                var currentDir: DocumentFile = parentDir
+                val directoryPathParts = sanitizedDirectoryName.split(File.separatorChar)
+                for (directoryName in directoryPathParts) {
+                    var newDir = currentDir.findFile(directoryName)
+                    if (newDir == null || !newDir.exists()) {
+                        newDir = currentDir.createDirectory(directoryName)
+                    } else if (!newDir.isDirectory) {
+                        result.error(
+                            "INVALID_PATH",
+                            "Invalid path: $directoryName is not a directory",
+                            null
+                        )
+                        return
+                    }
+                    if (newDir == null) {
+                        result.error(
+                            "CREATE_FAILED",
+                            "Failed to create directory: $directoryName",
+                            null
+                        )
+                        return
+                    }
+                    currentDir = newDir
+                    // Grant permissions to intermediate directories as well
+                    if (persistedUriPermission) {
+                        context.contentResolver.takePersistableUriPermission(
+                            newDir.uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                        )
+                    }
+                }
+                // Return the URI of the final directory
+                result.success(currentDir.uri.toString())
+            } catch (e: Exception) {
+                Log.e(TAG, "Error creating directory", e)
+                result.error(
+                    "CREATE_FAILED",
+                    "Error creating directory: ${e.message}",
+                    null
+                )
+            }
         }
     }
 }

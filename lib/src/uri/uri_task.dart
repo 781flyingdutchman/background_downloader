@@ -99,6 +99,8 @@ final class UriDownloadTask extends DownloadTask with _UriTaskMixin {
   /// subclassed [Task] from the [json]
   UriDownloadTask.fromJson(super.json) : super.fromJson();
 
+  //TODO copyWith should handle fileName and directoryUri properly
+
   @override
   String get taskType => 'UriDownloadTask';
 }
@@ -146,6 +148,8 @@ final class UriUploadTask extends UploadTask with _UriTaskMixin {
   /// Only used by subclasses. Use [createFromJsonMap] to create a properly
   /// subclassed [Task] from the [json]
   UriUploadTask.fromJson(super.json) : super.fromJson();
+
+  //TODO copyWith should handle fileName properly
 
   @override
   String get taskType => 'UriUploadTask';

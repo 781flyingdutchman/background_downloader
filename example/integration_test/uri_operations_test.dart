@@ -278,7 +278,6 @@ void main() {
     });
 
     testWidgets('path in shared storage with file URI',
-        //TODO not sure this test works properly
         // note: moved file is not deleted in this test
         (widgetTester) async {
       await FileDownloader().download(task);
@@ -293,10 +292,102 @@ void main() {
         final uri2 = await FileDownloader()
             .uri
             .pathInSharedStorage(uri, SharedStorage.downloads);
-        print('Uri is $uri');
+        print('Uri2 is $uri2');
         expect(uri2, isNotNull);
         expect(uri2?.scheme, equals('file'));
+      } else {
+        // for content Uri, the function should throw an AssertionError
+        expect(uri.scheme == 'content', isTrue); // Android
+        expect(
+            () async => await FileDownloader()
+                .uri
+                .pathInSharedStorage(uri, SharedStorage.downloads),
+            throwsAssertionError);
       }
+    });
+
+    test('createDirectory', () async {
+      const testDir = 'testDir';
+      const testSubDir = 'testSubDir';
+      const multiLevelDirName = 'test/Dir';
+
+      // Test creating a directory in the temporary directory
+      final tempDir = await getTemporaryDirectory();
+      final tempDirUri = tempDir.uri;
+
+      // Ensure directories are deleted before starting the test
+      final testDirPath = p.join(tempDir.path, testDir);
+      final testDirDirectory = Directory(testDirPath);
+      if (testDirDirectory.existsSync()) {
+        testDirDirectory.deleteSync(recursive: true);
+      }
+
+      final multiLevelDirPath = p.join(tempDir.path, 'test');
+      final multiLevelDir = Directory(multiLevelDirPath);
+      if (multiLevelDir.existsSync()) {
+        multiLevelDir.deleteSync(recursive: true);
+      }
+
+      final newDirUri =
+          await FileDownloader().uri.createDirectory(tempDirUri, testDir);
+      print('newDirUri: $newDirUri');
+      expect(newDirUri, isNotNull);
+      expect(newDirUri.scheme, 'file'); // Expect file scheme now
+      expect(Directory.fromUri(newDirUri).existsSync(), isTrue);
+
+      // Test creating a subdirectory within the newly created directory
+      final newSubDirUri =
+          await FileDownloader().uri.createDirectory(newDirUri, testSubDir);
+
+      expect(newSubDirUri, isNotNull);
+      expect(newSubDirUri.scheme, 'file'); // Expect file scheme
+      expect(Directory.fromUri(newSubDirUri).existsSync(), isTrue);
+
+      // Test creating a multi-level directory
+      final multiLevelDirUri = await FileDownloader()
+          .uri
+          .createDirectory(tempDirUri, multiLevelDirName);
+      expect(multiLevelDirUri, isNotNull);
+      expect(multiLevelDirUri.scheme, 'file'); // Expect file scheme
+
+      // Verify that both directories in the path were created
+      final multiLevelDirCreated = Directory.fromUri(multiLevelDirUri);
+      expect(multiLevelDirCreated.existsSync(), isTrue);
+      expect(Directory(p.join(tempDir.path, 'test')).existsSync(), isTrue);
+
+      // Ensure directories are deleted after test is complete
+      if (testDirDirectory.existsSync()) {
+        testDirDirectory.deleteSync(recursive: true);
+      }
+      if (multiLevelDir.existsSync()) {
+        multiLevelDir.deleteSync(recursive: true);
+      }
+    });
+
+    test('getFileBytes with file URI', () async {
+      // Create a dummy file
+      final directory = await getTemporaryDirectory();
+      final file = File(p.join(directory.path, 'testFile.txt'));
+      await file.writeAsString('Test file content');
+      // Get file bytes using the file URI
+      final fileUri = file.uri;
+      final bytes = await FileDownloader().uri.getFileBytes(fileUri);
+      expect(bytes, isNotNull);
+      expect(String.fromCharCodes(bytes!), 'Test file content');
+      // Clean up
+      await file.delete();
+    });
+
+    test('deleteFile with file URI', () async {
+      // Create a dummy file
+      final directory = await getTemporaryDirectory();
+      final file = File(p.join(directory.path, 'testFile.txt'));
+      await file.writeAsString('Test file content');
+      // Delete the file using the file URI
+      final fileUri = file.uri;
+      final success = await FileDownloader().uri.deleteFile(fileUri);
+      expect(success, isTrue);
+      expect(file.existsSync(), isFalse);
     });
   });
 }

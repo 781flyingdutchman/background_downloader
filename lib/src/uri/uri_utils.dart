@@ -242,7 +242,7 @@ final class DesktopUriUtils extends UriUtils {
       throw UnimplementedError(
           'pickDirectory not implemented for this platform. '
           'Use the file_picker package and convert the resulting filePath '
-          'to a URI using the .toFileUri extension');
+          'to a URI Uri.file(directoryPath, windows: Platform.isWindows)');
 
   @override
   Future<List<Uri>?> pickFiles(
@@ -253,7 +253,7 @@ final class DesktopUriUtils extends UriUtils {
           bool persistedUriPermission = false}) =>
       throw UnimplementedError('pickFiles not implemented for this platform. '
           'Use the file_picker package and convert the resulting filePath '
-          'to a URI using the .toFileUri extension');
+          'to a URI using Uri.file(filepath, windows: Platform.isWindows)');
 
   @override
   Future<Uri> createDirectory(Uri parentDirectoryUri, String newDirectoryName,
@@ -270,21 +270,53 @@ final class DesktopUriUtils extends UriUtils {
   }
 
   @override
-  Future<Uint8List?> getFileBytes(Uri uri) {
-    //TODO: Implement this for desktop
-    throw UnimplementedError('Not done yet');
+  Future<Uint8List?> getFileBytes(Uri uri) async {
+    try {
+      final file = File.fromUri(uri);
+      if (await file.exists()) {
+        return await file.readAsBytes();
+      } else {
+        log.warning('File does not exist: $uri');
+      }
+    } catch (e) {
+      log.severe('Error getting file bytes for $uri', e);
+    }
+    return null;
   }
 
   @override
-  Future<bool> deleteFile(Uri uri) {
-    // TODO: implement deleteFile
-    throw UnimplementedError();
+  Future<bool> deleteFile(Uri uri) async {
+    try {
+      final file = File.fromUri(uri);
+      if (await file.exists()) {
+        await file.delete();
+        return true;
+      } else {
+        log.warning('File does not exist: $uri');
+      }
+    } catch (e) {
+      log.severe('Error deleting file: $uri', e);
+    }
+    return false;
   }
 
   @override
-  Future<bool> openFile(Uri uri, {String? mimeType}) {
-    // TODO: implement openFile
-    throw UnimplementedError();
+  Future<bool> openFile(Uri uri, {String? mimeType}) async {
+    try {
+      final filePath = uri.toFilePath();
+      final processResult = await Process.run('open', [filePath]);
+
+      if (processResult.exitCode == 0) {
+        return true;
+      } else {
+        log.warning(
+            'Failed to open file. Exit code: ${processResult.exitCode}, Error: ${processResult.stderr}');
+        return false;
+      }
+    } catch (e) {
+      log.severe('Error opening file: $uri', e);
+      return false;
+    }
   }
 }
 

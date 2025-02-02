@@ -398,6 +398,10 @@ final class DesktopDownloader extends BaseDownloader {
   Future<String?> moveToSharedStorage(String filePath,
       SharedStorage destination, String directory, String? mimeType,
       {bool asUriString = false}) async {
+    final fileUri = Uri.tryParse(filePath);
+    if (fileUri case Uri(scheme: 'file')) {
+      filePath = fileUri.toFilePath(windows: Platform.isWindows);
+    }
     final destDirectoryPath =
         await getDestinationDirectoryPath(destination, directory);
     if (destDirectoryPath == null) {
@@ -414,7 +418,7 @@ final class DesktopDownloader extends BaseDownloader {
       _log.warning('Error moving $filePath to shared storage: $e');
       return null;
     }
-    return destFilePath;
+    return asUriString ? Uri.file(destFilePath).toString() : destFilePath;
   }
 
   @override
@@ -427,7 +431,8 @@ final class DesktopDownloader extends BaseDownloader {
       return null;
     }
     final fileName = path.basename(filePath);
-    return path.join(destDirectoryPath, fileName);
+    var destFilePath = path.join(destDirectoryPath, fileName);
+    return asUriString ? Uri.file(destFilePath).toString() : destFilePath;
   }
 
   /// Returns the path of the destination directory in shared storage, or null

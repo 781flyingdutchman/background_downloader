@@ -162,16 +162,24 @@ private fun moveToPublicDirectory(
 /**
  * Returns the path to the file in shared storage, or null
  *
+ * The [filePathOrUriString] can represent a file:// Uri but not a content:// Uri
+ *
  * If [asUriString] is true, returns the URI as a String
  */
 fun pathInSharedStorage(
     context: Context,
-    filePath: String,
+    filePathOrUriString: String,
     destination: SharedStorage,
     directory: String,
     asUriString: Boolean
 ): String? {
-    val fileName = File(filePath).name
+    // Check if filePath is a file:// URI
+    val fileUri = Uri.parse(filePathOrUriString)
+    val fileName = if (fileUri.scheme == "file") {
+        File(fileUri.path!!).name
+    } else {
+        File(filePathOrUriString).name
+    }
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
         val destinationMediaPath = getMediaStorePathBelowQ(destination)
         val rootDir = Environment.getExternalStoragePublicDirectory(destinationMediaPath)
