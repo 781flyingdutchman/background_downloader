@@ -10,7 +10,6 @@ import 'package:path/path.dart' as p;
 import '../exceptions.dart';
 import '../models.dart';
 import '../task.dart';
-import '../uri/uri_helpers.dart';
 import 'desktop_downloader.dart';
 import 'isolate.dart';
 

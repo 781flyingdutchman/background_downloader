@@ -4,7 +4,6 @@ import 'dart:math';
 
 import 'package:background_downloader/background_downloader.dart';
 import 'package:background_downloader_example/isolate.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
 

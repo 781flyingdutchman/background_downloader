@@ -328,17 +328,27 @@ void main() {
 
     test('Constructing UriDownloadTask with file scheme should set fileUri',
         () {
+      // with filename in constructor
       final task = UriDownloadTask(
           directoryUri: testUriWithFileScheme,
           url: workingUrl,
           filename: defaultFilename);
       expect(task.fileUri!.path,
           equals('${testUriWithFileScheme.path}/$defaultFilename'));
+      expect(task.filename, equals(defaultFilename));
       // without a filename in the constructor
       final task2 =
           UriDownloadTask(directoryUri: testUriWithFileScheme, url: workingUrl);
       expect(task2.fileUri!.path,
           equals('${testUriWithFileScheme.path}/${task2.filename}'));
+      expect(task2.filename, isNotEmpty);
+      // with a suggestedFilename marker in the constructor
+      final task3 = UriDownloadTask(
+          directoryUri: testUriWithFileScheme,
+          url: workingUrl,
+          filename: DownloadTask.suggestedFilename);
+      expect(task3.fileUri, isNull);
+      expect(task3.filename, equals(DownloadTask.suggestedFilename));
     });
 
     test('UriDownloadTask copyWith should handle filename correctly', () {
@@ -346,7 +356,8 @@ void main() {
       final task =
           UriDownloadTask(directoryUri: testUriWithFileScheme, url: workingUrl);
       expect(task.filename, isNotEmpty);
-      expect(task.fileUri, isNull);
+      expect(task.fileUri!.toFilePath(),
+          equals('${testUriWithFileScheme.path}/$defaultFilename'));
       expect(task.directoryUri, equals(testUriWithFileScheme));
       final updatedTask = task.copyWith(filename: 'new_filename.txt');
       expect(updatedTask.filename, 'new_filename.txt');

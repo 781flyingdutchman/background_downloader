@@ -90,6 +90,8 @@ final class UriDownloadTask extends DownloadTask with _UriTaskMixin {
           baseDirectory: BaseDirectory.root,
           directory: directoryUri.toString(),
           filename: switch ((filename, directoryUri)) {
+            (DownloadTask.suggestedFilename, _) =>
+              DownloadTask.suggestedFilename,
             (null, Uri(scheme: 'file')) => () {
                 final randomFilename = Random().nextInt(1 << 32).toString();
                 return pack(

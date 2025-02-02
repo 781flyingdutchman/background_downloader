@@ -76,9 +76,7 @@ Future<void> doDownloadTask(DownloadTask task, ResumeData? resumeData,
       }
       if (!downloadTask.hasFilename) {
         downloadTask = await taskWithSuggestedFilename(
-            downloadTask,
-            response.headers,
-            true);
+            downloadTask, response.headers, true);
         // update the filePath by replacing the last segment with the new filename
         filePath = p.join(p.dirname(filePath), downloadTask.filename);
         log.finest(
