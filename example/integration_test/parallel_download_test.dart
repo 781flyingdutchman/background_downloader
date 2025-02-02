@@ -312,6 +312,7 @@ void main() {
     });
   });
 
+  /// Skipped by default as these tests fail unless code modifications are made
   group('Modifications', () {
     // Tests in this group require modification of the source code
     // and may fail without that
@@ -380,7 +381,7 @@ void main() {
       expect(file.existsSync(), isTrue);
       expect(await fileEqualsTestFile(file), isTrue);
     });
-  });
+  }, skip: true);
 }
 
 /// Returns true if the supplied file equals the test file
