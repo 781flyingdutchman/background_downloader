@@ -89,7 +89,14 @@ suspend fun moveToSharedStorage(
         } finally {
             contentValues.clear()
             contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
-            resolver.update(uri, contentValues, null, null)
+            try {
+                resolver.update(uri, contentValues, null, null)
+            } catch (e: Exception) {
+                Log.i(
+                    BDPlugin.TAG,
+                    "Failed to reset IS_PENDING: $e"
+                )
+            }
         }
     }
     // If the file was moved successfully, remove the original

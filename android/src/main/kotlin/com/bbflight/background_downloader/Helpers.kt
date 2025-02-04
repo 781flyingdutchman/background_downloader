@@ -270,9 +270,11 @@ fun suggestFilename(responseHeaders: Map<String, List<String>>, url: String): St
     // Try filename derived from last path segment of the url
     try {
         val uri = Uri.parse(url)
-        val suggestedFilename = uri.lastPathSegment
-        if (suggestedFilename != null) {
-            return suggestedFilename
+        val lastPathSegment = uri.lastPathSegment
+        if (lastPathSegment != null) {
+            val lastSlashIndex = lastPathSegment.lastIndexOf("/")
+            val filename = if (lastSlashIndex != -1) lastPathSegment.substring(lastSlashIndex + 1) else lastPathSegment
+            return filename
         }
     } catch (_: Throwable) {
     }

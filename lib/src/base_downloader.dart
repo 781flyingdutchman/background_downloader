@@ -496,6 +496,9 @@ abstract base class BaseDownloader {
   /// This is a convenient way to capture downloads that have completed while
   /// the app was suspended, provided you have registered your listeners
   /// or callback before calling this.
+  ///
+  /// NOTE: on Android, when using [UriDownloadTask] the temp file is skipped
+  /// and therefore the presence of the destination file is not marked as complete.
   Future<void> trackTasks(String? group, bool markDownloadedComplete) async {
     await ready; // no database operations until ready
     trackedGroups.add(group);
@@ -503,6 +506,7 @@ abstract base class BaseDownloader {
       final records = await database.allRecords(group: group);
       for (var record in records.where((record) =>
           record.task is DownloadTask &&
+          (!Platform.isAndroid || record.task is! UriDownloadTask) &&
           record.status != TaskStatus.complete)) {
         final filePath = await record.task.filePath();
         if (await File(filePath).exists()) {

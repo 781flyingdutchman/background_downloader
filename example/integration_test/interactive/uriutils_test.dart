@@ -66,7 +66,7 @@ void main() {
     testWidgets('pickFiles with null startLocation and extensions',
         (WidgetTester tester) async {
       final pickedFilesUri = await uriUtils
-          .pickFiles(allowedExtensions: ['pdf'], multipleAllowed: false);
+          .pickFiles(allowedExtensions: ['jpg'], multipleAllowed: false);
       expect(pickedFilesUri, isNotNull);
       print(
           'Picked ${pickedFilesUri!.length} files: ${pickedFilesUri.map((uri) => uri.toString()).join(', ')}');

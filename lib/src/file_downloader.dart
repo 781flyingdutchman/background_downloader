@@ -47,9 +47,7 @@ interface class FileDownloader {
   /// Platform-specific implementation of the downloader itself
   late final BaseDownloader _downloader;
 
-  /// Accesses utilities for working with URIs. URIs make working with file pickers and
-  /// shared storage easier, as they abstract permissions and are coherent
-  /// across platforms.
+  /// Accesses utilities for working with URIs
   UriUtils? _uri;
 
   /// Do not use: for testing only

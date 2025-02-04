@@ -299,7 +299,7 @@ The downloader will only store the file upon success (so there will be no partia
 
 You can also pass an absolute path to the downloader by using `BaseDirectory.root` combined with the path in `directory`. This allows you to reach any file destination on your platform. However, be careful: the reason you should not normally do this (and use e.g. `BaseDirectory.applicationDocuments` instead) is that the location of the app's documents directory may change between application starts (on iOS, and on Android in some cases), and may therefore fail for downloads that complete while the app is suspended.  You should therefore never store permanently, or hard-code, an absolute path, unless you are absolutely sure that that path is 'stable'.
 
-Android has two storage modes: internal (default) and external storage. Read the [configuration document](https://github.com/781flyingdutchman/background_downloader/blob/main/CONFIG.md) for details on how to configure your app to use external storage instead of the default.
+Android has two storage modes: internal (default) and external storage. Read the [configuration document](docs/CONFIG.md) for details on how to configure your app to use external storage instead of the default.
 
 #### Server-suggested filename
 
@@ -318,9 +318,11 @@ print('Suggested filename=${result.task.filename}'); // note we don't use 'task'
 print('Wrong use filename=${task.filename}'); // this will print '?' as 'task' hasn't changed
 ```
 
-#### Android file URIs
+#### File, photo/video and directory pickers, and using URIs and the Android Storage Access Framework
 
-From Android 11 on, you can upload a file using a Storage Access Framework URI instead of the file name. To create such an `UploadTask`, use `UploadTask.fromAndroidUri` and supply the 'content://' URI. To make this easier, methods `moveToSharedStorage` and `pathInSharedStorage` can now return a URI if `asAndroidUri` is set to true. Note that if for whatever reason the URI cannot be obtained, the regular file path will be returned, so you need to confirm the returned value starts with 'content://' before using it as a URI.
+The downloader includes file, photo/video and directory pickers for Android and iOS (and for Desktop works alongside the [file_picker](https://pub.dev/packages/file_picker) package) and works well with Android's Storage Access Framework. If you need this functionality, then you should use URIs to locate file/media and directory locations. You use the `FileDownloader().uri` property to work with Uris, and use the associated `UriDownloadTask` and `UriUploadTask` instead of `DownloadTask` and `UploadTask`.
+
+For details, see [working with URIs](docs/URI.md).
 
 ### A batch of files
 
@@ -697,12 +699,15 @@ Uploads are very similar to downloads, except:
 
 There are two ways to upload a file to a server: binary upload (where the file is included in the POST body) and form/multi-part upload. Which type of upload is appropriate depends on the server you are uploading to. The upload will be done using the binary upload method only if you have set the `post` field of the `UploadTask` to 'binary'.
 
+### Single file upload
+
 If you already have a `File` object, you can create your `UploadTask` using `UploadTask.fromFile`, though note that this will create a task with an absolute path reference and `BaseDirectory.root`, which can cause problems on mobile platforms (see [here](#specifying-the-location-of-the-file-to-download-or-upload)). Preferably, use `Task.split` to break your `File` or filePath into appropriate baseDirectory, directory and filename and use that to create your `UploadTask`.
-On Android, you can use Storage Access Framework URIs for binary uploads by creating the task using `UploadTask.fromAndroidUri`.
 
 For multi-part uploads you can specify name/value pairs in the `fields` property of the `UploadTask` as a `Map<String, String>`. These will be uploaded as form fields along with the file. To specify multiple values for a single name, format the value as `'"value1", "value2", "value3"'` (note the double quotes and the comma to separate the values).
 
 You can also set the field name used for the file itself by setting `fileField` (default is "file") and override the mimeType by setting `mimeType` (default is derived from filename extension).
+
+### Multiple file upload
 
 If you need to upload multiple files in a single request, create a [MultiUploadTask](https://pub.dev/documentation/background_downloader/latest/background_downloader/MultiUploadTask-class.html) instead of an `UploadTask`. It has similar parameters as the `UploadTask`, except you specify a list of files to upload as the `files` argument of the constructor, and do not use `fileName`, `fileField` and `mimeType`. Each element in the `files` list is either:
 * a filename (e.g. `"file1.txt"`). The `fileField` for that file will be set to the base name (i.e. "file1" for "file1.txt") and the mime type will be derived from the extension (i.e. "text/plain" for "file1.txt")
@@ -710,6 +715,9 @@ If you need to upload multiple files in a single request, create a [MultiUploadT
 * a record containing `(filefield, filename, mimeType)`, e.g. `("document", "file1.txt", "text/plain")`
 
 The `baseDirectory` and `directory` fields of the `MultiUploadTask` determine the expected location of the file referenced, unless the filename used in any of the 3 formats above is an absolute path (e.g. "/data/user/0/com.my_app/file1.txt"). In that case, the absolute path is used and the `baseDirectory` and `directory` fields are ignored for that element of the list.
+
+If you are using URIs to locate your files (see [working with URIs](docs/URI.md)) then you can replace the `filename` with the Uri (as `Uri` type, not `String`) in each of the formats mentioned above.
+
 Once the `MultiUpoadTask` is created, the fields `fileFields`, `filenames` and `mimeTypes` will contain the parsed items, and the fields `fileField`, `filename` and `mimeType` contain those lists encoded as a JSON string.
 
 Use the `MultiTaskUpload` object in the `upload` and `enqueue` methods as you would a regular `UploadTask`.
@@ -721,6 +729,8 @@ For partial uploads, set the byte range by adding a "Range" header to your binar
 Some servers may offer an option to download part of the same file from multiple URLs or have multiple parallel downloads of part of a large file using a single URL. This can speed up the download of large files.  To do this, create a `ParallelDownloadTask` instead of a regular `DownloadTask` and specify `chunks` (the number of pieces you want to break the file into, i.e. the number of downloads that will happen in parallel) and `urls` (as a list of URLs, or just one). For example, if you specify 4 chunks and 2 URLs, then the download will be broken into 8 pieces, four each for each URL.
 
 Note that the implementation of this feature creates a regular `DownloadTask` for each chunk, with the group name 'chunk' which is now a reserved group. You will not get updates for this group, but you will get normal updates (status and/or progress) for the `ParallelDownloadTask`.
+
+Parallel downloads do not support the use of URIs.
 
 ## Managing tasks and the queue
 
@@ -1071,11 +1081,11 @@ Several aspects of the downloader can be configured on startup:
 * On Android, whether or not to use external storage
 * On iOS, localizing the notification button texts
 
-Please read the [configuration document](https://github.com/781flyingdutchman/background_downloader/blob/main/CONFIG.md) for details on how to configure.
+Please read the [configuration document](docs/CONFIG.md) for details on how to configure.
 
 ## Limitations
 
-* iOS 13.0 or greater; Android API 21 or greater
+* iOS 14.0 or greater; Android API 21 or greater
 * On Android, downloads are by default limited to 9 minutes, after which the download will end with `TaskStatus.failed`. To allow for longer downloads, set the `DownloadTask.allowPause` field to true: if the task times out, it will pause and automatically resume, eventually downloading the entire file. Alternatively, [configure](#configuration) the downloader to allow tasks to run in the foreground
 * On iOS, once enqueued (i.e. `TaskStatus.enqueued`), a background download must complete within 4 hours. [Configure](#configuration) 'resourceTimeout' to adjust.
 * Redirects will be followed
