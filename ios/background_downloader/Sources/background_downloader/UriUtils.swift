@@ -43,6 +43,10 @@ public class UriUtilsMethodCallHelper: NSObject,
             activateUri(call, result: result)
         case "getFileBytes":
             getFileBytes(call, result: result)
+        case "copyFile":
+            copyFile(call, result: result)
+        case "moveFile":
+            moveFile(call, result: result)
         case "deleteFile":
             deleteFile(call, result: result)
         case "openFile":
@@ -172,7 +176,17 @@ public class UriUtilsMethodCallHelper: NSObject,
     }
     
     
-    
+    /**
+     * Creates a new directory at the specified path within the given parent directory URI.
+     * The parent directory URI must be resolvable to a file:// URI.  Supports creating intermediate directories.
+     *
+     * - Parameters:
+     *   - call: The Flutter method call.  The arguments are expected to be a list
+     *     containing: the parent directory URI (String), the new directory name (String),
+     *     and a boolean indicating whether to request persisted URI permission.
+     *   - result: The Flutter result callback.  On success, the URI of the newly
+     *     created directory (String) is returned.  On failure, a `FlutterError` is returned.
+     */
     private func createDirectory(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         guard let args = call.arguments as? [Any],
               let parentDirectoryUriString = args[0] as? String,
@@ -214,10 +228,18 @@ public class UriUtilsMethodCallHelper: NSObject,
     }
     
     /**
-     * Activates the directory by calling startAccessingSecurityScopedResource, and returns the (potentially decoded) file Uri
+     * Activates a previously accessed directory or file (represented by a URI string)
+     * by calling `startAccessingSecurityScopedResource`.  This is necessary on iOS
+     * to regain access to resources outside the app's sandbox that were previously
+     * granted access (e.g., through a document picker).  Also decodes `urlbookmark://`
+     * and `media://` URIs to `file://` URIs.
      *
-     * This is a required step to 're-activate' a stored URL, especially a urlbookmark, before accessing resources within it, and
-     * before directly accessing a media:// scheme URI
+     * - Parameters:
+     *   - call: The Flutter method call.  The argument is expected to be the URI string.
+     *   - result: The Flutter result callback.  On success, the (potentially decoded)
+     *     `file://` URI string is returned. On failure (e.g., invalid URI, access denied),
+     *      a `FlutterError` is returned. If the URI is decoded, it is also added to
+     *      `accessedSecurityScopedUrls`
      */
     private func activateUri(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         guard let uriString = call.arguments as? String,
@@ -238,8 +260,12 @@ public class UriUtilsMethodCallHelper: NSObject,
     /**
      * Retrieves the file data (bytes) for a given URI string.
      *
-     * - Parameter uriString: The URI string representing the file. This can be a regular file:// URI or a urlbookmark:// URI.
-     * - Returns: The file data as a FlutterStandardTypedData (wrapping Data) if successful, or a FlutterError if an error occurs.
+     * - Parameters:
+     *    - call: The Flutter method call containing the arguments. The argument is
+     *      expected to be the URI string. This string will be decoded using `decodeToFileUrl`.
+     *    - result: The Flutter result callback to be invoked with the resul---t.  On success
+     *      the file data as a `FlutterStandardTypedData` is returned. On failure,
+     *      a `FlutterError` is returned.
      */
     private func getFileBytes(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         guard let uriString = call.arguments as? String,
@@ -265,6 +291,85 @@ public class UriUtilsMethodCallHelper: NSObject,
         }
     }
     
+    /**
+     * Copies the file at the given source URI to the destination URI.
+     * Both the source and destination URIs must be resolvable to file:// URIs.
+     *
+     * - Parameters:
+     *   - call: The Flutter method call containing the arguments.  The arguments
+     *     are expected to be a list containing two strings: the source URI and
+     *     the destination URI.
+     *   - result: The Flutter result callback to be invoked with the result
+     *     of the copy operation.  On success, the destination URI string is
+     *     returned.  On failure, a `FlutterError` is returned.
+     */
+    private func copyFile(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [Any],
+              let sourceUriString = args[0] as? String,
+              let destinationUriString = args[1] as? String,
+              let sourceUrl = decodeToFileUrl(uriString: sourceUriString), // Decode to file URL
+              let destinationUrl = decodeToFileUrl(uriString: destinationUriString) // Decode to file URL
+        else {
+            result(FlutterError(code: "INVALID_ARGUMENTS", message: "Invalid arguments for copyFile", details: nil))
+            return
+        }
+        do {
+            // Ensure destination directory exists
+            let destinationDirectory = destinationUrl.deletingLastPathComponent()
+            if !FileManager.default.fileExists(atPath: destinationDirectory.path) {
+                try FileManager.default.createDirectory(at: destinationDirectory, withIntermediateDirectories: true, attributes: nil)
+            }
+            try FileManager.default.copyItem(at: sourceUrl, to: destinationUrl)
+            result(destinationUrl.absoluteString)
+        } catch {
+            result(FlutterError(code: "COPY_FAILED", message: "Failed to copy file: \(error.localizedDescription)", details: nil))
+        }
+    }
+    
+    /**
+     * Moves the file at the given source URI to the destination URI.
+     * Both the source and destination URIs must be resolvable to file:// URIs.
+     *
+     * - Parameters:
+     *   - call: The Flutter method call containing the arguments.  The arguments
+     *     are expected to be a list containing two strings: the source URI and
+     *     the destination URI.
+     *   - result: The Flutter result callback to be invoked with the result
+     *     of the move operation.  On success, the destination URI string is
+     *     returned.  On failure, a `FlutterError` is returned.
+     */
+    private func moveFile(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [Any],
+              let sourceUriString = args[0] as? String,
+              let destinationUriString = args[1] as? String,
+              let sourceUrl = decodeToFileUrl(uriString: sourceUriString), // Decode!
+              let destinationUrl = decodeToFileUrl(uriString: destinationUriString) // Decode!
+        else {
+            result(FlutterError(code: "INVALID_ARGUMENTS", message: "Invalid arguments for moveFile", details: nil))
+            return
+        }
+        do {
+            // Ensure destination directory exists
+            let destinationDirectory = destinationUrl.deletingLastPathComponent()
+            if !FileManager.default.fileExists(atPath: destinationDirectory.path) {
+                try FileManager.default.createDirectory(at: destinationDirectory, withIntermediateDirectories: true, attributes: nil)
+            }
+            try FileManager.default.moveItem(at: sourceUrl, to: destinationUrl)
+            result(destinationUrl.absoluteString)
+        } catch {
+            result(FlutterError(code: "MOVE_FAILED", message: "Failed to move file: \(error.localizedDescription)", details: nil))
+        }
+    }
+    
+    /**
+     * Deletes the file at the given URI. The URI must be resolvable to a file:// URI.
+     *
+     * - Parameters:
+     *   - call: The Flutter method call containing the arguments. The argument
+     *     is expected to be a string representing the file URI.
+     *   - result: The Flutter result callback.  `true` is returned on success,
+     *     and a `FlutterError` is returned on failure.
+     */
     private func deleteFile(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         guard let uriString = call.arguments as? String,
               let fileUrl = decodeToFileUrl(uriString: uriString),
@@ -280,6 +385,16 @@ public class UriUtilsMethodCallHelper: NSObject,
         }
     }
     
+    /**
+     * Opens the file at the given URI using the system's default application for the file type.
+     *
+     * - Parameters:
+     *   - call: The Flutter method call containing the arguments. The arguments are
+     *     expected to be a list where the first element is the URI string, and the
+     *     optional second element is the MIME type (as a String).
+     *   - result: The Flutter result callback. `true` is returned on successful launch,
+     *     and a `FlutterError` is returned on failure.
+     */
     private func openFile(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         guard let args = call.arguments as? [Any],
               let uriString = args[0] as? String,

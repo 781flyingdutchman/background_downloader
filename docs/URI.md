@@ -34,6 +34,8 @@ The `FileDownloader().uri` property provides access to a set of utility function
 *   `pickFiles()`: Opens a file picker dialog and allows selection of multiple files, returning their URIs in a list.
 *   `createDirectory()`: Creates a new directory within a specified parent directory URI.
 *   `getFileBytes()`: Retrieves the file data (bytes) for a given URI.
+*   `copyFile()`: copies a file from a source uri to a destination. Destination can be a `Uri`, a `File` or a `String` containing a file path
+*   `moveFile()`: moves a file from a source uri to a destination. Destination can be a `Uri`, a `File` or a `String` containing a file path. If the move fails, it is possible that the file was copied but the source was not deleted
 *   `deleteFile()`: Deletes the file at the given URI.
 *   `openFile()`: Opens the file at a given URI.
 *   `moveToSharedStorage()`: Moves a file to a shared storage location.

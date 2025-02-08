@@ -1,4 +1,4 @@
-/// Object attached to the [Filedownloader]'s `utils` property, used to access
+/// Object attached to the [FileDownloader]'s `utils` property, used to access
 /// URI related utility functions
 
 library;
@@ -136,6 +136,18 @@ sealed class UriUtils {
   /// Returns a [Uint8List] containing the file data, or `null` if an error occurred.
   Future<Uint8List?> getFileBytes(Uri uri);
 
+  /// Copy a file from a Uri to a new destination.
+  ///
+  /// The [destination] parameter can be a [File] object, a [String] with a
+  /// filePath, or a [Uri].
+  Future<Uri?> copyFile(Uri source, dynamic destination);
+
+  /// Move a file from a Uri to a new destination.
+  ///
+  /// The [destination] parameter can be a [File] object, a [String] with a
+  /// filePath, or a [Uri].
+  Future<Uri?> moveFile(Uri source, dynamic destination);
+
   /// Deletes the file at the given URI.
   ///
   /// [uri] is the URI of the file to delete.
@@ -229,6 +241,17 @@ sealed class UriUtils {
         asUriString: true);
     return uriString != null ? Uri.tryParse(uriString) : null;
   }
+
+  /// Private helper method to determine the destination URI.
+  Uri _determineDestinationUri(dynamic destination) {
+    return switch (destination) {
+      File() => destination.uri,
+      String() => Uri.file(destination),
+      Uri() => destination,
+      _ => throw ArgumentError(
+          'Invalid destination type. Must be File, String, or Uri.'),
+    };
+  }
 }
 
 final class DesktopUriUtils extends UriUtils {
@@ -279,9 +302,45 @@ final class DesktopUriUtils extends UriUtils {
         log.warning('File does not exist: $uri');
       }
     } catch (e) {
-      log.severe('Error getting file bytes for $uri', e);
+      log.info('Error getting file bytes for $uri', e);
     }
     return null;
+  }
+
+  /// Private helper method to perform the file operation (copy or move).
+  Future<Uri?> _performFileOperation(Uri source, Uri destination,
+      Future<File> Function(String) operation) async {
+    if (!source.isScheme('file')) {
+      log.info('Source must be a file:// URI');
+      return null;
+    }
+    if (!destination.isScheme('file')) {
+      throw ArgumentError(
+          'Invalid destination type. Must be  file:// Uri, is $destination');
+    }
+    try {
+      final destinationFile = File.fromUri(destination);
+      await destinationFile.parent.create(recursive: true);
+      await operation(destinationFile.path);
+      return destination;
+    } catch (e) {
+      log.info('Error during file operation from $source to $destination', e);
+      return null;
+    }
+  }
+
+  @override
+  Future<Uri?> copyFile(Uri source, dynamic destination) async {
+    final destinationUri = _determineDestinationUri(destination);
+    return _performFileOperation(
+        source, destinationUri, File.fromUri(source).copy);
+  }
+
+  @override
+  Future<Uri?> moveFile(Uri source, dynamic destination) async {
+    final destinationUri = _determineDestinationUri(destination);
+    return _performFileOperation(
+        source, destinationUri, File.fromUri(source).rename);
   }
 
   @override
@@ -295,7 +354,7 @@ final class DesktopUriUtils extends UriUtils {
         log.warning('File does not exist: $uri');
       }
     } catch (e) {
-      log.severe('Error deleting file: $uri', e);
+      log.warning('Error deleting file: $uri', e);
     }
     return false;
   }
@@ -306,7 +365,7 @@ final class DesktopUriUtils extends UriUtils {
       final filePath = uri.toFilePath();
       return await _downloader.openFile(null, filePath, mimeType);
     } catch (e) {
-      log.severe('Error opening file: $uri', e);
+      log.warning('Error opening file: $uri', e);
       return false;
     }
   }
@@ -382,7 +441,37 @@ final class NativeUriUtils extends UriUtils {
           'getFileBytes', uri.toString());
       return result;
     } catch (e) {
-      print('Error reading file: $e');
+      log.warning('Error reading file: $e');
+      return null;
+    }
+  }
+
+  @override
+  Future<Uri?> copyFile(Uri source, dynamic destination) async {
+    final destinationUri = _determineDestinationUri(destination);
+    try {
+      final result = await _methodChannel.invokeMethod<String>(
+        'copyFile',
+        [source.toString(), destinationUri.toString()],
+      );
+      return result != null ? Uri.parse(result) : null;
+    } catch (e) {
+      log.warning('Error copying file from $source to $destinationUri', e);
+      return null;
+    }
+  }
+
+  @override
+  Future<Uri?> moveFile(Uri source, dynamic destination) async {
+    final destinationUri = _determineDestinationUri(destination);
+    try {
+      final result = await _methodChannel.invokeMethod<String>(
+        'moveFile',
+        [source.toString(), destinationUri.toString()],
+      );
+      return result != null ? Uri.parse(result) : null;
+    } catch (e) {
+      log.warning('Error moving file from $source to $destinationUri', e);
       return null;
     }
   }
@@ -393,7 +482,7 @@ final class NativeUriUtils extends UriUtils {
       await _methodChannel.invokeMethod('deleteFile', uri.toString());
       return true;
     } catch (e) {
-      log.fine('Error deleting file at URI $uri: $e');
+      log.warning('Error deleting file at URI $uri: $e');
       return false;
     }
   }
@@ -404,7 +493,7 @@ final class NativeUriUtils extends UriUtils {
       await _methodChannel.invokeMethod('openFile', [uri.toString(), mimeType]);
       return true;
     } catch (e) {
-      log.fine('Error opening file at URI $uri: $e');
+      log.warning('Error opening file at URI $uri: $e');
       return false;
     }
   }

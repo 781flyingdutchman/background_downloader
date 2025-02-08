@@ -11,8 +11,6 @@ import android.os.ext.SdkExtensions
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.util.Log
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.RequiresExtension
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import io.flutter.plugin.common.MethodCall
@@ -29,7 +27,7 @@ object UriUtils {
      *
      * Use [unpack] to retrieve the filename and uri from the packed String.
      */
-    fun pack(filename: String, uri: Uri): String = ":::$filename::::::${uri.toString()}:::"
+    fun pack(filename: String, uri: Uri): String = ":::$filename::::::$uri:::"
 
     /**
      * Unpacks [packedString] into a filename and uri. If this is not a packed
@@ -79,8 +77,6 @@ object UriUtils {
  */
 class UriUtilsMethodCallHelper(private val plugin: BDPlugin) : MethodCallHandler {
 
-    private val TAG = "MethodCallHelper"
-
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         val activity = plugin.activity
         if (activity == null) {
@@ -99,7 +95,7 @@ class UriUtilsMethodCallHelper(private val plugin: BDPlugin) : MethodCallHandler
                 val args = call.arguments as? List<*>
                 val startLocationOrdinal = args?.get(0) as Int?
                 val startLocationUriString = args?.get(1) as? String
-                val persistedUriPermission = args?.get(2) as? Boolean ?: false
+                val persistedUriPermission = args?.get(2) as? Boolean == true
                 val startLocation =
                     if (startLocationOrdinal != null) SharedStorage.entries[startLocationOrdinal] else null
                 val startLocationUri = startLocationUriString?.toUri()
@@ -214,6 +210,20 @@ class UriUtilsMethodCallHelper(private val plugin: BDPlugin) : MethodCallHandler
                 }
             }
 
+            "copyFile" -> {
+                val args = call.arguments as? List<*>
+                val sourceUriString = args?.get(0) as? String
+                val destinationUriString = args?.get(1) as? String
+                copyFile(activity, sourceUriString, destinationUriString, result)
+            }
+
+            "moveFile" -> {
+                val args = call.arguments as? List<*>
+                val sourceUriString = args?.get(0) as? String
+                val destinationUriString = args?.get(1) as? String
+                moveFile(activity, sourceUriString, destinationUriString, result)
+            }
+
             "deleteFile" -> {
                 val uriString = call.arguments as? String
                 if (uriString == null) {
@@ -282,9 +292,208 @@ class UriUtilsMethodCallHelper(private val plugin: BDPlugin) : MethodCallHandler
         return try {
             context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
         } catch (e: IOException) {
-            Log.e(TAG, "Error reading file: $uri", e)
+            Log.e(BDPlugin.TAG, "Error reading file: $uri", e)
             null
         }
+    }
+
+    /**
+     * Copies the file from the source URI to the destination URI. Handles file:// and content:// schemes
+     * for both source and destination.
+     */
+    private fun copyFile(
+        activity: Activity,
+        sourceUriString: String?,
+        destinationUriString: String?,
+        result: MethodChannel.Result
+    ) {
+        if (sourceUriString == null || destinationUriString == null) {
+            result.error(
+                "INVALID_ARGUMENTS",
+                "Source and destination URI strings are required",
+                null
+            )
+            return
+        }
+
+        val sourceUri = Uri.parse(sourceUriString)
+        val destinationUri = Uri.parse(destinationUriString)
+        try {
+            activity.contentResolver?.openInputStream(sourceUri)?.use { input ->
+                activity.contentResolver?.openOutputStream(destinationUri)?.use { output ->
+                    input.copyTo(output)
+                } ?: result.error(
+                    "COPY_FAILED",
+                    "Failed to open output stream for destination URI",
+                    null
+                )
+            } ?: result.error("COPY_FAILED", "Failed to open input stream for source URI", null)
+
+            result.success(destinationUriString) // Return the destination URI as a String
+        } catch (e: Exception) {
+            result.error("COPY_FAILED", "Error copying file: ${e.message}", null)
+        }
+    }
+
+    /**
+     * Tries to move a file using [DocumentsContract.moveDocument] if possible (API >= 24 and content URIs),
+     * otherwise falls back to a copy-and-delete strategy.  Handles file:// and content:// schemes
+     * for both source and destination.
+     */
+    private fun moveFile(
+        activity: Activity,
+        sourceUriString: String?,
+        destinationUriString: String?,
+        result: MethodChannel.Result
+    ) {
+        if (sourceUriString == null || destinationUriString == null) {
+            result.error(
+                "INVALID_ARGUMENTS",
+                "Source and destination URI strings are required",
+                null
+            )
+            return
+        }
+        val sourceUri = Uri.parse(sourceUriString)
+        val destinationUri = Uri.parse(destinationUriString)
+        // Try using DocumentsContract.moveDocument first (if applicable).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && sourceUri.scheme == "content" && destinationUri.scheme == "content") {
+            try {
+                val sourceDocument = DocumentFile.fromSingleUri(activity, sourceUri)
+                if (sourceDocument == null || !sourceDocument.exists()) {
+                    result.error("MOVE_FAILED", "Source file does not exist", null)
+                    return
+                }
+
+                val destinationParent = DocumentFile.fromTreeUri(
+                    activity, destinationUri.buildUpon().path(
+                        destinationUri.pathSegments.dropLast(1).joinToString("/")
+                    ).build()
+                ) ?: DocumentFile.fromSingleUri(
+                    activity, destinationUri.buildUpon().path(
+                        destinationUri.pathSegments.dropLast(1).joinToString("/")
+                    ).build()
+                )
+                if (destinationParent == null || !destinationParent.isDirectory) {
+                    result.error(
+                        "MOVE_FAILED",
+                        "Destination directory does not exist or is invalid",
+                        null
+                    )
+                    return
+                }
+                val movedDocument = DocumentsContract.moveDocument(
+                    activity.contentResolver,
+                    sourceUri,
+                    sourceDocument.parentFile!!.uri,
+                    destinationParent.uri
+                )
+                if (movedDocument != null) {
+                    val renamedFile = DocumentsContract.renameDocument(
+                        activity.contentResolver,
+                        movedDocument,
+                        destinationUri.lastPathSegment.toString()
+                    )
+                    result.success(renamedFile.toString())
+                    return
+                } else {
+                    result.error("MOVE_FAILED", "Failed to move file using DocumentsContract", null)
+                    return
+                }
+
+            } catch (e: Exception) {
+                Log.i(
+                    BDPlugin.TAG,
+                    "Error moving file (DocumentsContract) from $sourceUri to $destinationUri",
+                    e
+                )
+            }
+        }
+        // Fallback: Copy and Delete (works for mixed schemes and older Android versions).
+        try {
+            val success = copyForMove(
+                activity,
+                sourceUri,
+                destinationUri,
+                result
+            ) // perform the copy operation
+            if (success) {
+                var deleteSuccess = false
+                if (sourceUri.scheme == "content") {
+                    val sourceDocument = DocumentFile.fromSingleUri(activity, sourceUri)
+                    // Use DocumentsContract.deleteDocument if available.
+                    if (sourceDocument != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        deleteSuccess = try {
+                            DocumentsContract.deleteDocument(
+                                activity.contentResolver,
+                                sourceUri
+                            )
+                        } catch (_: Exception) {
+                            // Try to delete using the document (if deleteDocument fails)
+                            sourceDocument.delete()
+                        }
+                    } else if (sourceDocument != null) {
+                        deleteSuccess = sourceDocument.delete()
+                    }
+                } else if (sourceUri.scheme == "file") {
+                    val sourceFile = File(sourceUri.path!!)
+                    deleteSuccess = sourceFile.delete()
+                }
+                if (deleteSuccess) {
+                    result.success(destinationUriString)
+                } else {
+                    result.error("MOVE_FAILED", "Failed to delete the source", null)
+                }
+            }
+        } catch (e: Exception) {
+            result.error("MOVE_FAILED", "Error moving file: ${e.message}", null)
+        }
+    }
+
+    /**
+     * Private helper function to perform copy, to be used in move.
+     * returns true if successful
+     */
+    private fun copyForMove(
+        activity: Activity,
+        sourceUri: Uri,
+        destinationUri: Uri,
+        result: MethodChannel.Result
+    ): Boolean {
+        try {
+            if (destinationUri.scheme == "file") {
+                val destFile = File(destinationUri.path!!)
+                if (!destFile.parentFile!!.exists()) {
+                    if (!destFile.parentFile!!.mkdirs()) {
+                        result.error(
+                            "MOVE_FAILED",
+                            "Could not create destination directory at ${destFile.parentFile!!.absolutePath}",
+                            null
+                        )
+                        return false
+                    }
+                }
+            }
+            activity.contentResolver?.openInputStream(sourceUri)?.use { input ->
+                activity.contentResolver?.openOutputStream(destinationUri)?.use { output ->
+                    input.copyTo(output)
+                } ?: run {
+                    result.error(
+                        "MOVE_FAILED",
+                        "Failed to open output stream for destination URI",
+                        null
+                    )
+                    return false
+                }
+            } ?: run {
+                result.error("MOVE_FAILED", "Failed to open input stream for source URI", null)
+                return false
+            }
+        } catch (e: Exception) {
+            result.error("MOVE_FAILED", "Error copying file: ${e.message}", null)
+            return false
+        }
+        return true // copy was successful
     }
 }
 
@@ -652,7 +861,6 @@ object DirectoryCreator {
                 }
                 result.success(Uri.fromFile(newDir).toString())
             } catch (e: Exception) {
-                Log.e(TAG, "Error creating directory", e)
                 result.error(
                     "CREATE_FAILED",
                     "Error creating directory: ${e.message}",
@@ -709,7 +917,6 @@ object DirectoryCreator {
                 // Return the URI of the final directory
                 result.success(currentDir.uri.toString())
             } catch (e: Exception) {
-                Log.e(TAG, "Error creating directory", e)
                 result.error(
                     "CREATE_FAILED",
                     "Error creating directory: ${e.message}",

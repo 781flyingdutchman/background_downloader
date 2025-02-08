@@ -312,51 +312,42 @@ void main() {
       const testDir = 'testDir';
       const testSubDir = 'testSubDir';
       const multiLevelDirName = 'test/Dir';
-
       // Test creating a directory in the temporary directory
       final tempDir = await getTemporaryDirectory();
       final tempDirUri = tempDir.uri;
-
       // Ensure directories are deleted before starting the test
       final testDirPath = p.join(tempDir.path, testDir);
       final testDirDirectory = Directory(testDirPath);
       if (testDirDirectory.existsSync()) {
         testDirDirectory.deleteSync(recursive: true);
       }
-
       final multiLevelDirPath = p.join(tempDir.path, 'test');
       final multiLevelDir = Directory(multiLevelDirPath);
       if (multiLevelDir.existsSync()) {
         multiLevelDir.deleteSync(recursive: true);
       }
-
       final newDirUri =
           await FileDownloader().uri.createDirectory(tempDirUri, testDir);
       print('newDirUri: $newDirUri');
       expect(newDirUri, isNotNull);
       expect(newDirUri.scheme, 'file'); // Expect file scheme now
       expect(Directory.fromUri(newDirUri).existsSync(), isTrue);
-
       // Test creating a subdirectory within the newly created directory
       final newSubDirUri =
           await FileDownloader().uri.createDirectory(newDirUri, testSubDir);
-
       expect(newSubDirUri, isNotNull);
       expect(newSubDirUri.scheme, 'file'); // Expect file scheme
       expect(Directory.fromUri(newSubDirUri).existsSync(), isTrue);
-
       // Test creating a multi-level directory
       final multiLevelDirUri = await FileDownloader()
           .uri
           .createDirectory(tempDirUri, multiLevelDirName);
       expect(multiLevelDirUri, isNotNull);
       expect(multiLevelDirUri.scheme, 'file'); // Expect file scheme
-
       // Verify that both directories in the path were created
       final multiLevelDirCreated = Directory.fromUri(multiLevelDirUri);
       expect(multiLevelDirCreated.existsSync(), isTrue);
       expect(Directory(p.join(tempDir.path, 'test')).existsSync(), isTrue);
-
       // Ensure directories are deleted after test is complete
       if (testDirDirectory.existsSync()) {
         testDirDirectory.deleteSync(recursive: true);
@@ -379,6 +370,227 @@ void main() {
       // Clean up
       await file.delete();
     });
+
+    test('copyFile with file:// URIs', () async {
+      // Create a source file.
+      final directory = await getTemporaryDirectory();
+      final sourceFile = File(p.join(directory.path, 'source.txt'));
+      await sourceFile.writeAsString('Source File Content');
+      final sourceUri = sourceFile.uri;
+      // Define a destination file path.
+      final destFilePath = p.join(directory.path, 'destination.txt');
+      final destUri = Uri.file(destFilePath);
+      // Copy the file.
+      final resultUri = await FileDownloader().uri.copyFile(sourceUri, destUri);
+      // Verify the result.
+      expect(resultUri, isNotNull);
+      expect(resultUri, equals(destUri));
+      expect(File.fromUri(resultUri!).existsSync(), isTrue);
+      // Verify content.
+      final destFile = File.fromUri(resultUri);
+      expect(await destFile.readAsString(), 'Source File Content');
+      // Clean up.
+      await sourceFile.delete();
+      await destFile.delete();
+    });
+
+    test('moveFile with file:// URIs', () async {
+      // Create a source file.
+      final directory = await getTemporaryDirectory();
+      final sourceFile = File(p.join(directory.path, 'source.txt'));
+      await sourceFile.writeAsString('Source File Content');
+      final sourceUri = sourceFile.uri;
+      // Define a destination file path.
+      final destFilePath = p.join(directory.path, 'destination.txt');
+      final destUri = Uri.file(destFilePath);
+      // Move the file.
+      final resultUri = await FileDownloader().uri.moveFile(sourceUri, destUri);
+      // Verify the result.
+      expect(resultUri, isNotNull);
+      expect(resultUri, equals(destUri));
+      expect(File.fromUri(resultUri!).existsSync(), isTrue);
+      // Verify source file is gone.
+      expect(sourceFile.existsSync(), isFalse);
+      // Verify content.
+      final destFile = File.fromUri(resultUri);
+      expect(await destFile.readAsString(), 'Source File Content');
+      // Clean up (only destination, source is moved).
+      await destFile.delete();
+    });
+
+    test('copyFile with file:// URIs and String destination', () async {
+      // Create a source file.
+      final directory = await getTemporaryDirectory();
+      final sourceFile = File(p.join(directory.path, 'source.txt'));
+      await sourceFile.writeAsString('Source File Content');
+      final sourceUri = sourceFile.uri;
+      // Define a destination file path as String.
+      final destFilePath = p.join(directory.path, 'destination.txt');
+      // Copy the file.
+      final resultUri =
+          await FileDownloader().uri.copyFile(sourceUri, destFilePath);
+      // Verify the result.
+      expect(resultUri, isNotNull);
+      expect(resultUri, equals(Uri.file(destFilePath)));
+      expect(File.fromUri(resultUri!).existsSync(), isTrue);
+      // Verify content.
+      final destFile = File.fromUri(resultUri);
+      expect(await destFile.readAsString(), 'Source File Content');
+      // Clean up.
+      await sourceFile.delete();
+      await destFile.delete();
+    });
+
+    test('moveFile with file:// URIs and String destination', () async {
+      // Create a source file.
+      final directory = await getTemporaryDirectory();
+      final sourceFile = File(p.join(directory.path, 'source.txt'));
+      await sourceFile.writeAsString('Source File Content');
+      final sourceUri = sourceFile.uri;
+      // Define a destination file path as String
+      final destFilePath = p.join(directory.path, 'destination.txt');
+      // Move the file.
+      final resultUri =
+          await FileDownloader().uri.moveFile(sourceUri, destFilePath);
+      // Verify the result.
+      expect(resultUri, isNotNull);
+      expect(resultUri, equals(Uri.file(destFilePath)));
+      expect(File.fromUri(resultUri!).existsSync(), isTrue);
+      // Verify source file is gone.
+      expect(sourceFile.existsSync(), isFalse);
+      // Verify content.
+      final destFile = File.fromUri(resultUri);
+      expect(await destFile.readAsString(), 'Source File Content');
+      // Clean up (only destination, source is moved).
+      await destFile.delete();
+    });
+
+    test('copyFile with file:// URIs and File destination', () async {
+      // Create a source file.
+      final directory = await getTemporaryDirectory();
+      final sourceFile = File(p.join(directory.path, 'source.txt'));
+      await sourceFile.writeAsString('Source File Content');
+      final sourceUri = sourceFile.uri;
+      // Define a destination File object.
+      final destFile = File(p.join(directory.path, 'destination.txt'));
+      // Copy the file.
+      final resultUri =
+          await FileDownloader().uri.copyFile(sourceUri, destFile);
+      // Verify the result.
+      expect(resultUri, isNotNull);
+      expect(resultUri, equals(destFile.uri)); // Compare with the File's URI
+      expect(destFile.existsSync(), isTrue);
+      // Verify content.
+      expect(await destFile.readAsString(), 'Source File Content');
+      // Clean up.
+      await sourceFile.delete();
+      await destFile.delete();
+    });
+
+    test('moveFile with file:// URIs and File destination', () async {
+      // Create a source file.
+      final directory = await getTemporaryDirectory();
+      final sourceFile = File(p.join(directory.path, 'source.txt'));
+      await sourceFile.writeAsString('Source File Content');
+      final sourceUri = sourceFile.uri;
+      // Define a destination File object.
+      final destFile = File(p.join(directory.path, 'destination.txt'));
+      // Move the file.
+      final resultUri =
+          await FileDownloader().uri.moveFile(sourceUri, destFile);
+      // Verify the result.
+      expect(resultUri, isNotNull);
+      expect(resultUri, equals(destFile.uri)); // Compare with the File's URI
+      expect(destFile.existsSync(), isTrue);
+      // Verify source file is gone.
+      expect(sourceFile.existsSync(), isFalse);
+      // Verify content.
+      expect(await destFile.readAsString(), 'Source File Content');
+      // Clean up (only destination, source is moved).
+      await destFile.delete();
+    });
+
+    test('copyFile and moveFile throw with invalid destination type', () async {
+      // Create a source file.
+      final directory = await getTemporaryDirectory();
+      final sourceFile = File(p.join(directory.path, 'source.txt'));
+      await sourceFile.writeAsString('Source File Content');
+      final sourceUri = sourceFile.uri;
+      // Define an invalid destination type (e.g., an integer).
+      const invalidDestination = 123;
+      // Verify that copyFile throws an ArgumentError.
+      expect(
+          () async => await FileDownloader()
+              .uri
+              .copyFile(sourceUri, invalidDestination),
+          throwsA(isA<ArgumentError>()));
+      // Verify that moveFile throws an ArgumentError.
+      expect(
+          () async => await FileDownloader()
+              .uri
+              .moveFile(sourceUri, invalidDestination),
+          throwsA(isA<ArgumentError>()));
+      // Clean up source file
+      await sourceFile.delete();
+    });
+
+    test('copyFile from content URI to file URI on Android', () async {
+      // Move a test file to shared storage to obtain a content:// URI.
+      final dummy = DownloadTask(url: uploadTestUrl, filename: uploadFilename);
+      final contentUri = await FileDownloader()
+          .uri
+          .moveToSharedStorage(dummy, SharedStorage.downloads);
+      expect(contentUri, isNotNull);
+      expect(contentUri!.scheme, 'content');
+      // Define a destination file path (file:// URI).
+      final directory = await getTemporaryDirectory();
+      final destFilePath = p.join(directory.path, 'destination.txt');
+      final destUri = Uri.file(destFilePath);
+      // Copy the file.
+      final resultUri =
+          await FileDownloader().uri.copyFile(contentUri, destUri);
+      // Verify the result.
+      expect(resultUri, isNotNull);
+      expect(resultUri, equals(destUri));
+      expect(File.fromUri(resultUri!).existsSync(), isTrue);
+      // Verify content (read using getFileBytes, which handles content:// URIs).
+      final bytes = await FileDownloader().uri.getFileBytes(contentUri);
+      expect(bytes, isNotNull);
+      final destFile = File.fromUri(resultUri);
+      expect(await destFile.readAsBytes(), bytes);
+      // Clean up.
+      await destFile.delete();
+    }, skip: !Platform.isAndroid);
+
+    test('moveFile from content URI to file URI on Android', () async {
+      // Move a test file to shared storage to obtain a content:// URI.
+      final dummy = DownloadTask(url: uploadTestUrl, filename: uploadFilename);
+      final contentUri = await FileDownloader()
+          .uri
+          .moveToSharedStorage(dummy, SharedStorage.downloads);
+      expect(contentUri, isNotNull);
+      expect(contentUri!.scheme, 'content');
+      // Define a destination file path (file:// URI).
+      final directory = await getTemporaryDirectory();
+      final destFilePath = p.join(directory.path, 'destination.txt');
+      final destUri = Uri.file(destFilePath);
+      // Move the file.
+      final resultUri =
+          await FileDownloader().uri.moveFile(contentUri, destUri);
+      // Verify the result. It will be null because we could not delete teh source file
+      // but the file should have been copied to the destination
+      expect(resultUri, isNull);
+      expect(File.fromUri(destUri).existsSync(), isTrue);
+      // Verify content.
+      final bytes = await FileDownloader()
+          .uri
+          .getFileBytes(contentUri); // Get original content
+      expect(bytes, isNotNull);
+      final destFile = File.fromUri(destUri);
+      expect(await destFile.readAsBytes(),
+          bytes); //compare with destination content
+      await destFile.delete();
+    }, skip: !Platform.isAndroid);
 
     test('deleteFile with file URI', () async {
       // Create a dummy file
