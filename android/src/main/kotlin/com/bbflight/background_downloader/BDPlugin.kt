@@ -179,7 +179,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 }
                 if (holdingQueue?.enqueuedTaskIds?.contains(task.taskId) != true)
                     processStatusUpdate(task, TaskStatus.enqueued, prefs, context = context)
-            } catch (e: Throwable) {
+            } catch (_: Throwable) {
                 Log.w(
                     TAG,
                     "Unable to start background request for taskId ${task.taskId} in operation: $operation"
@@ -284,7 +284,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     withContext(Dispatchers.IO) {
                         operation.result.get()
                     }
-                } catch (e: Throwable) {
+                } catch (_: Throwable) {
                     Log.w(TAG, "Unable to cancel taskId $taskId in operation: $operation")
                     return false
                 }
@@ -303,6 +303,16 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         suspend fun cancelInactiveTask(context: Context, task: Task) {
             Log.d(TAG, "Canceling inactive task")
             val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            val notificationConfigJsonString = notificationConfigJsonStrings[task.taskId]
+            if (notificationConfigJsonString != null) {
+                // update the notification via an UpdateNotificationWorker
+                NotificationService.createUpdateNotificationWorker(
+                    context,
+                    Json.encodeToString(task),
+                    notificationConfigJsonString,
+                    TaskStatus.canceled.ordinal
+                )
+            }
             processStatusUpdate(task, TaskStatus.canceled, prefs, context = context)
         }
 
@@ -358,7 +368,10 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             flutterPluginBinding.binaryMessenger, "com.bbflight.background_downloader"
         )
         channel?.setMethodCallHandler(this)
-        val uriUtilsChannel = MethodChannel(flutterPluginBinding.binaryMessenger, "com.bbflight.background_downloader.uriutils")
+        val uriUtilsChannel = MethodChannel(
+            flutterPluginBinding.binaryMessenger,
+            "com.bbflight.background_downloader.uriutils"
+        )
         uriUtilsChannel.setMethodCallHandler(UriUtilsMethodCallHelper(this))
         // clear expired items
         val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
@@ -474,11 +487,11 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             withContext(Dispatchers.IO) {
                 URLDecoder.decode(task.url, "UTF-8")
             }
-        } catch (e: MalformedURLException) {
+        } catch (_: MalformedURLException) {
             Log.i(TAG, "MalformedURLException for taskId ${task.taskId}")
             result.success(false)
             return
-        } catch (e: IllegalArgumentException) {
+        } catch (_: IllegalArgumentException) {
             Log.i(TAG, "Could not url-decode url for taskId ${task.taskId}")
             result.success(false)
             return
@@ -620,7 +633,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val operation = workManager.cancelAllWorkByTag("taskId=$taskId")
         try {
             operation.result.get()
-        } catch (e: Throwable) {
+        } catch (_: Throwable) {
             Log.w(
                 TAG,
                 "Could not kill task wih id $taskId in operation: $operation"

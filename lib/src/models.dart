@@ -414,7 +414,7 @@ enum Undelivered { resumeData, statusUpdates, progressUpdates }
 
 /// Notification types, as configured in [TaskNotificationConfig] and passed
 /// on to [TaskNotificationTapCallback]
-enum NotificationType { running, complete, error, paused }
+enum NotificationType { running, complete, error, paused, canceled }
 
 /// Notification specification for a [Task]
 ///
@@ -465,6 +465,7 @@ final class TaskNotificationConfig {
   final TaskNotification? complete;
   final TaskNotification? error;
   final TaskNotification? paused;
+  final TaskNotification? canceled;
   final bool progressBar;
   final bool tapOpensFile;
   final String groupNotificationId;
@@ -476,7 +477,10 @@ final class TaskNotificationConfig {
   /// [running] is the notification used while the task is in progress
   /// [complete] is the notification used when the task completed
   /// [error] is the notification used when something went wrong,
-  /// including pause, failed and notFound status
+  /// including failed and notFound status
+  /// [paused] is the notification shown when the task is paused
+  /// [canceled] is the notification shown when the task is canceled programmatically
+  ///    or by the user via a notification button
   /// [progressBar] if set will show a progress bar
   /// [tapOpensFile] if set will attempt to open the file when the [complete]
   ///     notification is tapped
@@ -497,6 +501,7 @@ final class TaskNotificationConfig {
       this.complete,
       this.error,
       this.paused,
+      this.canceled,
       this.progressBar = false,
       this.tapOpensFile = false,
       this.groupNotificationId = ''}) {
@@ -512,6 +517,7 @@ final class TaskNotificationConfig {
         'complete': complete?.toJson(),
         'error': error?.toJson(),
         'paused': paused?.toJson(),
+        'canceled': canceled?.toJson(),
         'progressBar': progressBar,
         'tapOpensFile': tapOpensFile,
         'groupNotificationId': groupNotificationId

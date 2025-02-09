@@ -463,7 +463,7 @@ abstract base class BaseDownloader {
         }
         processStatusUpdate(TaskStatusUpdate(task, TaskStatus.canceled));
         processProgressUpdate(TaskProgressUpdate(task, progressCanceled));
-        updateNotification(task, null); // remove notification
+        updateNotification(task, TaskStatus.canceled);
       }
     }
   }

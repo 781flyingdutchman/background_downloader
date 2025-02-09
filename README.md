@@ -475,8 +475,7 @@ FileDownloader().configureNotification(
     progressBar: true);
 ```
 
-To also show a notifications for other states, add a `TaskNotification` for `complete`, `error`
-and/or `paused`. If `paused` is configured and the task can be paused, a 'Pause' button will
+To also show a notifications for other states, add a `TaskNotification` for `complete`, `error`, `paused` and/or `canceled`. If `paused` is configured and the task can be paused, a 'Pause' button will
 show for the `running` notification, next to the 'Cancel' button. To open the downloaded file
 when the user taps the `complete` notification, add `tapOpensFile: true` to your call to
 `configureNotification`

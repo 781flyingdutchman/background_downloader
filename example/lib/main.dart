@@ -78,6 +78,7 @@ class _MyAppState extends State<MyApp> {
                 'Download {filename}', 'Download failed'),
             paused: const TaskNotification(
                 'Download {filename}', 'Paused with metadata {metadata}'),
+            canceled: const TaskNotification('Download {filename}', 'Canceled'),
             progressBar: true)
         .configureNotificationForGroup('bunch',
             running: const TaskNotification(
@@ -281,7 +282,7 @@ class _MyAppState extends State<MyApp> {
         backgroundDownloadTask = DownloadTask(
             url: downloadWithError
                 ? 'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/get_current_app_data' // returns 403 status code
-                : 'https://storage.googleapis.com/approachcharts/test/5MB-test.ZIP',
+                : 'https://storage.googleapis.com/approachcharts/test/57MB-test.ZIP',
             filename: 'zipfile.zip',
             directory: 'my/directory',
             baseDirectory: BaseDirectory.applicationDocuments,

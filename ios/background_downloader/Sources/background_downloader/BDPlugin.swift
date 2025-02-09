@@ -489,6 +489,14 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         if processResumeData(task: task, resumeData: resumeData) {
             processStatusUpdate(task: task, status: .paused)
             os_log("Paused task with taskId %@", log: log, type: .info, taskId)
+            // update 'paused' notification if needed
+            guard let notificationConfigJsonString = BDPlugin.notificationConfigJsonStrings[taskId],
+                  let notificationConfig = notificationConfigFrom(jsonString: notificationConfigJsonString)
+            else {
+                result(true)
+                return
+            }
+            updateNotification(task: task, notificationType: .paused, notificationConfig: notificationConfig)
             result(true)
         } else {
             os_log("Could not post resume data for taskId %@: task paused but cannot be resumed", log: log, type: .info, taskId)

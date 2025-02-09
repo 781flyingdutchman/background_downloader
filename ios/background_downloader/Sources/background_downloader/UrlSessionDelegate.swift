@@ -87,6 +87,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             BDPlugin.taskIdsProgrammaticallyCancelled.remove(task.taskId) != nil
         })
         guard error == nil else {
+            var notificationType = taskWasProgramaticallyCanceled ? nil : NotificationType.error
             // handle the error if this task wasn't programatically cancelled (in which
             // case the error has been handled already)
             if !taskWasProgramaticallyCanceled {
@@ -118,14 +119,15 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
                     // cancelled without resumedata implies 'cancel'
                     os_log("Canceled task with id %@", log: log, type: .info, task.taskId)
                     processStatusUpdate(task: task, status: .canceled)
+                    notificationType = .canceled
                 }
                 else {
                     os_log("Error for taskId %@: %@", log: log, type: .error, task.taskId, error!.localizedDescription)
                     processStatusUpdate(task: task, status: .failed, taskException: TaskException(type: .general, httpResponseCode: -1, description: error!.localizedDescription))
                 }
             }
-            if isDownloadTask(task: task) {
-                updateNotification(task: task, notificationType: .error, notificationConfig: notificationConfig)
+            if isDownloadTask(task: task) && notificationType != nil {
+                updateNotification(task: task, notificationType: notificationType!, notificationConfig: notificationConfig)
             }
             return
         }
