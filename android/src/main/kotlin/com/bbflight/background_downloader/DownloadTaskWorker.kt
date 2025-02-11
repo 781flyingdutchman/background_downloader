@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.os.storage.StorageManager
-import android.provider.DocumentsContract
 import android.util.Log
 import androidx.core.net.toFile
 import androidx.documentfile.provider.DocumentFile
@@ -210,6 +209,10 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
                             description = message
                         )
                         return TaskStatus.failed
+                    }
+                    val newFilename = getFilenameFromUri(destUri)
+                    if (newFilename.isNotEmpty()) {
+                        uriFilename = newFilename
                     }
                     task = task.copyWith(filename = UriUtils.pack(uriFilename, destUri))
                     val os = resolver.openOutputStream(destUri)
@@ -455,8 +458,6 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
             return false
         }
         val start = matchResult.groups[1]?.value?.toLong()!!
-        val end = matchResult.groups[2]?.value?.toLong()!!
-        val total = matchResult.groups[3]?.value?.toLong()!!
         val tempFile = File(tempFilePath)
         val tempFileLength = tempFile.length()
         startByte = start - taskRangeStartByte // relative to start of range
@@ -471,7 +472,7 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
         // resume possible, set start conditions
         try {
             RandomAccessFile(tempFilePath, "rw").use { it.setLength(startByte) }
-        } catch (e: IOException) {
+        } catch (_: IOException) {
             Log.i(TAG, "Could not truncate temp file")
             taskException =
                 TaskException(
@@ -511,7 +512,7 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
             try {
                 val tempFile = File(tempFilePath)
                 tempFile.delete()
-            } catch (e: IOException) {
+            } catch (_: IOException) {
                 Log.i(TAG, "Could not delete temp file at $tempFilePath")
             }
         }
