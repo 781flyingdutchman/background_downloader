@@ -131,6 +131,7 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
+    final onMobile = Platform.isAndroid || Platform.isIOS;
     return MaterialApp(
       theme: ThemeData(
         useMaterial3: true,
@@ -246,13 +247,13 @@ class _MyAppState extends State<MyApp> {
                         : loadBackgroundResult ?? '',
                   ),
                 ),
-                if (Platform.isAndroid)
+                if (onMobile)
                   const Divider(
                     height: 30,
                     thickness: 5,
                     color: Colors.blueGrey,
                   ),
-                if (Platform.isAndroid)
+                if (onMobile)
                   Center(
                     child: ElevatedButton(
                       onPressed: processPickDirectory,
@@ -282,7 +283,7 @@ class _MyAppState extends State<MyApp> {
         backgroundDownloadTask = DownloadTask(
             url: downloadWithError
                 ? 'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/get_current_app_data' // returns 403 status code
-                : 'https://storage.googleapis.com/approachcharts/test/57MB-test.ZIP',
+                : 'https://storage.googleapis.com/approachcharts/test/5MB-test.ZIP',
             filename: 'zipfile.zip',
             directory: 'my/directory',
             baseDirectory: BaseDirectory.applicationDocuments,
@@ -431,15 +432,17 @@ class _MyAppState extends State<MyApp> {
       log.warning('Could not get a URI');
       return;
     }
-    print(uri);
     log.fine('Uri = $uri');
-    // final task = DownloadTask.fromUri(
-    //     url:
-    //         'https://i2.wp.com/www.skiptomylou.org/wp-content/uploads/2019/06/dog-drawing.jpg',
-    //     directoryUri: Uri.parse(uri),
-    //     filename: '?');
-    // final result = await FileDownloader().download(task);
-    // log.info('Download to URI completed with taskStatus ${result.status}');
+    final task = UriDownloadTask(
+        url:
+            'https://i2.wp.com/www.skiptomylou.org/wp-content/uploads/2019/06/dog-drawing.jpg',
+        directoryUri: uri,
+        filename: '?');
+    final result = await FileDownloader().download(task);
+    final resultTask = result.task as UriDownloadTask;
+    log.info('Download to URI completed with taskStatus ${result.status}');
+    log.info('Downloaded file is at ${resultTask.fileUri}');
+    log.info('Downloaded file name is ${resultTask.filename}');
   }
 
   /// Attempt to get permissions if not already granted
