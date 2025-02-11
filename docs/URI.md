@@ -39,7 +39,7 @@ The `FileDownloader().uri` property provides access to a set of utility function
 *   `deleteFile()`: Deletes the file at the given URI.
 *   `openFile()`: Opens the file at a given URI.
 *   `moveToSharedStorage()`: Moves a file to a shared storage location.
-*   `activateUri()`: Activates a previously accessed directory or file. Only relevant if you use `persistedUriPermission` or use the photo/video picker. In those cases, before using the Uri returned from the picker (or when retrieving that Uri if you stored it in a database), you must first activate it by calling `final uri = await downloader.uri.activateUri(persistentUri)` and use the resulting `uri` for subsequent operations. This is platform-agnostic (and will return the `persistentUri` on platforms other than iOS, so no `Platform.isIOS` check is needed).
+*   `activate()`: Activates a previously accessed directory or file. Only relevant if you use `persistedUriPermission` or use the photo/video picker. In those cases, before using the Uri returned from the picker (or when retrieving that Uri if you stored it in a database), you must first activate it by calling `final uri = await downloader.uri.activate(persistentUri)` and use the resulting `uri` for subsequent operations. This is platform-agnostic (and will return the `persistentUri` on platforms other than iOS, so no `Platform.isIOS` check is needed).
 
 The `pick...` methods and `createDirectory` take an optional `persistedUriPermission` argument (defaults to `false`) that when `true` registers the picked directory with the OS, allowing access in a later session - see [persistent URI permissions](#Persistent-URI-Permissions).
 
@@ -173,7 +173,7 @@ Future<void> pickAndUploadMediaIOS() async {
 
 ## Persistent URI Permissions
 
-On Android and iOS, the `pickDirectory()`, `pickFile()`, `pickFiles()`, and `createDirectory()` methods have an optional parameter `persistedUriPermission` (which defaults to `false`). Setting this to `true` allows you to obtain a URI that can be stored in a database and used even after the application restarts or the device reboots. If you have obtained a persistent URI you must activate it before use by calling `final uri = await downloader.uri.activateUri(persistentUri);` and use the resulting `uri` for subsequent operations.
+On Android and iOS, the `pickDirectory()`, `pickFile()`, `pickFiles()`, and `createDirectory()` methods have an optional parameter `persistedUriPermission` (which defaults to `false`). Setting this to `true` allows you to obtain a URI that can be stored in a database and used even after the application restarts or the device reboots. If you have obtained a persistent URI you must activate it before use by calling `final uri = await downloader.uri.activate(persistentUri);` and use the resulting `uri` for subsequent operations.
 
 **Note:**  You should only request persisted URI permissions if you intend to store the URI for long-term use (e.g., in a database). Do not request persistent permissions unnecessarily.
 
@@ -183,7 +183,7 @@ When `persistedUriPermission` is `true`, the picked directory or file URI is reg
 
 ### iOS
 
-Similar to Android, setting `persistedUriPermission` to `true` registers the URI with the OS, allowing it to be stored and used later. On iOS, these persistent URIs (also called URL bookmarks) have a special `urlbookmark://` scheme. URIs with this scheme can be used with the `uri` methods and the URI based upload and download tasks, but if you need to directly access the file referenced by the bookmark URI you must "activate" it using the `activateUri()` method. This method will return a new, usable `file://` URI for that session.
+Similar to Android, setting `persistedUriPermission` to `true` registers the URI with the OS, allowing it to be stored and used later. On iOS, these persistent URIs (also called URL bookmarks) have a special `urlbookmark://` scheme. URIs with this scheme can be used with the `uri` methods and the URI based upload and download tasks, but if you need to directly access the file referenced by the bookmark URI you must "activate" it using the `activate()` method. This method will return a new, usable `file://` URI for that session.
 
 
 ## Platform-Specific Considerations
@@ -194,8 +194,8 @@ While the URI approach abstracts away many platform differences, there are still
 * **Direct Download**: When downloading to a URI destination, background_downloader bypasses the temporary file and downloads directly to the final location. This behavior is different from the regular file path approach where a temporary file is used. This also means that, for `UriDownloadTask` on Android ONLY, the presence of a file at the destination URI does not mean the file has successfully downloaded (it may be partial)
 
 ### iOS
-* **`urlbookmark://`** URIs: When requesting persistent permissions for a directory or file using `persistedUriPermission` set to true, iOS returns a special `urlbookmark://` URI. This URI contains security information and can safely be stored in a database for later use. You can 'manually' convert the bookmark URL to a regular `file://` url by calling `activateUri`, but it is safer to pass the bookmark URI directly to `uri` methods and tasks, so no platform-specific treatment is required.
-* **`media://` URIs**: When using the media picker on iOS (`pickFile` with `SharedStorage.images` or `SharedStorage.videos`), the selected media file is copied to the application's cache directory, and a `media://` URI is returned. This URI can safely be used with the `uri` methods, or used as the `fileUri` in a `UriUploadTask`. Note that the developer is responsible for deleting the file using `FileDownloader().uri.deleteFile` after use. If you need to access the referenced file directly, then use `activateUri()` to obtain a `file://` URI.
+* **`urlbookmark://`** URIs: When requesting persistent permissions for a directory or file using `persistedUriPermission` set to true, iOS returns a special `urlbookmark://` URI. This URI contains security information and can safely be stored in a database for later use. You can 'manually' convert the bookmark URL to a regular `file://` url by calling `activate`, but it is safer to pass the bookmark URI directly to `uri` methods and tasks, so no platform-specific treatment is required.
+* **`media://` URIs**: When using the media picker on iOS (`pickFile` with `SharedStorage.images` or `SharedStorage.videos`), the selected media file is copied to the application's cache directory, and a `media://` URI is returned. This URI can safely be used with the `uri` methods, or used as the `fileUri` in a `UriUploadTask`. Note that the developer is responsible for deleting the file using `FileDownloader().uri.deleteFile` after use. If you need to access the referenced file directly, then use `activate()` to obtain a `file://` URI.
 * **Temporary File Deletion**: After using a `media://` URI (obtained from the media picker), you must delete the temporary file using `downloader.uri.deleteFile()`.
 
 ### Desktop (macOS, Windows, Linux)

@@ -202,7 +202,7 @@ void main() {
     if (Platform.isIOS) {
       expect(fileUri.scheme, equals('media'));
     }
-    final activatedUri = await FileDownloader().uri.activateUri(fileUri);
+    final activatedUri = await FileDownloader().uri.activate(fileUri);
     if (!Platform.isIOS) {
       expect(activatedUri, equals(fileUri));
     }

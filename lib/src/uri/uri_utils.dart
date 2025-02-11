@@ -124,8 +124,8 @@ sealed class UriUtils {
   /// launches the media picker). Selected media is copied into the Application
   /// Support directory, subdirectory "com.bbflight.downloader.media" and
   /// returned as a media:// URI.  To access the actual copied file,
-  /// use [activateUri]
-  Future<Uri?> activateUri(Uri uri) async {
+  /// use [activate]
+  Future<Uri?> activate(Uri uri) async {
     return uri;
   }
 
@@ -507,7 +507,7 @@ final class IOSUriUtils extends NativeUriUtils {
   IOSUriUtils(super.downloader);
 
   @override
-  Future<Uri?> activateUri(Uri uri) async {
+  Future<Uri?> activate(Uri uri) async {
     try {
       final result = await _methodChannel.invokeMethod<String?>(
           'activateUri', uri.toString());
