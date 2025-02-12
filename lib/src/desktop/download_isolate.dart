@@ -52,8 +52,8 @@ Future<void> doDownloadTask(DownloadTask task, ResumeData? resumeData,
     final newRangeString = 'bytes=${resumeRange.$1}-${resumeRange.$2 ?? ""}';
     request.headers['Range'] = newRangeString;
   }
-  if (downloadTask.post is String) {
-    request.body = downloadTask.post!;
+  if (downloadTask.post case String post) {
+    request.body = post;
   }
   var resultStatus = TaskStatus.failed;
   try {
