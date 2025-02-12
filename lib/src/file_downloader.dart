@@ -1039,8 +1039,8 @@ Future<http.Response> _doRequest(
         'HEAD' => client.head(Uri.parse(request.url), headers: request.headers),
         'PUT' => client.put(Uri.parse(request.url),
             headers: request.headers, body: request.post),
-        'DELETE' =>
-          client.delete(Uri.parse(request.url), headers: request.headers),
+        'DELETE' => client.delete(Uri.parse(request.url),
+            headers: request.headers, body: request.post),
         'PATCH' => client.patch(Uri.parse(request.url),
             headers: request.headers, body: request.post),
         _ => Future.value(response)
