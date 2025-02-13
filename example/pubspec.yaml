@@ -37,8 +37,6 @@ dependencies:
   path_provider: ^2.0.2
   path: ^1.8.1
   http: ^1.2.2
-  saf_util: ^0.6.2
-  file_picker: ^8.1.7
 
 dev_dependencies:
   flutter_test:

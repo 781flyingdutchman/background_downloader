@@ -1,3 +1,35 @@
+## 9.0.0
+* Introduces URI operations, including file/photo/video/directory pickers, under the `uri` property, and `UriDownloadTask` and `UriUploadTask`. See [Working with URIs](docs/URI.md). 
+* [Breaking] removes references to `asAndroidUri` - use the new methods on the `uri` property instead
+* Adds option to configure a `canceled` notification (instead of cancellation defaulting to the `error` notification)
+* Fixes bug with `request` when using `PUT` or `PATCH` requests
+* Bumps minimum iOS version to 14
+
+### Uri operations
+
+Uri operations abstract away platform differences, including content provider on Android (used for the Storage Access Framework), and file, photo and directory pickers on iOS and Android. This enables largely platform-independent code for file operations, and on Android downloads directly to destination, bypassing the temp file in internal storage.
+
+The `FileDownloader().uri` property provides access to a set of utility functions for working with URIs, including:
+
+*   `pickDirectory()`: Opens a directory picker dialog and returns the selected directory's URI.
+*   `pickFile()`: Opens a file picker dialog and returns the selected file's URI.
+*   `pickFiles()`: Opens a file picker dialog and allows selection of multiple files, returning their URIs in a list.
+*   `createDirectory()`: Creates a new directory within a specified parent directory URI.
+*   `getFileBytes()`: Retrieves the file data (bytes) for a given URI.
+*   `copyFile()`: copies a file from a source uri to a destination. Destination can be a `Uri`, a `File` or a `String` containing a file path
+*   `moveFile()`: moves a file from a source uri to a destination. Destination can be a `Uri`, a `File` or a `String` containing a file path. If the move fails, it is possible that the file was copied but the source was not deleted
+*   `deleteFile()`: Deletes the file at the given URI.
+*   `openFile()`: Opens the file at a given URI.
+*   `moveToSharedStorage()`: Moves a file to a shared storage location.
+*   `activate()`: Activates a previously accessed directory or file. Only relevant if you use `persistedUriPermission` or use the photo/video picker.
+
+The `pick...` methods and `createDirectory` take an optional `persistedUriPermission` argument (defaults to `false`) that when `true` registers the picked directory with the OS, allowing access in a later session.
+
+New/modified `Task` types:
+*   `UriDownloadTask`: Downloads a file to a specified directory URI. On Android, this bypasses the temp file used in the traditional approach and downloads directly to the destination.
+*   `UriUploadTask`: Uploads a file from a given file URI. If the `filename` is omitted, it will be based on the task's URL.
+*   `MultiUploadTask`: now accepts Uri where previously only filename or file path was allowed
+
 ## 8.9.4
 * Modifies the interval between `TaskProgressUpdate` such that an update is sent at least once every 2.5 seconds if progress has been made, even if it less than 2% of the file size
 * Improves `rescheduleKilledTasks` to also reschedule tasks marked as `waitingToRetry` but not registered as such

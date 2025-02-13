@@ -10,6 +10,8 @@ To upload a file, create an [UploadTask](https://pub.dev/documentation/backgroun
 
 The plugin supports [headers](#headers), [retries](#retries), [priority](#priority), [requiring WiFi](#requiring-wifi) before starting the up/download, user-defined [metadata and display name](#metadata-and-displayname) and GET, [POST](#post-requests) and other http(s) [requests](#http-request-method), and can be [configured](#configuration) by platform. You can [manage  the tasks in the queue](#managing-tasks-and-the-queue) (e.g. cancel, pause and resume), and have different handlers for updates by [group](#grouping-tasks) of tasks. Downloaded files can be moved to [shared storage](#shared-and-scoped-storage) to make them available outside the app.
 
+Pickers for files, photos/videos and directories are included for iOS and Android, and the downloader supports `Uri` based file locations and operations that are consistent across all platforms, including Android's `content://` URIs (used for the Storage Access Framework) and iOSs URL Bookmarks for persistent file locators (see [working with URIs](docs/URI.md)).
+
 No setup is required for [Android](#android) (except when using notifications), Windows and Linux, and only minimal [setup for iOS](#ios) and [MacOS](#macos).
 
 ## Usage examples
