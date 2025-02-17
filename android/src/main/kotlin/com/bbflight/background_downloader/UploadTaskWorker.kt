@@ -17,7 +17,7 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
     TaskWorker(applicationContext, workerParams) {
 
     companion object {
-        private val asciiOnlyRegEx = Regex("^[\\x00-\\x7F]+$")
+        private val asciiOnlyRegEx = Regex("^[\\x00-\\xFF]+$")
         private val jsonStringRegEx = Regex("^\\s*(\\{.*\\}|\\[.*\\])\\s*$")
         private val newlineRegEx = Regex("\r\n|\r|\n")
         const val boundary = "-----background_downloader-akjhfw281onqciyhnIk"
