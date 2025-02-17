@@ -25,7 +25,7 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
     var totalBytesWritten: Int64 = 0
     static let boundary = "-----background_downloader-akjhfw281onqciyhnIk"
     let lineFeed = "\r\n"
-    let asciiOnly = try! NSRegularExpression(pattern: "^[\\x00-\\x7F]+$")
+    let asciiOnly = try! NSRegularExpression(pattern: "^[\\x00-\\xFF]+$")
     let jsonString = try! NSRegularExpression(pattern: "^\\s*(\\{.*\\}|\\[.*\\])\\s*$")
     let newlineRegExp = try! NSRegularExpression(pattern: "\r\n|\r|\n")
     let bufferSize = 2 << 13
