@@ -543,13 +543,13 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
      */
     private fun headerForField(name: String, value: String): String {
         var header = "content-disposition: form-data; name=\"${browserEncode(name)}\""
-        if (!isPlainAscii(value)) {
+        if (isJsonString(value)) {
+            header = "$header\r\n" +
+                    "content-type: application/json; charset=utf-8\r\n"
+        } else if (!isPlainAscii(value)) {
             header = "$header\r\n" +
                     "content-type: text/plain; charset=utf-8\r\n" +
                     "content-transfer-encoding: binary"
-        } else if (isJsonString(value)) {
-            header = "$header\r\n" +
-                    "content-type: application/json; charset=utf-8\r\n"
         }
         return "$header\r\n\r\n"
     }

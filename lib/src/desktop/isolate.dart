@@ -354,13 +354,13 @@ String fieldEntry(String name, String value) =>
 /// The return value is guaranteed to contain only ASCII characters.
 String headerForField(String name, String value) {
   var header = 'content-disposition: form-data; name="${browserEncode(name)}"';
-  if (!isPlainAscii(value)) {
+  if (isJsonString(value)) {
+    header = '$header\r\n'
+        'content-type: application/json; charset=utf-8\r\n';
+  } else if (!isPlainAscii(value)) {
     header = '$header\r\n'
         'content-type: text/plain; charset=utf-8\r\n'
         'content-transfer-encoding: binary';
-  } else if (isJsonString(value)) {
-    header = '$header\r\n'
-        'content-type: application/json; charset=utf-8\r\n';
   }
   return '$header\r\n\r\n';
 }
