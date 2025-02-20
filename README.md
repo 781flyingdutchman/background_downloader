@@ -849,7 +849,8 @@ The global setting persists across application restarts. Check the current setti
 A task may be waiting a long time before it gets executed, or before it has finished, and you may need to modify the task before it actually starts (e.g. to refresh an access token) or do something when it finishes (e.g. conditionally call your server to confirm an upload has finished). The normal listener or registered callback approach does not enable that functionality, and does not execute when the app is in a suspended state.
 
 To facilitate more complex task management functions, consider using "native" callbacks:
-* `onTaskStart`: a callback called before a task starts executing. The callback receives the `Task` and returns `null` if it did not change anything, or a modified `Task` if it needs to use a different url or header. It is called after `onAuth` for token refresh, if that is set
+* `beforeTaskStart`: a callback called before a task starts executing. The callback receives the `Task` and returns `null` if the task should continue, or a `TaskStatusUpdate` if it should not start - in which case the `TaskStatusUpdate` is posted as the last state update for the task
+* `onTaskStart`: a callback called before a task starts executing, after `beforeTaskStart`. The callback receives the `Task` and returns `null` if it did not change anything, or a modified `Task` if it needs to use a different url or header. It is called after `onAuth` for token refresh, if that is set
 * `onTaskFinished`: a callback called when the task has finished. The callback receives the final `TaskStatusUpdate`.
 * `auth`: a class that facilitates management of authorization tokens and refresh tokens, and includes an `onAuth` callback similar to `onTaskStart`
 
@@ -868,8 +869,11 @@ For most situations, using the event listeners or registered "regular" callbacks
 
 You should assume that the callback runs in an isolate, and has no access to application state or to plugins. Native callbacks are really only meant to perform simple "local" functions, operating only on the parameter passed into the callback function.
 
+### BeforeTaskStart
+Callback with signature `Future<TaskStatusUpdate?> Function(Task task)`, called just before the task starts executing. Your callback receives the `task` and should return `null` if the task should proceed. If the task should end before it is started, return a `TaskStatusUpdate` object, which will be returned. The `TaskStatusUpdate` object must be consistent with normal updates of that type, e.g. an update with `status` set to `.canceled` cannot contain an `exception` or `responseStatusCode`. 
+
 ### OnTaskStart
-Callback with signature`Future<Task?> Function(Task original)`, called just before the task starts executing. Your callback receives the `original` task about to start, and can modify this task if necessary. If you make modifications, you return the modified task - otherwise return null to continue execution with the original task. You can only change the task's `url` (including query parameters) and `headers` properties - making changes to any other property may lead to undefined behavior.
+Callback with signature`Future<Task?> Function(Task original)`, called just before the task starts executing, immediately after `BeforeTaskStart`. Your callback receives the `original` task about to start, and can modify this task if necessary. If you make modifications, you return the modified task - otherwise return null to continue execution with the original task. You can only change the task's `url` (including query parameters) and `headers` properties - making changes to any other property may lead to undefined behavior.
 
 ### OnTaskFinished
 Callback with signature `Future<void> Function(TaskStatusUpdate taskStatusUpdate)`, called when the task has reached a final state (regardless of outcome). Your callback receives the final `TaskStatusUpdate` and can act on that.

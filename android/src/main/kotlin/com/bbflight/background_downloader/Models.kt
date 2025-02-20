@@ -66,14 +66,17 @@ private class UpdatesSerializer : EnumAsIntSerializer<Updates>(
 @OptIn(InternalSerializationApi::class)
 @Serializable
 class TaskOptions(
+    private val beforeTaskStartRawHandle: Long?,
     private val onTaskStartRawHandle: Long?,
     private val onTaskFinishedRawHandle: Long?,
     var auth: Auth?
 ) {
 
-    fun hasStartCallback(): Boolean = onTaskStartRawHandle != null
+    fun hasBeforeStartCallback(): Boolean = beforeTaskStartRawHandle != null
 
-    fun hasFinishCallback(): Boolean = onTaskFinishedRawHandle != null
+    fun hasOnStartCallback(): Boolean = onTaskStartRawHandle != null
+
+    fun hasOnFinishCallback(): Boolean = onTaskFinishedRawHandle != null
 }
 
 /**

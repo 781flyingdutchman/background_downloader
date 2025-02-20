@@ -646,10 +646,10 @@ final class IOSDownloader extends NativeDownloader {
 const _callbackChannel =
     MethodChannel('com.bbflight.background_downloader.callbacks');
 
-/// Initialize the callbackDispatcher for task related callbacks (hooks)
+/// Initialize the callbackDispatcher for native callbacks
 ///
 /// Establishes the methodChannel through which the native side will send its
-/// callBacks, and teh listener that processes the different callback types.
+/// callBacks, and the listener that processes the different callback types.
 ///
 /// This method is called directly from the native platform prior to using
 /// the [_callbackChannel] to post the actual callback
@@ -658,6 +658,16 @@ void initCallbackDispatcher() {
   WidgetsFlutterBinding.ensureInitialized();
   _callbackChannel.setMethodCallHandler((MethodCall call) async {
     switch (call.method) {
+      case 'beforeTaskStartCallback':
+        final taskJsonString = call.arguments as String;
+        final task = Task.createFromJson(jsonDecode(taskJsonString));
+        final callBack = task.options?.beforeTaskStartCallBack;
+        final taskStatusUpdate = await callBack?.call(task);
+        if (taskStatusUpdate == null) {
+          return null;
+        }
+        return jsonEncode(taskStatusUpdate.toJson());
+
       case 'onTaskStartCallback':
       case 'onAuthCallback':
         final taskJsonString = call.arguments as String;

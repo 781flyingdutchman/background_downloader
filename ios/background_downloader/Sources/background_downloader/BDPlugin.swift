@@ -34,7 +34,8 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     static var haveregisteredNotificationCategories = false
     static var requireWiFi = RequireWiFi.asSetByTask // global setting
     static var taskIdsThatCanResume = Set<String>() // taskIds that can resume
-    static var taskIdsProgrammaticallyCancelled = Set<String>() // skips error handling for these tasks
+    static var taskIdsProgrammaticallyCanceledBeforeStart = Set<String>() // skips completion processing for these tasks
+    static var taskIdsProgrammaticallyCanceledAfterStart = Set<String>() // skips error handling for these tasks
     static var tasksToReEnqueue = Set<Task>() // for when WiFi requirement changes
     static var taskIdsRequiringWiFi = Set<String>() // ensures correctness when enqueueing task
     static var notificationConfigJsonStrings = [String:String]() // by taskId
@@ -462,7 +463,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         let taskId = call.arguments as! String
         UrlSessionDelegate.createUrlSession()
         BDPlugin.propertyLock.withLock({
-            _ = BDPlugin.taskIdsProgrammaticallyCancelled.insert(taskId)
+            _ = BDPlugin.taskIdsProgrammaticallyCanceledAfterStart.insert(taskId)
         })
         guard let urlSessionTask = await UrlSessionDelegate.getUrlSessionTaskWithId(taskId: taskId) as? URLSessionDownloadTask,
               let task = await UrlSessionDelegate.getTaskWithId(taskId: taskId),
@@ -470,7 +471,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         else {
             // no regular task found, return if there's no ParalleldownloadTask either
             BDPlugin.propertyLock.withLock({
-                _ = BDPlugin.taskIdsProgrammaticallyCancelled.remove(taskId)
+                _ = BDPlugin.taskIdsProgrammaticallyCanceledAfterStart.remove(taskId)
             })
             if ParallelDownloader.downloads[taskId] == nil {
                 os_log("Could not pause task %@", log: log, type: .info, taskId)

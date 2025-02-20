@@ -212,7 +212,7 @@ open class TaskWorker(
                         withContext(Dispatchers.IO) {
                             operation.result.get()
                         }
-                    } catch (e: Throwable) {
+                    } catch (_: Throwable) {
                         Log.w(
                             BDPlugin.TAG,
                             "Could not kill task wih id ${task.taskId} in operation: $operation"
@@ -230,7 +230,7 @@ open class TaskWorker(
                     editor.apply()
                 }
                 QueueService.cleanupTaskId(task.taskId)
-                if (task.options?.hasFinishCallback() == true) {
+                if (task.options?.hasOnFinishCallback() == true) {
                     Callbacks.invokeOnTaskFinishedCallback(context, taskStatusUpdate)
                 }
             }
@@ -401,9 +401,31 @@ open class TaskWorker(
                 delay(taskTimeoutMillis)
                 isTimedOut = true
             }
+            task = Json.decodeFromString(inputData.getString(keyTask)!!)
+            if (task.options?.hasBeforeStartCallback() == true) {
+                val statusUpdate = Callbacks.invokeBeforeTaskStartCallback(applicationContext, task)
+                if (statusUpdate != null) {
+                    Log.i(
+                        TAG,
+                        "TaskId ${task.taskId} interrupted by beforeTaskStart callback"
+                    )
+                    processStatusUpdate(
+                        task,
+                        statusUpdate.taskStatus,
+                        prefs,
+                        taskException = statusUpdate.exception,
+                        responseBody = statusUpdate.responseBody,
+                        responseHeaders = statusUpdate.responseHeaders,
+                        responseStatusCode = statusUpdate.responseStatusCode,
+                        context = applicationContext
+                    )
+                    BDPlugin.holdingQueue?.taskFinished(task)
+                    return@withContext Result.success() // task interrupted
+                }
+            }
             task = getModifiedTask(
                 context = applicationContext,
-                task = Json.decodeFromString(inputData.getString(keyTask)!!)
+                task = task
             )
             notificationConfigJsonString = inputData.getString(keyNotificationConfig)
             notificationConfig =
@@ -828,7 +850,6 @@ suspend fun getModifiedTask(context: Context, task: Task): Task {
     if (auth != null) {
         // Refresh token if needed
         if (auth.isTokenExpired() && auth.hasOnAuthCallback()) {
-            Log.i(TAG, "onAuth callback for taskId ${task.taskId}")
             authTask = withContext(Dispatchers.IO) {
                 Callbacks.invokeOnAuthCallback(context, task)
             }
@@ -845,11 +866,10 @@ suspend fun getModifiedTask(context: Context, task: Task): Task {
         authTask = authTask.copyWith(url = uri.toString(), headers = headers)
     }
     authTask = authTask ?: task
-    if (task.options?.hasStartCallback() != true) {
+    if (task.options?.hasOnStartCallback() != true) {
         return authTask
     }
     // onStart callback
-    Log.i(TAG, "onTaskStart callback for taskId ${authTask.taskId}")
     val modifiedTask = withContext(Dispatchers.IO) {
         Callbacks.invokeOnTaskStartCallback(context, authTask)
     }

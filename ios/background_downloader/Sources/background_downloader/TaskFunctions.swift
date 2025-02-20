@@ -441,10 +441,10 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
             BDPlugin.responseBodyData.removeValue(forKey: task.taskId)
             BDPlugin.notificationConfigJsonStrings.removeValue(forKey: task.taskId)
             BDPlugin.taskIdsThatCanResume.remove(task.taskId)
-            BDPlugin.taskIdsProgrammaticallyCancelled.remove(task.taskId)
+            BDPlugin.taskIdsProgrammaticallyCanceledAfterStart.remove(task.taskId)
         }
         // invoke onTaskFinished callback if needed
-        if task.options?.hasFinishedCallback() == true {
+        if task.options?.hasOnFinishedCallback() == true {
             _Concurrency.Task {
                 if !(await invokeOnTaskFinishedCallback(taskStatusUpdate: statusUpdate)) {
                     os_log("Could not invoke onTaskFinishedCallback", log: log, type: .error)

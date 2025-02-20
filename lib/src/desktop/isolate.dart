@@ -72,7 +72,22 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
       sendPort.send(('log', (rec.message)));
     }
   });
-  final task = await getModifiedTask(originalTask);
+  // process native callbacks beforeTaskStart, onTaskStart and onAuth
+  final statusUpdate =
+      await originalTask.options?.beforeTaskStartCallBack?.call(originalTask);
+  if (statusUpdate != null) {
+    log.fine(
+        'TaskId ${originalTask.taskId} interrupted by beforeTaskStart callback');
+    // set global vars for final TaskStatusUpdate
+    taskException = statusUpdate.exception;
+    responseBody = statusUpdate.responseBody;
+    responseHeaders = statusUpdate.responseHeaders;
+    responseStatusCode = statusUpdate.responseStatusCode;
+    processStatusUpdateInIsolate(originalTask, statusUpdate.status, sendPort);
+    return;
+  }
+  final task =
+      await getModifiedTask(originalTask); // processes onStart and onAuth
   // start listener/processor for incoming messages
   unawaited(listenToIncomingMessages(task, messagesToIsolate, sendPort));
   processStatusUpdateInIsolate(task, TaskStatus.running, sendPort);
@@ -255,7 +270,9 @@ void processStatusUpdateInIsolate(
       statusUpdate.charSet,
     ));
   }
-  task.options?.onTaskFinishedCallBack?.call(statusUpdate);
+  if (status.isFinalState) {
+    task.options?.onTaskFinishedCallBack?.call(statusUpdate);
+  }
 }
 
 /// Processes a progress update for the [task]
