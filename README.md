@@ -858,7 +858,7 @@ To add a callback to a `Task`, set its `options` property, e.g. to add an onTask
 final task = DownloadTask(url: 'https://google.com',
    options: TaskOptions(onTaskStart: myStartCallback));
 ```
-where `myStartCallback` must be a top level or static function.
+where `myStartCallback` must be a top level or static function, and must be annotated with `@pragma("vm:entry-point")` to ensure it can be called from native code.
 
 For most situations, using the event listeners or registered "regular" callbacks is recommended, as they run in the normal application context on the main isolate. Native callbacks are called directly from native code (iOS, Android or Desktop) and therefore behave differently:
 * Native callbacks are called even when an application is suspended

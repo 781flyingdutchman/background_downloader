@@ -3,6 +3,7 @@
 * [Breaking] removes references to `asAndroidUri` - use the new methods on the `uri` property instead
 * Adds option to configure a `canceled` notification (instead of cancellation defaulting to the `error` notification)
 * Fixes bug with `request` when using `PUT` or `PATCH` requests
+* Fixes bug for multi-part uploads when field values are formatted as a JSON string and contain non-ASCII characters
 * Bumps minimum iOS version to 14
 
 ### Uri operations

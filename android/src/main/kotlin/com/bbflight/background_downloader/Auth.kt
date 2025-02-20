@@ -1,10 +1,12 @@
 package com.bbflight.background_downloader
 
 import android.net.Uri
+import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.Serializable
 
 @Serializable
 @Suppress("unused")
+@OptIn(InternalSerializationApi::class)
 class Auth(
     private var accessToken: String? = null,
     private var accessHeaders: Map<String, String> = emptyMap(),

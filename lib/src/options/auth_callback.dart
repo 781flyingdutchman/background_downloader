@@ -11,6 +11,7 @@ typedef OnAuthCallback = Future<Task?> Function(Task original);
 /// The callback attempts to refresh the access token using the information
 /// contained in the [Auth] object, and returns the task, which now contains an
 /// updated [Auth] object
+@pragma("vm:entry-point")
 Future<Task?> defaultOnAuth(Task task) async {
   final auth = task.options?.auth;
   if (auth == null) {

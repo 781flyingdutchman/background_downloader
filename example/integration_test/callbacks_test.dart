@@ -49,6 +49,7 @@ void _sendCounterToMainIsolate() {
   sendPort?.send(callbackCounter);
 }
 
+@pragma("vm:entry-point")
 Future<Task?> onTaskStartCallbackNoChange(Task original) async {
   callbackCounter++;
   print(
@@ -57,6 +58,7 @@ Future<Task?> onTaskStartCallbackNoChange(Task original) async {
   return null;
 }
 
+@pragma("vm:entry-point")
 Future<Task?> onTaskStartCallbackUrlChange(Task original) async {
   callbackCounter++;
   print(
@@ -65,6 +67,7 @@ Future<Task?> onTaskStartCallbackUrlChange(Task original) async {
   return original.copyWith(url: '$getTestUrl?json=true&param1=changed');
 }
 
+@pragma("vm:entry-point")
 Future<Task?> onTaskStartCallbackHeaderChange(Task original) async {
   callbackCounter++;
   print(
@@ -73,6 +76,7 @@ Future<Task?> onTaskStartCallbackHeaderChange(Task original) async {
   return original.copyWith(headers: {'Auth': 'newBearer'});
 }
 
+@pragma("vm:entry-point")
 Future<void> onTaskFinishedCallback(TaskStatusUpdate statusUpdate) async {
   if (statusUpdate.status == TaskStatus.complete &&
       statusUpdate.responseStatusCode == 200) {
@@ -84,6 +88,7 @@ Future<void> onTaskFinishedCallback(TaskStatusUpdate statusUpdate) async {
   _sendCounterToMainIsolate();
 }
 
+@pragma("vm:entry-point")
 Future<Task?> onAuthCallbackNoChange(Task original) async {
   callbackCounter++;
   print('In onAuthCallbackNoChange. Callback counter is now $callbackCounter');

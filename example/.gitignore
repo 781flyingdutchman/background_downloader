@@ -11,6 +11,7 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
+temp_output.txt
 
 # IntelliJ related
 *.iml
@@ -34,6 +35,8 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+devtools_options.yaml
+
 
 # Symbolication related
 app.*.symbols
@@ -45,3 +48,12 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Android files
+android/app/.cxx/
+
+# iOS files
+swiftpm
+
+# MacOS files
+macos/Flutter/GeneratedPluginRegistrant.swift
