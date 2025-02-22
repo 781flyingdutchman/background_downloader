@@ -89,8 +89,9 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         var requireWifi = RequireWiFi.asSetByTask // global setting
         val localResumeData =
             mutableMapOf<String, ResumeData>() // by taskId, for pause notifications
-        var canceledTaskIds = mutableMapOf<String, Long>() // <taskId, timeMillis>
+        var cancelUpdateSentForTaskId = mutableMapOf<String, Long>() // <taskId, timeMillis>
         val pausedTaskIds = mutableSetOf<String>() // <taskId>, acts as flag
+        val canceledTaskIds = mutableSetOf<String>() // <taskId>, acts as flag
         val parallelDownloadTaskWorkers = HashMap<String, ParallelDownloadTaskWorker>()
         val tasksToReEnqueue = mutableSetOf<Task>() // for when WiFi requirement changes
         val taskIdsRequiringWiFi =
@@ -121,9 +122,9 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             } else {
                 Log.w(TAG, "Could not find backgroundChannel for taskId ${task.taskId}")
             }
-            // store host if we have a HoldingQueue
-            holdingQueue?.hostByTaskId?.set(task.taskId, task.host())
-            canceledTaskIds.remove(task.taskId)
+            holdingQueue?.hostByTaskId?.set(task.taskId, task.host()) // store host if we have a HoldingQueue
+            canceledTaskIds.remove(task.taskId) // reset flag
+            cancelUpdateSentForTaskId.remove(task.taskId) // reset flag
             val dataBuilder = Data.Builder().putString(TaskWorker.keyTask, taskToJsonString(task))
             if (notificationConfigJsonString != null) {
                 dataBuilder.putString(
@@ -237,6 +238,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         ): Boolean {
             // cancel chunk tasks if this is a ParallelDownloadTask
             parallelDownloadTaskWorkers[taskId]?.cancelAllChunkTasks()
+            // get the workInfos for the task (should be only one)
             val workInfos = withContext(Dispatchers.IO) {
                 workManager.getWorkInfosByTag("taskId=$taskId").get()
             }
@@ -244,6 +246,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 Log.d(TAG, "Could not find tasks to cancel")
                 return false
             }
+            // send cancel update and remove notification
             val prefs = PreferenceManager.getDefaultSharedPreferences(context)
             val tasksMap = getTaskMap(prefs)
             for (workInfo in workInfos) {
@@ -252,6 +255,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     // and remove associated notification
                     val task = tasksMap[taskId]
                     if (task != null) {
+                        canceledTaskIds.add(task.taskId)
                         processStatusUpdate(
                             task,
                             TaskStatus.canceled,
@@ -554,6 +558,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 val taskId = tags.first().substring(7)
                 val task = tasksMap[taskId]
                 if (task != null) {
+                    canceledTaskIds.add(task.taskId)
                     processStatusUpdate(
                         task,
                         TaskStatus.canceled,
