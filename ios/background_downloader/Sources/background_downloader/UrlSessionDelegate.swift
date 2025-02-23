@@ -81,7 +81,6 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
         task: URLSessionTask,
         didCompleteWithError error: Error?
     ) {
-        os_log("In didCompleteWithError", log: log, type: .error)
         guard let bgdTask = getTaskFrom(urlSessionTask: task) else { // refers to "our" task, not a URLSessionTask
             os_log("Could not find task related to urlSessionTask %d", log: log, type: .error, task.taskIdentifier)
             return
