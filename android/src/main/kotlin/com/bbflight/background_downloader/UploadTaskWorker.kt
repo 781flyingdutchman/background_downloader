@@ -612,17 +612,15 @@ class LimitedInputStream(
         if (bytesRead >= limit) {
             return -1
         }
-
         // Adjust length to not exceed limit
-        val remainingBytes: Long = limit - bytesRead // Declare remainingBytes explicitly as a Long
+        val remainingBytes: Long = limit - bytesRead
         val maxBytesToRead =
-            minOf(len.toLong(), remainingBytes).toInt() // Safely cast after taking min
+            minOf(len.toLong(), remainingBytes).toInt()
         val result = inputStream.read(b, off, maxBytesToRead)
 
         if (result != -1) {
             bytesRead += result
         }
-
         return result
     }
 }

@@ -244,7 +244,7 @@ class Task(
      * The server-suggested filename is obtained from the  [responseHeaders] entry
      * "Content-Disposition"
      */
-    suspend fun withSuggestedFilenameFromResponseHeaders(
+    fun withSuggestedFilenameFromResponseHeaders(
         context: Context,
         responseHeaders: MutableMap<String, MutableList<String>>,
         unique: Boolean = false

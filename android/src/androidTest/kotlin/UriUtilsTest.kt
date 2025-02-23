@@ -15,14 +15,14 @@ class UriUtilsTest {
 
         val packedString = UriUtils.pack(filename, uri)
 
-        assertEquals(":::$filename::::::${uri.toString()}:::", packedString)
+        assertEquals(":::$filename::::::$uri:::", packedString)
     }
 
     @Test
     fun unpack_should_unpack_a_valid_packed_string_into_filename_and_uri() {
         val filename = "myFile.txt"
         val uri = Uri.parse("content://com.example.app/document/123")
-        val packedString = ":::$filename::::::${uri.toString()}:::"
+        val packedString = ":::$filename::::::$uri:::"
 
         val (unpackedFilename, unpackedUri) = UriUtils.unpack(packedString)
 

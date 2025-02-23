@@ -10,7 +10,7 @@ To upload a file, create an [UploadTask](https://pub.dev/documentation/backgroun
 
 The plugin supports [headers](#headers), [retries](#retries), [priority](#priority), [requiring WiFi](#requiring-wifi) before starting the up/download, user-defined [metadata and display name](#metadata-and-displayname) and GET, [POST](#post-requests) and other http(s) [requests](#http-request-method), and can be [configured](#configuration) by platform. You can [manage  the tasks in the queue](#managing-tasks-and-the-queue) (e.g. cancel, pause and resume), and have different handlers for updates by [group](#grouping-tasks) of tasks. Downloaded files can be moved to [shared storage](#shared-and-scoped-storage) to make them available outside the app.
 
-Pickers for files, photos/videos and directories are included for iOS and Android, and the downloader supports `Uri` based file locations and operations that are consistent across all platforms, including Android's `content://` URIs (used for the Storage Access Framework) and iOSs URL Bookmarks for persistent file locators (see [working with URIs](docs/URI.md)).
+Pickers for files, photos/videos and directories are included for iOS and Android, and the downloader supports `Uri` based file locations and operations that are consistent across all platforms, including Android's `content://` URIs (used for the Storage Access Framework) and iOSs URL Bookmarks for persistent file locators (see [working with URIs](doc/URI.md)).
 
 No setup is required for [Android](#android) (except when using notifications), Windows and Linux, and only minimal [setup for iOS](#ios) and [MacOS](#macos).
 
@@ -303,7 +303,7 @@ The downloader will only store the file upon success (so there will be no partia
 
 You can also pass an absolute path to the downloader by using `BaseDirectory.root` combined with the path in `directory`. This allows you to reach any file destination on your platform. However, be careful: the reason you should not normally do this (and use e.g. `BaseDirectory.applicationDocuments` instead) is that the location of the app's documents directory may change between application starts (on iOS, and on Android in some cases), and may therefore fail for downloads that complete while the app is suspended.  You should therefore never store permanently, or hard-code, an absolute path, unless you are absolutely sure that that path is 'stable'.
 
-Android has two storage modes: internal (default) and external storage. Read the [configuration document](docs/CONFIG.md) for details on how to configure your app to use external storage instead of the default.
+Android has two storage modes: internal (default) and external storage. Read the [configuration document](doc/CONFIG.md) for details on how to configure your app to use external storage instead of the default.
 
 #### Server-suggested filename
 
@@ -326,7 +326,7 @@ print('Wrong use filename=${task.filename}'); // this will print '?' as 'task' h
 
 The downloader includes file, photo/video and directory pickers for Android and iOS (and for Desktop works alongside the [file_picker](https://pub.dev/packages/file_picker) package) and works well with Android's Storage Access Framework. If you need this functionality, then you should use URIs to locate file/media and directory locations. You use the `FileDownloader().uri` property to work with Uris, and use the associated `UriDownloadTask` and `UriUploadTask` instead of `DownloadTask` and `UploadTask`.
 
-For details, see [working with URIs](docs/URI.md).
+For details, see [working with URIs](doc/URI.md).
 
 ### A batch of files
 
@@ -719,7 +719,7 @@ If you need to upload multiple files in a single request, create a [MultiUploadT
 
 The `baseDirectory` and `directory` fields of the `MultiUploadTask` determine the expected location of the file referenced, unless the filename used in any of the 3 formats above is an absolute path (e.g. "/data/user/0/com.my_app/file1.txt"). In that case, the absolute path is used and the `baseDirectory` and `directory` fields are ignored for that element of the list.
 
-If you are using URIs to locate your files (see [working with URIs](docs/URI.md)) then you can replace the `filename` with the Uri (as `Uri` type, not `String`) in each of the formats mentioned above.
+If you are using URIs to locate your files (see [working with URIs](doc/URI.md)) then you can replace the `filename` with the Uri (as `Uri` type, not `String`) in each of the formats mentioned above.
 
 Once the `MultiUpoadTask` is created, the fields `fileFields`, `filenames` and `mimeTypes` will contain the parsed items, and the fields `fileField`, `filename` and `mimeType` contain those lists encoded as a JSON string.
 
@@ -1088,7 +1088,7 @@ Several aspects of the downloader can be configured on startup:
 * On Android, whether or not to use external storage
 * On iOS, localizing the notification button texts
 
-Please read the [configuration document](docs/CONFIG.md) for details on how to configure.
+Please read the [configuration document](doc/CONFIG.md) for details on how to configure.
 
 ## Limitations
 

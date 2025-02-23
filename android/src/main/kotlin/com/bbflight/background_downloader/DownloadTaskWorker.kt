@@ -199,7 +199,7 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
                     val resolver = applicationContext.contentResolver
                     // create destination Uri if not already exists
                     var documentFile = DocumentFile.fromTreeUri(applicationContext, directoryUri)
-                    destUri = destUri ?: documentFile?.createFile(task.mimeType, uriFilename)?.uri;
+                    destUri = destUri ?: documentFile?.createFile(task.mimeType, uriFilename)?.uri
                     if (destUri == null) {
                         val message =
                             "Failed to create document within directory with URI: $directoryUri"

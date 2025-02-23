@@ -12,8 +12,6 @@ import androidx.preference.PreferenceManager
 import com.bbflight.background_downloader.TaskWorker.Companion.TAG
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.URLDecoder
 import javax.net.ssl.HttpsURLConnection
@@ -22,7 +20,6 @@ import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 import kotlin.io.path.Path
 import kotlin.io.path.pathString
-import kotlin.random.Random
 
 
 /**
