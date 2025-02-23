@@ -72,4 +72,9 @@ final class DesktopDownloader extends BaseDownloader {
       DownloadTask task, String contentDisposition) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<List<bool>> enqueueAll(List<Task> tasks) {
+    throw UnimplementedError();
+  }
 }

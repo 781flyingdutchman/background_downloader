@@ -87,6 +87,8 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                 await methodReset(call: call, result: result)
             case "enqueue":
                 await methodEnqueue(call: call, result: result)
+            case "enqueueAll":
+                await methodEnqueueAll(call: call, result: result)
             case "allTasks":
                 await methodAllTasks(call: call, result: result)
             case "cancelTasksWithIds":
@@ -154,9 +156,9 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         }
     }
     
-    /// Starts the download for one task, passed as map of values representing a Task
+    /// Enqueues one task
     ///
-    /// Returns true if successful, but will emit a status update that the background task is running
+    /// Returns true if successful
     private func methodEnqueue(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let args = call.arguments as! [Any]
         let taskJsonString = args[0] as! String
@@ -187,6 +189,57 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             postResult(result: result, value: true)
         }
     }
+    
+    /// Enqueues a list of tasks
+        ///
+        /// Returns a list of equal length of booleans indicating whether each individual enqueue succeeded
+        private func methodEnqueueAll(call: FlutterMethodCall, result: @escaping FlutterResult) {
+            guard let args = call.arguments as? [Any],
+                  let taskListJsonString = args[0] as? String,
+                  let notificationConfigListJsonString = args[1] as? String,
+                  let tasks = try? JSONDecoder().decode([Task].self, from: taskListJsonString.data(using: .utf8)!),
+                  let notificationConfigs = try? JSONDecoder().decode([NotificationConfig?].self, from: notificationConfigListJsonString.data(using: .utf8)!) else {
+                os_log("Invalid arguments to enqueue: %@", log: log, String(describing: call.arguments))
+                postResult(result: result, value: [])
+                return
+            }
+
+            _Concurrency.Task.detached { // Run the loop off the main thread
+                var results: [Bool] = []
+
+                for (index, task) in tasks.enumerated() {
+                    let notificationConfig = notificationConfigs.indices.contains(index) ? notificationConfigs[index] : nil
+                    let notificationConfigJsonString = notificationConfig != nil ? try? String(data: JSONEncoder().encode(notificationConfig), encoding: .utf8) : nil
+                    guard let taskJsonString = jsonStringFor(task: task) else {
+                        os_log("Failed to serialize taskId %@", log: log, task.taskId)
+                        results.append(false)
+                        continue
+                    }
+                    if BDPlugin.holdingQueue == nil {
+                        // Enqueue directly using doEnqueue
+                        let success = await self.doEnqueue(taskJsonString: taskJsonString, notificationConfigJsonString: notificationConfigJsonString, resumeDataAsBase64String: "")
+                        results.append(success)
+                    } else {
+                        // Add to holding queue
+                        guard validateUrl(task) != nil else {
+                            os_log("Invalid url: %@", log: log, type: .info, task.url)
+                            results.append(false)
+                            continue
+                        }
+                        os_log("Enqueueing task with id %@ to the HoldingQueue", log: log, type: .info, task.taskId)
+                        await BDPlugin.holdingQueue?.add(item: EnqueueItem(task: task, notificationConfigJsonString: notificationConfigJsonString, resumeDataAsBase64String: ""))
+                        processStatusUpdate(task: task, status: .enqueued)
+                        results.append(true)
+                    }
+                }
+
+                // Return results to the main thread *after* the loop completes
+                await MainActor.run {
+                    postResult(result: result, value: results)
+                }
+            }
+        }
+    
     
     /// Do the actual enqueue as a URLSessionTask
     public func doEnqueue(taskJsonString: String, notificationConfigJsonString: String?, resumeDataAsBase64String: String) async -> Bool {

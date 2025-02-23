@@ -1,6 +1,7 @@
 ## 9.0.0
 * Introduces URI operations, including file/photo/video/directory pickers, under the `uri` property, and `UriDownloadTask` and `UriUploadTask`. See [Working with URIs](docs/URI.md). 
 * [Breaking] removes references to `asAndroidUri` - use the new methods on the `uri` property instead
+* Adds `enqueueAll` to enqueue a list of tasks (non-blocking and with better performance when compared to calling `enqueue` for each task)
 * Adds native callback `beforeTaskStartCallback` to `TaskOptions`, that is called just before the task starts executing. If it returns a non-null `TaskStatusUpdate` then this forces the task to finish before it starts, with that `TaskStatusUpdate`
 * Adds option to configure a `canceled` notification (instead of cancellation defaulting to the `error` notification)
 * Fixes bug with `request` when using `PUT` or `PATCH` requests

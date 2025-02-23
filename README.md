@@ -98,6 +98,8 @@ final successfullyEnqueued = await FileDownloader().enqueue(DownloadTask(
                                 updates: Updates.statusAndProgress));
 ```
 
+**Note:** If you need to enqueue a large number of tasks, create a list of `Task` objects and use `FileDownloader().enqueueAll(tasks)` for better, non-blocking performance.
+
 ### Uploads example
 
 ```dart
@@ -818,7 +820,7 @@ for (var n = 0; n < 100; n++) {
 
 Because it is possible that an error occurs when the taskQueue eventually actually enqueues the task with the FileDownloader, you can listen to the `enqueueErrors` stream for tasks that failed to enqueue.
 
-A common use for the `MemoryTaskQueue` is enqueueing a large number of tasks. This can 'choke' the downloader if done in a loop, but is easy to do when adding all tasks to a queue. The `minInterval` field of the `MemoryTaskQueue` ensures that the tasks are fed to the `FileDownloader` at a rate that does not grind your app to a halt.
+Before the introduction of `enqueueAll`, a common use for the `TaskQueue` was enqueueing a large number of tasks without 'choking' the downloader if done in a loop. The current recommended method for that scenario is to use `enqueuAll`, though the `TaskQueue` can be used if not all tasks are available at the time of enqueue.  Use property `minInterval` to pace the rate at which tasks are enqueued using the `TaskQueue`. 
 
 The default `TaskQueue` is the `MemoryTaskQueue` which, as the  name suggests, keeps everything in memory. This is fine for most situations, but be aware that the queue may get dropped if the OS aggressively moves the app to the background. Tasks still waiting in the queue will not be enqueued, and will therefore be lost. If you want a `TaskQueue` with more persistence, or add different prioritization and concurrency roles, then subclass the `MemoryTaskQueue` and add your own persistence or logic.
 In addition, if your app is suspended by the OS due to resource constraints, tasks waiting in the queue will not be enqueued to the native platform and will not run in the background. TaskQueues are therefore best for situations where you expect the queue to be emptied while the app is still in the foreground.

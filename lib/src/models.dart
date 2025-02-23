@@ -506,7 +506,11 @@ final class TaskNotificationConfig {
       this.tapOpensFile = false,
       this.groupNotificationId = ''}) {
     assert(
-        running != null || complete != null || error != null || paused != null,
+        running != null ||
+            complete != null ||
+            error != null ||
+            paused != null ||
+            canceled != null,
         'At least one notification must be set');
   }
 
@@ -522,6 +526,16 @@ final class TaskNotificationConfig {
         'tapOpensFile': tapOpensFile,
         'groupNotificationId': groupNotificationId
       };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TaskNotificationConfig &&
+          runtimeType == other.runtimeType &&
+          taskOrGroup == other.taskOrGroup;
+
+  @override
+  int get hashCode => taskOrGroup.hashCode;
 }
 
 /// Shared storage destinations

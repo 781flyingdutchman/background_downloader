@@ -213,6 +213,13 @@ interface class FileDownloader {
   ///   (e.g. file size, network speed, time remaining)
   Future<bool> enqueue(Task task) => _downloader.enqueue(task);
 
+  /// Enqueues a list of tasks and returns a list of booleans indicating whether
+  /// each task was successfully enqueued
+  ///
+  /// See [enqueue] for details
+  Future<List<bool>> enqueueAll(List<Task> tasks) =>
+      _downloader.enqueueAll(tasks);
+
   /// Download a file and return the final [TaskStatusUpdate]
   ///
   /// Different from [enqueue], this method returns a [Future] that completes
@@ -740,7 +747,7 @@ interface class FileDownloader {
       bool progressBar = false,
       bool tapOpensFile = false,
       String groupNotificationId = ''}) {
-    _downloader.notificationConfigs.add(TaskNotificationConfig(
+    _addOrUpdateTaskNotificationConfig(TaskNotificationConfig(
         taskOrGroup: task,
         running: running,
         complete: complete,
@@ -807,7 +814,7 @@ interface class FileDownloader {
       bool progressBar = false,
       bool tapOpensFile = false,
       String groupNotificationId = ''}) {
-    _downloader.notificationConfigs.add(TaskNotificationConfig(
+    _addOrUpdateTaskNotificationConfig(TaskNotificationConfig(
         taskOrGroup: group,
         running: running,
         complete: complete,
@@ -874,7 +881,7 @@ interface class FileDownloader {
       bool progressBar = false,
       bool tapOpensFile = false,
       String groupNotificationId = ''}) {
-    _downloader.notificationConfigs.add(TaskNotificationConfig(
+    _addOrUpdateTaskNotificationConfig(TaskNotificationConfig(
         taskOrGroup: null,
         running: running,
         complete: complete,
@@ -885,6 +892,13 @@ interface class FileDownloader {
         tapOpensFile: tapOpensFile,
         groupNotificationId: groupNotificationId));
     return this;
+  }
+
+  /// Helper to add or update a task notification config
+  void _addOrUpdateTaskNotificationConfig(
+      TaskNotificationConfig taskNotificationConfig) {
+    _downloader.notificationConfigs.remove(taskNotificationConfig);
+    _downloader.notificationConfigs.add(taskNotificationConfig);
   }
 
   /// Perform a server request for this [request]

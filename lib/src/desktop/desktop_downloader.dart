@@ -65,6 +65,15 @@ final class DesktopDownloader extends BaseDownloader {
     return true;
   }
 
+  @override
+  Future<List<bool>> enqueueAll(List<Task> tasks) async {
+    final results = <bool>[];
+    for (final task in tasks) {
+      results.add(await enqueue(task));
+    }
+    return results;
+  }
+
   /// Advance the queue if it's not empty and there is room in the run queue
   void _advanceQueue() {
     while (_running.length < maxConcurrent && _queue.isNotEmpty) {

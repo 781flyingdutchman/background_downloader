@@ -237,6 +237,34 @@ abstract base class NativeDownloader extends BaseDownloader {
   }
 
   @override
+  Future<List<bool>> enqueueAll(List<Task> tasks) async {
+    for (final task in tasks.where((task) => task.allowPause)) {
+      canResumeTask[task] = Completer();
+    }
+    final (
+      String tasksJsonString,
+      String notificationConfigsJsonString
+    ) = await compute(
+        _taskAndNotificationConfigJsonStrings, (tasks, notificationConfigs));
+    final result = await methodChannel.invokeMethod<List<Object?>>(
+            'enqueueAll', [tasksJsonString, notificationConfigsJsonString]) ??
+        [];
+    return result.map((item) => item is bool ? item : false).toList();
+  }
+
+  static (String, String) _taskAndNotificationConfigJsonStrings(
+      (List<Task>, Set<TaskNotificationConfig>) tasksAndNotificationConfigs) {
+    final (tasks, notificationConfigs) = tasksAndNotificationConfigs;
+    final tasksJsonString = jsonEncode(tasks);
+    final configs = tasks
+        .map((task) => BaseDownloader.notificationConfigForTaskUsingConfigSet(
+            task, notificationConfigs))
+        .toList();
+    final notificationConfigsJsonString = jsonEncode(configs);
+    return (tasksJsonString, notificationConfigsJsonString);
+  }
+
+  @override
   Future<int> reset(String group) async {
     final retryAndPausedTaskCount = await super.reset(group);
     final nativeCount =
@@ -472,6 +500,21 @@ final class AndroidDownloader extends NativeDownloader {
 
   @override
   Future<bool> enqueue(Task task) async {
+    await _registerCallbackDispatcher(task);
+    return super.enqueue(task);
+  }
+
+  @override
+  Future<List<bool>> enqueueAll(List<Task> tasks) async {
+    for (final task in tasks) {
+      await _registerCallbackDispatcher(task);
+    }
+    return super.enqueueAll(tasks);
+  }
+
+  /// On Android, need to register [_callbackDispatcherRawHandle] upon first
+  /// encounter of a task with callbacks
+  Future<void> _registerCallbackDispatcher(Task task) async {
     // on Android, need to register [_callbackDispatcherRawHandle] upon first
     // encounter of a task with callbacks
     if (task.options?.hasCallback == true &&
@@ -492,7 +535,6 @@ final class AndroidDownloader extends NativeDownloader {
         log.warning('Could not obtain rawHandle for initCallbackDispatcher');
       }
     }
-    return super.enqueue(task);
   }
 
   @override

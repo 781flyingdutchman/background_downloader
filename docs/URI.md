@@ -22,6 +22,7 @@ Consider using the URI approach when:
 *   You are working with files that might not have a direct file path representation (e.g., files accessed through content providers on Android).
 *   You want to download directly to an (external) storage destination on Android and bypass the temporary file that is used in the traditional approach.
 
+Note that Uri downloads cannot be paused or resumed.
 
 ## Key Concepts
 

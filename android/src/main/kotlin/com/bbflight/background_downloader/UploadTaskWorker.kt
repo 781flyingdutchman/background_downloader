@@ -234,7 +234,6 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
                     // Special treatment for partial uploads
                     fis.skip(start)
                 }
-
                 LimitedInputStream(fis, contentLength).use { limitedInputStream ->
                     DataOutputStream(connection.outputStream.buffered()).use { outputStream ->
                         return@withContext transferBytes(

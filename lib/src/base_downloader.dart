@@ -85,7 +85,7 @@ abstract base class BaseDownloader {
   final groupNotificationTapCallbacks = <String, TaskNotificationTapCallback>{};
 
   /// List of notification configurations
-  final notificationConfigs = <TaskNotificationConfig>[];
+  final notificationConfigs = <TaskNotificationConfig>{};
 
   /// StreamController for [TaskUpdate] updates
   var updates = StreamController<TaskUpdate>();
@@ -216,14 +216,24 @@ abstract base class BaseDownloader {
   ///
   /// Matches on task, then on group, then on default
   TaskNotificationConfig? notificationConfigForTask(Task task) {
+    return notificationConfigForTaskUsingConfigSet(task, notificationConfigs);
+  }
+
+  /// Returns the [TaskNotificationConfig] for this [task] or null
+  ///
+  /// Matches on task, then on group, then on default
+  /// This method is used in isolate context, where the [notificationConfigs]
+  /// are not directly accessible
+  static TaskNotificationConfig? notificationConfigForTaskUsingConfigSet(
+      Task task, Set<TaskNotificationConfig> taskNotificationConfigs) {
     if (task.group == chunkGroup || task is DataTask) {
       return null;
     }
-    return notificationConfigs
+    return taskNotificationConfigs
             .firstWhereOrNull((config) => config.taskOrGroup == task) ??
-        notificationConfigs
+        taskNotificationConfigs
             .firstWhereOrNull((config) => config.taskOrGroup == task.group) ??
-        notificationConfigs
+        taskNotificationConfigs
             .firstWhereOrNull((config) => config.taskOrGroup == null);
   }
 
@@ -233,8 +243,11 @@ abstract base class BaseDownloader {
     if (task.allowPause) {
       canResumeTask[task] = Completer();
     }
-    return true;
+    return true; // dummy return, actual enqueue happens in subclass
   }
+
+  /// Enqueue a list of tasks
+  Future<List<bool>> enqueueAll(List<Task> tasks);
 
   /// Enqueue the [task] and wait for completion
   ///

@@ -122,7 +122,10 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             } else {
                 Log.w(TAG, "Could not find backgroundChannel for taskId ${task.taskId}")
             }
-            holdingQueue?.hostByTaskId?.set(task.taskId, task.host()) // store host if we have a HoldingQueue
+            holdingQueue?.hostByTaskId?.set(
+                task.taskId,
+                task.host()
+            ) // store host if we have a HoldingQueue
             canceledTaskIds.remove(task.taskId) // reset flag
             cancelUpdateSentForTaskId.remove(task.taskId) // reset flag
             val dataBuilder = Data.Builder().putString(TaskWorker.keyTask, taskToJsonString(task))
@@ -414,6 +417,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         runBlocking {
             when (call.method) {
                 "enqueue" -> methodEnqueue(call, result)
+                "enqueueAll" -> methodEnqueueAll(call, result)
                 "reset" -> methodReset(call, result)
                 "allTasks" -> methodAllTasks(call, result)
                 "cancelTasksWithIds" -> methodCancelTasksWithIds(call, result)
@@ -532,6 +536,76 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         }
     }
 
+    /**
+     * Starts a list of tasks, passed as a JSON string representing a list of [Task] objects.
+     *
+     * Returns a list of booleans indicating the success of each individual enqueue operation.
+     */
+    private suspend fun methodEnqueueAll(call: MethodCall, result: Result) {
+        val args = call.arguments as List<*>
+        val taskListJsonString = args[0] as String
+        val notificationConfigListJsonString = args[1] as String
+
+        try {
+            val tasks = Json.decodeFromString<List<Task>>(taskListJsonString)
+            val notificationConfigs =
+                Json.decodeFromString<List<NotificationConfig?>>(notificationConfigListJsonString)
+            val results = mutableListOf<Boolean>()
+            for ((index, task) in tasks.withIndex()) {
+                val notificationConfig = notificationConfigs.getOrNull(index)
+                val notificationConfigJsonString =
+                    notificationConfig?.let { Json.encodeToString(it) }
+                try {
+                    URL(task.url)
+                    withContext(Dispatchers.IO) {
+                        URLDecoder.decode(task.url, "UTF-8")
+                    }
+                } catch (_: MalformedURLException) {
+                    Log.i(TAG, "MalformedURLException for taskId ${task.taskId}")
+                    results.add(false)
+                    continue
+                } catch (_: IllegalArgumentException) {
+                    Log.i(TAG, "Could not url-decode url for taskId ${task.taskId}")
+                    results.add(false)
+                    continue
+                }
+                // Enqueue or add to HoldingQueue
+                if (holdingQueue == null) {
+                    results.add(
+                        doEnqueue(
+                            applicationContext,
+                            task,
+                            notificationConfigJsonString,
+                            resumeData = null,
+                            plugin = this
+                        )
+                    )
+                } else {
+                    Log.i(TAG, "Enqueueing task with id ${task.taskId} to the HoldingQueue")
+                    holdingQueue?.add(
+                        EnqueueItem(
+                            context = applicationContext,
+                            task = task,
+                            notificationConfigJsonString = notificationConfigJsonString,
+                            resumeData = null,
+                            plugin = this
+                        )
+                    )
+                    processStatusUpdate(
+                        task,
+                        TaskStatus.enqueued,
+                        PreferenceManager.getDefaultSharedPreferences(applicationContext),
+                        context = applicationContext
+                    )
+                    results.add(true)
+                }
+            }
+            result.success(results)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error decoding JSON or processing tasks: ${e.message}")
+            result.success(emptyList<Boolean>()) // Return an empty list on error
+        }
+    }
 
     /**
      * Resets the download worker by cancelling all ongoing download tasks for the group
