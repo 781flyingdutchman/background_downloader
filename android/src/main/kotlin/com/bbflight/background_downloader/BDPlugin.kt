@@ -541,69 +541,75 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      *
      * Returns a list of booleans indicating the success of each individual enqueue operation.
      */
-    private suspend fun methodEnqueueAll(call: MethodCall, result: Result) {
-        val args = call.arguments as List<*>
-        val taskListJsonString = args[0] as String
-        val notificationConfigListJsonString = args[1] as String
-
-        try {
-            val tasks = Json.decodeFromString<List<Task>>(taskListJsonString)
-            val notificationConfigs =
-                Json.decodeFromString<List<NotificationConfig?>>(notificationConfigListJsonString)
-            val results = mutableListOf<Boolean>()
-            for ((index, task) in tasks.withIndex()) {
-                val notificationConfig = notificationConfigs.getOrNull(index)
-                val notificationConfigJsonString =
-                    notificationConfig?.let { Json.encodeToString(it) }
-                try {
-                    URL(task.url)
-                    withContext(Dispatchers.IO) {
+    private fun methodEnqueueAll(call: MethodCall, result: Result) {
+        if (scope == null) {
+            result.success(emptyList<Boolean>())
+            return
+        }
+        val plugin = this
+        scope!!.launch(Dispatchers.IO) {
+            val args = call.arguments as List<*>
+            val taskListJsonString = args[0] as String
+            val notificationConfigListJsonString = args[1] as String
+            try {
+                val tasks = Json.decodeFromString<List<Task>>(taskListJsonString)
+                val notificationConfigs =
+                    Json.decodeFromString<List<NotificationConfig?>>(
+                        notificationConfigListJsonString
+                    )
+                val results = mutableListOf<Boolean>()
+                for ((index, task) in tasks.withIndex()) {
+                    val notificationConfig = notificationConfigs.getOrNull(index)
+                    val notificationConfigJsonString =
+                        notificationConfig?.let { Json.encodeToString(it) }
+                    try {
+                        URL(task.url)
                         URLDecoder.decode(task.url, "UTF-8")
+                    } catch (_: MalformedURLException) {
+                        Log.i(TAG, "MalformedURLException for taskId ${task.taskId}")
+                        results.add(false)
+                        continue
+                    } catch (_: IllegalArgumentException) {
+                        Log.i(TAG, "Could not url-decode url for taskId ${task.taskId}")
+                        results.add(false)
+                        continue
                     }
-                } catch (_: MalformedURLException) {
-                    Log.i(TAG, "MalformedURLException for taskId ${task.taskId}")
-                    results.add(false)
-                    continue
-                } catch (_: IllegalArgumentException) {
-                    Log.i(TAG, "Could not url-decode url for taskId ${task.taskId}")
-                    results.add(false)
-                    continue
-                }
-                // Enqueue or add to HoldingQueue
-                if (holdingQueue == null) {
-                    results.add(
-                        doEnqueue(
-                            applicationContext,
+                    // Enqueue or add to HoldingQueue
+                    if (holdingQueue == null) {
+                        results.add(
+                            doEnqueue(
+                                applicationContext,
+                                task,
+                                notificationConfigJsonString,
+                                resumeData = null,
+                                plugin = plugin
+                            )
+                        )
+                    } else {
+                        Log.i(TAG, "Enqueueing task with id ${task.taskId} to the HoldingQueue")
+                        holdingQueue?.add(
+                            EnqueueItem(
+                                context = applicationContext,
+                                task = task,
+                                notificationConfigJsonString = notificationConfigJsonString,
+                                resumeData = null,
+                                plugin = plugin
+                            )
+                        )
+                        processStatusUpdate(
                             task,
-                            notificationConfigJsonString,
-                            resumeData = null,
-                            plugin = this
+                            TaskStatus.enqueued,
+                            PreferenceManager.getDefaultSharedPreferences(applicationContext),
+                            context = applicationContext
                         )
-                    )
-                } else {
-                    Log.i(TAG, "Enqueueing task with id ${task.taskId} to the HoldingQueue")
-                    holdingQueue?.add(
-                        EnqueueItem(
-                            context = applicationContext,
-                            task = task,
-                            notificationConfigJsonString = notificationConfigJsonString,
-                            resumeData = null,
-                            plugin = this
-                        )
-                    )
-                    processStatusUpdate(
-                        task,
-                        TaskStatus.enqueued,
-                        PreferenceManager.getDefaultSharedPreferences(applicationContext),
-                        context = applicationContext
-                    )
-                    results.add(true)
+                        results.add(true)
+                    }
                 }
+                result.success(results)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error decoding JSON or processing tasks: ${e.message}")
+                result.success(emptyList<Boolean>()) // Return an empty list on error
             }
-            result.success(results)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error decoding JSON or processing tasks: ${e.message}")
-            result.success(emptyList<Boolean>()) // Return an empty list on error
         }
     }
 
@@ -1187,7 +1193,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * For testing only
      *
      */
-    private suspend fun methodTestSuggestedFilename(call: MethodCall, result: Result) {
+    private fun methodTestSuggestedFilename(call: MethodCall, result: Result) {
         val args = call.arguments as List<*>
         val taskJsonMapString = args[0] as String
         val contentDisposition = args[1] as String
