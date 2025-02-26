@@ -696,9 +696,17 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      *
      * Returns true if all cancellations were successful
      */
-    private suspend fun methodCancelTasksWithIds(call: MethodCall, result: Result) {
-        @Suppress("UNCHECKED_CAST") val taskIds = call.arguments as List<String>
-        result.success(cancelTasksWithIds(applicationContext, taskIds))
+    private fun methodCancelTasksWithIds(call: MethodCall, result: Result) {
+        if (scope == null) {
+            result.success(false) // Or handle the error appropriately
+            return
+        }
+        scope!!.launch(Dispatchers.IO) {
+            @Suppress("UNCHECKED_CAST") val taskIds = call.arguments as List<String>
+            withContext(Dispatchers.Main) {
+                result.success(cancelTasksWithIds(applicationContext, taskIds))
+            }
+        }
     }
 
     /**

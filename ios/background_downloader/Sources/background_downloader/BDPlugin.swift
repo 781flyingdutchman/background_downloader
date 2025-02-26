@@ -199,14 +199,12 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                   let notificationConfigListJsonString = args[1] as? String,
                   let tasks = try? JSONDecoder().decode([Task].self, from: taskListJsonString.data(using: .utf8)!),
                   let notificationConfigs = try? JSONDecoder().decode([NotificationConfig?].self, from: notificationConfigListJsonString.data(using: .utf8)!) else {
-                os_log("Invalid arguments to enqueue: %@", log: log, String(describing: call.arguments))
+                os_log("Invalid arguments to enqueueAll: %@", log: log, String(describing: call.arguments))
                 postResult(result: result, value: [])
                 return
             }
-
             _Concurrency.Task.detached { // Run the loop off the main thread
                 var results: [Bool] = []
-
                 for (index, task) in tasks.enumerated() {
                     let notificationConfig = notificationConfigs.indices.contains(index) ? notificationConfigs[index] : nil
                     let notificationConfigJsonString = notificationConfig != nil ? try? String(data: JSONEncoder().encode(notificationConfig), encoding: .utf8) : nil
@@ -232,10 +230,9 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                         results.append(true)
                     }
                 }
-
-                // Return results to the main thread *after* the loop completes
+                let finalResults = results
                 await MainActor.run {
-                    postResult(result: result, value: results)
+                    postResult(result: result, value: finalResults)
                 }
             }
         }
