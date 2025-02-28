@@ -376,6 +376,12 @@ final class DesktopDownloader extends BaseDownloader {
   }
 
   @override
+  Future<List<bool>> pauseTaskList(Iterable<Task> tasksToPause) async {
+    final pauseCalls = tasksToPause.map((task) => pause(task));
+    return Future.wait(pauseCalls);
+  }
+
+  @override
   Future<bool> resume(Task task) async {
     if (await super.resume(task)) {
       task = awaitTasks.containsKey(task)

@@ -541,6 +541,35 @@ abstract base class BaseDownloader {
   /// Returns true if successful
   Future<bool> pause(Task task);
 
+  /// Pauses all tasks, or those in [tasks], or all tasks in group [group]
+  ///
+  /// Returns list of tasks that were paused
+  Future<List<DownloadTask>> pauseAll(
+      {List<DownloadTask>? tasks, String? group}) async {
+    final tasksToPause = switch ((tasks, group)) {
+      (List<DownloadTask> tasks, _) => tasks,
+      (_, String group) => await allTasks(group, false, false),
+      (null, null) => await allTasks('', true, true),
+    }.where((task) => task is DownloadTask).toList(growable: false);
+    final results =
+        await pauseTaskList(tasksToPause);
+    return tasksToPause
+        .asMap() // Convert to a Map (index -> Task)
+        .entries // Get the entries of the Map (Iterable<MapEntry<int, Task>>)
+        .where((entry) =>
+            results[entry.key] == true &&
+            entry.value is DownloadTask) // Filter by success and type
+        .map((entry) =>
+            entry.value as DownloadTask) // Cast and extract the DownloadTask
+        .toList(growable: false); // Convert back to a List
+  }
+
+  /// Pause all tasks in this list and return a list of the same length with
+  /// tasks that were paused marked with true.
+  ///
+  /// Platform-specific
+  Future<List<bool>> pauseTaskList(Iterable<Task> tasksToPause);
+
   /// Attempt to resume this [task]
   ///
   /// Returns true if successful

@@ -310,6 +310,15 @@ abstract base class NativeDownloader extends BaseDownloader {
       await methodChannel.invokeMethod<bool>('pause', task.taskId) ?? false;
 
   @override
+  Future<List<bool>> pauseTaskList(Iterable<Task> tasksToPause) async {
+    final taskIds =
+        tasksToPause.map((task) => task.taskId).toList(growable: false);
+    final results =
+        await methodChannel.invokeMethod<List<bool>>('pauseAll', taskIds);
+    return results ?? tasksToPause.map((task) => false).toList();
+  }
+
+  @override
   Future<bool> resume(Task task) async {
     if (await super.resume(task)) {
       task = awaitTasks.containsKey(task)
