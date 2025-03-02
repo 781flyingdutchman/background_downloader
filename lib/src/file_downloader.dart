@@ -217,7 +217,7 @@ interface class FileDownloader {
   /// each task was successfully enqueued
   ///
   /// See [enqueue] for details
-  Future<List<bool>> enqueueAll(List<Task> tasks) =>
+  Future<List<bool>> enqueueAll(Iterable<Task> tasks) =>
       _downloader.enqueueAll(tasks);
 
   /// Download a file and return the final [TaskStatusUpdate]
@@ -491,7 +491,7 @@ interface class FileDownloader {
   ///
   /// Every canceled task wil emit a [TaskStatus.canceled] update to
   /// the registered callback, if requested
-  Future<bool> cancelTasksWithIds(List<String> taskIds) =>
+  Future<bool> cancelTasksWithIds(Iterable<String> taskIds) =>
       _downloader.cancelTasksWithIds(taskIds);
 
   /// Cancel this task
@@ -499,6 +499,12 @@ interface class FileDownloader {
   /// The task will emit a [TaskStatus.canceled] update to
   /// the registered callback, if requested
   Future<bool> cancelTaskWithId(String taskId) => cancelTasksWithIds([taskId]);
+
+  /// Cancels all tasks, or those in [tasks], or all tasks in group [group]
+  ///
+  /// Returns true if all cancellations were successful
+  Future<bool> cancelAll({Iterable<Task>? tasks, String? group}) =>
+      _downloader.cancelAll(tasks: tasks, group: group);
 
   /// Return [Task] for the given [taskId], or null
   /// if not found.
@@ -672,7 +678,7 @@ interface class FileDownloader {
   ///
   /// Returns list of tasks that were paused
   Future<List<DownloadTask>> pauseAll(
-          {List<DownloadTask>? tasks, String? group}) =>
+          {Iterable<DownloadTask>? tasks, String? group}) =>
       _downloader.pauseAll(tasks: tasks, group: group);
 
   /// Resume the task
@@ -690,7 +696,7 @@ interface class FileDownloader {
   ///
   /// Calls to resume will be spaced out over time by [interval], defaults to 50ms
   Future<List<Task>> resumeAll(
-      {List<DownloadTask>? tasks,
+      {Iterable<DownloadTask>? tasks,
       Duration interval = const Duration(milliseconds: 50)}) async {
     final results = <Task>[];
     final tasksToResume =

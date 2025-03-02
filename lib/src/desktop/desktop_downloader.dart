@@ -66,7 +66,7 @@ final class DesktopDownloader extends BaseDownloader {
   }
 
   @override
-  Future<List<bool>> enqueueAll(List<Task> tasks) async {
+  Future<List<bool>> enqueueAll(Iterable<Task> tasks) async {
     final results = <bool>[];
     for (final task in tasks) {
       results.add(await enqueue(task));

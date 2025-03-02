@@ -29,7 +29,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     static var progressInfo = [String: (lastProgressUpdateTime: TimeInterval,
                                         lastProgressValue: Double,
                                         lastTotalBytesDone: Int64,
-                                        lastNetworkSpeed: Double)]() // time, bytes, speed
+                                        lastNetworkSpeed: Double)]() // upadtetime, progress %, bytes, speed
     static var uploaderForUrlSessionTaskIdentifier = [Int:Uploader]() // maps from UrlSessionTask TaskIdentifier
     static var haveregisteredNotificationCategories = false
     static var requireWiFi = RequireWiFi.asSetByTask // global setting
@@ -589,8 +589,13 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             if let notificationConfigJsonString = BDPlugin.notificationConfigJsonStrings[taskId],
                let notificationConfig = notificationConfigFrom(jsonString: notificationConfigJsonString)
             {
-                updateNotification(task: task, notificationType: .paused, notificationConfig: notificationConfig)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    updateNotification(task: task, notificationType: .paused, notificationConfig: notificationConfig)
+                }
             }
+            BDPlugin.propertyLock.withLock({
+                _ = BDPlugin.progressInfo.removeValue(forKey: taskId) // ensure .running update on resume
+            })
             return true
         } else {
             os_log("Could not post resume data for taskId %@: task paused but cannot be resumed", log: log, type: .info, taskId)

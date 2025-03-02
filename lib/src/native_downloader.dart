@@ -237,7 +237,7 @@ abstract base class NativeDownloader extends BaseDownloader {
   }
 
   @override
-  Future<List<bool>> enqueueAll(List<Task> tasks) async {
+  Future<List<bool>> enqueueAll(Iterable<Task> tasks) async {
     for (final task in tasks.where((task) => task.allowPause)) {
       canResumeTask[task] = Completer();
     }
@@ -253,7 +253,10 @@ abstract base class NativeDownloader extends BaseDownloader {
   }
 
   static (String, String) _taskAndNotificationConfigJsonStrings(
-      (List<Task>, Set<TaskNotificationConfig>) tasksAndNotificationConfigs) {
+      (
+        Iterable<Task>,
+        Set<TaskNotificationConfig>
+      ) tasksAndNotificationConfigs) {
     final (tasks, notificationConfigs) = tasksAndNotificationConfigs;
     final tasksJsonString = jsonEncode(tasks);
     final configs = tasks
@@ -514,7 +517,7 @@ final class AndroidDownloader extends NativeDownloader {
   }
 
   @override
-  Future<List<bool>> enqueueAll(List<Task> tasks) async {
+  Future<List<bool>> enqueueAll(Iterable<Task> tasks) async {
     for (final task in tasks) {
       await _registerCallbackDispatcher(task);
     }

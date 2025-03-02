@@ -247,7 +247,7 @@ abstract base class BaseDownloader {
   }
 
   /// Enqueue a list of tasks
-  Future<List<bool>> enqueueAll(List<Task> tasks);
+  Future<List<bool>> enqueueAll(Iterable<Task> tasks);
 
   /// Enqueue the [task] and wait for completion
   ///
@@ -402,7 +402,7 @@ abstract base class BaseDownloader {
   ///
   /// Returns true if all cancellations were successful
   @mustCallSuper
-  Future<bool> cancelTasksWithIds(List<String> taskIds) async {
+  Future<bool> cancelTasksWithIds(Iterable<String> taskIds) async {
     final matchingTasksWaitingToRetry = tasksWaitingToRetry
         .where((task) => taskIds.contains(task.taskId))
         .toList(growable: false);
@@ -422,8 +422,7 @@ abstract base class BaseDownloader {
     final pausedTasks = await getPausedTasks();
     final pausedTaskIdsToCancel = pausedTasks
         .where((task) => remainingTaskIds.contains(task.taskId))
-        .map((e) => e.taskId)
-        .toList(growable: false);
+        .map((e) => e.taskId);
     await cancelPausedPlatformTasksWithIds(pausedTasks, pausedTaskIdsToCancel);
     // cancel remaining taskIds on the platform
     final platformTaskIds = remainingTaskIds
@@ -435,6 +434,18 @@ abstract base class BaseDownloader {
     return cancelPlatformTasksWithIds(platformTaskIds);
   }
 
+  /// Cancels all tasks, or those in [tasks], or all tasks in group [group]
+  ///
+  /// Returns true if all cancellations were successful
+  Future<bool> cancelAll({Iterable<Task>? tasks, String? group}) async {
+    final tasksToCancel = switch ((tasks, group)) {
+      (Iterable<Task> tasks, _) => tasks,
+      (_, String group) => await FileDownloader().allTasks(group: group),
+      (null, null) => await FileDownloader().allTasks(),
+    };
+    return cancelTasksWithIds(tasksToCancel.map((task) => task.taskId));
+  }
+
   /// Cancel these tasks on the platform
   Future<bool> cancelPlatformTasksWithIds(List<String> taskIds);
 
@@ -442,7 +453,7 @@ abstract base class BaseDownloader {
   ///
   /// Deletes the associated temp file and emits [TaskStatus.cancel]
   Future<void> cancelPausedPlatformTasksWithIds(
-      List<Task> pausedTasks, List<String> taskIds) async {
+      List<Task> pausedTasks, Iterable<String> taskIds) async {
     for (final taskId in taskIds) {
       final task =
           pausedTasks.firstWhereOrNull((element) => element.taskId == taskId);
@@ -545,11 +556,12 @@ abstract base class BaseDownloader {
   ///
   /// Returns list of tasks that were paused
   Future<List<DownloadTask>> pauseAll(
-      {List<DownloadTask>? tasks, String? group}) async {
+      {Iterable<DownloadTask>? tasks, String? group}) async {
     final tasksToPause = switch ((tasks, group)) {
-      (List<DownloadTask> tasks, _) => tasks,
-      (_, String group) => await FileDownloader().allTasks(group: group),
-      (null, null) => await FileDownloader().allTasks(),
+      (Iterable<DownloadTask> tasks, _) => tasks,
+      (_, String group) =>
+        (await FileDownloader().allTasks(group: group)) as Iterable<Task>,
+      (null, null) => (await FileDownloader().allTasks()) as Iterable<Task>,
     }
         .whereType<DownloadTask>()
         .where((task) => task.allowPause && task.post == null)
