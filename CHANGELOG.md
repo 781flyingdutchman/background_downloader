@@ -1,3 +1,8 @@
+## 9.1.0
+* Adds `pauseAll`, `cancelAll` and `resumeAll`
+* Improves handling `enqueuAll` to not starve the UI thread
+* Fixes compilation bug in when compiling with XCode 16.2
+
 ## 9.0.0
 * Introduces URI operations, including file/photo/video/directory pickers, under the `uri` property, and `UriDownloadTask` and `UriUploadTask`. See [Working with URIs](doc/URI.md). 
 * [Breaking] removes references to `asAndroidUri` - use the new methods on the `uri` property instead

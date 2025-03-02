@@ -1,7 +1,6 @@
 // ignore_for_file: avoid_print, empty_catches
 
 import 'dart:io';
-import 'dart:math';
 
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';

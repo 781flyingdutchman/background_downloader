@@ -500,6 +500,12 @@ interface class FileDownloader {
   /// the registered callback, if requested
   Future<bool> cancelTaskWithId(String taskId) => cancelTasksWithIds([taskId]);
 
+  /// Cancel this task
+  ///
+  /// The task will emit a [TaskStatus.canceled] update to
+  /// the registered callback, if requested
+  Future<bool> cancel(Task task) => cancelTasksWithIds([task.taskId]);
+
   /// Cancels all tasks, or those in [tasks], or all tasks in group [group]
   ///
   /// Returns true if all cancellations were successful
