@@ -206,7 +206,9 @@ Future<TaskStatus> processOkDownloadResponse(
     setTaskError(e);
   } finally {
     try {
-      await outStream?.close();
+      try {
+        await outStream?.close();
+      } catch (_) {}
       if (resultStatus == TaskStatus.failed &&
           serverAcceptsRanges &&
           bytesTotal + startByte > 1 << 20) {
@@ -217,7 +219,7 @@ Future<TaskStatus> processOkDownloadResponse(
         File(tempFilePath).deleteSync();
       }
     } catch (e) {
-      logError(downloadTask, 'Could not delete temp file $tempFilePath');
+      logError(downloadTask, 'Could not delete temp file $tempFilePath: $e');
     }
   }
   return resultStatus;

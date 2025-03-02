@@ -314,8 +314,8 @@ abstract base class NativeDownloader extends BaseDownloader {
     final taskIds =
         tasksToPause.map((task) => task.taskId).toList(growable: false);
     final results =
-        await methodChannel.invokeMethod<List<bool>>('pauseAll', taskIds);
-    return results ?? tasksToPause.map((task) => false).toList();
+        await methodChannel.invokeMethod<List<Object?>>('pauseAll', taskIds);
+    return results?.cast<bool>() ?? tasksToPause.map((task) => false).toList();
   }
 
   @override

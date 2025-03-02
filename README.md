@@ -96,6 +96,7 @@ final successfullyEnqueued = await FileDownloader().enqueue(DownloadTask(
                                 url: 'https://google.com',
                                 filename: 'google.html',
                                 updates: Updates.statusAndProgress));
+
 ```
 
 **Note:** If you need to enqueue a large number of tasks, create a list of `Task` objects and use `FileDownloader().enqueueAll(tasks)` for better, non-blocking performance.
@@ -745,7 +746,9 @@ To cancel, pause or resume a task, call:
 * `cancelTaskWithId` to cancel the tasks with that taskId
 * `cancelTasksWithIds` to cancel all tasks with a `taskId` in the provided list of taskIds
 * `pause` to attempt to pause a task. Pausing is only possible for download GET requests, only if the `Task.allowPause` field is true, and only if the server supports pause/resume. Soon after the task is running (`TaskStatus.running`) you can call `taskCanResume` which will return a Future that resolves to `true` if the server appears capable of pause & resume. If it is not, then `pause` will have no effect and return false
+* `pauseAll` to attempt to pause a all tasks currently running, a specific list of tasks, or all tasks in a `group`. Returns a list of tasks that were paused
 * `resume` to resume a previously paused task (or certain failed tasks), which returns true if resume appears feasible. The task status will follow the same sequence as a newly enqueued task. If resuming turns out to be not feasible (e.g. the operating system deleted the temp file with the partial download) then the task will either restart as a normal download, or fail.
+* `resumeAll` to resume all tasks currently paused, or a specific list of tasks. Returns a list of tasks that were resumed
 
 
 To manage or query the queue of waiting or running tasks, call:

@@ -668,6 +668,13 @@ interface class FileDownloader {
     return false;
   }
 
+  /// Pauses all tasks, or those in [tasks], or all tasks in group [group]
+  ///
+  /// Returns list of tasks that were paused
+  Future<List<DownloadTask>> pauseAll(
+          {List<DownloadTask>? tasks, String? group}) =>
+      _downloader.pauseAll(tasks: tasks, group: group);
+
   /// Resume the task
   ///
   /// If no resume data is available for this task, the call to [resume]
@@ -678,6 +685,24 @@ interface class FileDownloader {
   /// If the task is able to resume, it will, otherwise it will restart the
   /// task from scratch, or fail.
   Future<bool> resume(DownloadTask task) => _downloader.resume(task);
+
+  /// Resume all [tasks], or all paused tasks if [tasks] is omitted
+  ///
+  /// Calls to resume will be spaced out over time by [interval], defaults to 50ms
+  Future<List<Task>> resumeAll(
+      {List<DownloadTask>? tasks,
+      Duration interval = const Duration(milliseconds: 50)}) async {
+    final results = <Task>[];
+    final tasksToResume =
+        tasks ?? (await _downloader.getPausedTasks()).whereType<DownloadTask>();
+    for (final task in tasksToResume) {
+      if (await resume(task)) {
+        results.add(task);
+      }
+      await Future.delayed(interval);
+    }
+    return results;
+  }
 
   /// Set WiFi requirement globally, based on [requirement].
   ///

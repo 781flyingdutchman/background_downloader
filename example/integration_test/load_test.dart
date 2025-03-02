@@ -1,6 +1,7 @@
 // ignore_for_file: avoid_print, empty_catches
 
 import 'dart:io';
+import 'dart:math';
 
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -84,6 +85,78 @@ void main() {
 
       // Simply pass the test
       expect(true, isTrue); // Just to have a passing test
+    });
+  });
+
+  group('pauseAll', () {
+    testWidgets('Pause and Resume All', (widgetTester) async {
+      const numTasks = 10;
+      final tasks = <DownloadTask>[];
+      for (var n = 0; n < numTasks; n++) {
+        tasks.add(DownloadTask(url: urlWithContentLength, allowPause: true));
+      }
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
+      final enqueueResults = await FileDownloader().enqueueAll(tasks);
+      for (final result in enqueueResults) {
+        expect(result, isTrue);
+      }
+      // Wait a short time to let downloads start.
+      await Future.delayed(const Duration(milliseconds: 500));
+      // Pause all tasks.
+      final pauseResults = await FileDownloader().pauseAll();
+      // Verify that all tasks were paused.
+      print('Paused: ${pauseResults.length} tasks (versus $numTasks)');
+      await Future.delayed(const Duration(seconds: 5));
+      //Resume the tasks
+      final startOfResumeCall = DateTime.now();
+      final resumeResults = await FileDownloader().resumeAll();
+      print(
+          'Resuming ${resumeResults.length} tasks took ${DateTime.now().difference(startOfResumeCall)}');
+      // Wait for downloads to complete.
+      while ((await FileDownloader().allTasks()).isNotEmpty) {
+        await Future.delayed(const Duration(seconds: 2));
+      }
+      // Check if all tasks eventually completed.
+      for (final task in tasks) {
+        final file = File(await task.filePath());
+        expect(file.existsSync(), isTrue);
+        try {
+          file.deleteSync();
+        } on FileSystemException {}
+      }
+    });
+
+    testWidgets('Pause with allowPause set to false', (widgetTester) async {
+      const numTasks = 10;
+      final tasks = <DownloadTask>[];
+      for (var n = 0; n < numTasks; n++) {
+        // Crucially, allowPause is false
+        tasks.add(DownloadTask(url: urlWithContentLength, allowPause: false));
+      }
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
+      final enqueueResults = await FileDownloader().enqueueAll(tasks);
+      for (final result in enqueueResults) {
+        expect(result, isTrue);
+      }
+      await Future.delayed(const Duration(milliseconds: 500));
+      final runningTasks = await FileDownloader().allTasks();
+      expect(runningTasks, isNotEmpty);
+      print('Attempting to pause all tasks');
+      final pauseResults = await FileDownloader().pauseAll();
+      expect(pauseResults, isEmpty); // No tasks paused
+      print('No tasks were paused');
+      // Wait for downloads to complete.
+      while ((await FileDownloader().allTasks()).isNotEmpty) {
+        await Future.delayed(const Duration(seconds: 2));
+      }
+      // Check if all tasks eventually completed.
+      for (final task in tasks) {
+        final file = File(await task.filePath());
+        expect(file.existsSync(), isTrue);
+        try {
+          file.deleteSync();
+        } on FileSystemException {}
+      }
     });
   });
 }

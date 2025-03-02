@@ -97,6 +97,8 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                 await methodTaskForId(call: call, result: result)
             case "pause":
                 await methodPause(call: call, result: result)
+            case "pauseAll":
+                await methodPauseAll(call: call, result: result)
             case "updateNotification":
                 methodUpdateNotification(call: call, result: result)
             case "moveToSharedStorage":
@@ -506,54 +508,97 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         await BDPlugin.holdingQueue?.stateLock.unlock()
     }
     
+    
+    
     /// Pauses Task for this taskId. Returns true of pause likely successful, false otherwise
     ///
     /// If pause is not successful, task will be canceled (attempted)
     private func methodPause(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let taskId = call.arguments as! String
+        let pauseResult = await pauseSingleTask(taskId: taskId)
+        result(pauseResult)
+    }
+    
+    
+    /// Pauses a list of tasks.  Uses the same approach as methodEnqueueAll
+    ///
+    /// Returns a list of equal length of booleans indicating whether each individual pause succeeded
+    private func methodPauseAll(call: FlutterMethodCall, result: @escaping FlutterResult) async {
+        guard let taskIds = call.arguments as? [String] else {
+            result(FlutterError(code: "INVALID_ARGUMENT", message: "Expected a list of task IDs", details: nil))
+            return
+        }
+        
+        _Concurrency.Task.detached { // Run off the main thread
+            var results: [Bool] = []
+            for taskId in taskIds {
+                let pauseResult = await self.pauseSingleTask(taskId: taskId)
+                results.append(pauseResult)
+            }
+            
+            let finalResults = results
+            await MainActor.run { // Send results back to the main thread
+                result(finalResults)
+            }
+        }
+    }
+    
+    /// Attempts to pause a single task.
+    ///
+    /// - Parameter taskId: The ID of the task to pause.
+    /// - Returns: `true` if the pause was likely successful, `false` otherwise.
+    private func pauseSingleTask(taskId: String) async -> Bool {
         UrlSessionDelegate.createUrlSession()
         BDPlugin.propertyLock.withLock({
             _ = BDPlugin.taskIdsProgrammaticallyCanceledAfterStart.insert(taskId)
         })
+        
         guard let urlSessionTask = await UrlSessionDelegate.getUrlSessionTaskWithId(taskId: taskId) as? URLSessionDownloadTask,
-              let task = await UrlSessionDelegate.getTaskWithId(taskId: taskId),
-              let resumeData = await urlSessionTask.cancelByProducingResumeData()
+              let task = await UrlSessionDelegate.getTaskWithId(taskId: taskId)
         else {
             // no regular task found, return if there's no ParalleldownloadTask either
             BDPlugin.propertyLock.withLock({
                 _ = BDPlugin.taskIdsProgrammaticallyCanceledAfterStart.remove(taskId)
             })
-            if ParallelDownloader.downloads[taskId] == nil {
-                os_log("Could not pause task %@", log: log, type: .info, taskId)
-                result(false)
-            } else {
-                if await ParallelDownloader.downloads[taskId]?.pauseTask() == true {
+            if let parallelDownloadTask = ParallelDownloader.downloads[taskId] {
+                if await parallelDownloadTask.pauseTask() {
                     os_log("Paused task with taskId %@", log: log, type: .info, taskId)
-                    result(true)
+                    return true
                 } else {
                     os_log("Could not pause taskId %@", log: log, type: .info, taskId)
-                    result(false)
+                    return false
                 }
+            } else {
+                os_log("Could not pause task %@, or task not found", log: log, type: .info, taskId)
+                return false
             }
-            return
         }
+        
+        guard let resumeData = await urlSessionTask.cancelByProducingResumeData() else {
+            os_log("Could not pause task %@", log: log, type: .info, taskId)
+            BDPlugin.propertyLock.withLock({
+                _ = BDPlugin.taskIdsProgrammaticallyCanceledAfterStart.remove(taskId)
+            })
+            return false
+        }
+        
         if processResumeData(task: task, resumeData: resumeData) {
             processStatusUpdate(task: task, status: .paused)
             os_log("Paused task with taskId %@", log: log, type: .info, taskId)
             // update 'paused' notification if needed
-            guard let notificationConfigJsonString = BDPlugin.notificationConfigJsonStrings[taskId],
-                  let notificationConfig = notificationConfigFrom(jsonString: notificationConfigJsonString)
-            else {
-                result(true)
-                return
+            if let notificationConfigJsonString = BDPlugin.notificationConfigJsonStrings[taskId],
+               let notificationConfig = notificationConfigFrom(jsonString: notificationConfigJsonString)
+            {
+                updateNotification(task: task, notificationType: .paused, notificationConfig: notificationConfig)
             }
-            updateNotification(task: task, notificationType: .paused, notificationConfig: notificationConfig)
-            result(true)
+            return true
         } else {
             os_log("Could not post resume data for taskId %@: task paused but cannot be resumed", log: log, type: .info, taskId)
-            result(false)
+            return false
         }
     }
+    
+
     
     /// Update the notification for this task
     /// Args are:

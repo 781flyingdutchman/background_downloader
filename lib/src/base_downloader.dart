@@ -548,19 +548,18 @@ abstract base class BaseDownloader {
       {List<DownloadTask>? tasks, String? group}) async {
     final tasksToPause = switch ((tasks, group)) {
       (List<DownloadTask> tasks, _) => tasks,
-      (_, String group) => await allTasks(group, false, false),
-      (null, null) => await allTasks('', true, true),
-    }.where((task) => task is DownloadTask).toList(growable: false);
-    final results =
-        await pauseTaskList(tasksToPause);
+      (_, String group) => await FileDownloader().allTasks(group: group),
+      (null, null) => await FileDownloader().allTasks(),
+    }
+        .whereType<DownloadTask>()
+        .where((task) => task.allowPause && task.post == null)
+        .toList(growable: false);
+    final results = await pauseTaskList(tasksToPause);
     return tasksToPause
         .asMap() // Convert to a Map (index -> Task)
-        .entries // Get the entries of the Map (Iterable<MapEntry<int, Task>>)
-        .where((entry) =>
-            results[entry.key] == true &&
-            entry.value is DownloadTask) // Filter by success and type
-        .map((entry) =>
-            entry.value as DownloadTask) // Cast and extract the DownloadTask
+        .entries // Get the entries of the Map (Iterable<MapEntry<int, DownloadTask>>)
+        .where((entry) => results[entry.key] == true) // Filter by success
+        .map((entry) => entry.value) // Extract the DownloadTask
         .toList(growable: false); // Convert back to a List
   }
 

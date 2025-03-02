@@ -424,6 +424,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 "killTaskWithId" -> methodKillTaskWithId(call, result)
                 "taskForId" -> methodTaskForId(call, result)
                 "pause" -> methodPause(call, result)
+                "pauseAll" -> methodPauseAll(call, result)
                 "updateNotification" -> methodUpdateNotification(call, result)
                 "moveToSharedStorage" -> methodMoveToSharedStorage(call, result)
                 "pathInSharedStorage" -> methodPathInSharedStorage(call, result)
@@ -764,6 +765,24 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private fun methodPause(call: MethodCall, result: Result) {
         val taskId = call.arguments as String
         result.success(pauseTaskWithId(taskId))
+    }
+
+    /**
+     * Marks all taskIds for pausing
+     */
+    private fun methodPauseAll(call: MethodCall, result: Result) {
+        val taskIds = call.arguments as? List<*> ?: run {
+            result.error("INVALID_ARGUMENT", "Expected a list of task IDs", null)
+            return
+        }
+        val results = taskIds.map { taskId ->
+            if (taskId is String) {
+                pauseTaskWithId(taskId)
+            } else {
+                false
+            }
+        }
+        result.success(results)
     }
 
     /**
