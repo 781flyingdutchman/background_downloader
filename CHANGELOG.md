@@ -1,3 +1,7 @@
+## 9.1.1
+* Adds optional `group` parameter to `resumeAll`
+* Fixes concurrency bugs in Android
+
 ## 9.1.0
 * Adds `pauseAll`, `cancelAll` and `resumeAll`
 * Improves handling `enqueuAll` to not starve the UI thread
