@@ -1,11 +1,15 @@
 package com.bbflight.background_downloader
 
 import android.content.Context
+import android.net.Uri
 import android.os.Build
 import android.os.storage.StorageManager
 import android.util.Log
+import androidx.core.net.toFile
+import androidx.documentfile.provider.DocumentFile
 import androidx.preference.PreferenceManager
 import androidx.work.WorkerParameters
+import com.bbflight.background_downloader.UriUtils.unpack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.BufferedInputStream
@@ -18,6 +22,7 @@ import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
+import kotlin.math.absoluteValue
 import kotlin.random.Random
 
 
@@ -62,16 +67,17 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
      */
     override suspend fun process(
         connection: HttpURLConnection,
-        filePath: String
     ): TaskStatus {
         responseStatusCode = connection.responseCode
         if (connection.responseCode in 200..206) {
-            // ok response, check if resume is possible
+            // determine if we are using Uri or not.  Uri means pause/resume not allowed
+            val directoryUri = UriUtils.uriFromStringValue(task.directory)
+            val usesUri = directoryUri != null
             eTagHeader = connection.headerFields["ETag"]?.first()
             val acceptRangesHeader = connection.headerFields["Accept-Ranges"]
             serverAcceptsRanges =
                 acceptRangesHeader?.first() == "bytes" || connection.responseCode == 206
-            if (task.allowPause) {
+            if (task.allowPause && !usesUri) {
                 taskCanResume = serverAcceptsRanges
                 processCanResume(
                     task,
@@ -92,109 +98,182 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
                 )
                 return TaskStatus.failed
             }
-            // if no filename is set, get from headers or url, update task and set new destFilePath
-            var destFilePath = filePath
+            // Determine destination - either [destFilePath] or [destUri]
+            // If no filename is set, get from headers or url, and update the task
+            var destFilePath = task.filePath(applicationContext)
+            var (uriFilename, destUri) = unpack(task.filename)
             if (!task.hasFilename()) {
-                task = task.withSuggestedFilenameFromResponseHeaders(
-                    applicationContext,
-                    connection.headerFields,
-                    unique = true
-                )
-                val dirName = File(filePath).parent ?: ""
-                destFilePath = "$dirName/${task.filename}"
-                Log.d(TAG, "Suggested filename for taskId ${task.taskId}: ${task.filename}")
+                // If no filename is set, get from headers or url, and update the task
+                if (usesUri) {
+                    uriFilename = suggestFilename(connection.headerFields, task.url)
+                    if (uriFilename.isEmpty()) {
+                        uriFilename = "${Random.nextInt().absoluteValue}"
+                    }
+                    task = task.copyWith(
+                        filename = if (destUri == null) uriFilename else UriUtils.pack(
+                            uriFilename,
+                            destUri
+                        )
+                    )
+                } else {
+                    destFilePath = destFilePath(connection)
+                }
             }
             extractResponseHeaders(connection.headerFields)
             extractContentType(connection.headerFields)
-            // determine tempFile
             val contentLength = getContentLength(connection.headerFields, task)
-            val applicationSupportPath =
-                baseDirPath(applicationContext, BaseDirectory.applicationSupport)
-            val cachePath = baseDirPath(applicationContext, BaseDirectory.temporary)
-            if (applicationSupportPath == null || cachePath == null) {
-                throw IllegalStateException("External storage is requested but not available")
-            }
-            val tempDir = when (PreferenceManager.getDefaultSharedPreferences(applicationContext)
-                .getInt(BDPlugin.keyConfigUseCacheDir, -2)) {
-                0 -> File(cachePath) // 'always'
-                -1 -> File(applicationSupportPath) // 'never'
-                else -> {
-                    // 'whenAble' -> determine based on cache quota
-                    val storageManager =
-                        applicationContext.getSystemService(Context.STORAGE_SERVICE) as StorageManager
-                    val cacheQuota = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        storageManager.getCacheQuotaBytes(
-                            storageManager.getUuidForPath(
-                                File(cachePath)
-                            )
-                        )
-                    } else {
-                        50L shl (20)  // for older OS versions, assume 50MB
-                    }
-                    if (contentLength < cacheQuota / 2) File(cachePath) else File(
-                        applicationSupportPath
-                    )
+            // determine tempFile, or set to null if Uri is used
+            val tempFile = if (!usesUri) {
+                val applicationSupportPath =
+                    baseDirPath(applicationContext, BaseDirectory.applicationSupport)
+                val cachePath = baseDirPath(applicationContext, BaseDirectory.temporary)
+                if (applicationSupportPath == null || cachePath == null) {
+                    throw IllegalStateException("External storage is requested but not available")
                 }
+                val tempDir =
+                    when (PreferenceManager.getDefaultSharedPreferences(applicationContext)
+                        .getInt(BDPlugin.keyConfigUseCacheDir, -2)) {
+                        0 -> File(cachePath) // 'always'
+                        -1 -> File(applicationSupportPath) // 'never'
+                        else -> {
+                            // 'whenAble' -> determine based on cache quota
+                            val storageManager =
+                                applicationContext.getSystemService(Context.STORAGE_SERVICE) as StorageManager
+                            val cacheQuota = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                storageManager.getCacheQuotaBytes(
+                                    storageManager.getUuidForPath(
+                                        File(cachePath)
+                                    )
+                                )
+                            } else {
+                                50L shl (20)  // for older OS versions, assume 50MB
+                            }
+                            if (contentLength < cacheQuota / 2) File(cachePath) else File(
+                                applicationSupportPath
+                            )
+                        }
+                    }
+                if (!tempDir.exists()) {
+                    tempDir.mkdirs()
+                }
+                tempFilePath =
+                    tempFilePath.ifEmpty { "${tempDir.absolutePath}/com.bbflight.background_downloader${Random.nextInt()}" }
+
+                // confirm enough storage space for download
+                if (insufficientSpace(applicationContext, contentLength)) {
+                    Log.i(
+                        TAG,
+                        "Insufficient space to store the file to be downloaded for taskId ${task.taskId}"
+                    )
+                    taskException = TaskException(
+                        ExceptionType.fileSystem,
+                        description = "Insufficient space to store the file to be downloaded"
+                    )
+                    return TaskStatus.failed
+                }
+                File(tempFilePath)
+            } else {
+                null
             }
-            if (!tempDir.exists()) {
-                tempDir.mkdirs()
-            }
-            tempFilePath =
-                tempFilePath.ifEmpty { "${tempDir.absolutePath}/com.bbflight.background_downloader${Random.nextInt()}" }
-            val tempFile = File(tempFilePath)
-            // confirm enough storage space for download
-            if (insufficientSpace(applicationContext, contentLength)) {
-                Log.i(
-                    TAG,
-                    "Insufficient space to store the file to be downloaded for taskId ${task.taskId}"
-                )
-                taskException = TaskException(
-                    ExceptionType.fileSystem,
-                    description = "Insufficient space to store the file to be downloaded"
-                )
-                return TaskStatus.failed
+            val outputStream = if (tempFile != null) {
+                FileOutputStream(tempFile, isResume)
+            } else {
+                // no tempFile, because we have a Uri
+                uriFilename = uriFilename ?: "unknown"
+                if (directoryUri!!.scheme == "file") {
+                    // fileUri is converted to a File, then to a FileOutputStream
+                    if (destUri == null) {
+                        // need to create file at directory
+                        val dirObject = directoryUri.toFile()
+                        val destFile = File(dirObject, uriFilename)
+                        destUri = Uri.fromFile(destFile)
+                        // Store destination Uri in task
+                        task = task.copyWith(filename = UriUtils.pack(uriFilename, destUri))
+                        FileOutputStream(destFile) // return outputStream
+                    } else {
+                        // use destination Uri that was set in previous attempt
+                        FileOutputStream(destUri.toFile())
+                    }
+                } else {
+                    // other URL scheme will be attempted to resolve using content resolver
+                    val resolver = applicationContext.contentResolver
+                    // create destination Uri if not already exists
+                    var documentFile = DocumentFile.fromTreeUri(applicationContext, directoryUri)
+                    destUri = destUri ?: documentFile?.createFile(task.mimeType, uriFilename)?.uri
+                    if (destUri == null) {
+                        val message =
+                            "Failed to create document within directory with URI: $directoryUri"
+                        Log.e(TAG, message)
+                        taskException = TaskException(
+                            ExceptionType.fileSystem,
+                            description = message
+                        )
+                        return TaskStatus.failed
+                    }
+                    val newFilename = getFilenameFromUri(destUri)
+                    if (newFilename.isNotEmpty()) {
+                        uriFilename = newFilename
+                    }
+                    task = task.copyWith(filename = UriUtils.pack(uriFilename, destUri))
+                    val os = resolver.openOutputStream(destUri)
+                    if (os == null) {
+                        val message = "Failed to open output stream for URI: $destUri"
+                        Log.e(TAG, message)
+                        taskException = TaskException(
+                            ExceptionType.fileSystem,
+                            description = message
+                        )
+                        return TaskStatus.failed
+                    } else os
+                }
             }
             BDPlugin.remainingBytesToDownload[task.taskId] = contentLength
             determineRunInForeground(task, contentLength) // sets 'runInForeground'
-            // transfer the bytes from the server to the temp file
+            // transfer the bytes from the server to the output stream
             val transferBytesResult: TaskStatus
             BufferedInputStream(connection.inputStream).use { inputStream ->
-                FileOutputStream(tempFile, isResume).use { outputStream ->
-                    transferBytesResult = transferBytes(
-                        inputStream, outputStream, contentLength, task
-                    )
-                }
+                transferBytesResult = transferBytes(
+                    inputStream, outputStream, contentLength, task
+                )
             }
+            outputStream.flush()
+            outputStream.close()
             // act on the result of the bytes transfer
             when (transferBytesResult) {
                 TaskStatus.complete -> {
-                    // move file from its temp location to the destination
-                    val destFile = File(destFilePath)
-                    val dir = destFile.parentFile!!
-                    if (!dir.exists()) {
-                        dir.mkdirs()
-                    }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        withContext(Dispatchers.IO) {
-                            Files.move(
-                                tempFile.toPath(),
-                                destFile.toPath(),
-                                StandardCopyOption.REPLACE_EXISTING
-                            )
-                        }
+                    if (tempFile == null) {
+                        Log.i(
+                            TAG, "Successfully downloaded taskId ${task.taskId} to URI $destUri"
+                        )
                     } else {
-                        tempFile.copyTo(destFile, overwrite = true)
-                        deleteTempFile()
+                        // move file from its temp location to the destination
+                        val destFile = File(destFilePath)
+                        val dir = destFile.parentFile!!
+                        if (!dir.exists()) {
+                            dir.mkdirs()
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            withContext(Dispatchers.IO) {
+                                Files.move(
+                                    tempFile.toPath(),
+                                    destFile.toPath(),
+                                    StandardCopyOption.REPLACE_EXISTING
+                                )
+                            }
+                        } else {
+                            tempFile.copyTo(destFile, overwrite = true)
+                            deleteTempFile()
+                        }
+                        Log.i(
+                            TAG, "Successfully downloaded taskId ${task.taskId} to $destFilePath"
+                        )
                     }
-                    Log.i(
-                        TAG, "Successfully downloaded taskId ${task.taskId} to $destFilePath"
-                    )
                     return TaskStatus.complete
                 }
 
                 TaskStatus.canceled -> {
-                    deleteTempFile()
-                    Log.i(TAG, "Canceled taskId ${task.taskId} for $destFilePath")
+                    cleanup(usesUri, destUri)
+                    Log.i(TAG, "Canceled taskId ${task.taskId}")
                     return TaskStatus.canceled
                 }
 
@@ -223,7 +302,7 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
                         ExceptionType.resume,
                         description = "Task was paused but cannot resume"
                     )
-                    deleteTempFile()
+                    cleanup(usesUri, destUri)
                     return TaskStatus.failed
                 }
 
@@ -257,7 +336,7 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
                     Log.i(TAG, "Task ${task.taskId} timed out and cannot pause/resume")
                     taskException =
                         TaskException(ExceptionType.connection, description = "Task timed out")
-                    deleteTempFile()
+                    cleanup(usesUri, destUri)
                     return TaskStatus.failed
                 }
 
@@ -268,7 +347,7 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
 
                 else -> {
                     Log.e(TAG, "Unknown transferBytesResult $transferBytesResult")
-                    deleteTempFile()
+                    cleanup(usesUri, destUri)
                     return TaskStatus.failed
                 }
             }
@@ -293,19 +372,34 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
     }
 
     /**
+     * Return destination filePath where the filename is set based on response headers, and
+     * update the [task] accordingly
+     */
+    private suspend fun destFilePath(connection: HttpURLConnection): String {
+        val destFilePath = task.filePath(applicationContext)
+        task = task.withSuggestedFilenameFromResponseHeaders(
+            applicationContext,
+            connection.headerFields,
+            unique = true
+        )
+        val dirName = File(destFilePath).parent ?: ""
+        return if (dirName.isEmpty()) task.filename else "$dirName/${task.filename}"
+    }
+
+
+    /**
      * Return true if this is a resume, and resume is possible,
      * given [tempFilePath] and [requiredStartByte]
      * */
     override fun determineIfResume(): Boolean {
         // set tempFilePath from resume data, or "" if a new tempFile is needed
         requiredStartByte = inputData.getLong(keyStartByte, 0)
-        tempFilePath = if (requiredStartByte > 0) inputData.getString(keyResumeDataData) ?: ""
-        else ""
-        eTag = inputData.getString(keyETag)
-
         if (requiredStartByte == 0L) {
             return false
         }
+        eTag = inputData.getString(keyETag)
+        tempFilePath = if (requiredStartByte > 0) inputData.getString(keyResumeDataData) ?: ""
+        else ""
         val tempFile = File(tempFilePath)
         if (tempFile.exists()) {
             val tempFileLength = tempFile.length()
@@ -348,7 +442,8 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
         }
         val contentRanges = connection.headerFields["Content-Range"]
         if (contentRanges == null || contentRanges.size > 1) {
-            Log.i(TAG, "Could not process partial response Content-Range")
+            Log.i(TAG, "Could not " +
+                    "process partial response Content-Range")
             return false
         }
         val range = contentRanges.first()
@@ -363,14 +458,8 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
             return false
         }
         val start = matchResult.groups[1]?.value?.toLong()!!
-        val end = matchResult.groups[2]?.value?.toLong()!!
-        val total = matchResult.groups[3]?.value?.toLong()!!
         val tempFile = File(tempFilePath)
         val tempFileLength = tempFile.length()
-        Log.d(
-            TAG,
-            "Resume start=$start, end=$end of total=$total bytes, tempFile = $tempFileLength bytes"
-        )
         startByte = start - taskRangeStartByte // relative to start of range
         if (startByte > tempFileLength) {
             Log.i(TAG, "Offered range not feasible: $range with startByte $startByte")
@@ -383,7 +472,7 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
         // resume possible, set start conditions
         try {
             RandomAccessFile(tempFilePath, "rw").use { it.setLength(startByte) }
-        } catch (e: IOException) {
+        } catch (_: IOException) {
             Log.i(TAG, "Could not truncate temp file")
             taskException =
                 TaskException(
@@ -415,14 +504,39 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
         }
     }
 
+    /**
+     * Deletes the temp file associated with this download
+     */
     private fun deleteTempFile() {
         if (tempFilePath.isNotEmpty()) {
             try {
                 val tempFile = File(tempFilePath)
                 tempFile.delete()
-            } catch (e: IOException) {
+            } catch (_: IOException) {
                 Log.i(TAG, "Could not delete temp file at $tempFilePath")
             }
+        }
+    }
+
+    /**
+     * Deletes the destination Uri at [uri]
+     */
+    private fun deleteDestinationUri(uri: Uri) {
+        try {
+            applicationContext.contentResolver.delete(uri, null, null)
+        } catch (_: Exception) {
+            Log.i(TAG, "Could not delete file at $uri")
+        }
+    }
+
+    /**
+     * Cleanup by deleting the temp file or destination uri
+     */
+    private fun cleanup(usesUri: Boolean, destUri: Uri?) {
+        if (usesUri && destUri != null) {
+            deleteDestinationUri(destUri)
+        } else {
+            deleteTempFile()
         }
     }
 

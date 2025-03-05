@@ -13,9 +13,12 @@ import 'package:path_provider/path_provider.dart';
 import 'file_downloader.dart';
 import 'models.dart';
 import 'options/task_options.dart';
+import 'uri/uri_helpers.dart';
 import 'utils.dart';
 import 'web_downloader.dart'
     if (dart.library.io) 'desktop/desktop_downloader.dart';
+
+part 'uri/uri_task.dart';
 
 final _log = Logger('FileDownloader');
 
@@ -257,6 +260,10 @@ sealed class Task extends Request implements Comparable {
 
   static bool useExternalStorage = false; // for Android configuration only
 
+  /// Uri schemes that are supported by the downloader in the context of
+  /// a [Task] download directory or upload file
+  static const allowedUriSchemes = ['file', 'content', 'urlbookmark', 'media'];
+
   /// Creates a [Task]
   ///
   /// [taskId] must be unique. A unique id will be generated if omitted
@@ -320,7 +327,9 @@ sealed class Task extends Request implements Comparable {
     if (filename?.isEmpty == true) {
       throw ArgumentError('Filename cannot be empty');
     }
-    if (_pathSeparator.hasMatch(this.filename) && this is! MultiUploadTask) {
+    if (this is! UriTask &&
+        this is! MultiUploadTask &&
+        _pathSeparator.hasMatch(this.filename)) {
       throw ArgumentError('Filename cannot contain path separators');
     }
     if (allowPause && post != null) {
@@ -335,7 +344,9 @@ sealed class Task extends Request implements Comparable {
   factory Task.createFromJson(Map<String, dynamic> json) =>
       switch (json['taskType']) {
         'DownloadTask' => DownloadTask.fromJson(json),
+        'UriDownloadTask' => UriDownloadTask.fromJson(json),
         'UploadTask' => UploadTask.fromJson(json),
+        'UriUploadTask' => UriUploadTask.fromJson(json),
         'MultiUploadTask' => MultiUploadTask.fromJson(json),
         'ParallelDownloadTask' => ParallelDownloadTask.fromJson(json),
         'DataTask' => DataTask.fromJson(json),
@@ -357,12 +368,28 @@ sealed class Task extends Request implements Comparable {
   ///
   /// Throws a FileSystemException if using external storage on Android (via
   /// configuration at startup), and external storage is not available.
+  ///
+  /// If called when the task is a [UriTask], will return the filePath of a file
+  /// scheme Uri, but may throw if unavailable or the scheme is not 'file'
   Future<String> filePath({String? withFilename}) async {
     if (this is MultiUploadTask && withFilename == null) {
       return '';
     }
-    final baseDirPath = await baseDirectoryPath(baseDirectory);
-    return p.join(baseDirPath, directory, withFilename ?? filename);
+    switch (this) {
+      case UriTask t:
+        if (t.fileUri != null) {
+          assert(t.fileUri?.scheme == 'file',
+              'fileUri must be a URI scheme to return a path');
+          return t.fileUri!.toFilePath(windows: Platform.isWindows);
+        } else {
+          assert(t.directoryUri?.scheme == 'file',
+              'directoryUri must be a URI scheme to return a path');
+          return '${t.directoryUri!.toFilePath(windows: Platform.isWindows)}${Platform.pathSeparator}${withFilename ?? filename}';
+        }
+      default:
+        return p.join(await baseDirectoryPath(baseDirectory), directory,
+            withFilename ?? filename);
+    }
   }
 
   /// Returns the path to the directory represented by [baseDirectory]
@@ -635,12 +662,19 @@ final class DownloadTask extends Task {
       super.creationTime,
       super.options});
 
+  /// List of task types supported by [DownloadTask.fromJson]
+  static final _taskTypes = [
+    'DownloadTask',
+    'ParallelDownloadTask',
+    'UriDownloadTask'
+  ];
+
   /// Creates [DownloadTask] object from [json]
   DownloadTask.fromJson(super.json)
       : assert(
-            ['DownloadTask', 'ParallelDownloadTask'].contains(json['taskType']),
-            'The provided JSON map is not'
-            ' a DownloadTask, because key "taskType" is not "DownloadTask" or "ParallelDownloadTask".'),
+            _taskTypes.contains(json['taskType']),
+            'The provided JSON map is not an UploadTask, '
+            'because key "taskType" is not in ${_taskTypes.join(',')}'),
         super.fromJson();
 
   @override
@@ -847,7 +881,8 @@ final class UploadTask extends Task {
       super.priority,
       super.metaData,
       super.displayName,
-      super.creationTime})
+      super.creationTime,
+      super.options})
       : fields = fields ?? {},
         mimeType =
             mimeType ?? lookupMimeType(file.path) ?? 'application/octet-stream',
@@ -858,47 +893,19 @@ final class UploadTask extends Task {
             httpRequestMethod: httpRequestMethod ?? 'POST',
             allowPause: false);
 
-  /// Creates [UploadTask] from an Android 'content' URI, for binary upload
-  ///
-  /// The [uri] must be a 'content://' scheme and will be stored in the
-  /// [directory] property. The task's [filename] will be set to the last
-  /// path segment of the [uri].
-  ///
-  /// Note that the result of [Task.filePath] is undefined when using a URI
-  UploadTask.fromAndroidUri(
-      {required Uri uri,
-      super.taskId,
-      required super.url,
-      super.urlQueryParameters,
-      super.headers,
-      String? mimeType,
-      super.group,
-      super.updates,
-      super.requiresWiFi,
-      super.retries,
-      super.priority,
-      super.metaData,
-      super.displayName,
-      super.creationTime})
-      : mimeType = mimeType ?? 'application/octet-stream',
-        fields = {},
-        fileField = '',
-        super(
-            baseDirectory: BaseDirectory.root,
-            directory: uri.toString(),
-            filename: uri.pathSegments.last,
-            httpRequestMethod: 'POST',
-            post: 'binary',
-            allowPause: false) {
-    assert(uri.scheme == 'content', 'Android URI scheme must be "content"');
-  }
+  /// List of task types  supported by [UploadTask.fromJson]
+  static final _taskTypes = [
+    'UploadTask',
+    'MultiUploadTask',
+    'UriUploadTask',
+  ];
 
   /// Creates [UploadTask] object from [json]
   UploadTask.fromJson(super.json)
       : assert(
-            ['UploadTask', 'MultiUploadTask'].contains(json['taskType']),
+            _taskTypes.contains(json['taskType']),
             'The provided JSON map is not an UploadTask, '
-            'because key "taskType" is not "UploadTask" or "MultiUploadTask.'),
+            'because key "taskType" is not in ${_taskTypes.join(',')}'),
         fileField = json['fileField'] ?? 'file',
         mimeType = json['mimeType'] ?? 'application/octet-stream',
         fields = Map<String, String>.from(json['fields'] ?? {}),
@@ -911,21 +918,28 @@ final class UploadTask extends Task {
   /// with each list the same length. For the filenames list, if a filename refers
   /// to a file that exists (i.e. it is a full path) then that is the filePath used,
   /// otherwise the filename is appended to the [Task.baseDirectory] and [Task.directory]
-  /// to form a full file path
+  /// to form a full file path. If the filename is represented as a file:// uri
+  /// then that Uri's filePath is used
   Future<List<(String, String, String)>> extractFilesData() async {
     final List<String> fileFields = List.from(jsonDecode(fileField));
     final List<String> filenames = List.from(jsonDecode(filename));
     final List<String> mimeTypes = List.from(jsonDecode(mimeType));
     final result = <(String, String, String)>[];
     for (int i = 0; i < fileFields.length; i++) {
-      final file = File(filenames[i]);
+      final fileUri = Uri.tryParse(filenames[i]);
+      final filenameOrPath = (fileUri?.scheme == 'file')
+          ? fileUri!.toFilePath(windows: Platform.isWindows)
+          : filenames[i];
+      final file = File(filenameOrPath);
       if (await file.exists()) {
-        result.add((fileFields[i], filenames[i], mimeTypes[i]));
+        result.add((fileFields[i], filenameOrPath, mimeTypes[i]));
       } else {
+        // if file does not exist, assume it is a filename only relative path) and
+        // append to baseDirectory and directory
         result.add(
           (
             fileFields[i],
-            await filePath(withFilename: filenames[i]),
+            await filePath(withFilename: filenameOrPath),
             mimeTypes[i],
           ),
         );
@@ -1003,18 +1017,19 @@ final class UploadTask extends Task {
 /// only - all other fields are ignored in that test
 ///
 /// A [MultiUploadTask] is initialized with a list representing the files to upload.
-/// Each element is either a filename/path, or a (fileField, filename/path),
-/// or a (fileField, filename/path, mimeType).
+/// Each element is either a filename/path/Uri, or a (fileField, filename/path/Uri),
+/// or a (fileField, filename/path/Uri, mimeType).
 /// When instantiating a [MultiUploadTask], this list is converted into
 /// three lists: [fileFields], [filenames], and [mimeTypes], available
 /// as fields. These lists are also encoded to a JSON string representation in
 /// the fields [fileField], [filename] and [mimeType],so - different from
 /// a single [UploadTask] - these fields now contain a JSON object representing all
 /// files.
-/// filename/path means either a filename without directory (and the
+/// filename/path/Uri means either a filename without directory (and the
 /// directory will be based on the [Task.baseDirectory] and [Task.directory]
-/// fields), or you specify a full file path. For example: "hello.txt" or
-/// "/data/com.myapp/data/dir/hello.txt"
+/// fields), or you specify a full file path or a Uri (which will be converted
+/// to a Uri string). For example: "hello.txt" or
+/// "/data/com.myapp/data/dir/hello.txt" or "content://some/path/to/file.txt"
 final class MultiUploadTask extends UploadTask {
   final List<String> fileFields, filenames, mimeTypes;
 
@@ -1022,18 +1037,24 @@ final class MultiUploadTask extends UploadTask {
       'files must be a list of filenames, or a list of records of type '
       '(fileField, filename) or (fileField, filename, mimeType)';
 
-  /// Creates [UploadTask]
+  /// Creates [MultiUploadTask] to upload more than one file using
+  /// multipart/form-data
   ///
   /// [taskId] must be unique. A unique id will be generated if omitted
   /// [url] properly encoded if necessary, can include query parameters
   /// [urlQueryParameters] may be added and will be appended to the [url], must
   ///   be properly encoded if necessary
-  /// [files] list of objects representing each file to upload. The object must
+  /// [files] list of objects representing each file to upload. If not using Uri,
+  ///   The object must
   ///   be either a String representing the filename/path (and the fileField will
   ///   be the filename without extension), a Record of type
   ///   (String fileField, String filename/path) or a Record with a third String
   ///   for the mimeType (if omitted, mimeType will be derived from the filename
   ///   extension).
+  ///   If using Uri, the object must be a Uri (and the fileField will be
+  ///   "file1", "file2" etc), or a Record with fileField and Uri, and the
+  ///   mimeType will be attempted to be derived from the Uri, or
+  ///   a Record with fileField, Uri and mimetype
   ///   Each file must be based in the directory represented by the combination
   ///   of [baseDirectory] and [directory], unless a full filepath is given
   ///   instead of only the filename. For example: "hello.txt" or
@@ -1077,25 +1098,37 @@ final class MultiUploadTask extends UploadTask {
       : fileFields = files
             .map((e) => switch (e) {
                   String filename => p.basenameWithoutExtension(filename),
-                  (String fileField, String _, String _) => fileField,
-                  (String fileField, String _) => fileField,
+                  (String fileField, String _) ||
+                  (String fileField, String _, String _) ||
+                  (String fileField, Uri _) ||
+                  (String fileField, Uri _, String _) =>
+                    fileField,
+                  Uri _ => 'file${files.indexOf(e) + 1}',
                   _ => throw ArgumentError(_filesArgumentError)
                 })
             .toList(growable: false),
         filenames = files
             .map((e) => switch (e) {
-                  String filename => filename,
-                  (String _, String filename, String _) => filename,
-                  (String _, String filename) => filename,
+                  String filename ||
+                  (String _, String filename) ||
+                  (String _, String filename, String _) =>
+                    filename,
+                  Uri uri ||
+                  (String _, Uri uri) ||
+                  (String _, Uri uri, String _) =>
+                    uri.toString(),
                   _ => throw ArgumentError(_filesArgumentError)
                 })
             .toList(growable: false),
         mimeTypes = files
             .map((e) => switch (e) {
-                  (String _, String _, String mimeType) => mimeType,
                   String filename ||
                   (String _, String filename) =>
                     lookupMimeType(filename) ?? 'application/octet-stream',
+                  (String _, String _, String mimeType) ||
+                  (String _, Uri _, String mimeType) =>
+                    mimeType,
+                  Uri _ || (String _, Uri _) => '',
                   _ => throw ArgumentError(_filesArgumentError)
                 })
             .toList(growable: false),

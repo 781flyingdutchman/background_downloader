@@ -26,6 +26,7 @@ struct NotificationConfig : Codable {
     let complete: NotificationContents?
     let error: NotificationContents?
     let paused: NotificationContents?
+    let canceled: NotificationContents?
     let progressBar: Bool
     let tapOpensFile: Bool
     let groupNotificationId: String
@@ -35,7 +36,8 @@ enum NotificationType : Int {
     case running,
          complete,
          error,
-         paused
+         paused,
+         canceled
 }
 
 /// Data and methods related to a notification for a group of tasks
@@ -156,6 +158,7 @@ enum NotificationCategory : String, CaseIterable {
     case paused = "paused"
     case complete = "complete"
     case error = "error"
+    case canceled = "canceled"
 }
 
 /// List of all category identifiers
@@ -176,14 +179,16 @@ func updateNotification(task: Task, notificationType: NotificationType, notifica
             // regular notification
             var notification: NotificationContents?
             switch notificationType {
-                case .running:
-                    notification = notificationConfig?.running
-                case .complete:
-                    notification = notificationConfig?.complete
-                case .error:
-                    notification = notificationConfig?.error
-                case .paused:
-                    notification = notificationConfig?.paused
+            case .running:
+                notification = notificationConfig?.running
+            case .complete:
+                notification = notificationConfig?.complete
+            case .error:
+                notification = notificationConfig?.error
+            case .paused:
+                notification = notificationConfig?.paused
+            case .canceled:
+                notification = notificationConfig?.canceled
             }
             if notification == nil {
                 return
@@ -313,6 +318,8 @@ func addNotificationActions(task: Task, notificationType: NotificationType, cont
             content.categoryIdentifier = NotificationCategory.complete.rawValue
         case .error:
             content.categoryIdentifier = NotificationCategory.error.rawValue
+        case .canceled:
+            content.categoryIdentifier = NotificationCategory.canceled.rawValue
         }
     })
 }
@@ -328,6 +335,7 @@ func notificationTypeForTaskStatus(status: TaskStatus) -> NotificationType {
         case .enqueued, .running: return NotificationType.running
         case .complete: return NotificationType.complete
         case .paused: return NotificationType.paused
+        case .canceled: return NotificationType.canceled
         default: return NotificationType.error
     }
 }
@@ -417,9 +425,15 @@ func registerNotificationCategories() {
                            intentIdentifiers: [],
                            hiddenPreviewsBodyPlaceholder: "",
                            options: .customDismissAction)
+    let canceledCategory =
+    UNNotificationCategory(identifier: NotificationCategory.canceled.rawValue,
+                           actions: [],
+                           intentIdentifiers: [],
+                           hiddenPreviewsBodyPlaceholder: "",
+                           options: .customDismissAction)
     // Register the notification type.
     let notificationCenter = UNUserNotificationCenter.current()
-    notificationCenter.setNotificationCategories([runningWithPauseCategory, runningWithoutPauseCategory, pausedCategory, completeCategory, errorCategory])
+    notificationCenter.setNotificationCategories([runningWithPauseCategory, runningWithoutPauseCategory, pausedCategory, completeCategory, errorCategory, canceledCategory])
 }
 
 /// Returns a JSON string for this NotificationConfig, or nil

@@ -18,13 +18,34 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
     
     //MARK: URLSessionTaskDelegate
     
+    /// Called before the task starts, and may continue, cancel or modify the original request, based on native callbacks in the [TaskOptions] of the task
     public func urlSession(_ session: URLSession, task: URLSessionTask, willBeginDelayedRequest request: URLRequest) async -> (URLSession.DelayedRequestDisposition, URLRequest?) {
-        guard let bgdTask = getTaskFrom(urlSessionTask: task),
-              bgdTask.options?.hasStartCallback() == true || bgdTask.options?.auth?.hasOnAuthCallback() == true
+        guard let bgdTask = getTaskFrom(urlSessionTask: task)
         else {
             return (.continueLoading, nil)
         }
-        let (newTask, taskWasModified) = await getModifiedTask(task: bgdTask)
+        // check & process beforeTaskStartCallback and cancel the task if returned value is not nil
+        if bgdTask.options?.hasBeforeStartCallback() == true {
+            if let statusUpdate = await invokeBeforeTaskStartCallback(task: bgdTask) {
+                os_log("TaskId %@ interrupted by beforeTaskStart callback", log: log, type: .info, bgdTask.taskId)
+                BDPlugin.propertyLock.withLock( {
+                    BDPlugin.taskIdsProgrammaticallyCanceledBeforeStart.insert(bgdTask.taskId)
+                })
+                processStatusUpdate(task: bgdTask,
+                                    status: statusUpdate.taskStatus,
+                                    taskException: statusUpdate.exception,
+                                    responseBody: statusUpdate.responseBody,
+                                    responseHeaders: statusUpdate.responseHeaders,
+                                    responseStatusCode: statusUpdate.responseStatusCode)
+                return (.cancel, nil)
+            }
+        }
+        // check & process onStartCalback and onAuthCallback
+        guard bgdTask.options?.hasOnStartCallback() == true || bgdTask.options?.auth?.hasOnAuthCallback() == true
+        else {
+            return (.continueLoading, nil)
+        }
+        let (newTask, taskWasModified) = await getModifiedTask(task: bgdTask) // processes both onStart and onAuth
         if !taskWasModified {
             return (.continueLoading, nil)
         }
@@ -60,6 +81,17 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
         task: URLSessionTask,
         didCompleteWithError error: Error?
     ) {
+        guard let bgdTask = getTaskFrom(urlSessionTask: task) else { // refers to "our" task, not a URLSessionTask
+            os_log("Could not find task related to urlSessionTask %d", log: log, type: .error, task.taskIdentifier)
+            return
+        }
+        if BDPlugin.propertyLock.withLock( {
+            BDPlugin.taskIdsProgrammaticallyCanceledBeforeStart.remove(bgdTask.taskId) != nil
+        }) {
+            // task was canceled before start and the
+            // status update already generated, so simply return without any further processing
+            return
+        }
         let multipartUploader = BDPlugin.uploaderForUrlSessionTaskIdentifier[task.taskIdentifier]
         if multipartUploader != nil {
             try? FileManager.default.removeItem(at: multipartUploader!.outputFileUrl())
@@ -69,78 +101,75 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
         let responseStatusDescription = HTTPURLResponse.localizedString(forStatusCode: responseStatusCode)
         let responseHeaders = (task.response as? HTTPURLResponse)?.allHeaderFields
         let notificationConfig = getNotificationConfigFrom(urlSessionTask: task)
-        // from here on, task refers to "our" task, not a URLSessionTask
-        guard let task = getTaskFrom(urlSessionTask: task) else {
-            os_log("Could not find task related to urlSessionTask %d", log: log, type: .error, task.taskIdentifier)
-            return
-        }
-        if let tempUploadUrl = BDPlugin.propertyLock.withLock({ BDPlugin.tasksWithTempUploadFile.removeValue(forKey: task.taskId) }) {
+        if let tempUploadUrl = BDPlugin.propertyLock.withLock({ BDPlugin.tasksWithTempUploadFile.removeValue(forKey: bgdTask.taskId) }) {
             try? FileManager.default.removeItem(at: tempUploadUrl)
         }
         if BDPlugin.holdingQueue != nil {
             _Concurrency.Task {
-                await BDPlugin.holdingQueue?.taskFinished(task)
+                await BDPlugin.holdingQueue?.taskFinished(bgdTask)
             }
         }
-        let responseBody = getResponseBody(taskId: task.taskId)
-        let taskWasProgramaticallyCanceled = BDPlugin.propertyLock.withLock( {
-            BDPlugin.taskIdsProgrammaticallyCancelled.remove(task.taskId) != nil
+        let responseBody = getResponseBody(taskId: bgdTask.taskId)
+        let taskWasProgramaticallyCanceledAfterStart = BDPlugin.propertyLock.withLock( {
+            BDPlugin.taskIdsProgrammaticallyCanceledAfterStart.remove(bgdTask.taskId) != nil
         })
         guard error == nil else {
+            var notificationType = taskWasProgramaticallyCanceledAfterStart ? nil : NotificationType.error
             // handle the error if this task wasn't programatically cancelled (in which
             // case the error has been handled already)
-            if !taskWasProgramaticallyCanceled {
+            if !taskWasProgramaticallyCanceledAfterStart {
                 // check if we have resume data, and if so, process it
                 let userInfo = (error! as NSError).userInfo
                 let resumeData = userInfo[NSURLSessionDownloadTaskResumeData] as? Data
-                let canResume = resumeData != nil && processResumeData(task: task, resumeData: resumeData!)
+                let canResume = resumeData != nil && processResumeData(task: bgdTask, resumeData: resumeData!)
                 // check different error codes
                 if (error! as NSError).code == NSURLErrorTimedOut {
-                    os_log("Task with id %@ timed out", log: log, type: .info, task.taskId)
-                    processStatusUpdate(task: task, status: .failed, taskException: TaskException(type: .connection, httpResponseCode: -1, description: error!.localizedDescription))
+                    os_log("Task with id %@ timed out", log: log, type: .info, bgdTask.taskId)
+                    processStatusUpdate(task: bgdTask, status: .failed, taskException: TaskException(type: .connection, httpResponseCode: -1, description: error!.localizedDescription))
                     return
                 }
                 if (error! as NSError).code == NSURLErrorCancelled {
                     // cancelled with resumedata implies 'pause'
                     if canResume {
-                        os_log("Paused task with id %@", log: log, type: .info, task.taskId)
-                        processStatusUpdate(task: task, status: .paused)
-                        if isDownloadTask(task: task) {
+                        os_log("Paused task with id %@", log: log, type: .info, bgdTask.taskId)
+                        processStatusUpdate(task: bgdTask, status: .paused)
+                        if isDownloadTask(task: bgdTask) {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                updateNotification(task: task, notificationType: .paused, notificationConfig: notificationConfig)
+                                updateNotification(task: bgdTask, notificationType: .paused, notificationConfig: notificationConfig)
                             }
                         }
                         BDPlugin.propertyLock.withLock({
-                            _ = BDPlugin.progressInfo.removeValue(forKey: task.taskId) // ensure .running update on resume
+                            _ = BDPlugin.progressInfo.removeValue(forKey: bgdTask.taskId) // ensure .running update on resume
                         })
                         return
                     }
                     // cancelled without resumedata implies 'cancel'
-                    os_log("Canceled task with id %@", log: log, type: .info, task.taskId)
-                    processStatusUpdate(task: task, status: .canceled)
+                    os_log("Canceled task with id %@", log: log, type: .info, bgdTask.taskId)
+                    processStatusUpdate(task: bgdTask, status: .canceled)
+                    notificationType = .canceled
                 }
                 else {
-                    os_log("Error for taskId %@: %@", log: log, type: .error, task.taskId, error!.localizedDescription)
-                    processStatusUpdate(task: task, status: .failed, taskException: TaskException(type: .general, httpResponseCode: -1, description: error!.localizedDescription))
+                    os_log("Error for taskId %@: %@", log: log, type: .error, bgdTask.taskId, error!.localizedDescription)
+                    processStatusUpdate(task: bgdTask, status: .failed, taskException: TaskException(type: .general, httpResponseCode: -1, description: error!.localizedDescription))
                 }
             }
-            if isDownloadTask(task: task) {
-                updateNotification(task: task, notificationType: .error, notificationConfig: notificationConfig)
+            if isDownloadTask(task: bgdTask) && notificationType != nil {
+                updateNotification(task: bgdTask, notificationType: notificationType!, notificationConfig: notificationConfig)
             }
             return
         }
         // there was no error
-        os_log("Finished task with id %@", log: log, type: .info, task.taskId)
+        os_log("Finished task with id %@", log: log, type: .info, bgdTask.taskId)
         // if this is an upload task, send final TaskStatus (based on HTTP status code).
         // for download tasks, this is done in urlSession(downloadTask:, didFinishDownloadingTo:)
-        if isUploadTask(task: task) {
+        if isUploadTask(task: bgdTask) {
             let taskException = TaskException(type: .httpResponse, httpResponseCode: responseStatusCode, description: responseStatusDescription)
             let finalStatus = (200...206).contains(responseStatusCode)
             ? TaskStatus.complete
             : responseStatusCode == 404
             ? TaskStatus.notFound
             : TaskStatus.failed
-            processStatusUpdate(task: task, status: finalStatus, taskException: taskException, responseBody: responseBody, responseHeaders: responseHeaders, responseStatusCode: responseStatusCode)
+            processStatusUpdate(task: bgdTask, status: finalStatus, taskException: taskException, responseBody: responseBody, responseHeaders: responseHeaders, responseStatusCode: responseStatusCode)
         }
     }
     
@@ -150,8 +179,8 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
     
     /// Process taskdelegate progress update for download task
     ///
-    /// If the task requires progress updates, provide these at a reasonable interval
-    /// If this is the first update for this file, also emit a 'running' status update
+    /// If the task requires progress updates, provides these at a reasonable interval
+    /// If this is the first update for this file, also emits a 'running' status update
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         // task is var because the filename can be changed on the first 'didWriteData' call
         guard var task = getTaskFrom(urlSessionTask: downloadTask) else { return }
@@ -163,14 +192,19 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             os_log("Starting/resuming taskId %@", log: log, type: .info, task.taskId)
             let response = downloadTask.response as! HTTPURLResponse
             // get suggested filename if needed
-            if task.filename == "?" {
-                let newTask = suggestedFilenameFromResponseHeaders(task: task, responseHeaders: response.allHeaderFields)
-                os_log("Suggested task filename for taskId %@ is %@", log: log, type: .info, newTask.taskId, newTask.filename)
-                if newTask.filename != task.filename {
-                    // store for future replacement, and replace now
-                    BDPlugin.propertyLock.withLock({
-                        BDPlugin.tasksWithSuggestedFilename[newTask.taskId] = newTask
-                    })
+            let (filename, uri) = unpack(packedString: task.filename)
+            if filename == "?" {
+                if (uri == nil) {
+                    let newTask = taskWithSuggestedFilenameFromResponseHeaders(task: task, responseHeaders: response.allHeaderFields)
+                    if newTask.filename != task.filename {
+                        storeModifiedTask(task: newTask)
+                        task = newTask
+                    }
+                } else {
+                    let suggestedFilename = suggestFilename(responseHeaders: response.allHeaderFields, urlString: task.url)
+                    let packed = pack(filename: suggestedFilename.isEmpty ? "unknown" : suggestedFilename, uri: uri!)
+                    let newTask = task.copyWith(filename: packed)
+                    storeModifiedTask(task: newTask)
                     task = newTask
                 }
             }
@@ -187,13 +221,13 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             // Check if there is enough space
             if insufficientSpace(contentLength: totalBytesExpectedToWrite) {
                 let notProgrammaticallyCancelled = BDPlugin.propertyLock.withLock({
-                    !BDPlugin.taskIdsProgrammaticallyCancelled.contains(task.taskId)
+                    !BDPlugin.taskIdsProgrammaticallyCanceledAfterStart.contains(task.taskId)
                 })
                 if notProgrammaticallyCancelled {
                     os_log("Error for taskId %@: Insufficient space to store the file to be downloaded", log: log, type: .error, task.taskId)
                     processStatusUpdate(task: task, status: .failed, taskException: TaskException(type: .fileSystem, httpResponseCode: -1, description: "Insufficient space to store the file to be downloaded for taskId \(task.taskId)"))
                     BDPlugin.propertyLock.withLock({
-                        _ = BDPlugin.taskIdsProgrammaticallyCancelled.insert(task.taskId)
+                        _ = BDPlugin.taskIdsProgrammaticallyCanceledAfterStart.insert(task.taskId)
                     })
                     downloadTask.cancel()
                 }
@@ -262,7 +296,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
     public func urlSession(_ session: URLSession,
                            downloadTask: URLSessionDownloadTask,
                            didFinishDownloadingTo location: URL) {
-        guard let task = getTaskFrom(urlSessionTask: downloadTask),
+        guard var task = getTaskFrom(urlSessionTask: downloadTask),
               let response = downloadTask.response as? HTTPURLResponse
         else {
             os_log("Could not find task associated urlSessionTask %d, or did not get HttpResponse", log: log,  type: .info, downloadTask.taskIdentifier)
@@ -272,7 +306,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
         let (mimeType, charSet) = BDPlugin.propertyLock.withLock({
             let mimeType = BDPlugin.mimeTypes.removeValue(forKey: taskId)
             let charSet = BDPlugin.charSets.removeValue(forKey: taskId)
-            BDPlugin.tasksWithSuggestedFilename.removeValue(forKey: taskId)
+            BDPlugin.tasksWithModifications.removeValue(forKey: taskId)
             BDPlugin.tasksWithContentLengthOverride.removeValue(forKey: taskId)
             return (mimeType, charSet)
         })
@@ -298,7 +332,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             var taskException: TaskException? = nil
             var responseBody: String? = nil
             defer {
-                processStatusUpdate(task: task, 
+                processStatusUpdate(task: task,
                                     status: finalStatus,
                                     taskException: taskException,
                                     responseBody: responseBody,
@@ -312,38 +346,76 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
                 }
             }
             if (isDownloadTask(task: task)) {
-                let directory = try directoryForTask(task: task)
-                do
-                {
-                    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories:  true)
-                } catch {
-                    os_log("Failed to create directory %@", log: log, type: .error, directory.path)
-                    taskException = TaskException(type: .fileSystem, httpResponseCode: -1,
-                                                  description: "Failed to create directory \(directory.path)")
-                    return
-                }
-                var fileUrl = directory.appendingPath(task.filename)
-                if FileManager.default.fileExists(atPath: fileUrl.path) {
-                    try? FileManager.default.removeItem(at: fileUrl)
-                }
-                do {
-                    try FileManager.default.moveItem(at: location, to: fileUrl)
-                } catch {
-                    os_log("Failed to move file from %@ to %@: %@", log: log, type: .error, location.path, fileUrl.path, error.localizedDescription)
-                    taskException = TaskException(type: .fileSystem, httpResponseCode: -1,
-                                                  description: "Failed to move file from \(location.path) to \(fileUrl.path): \(error.localizedDescription)")
-                    return
-                }
-                do {
-                    if UserDefaults.standard.bool(forKey: BDPlugin.keyConfigExcludeFromCloudBackup)
-                    {
-                        try fileUrl.setCloudBackup(exclude: true)
-                        os_log("Excluded from iCloud backup: %@", log: log, type: .info, fileUrl.path)
+                // Determine directoryUri and fileUrl based on URI mode or filepath mode
+                var directoryUrl: URL?
+                var fileUrl: URL?
+                
+                // filename field can contain filename and/or a file url (if already started)
+                let unpackedFilename = unpack(packedString: task.filename)
+                let filename = unpackedFilename.filename ?? "unknown"
+                fileUrl = unpackedFilename.uri
+                // directory may contain a path or a Uri representing the full destination directory
+                if let directoryUri = uriFromStringValue(maybePacked: task.directory) {
+                    // URI mode
+                    let uri = decodeToFileUrl(uri: directoryUri)
+                    guard let uri = uri else {
+                        os_log("Invalid directory URI (could not convert bookmark): %@", log: log, type: .error, directoryUri.absoluteString)
+                        taskException = TaskException(type: .fileSystem, httpResponseCode: -1,
+                                                      description: "Invalid directory URI (could not convert bookmark): %@ \(directoryUri.absoluteString)")
+                        return
                     }
-                } catch {
-                    os_log("Could not exclude from iCloud backup: %@ - %@", log: log, type: .info, fileUrl.path, error.localizedDescription)
+                    guard uri.isFileURL else {
+                        os_log("Invalid directory URI (not a file URL): %@", log: log, type: .error, uri.absoluteString)
+                        taskException = TaskException(type: .fileSystem, httpResponseCode: -1,
+                                                      description: "Invalid directory URI (not a file URL): \(uri.absoluteString)")
+                        return
+                    }
+                    directoryUrl = uri
+                    fileUrl = uri.appendingPathComponent(filename)
+                    // store the full Uri in the task.filename so it can be retrieved
+                    let newTask = task.copyWith(filename: pack(filename: filename, uri: fileUrl!))
+                    task = newTask
+                } else {
+                    // Filepath mode
+                    directoryUrl = try directoryForTask(task: task)
+                    fileUrl = directoryUrl?.appendingPathComponent(filename)
                 }
-                finalStatus = TaskStatus.complete
+                
+                // Guard against directoryUri or fileUrl being nil
+                guard let directoryUri = directoryUrl, var fileUrl = fileUrl else {
+                    os_log("Could not determine directory Uri or file Uri", log: log, type: .error)
+                    taskException = TaskException(type: .fileSystem, httpResponseCode: -1,
+                                                  description: "Could not determine directory or file Uri")
+                    return
+                }
+                
+                do {
+                    if !FileManager.default.fileExists(atPath: directoryUri.path) {
+                        try FileManager.default.createDirectory(at: directoryUri, withIntermediateDirectories: true)
+                    }
+                    
+                    if FileManager.default.fileExists(atPath: fileUrl.path) {
+                        try FileManager.default.removeItem(at: fileUrl)
+                    }
+                    
+                    try FileManager.default.moveItem(at: location, to: fileUrl)
+                    
+                    do {
+                        if UserDefaults.standard.bool(forKey: BDPlugin.keyConfigExcludeFromCloudBackup)
+                        {
+                            try fileUrl.setCloudBackup(exclude: true)
+                            os_log("Excluded from iCloud backup: %@", log: log, type: .info, fileUrl.path)
+                        }
+                    } catch {
+                        os_log("Could not exclude from iCloud backup: %@ - %@", log: log, type: .info, fileUrl.path, error.localizedDescription)
+                    }
+                    finalStatus = TaskStatus.complete
+                    
+                } catch {
+                    os_log("File operation failed: %@", log: log, type: .error, error.localizedDescription)
+                    taskException = TaskException(type: .fileSystem, httpResponseCode: -1, description: "File operation failed: \(error.localizedDescription)")
+                    return
+                }
             } else {
                 // this is a DataTask, so we read the file as the responseBody
                 responseBody = readFile(url: location)
@@ -497,7 +569,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
         }) else { return nil }
         return urlSessionTask
     }
-
+    
     /// Returns a `task` that may be modified through callbacks, and a bool to indicate that the task was modified.
     ///
     /// Callbacks would be attached to the task via its `Task.options` property, and if
@@ -513,7 +585,6 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
         if let auth = task.options?.auth {
             // Refresh token if needed
             if auth.isTokenExpired() && auth.hasOnAuthCallback() == true {
-                os_log("onAuth callback for taskId %@", log: log, type: .info, task.taskId)
                 authTask = await invokeOnAuthCallback(task: task)
             }
             taskWasModified = authTask != nil
@@ -530,9 +601,8 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             authTask = authTask!.copyWith(url: uri.absoluteString, headers: headers)
         }
         authTask = authTask ?? task
-        guard task.options?.hasStartCallback() == true else { return (authTask!, taskWasModified) }
+        guard task.options?.hasOnStartCallback() == true else { return (authTask!, taskWasModified) }
         // onStart callback
-        os_log("onTaskStart callback for taskId %@", log: log, type: .info, authTask!.taskId)
         let modifiedTask = await invokeOnTaskStartCallback(task: authTask!)
         taskWasModified = taskWasModified || modifiedTask != nil
         return (modifiedTask ?? authTask!, taskWasModified)

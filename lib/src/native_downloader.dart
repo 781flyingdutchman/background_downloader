@@ -237,6 +237,37 @@ abstract base class NativeDownloader extends BaseDownloader {
   }
 
   @override
+  Future<List<bool>> enqueueAll(Iterable<Task> tasks) async {
+    for (final task in tasks.where((task) => task.allowPause)) {
+      canResumeTask[task] = Completer();
+    }
+    final (
+      String tasksJsonString,
+      String notificationConfigsJsonString
+    ) = await compute(
+        _taskAndNotificationConfigJsonStrings, (tasks, notificationConfigs));
+    final result = await methodChannel.invokeMethod<List<Object?>>(
+            'enqueueAll', [tasksJsonString, notificationConfigsJsonString]) ??
+        [];
+    return result.map((item) => item is bool ? item : false).toList();
+  }
+
+  static (String, String) _taskAndNotificationConfigJsonStrings(
+      (
+        Iterable<Task>,
+        Set<TaskNotificationConfig>
+      ) tasksAndNotificationConfigs) {
+    final (tasks, notificationConfigs) = tasksAndNotificationConfigs;
+    final tasksJsonString = jsonEncode(tasks);
+    final configs = tasks
+        .map((task) => BaseDownloader.notificationConfigForTaskUsingConfigSet(
+            task, notificationConfigs))
+        .toList();
+    final notificationConfigsJsonString = jsonEncode(configs);
+    return (tasksJsonString, notificationConfigsJsonString);
+  }
+
+  @override
   Future<int> reset(String group) async {
     final retryAndPausedTaskCount = await super.reset(group);
     final nativeCount =
@@ -280,6 +311,15 @@ abstract base class NativeDownloader extends BaseDownloader {
   @override
   Future<bool> pause(Task task) async =>
       await methodChannel.invokeMethod<bool>('pause', task.taskId) ?? false;
+
+  @override
+  Future<List<bool>> pauseTaskList(Iterable<Task> tasksToPause) async {
+    final taskIds =
+        tasksToPause.map((task) => task.taskId).toList(growable: false);
+    final results =
+        await methodChannel.invokeMethod<List<Object?>>('pauseAll', taskIds);
+    return results?.cast<bool>() ?? tasksToPause.map((task) => false).toList();
+  }
 
   @override
   Future<bool> resume(Task task) async {
@@ -358,20 +398,18 @@ abstract base class NativeDownloader extends BaseDownloader {
   }
 
   @override
-  Future<String?> moveToSharedStorage(
-          String filePath,
-          SharedStorage destination,
-          String directory,
-          String? mimeType,
-          bool asAndroidUri) =>
+  Future<String?> moveToSharedStorage(String filePath,
+          SharedStorage destination, String directory, String? mimeType,
+          {bool asUriString = false}) =>
       methodChannel.invokeMethod<String?>('moveToSharedStorage',
-          [filePath, destination.index, directory, mimeType, asAndroidUri]);
+          [filePath, destination.index, directory, mimeType, asUriString]);
 
   @override
-  Future<String?> pathInSharedStorage(String filePath,
-          SharedStorage destination, String directory, bool asAndroidUri) =>
+  Future<String?> pathInSharedStorage(
+          String filePath, SharedStorage destination, String directory,
+          {bool asUriString = false}) =>
       methodChannel.invokeMethod<String?>('pathInSharedStorage',
-          [filePath, destination.index, directory, asAndroidUri]);
+          [filePath, destination.index, directory, asUriString]);
 
   @override
   Future<bool> openFile(Task? task, String? filePath, String? mimeType) async {
@@ -474,6 +512,21 @@ final class AndroidDownloader extends NativeDownloader {
 
   @override
   Future<bool> enqueue(Task task) async {
+    await _registerCallbackDispatcher(task);
+    return super.enqueue(task);
+  }
+
+  @override
+  Future<List<bool>> enqueueAll(Iterable<Task> tasks) async {
+    for (final task in tasks) {
+      await _registerCallbackDispatcher(task);
+    }
+    return super.enqueueAll(tasks);
+  }
+
+  /// On Android, need to register [_callbackDispatcherRawHandle] upon first
+  /// encounter of a task with callbacks
+  Future<void> _registerCallbackDispatcher(Task task) async {
     // on Android, need to register [_callbackDispatcherRawHandle] upon first
     // encounter of a task with callbacks
     if (task.options?.hasCallback == true &&
@@ -494,7 +547,6 @@ final class AndroidDownloader extends NativeDownloader {
         log.warning('Could not obtain rawHandle for initCallbackDispatcher');
       }
     }
-    return super.enqueue(task);
   }
 
   @override
@@ -648,10 +700,10 @@ final class IOSDownloader extends NativeDownloader {
 const _callbackChannel =
     MethodChannel('com.bbflight.background_downloader.callbacks');
 
-/// Initialize the callbackDispatcher for task related callbacks (hooks)
+/// Initialize the callbackDispatcher for native callbacks
 ///
 /// Establishes the methodChannel through which the native side will send its
-/// callBacks, and teh listener that processes the different callback types.
+/// callBacks, and the listener that processes the different callback types.
 ///
 /// This method is called directly from the native platform prior to using
 /// the [_callbackChannel] to post the actual callback
@@ -660,6 +712,16 @@ void initCallbackDispatcher() {
   WidgetsFlutterBinding.ensureInitialized();
   _callbackChannel.setMethodCallHandler((MethodCall call) async {
     switch (call.method) {
+      case 'beforeTaskStartCallback':
+        final taskJsonString = call.arguments as String;
+        final task = Task.createFromJson(jsonDecode(taskJsonString));
+        final callBack = task.options?.beforeTaskStartCallBack;
+        final taskStatusUpdate = await callBack?.call(task);
+        if (taskStatusUpdate == null) {
+          return null;
+        }
+        return jsonEncode(taskStatusUpdate.toJson());
+
       case 'onTaskStartCallback':
       case 'onAuthCallback':
         final taskJsonString = call.arguments as String;

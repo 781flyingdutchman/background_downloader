@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import UniformTypeIdentifiers
 import os.log
 
 extension URL {
@@ -108,3 +109,18 @@ func createTempFileWithRange(from fileURL: URL, start: UInt64, contentLength: UI
     }
     return tempFileURL
 }
+
+
+/**
+ Returns mimetype of a filename based on its extension, or application/octet-stream
+ */
+func getMimeType(fromFilename filename: String) -> String {
+    // Extract the file extension from the filename
+    let fileExtension = (filename as NSString).pathExtension
+    if let type = UTType(filenameExtension: fileExtension) {
+        return type.preferredMIMEType ?? "application/octet-stream"
+    }
+    // Default MIME type if unable to determine
+    return "application/octet-stream"
+}
+

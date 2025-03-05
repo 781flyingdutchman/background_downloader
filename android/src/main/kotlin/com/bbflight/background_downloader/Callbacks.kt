@@ -102,7 +102,7 @@ class Callbacks {
          * @param task The [Task] object to be passed to the Flutter callback, or null.
          * @param statusUpdate The [TaskStatusUpdate] object to be passed to the Flutter callback, or null.
          * @param methodName The name of the method to invoke on the Flutter side.
-         * @return The updated task object returned by the Flutter callback, or `null` if
+         * @return The updated object returned by the Flutter callback, or `null` if
          *         the task is unchanged, an error occurs, or the method channel is not available.
          */
         private suspend fun invokeCallback(
@@ -110,36 +110,47 @@ class Callbacks {
             methodName: String,
             task: Task? = null,
             statusUpdate: TaskStatusUpdate? = null,
-        ): Task? {
+        ): Any? {
             val methodChannel = getMethodChannel(context) ?: return null
             methodChannelMutex.withLock {
-                val resultingTaskAsJsonStringCompleter = CompletableDeferred<String?>()
+                val resultingObjectAsJsonStringCompleter = CompletableDeferred<String?>()
                 Handler(Looper.getMainLooper()).post {
                     // Run on UI thread
                     val arg = if (task != null) Json.encodeToString(task) else Json.encodeToString(
                         statusUpdate
                     )
+                    Log.i(
+                        TAG,
+                        "Invoking $methodName for taskId ${task?.taskId}"
+                    )
                     methodChannel.invokeMethod(
                         methodName,
                         arg, // either task or update
-                        FlutterResultHandler(resultingTaskAsJsonStringCompleter)
+                        FlutterResultHandler(resultingObjectAsJsonStringCompleter)
                     )
                 }
-                val taskAsJsonString = resultingTaskAsJsonStringCompleter.await()
-                return if (taskAsJsonString == null) null else Json.decodeFromString<Task>(
-                    taskAsJsonString
-                )
+                val objectAsJsonString = resultingObjectAsJsonStringCompleter.await()
+                return if (objectAsJsonString == null) null else
+                    if (methodName == "beforeTaskStartCallback") Json.decodeFromString<TaskStatusUpdate>(
+                        objectAsJsonString
+                    ) else Json.decodeFromString<Task>(
+                        objectAsJsonString
+                    )
             }
         }
 
         /**
-         * Invoke the invokeOnAuthCallback and return the result
+         * Invoke the beforeTaskStartCallback and return the result
          */
-        suspend fun invokeOnAuthCallback(context: Context, task: Task): Task? {
+        suspend fun invokeBeforeTaskStartCallback(context: Context, task: Task): TaskStatusUpdate? {
             try {
-                return invokeCallback(context, "onAuthCallback", task = task)
+                return invokeCallback(
+                    context,
+                    "beforeTaskStartCallback",
+                    task = task
+                ) as TaskStatusUpdate?
             } catch (e: Exception) {
-                Log.e(TAG, "Error in invokeOnAuthCallback", e)
+                Log.e(TAG, "Error in invokeBeforeTaskStartCallback", e)
             }
             return null
         }
@@ -149,9 +160,21 @@ class Callbacks {
          */
         suspend fun invokeOnTaskStartCallback(context: Context, task: Task): Task? {
             try {
-                return invokeCallback(context, "onTaskStartCallback", task = task)
+                return invokeCallback(context, "onTaskStartCallback", task = task) as Task?
             } catch (e: Exception) {
                 Log.e(TAG, "Error in invokeOnTaskStartCallback", e)
+            }
+            return null
+        }
+
+        /**
+         * Invoke the invokeOnAuthCallback and return the result
+         */
+        suspend fun invokeOnAuthCallback(context: Context, task: Task): Task? {
+            try {
+                return invokeCallback(context, "onAuthCallback", task = task) as Task?
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in invokeOnAuthCallback", e)
             }
             return null
         }
@@ -161,7 +184,11 @@ class Callbacks {
          */
         suspend fun invokeOnTaskFinishedCallback(context: Context, statusUpdate: TaskStatusUpdate) {
             try {
-                invokeCallback(context, "onTaskFinishedCallback", statusUpdate = statusUpdate)
+                invokeCallback(
+                    context,
+                    "onTaskFinishedCallback",
+                    statusUpdate = statusUpdate
+                ) as Task?
             } catch (e: Exception) {
                 Log.e(TAG, "Error in invokeOnTaskFinishedCallback", e)
             }

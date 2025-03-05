@@ -48,7 +48,7 @@ void main() {
         .writeAsString('contents', flush: true);
     expect(
         File(path.join(docDir.path, tasksPath, 'test')).existsSync(), isTrue);
-    final downloader = FileDownloader().downloaderForTesting;
+    final _ = FileDownloader(); // triggers the initialization and migration
     await Future.delayed(const Duration(milliseconds: 100));
     // file 'test' in docDir should have been moved to supportDir
     expect(
@@ -68,7 +68,6 @@ void main() {
     await file2.writeAsString('contents2');
     expect(
         File(path.join(docDir.path, tasksPath, 'test2')).existsSync(), isTrue);
-    await downloader.initialize();
     expect(
         File(path.join(docDir.path, tasksPath, 'test2')).existsSync(), isTrue);
     expect(File(path.join(supportDir.path, tasksPath, 'test2')).existsSync(),

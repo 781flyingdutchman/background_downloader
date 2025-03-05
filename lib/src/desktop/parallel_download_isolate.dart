@@ -58,7 +58,6 @@ var parallelDownloadContentLength = -1;
 /// [listenToIncomingMessages] function
 Future<void> doParallelDownloadTask(
     ParallelDownloadTask task,
-    String filePath,
     ResumeData? resumeData,
     bool isResume,
     Duration requestTimeout,

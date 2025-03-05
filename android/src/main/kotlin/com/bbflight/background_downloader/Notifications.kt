@@ -29,6 +29,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -45,6 +46,7 @@ import kotlin.math.roundToInt
  * Actual appearance of notification is dependent on the platform, e.g.
  * on iOS {progress} and progressBar are not available and ignored
  */
+@OptIn(InternalSerializationApi::class)
 @Serializable
 class TaskNotification(val title: String, val body: String) {
     override fun toString(): String {
@@ -60,12 +62,14 @@ class TaskNotification(val title: String, val body: String) {
  * [error] is the notification used when something went wrong,
  * including pause, failed and notFound status
  */
+@OptIn(InternalSerializationApi::class)
 @Serializable
 class NotificationConfig(
     val running: TaskNotification?,
     val complete: TaskNotification?,
     val error: TaskNotification?,
     val paused: TaskNotification?,
+    val canceled: TaskNotification?,
     val progressBar: Boolean,
     val tapOpensFile: Boolean,
     val groupNotificationId: String
@@ -147,7 +151,7 @@ class GroupNotification(
 }
 
 @Suppress("EnumEntryName")
-enum class NotificationType { running, complete, error, paused }
+enum class NotificationType { running, complete, error, paused, canceled }
 
 /**
  * Receiver for messages from notification, sent via intent
@@ -362,6 +366,7 @@ object NotificationService {
             NotificationType.complete -> taskWorker.notificationConfig?.complete
             NotificationType.error -> taskWorker.notificationConfig?.error
             NotificationType.paused -> taskWorker.notificationConfig?.paused
+            NotificationType.canceled -> taskWorker.notificationConfig?.canceled
         }
         if (notification == null) {
             addToNotificationQueue(taskWorker) // removes notification
@@ -377,6 +382,7 @@ object NotificationService {
             NotificationType.complete -> R.drawable.outline_download_done_24
             NotificationType.error -> R.drawable.outline_error_outline_24
             NotificationType.paused -> R.drawable.outline_pause_24
+            NotificationType.canceled -> R.drawable.outline_cancel_24
         }
         val builder = Builder(
             taskWorker.applicationContext, notificationChannelId
@@ -407,7 +413,7 @@ object NotificationService {
         }
         // progress bar
         val progressBar =
-            taskWorker.notificationConfig?.progressBar ?: false && (notificationType == NotificationType.running || notificationType == NotificationType.paused)
+            taskWorker.notificationConfig?.progressBar == true && (notificationType == NotificationType.running || notificationType == NotificationType.paused)
         if (progressBar && taskWorker.notificationProgress >= 0) {
             if (taskWorker.notificationProgress <= 1) {
                 builder.setProgress(
@@ -654,6 +660,7 @@ object NotificationService {
 
             NotificationType.complete -> {}
             NotificationType.error -> {}
+            NotificationType.canceled -> {}
         }
     }
 
@@ -830,6 +837,7 @@ object NotificationService {
             TaskStatus.enqueued, TaskStatus.running -> NotificationType.running
             TaskStatus.complete -> NotificationType.complete
             TaskStatus.paused -> NotificationType.paused
+            TaskStatus.canceled -> NotificationType.canceled
             else -> NotificationType.error
         }
     }

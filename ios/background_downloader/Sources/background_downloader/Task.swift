@@ -193,17 +193,23 @@ enum Updates: Int {
 /// Holds various options related to the task that are not included in the
 /// task's properties, as they are rare
 struct TaskOptions : Codable, Hashable {
+    var beforeTaskStartRawHandle: Int64?
     var onTaskStartRawHandle: Int64?
     var onTaskFinishedRawHandle: Int64?
     var auth: Auth?
     
-    /// True if [TaskOptions] contains a callback for Start or Auth that happens before the task starts
-    func hasStartCallback() -> Bool {
+    /// True if [TaskOptions] contains a callback for beforeTaskStart
+    func hasBeforeStartCallback() -> Bool {
+        beforeTaskStartRawHandle != nil
+    }
+    
+    /// True if [TaskOptions] contains a callback for onTaskStart
+    func hasOnStartCallback() -> Bool {
         onTaskStartRawHandle != nil
     }
     
     /// True if [TaskOptions] contains a callback that must be called after the task finishes
-    func hasFinishedCallback() -> Bool {
+    func hasOnFinishedCallback() -> Bool {
         onTaskFinishedRawHandle != nil
     }
 }
@@ -221,7 +227,7 @@ enum TaskStatus: Int, Codable {
 }
 
 /** Holds data associated with a task status update, for local storage */
-struct TaskStatusUpdate: Encodable {
+struct TaskStatusUpdate: Codable {
     var task: Task
     var taskStatus: TaskStatus
     var exception: TaskException?
@@ -262,7 +268,7 @@ struct ResumeData: Encodable {
 }
 
 /// The type of [TaskException]
-enum ExceptionType: String, Encodable {
+enum ExceptionType: String, Codable {
     case
     
     // General error
@@ -294,7 +300,7 @@ enum ExceptionType: String, Encodable {
  * The [description] is typically taken from the platform-generated
  * error message, or from the plugin. The localization is undefined
  */
-struct TaskException : Encodable {
+struct TaskException : Codable {
     var type: ExceptionType
     var httpResponseCode: Int = -1
     var description: String

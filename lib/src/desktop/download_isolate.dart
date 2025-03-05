@@ -22,16 +22,12 @@ late DownloadTask downloadTask; // global because filename may change
 ///
 /// Sends updates via the [sendPort] and can be commanded to cancel/pause via
 /// the [messagesToIsolate] queue
-Future<void> doDownloadTask(
-    DownloadTask task,
-    String filePath,
-    ResumeData? resumeData,
-    bool isResume,
-    Duration requestTimeout,
-    SendPort sendPort) async {
+Future<void> doDownloadTask(DownloadTask task, ResumeData? resumeData,
+    bool isResume, Duration requestTimeout, SendPort sendPort) async {
   // use downloadTask from here on as a 'global' variable in this isolate,
   // as we may change the filename of the task
   downloadTask = task;
+  var filePath = await downloadTask.filePath();
   // tempFilePath is taken from [resumeDataString] if this is a resuming task.
   // Otherwise, it is a generated full path to the temp directory
   final tempFilePath = isResume && resumeData != null
@@ -56,8 +52,8 @@ Future<void> doDownloadTask(
     final newRangeString = 'bytes=${resumeRange.$1}-${resumeRange.$2 ?? ""}';
     request.headers['Range'] = newRangeString;
   }
-  if (downloadTask.post is String) {
-    request.body = downloadTask.post!;
+  if (downloadTask.post case String post) {
+    request.body = post;
   }
   var resultStatus = TaskStatus.failed;
   try {
@@ -210,7 +206,9 @@ Future<TaskStatus> processOkDownloadResponse(
     setTaskError(e);
   } finally {
     try {
-      await outStream?.close();
+      try {
+        await outStream?.close();
+      } catch (_) {}
       if (resultStatus == TaskStatus.failed &&
           serverAcceptsRanges &&
           bytesTotal + startByte > 1 << 20) {
@@ -221,7 +219,7 @@ Future<TaskStatus> processOkDownloadResponse(
         File(tempFilePath).deleteSync();
       }
     } catch (e) {
-      logError(downloadTask, 'Could not delete temp file $tempFilePath');
+      logError(downloadTask, 'Could not delete temp file $tempFilePath: $e');
     }
   }
   return resultStatus;

@@ -25,27 +25,29 @@ val trailingPathSeparatorRegEx = Regex("""/$""")
 
 /**
  * Moves the file from filePath to the shared storage destination and returns the path to
- * that file if successful, or null if not. If [asAndroidUri] is true, the URI will be returned
- * instead of the file path, if possible, otherwise falls back to the file path
+ * that file if successful, or null if not. If [asUriString] is true, the URI will be returned
+ * instead of the file path
  *
  * If successful, the original file will have been deleted
  */
 suspend fun moveToSharedStorage(
     context: Context,
-    filePath: String,
+    filePathOrUriString: String,
     destination: SharedStorage,
     directory: String,
     mimeType: String?,
-    asAndroidUri: Boolean
+    asUriString: Boolean
 ): String? {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-        return moveToPublicDirectory(filePath, destination, directory)
+        return moveToPublicDirectory(filePathOrUriString, destination, directory)
     }
-    val file = File(filePath)
+    val file = if (filePathOrUriString.startsWith("file://")) {
+        File(Uri.parse(filePathOrUriString).path!!)
+    } else  File(filePathOrUriString)
     if (!file.exists()) {
         Log.i(
             BDPlugin.TAG,
-            "File $filePath does not exist -> cannot move to shared storage"
+            "File $filePathOrUriString does not exist -> cannot move to shared storage"
         )
         return null
     }
@@ -64,7 +66,7 @@ suspend fun moveToSharedStorage(
     val uri = try {
         resolver.insert(getMediaStoreUri(destination), contentValues)
     } catch (e: Exception) {
-        Log.i(BDPlugin.TAG, "Cannot insert $filePath in MediaStore: $e")
+        Log.i(BDPlugin.TAG, "Cannot insert $filePathOrUriString in MediaStore: $e")
         return null
     }
     if (uri != null) {
@@ -82,18 +84,25 @@ suspend fun moveToSharedStorage(
         } catch (e: Exception) {
             Log.i(
                 BDPlugin.TAG,
-                "Error moving file $filePath to shared storage: $e"
+                "Error moving file $filePathOrUriString to shared storage: $e"
             )
         } finally {
             contentValues.clear()
             contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
-            resolver.update(uri, contentValues, null, null)
+            try {
+                resolver.update(uri, contentValues, null, null)
+            } catch (e: Exception) {
+                Log.i(
+                    BDPlugin.TAG,
+                    "Failed to reset IS_PENDING: $e"
+                )
+            }
         }
     }
     // If the file was moved successfully, remove the original
     if (success) {
         file.delete()
-        return if (asAndroidUri) uri!!.toString() else pathFromUri(context, uri!!)
+        return if (asUriString) uri!!.toString() else pathFromUri(context, uri!!)
     } else {
         return null
     }
@@ -159,15 +168,25 @@ private fun moveToPublicDirectory(
 
 /**
  * Returns the path to the file in shared storage, or null
+ *
+ * The [filePathOrUriString] can represent a file:// Uri but not a content:// Uri
+ *
+ * If [asUriString] is true, returns the URI as a String
  */
 fun pathInSharedStorage(
     context: Context,
-    filePath: String,
+    filePathOrUriString: String,
     destination: SharedStorage,
     directory: String,
-    asAndroidUri: Boolean
+    asUriString: Boolean
 ): String? {
-    val fileName = File(filePath).name
+    // Check if filePath is a file:// URI
+    val fileUri = Uri.parse(filePathOrUriString)
+    val fileName = if (fileUri.scheme == "file") {
+        File(fileUri.path!!).name
+    } else {
+        File(filePathOrUriString).name
+    }
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
         val destinationMediaPath = getMediaStorePathBelowQ(destination)
         val rootDir = Environment.getExternalStoragePublicDirectory(destinationMediaPath)
@@ -187,7 +206,7 @@ fun pathInSharedStorage(
         null
     )?.use { cursor ->
         if (cursor.moveToFirst()) {
-            return if (asAndroidUri) {
+            return if (asUriString) {
                 Uri.withAppendedPath(
                     getMediaStoreUri(destination),
                     cursor.getLong(1).toString()
@@ -202,7 +221,7 @@ fun pathInSharedStorage(
  * Returns path to media store [destination] for Android versions at or above Q
  */
 @RequiresApi(Build.VERSION_CODES.Q)
-private fun getMediaStoreUri(destination: SharedStorage): Uri {
+fun getMediaStoreUri(destination: SharedStorage): Uri {
     return when (destination) {
         SharedStorage.files -> MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         SharedStorage.downloads -> MediaStore.Downloads.getContentUri(
@@ -256,12 +275,12 @@ private fun getRelativePath(destination: SharedStorage, directory: String): Stri
 
 
 /**
- * Return Mime type for this [fileName], as a String
+ * Return Mime type for this [fileNameOrUriString], as a String
  *
  * Defaults to application/octet-stream
  */
-fun getMimeType(fileName: String): String {
-    val extension = fileName.substringAfterLast(".", "")
+fun getMimeType(fileNameOrUriString: String): String {
+    val extension = fileNameOrUriString.substringAfterLast(".", "")
     return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
         ?: "application/octet-stream"
 }

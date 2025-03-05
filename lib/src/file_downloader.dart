@@ -14,6 +14,7 @@ import 'permissions.dart';
 import 'persistent_storage.dart';
 import 'queue/task_queue.dart';
 import 'task.dart';
+import 'uri/uri_utils.dart';
 import 'web_downloader.dart'
     if (dart.library.io) 'desktop/desktop_downloader.dart';
 
@@ -42,7 +43,11 @@ interface class FileDownloader {
   /// rationale for this permission should be shown
   Permissions get permissions => _downloader.permissionsService;
 
+  /// Platform-specific implementation of the downloader itself
   late final BaseDownloader _downloader;
+
+  /// Accesses utilities for working with URIs
+  UriUtils? _uri;
 
   /// Do not use: for testing only
   @visibleForTesting
@@ -69,6 +74,14 @@ interface class FileDownloader {
   /// Stream of [TaskUpdate] updates for downloads that do
   /// not have a registered callback
   Stream<TaskUpdate> get updates => _downloader.updates.stream;
+
+  /// Accesses utilities for working with URIs. URIs make working with file pickers and
+  /// shared storage easier, as they abstract permissions and are coherent
+  /// across platforms.
+  UriUtils get uri {
+    _uri ??= UriUtils.withDownloader(_downloader);
+    return _uri!;
+  }
 
   /// Configures the downloader
   ///
@@ -199,6 +212,13 @@ interface class FileDownloader {
   /// - you want more detailed progress information
   ///   (e.g. file size, network speed, time remaining)
   Future<bool> enqueue(Task task) => _downloader.enqueue(task);
+
+  /// Enqueues a list of tasks and returns a list of booleans indicating whether
+  /// each task was successfully enqueued
+  ///
+  /// See [enqueue] for details
+  Future<List<bool>> enqueueAll(Iterable<Task> tasks) =>
+      _downloader.enqueueAll(tasks);
 
   /// Download a file and return the final [TaskStatusUpdate]
   ///
@@ -471,7 +491,7 @@ interface class FileDownloader {
   ///
   /// Every canceled task wil emit a [TaskStatus.canceled] update to
   /// the registered callback, if requested
-  Future<bool> cancelTasksWithIds(List<String> taskIds) =>
+  Future<bool> cancelTasksWithIds(Iterable<String> taskIds) =>
       _downloader.cancelTasksWithIds(taskIds);
 
   /// Cancel this task
@@ -479,6 +499,18 @@ interface class FileDownloader {
   /// The task will emit a [TaskStatus.canceled] update to
   /// the registered callback, if requested
   Future<bool> cancelTaskWithId(String taskId) => cancelTasksWithIds([taskId]);
+
+  /// Cancel this task
+  ///
+  /// The task will emit a [TaskStatus.canceled] update to
+  /// the registered callback, if requested
+  Future<bool> cancel(Task task) => cancelTasksWithIds([task.taskId]);
+
+  /// Cancels all tasks, or those in [tasks], or all tasks in group [group]
+  ///
+  /// Returns true if all cancellations were successful
+  Future<bool> cancelAll({Iterable<Task>? tasks, String? group}) =>
+      _downloader.cancelAll(tasks: tasks, group: group);
 
   /// Return [Task] for the given [taskId], or null
   /// if not found.
@@ -575,9 +607,12 @@ interface class FileDownloader {
   ///
   /// This function retrieves all tasks from the database that are in enqueued
   /// or running states and compares these tasks with the
-  /// list of tasks currently present in the native task queue.
+  /// list of tasks currently present in the native task queue, and all tasks
+  /// that are in waitingToRetry state that are not actually waiting to retry
+  /// in the downloader
   ///
-  /// For each task found only in the database, the function:
+  /// For each task found only in the database (or waitingToRetry yet not
+  /// actually waiting), the function:
   /// 1. Deletes the corresponding record from the database.
   /// 2. Enqueues the task back into the native task queue.
   ///
@@ -592,7 +627,10 @@ interface class FileDownloader {
         _downloader.isTrackingTasks,
         'rescheduleKilledTasks should only be called if you are tracking tasks. '
         'Did you call trackTasks or trackTasksInGroup?');
-    final databaseTasks = (await database.allRecords())
+    final missingTasks = <Task>{};
+    final databaseTasks = await database.allRecords();
+    // find missing enqueued/running tasks
+    final enqueuedOrRunningDatabaseTasks = databaseTasks
         .where((record) => const [
               TaskStatus.enqueued,
               TaskStatus.running,
@@ -600,7 +638,13 @@ interface class FileDownloader {
         .map((record) => record.task)
         .toSet();
     final nativeTasks = Set<Task>.from(await FileDownloader().allTasks());
-    final missingTasks = databaseTasks.difference(nativeTasks);
+    missingTasks.addAll(enqueuedOrRunningDatabaseTasks.difference(nativeTasks));
+    // find missing tasks waiting to retry
+    missingTasks.addAll(databaseTasks
+        .where((record) =>
+            record.status == TaskStatus.waitingToRetry &&
+            !_downloader.tasksWaitingToRetry.contains(record.task))
+        .map((record) => record.task));
     final successfullyEnqueued = <Task>[];
     final failedToEnqueue = <Task>[];
     for (final task in missingTasks) {
@@ -636,6 +680,13 @@ interface class FileDownloader {
     return false;
   }
 
+  /// Pauses all tasks, or those in [tasks], or all tasks in group [group]
+  ///
+  /// Returns list of tasks that were paused
+  Future<List<DownloadTask>> pauseAll(
+          {Iterable<DownloadTask>? tasks, String? group}) =>
+      _downloader.pauseAll(tasks: tasks, group: group);
+
   /// Resume the task
   ///
   /// If no resume data is available for this task, the call to [resume]
@@ -646,6 +697,34 @@ interface class FileDownloader {
   /// If the task is able to resume, it will, otherwise it will restart the
   /// task from scratch, or fail.
   Future<bool> resume(DownloadTask task) => _downloader.resume(task);
+
+  /// Resume all paused tasks, or those in [tasks], or paused tasks in
+  /// group [group]
+  ///
+  /// Calls to resume will be spaced out over time by [interval], defaults to 50ms
+  Future<List<Task>> resumeAll(
+      {Iterable<DownloadTask>? tasks,
+      String? group,
+      Duration interval = const Duration(milliseconds: 50)}) async {
+    final results = <Task>[];
+    final tasksToResume = switch ((tasks, group)) {
+      (Iterable<DownloadTask> tasks, null) => tasks,
+      (null, String group) => (await _downloader.getPausedTasks())
+          .whereType<DownloadTask>()
+          .where((task) => task.group == group),
+      (null, null) =>
+        (await _downloader.getPausedTasks()).whereType<DownloadTask>(),
+      _ => throw AssertionError(
+          "Either 'tasks' or 'group' must be provided, or neither, but not both.")
+    };
+    for (final task in tasksToResume) {
+      if (await resume(task)) {
+        results.add(task);
+      }
+      await Future.delayed(interval);
+    }
+    return results;
+  }
 
   /// Set WiFi requirement globally, based on [requirement].
   ///
@@ -670,7 +749,10 @@ interface class FileDownloader {
   /// [running] is the notification used while the task is in progress
   /// [complete] is the notification used when the task completed
   /// [error] is the notification used when something went wrong,
-  /// including pause, failed and notFound status
+  /// including failed and notFound status
+  /// [paused] is the notification shown when the task is paused
+  /// [canceled] is the notification shown when the task is canceled programmatically
+  ///    or by the user via a notification button
   /// [progressBar] if set will show a progress bar
   /// [tapOpensFile] if set will attempt to open the file when the [complete]
   ///     notification is tapped
@@ -708,15 +790,17 @@ interface class FileDownloader {
       TaskNotification? complete,
       TaskNotification? error,
       TaskNotification? paused,
+      TaskNotification? canceled,
       bool progressBar = false,
       bool tapOpensFile = false,
       String groupNotificationId = ''}) {
-    _downloader.notificationConfigs.add(TaskNotificationConfig(
+    _addOrUpdateTaskNotificationConfig(TaskNotificationConfig(
         taskOrGroup: task,
         running: running,
         complete: complete,
         error: error,
         paused: paused,
+        canceled: canceled,
         progressBar: progressBar,
         tapOpensFile: tapOpensFile,
         groupNotificationId: groupNotificationId));
@@ -732,7 +816,10 @@ interface class FileDownloader {
   /// [running] is the notification used while the task is in progress
   /// [complete] is the notification used when the task completed
   /// [error] is the notification used when something went wrong,
-  /// including pause, failed and notFound status
+  /// including failed and notFound status
+  /// [paused] is the notification shown when the task is paused
+  /// [canceled] is the notification shown when the task is canceled programmatically
+  ///    or by the user via a notification button
   /// [progressBar] if set will show a progress bar
   /// [tapOpensFile] if set will attempt to open the file when the [complete]
   ///     notification is tapped
@@ -770,15 +857,17 @@ interface class FileDownloader {
       TaskNotification? complete,
       TaskNotification? error,
       TaskNotification? paused,
+      TaskNotification? canceled,
       bool progressBar = false,
       bool tapOpensFile = false,
       String groupNotificationId = ''}) {
-    _downloader.notificationConfigs.add(TaskNotificationConfig(
+    _addOrUpdateTaskNotificationConfig(TaskNotificationConfig(
         taskOrGroup: group,
         running: running,
         complete: complete,
         error: error,
         paused: paused,
+        canceled: canceled,
         progressBar: progressBar,
         tapOpensFile: tapOpensFile,
         groupNotificationId: groupNotificationId));
@@ -794,7 +883,10 @@ interface class FileDownloader {
   /// [running] is the notification used while the task is in progress
   /// [complete] is the notification used when the task completed
   /// [error] is the notification used when something went wrong,
-  /// including pause, failed and notFound status
+  /// including failed and notFound status
+  /// [paused] is the notification shown when the task is paused
+  /// [canceled] is the notification shown when the task is canceled programmatically
+  ///    or by the user via a notification button
   /// [progressBar] if set will show a progress bar
   /// [tapOpensFile] if set will attempt to open the file when the [complete]
   ///     notification is tapped
@@ -832,19 +924,28 @@ interface class FileDownloader {
       TaskNotification? complete,
       TaskNotification? error,
       TaskNotification? paused,
+      TaskNotification? canceled,
       bool progressBar = false,
       bool tapOpensFile = false,
       String groupNotificationId = ''}) {
-    _downloader.notificationConfigs.add(TaskNotificationConfig(
+    _addOrUpdateTaskNotificationConfig(TaskNotificationConfig(
         taskOrGroup: null,
         running: running,
         complete: complete,
         error: error,
         paused: paused,
+        canceled: canceled,
         progressBar: progressBar,
         tapOpensFile: tapOpensFile,
         groupNotificationId: groupNotificationId));
     return this;
+  }
+
+  /// Helper to add or update a task notification config
+  void _addOrUpdateTaskNotificationConfig(
+      TaskNotificationConfig taskNotificationConfig) {
+    _downloader.notificationConfigs.remove(taskNotificationConfig);
+    _downloader.notificationConfigs.add(taskNotificationConfig);
   }
 
   /// Perform a server request for this [request]
@@ -877,9 +978,6 @@ interface class FileDownloader {
   /// [Task.filePath] extension
   ///
   /// Returns the path to the stored file, or null if not successful.
-  /// If [asAndroidUri] is true, on Android returns the URI of the stored file
-  /// instead of the filePath, if possible, otherwise falls back to the file
-  /// path.
   ///
   /// NOTE: on iOS, using [destination] [SharedStorage.images] or
   /// [SharedStorage.video] adds the photo or video file to the Photos
@@ -896,11 +994,9 @@ interface class FileDownloader {
   /// Platform-dependent, not consistent across all platforms
   Future<String?> moveToSharedStorage(
           DownloadTask task, SharedStorage destination,
-          {String directory = '',
-          String? mimeType,
-          bool asAndroidUri = false}) async =>
+          {String directory = '', String? mimeType}) async =>
       moveFileToSharedStorage(await task.filePath(), destination,
-          directory: directory, mimeType: mimeType, asAndroidUri: asAndroidUri);
+          directory: directory, mimeType: mimeType);
 
   /// Move the file represented by [filePath] to a shared storage
   /// [destination] and potentially a [directory] within that destination. If
@@ -908,9 +1004,6 @@ interface class FileDownloader {
   /// [filePath] extension
   ///
   /// Returns the path to the stored file, or null if not successful
-  /// If [asAndroidUri] is true, on Android returns the URI of the stored file
-  /// instead of the filePath, if possible, otherwise falls back to the file
-  /// path.
   ///
   /// NOTE: on iOS, using [destination] [SharedStorage.images] or
   /// [SharedStorage.video] adds the photo or video file to the Photos
@@ -927,11 +1020,9 @@ interface class FileDownloader {
   /// Platform-dependent, not consistent across all platforms
   Future<String?> moveFileToSharedStorage(
           String filePath, SharedStorage destination,
-          {String directory = '',
-          String? mimeType,
-          bool asAndroidUri = false}) async =>
+          {String directory = '', String? mimeType}) async =>
       _downloader.moveToSharedStorage(
-          filePath, destination, directory, mimeType, asAndroidUri);
+          filePath, destination, directory, mimeType);
 
   /// Returns the filePath to the file represented by [filePath] in shared
   /// storage [destination] and potentially a [directory] within that
@@ -939,18 +1030,14 @@ interface class FileDownloader {
   ///
   /// Returns the path to the stored file, or null if not successful
   ///
-  /// If [asAndroidUri] is true, returns the URI if possible, otherwise falls
-  /// back to the file path
-  ///
   /// See the documentation for [moveToSharedStorage] for special use case
   /// on iOS for .images and .video
   ///
   /// Platform-dependent, not consistent across all platforms
   Future<String?> pathInSharedStorage(
           String filePath, SharedStorage destination,
-          {String directory = '', asAndroidUri = false}) async =>
-      _downloader.pathInSharedStorage(
-          filePath, destination, directory, asAndroidUri);
+          {String directory = ''}) async =>
+      _downloader.pathInSharedStorage(filePath, destination, directory);
 
   /// Open the file represented by [task] or [filePath] using the application
   /// available on the platform.
@@ -1011,11 +1098,12 @@ Future<http.Response> _doRequest(
         'POST' => client.post(Uri.parse(request.url),
             headers: request.headers, body: request.post),
         'HEAD' => client.head(Uri.parse(request.url), headers: request.headers),
-        'PUT' => client.put(Uri.parse(request.url), headers: request.headers),
-        'DELETE' =>
-          client.delete(Uri.parse(request.url), headers: request.headers),
-        'PATCH' =>
-          client.patch(Uri.parse(request.url), headers: request.headers),
+        'PUT' => client.put(Uri.parse(request.url),
+            headers: request.headers, body: request.post),
+        'DELETE' => client.delete(Uri.parse(request.url),
+            headers: request.headers, body: request.post),
+        'PATCH' => client.patch(Uri.parse(request.url),
+            headers: request.headers, body: request.post),
         _ => Future.value(response)
       };
       if ([200, 201, 202, 203, 204, 205, 206, 404]

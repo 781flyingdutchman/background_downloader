@@ -29,19 +29,20 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     static var progressInfo = [String: (lastProgressUpdateTime: TimeInterval,
                                         lastProgressValue: Double,
                                         lastTotalBytesDone: Int64,
-                                        lastNetworkSpeed: Double)]() // time, bytes, speed
+                                        lastNetworkSpeed: Double)]() // upadtetime, progress %, bytes, speed
     static var uploaderForUrlSessionTaskIdentifier = [Int:Uploader]() // maps from UrlSessionTask TaskIdentifier
     static var haveregisteredNotificationCategories = false
     static var requireWiFi = RequireWiFi.asSetByTask // global setting
     static var taskIdsThatCanResume = Set<String>() // taskIds that can resume
-    static var taskIdsProgrammaticallyCancelled = Set<String>() // skips error handling for these tasks
+    static var taskIdsProgrammaticallyCanceledBeforeStart = Set<String>() // skips completion processing for these tasks
+    static var taskIdsProgrammaticallyCanceledAfterStart = Set<String>() // skips error handling for these tasks
     static var tasksToReEnqueue = Set<Task>() // for when WiFi requirement changes
     static var taskIdsRequiringWiFi = Set<String>() // ensures correctness when enqueueing task
     static var notificationConfigJsonStrings = [String:String]() // by taskId
     static var localResumeData = [String : String]() // locally stored to enable notification resume
     static var remainingBytesToDownload = [String : Int64]()  // keyed by taskId
     static var responseBodyData = [String: [Data]]() // list of Data objects received for this UploadTask id
-    static var tasksWithSuggestedFilename = [String : Task]() // [taskId : Task with suggested filename]
+    static var tasksWithModifications = [String : Task]() // [taskId : Task with suggested filename]
     static var tasksWithContentLengthOverride = [String : Int64]() // [taskId : Content length]
     static var tasksWithTempUploadFile = [String : URL]() // [taskId : file URL]
     static var mimeTypes = [String : String]() // [taskId : mimeType]
@@ -67,6 +68,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             backgroundChannel = FlutterMethodChannel(name: "com.bbflight.background_downloader.background", binaryMessenger: registrar.messenger())
             BDPlugin.callbackChannel = callbackChannel
         }
+        UriUtilsMethodCallHelper.register(with: registrar) // not a real plugin, but has a methodCallHandler
         requireWiFi = RequireWiFi(rawValue: UserDefaults.standard.integer(forKey: BDPlugin.keyRequireWiFi))!
     }
     
@@ -81,80 +83,84 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         _Concurrency.Task { @MainActor () -> Void in
             // to allow async/await
             switch call.method {
-                case "reset":
-                    await methodReset(call: call, result: result)
-                case "enqueue":
-                    await methodEnqueue(call: call, result: result)
-                case "allTasks":
-                    await methodAllTasks(call: call, result: result)
-                case "cancelTasksWithIds":
-                    await methodCancelTasksWithIds(call: call, result: result)
-                case "taskForId":
-                    await methodTaskForId(call: call, result: result)
-                case "pause":
-                    await methodPause(call: call, result: result)
-                case "updateNotification":
-                    methodUpdateNotification(call: call, result: result)
-                case "moveToSharedStorage":
-                    await methodMoveToSharedStorage(call: call, result: result)
-                case "pathInSharedStorage":
-                    await methodPathInSharedStorage(call: call, result: result)
-                case "openFile":
-                    methodOpenFile(call: call, result: result)
-                case "requireWiFi":
-                    methodRequireWiFi(call: call, result: result)
-                case "getRequireWiFiSetting":
-                    methodGetRequireWiFiSetting(result: result)
-                    /// ParallelDownloadTask child updates
-                case "chunkStatusUpdate":
-                    methodUpdateChunkStatus(call: call, result: result)
-                case "chunkProgressUpdate":
-                    methodUpdateChunkProgress(call: call, result: result)
-                    /// internal use
-                case "popResumeData":
-                    methodPopResumeData(result: result)
-                case "popStatusUpdates":
-                    methodPopStatusUpdates(result: result)
-                case "popProgressUpdates":
-                    methodPopProgressUpdates(result: result)
-                    /// Permissions
-                case "permissionStatus":
-                    await methodPermissionStatus(call: call, result: result)
-                case "requestPermission":
-                    await methodRequestPermission(call: call, result: result)
-                    /// configuration
-                case "configLocalize":
-                    storeInUserDefaults(key: BDPlugin.keyConfigLocalize, value: call.arguments, result: result)
-                case "configResourceTimeout":
-                    storeInUserDefaults(key: BDPlugin.keyConfigResourceTimeout, value: call.arguments, result: result)
-                case "configRequestTimeout":
-                    storeInUserDefaults(key: BDPlugin.keyConfigRequestTimeout, value: call.arguments, result: result)
-                case "configProxyAddress":
-                    storeInUserDefaults(key: BDPlugin.keyConfigProxyAdress, value: call.arguments, result: result)
-                case "configProxyPort":
-                    storeInUserDefaults(key: BDPlugin.keyConfigProxyPort, value: call.arguments, result: result)
-                case "configCheckAvailableSpace":
-                    storeInUserDefaults(key: BDPlugin.keyConfigCheckAvailableSpace, value: call.arguments, result: result)
-                case "configHoldingQueue":
-                    methodConfigHoldingQueue(call: call, result: result)
-                case "configExcludeFromCloudBackup":
+            case "reset":
+                await methodReset(call: call, result: result)
+            case "enqueue":
+                await methodEnqueue(call: call, result: result)
+            case "enqueueAll":
+                await methodEnqueueAll(call: call, result: result)
+            case "allTasks":
+                await methodAllTasks(call: call, result: result)
+            case "cancelTasksWithIds":
+                await methodCancelTasksWithIds(call: call, result: result)
+            case "taskForId":
+                await methodTaskForId(call: call, result: result)
+            case "pause":
+                await methodPause(call: call, result: result)
+            case "pauseAll":
+                await methodPauseAll(call: call, result: result)
+            case "updateNotification":
+                methodUpdateNotification(call: call, result: result)
+            case "moveToSharedStorage":
+                await methodMoveToSharedStorage(call: call, result: result)
+            case "pathInSharedStorage":
+                await methodPathInSharedStorage(call: call, result: result)
+            case "openFile":
+                methodOpenFile(call: call, result: result)
+            case "requireWiFi":
+                methodRequireWiFi(call: call, result: result)
+            case "getRequireWiFiSetting":
+                methodGetRequireWiFiSetting(result: result)
+                /// ParallelDownloadTask child updates
+            case "chunkStatusUpdate":
+                methodUpdateChunkStatus(call: call, result: result)
+            case "chunkProgressUpdate":
+                methodUpdateChunkProgress(call: call, result: result)
+                /// internal use
+            case "popResumeData":
+                methodPopResumeData(result: result)
+            case "popStatusUpdates":
+                methodPopStatusUpdates(result: result)
+            case "popProgressUpdates":
+                methodPopProgressUpdates(result: result)
+                /// Permissions
+            case "permissionStatus":
+                await methodPermissionStatus(call: call, result: result)
+            case "requestPermission":
+                await methodRequestPermission(call: call, result: result)
+                /// configuration
+            case "configLocalize":
+                storeInUserDefaults(key: BDPlugin.keyConfigLocalize, value: call.arguments, result: result)
+            case "configResourceTimeout":
+                storeInUserDefaults(key: BDPlugin.keyConfigResourceTimeout, value: call.arguments, result: result)
+            case "configRequestTimeout":
+                storeInUserDefaults(key: BDPlugin.keyConfigRequestTimeout, value: call.arguments, result: result)
+            case "configProxyAddress":
+                storeInUserDefaults(key: BDPlugin.keyConfigProxyAdress, value: call.arguments, result: result)
+            case "configProxyPort":
+                storeInUserDefaults(key: BDPlugin.keyConfigProxyPort, value: call.arguments, result: result)
+            case "configCheckAvailableSpace":
+                storeInUserDefaults(key: BDPlugin.keyConfigCheckAvailableSpace, value: call.arguments, result: result)
+            case "configHoldingQueue":
+                methodConfigHoldingQueue(call: call, result: result)
+            case "configExcludeFromCloudBackup":
                 storeInUserDefaults(key: BDPlugin.keyConfigExcludeFromCloudBackup, value: call.arguments, result: result)
-                case "platformVersion":
-                    result(UIDevice.current.systemVersion)
-                case "forceFailPostOnBackgroundChannel":
-                    methodForceFailPostOnBackgroundChannel(call: call, result: result)
-                case "testSuggestedFilename":
-                    methodTestSuggestedFilename(call: call, result: result)
-                default:
-                    os_log("Invalid method: %@", log: log, type: .error, call.method)
-                    result(FlutterMethodNotImplemented)
+            case "platformVersion":
+                result(UIDevice.current.systemVersion)
+            case "forceFailPostOnBackgroundChannel":
+                methodForceFailPostOnBackgroundChannel(call: call, result: result)
+            case "testSuggestedFilename":
+                methodTestSuggestedFilename(call: call, result: result)
+            default:
+                os_log("Invalid method: %@", log: log, type: .error, call.method)
+                result(FlutterMethodNotImplemented)
             }
         }
     }
     
-    /// Starts the download for one task, passed as map of values representing a Task
+    /// Enqueues one task
     ///
-    /// Returns true if successful, but will emit a status update that the background task is running
+    /// Returns true if successful
     private func methodEnqueue(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let args = call.arguments as! [Any]
         let taskJsonString = args[0] as! String
@@ -185,6 +191,54 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             postResult(result: result, value: true)
         }
     }
+    
+    /// Enqueues a list of tasks
+        ///
+        /// Returns a list of equal length of booleans indicating whether each individual enqueue succeeded
+        private func methodEnqueueAll(call: FlutterMethodCall, result: @escaping FlutterResult) {
+            guard let args = call.arguments as? [Any],
+                  let taskListJsonString = args[0] as? String,
+                  let notificationConfigListJsonString = args[1] as? String,
+                  let tasks = try? JSONDecoder().decode([Task].self, from: taskListJsonString.data(using: .utf8)!),
+                  let notificationConfigs = try? JSONDecoder().decode([NotificationConfig?].self, from: notificationConfigListJsonString.data(using: .utf8)!) else {
+                os_log("Invalid arguments to enqueueAll: %@", log: log, String(describing: call.arguments))
+                postResult(result: result, value: [])
+                return
+            }
+            _Concurrency.Task.detached { // Run the loop off the main thread
+                var results: [Bool] = []
+                for (index, task) in tasks.enumerated() {
+                    let notificationConfig = notificationConfigs.indices.contains(index) ? notificationConfigs[index] : nil
+                    let notificationConfigJsonString = notificationConfig != nil ? try? String(data: JSONEncoder().encode(notificationConfig), encoding: .utf8) : nil
+                    guard let taskJsonString = jsonStringFor(task: task) else {
+                        os_log("Failed to serialize taskId %@", log: log, task.taskId)
+                        results.append(false)
+                        continue
+                    }
+                    if BDPlugin.holdingQueue == nil {
+                        // Enqueue directly using doEnqueue
+                        let success = await self.doEnqueue(taskJsonString: taskJsonString, notificationConfigJsonString: notificationConfigJsonString, resumeDataAsBase64String: "")
+                        results.append(success)
+                    } else {
+                        // Add to holding queue
+                        guard validateUrl(task) != nil else {
+                            os_log("Invalid url: %@", log: log, type: .info, task.url)
+                            results.append(false)
+                            continue
+                        }
+                        os_log("Enqueueing task with id %@ to the HoldingQueue", log: log, type: .info, task.taskId)
+                        await BDPlugin.holdingQueue?.add(item: EnqueueItem(task: task, notificationConfigJsonString: notificationConfigJsonString, resumeDataAsBase64String: ""))
+                        processStatusUpdate(task: task, status: .enqueued)
+                        results.append(true)
+                    }
+                }
+                let finalResults = results
+                await MainActor.run {
+                    postResult(result: result, value: finalResults)
+                }
+            }
+        }
+    
     
     /// Do the actual enqueue as a URLSessionTask
     public func doEnqueue(taskJsonString: String, notificationConfigJsonString: String?, resumeDataAsBase64String: String) async -> Bool {
@@ -237,7 +291,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             return await scheduleUpload(task: task, taskDescription: taskDescription, baseRequest: baseRequest, notificationConfigJsonString: notificationConfigJsonString)
         }
     }
-
+    
     
     /// Schedule a download task
     private func scheduleDownload(task: Task, taskDescription: String, baseRequest: URLRequest, resumeData: Data?, notificationConfigJsonString: String?) async -> Bool {
@@ -259,23 +313,52 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         if isBinaryUploadTask(task: task) {
             // binary post can use uploadTask fromFile method
             os_log("Binary file upload", log: log, type: .debug)
-            guard let directory = try? directoryForTask(task: task) else {
-                os_log("Could not find directory for taskId %@", log: log, type: .info, task.taskId)
-                return false
+            let fileUrl: URL
+            // filename field can contain filename or a file url
+            let unpackedFilename = unpack(packedString: task.filename)
+            var maybeFileUrl = unpackedFilename.uri
+            var filename = unpackedFilename.filename
+            if (maybeFileUrl == nil) {
+                // filePath mode
+                guard let directory = try? directoryForTask(task: task) else {
+                    os_log("Could not find directory for taskId %@", log: log, type: .info, task.taskId)
+                    return false
+                }
+                fileUrl = directory.appendingPath(task.filename) // and filename is already unpacked
+            } else {
+                // URI mode
+                maybeFileUrl = decodeToFileUrl(uri: maybeFileUrl!)
+                if maybeFileUrl == nil {
+                    os_log("Could not convert uri to file url for taskId %@", log: log, type: .info, task.taskId)
+                    return false
+                }
+                if maybeFileUrl!.scheme != "file" {
+                    os_log("File uri must be file scheme %@", log: log, type: .info, task.taskId)
+                    return false
+                }
+                if filename == nil {
+                    // attemp to set a filename for the uploaded file in the task object
+                    let derivedFilename = URL(fileURLWithPath: maybeFileUrl!.path).lastPathComponent
+                    let newTask = task.copyWith(filename: pack(filename: derivedFilename, uri: maybeFileUrl!))
+                    storeModifiedTask(task: newTask)
+                    filename = derivedFilename
+                }
+                fileUrl = maybeFileUrl!
             }
-            let fileUrl = directory.appendingPath(task.filename)
             if !FileManager.default.fileExists(atPath: fileUrl.path) {
-                os_log("Could not find file %@ for taskId %@", log: log, type: .info, fileUrl.absoluteString, task.taskId)
+                os_log("Could not find file %@ for taskId %@", log: log, type: .info, fileUrl.path, task.taskId)
                 return false
             }
-            request.setValue(task.mimeType, forHTTPHeaderField: "Content-Type")
-            if let encodedFilename = task.filename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
+            let resolvedMimeType = task.mimeType?.isEmpty == true
+                ? getMimeType(fromFilename: fileUrl.path)
+                : task.mimeType ?? "application/octet-stream"
+            request.setValue(resolvedMimeType, forHTTPHeaderField: "Content-Type")
+            if let encodedFilename = filename?.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
                 request.setValue("attachment; filename=\"\(encodedFilename)\"", forHTTPHeaderField: "Content-Disposition")
             } else {
                 os_log("Could not encode task.fileName %@", log: log, type: .info, task.filename)
                 return false
             }
-            request.setValue("attachment; filename=\"\(task.filename)\"", forHTTPHeaderField: "Content-Disposition")
             var uploadFileUrl = fileUrl // if no range given
             if let rangeHeader = task.headers["Range"] {
                 // determine the start and content length from the range header
@@ -425,46 +508,102 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         await BDPlugin.holdingQueue?.stateLock.unlock()
     }
     
+    
+    
     /// Pauses Task for this taskId. Returns true of pause likely successful, false otherwise
     ///
     /// If pause is not successful, task will be canceled (attempted)
     private func methodPause(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let taskId = call.arguments as! String
+        let pauseResult = await pauseSingleTask(taskId: taskId)
+        result(pauseResult)
+    }
+    
+    
+    /// Pauses a list of tasks.  Uses the same approach as methodEnqueueAll
+    ///
+    /// Returns a list of equal length of booleans indicating whether each individual pause succeeded
+    private func methodPauseAll(call: FlutterMethodCall, result: @escaping FlutterResult) async {
+        guard let taskIds = call.arguments as? [String] else {
+            result(FlutterError(code: "INVALID_ARGUMENT", message: "Expected a list of task IDs", details: nil))
+            return
+        }
+        
+        _Concurrency.Task.detached { // Run off the main thread
+            var results: [Bool] = []
+            for taskId in taskIds {
+                let pauseResult = await self.pauseSingleTask(taskId: taskId)
+                results.append(pauseResult)
+            }
+            
+            let finalResults = results
+            await MainActor.run { // Send results back to the main thread
+                result(finalResults)
+            }
+        }
+    }
+    
+    /// Attempts to pause a single task.
+    ///
+    /// - Parameter taskId: The ID of the task to pause.
+    /// - Returns: `true` if the pause was likely successful, `false` otherwise.
+    private func pauseSingleTask(taskId: String) async -> Bool {
         UrlSessionDelegate.createUrlSession()
         BDPlugin.propertyLock.withLock({
-            _ = BDPlugin.taskIdsProgrammaticallyCancelled.insert(taskId)
+            _ = BDPlugin.taskIdsProgrammaticallyCanceledAfterStart.insert(taskId)
         })
+        
         guard let urlSessionTask = await UrlSessionDelegate.getUrlSessionTaskWithId(taskId: taskId) as? URLSessionDownloadTask,
-              let task = await UrlSessionDelegate.getTaskWithId(taskId: taskId),
-              let resumeData = await urlSessionTask.cancelByProducingResumeData()
+              let task = await UrlSessionDelegate.getTaskWithId(taskId: taskId)
         else {
             // no regular task found, return if there's no ParalleldownloadTask either
             BDPlugin.propertyLock.withLock({
-                _ = BDPlugin.taskIdsProgrammaticallyCancelled.remove(taskId)
+                _ = BDPlugin.taskIdsProgrammaticallyCanceledAfterStart.remove(taskId)
             })
-            if ParallelDownloader.downloads[taskId] == nil {
-                os_log("Could not pause task %@", log: log, type: .info, taskId)
-                result(false)
-            } else {
-                if await ParallelDownloader.downloads[taskId]?.pauseTask() == true {
+            if let parallelDownloadTask = ParallelDownloader.downloads[taskId] {
+                if await parallelDownloadTask.pauseTask() {
                     os_log("Paused task with taskId %@", log: log, type: .info, taskId)
-                    result(true)
+                    return true
                 } else {
                     os_log("Could not pause taskId %@", log: log, type: .info, taskId)
-                    result(false)
+                    return false
                 }
+            } else {
+                os_log("Could not pause task %@, or task not found", log: log, type: .info, taskId)
+                return false
             }
-            return
         }
+        
+        guard let resumeData = await urlSessionTask.cancelByProducingResumeData() else {
+            os_log("Could not pause task %@", log: log, type: .info, taskId)
+            BDPlugin.propertyLock.withLock({
+                _ = BDPlugin.taskIdsProgrammaticallyCanceledAfterStart.remove(taskId)
+            })
+            return false
+        }
+        
         if processResumeData(task: task, resumeData: resumeData) {
             processStatusUpdate(task: task, status: .paused)
             os_log("Paused task with taskId %@", log: log, type: .info, taskId)
-            result(true)
+            // update 'paused' notification if needed
+            if let notificationConfigJsonString = BDPlugin.notificationConfigJsonStrings[taskId],
+               let notificationConfig = notificationConfigFrom(jsonString: notificationConfigJsonString)
+            {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    updateNotification(task: task, notificationType: .paused, notificationConfig: notificationConfig)
+                }
+            }
+            BDPlugin.propertyLock.withLock({
+                _ = BDPlugin.progressInfo.removeValue(forKey: taskId) // ensure .running update on resume
+            })
+            return true
         } else {
             os_log("Could not post resume data for taskId %@: task paused but cannot be resumed", log: log, type: .info, taskId)
-            result(false)
+            return false
         }
     }
+    
+
     
     /// Update the notification for this task
     /// Args are:
@@ -527,35 +666,37 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         result(jsonString)
         return
     }
-
+    
     /// Moves a file represented by the first argument to a SharedStorage destination
     ///
-    /// Results in the new filePath if successful, or nil
+    /// Results in the new filePath (or Uri, if asUriString is true) if successful, or nil
     private func methodMoveToSharedStorage(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let args = call.arguments as! [Any]
         guard
             let filePath = args[0] as? String,
             let destination = SharedStorage.init(rawValue: args[1] as? Int ?? 0),
-            let directory = args[2] as? String
+            let directory = args[2] as? String,
+            let asUriString = args[4] as? Bool
         else {
             result(nil)
             return
         }
-        result(await moveToSharedStorage(filePath: filePath, destination: destination, directory: directory))
+        result(await moveToSharedStorage(filePathOrUriString: filePath, destination: destination, directory: directory, asUriString: asUriString))
     }
     
-    /// Returns path to file in a SharedStorage destination, or null
+    /// Results path in SharedStorage (or Uri, if asUriString is true) if successful, or nil
     private func methodPathInSharedStorage(call: FlutterMethodCall, result: @escaping FlutterResult) async {
         let args = call.arguments as! [Any]
         guard
             let filePath = args[0] as? String,
             let destination = SharedStorage(rawValue: args[1] as? Int ?? 0),
-            let directory = args[2] as? String
+            let directory = args[2] as? String,
+            let asUriString = args[3] as? Bool
         else {
             result(nil)
             return
         }
-        result(await pathInSharedStorage(filePath: filePath, destination: destination, directory: directory))
+        result(await pathInSharedStorage(filePath: filePath, destination: destination, directory: directory, asUriString: asUriString))
     }
     
     
@@ -653,7 +794,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         parallelDownloadTask.chunkProgressUpdate(chunkTaskId: chunkTaskId, progress: progress)
         result(nil)
     }
-        
+    
     /// Return the authorization status of a permission, passed as the rawValue of the
     /// [Permissionequest] enum
     private func methodPermissionStatus(call: FlutterMethodCall, result: @escaping FlutterResult) async {
@@ -691,7 +832,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         BDPlugin.holdingQueue?.maxConcurrentByGroup = args[2] as! Int
         result(nil)
     }
-
+    
     /// Sets or resets flag to force failing posting on background channel
     ///
     /// For testing only
@@ -711,7 +852,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             result("")
             return
         }
-        let resultTask = suggestedFilenameFromResponseHeaders(task: task, responseHeaders: ["Content-Disposition" : contentDisposition], unique: true)
+        let resultTask = taskWithSuggestedFilenameFromResponseHeaders(task: task, responseHeaders: ["Content-Disposition" : contentDisposition], unique: true)
         result(resultTask.filename)
     }
     
@@ -730,7 +871,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         return false
     }
     
-
+    
     //MARK: UNUserNotificationCenterDelegate
     
     @MainActor
@@ -761,75 +902,75 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                 return
             }
             switch response.actionIdentifier {
-                case "pause_action":
-                    guard let urlSessionTask = await UrlSessionDelegate.getUrlSessionTaskWithId(taskId: task.taskId) as? URLSessionDownloadTask,
-                          let resumeData = await urlSessionTask.cancelByProducingResumeData()
+            case "pause_action":
+                guard let urlSessionTask = await UrlSessionDelegate.getUrlSessionTaskWithId(taskId: task.taskId) as? URLSessionDownloadTask,
+                      let resumeData = await urlSessionTask.cancelByProducingResumeData()
+                else {
+                    os_log("Could not pause task in response to notification action", log: log, type: .info)
+                    return
+                }
+                _ = processResumeData(task: task, resumeData: resumeData)
+                
+            case "cancel_action":
+                let urlSessionTaskToCancel = await UrlSessionDelegate.getAllUrlSessionTasks().first(where: {
+                    guard let taskInUrlSessionTask = getTaskFrom(urlSessionTask: $0) else { return false }
+                    return taskInUrlSessionTask.taskId == task.taskId
+                })
+                urlSessionTaskToCancel?.cancel()
+                
+            case "cancel_inactive_action":
+                processStatusUpdate(task: task, status: .canceled)
+                
+            case "resume_action":
+                var resumeDataAsBase64String = ""
+                BDPlugin.propertyLock.withLock {
+                    resumeDataAsBase64String = BDPlugin.localResumeData[task.taskId] ?? ""
+                }
+                if resumeDataAsBase64String.isEmpty {
+                    os_log("Resume data for taskId %@ no longer available: restarting", log: log, type: .info, task.taskId)
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    _Concurrency.Task {
+                        if await(BDPlugin.instance.doEnqueue(taskJsonString: taskAsJsonString, notificationConfigJsonString: userInfo["notificationConfig"] as? String, resumeDataAsBase64String: resumeDataAsBase64String)) == false {
+                            os_log("Could not enqueue taskId %@ to resume", log: log, type: .info, task.taskId)
+                            await BDPlugin.holdingQueue?.taskFinished(task)
+                        }
+                    }
+                }
+                
+            case UNNotificationDefaultActionIdentifier:
+                // general notification tap (no button)
+                guard
+                    let notificationType = userInfo["notificationType"] as? Int
+                else {
+                    os_log("No notificationType for notification tap", log: log, type: .info)
+                    return
+                }
+                _ = postOnBackgroundChannel(method: "notificationTap", task: task, arg: notificationType)
+                // check 'tapOpensfile'
+                if notificationType == NotificationType.complete.rawValue {
+                    guard let notificationConfigString = userInfo["notificationConfig"] as? String,
+                          let notificationConfigData = notificationConfigString.data(using: .utf8),
+                          let notificationConfig = try? JSONDecoder().decode(NotificationConfig.self, from: notificationConfigData),
+                          let filePath = getFilePath(for: task)
                     else {
-                        os_log("Could not pause task in response to notification action", log: log, type: .info)
+                        os_log("Could not extract filePath for notification tap on .complete", log: log, type: .info)
                         return
                     }
-                    _ = processResumeData(task: task, resumeData: resumeData)
-                    
-                case "cancel_action":
-                    let urlSessionTaskToCancel = await UrlSessionDelegate.getAllUrlSessionTasks().first(where: {
-                        guard let taskInUrlSessionTask = getTaskFrom(urlSessionTask: $0) else { return false }
-                        return taskInUrlSessionTask.taskId == task.taskId
-                    })
-                    urlSessionTaskToCancel?.cancel()
-                    
-                case "cancel_inactive_action":
-                    processStatusUpdate(task: task, status: .canceled)
-                    
-                case "resume_action":
-                    var resumeDataAsBase64String = ""
-                    BDPlugin.propertyLock.withLock {
-                        resumeDataAsBase64String = BDPlugin.localResumeData[task.taskId] ?? ""
-                    }
-                    if resumeDataAsBase64String.isEmpty {
-                        os_log("Resume data for taskId %@ no longer available: restarting", log: log, type: .info, task.taskId)
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        _Concurrency.Task {
-                            if await(BDPlugin.instance.doEnqueue(taskJsonString: taskAsJsonString, notificationConfigJsonString: userInfo["notificationConfig"] as? String, resumeDataAsBase64String: resumeDataAsBase64String)) == false {
-                                os_log("Could not enqueue taskId %@ to resume", log: log, type: .info, task.taskId)
-                                await BDPlugin.holdingQueue?.taskFinished(task)
-                            }
+                    if notificationConfig.tapOpensFile {
+                        if !doOpenFile(filePath: filePath, mimeType: nil)
+                        {
+                            os_log("Failed to open file on notification tap", log: log, type: .info)
                         }
                     }
-                    
-                case UNNotificationDefaultActionIdentifier:
-                    // general notification tap (no button)
-                    guard
-                        let notificationType = userInfo["notificationType"] as? Int
-                    else {
-                        os_log("No notificationType for notification tap", log: log, type: .info)
-                        return
-                    }
-                    _ = postOnBackgroundChannel(method: "notificationTap", task: task, arg: notificationType)
-                    // check 'tapOpensfile'
-                    if notificationType == NotificationType.complete.rawValue {
-                        guard let notificationConfigString = userInfo["notificationConfig"] as? String,
-                              let notificationConfigData = notificationConfigString.data(using: .utf8),
-                              let notificationConfig = try? JSONDecoder().decode(NotificationConfig.self, from: notificationConfigData),
-                              let filePath = getFilePath(for: task)
-                        else {
-                            os_log("Could not extract filePath for notification tap on .complete", log: log, type: .info)
-                            return
-                        }
-                        if notificationConfig.tapOpensFile {
-                            if !doOpenFile(filePath: filePath, mimeType: nil)
-                            {
-                                os_log("Failed to open file on notification tap", log: log, type: .info)
-                            }
-                        }
-                    }
-                    // dismiss notification if it is a 'complete' or 'error' notification
-                    if notificationType == NotificationType.complete.rawValue || notificationType == NotificationType.error.rawValue {
-                        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [response.notification.request.identifier])
-                    }
-                    
-                default:
-                    do {}
+                }
+                // dismiss notification if it is a 'complete' or 'error' notification
+                if notificationType == NotificationType.complete.rawValue || notificationType == NotificationType.error.rawValue {
+                    UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [response.notification.request.identifier])
+                }
+                
+            default:
+                do {}
             }
         }
     }

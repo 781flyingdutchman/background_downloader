@@ -49,6 +49,28 @@ void _sendCounterToMainIsolate() {
   sendPort?.send(callbackCounter);
 }
 
+/// Define callbacks
+
+@pragma("vm:entry-point")
+Future<TaskStatusUpdate?> beforeTaskStartCallbackNoChange(Task task) async {
+  callbackCounter++;
+  print(
+      'In beforeTaskStartCallbackNoChange. Callback counter is now $callbackCounter');
+  _sendCounterToMainIsolate();
+  return null;
+}
+
+@pragma("vm:entry-point")
+Future<TaskStatusUpdate?> beforeTaskStartCallbackCancel(Task task) async {
+  callbackCounter++;
+  print(
+      'In beforeTaskStartCallbackCancel. Callback counter is now $callbackCounter');
+  _sendCounterToMainIsolate();
+  return TaskStatusUpdate(
+      task, TaskStatus.canceled, null, 'response', {'header': 'value'});
+}
+
+@pragma("vm:entry-point")
 Future<Task?> onTaskStartCallbackNoChange(Task original) async {
   callbackCounter++;
   print(
@@ -57,6 +79,7 @@ Future<Task?> onTaskStartCallbackNoChange(Task original) async {
   return null;
 }
 
+@pragma("vm:entry-point")
 Future<Task?> onTaskStartCallbackUrlChange(Task original) async {
   callbackCounter++;
   print(
@@ -65,6 +88,7 @@ Future<Task?> onTaskStartCallbackUrlChange(Task original) async {
   return original.copyWith(url: '$getTestUrl?json=true&param1=changed');
 }
 
+@pragma("vm:entry-point")
 Future<Task?> onTaskStartCallbackHeaderChange(Task original) async {
   callbackCounter++;
   print(
@@ -73,17 +97,21 @@ Future<Task?> onTaskStartCallbackHeaderChange(Task original) async {
   return original.copyWith(headers: {'Auth': 'newBearer'});
 }
 
+@pragma("vm:entry-point")
 Future<void> onTaskFinishedCallback(TaskStatusUpdate statusUpdate) async {
+  print('In onTaskFinishedCallback with status: ${statusUpdate.status}');
   if (statusUpdate.status == TaskStatus.complete &&
       statusUpdate.responseStatusCode == 200) {
     callbackCounter++;
   } else {
     print('Status not complete or code not 200: $statusUpdate');
+    callbackCounter += 100; // to indicate error
   }
   print('In onTaskFinishedCallback. Callback counter is now $callbackCounter');
   _sendCounterToMainIsolate();
 }
 
+@pragma("vm:entry-point")
 Future<Task?> onAuthCallbackNoChange(Task original) async {
   callbackCounter++;
   print('In onAuthCallbackNoChange. Callback counter is now $callbackCounter');
@@ -106,6 +134,43 @@ void main() {
     mainIsolateCallbackCounterAtStartOfTest =
         (Platform.isAndroid || Platform.isIOS) ? mainIsolateCallbackCounter : 0;
     mainIsolateCallbackCounter = mainIsolateCallbackCounterAtStartOfTest;
+  });
+
+  group('beforeTaskStartCallback', () {
+    test('no-change callback', () async {
+      final task = DownloadTask(
+          url: getTestUrl,
+          urlQueryParameters: {'json': 'true', 'param1': 'original'},
+          filename: defaultFilename,
+          options:
+              TaskOptions(beforeTaskStart: beforeTaskStartCallbackNoChange));
+      final path =
+          join((await getApplicationDocumentsDirectory()).path, task.filename);
+      expect((await FileDownloader().download(task)).status,
+          equals(TaskStatus.complete));
+      var result = jsonDecode(await File(path).readAsString());
+      expect(result['args']['param1'], equals('original'));
+      expect(mainIsolateCallbackCounter,
+          equals(mainIsolateCallbackCounterAtStartOfTest + 1));
+      await File(path).delete();
+    });
+
+    test('cancel callback', () async {
+      final task = DownloadTask(
+          url: getTestUrl,
+          urlQueryParameters: {'json': 'true', 'param1': 'original'},
+          filename: defaultFilename,
+          options: TaskOptions(beforeTaskStart: beforeTaskStartCallbackCancel));
+      final path =
+          join((await getApplicationDocumentsDirectory()).path, task.filename);
+      final result = await FileDownloader().download(task);
+      expect(result.status, equals(TaskStatus.canceled));
+      expect(result.responseBody, equals('response'));
+      expect(result.responseHeaders, equals({'header': 'value'}));
+      expect(mainIsolateCallbackCounter,
+          equals(mainIsolateCallbackCounterAtStartOfTest + 1));
+      expect(File(path).existsSync(), isFalse);
+    });
   });
 
   group('onStartCallback', () {
@@ -164,7 +229,7 @@ void main() {
   });
 
   group('onFinishedCallback', () {
-    test('no change', () async {
+    test('onFinishedCallback passes the appropriate status', () async {
       final task = DownloadTask(
           url: getTestUrl,
           urlQueryParameters: {'json': 'true', 'param1': 'original'},
@@ -180,6 +245,30 @@ void main() {
       expect(mainIsolateCallbackCounter,
           equals(mainIsolateCallbackCounterAtStartOfTest + 1));
       await File(path).delete();
+    });
+
+    test('onFinishedCallback after canceling beforeStartCallback', () async {
+      // tests that onTaskFinished is also called when the task is canceled
+      // via the beforeStartCallback
+      final task = DownloadTask(
+          url: getTestUrl,
+          urlQueryParameters: {'json': 'true', 'param1': 'original'},
+          filename: defaultFilename,
+          options: TaskOptions(
+              beforeTaskStart: beforeTaskStartCallbackCancel,
+              onTaskFinished: onTaskFinishedCallback));
+      final path =
+          join((await getApplicationDocumentsDirectory()).path, task.filename);
+      final result = await FileDownloader().download(task);
+      expect(result.status, equals(TaskStatus.canceled));
+      expect(result.responseBody, equals('response'));
+      expect(result.responseHeaders, equals({'header': 'value'}));
+      expect(mainIsolateCallbackCounter,
+          equals(mainIsolateCallbackCounterAtStartOfTest + 1));
+      expect(File(path).existsSync(), isFalse);
+      await Future.delayed(const Duration(milliseconds: 100));
+      expect(mainIsolateCallbackCounter,
+          equals(mainIsolateCallbackCounterAtStartOfTest + 101));
     });
   });
 

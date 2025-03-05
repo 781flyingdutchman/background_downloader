@@ -10,3 +10,4 @@ export 'src/persistent_storage.dart';
 export 'src/progress_widget.dart';
 export 'src/queue/task_queue.dart';
 export 'src/task.dart';
+export 'src/uri/uri_utils.dart';

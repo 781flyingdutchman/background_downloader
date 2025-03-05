@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:http/http.dart' as http;
+import 'package:mime/mime.dart';
 import 'package:path/path.dart' as p;
 
 import '../exceptions.dart';
@@ -19,33 +20,33 @@ const lineFeed = '\r\n';
 ///
 /// Sends updates via the [sendPort] and can be commanded to cancel via
 /// the [messagesToIsolate] queue
-Future<void> doUploadTask(
-    UploadTask task, String filePath, SendPort sendPort) async {
-  final resultStatus = task.post == 'binary'
-      ? await binaryUpload(task, filePath, sendPort)
-      : await multipartUpload(task, filePath, sendPort);
-  processStatusUpdateInIsolate(task, resultStatus, sendPort);
+Future<void> doUploadTask(UploadTask task, SendPort sendPort) async {
+  final (updatedTask, resultStatus) = task.post == 'binary'
+      ? await binaryUpload(task, sendPort)
+      : await multipartUpload(task, sendPort);
+  processStatusUpdateInIsolate(updatedTask, resultStatus, sendPort);
 }
 
 /// Do the binary upload and return the TaskStatus
 ///
 /// Sends updates via the [sendPort] and can be commanded to cancel via
 /// the [messagesToIsolate] queue
-Future<TaskStatus> binaryUpload(
-    UploadTask task, String filePath, SendPort sendPort) async {
+Future<(Task, TaskStatus)> binaryUpload(
+    UploadTask task, SendPort sendPort) async {
+  final filePath = await task.filePath();
   final inFile = File(filePath);
   if (!inFile.existsSync()) {
     final message = 'File to upload does not exist: $filePath';
     logError(task, message);
     taskException = TaskFileSystemException(message);
-    return TaskStatus.failed;
+    return (task, TaskStatus.failed);
   }
   final fileSize = inFile.lengthSync();
   if (fileSize == 0) {
     final message = 'File $filePath has 0 length';
     logError(task, message);
     taskException = TaskFileSystemException(message);
-    return TaskStatus.failed;
+    return (task, TaskStatus.failed);
   }
   var resultStatus = TaskStatus.failed;
   try {
@@ -64,9 +65,14 @@ Future<TaskStatus> binaryUpload(
         final message = 'Invalid Range header $rangeHeader';
         logError(task, message);
         taskException = TaskException(message);
-        return TaskStatus.failed;
+        return (task, TaskStatus.failed);
       }
       task.headers.remove('Range'); // not passed on to server
+    }
+    if (task case UriUploadTask(fileUri: final fileUri)
+        when fileUri != null && task.filename.isEmpty) {
+      // for UriTasks without a filename, derive it from the Uri
+      task = task.copyWith(filename: fileUri.pathSegments.last);
     }
     final contentLength = end - start + 1;
     final client = DesktopDownloader.httpClient;
@@ -115,15 +121,15 @@ Future<TaskStatus> binaryUpload(
     resultStatus = TaskStatus.failed;
     setTaskError(e);
   }
-  return resultStatus;
+  return (task, resultStatus);
 }
 
 /// Do the multipart upload and return the TaskStatus
 ///
 /// Sends updates via the [sendPort] and can be commanded to cancel via
 /// the [messagesToIsolate] queue
-Future<TaskStatus> multipartUpload(
-    UploadTask task, String filePath, SendPort sendPort) async {
+Future<(Task, TaskStatus)> multipartUpload(
+    UploadTask task, SendPort sendPort) async {
   // field portion of the multipart, all in one string
   // multiple values should be encoded as '"value1", "value2", ...'
   final multiValueRegEx = RegExp(r'^(?:"[^"]+"\s*,\s*)+"[^"]+"$');
@@ -145,9 +151,11 @@ Future<TaskStatus> multipartUpload(
   // and file length, so that we can calculate total size of upload
   const separator = '$lineFeed--$boundary$lineFeed'; // between files
   const terminator = '$lineFeed--$boundary--$lineFeed'; // after last file
-  final filesData = filePath.isNotEmpty
-      ? [(task.fileField, filePath, task.mimeType)] // one file Upload case
-      : await task.extractFilesData(); // MultiUpload case
+  final filesData = (task is MultiUploadTask)
+      ? await task.extractFilesData() // MultiUpload case
+      : [
+          (task.fileField, await task.filePath(), task.mimeType)
+        ]; // one file Upload case
   final contentDispositionStrings = <String>[];
   final contentTypeStrings = <String>[];
   final fileLengths = <int>[];
@@ -157,13 +165,24 @@ Future<TaskStatus> multipartUpload(
       logError(task, 'File to upload does not exist: $path');
       taskException =
           TaskFileSystemException('File to upload does not exist: $path');
-      return TaskStatus.failed;
+      return (task, TaskStatus.failed);
+    }
+    final resolvedMimeType = mimeType.isEmpty ? lookupMimeType(path) : mimeType;
+    var derivedFilename = p.basename(file.path);
+    if (filesData.length == 1) {
+      // only for single file uploads do we set the task's filename property
+      if (task case UriUploadTask(fileUri: final fileUri)
+          when fileUri != null) {
+        task = task.copyWith(filename: fileUri.pathSegments.last);
+      } else {
+        task = task.copyWith(filename: derivedFilename);
+      }
     }
     contentDispositionStrings.add(
       'Content-Disposition: form-data; name="${browserEncode(fileField)}"; '
-      'filename="${browserEncode(p.basename(file.path))}"$lineFeed',
+      'filename="${browserEncode(derivedFilename)}"$lineFeed',
     );
-    contentTypeStrings.add('Content-Type: $mimeType$lineFeed$lineFeed');
+    contentTypeStrings.add('Content-Type: $resolvedMimeType$lineFeed$lineFeed');
     fileLengths.add(file.lengthSync());
   }
   final fileDataLength = contentDispositionStrings.fold<int>(
@@ -240,5 +259,5 @@ Future<TaskStatus> multipartUpload(
     // cancellation overrides other results
     resultStatus = TaskStatus.canceled;
   }
-  return resultStatus;
+  return (task, resultStatus);
 }

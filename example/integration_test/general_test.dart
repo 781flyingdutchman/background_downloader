@@ -10,167 +10,15 @@ import 'package:background_downloader/src/utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:logging/logging.dart';
 import 'package:path/path.dart' hide equals;
 import 'package:path_provider/path_provider.dart';
 
-const def = 'default';
-var statusCallbackCounter = 0;
-var progressCallbackCounter = 0;
-
-var statusCallbackCompleter = Completer<void>();
-var progressCallbackCompleter = Completer<void>();
-var someProgressCompleter = Completer<void>(); // completes when progress > 0
-var significantProgressCompleter =
-    Completer<void>(); // completes when progress > 0.1
-var lastStatus = TaskStatus.enqueued;
-var lastProgress = -100.0;
-Task? lastTaskWithStatus;
-var lastValidExpectedFileSize = -1;
-var lastValidNetworkSpeed = -1.0;
-var lastValidTimeRemaining = const Duration(seconds: -1);
-TaskException? lastException;
-
-const workingUrl = 'https://google.com';
-const failingUrl = 'https://avmaps-dot-bbflightserver-hrd.appspot'
-    '.com/public/get_current_app_data?key=background_downloader_integration_test';
-const urlWithContentLength = 'https://storage.googleapis'
-    '.com/approachcharts/test/5MB-test.ZIP';
-const urlWithLongContentLength = 'https://storage.googleapis'
-    '.com/approachcharts/test/57MB-test.ZIP';
-const getTestUrl =
-    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_get_data';
-const getRedirectTestUrl =
-    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_get_redirect';
-const postTestUrl =
-    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_post_data';
-const uploadTestUrl =
-    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_upload_file';
-const uploadBinaryTestUrl =
-    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_upload_binary_file';
-const uploadMultiTestUrl =
-    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_multi_upload_file';
-const dataTaskGetUrl = 'https://httpbin.org/get';
-const dataTaskPostUrl = 'https://httpbin.org/post';
-final dataTaskHeaders = {'accept': 'application/json'};
-
-const urlWithContentLengthFileSize = 6207471;
-
-const defaultFilename = 'google.html';
-const postFilename = 'post.txt';
-const uploadFilename = 'a_file.txt';
-const uploadFilename2 = 'second_file.txt';
-const largeFilename = '5MB-test.ZIP';
-
-var task = DownloadTask(url: workingUrl, filename: defaultFilename);
-
-var retryTask =
-    DownloadTask(url: failingUrl, filename: defaultFilename, retries: 3);
-
-var uploadTask = UploadTask(url: uploadTestUrl, filename: uploadFilename);
-var uploadTaskBinary = uploadTask.copyWith(post: 'binary');
-
-void statusCallback(TaskStatusUpdate update) {
-  final task = update.task;
-  lastTaskWithStatus = task;
-  final status = update.status;
-  print('statusCallback for $task with status $status');
-  if (update.exception != null) {
-    print('Exception: ${update.exception}');
-  }
-  lastStatus = status;
-  lastException = update.exception;
-  statusCallbackCounter++;
-  if (!statusCallbackCompleter.isCompleted && status.isFinalState) {
-    statusCallbackCompleter.complete();
-  }
-}
-
-void progressCallback(TaskProgressUpdate update) {
-  final task = update.task;
-  final progress = update.progress;
-  print('progressCallback for $task with $update}');
-  lastProgress = progress;
-  if (update.hasExpectedFileSize) {
-    lastValidExpectedFileSize = update.expectedFileSize;
-  }
-  if (update.hasNetworkSpeed) {
-    lastValidNetworkSpeed = update.networkSpeed;
-  }
-  if (update.hasTimeRemaining) {
-    lastValidTimeRemaining = update.timeRemaining;
-  }
-  progressCallbackCounter++;
-  if (!someProgressCompleter.isCompleted && progress > 0) {
-    someProgressCompleter.complete();
-  }
-  if (!significantProgressCompleter.isCompleted && progress > 0.1) {
-    significantProgressCompleter.complete();
-  }
-  if (!progressCallbackCompleter.isCompleted &&
-      (progress < 0 || progress == 1)) {
-    progressCallbackCompleter.complete();
-  }
-}
+import 'test_utils.dart';
 
 void main() {
-  setUp(() async {
-    Logger.root.level = Level.ALL;
-    Logger.root.onRecord.listen((LogRecord rec) {
-      print('${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
-    });
-    await FileDownloader().reset();
-    await FileDownloader().reset(group: 'someGroup');
-    // recreate the tasks
-    task = DownloadTask(url: workingUrl, filename: defaultFilename);
-    retryTask =
-        DownloadTask(url: failingUrl, filename: defaultFilename, retries: 3);
-    uploadTask = UploadTask(url: uploadTestUrl, filename: uploadFilename);
-    uploadTaskBinary =
-        uploadTask.copyWith(url: uploadBinaryTestUrl, post: 'binary');
+  setUp(defaultSetup);
 
-    // copy the test files to upload from assets to documents directory
-    Directory directory = await getApplicationDocumentsDirectory();
-    for (final filename in [uploadFilename, uploadFilename2, largeFilename]) {
-      var uploadFilePath = join(directory.path, filename);
-      ByteData data = await rootBundle.load("assets/$filename");
-      final buffer = data.buffer;
-      File(uploadFilePath).writeAsBytesSync(
-          buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
-    }
-    // reset counters
-    statusCallbackCounter = 0;
-    progressCallbackCounter = 0;
-    statusCallbackCompleter = Completer<void>();
-    progressCallbackCompleter = Completer<void>();
-    significantProgressCompleter = Completer<void>();
-    someProgressCompleter = Completer<void>();
-    lastStatus = TaskStatus.enqueued;
-    lastProgress = 0;
-    lastTaskWithStatus = null;
-    lastValidExpectedFileSize = -1;
-    lastValidNetworkSpeed = -1.0;
-    lastValidTimeRemaining = const Duration(seconds: -1);
-    lastException = null;
-    FileDownloader().destroy();
-    final path =
-        join((await getApplicationDocumentsDirectory()).path, task.filename);
-    try {
-      File(path).deleteSync();
-    } on FileSystemException {}
-  });
-
-  tearDown(() async {
-    await FileDownloader().reset();
-    await FileDownloader().reset(group: 'someGroup');
-    FileDownloader().destroy();
-    if (Platform.isAndroid || Platform.isIOS) {
-      await FileDownloader()
-          .downloaderForTesting
-          .setForceFailPostOnBackgroundChannel(false);
-    }
-    await Future.delayed(const Duration(milliseconds: 250));
-  });
+  tearDown(defaultTearDown);
 
   group('Initialization', () {
     test('registerCallbacks', () {
@@ -505,6 +353,7 @@ void main() {
       final subscription = FileDownloader().updates.listen((update) {
         expect(update is TaskProgressUpdate, isTrue);
         if (update is TaskProgressUpdate) {
+          print("ProgressUpdate ${update.progress} at ${DateTime.now()}");
           progressCallback(update);
         }
       });
@@ -1762,42 +1611,6 @@ void main() {
       print('Finished enqueue binary file');
     });
 
-    testWidgets('enqueue binary file using Android URI', (widgetTester) async {
-      if (Platform.isAndroid) {
-        FileDownloader().registerCallbacks(
-            taskStatusCallback: statusCallback,
-            taskProgressCallback: progressCallback);
-        // move file to shared storage and obtain the URI
-        final dummy =
-            DownloadTask(url: uploadTestUrl, filename: uploadFilename);
-        final uriString = await FileDownloader().moveFileToSharedStorage(
-            await dummy.filePath(), SharedStorage.downloads,
-            asAndroidUri: true);
-        print('URI: $uriString');
-        final task = UploadTask.fromAndroidUri(
-            url: uploadBinaryTestUrl, uri: Uri.parse(uriString!));
-        expect(await FileDownloader().enqueue(task), isTrue);
-        await statusCallbackCompleter.future;
-        expect(statusCallbackCounter, equals(3));
-        expect(lastStatus, equals(TaskStatus.complete));
-        print('Finished enqueue binary file using Android URI');
-      }
-    });
-
-    testWidgets('enqueue binary file using incorrect Android URI',
-        (widgetTester) async {
-      if (Platform.isAndroid) {
-        final task = UploadTask.fromAndroidUri(
-            url: uploadBinaryTestUrl,
-            uri: Uri.parse('content://some/invalid/path'));
-        final result = await FileDownloader().upload(task);
-        print(result.exception?.description);
-        expect(result.status, equals(TaskStatus.failed));
-        expect(
-            result.exception?.exceptionType, equals('TaskFileSystemException'));
-      }
-    });
-
     testWidgets('upload binary file partially bytes=2-4', (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
@@ -1847,8 +1660,8 @@ void main() {
       };
       final result =
           await FileDownloader().upload(uploadTask.copyWith(fields: fields));
-      final jsonString = result.responseBody!.replaceAll(r'\r\n', '');
       expect(result.status, equals(TaskStatus.complete));
+      final jsonString = result.responseBody!.replaceAll(r'\r\n', '');
       expect(jsonDecode(jsonString), equals(fields));
     });
 
@@ -2887,21 +2700,6 @@ void main() {
       Directory(dirname(path)).deleteSync();
     });
 
-    test('move task to shared storage with Android URI', () async {
-      // note: moved file is not deleted in this test
-      if (Platform.isAndroid) {
-        var filePath = await task.filePath();
-        await FileDownloader().download(task);
-        final path = await FileDownloader().moveToSharedStorage(
-            task, SharedStorage.downloads,
-            asAndroidUri: true);
-        print('Uri is $path');
-        expect(path, isNotNull);
-        expect(path?.startsWith('content://'), isTrue);
-        expect(File(filePath).existsSync(), isFalse);
-      }
-    });
-
     test('[*] try to move text file to images -> error', () async {
       // Note: this test will fail on Android API below 30, as that API
       // does not have a problem storing a text file in images
@@ -2990,25 +2788,6 @@ void main() {
           .pathInSharedStorage(path, SharedStorage.downloads);
       expect(filePath, equals(path));
       File(path).deleteSync();
-    });
-
-    testWidgets('path in shared storage with Android URI',
-        (widgetTester) async {
-      if (Platform.isAndroid) {
-        await FileDownloader().download(task);
-        final path = await FileDownloader()
-            .moveToSharedStorage(task, SharedStorage.downloads);
-        print('Path in downloads is $path');
-        expect(path, isNotNull);
-        expect(File(path!).existsSync(), isTrue);
-        final uri = await FileDownloader().pathInSharedStorage(
-            path, SharedStorage.downloads,
-            asAndroidUri: true);
-        print('Uri is $uri');
-        expect(uri, isNotNull);
-        expect(uri?.startsWith('content://'), isTrue);
-        File(path).deleteSync();
-      }
     });
   });
 
@@ -3541,6 +3320,157 @@ void main() {
     });
   });
 
+  group('FilePath', () {
+    late String tempBasePath;
+
+    setUp(() async {
+      // Create temporary directories for testing
+      final tempDir = await Directory.systemTemp.createTemp('upload_test_');
+      tempBasePath = tempDir.path;
+    });
+
+    tearDown(() async {
+      // Clean up the temporary directory after tests
+      Directory(tempBasePath).deleteSync(recursive: true);
+    });
+
+    test(
+        'returns correct path for single upload task with default filename in applicationDocuments',
+        () async {
+      final task = DownloadTask(
+          url: workingUrl,
+          filename: 'test.txt',
+          directory: 'uploads',
+          baseDirectory: BaseDirectory.applicationDocuments);
+      final path = await task.filePath();
+      final expectedPath = join(
+          await Task.baseDirectoryPath(BaseDirectory.applicationDocuments),
+          'uploads',
+          'test.txt');
+      expect(path, expectedPath);
+    });
+
+    test(
+        'returns correct path for single upload task with custom filename in temporary',
+        () async {
+      final task = UploadTask(
+          url: workingUrl,
+          filename: 'test.txt',
+          directory: 'uploads',
+          baseDirectory: BaseDirectory.temporary);
+      final path = await task.filePath(withFilename: 'custom.txt');
+      final expectedPath = join(
+          await Task.baseDirectoryPath(BaseDirectory.temporary),
+          'uploads',
+          'custom.txt');
+      expect(path, expectedPath);
+    });
+
+    test(
+        'returns correct path for single upload task with default filename in applicationSupport',
+        () async {
+      final task = DownloadTask(
+          url: workingUrl,
+          filename: 'test.txt',
+          baseDirectory: BaseDirectory.applicationSupport);
+      final path = await task.filePath();
+      final expectedPath = join(
+          await Task.baseDirectoryPath(BaseDirectory.applicationSupport),
+          'test.txt');
+      expect(path, expectedPath);
+    });
+
+    test(
+        'returns correct path for single upload task with custom filename in applicationLibrary',
+        () async {
+      final task = DownloadTask(
+          url: workingUrl,
+          filename: 'test.txt',
+          baseDirectory: BaseDirectory.applicationLibrary);
+      final path = await task.filePath(withFilename: 'custom.txt');
+      final expectedPath = join(
+          await Task.baseDirectoryPath(BaseDirectory.applicationLibrary),
+          'custom.txt');
+      expect(path, expectedPath);
+    });
+
+    test(
+        'returns empty string for multi upload task without custom filename in temporary',
+        () async {
+      final task = MultiUploadTask(
+          url: workingUrl,
+          files: ['a.text'],
+          directory: 'uploads',
+          baseDirectory: BaseDirectory.temporary);
+      final path = await task.filePath();
+      expect(path, '');
+    });
+
+    test(
+        'returns correct path for multi upload task with custom filename in applicationDocuments',
+        () async {
+      final task = MultiUploadTask(
+          url: workingUrl,
+          files: ['a.text'],
+          directory: 'uploads',
+          baseDirectory: BaseDirectory.applicationDocuments);
+      final path = await task.filePath(withFilename: 'custom.txt');
+      final expectedPath = join(
+          await Task.baseDirectoryPath(BaseDirectory.applicationDocuments),
+          'uploads',
+          'custom.txt');
+      expect(path, expectedPath);
+    });
+
+    test('returns correct file path for task using file URI', () async {
+      final task =
+          UriUploadTask(url: workingUrl, fileUri: Uri.file('/my/file/uri.txt'));
+      final path = await task.filePath();
+      expect(path, '/my/file/uri.txt');
+    });
+
+    test('returns correct file path for UriUploadTask with URI and filename',
+        () async {
+      final uri = Uri.file('/my/file/uri.txt');
+      final task = UriUploadTask(
+          url: workingUrl, fileUri: uri, filename: uploadFilename);
+      final path = await task.filePath();
+      expect(path, '/my/file/uri.txt');
+      expect(task.filename, equals(uploadFilename));
+      expect(task.fileUri, equals(uri));
+      expect(task.directoryUri, isNull);
+    });
+
+    test('returns correct file path for UriDownloadTask with URI and filename',
+        () async {
+      final uri = Uri.file('/my/directory');
+      final task = UriDownloadTask(
+          url: workingUrl, directoryUri: uri, filename: 'testFilename.txt');
+      expect(task.directoryUri?.scheme, equals('file'));
+      final path = await task.filePath();
+      expect(path, '/my/directory/testFilename.txt');
+      expect(task.directoryUri, equals(uri));
+      expect(task.fileUri!.toFilePath(windows: Platform.isWindows),
+          equals('/my/directory/testFilename.txt'));
+    });
+
+    test('throws assertion error for task using non-file URI', () async {
+      final task = UriUploadTask(
+          url: workingUrl, fileUri: Uri.parse('content://example.com'));
+      expect(() async => await task.filePath(), throwsA(isA<AssertionError>()));
+    });
+
+    test('returns correct path for task using root directory', () async {
+      final task = DownloadTask(
+          url: workingUrl,
+          filename: 'test.txt',
+          directory: 'uploads',
+          baseDirectory: BaseDirectory.root);
+      final path = await task.filePath();
+      expect(path, join(separator, 'uploads', 'test.txt'));
+    });
+  });
+
   group('DataTask', () {
     test('dataTask get', () async {
       var lastUpdate = TaskStatusUpdate(task, TaskStatus.paused);
@@ -3737,13 +3667,4 @@ Future<void> enqueueAndFileExists(String path) async {
   } on FileSystemException {}
   // Expect 3 status callbacks: enqueued + running + complete
   expect(statusCallbackCounter, equals(3));
-}
-
-/// Returns true if the supplied file equals the large test file
-Future<bool> fileEqualsLargeTestFile(File file) async {
-  ByteData data = await rootBundle.load("assets/$largeFilename");
-  final targetData = data.buffer.asUint8List();
-  final fileData = file.readAsBytesSync();
-  print('target= ${targetData.length} and file= ${fileData.length}');
-  return listEquals(targetData, fileData);
 }

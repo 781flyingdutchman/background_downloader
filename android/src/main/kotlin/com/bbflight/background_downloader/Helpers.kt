@@ -2,15 +2,18 @@ package com.bbflight.background_downloader
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.os.StatFs
 import android.util.Log
+import androidx.core.content.FileProvider.getUriForFile
 import androidx.preference.PreferenceManager
 import com.bbflight.background_downloader.TaskWorker.Companion.TAG
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.CompletableDeferred
 import java.io.File
+import java.net.URLDecoder
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
@@ -171,6 +174,7 @@ fun baseDirPath(context: Context, baseDirectory: BaseDirectory): String? {
                 } else {
                     "${context.applicationInfo.dataDir}/app_flutter"
                 }
+
                 BaseDirectory.temporary -> context.cacheDir.path
                 BaseDirectory.applicationSupport -> context.filesDir.path
                 BaseDirectory.applicationLibrary -> "${context.filesDir.path}/Library"
@@ -200,6 +204,93 @@ fun getBasenameWithoutExtension(file: File): String {
     val fileName = file.name
     val extension = file.extension
     return fileName.substringBeforeLast(".$extension")
+}
+
+/**
+ * Returns the Uri for the given [filePath], or null if not allowed/possible
+ */
+fun getUriFromFilePath(context: Context, filePath: String): String? {
+    try {
+        val contentUri = getUriForFile(
+            context,
+            context.packageName + ".com.bbflight.background_downloader.fileprovider",
+            File(filePath)
+        )
+        return contentUri.toString()
+    } catch (e: Exception) {
+        Log.i(BDPlugin.TAG, "Failed to get Uri for file $filePath: $e")
+        return null
+    }
+}
+
+/**
+ * Suggests a filename based on response headers and a URL. If none can be derived, returns ""
+ *
+ * @param responseHeaders The response headers map.
+ * @param url             The URL the file would be downloaded from.
+ * @return A suggested filename, derived from the headers or the URL.
+ */
+fun suggestFilename(responseHeaders: Map<String, List<String>>, url: String): String {
+    try {
+        val disposition = (responseHeaders["Content-Disposition"]
+            ?: responseHeaders["content-disposition"])?.get(0)
+        if (disposition != null) {
+            // Try filename*=UTF-8'language'"encodedFilename"
+            val encodedFilenameRegEx =
+                Regex("""filename\*=\s*([^']+)'([^']*)'"?([^"]+)"?""", RegexOption.IGNORE_CASE)
+            var match = encodedFilenameRegEx.find(disposition)
+            if (match != null && match.groupValues[1].isNotEmpty() && match.groupValues[3].isNotEmpty()) {
+                try {
+                    val suggestedFilename = if (match.groupValues[1].uppercase() == "UTF-8") {
+                        URLDecoder.decode(match.groupValues[3], "UTF-8")
+                    } else {
+                        match.groupValues[3]
+                    }
+                    return suggestedFilename
+                } catch (_: IllegalArgumentException) {
+                    Log.d(
+                        TAG,
+                        "Could not interpret suggested filename (UTF-8 url encoded) ${match.groupValues[3]}"
+                    )
+                }
+            }
+            // Try filename="filename"
+            val plainFilenameRegEx =
+                Regex("""filename=\s*"?([^"]+)"?.*$""", RegexOption.IGNORE_CASE)
+            match = plainFilenameRegEx.find(disposition)
+            if (match != null && match.groupValues[1].isNotEmpty()) {
+                return match.groupValues[1]
+            }
+        }
+    } catch (_: Throwable) {
+    }
+    // Try filename derived from last path segment of the url
+    try {
+        val uri = Uri.parse(url)
+        return getFilenameFromUri(uri)
+    } catch (_: Throwable) {
+    }
+    return "" // Default fallback
+}
+
+/**
+ * Returns the filename from the given [uri]
+ *
+ * Returns "" if not possible
+ *
+ * Slightly modified from lastPathSegment to account for possible subdirs in that last segment
+ * (e.g. '/primary:Documents/dog-drawing.jpg' will have 'Documents/dog-drawing.jpg' as last path
+ * segment, not 'dog-drawing.jpg')
+ */
+fun getFilenameFromUri(uri: Uri): String {
+    val lastPathSegment = uri.lastPathSegment
+    if (lastPathSegment != null) {
+        val lastSlashIndex = lastPathSegment.lastIndexOf("/")
+        val filename =
+            if (lastSlashIndex != -1) lastPathSegment.substring(lastSlashIndex + 1) else lastPathSegment
+        return filename
+    }
+    return ""
 }
 
 // Helper extension to filter out null values from Maps

@@ -39,17 +39,19 @@ public func photosAccessAuthorized(addOnly: Bool) async -> Bool {
 }
 
 /// Move file at [filePath] to shared storage [destination] with optional [directory]
-public func moveToSharedStorage(filePath: String, destination: SharedStorage, directory: String) async -> String? {
+public func moveToSharedStorage(filePathOrUriString: String, destination: SharedStorage, directory: String, asUriString: Bool) async -> String? {
+    let fileUrl = URL(string: filePathOrUriString)
+    let filePath = fileUrl?.scheme == "file" ? fileUrl!.path : filePathOrUriString
     guard FileManager().fileExists(atPath: filePath)
     else {
-        os_log("Cannot move to shared storage: file %@ does not exist", log: log, type: .error, filePath)
+        os_log("Cannot move to shared storage: file %@ does not exist", log: log, type: .error, filePathOrUriString)
         return nil
     }
     switch destination {
         case .images, .video:
             return await moveToPhotoLibrary(filePath: filePath, destination: destination)
         default:
-            return moveToFakeSharedStorage(filePath: filePath, destination: destination, directory: directory)
+        return moveToFakeSharedStorage(filePath: filePath, destination: destination, directory: directory, asUriString: asUriString)
     }
 }
 
@@ -88,7 +90,7 @@ private func moveToPhotoLibrary(filePath: String, destination: SharedStorage) as
 }
 
 /// Returns the path to the file at [filePath] in shared storage [destination] subdir [directory], or null
-public func pathInSharedStorage(filePath: String, destination: SharedStorage, directory: String) async -> String? {
+public func pathInSharedStorage(filePath: String, destination: SharedStorage, directory: String, asUriString: Bool) async -> String? {
     if destination == .images || destination == .video {
         return await pathInPhotoLibrary(localId: filePath, destination: destination)
     }
@@ -98,7 +100,7 @@ public func pathInSharedStorage(filePath: String, destination: SharedStorage, di
         return nil
     }
     let destUrl = directory.appendingPath((filePath as NSString).lastPathComponent)
-    return destUrl.path
+    return asUriString ? destUrl.absoluteString : destUrl.path
 }
 
 /// Returns the file path associated with the [localId] in the Photos library
@@ -162,7 +164,7 @@ public func directoryForSharedStorage(destination: SharedStorage, directory: Str
     : documentsURL?.appendingPath(dir, isDirectory: true).appendingPath(directory, isDirectory: true)
 }
 
-private func moveToFakeSharedStorage(filePath: String, destination: SharedStorage, directory: String) -> String? {
+private func moveToFakeSharedStorage(filePath: String, destination: SharedStorage, directory: String, asUriString: Bool) -> String? {
     let fileUrl = NSURL(fileURLWithPath: filePath)
     guard let directory = try? directoryForSharedStorage(destination: destination, directory: directory) else {
         os_log("Cannot move to shared storage: no permission for directory %@", log: log, type: .error, directory)
@@ -186,6 +188,5 @@ private func moveToFakeSharedStorage(filePath: String, destination: SharedStorag
         os_log("Failed to move file %@ to %@: %@", log: log, type: .error, filePath, destUrl.path, error.localizedDescription)
         return nil
     }
-    os_log("Moved from %@ to %@", log: log, type: .info, fileUrl, destUrl.path)
-    return destUrl.path
+    return asUriString ? destUrl.absoluteString : destUrl.path
 }

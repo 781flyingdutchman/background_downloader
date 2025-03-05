@@ -26,7 +26,7 @@ func providesStatusUpdates(downloadTask: Task) -> Bool {
 ///
 /// A ParallelDownloadTask is also a DownloadTask
 func isDownloadTask(task: Task) -> Bool {
-    return task.taskType == "DownloadTask" || task.taskType == "ParallelDownloadTask"
+    return task.taskType == "DownloadTask" || task.taskType == "UriDownloadTask" || task.taskType == "ParallelDownloadTask"
 }
 
 /// True if this task is a ParallelDownloadTask, false if not
@@ -39,7 +39,7 @@ func isParallelDownloadTask(task: Task) -> Bool
 ///
 /// A MultiUploadTask is also an UploadTask
 func isUploadTask(task: Task) -> Bool {
-    return task.taskType == "UploadTask" || task.taskType == "MultiUploadTask"
+    return task.taskType == "UploadTask" || task.taskType == "UriUploadTask" || task.taskType == "MultiUploadTask"
 }
 
 /// True if this task is a MultiUploadTask, false if not
@@ -91,6 +91,59 @@ func stripFileExtension ( _ filename: String ) -> String {
     return components.joined(separator: ".")
 }
 
+/// Suggests a filename based on response headers and a URL.
+/// If none can be derived, returns an empty string.
+///
+/// - Parameters:
+///   - responseHeaders: The response headers dictionary.
+///   - urlString: The URL string the file would be downloaded from.
+/// - Returns: A suggested filename, derived from the headers or the URL.
+func suggestFilename(responseHeaders: [AnyHashable: Any], urlString: String) -> String {
+    do {
+        if let disposition = responseHeaders["Content-Disposition"] as? String ?? responseHeaders["content-disposition"] as? String {
+            // Try filename*=UTF-8'language'"encodedFilename"
+            let encodedFilenameRegEx = try NSRegularExpression(pattern: #"filename\*=\s*([^']+)'([^']*)'"?([^"]+)"?"#, options: .caseInsensitive)
+            let range = NSRange(location: 0, length: disposition.utf16.count)
+            if let match = encodedFilenameRegEx.firstMatch(in: disposition, options: [], range: range) {
+                if let encodingRange = Range(match.range(at: 1), in: disposition),
+                   let filenameRange = Range(match.range(at: 3), in: disposition) {
+                    let encoding = String(disposition[encodingRange]).uppercased()
+                    let filename = String(disposition[filenameRange])
+                    if encoding == "UTF-8" {
+                        if let decodedFilename = filename.removingPercentEncoding {
+                            return decodedFilename
+                        } else {
+                            os_log("Could not interpret suggested filename (UTF-8 url encoded) %@", log: log, type: .debug, filename)
+                        }
+                    } else {
+                        return filename
+                    }
+                }
+            }
+
+            // Try filename="filename"
+            let plainFilenameRegEx = try NSRegularExpression(pattern: #"filename=\s*"?([^"]+)"?.*$"#, options: .caseInsensitive)
+            if let match = plainFilenameRegEx.firstMatch(in: disposition, options: [], range: range) {
+                if let filenameRange = Range(match.range(at: 1), in: disposition) {
+                    return String(disposition[filenameRange])
+                }
+            }
+        }
+    } catch {
+        os_log("Error parsing suggested filename from headers: %@", log: log, type: .error, error.localizedDescription)
+    }
+
+    os_log("Could not determine suggested filename from server", log: log, type: .debug)
+
+    // Try filename derived from last path segment of the url
+    if let url = URL(string: urlString), !url.lastPathComponent.isEmpty {
+        return url.lastPathComponent
+    }
+
+    os_log("Could not parse URL pathSegment for suggested filename", log: log, type: .debug)
+    return "" // Default fallback
+}
+
 /**
  * Returns a copy of the task with the [Task.filename] property changed
  * to the filename suggested by the server, or derived from the url, or
@@ -103,45 +156,18 @@ func stripFileExtension ( _ filename: String ) -> String {
  * The server-suggested filename is obtained from the  [responseHeaders] entry
  * "Content-Disposition"
  */
-func suggestedFilenameFromResponseHeaders(
+func taskWithSuggestedFilenameFromResponseHeaders(
     task: Task,
     responseHeaders: [AnyHashable: Any],
     unique: Bool = false
 ) -> Task {
-    if let disposition = responseHeaders["Content-Disposition"] as? String {
-        let range = NSMakeRange(0, disposition.utf16.count)
-        // Try filename*=UTF-8'language'"encodedFilename"
-        let encodedFilenameRegEx = try! NSRegularExpression(pattern: #"filename\*=\s*([^']+)'([^']*)'"?([^"]+)"?"#, options: .caseInsensitive)
-        if let match = encodedFilenameRegEx.firstMatch(in: disposition, options: [], range: range) {
-            let encoding = String(disposition[Range(match.range(at: 1), in: disposition)!]).uppercased()
-            let filename = String(disposition[Range(match.range(at: 3), in: disposition)!])
-            if encoding == "UTF-8" {
-                if let decodedFilename = filename.removingPercentEncoding {
-                    return uniqueFilename(task: task.copyWith(filename: decodedFilename), unique: unique)
-                } else {
-                    os_log("Could not interpret suggested filename (UTF-8 url encoded)", log: log, type: .debug)
-                }
-            } else {
-                return uniqueFilename(task: task.copyWith(filename: filename), unique: unique)
-            }
-        }
-        // Try filename="filename"
-        let plainFilenameRegEx = try! NSRegularExpression(pattern: #"filename=\s*"?([^"]+)"?.*$"#, options: .caseInsensitive)
-        if let match = plainFilenameRegEx.firstMatch(in: disposition, options: [], range: range) {
-            let filename = String(disposition[Range(match.range(at: 1), in: disposition)!])
-            return uniqueFilename(task: task.copyWith(filename: filename), unique: unique)
-        }
+    let suggestedFilenameValue = suggestFilename(responseHeaders: responseHeaders, urlString: task.url)
+    
+    if !suggestedFilenameValue.isEmpty {
+        return uniqueFilename(task: task.copyWith(filename: suggestedFilenameValue), unique: unique)
     }
-    os_log("Could not determine suggested filename from server", log: log, type: .debug)
-    // Try filename derived from last path segment of the url
-    if let uri = URL(string: task.url) {
-        let suggestedFilename = uri.lastPathComponent
-        if !suggestedFilename.isEmpty {
-            return uniqueFilename(task: task.copyWith(filename: suggestedFilename), unique: unique)
-        }
-    }
-    os_log("Could not parse URL pathSegment for suggested filename", log: log, type: .debug)
-    // if everything fails, return the task with unchanged filename
+    
+    // If everything fails, return the task with an unchanged filename
     // except for possibly making it unique
     return uniqueFilename(task: task, unique: unique)
 }
@@ -272,14 +298,22 @@ func extractFilesData(task: Task) -> [((String, String, String))] {
     }
     var result = [(String, String, String)]()
     for i in 0 ..< fileFields.count {
-        if FileManager.default.fileExists(atPath: filenames[i]) {
-            result.append((fileFields[i], filenames[i], mimeTypes[i]))
+        let fileUrl = URL(string: filenames[i])
+        let decodedFileUrl = fileUrl != nil ? decodeToFileUrl(uri: fileUrl!) : nil
+        if decodedFileUrl?.scheme == "file" {
+            // URI mode, return path
+            result.append((fileFields[i], decodedFileUrl!.path, mimeTypes[i]))
         } else {
-            result.append((
-                fileFields[i],
-                getFilePath(for: task, withFilename: filenames[i]) ?? "",
-                mimeTypes[i]
-            ))
+            // file path mode
+            if FileManager.default.fileExists(atPath: filenames[i]) {
+                result.append((fileFields[i], filenames[i], mimeTypes[i]))
+            } else {
+                result.append((
+                    fileFields[i],
+                    getFilePath(for: task, withFilename: filenames[i]) ?? "",
+                    mimeTypes[i]
+                ))
+            }
         }
     }
     return result
@@ -296,9 +330,10 @@ func updateProgress(task: Task, totalBytesExpected: Int64, totalBytesDone: Int64
     let info = BDPlugin.propertyLock.withLock({
         return BDPlugin.progressInfo[task.taskId] ?? (lastProgressUpdateTime: 0.0, lastProgressValue: 0.0, lastTotalBytesDone: 0, lastNetworkSpeed: -1.0)
     })
-    if totalBytesExpected != NSURLSessionTransferSizeUnknown && Date().timeIntervalSince1970 > info.lastProgressUpdateTime + 0.5 {
+    let now = Date().timeIntervalSince1970
+    if totalBytesExpected != NSURLSessionTransferSizeUnknown && now > info.lastProgressUpdateTime + 0.5 {
         let progress = min(Double(totalBytesDone) / Double(totalBytesExpected), 0.999)
-        if progress - info.lastProgressValue > 0.02 {
+        if (progress - info.lastProgressValue > 0.02) || (progress > info.lastProgressValue && now > info.lastProgressUpdateTime + 2.5) {
             // calculate network speed and time remaining
             let now = Date().timeIntervalSince1970
             let timeSinceLastUpdate = now - info.lastProgressUpdateTime
@@ -401,15 +436,15 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
             BDPlugin.progressInfo.removeValue(forKey: task.taskId)
             BDPlugin.localResumeData.removeValue(forKey: task.taskId)
             BDPlugin.remainingBytesToDownload.removeValue(forKey: task.taskId)
-            BDPlugin.tasksWithSuggestedFilename.removeValue(forKey: task.taskId)
+            BDPlugin.tasksWithModifications.removeValue(forKey: task.taskId)
             BDPlugin.tasksWithContentLengthOverride.removeValue(forKey: task.taskId)
             BDPlugin.responseBodyData.removeValue(forKey: task.taskId)
             BDPlugin.notificationConfigJsonStrings.removeValue(forKey: task.taskId)
             BDPlugin.taskIdsThatCanResume.remove(task.taskId)
-            BDPlugin.taskIdsProgrammaticallyCancelled.remove(task.taskId)
+            BDPlugin.taskIdsProgrammaticallyCanceledAfterStart.remove(task.taskId)
         }
         // invoke onTaskFinished callback if needed
-        if task.options?.hasFinishedCallback() == true {
+        if task.options?.hasOnFinishedCallback() == true {
             _Concurrency.Task {
                 if !(await invokeOnTaskFinishedCallback(taskStatusUpdate: statusUpdate)) {
                     os_log("Could not invoke onTaskFinishedCallback", log: log, type: .error)
@@ -556,7 +591,8 @@ func taskFrom(jsonString: String) -> Task? {
 
 /// Return the task corresponding to the URLSessionTask, or nil if it cannot be matched
 ///
-/// If possible, the task returned contains the suggested filename
+/// May return a modified version of the task instead of the original stored with the URLSessionTask, e.g.
+/// if the filename has changed
 func getTaskFrom(urlSessionTask: URLSessionTask) -> Task? {
     guard let jsonData = getTaskJsonStringFrom(urlSessionTask: urlSessionTask)?.data(using: .utf8)
     else {
@@ -564,12 +600,20 @@ func getTaskFrom(urlSessionTask: URLSessionTask) -> Task? {
     }
     let decoder = JSONDecoder()
     if let task = try? decoder.decode(Task.self, from: jsonData) {
-        let taskWithSuggestedFilename = BDPlugin.propertyLock.withLock({
-            BDPlugin.tasksWithSuggestedFilename[task.taskId]
+        let modifiedTask = BDPlugin.propertyLock.withLock({
+            BDPlugin.tasksWithModifications[task.taskId]
         })
-        return taskWithSuggestedFilename ?? task
+        return modifiedTask ?? task
     }
     return nil
+}
+
+/// Marks the task as modified such that [getTaskFrom] a UrlSession wlll get the modified task, not the one'
+/// immutably stored with the urlSession
+func storeModifiedTask(task: Task) {
+    BDPlugin.propertyLock.withLock({
+        BDPlugin.tasksWithModifications[task.taskId] = task
+    })
 }
 
 /// Returns the taskJsonString contained in the urlSessionTask

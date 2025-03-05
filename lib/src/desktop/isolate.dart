@@ -58,7 +58,6 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
   // get the arguments list and parse each argument
   final (
     Task originalTask,
-    String filePath,
     ResumeData? resumeData,
     bool isResume,
     Duration? requestTimeout,
@@ -73,7 +72,22 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
       sendPort.send(('log', (rec.message)));
     }
   });
-  final task = await getModifiedTask(originalTask);
+  // process native callbacks beforeTaskStart, onTaskStart and onAuth
+  final statusUpdate =
+      await originalTask.options?.beforeTaskStartCallBack?.call(originalTask);
+  if (statusUpdate != null) {
+    log.fine(
+        'TaskId ${originalTask.taskId} interrupted by beforeTaskStart callback');
+    // set global vars for final TaskStatusUpdate
+    taskException = statusUpdate.exception;
+    responseBody = statusUpdate.responseBody;
+    responseHeaders = statusUpdate.responseHeaders;
+    responseStatusCode = statusUpdate.responseStatusCode;
+    processStatusUpdateInIsolate(originalTask, statusUpdate.status, sendPort);
+    return;
+  }
+  final task =
+      await getModifiedTask(originalTask); // processes onStart and onAuth
   // start listener/processor for incoming messages
   unawaited(listenToIncomingMessages(task, messagesToIsolate, sendPort));
   processStatusUpdateInIsolate(task, TaskStatus.running, sendPort);
@@ -89,17 +103,13 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
     // allow immediate cancel message to come through
     await Future.delayed(const Duration(milliseconds: 0));
     await switch (task) {
-      ParallelDownloadTask() => doParallelDownloadTask(
-          task,
-          filePath,
-          resumeData,
-          isResume,
-          requestTimeout ?? const Duration(seconds: 60),
-          sendPort),
-      DownloadTask() => doDownloadTask(task, filePath, resumeData, isResume,
+      ParallelDownloadTask() => doParallelDownloadTask(task, resumeData,
+          isResume, requestTimeout ?? const Duration(seconds: 60), sendPort),
+      DownloadTask() => doDownloadTask(task, resumeData, isResume,
           requestTimeout ?? const Duration(seconds: 60), sendPort),
-      UploadTask() => doUploadTask(task, filePath, sendPort),
-      DataTask() => doDataTask(task, sendPort)
+      UploadTask() => doUploadTask(task, sendPort),
+      DataTask() => doDataTask(task, sendPort),
+      _ => throw UnimplementedError(),
     };
   }
   DesktopDownloader.httpClient.close();
@@ -260,7 +270,9 @@ void processStatusUpdateInIsolate(
       statusUpdate.charSet,
     ));
   }
-  task.options?.onTaskFinishedCallBack?.call(statusUpdate);
+  if (status.isFinalState) {
+    task.options?.onTaskFinishedCallBack?.call(statusUpdate);
+  }
 }
 
 /// Processes a progress update for the [task]
@@ -359,13 +371,13 @@ String fieldEntry(String name, String value) =>
 /// The return value is guaranteed to contain only ASCII characters.
 String headerForField(String name, String value) {
   var header = 'content-disposition: form-data; name="${browserEncode(name)}"';
-  if (!isPlainAscii(value)) {
+  if (isJsonString(value)) {
+    header = '$header\r\n'
+        'content-type: application/json; charset=utf-8\r\n';
+  } else if (!isPlainAscii(value)) {
     header = '$header\r\n'
         'content-type: text/plain; charset=utf-8\r\n'
         'content-transfer-encoding: binary';
-  } else if (isJsonString(value)) {
-    header = '$header\r\n'
-        'content-type: application/json; charset=utf-8\r\n';
   }
   return '$header\r\n\r\n';
 }
@@ -435,9 +447,11 @@ Future<String?> responseContent(http.StreamedResponse response) {
   }
 }
 
-/// Returns true if [currentProgress] > [lastProgressUpdate] + threshold and
-/// [now] > [nextProgressUpdateTime]
-bool shouldSendProgressUpdate(double currentProgress, DateTime now) {
-  return currentProgress - lastProgressUpdate > 0.02 &&
-      now.isAfter(nextProgressUpdateTime);
-}
+/// Returns true if [currentProgress] > [lastProgressUpdate] + 2% and
+/// [now] > [nextProgressUpdateTime], or if there was progress and
+/// [now] > [nextProgressUpdateTime] + 2 seconds
+bool shouldSendProgressUpdate(double currentProgress, DateTime now) =>
+    (currentProgress - lastProgressUpdate > 0.02 &&
+        now.isAfter(nextProgressUpdateTime)) ||
+    (currentProgress > lastProgressUpdate &&
+        now.isAfter(nextProgressUpdateTime.add(const Duration(seconds: 2))));

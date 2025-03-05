@@ -11,12 +11,9 @@ class DataTaskWorker(applicationContext: Context, workerParams: WorkerParameters
     /** Process the response to the GET or POST request on this [connection]
      *
      * Returns the [TaskStatus]
-     *
-     * [filePath] is ignored for Data tasks
      */
     override suspend fun process(
         connection: HttpURLConnection,
-        filePath: String
     ): TaskStatus {
         responseStatusCode = connection.responseCode
         if (connection.responseCode in 200..206) {

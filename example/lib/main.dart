@@ -78,6 +78,7 @@ class _MyAppState extends State<MyApp> {
                 'Download {filename}', 'Download failed'),
             paused: const TaskNotification(
                 'Download {filename}', 'Paused with metadata {metadata}'),
+            canceled: const TaskNotification('Download {filename}', 'Canceled'),
             progressBar: true)
         .configureNotificationForGroup('bunch',
             running: const TaskNotification(
@@ -130,6 +131,7 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
+    final onMobile = Platform.isAndroid || Platform.isIOS;
     return MaterialApp(
       theme: ThemeData(
         useMaterial3: true,
@@ -245,6 +247,21 @@ class _MyAppState extends State<MyApp> {
                         : loadBackgroundResult ?? '',
                   ),
                 ),
+                if (onMobile)
+                  const Divider(
+                    height: 30,
+                    thickness: 5,
+                    color: Colors.blueGrey,
+                  ),
+                if (onMobile)
+                  Center(
+                    child: ElevatedButton(
+                      onPressed: processPickDirectory,
+                      child: const Text(
+                        'Pick destination',
+                      ),
+                    ),
+                  ),
               ],
             ),
           )),
@@ -407,6 +424,25 @@ class _MyAppState extends State<MyApp> {
         loadBackgroundInProgress = false;
       });
     }
+  }
+
+  Future<void> processPickDirectory() async {
+    final uri = await FileDownloader().uri.pickDirectory();
+    if (uri == null) {
+      log.warning('Could not get a URI');
+      return;
+    }
+    log.fine('Uri = $uri');
+    final task = UriDownloadTask(
+        url:
+            'https://i2.wp.com/www.skiptomylou.org/wp-content/uploads/2019/06/dog-drawing.jpg',
+        directoryUri: uri,
+        filename: '?');
+    final result = await FileDownloader().download(task);
+    final resultTask = result.task as UriDownloadTask;
+    log.info('Download to URI completed with taskStatus ${result.status}');
+    log.info('Downloaded file is at ${resultTask.fileUri}');
+    log.info('Downloaded file name is ${resultTask.filename}');
   }
 
   /// Attempt to get permissions if not already granted

@@ -13,29 +13,40 @@ import UIKit
 
 
 /// Invoke a callback in Dart (via the method channel) and return the returned Task value or nil
-private func invokeCallback(withMethod methodName: String, forTask task: Task) async -> Task? {
+private func invokeCallback(withMethod methodName: String, forTask task: Task) async -> Any? {
     return await withCheckedContinuation { continuation in
+        os_log("Invoking %{public}@ for taskId %@", log: log, type: .info, methodName, task.taskId)
         BDPlugin.callbackChannel?.invokeMethod(methodName, arguments: jsonStringFor(task: task), result: { result in
-            guard let taskJsonString = result as? String else {
+            guard let jsonString = result as? String else {
                 if let error = result as? FlutterError {
                     os_log("Error invoking %{public}@: %@", log: log, type: .error, methodName, error.message ?? "nil")
                 }
                 continuation.resume(returning: nil)
                 return
             }
-            continuation.resume(returning: taskFrom(jsonString: taskJsonString))
+            if methodName == "beforeTaskStartCallback" {
+                continuation.resume(returning: try? JSONDecoder().decode(TaskStatusUpdate.self, from: (jsonString).data(using: .utf8)!))
+            }
+            else {
+                continuation.resume(returning: taskFrom(jsonString: jsonString))
+            }
         })
     }
 }
 
 /// Invoke the onTaskStartCallback in Dart (via the method channel) and return the returned Task value or nil
+func invokeBeforeTaskStartCallback(task: Task) async -> TaskStatusUpdate? {
+    return await invokeCallback(withMethod: "beforeTaskStartCallback", forTask: task) as? TaskStatusUpdate
+}
+
+/// Invoke the onTaskStartCallback in Dart (via the method channel) and return the returned Task value or nil
 func invokeOnTaskStartCallback(task: Task) async -> Task? {
-    return await invokeCallback(withMethod: "onTaskStartCallback", forTask: task)
+    return await invokeCallback(withMethod: "onTaskStartCallback", forTask: task) as? Task
 }
 
 /// Invoke the onAuthCallback in Dart (via the method channel) and return the returned Task value or nil
 func invokeOnAuthCallback(task: Task) async -> Task? {
-    return await invokeCallback(withMethod: "onAuthCallback", forTask: task)
+    return await invokeCallback(withMethod: "onAuthCallback", forTask: task) as? Task
 }
 
 /// Invoke the onTaskFinishedCallback in Dart (via the method channel) and return true if successful
