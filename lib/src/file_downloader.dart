@@ -698,15 +698,25 @@ interface class FileDownloader {
   /// task from scratch, or fail.
   Future<bool> resume(DownloadTask task) => _downloader.resume(task);
 
-  /// Resume all [tasks], or all paused tasks if [tasks] is omitted
+  /// Resume all paused tasks, or those in [tasks], or paused tasks in
+  /// group [group]
   ///
   /// Calls to resume will be spaced out over time by [interval], defaults to 50ms
   Future<List<Task>> resumeAll(
       {Iterable<DownloadTask>? tasks,
+      String? group,
       Duration interval = const Duration(milliseconds: 50)}) async {
     final results = <Task>[];
-    final tasksToResume =
-        tasks ?? (await _downloader.getPausedTasks()).whereType<DownloadTask>();
+    final tasksToResume = switch ((tasks, group)) {
+      (Iterable<DownloadTask> tasks, null) => tasks,
+      (null, String group) => (await _downloader.getPausedTasks())
+          .whereType<DownloadTask>()
+          .where((task) => task.group == group),
+      (null, null) =>
+        (await _downloader.getPausedTasks()).whereType<DownloadTask>(),
+      _ => throw AssertionError(
+          "Either 'tasks' or 'group' must be provided, or neither, but not both.")
+    };
     for (final task in tasksToResume) {
       if (await resume(task)) {
         results.add(task);

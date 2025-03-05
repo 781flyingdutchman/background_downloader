@@ -439,9 +439,11 @@ abstract base class BaseDownloader {
   /// Returns true if all cancellations were successful
   Future<bool> cancelAll({Iterable<Task>? tasks, String? group}) async {
     final tasksToCancel = switch ((tasks, group)) {
-      (Iterable<Task> tasks, _) => tasks,
-      (_, String group) => await FileDownloader().allTasks(group: group),
+      (Iterable<Task> tasks, null) => tasks,
+      (null, String group) => await FileDownloader().allTasks(group: group),
       (null, null) => await FileDownloader().allTasks(),
+      _ => throw AssertionError(
+          "Either 'tasks' or 'group' must be provided, or neither, but not both.")
     };
     return cancelTasksWithIds(tasksToCancel.map((task) => task.taskId));
   }
@@ -558,10 +560,12 @@ abstract base class BaseDownloader {
   Future<List<DownloadTask>> pauseAll(
       {Iterable<DownloadTask>? tasks, String? group}) async {
     final tasksToPause = switch ((tasks, group)) {
-      (Iterable<DownloadTask> tasks, _) => tasks,
-      (_, String group) =>
+      (Iterable<DownloadTask> tasks, null) => tasks,
+      (null, String group) =>
         (await FileDownloader().allTasks(group: group)) as Iterable<Task>,
       (null, null) => (await FileDownloader().allTasks()) as Iterable<Task>,
+      _ => throw AssertionError(
+          "Either 'tasks' or 'group' must be provided, or neither, but not both.")
     }
         .whereType<DownloadTask>()
         .where((task) => task.allowPause && task.post == null)
