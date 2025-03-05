@@ -30,6 +30,7 @@ import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.SocketException
 import java.net.URL
+import kotlin.concurrent.read
 import kotlin.concurrent.write
 import java.lang.Double.min as doubleMin
 
@@ -833,8 +834,10 @@ open class TaskWorker(
 
 /** Return the map of tasks stored in preferences */
 fun getTaskMap(prefs: SharedPreferences): MutableMap<String, Task> {
-    val tasksMapJson = prefs.getString(BDPlugin.keyTasksMap, "{}") ?: "{}"
-    return Json.decodeFromString(tasksMapJson)
+    BDPlugin.prefsLock.read {
+        val tasksMapJson = prefs.getString(BDPlugin.keyTasksMap, "{}") ?: "{}"
+        return Json.decodeFromString(tasksMapJson)
+    }
 }
 
 /**

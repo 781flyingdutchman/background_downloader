@@ -42,6 +42,7 @@ import java.lang.Long.min
 import java.net.MalformedURLException
 import java.net.URL
 import java.net.URLDecoder
+import java.util.Collections
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
@@ -82,24 +83,33 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
 
         @SuppressLint("StaticFieldLeak")
-        var notificationButtonText = mutableMapOf<String, String>() // for localization
+        var notificationButtonText =
+            Collections.synchronizedMap(mutableMapOf<String, String>()) // for localization
         var firstBackgroundChannel: MethodChannel? = null
-        var bgChannelByTaskId = mutableMapOf<String, MethodChannel>()
-        var flutterEngineByTaskId = mutableMapOf<String, FlutterEngine>()
+        var bgChannelByTaskId = Collections.synchronizedMap(mutableMapOf<String, MethodChannel>())
+        var flutterEngineByTaskId =
+            Collections.synchronizedMap(mutableMapOf<String, FlutterEngine>())
         var requireWifi = RequireWiFi.asSetByTask // global setting
         val localResumeData =
-            mutableMapOf<String, ResumeData>() // by taskId, for pause notifications
-        var cancelUpdateSentForTaskId = mutableMapOf<String, Long>() // <taskId, timeMillis>
-        val pausedTaskIds = mutableSetOf<String>() // <taskId>, acts as flag
-        val canceledTaskIds = mutableSetOf<String>() // <taskId>, acts as flag
-        val parallelDownloadTaskWorkers = HashMap<String, ParallelDownloadTaskWorker>()
-        val tasksToReEnqueue = mutableSetOf<Task>() // for when WiFi requirement changes
+            Collections.synchronizedMap(mutableMapOf<String, ResumeData>()) // by taskId, for pause notifications
+        var cancelUpdateSentForTaskId =
+            Collections.synchronizedMap(mutableMapOf<String, Long>()) // <taskId, timeMillis>
+        val pausedTaskIds =
+            Collections.synchronizedSet(mutableSetOf<String>()) // <taskId>, acts as flag
+        val canceledTaskIds =
+            Collections.synchronizedSet(mutableSetOf<String>()) // <taskId>, acts as flag
+        val parallelDownloadTaskWorkers =
+            Collections.synchronizedMap(HashMap<String, ParallelDownloadTaskWorker>()) //Was a HashMap
+        val tasksToReEnqueue =
+            Collections.synchronizedSet(mutableSetOf<Task>()) // for when WiFi requirement changes
         val taskIdsRequiringWiFi =
-            mutableSetOf<String>() // ensures correctness when enqueueing task
-        val notificationConfigJsonStrings = mutableMapOf<String, String>() // by taskId
+            Collections.synchronizedSet(mutableSetOf<String>()) // ensures correctness when enqueueing task
+        val notificationConfigJsonStrings =
+            Collections.synchronizedMap(mutableMapOf<String, String>()) // by taskId
         var forceFailPostOnBackgroundChannel = false
         val prefsLock = ReentrantReadWriteLock()
-        val remainingBytesToDownload = mutableMapOf<String, Long>() // <taskId, size>
+        val remainingBytesToDownload =
+            Collections.synchronizedMap(mutableMapOf<String, Long>()) // <taskId, size>
         var haveLoggedProxyMessage = false
         var holdingQueue: HoldingQueue? = null
 
@@ -385,10 +395,12 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val workManager = WorkManager.getInstance(applicationContext)
         val allWorkInfos = workManager.getWorkInfosByTag(TAG).get()
         if (allWorkInfos.isEmpty()) {
-            // remove persistent storage if no jobs found at all
-            val editor = prefs.edit()
-            editor.remove(keyTasksMap)
-            editor.apply()
+            prefsLock.write {
+                // remove persistent storage if no jobs found at all
+                val editor = prefs.edit()
+                editor.remove(keyTasksMap)
+                editor.apply()
+            }
         }
         requireWifi = RequireWiFi.entries[prefs.getInt(keyRequireWiFi, 0)]
     }
