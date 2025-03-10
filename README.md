@@ -457,7 +457,8 @@ print('TaskId ${record.taskId} with task ${record.task} has '
 ```
 
 You can interact with the `database` using `allRecords`, `allRecordsOlderThan`, `recordForId`,`deleteAllRecords`,
-`deleteRecordWithId` etc. If you only want to track tasks in a specific [group](#grouping-tasks), call `trackTasksInGroup` instead.
+`deleteRecordWithId` etc. If you only want to track tasks in a specific [group](#grouping-tasks), call `trackTasksInGroup` instead. 
+To listen to changes to the database, use the `FileDownloader().database.updates` stream of `TaskRecord` items, emitted after a record has been updated in the database. This is a `BroadcastStream`, so multiple listeners can attach/detach and re-attach to the stream, which makes it easy to use in UI components. Make sure to cancel your `StreamSubscription` appropriately.
 
 If a user kills your app (e.g. by swiping it away in the app tray) then tasks that are running (natively) are killed, and no indication is given to your application. This cannot be avoided. To guard for this, upon app startup you can ask the downloader to reschedule killed tasks, i.e. tasks that show up as `enqueued` or `running` in the database, yet are not enqueued or running on the native side, or are `waitingToRetry` but not registered as such. Method `rescheduleKilledTasks` returns a record with two lists, 1) successfully rescheduled tasks and 2) tasks that failed to reschedule. Together, those are the missing tasks. Reschedule missing tasks a few seconds after you have called `resumeFromBackground`, as that gives the downloader time to processes updates that may have happened while the app was suspended, or call `FileDownloader().start()` with `doRescheduleKilledTasks` set to true (the default).
 

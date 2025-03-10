@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 
 import 'base_downloader.dart';
 import 'exceptions.dart';
@@ -14,7 +15,10 @@ import 'task.dart';
 interface class Database {
   static Database? _instance;
   late final PersistentStorage _storage;
+  final StreamController<TaskRecord> _controller =
+      StreamController<TaskRecord>.broadcast();
 
+  /// Return the [Database] singleton instance, and creates it if required
   factory Database(PersistentStorage persistentStorage) {
     _instance ??= Database._internal(persistentStorage);
     return _instance!;
@@ -29,6 +33,10 @@ interface class Database {
   /// database. For testing only
   @visibleForTesting
   PersistentStorage get storage => _storage;
+
+  /// Stream of [TaskRecord] updates, emitted after a record is updated in
+  /// [PersistentStorage]
+  Stream<TaskRecord> get updates => _controller.stream;
 
   /// Returns all [TaskRecord]
   ///
@@ -110,8 +118,19 @@ interface class Database {
   ///
   /// This is used by the [FileDownloader] to track tasks, and should not
   /// normally be used by the user of this package
-  Future<void> updateRecord(TaskRecord record) async =>
-      _storage.storeTaskRecord(record);
+  Future<void> updateRecord(TaskRecord record) async {
+    await _storage.storeTaskRecord(record);
+    if (_controller.hasListener) {
+      _controller.add(record);
+    }
+  }
+
+  /// Destroy the [Database] singleton instance
+  ///
+  /// For testing purposes only
+  void destroy() {
+    _instance = null;
+  }
 }
 
 /// Record containing task, task status and task progress.

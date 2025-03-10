@@ -1,3 +1,5 @@
+* Adds `updates` broadcast stream to the `database` property, which emits every `TaskRecord` update made to the database.
+
 ## 9.1.1
 * Adds optional `group` parameter to `resumeAll`
 * Fixes concurrency bugs in Android
@@ -5,7 +7,7 @@
 ## 9.1.0
 * Adds `pauseAll`, `cancelAll` and `resumeAll`
 * Improves handling `enqueuAll` to not starve the UI thread
-* Fixes compilation bug in when compiling with XCode 16.2
+* Fixes compilation bug when compiling with XCode 16.2
 
 ## 9.0.0
 * Introduces URI operations, including file/photo/video/directory pickers, under the `uri` property, and `UriDownloadTask` and `UriUploadTask`. See [Working with URIs](doc/URI.md). 
