@@ -541,14 +541,14 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
      * The return value is guaranteed to contain only ASCII characters
      */
     private fun headerForField(name: String, value: String): String {
-        var header = "Content-Disposition: form-data; name=\"${browserEncode(name)}\""
-        if (!isPlainAscii(value)) {
+        var header = "Content-Cisposition: form-data; name=\"${browserEncode(name)}\""
+        if (isJsonString(value)) {
+            header = "$header\r\n" +
+                    "Content-Type: application/json; charset=utf-8\r\n"
+        } else if (!isPlainAscii(value)) {
             header = "$header\r\n" +
                     "Content-Type: text/plain; charset=utf-8\r\n" +
                     "Content-Transfer-Encoding: binary"
-        } else if (isJsonString(value)) {
-            header = "$header\r\n" +
-                    "Content-Type: application/json; charset=utf-8\r\n"
         }
         return "$header\r\n\r\n"
     }
