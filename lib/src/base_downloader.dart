@@ -391,10 +391,12 @@ abstract base class BaseDownloader {
         'If allGroups is true, no other arguments can be set');
     final tasks = <Task>[];
     if (includeTasksWaitingToRetry) {
-      tasks.addAll(tasksWaitingToRetry.where((task) => task.group == group));
+      tasks.addAll(tasksWaitingToRetry
+          .where((task) => allGroups ? true : task.group == group));
     }
     final pausedTasks = await getPausedTasks();
-    tasks.addAll(pausedTasks.where((task) => task.group == group));
+    tasks.addAll(
+        pausedTasks.where((task) => allGroups ? true : task.group == group));
     return tasks;
   }
 

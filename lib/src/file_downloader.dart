@@ -456,7 +456,7 @@ interface class FileDownloader {
   Future<List<Task>> allTasks(
           {String group = defaultGroup,
           bool includeTasksWaitingToRetry = true,
-          allGroups = false}) =>
+          bool allGroups = false}) =>
       _downloader.allTasks(group, includeTasksWaitingToRetry, allGroups);
 
   /// Returns true if tasks in this [group] are finished
@@ -637,7 +637,8 @@ interface class FileDownloader {
             ].contains(record.status))
         .map((record) => record.task)
         .toSet();
-    final nativeTasks = Set<Task>.from(await FileDownloader().allTasks());
+    final nativeTasks =
+        Set<Task>.from(await FileDownloader().allTasks(allGroups: true));
     missingTasks.addAll(enqueuedOrRunningDatabaseTasks.difference(nativeTasks));
     // find missing tasks waiting to retry
     missingTasks.addAll(databaseTasks
