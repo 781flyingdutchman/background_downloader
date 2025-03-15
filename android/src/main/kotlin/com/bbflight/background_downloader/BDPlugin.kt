@@ -575,21 +575,22 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     val notificationConfig = notificationConfigs.getOrNull(index)
                     val notificationConfigJsonString =
                         notificationConfig?.let { Json.encodeToString(it) }
+                    var success = false
                     try {
-                        URL(task.url)
-                        URLDecoder.decode(task.url, "UTF-8")
-                    } catch (_: MalformedURLException) {
-                        Log.i(TAG, "MalformedURLException for taskId ${task.taskId}")
-                        results.add(false)
-                        continue
-                    } catch (_: IllegalArgumentException) {
-                        Log.i(TAG, "Could not url-decode url for taskId ${task.taskId}")
-                        results.add(false)
-                        continue
-                    }
-                    // Enqueue or add to HoldingQueue
-                    if (holdingQueue == null) {
-                        results.add(
+                        try {
+                            URL(task.url)
+                            URLDecoder.decode(task.url, "UTF-8")
+                        } catch (_: MalformedURLException) {
+                            Log.i(TAG, "MalformedURLException for taskId ${task.taskId}")
+                            results.add(false)
+                            continue
+                        } catch (_: IllegalArgumentException) {
+                            Log.i(TAG, "Could not url-decode url for taskId ${task.taskId}")
+                            results.add(false)
+                            continue
+                        }
+                        // Enqueue or add to HoldingQueue
+                        success = if (holdingQueue == null) {
                             doEnqueue(
                                 applicationContext,
                                 task,
@@ -597,30 +598,33 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                                 resumeData = null,
                                 plugin = plugin
                             )
-                        )
-                    } else {
-                        Log.i(TAG, "Enqueueing task with id ${task.taskId} to the HoldingQueue")
-                        holdingQueue?.add(
-                            EnqueueItem(
-                                context = applicationContext,
-                                task = task,
-                                notificationConfigJsonString = notificationConfigJsonString,
-                                resumeData = null,
-                                plugin = plugin
+                        } else {
+                            Log.i(TAG, "Enqueueing task with id ${task.taskId} to the HoldingQueue")
+                            holdingQueue?.add(
+                                EnqueueItem(
+                                    context = applicationContext,
+                                    task = task,
+                                    notificationConfigJsonString = notificationConfigJsonString,
+                                    resumeData = null,
+                                    plugin = plugin
+                                )
                             )
-                        )
-                        processStatusUpdate(
-                            task,
-                            TaskStatus.enqueued,
-                            PreferenceManager.getDefaultSharedPreferences(applicationContext),
-                            context = applicationContext
-                        )
-                        results.add(true)
+                            processStatusUpdate(
+                                task,
+                                TaskStatus.enqueued,
+                                PreferenceManager.getDefaultSharedPreferences(applicationContext),
+                                context = applicationContext
+                            )
+                            true
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error processing task ${task.taskId}: ${e.message}")
                     }
+                    results.add(success)
                 }
                 result.success(results)
             } catch (e: Exception) {
-                Log.e(TAG, "Error decoding JSON or processing tasks: ${e.message}")
+                Log.e(TAG, "Error decoding JSON: ${e.message}")
                 result.success(emptyList<Boolean>()) // Return an empty list on error
             }
         }
