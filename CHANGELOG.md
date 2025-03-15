@@ -1,3 +1,6 @@
+## 8.9.5
+* Fixes issue with `start` and `rescheduleKilledTasks` when using group names for tasks
+
 ## 8.9.4
 * Modifies the interval between `TaskProgressUpdate` such that an update is sent at least once every 2.5 seconds if progress has been made, even if it less than 2% of the file size
 * Improves `rescheduleKilledTasks` to also reschedule tasks marked as `waitingToRetry` but not registered as such
