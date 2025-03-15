@@ -545,6 +545,12 @@ final class DesktopDownloader extends BaseDownloader {
         maxConcurrentByHost = maxConcurrentByHostParam ?? unlimited;
         maxConcurrentByGroup = maxConcurrentByGroupParam ?? unlimited;
 
+      case (Config.holdingQueue, Config.never):
+      case (Config.holdingQueue, false):
+        maxConcurrent = unlimited;
+        maxConcurrentByHost = unlimited;
+        maxConcurrentByGroup = unlimited;
+
       default:
         return (
           configItem.$1,

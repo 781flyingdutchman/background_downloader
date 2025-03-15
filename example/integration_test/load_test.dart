@@ -40,12 +40,18 @@ void main() {
         DownloadTask(url: "invalid url"),
         DataTask(
             url: workingUrl,
-            post:
-                "{'data': '${List.generate(15001, (index) => 'a').join()}'}")
+            post: "{'data': '${List.generate(15001, (index) => 'a').join()}'}")
       ];
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       final enqueueResult = await FileDownloader().enqueueAll(tasks);
-      expect(enqueueResult, equals([true, false, false]));
+      final expectedResult = Platform.isAndroid
+          ? [true, false, false]
+          : Platform.isIOS
+              // iOS does not catch lack of host until start of download
+              ? [true, false, true]
+              // Desktop does not catch any of these until download
+              : [true, true, true];
+      expect(enqueueResult, equals(expectedResult));
     });
 
     testWidgets('Enqueue Performance Comparison', (widgetTester) async {

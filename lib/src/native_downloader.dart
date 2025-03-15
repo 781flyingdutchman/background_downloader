@@ -489,6 +489,11 @@ abstract base class NativeDownloader extends BaseDownloader {
           maxConcurrentByGroup ?? 1 << 20
         ]);
 
+      case (Config.holdingQueue, Config.never):
+      case (Config.holdingQueue, false):
+        await NativeDownloader.methodChannel
+            .invokeMethod('configHoldingQueue', []);
+
       default:
         return (
           configItem.$1,

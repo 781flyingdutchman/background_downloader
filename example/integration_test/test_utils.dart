@@ -159,6 +159,7 @@ Future<void> defaultSetup() async {
   lastValidTimeRemaining = const Duration(seconds: -1);
   lastException = null;
   FileDownloader().destroy();
+  await FileDownloader().configure(globalConfig: (Config.holdingQueue, false));
   final path =
       join((await getApplicationDocumentsDirectory()).path, task.filename);
   try {

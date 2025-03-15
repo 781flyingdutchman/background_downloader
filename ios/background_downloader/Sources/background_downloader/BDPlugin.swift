@@ -826,10 +826,14 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     /// Configure the HoldingQueue (and create if necessary)
     private func methodConfigHoldingQueue(call: FlutterMethodCall, result: @escaping FlutterResult) {
         let args = call.arguments as! [Any]
-        BDPlugin.holdingQueue = BDPlugin.holdingQueue ?? HoldingQueue()
-        BDPlugin.holdingQueue?.maxConcurrent = args[0] as! Int
-        BDPlugin.holdingQueue?.maxConcurrentByHost = args[1] as! Int
-        BDPlugin.holdingQueue?.maxConcurrentByGroup = args[2] as! Int
+        if (args.isEmpty) { // deactivate the holding queue
+            BDPlugin.holdingQueue = nil
+        } else {
+            BDPlugin.holdingQueue = BDPlugin.holdingQueue ?? HoldingQueue()
+            BDPlugin.holdingQueue?.maxConcurrent = args[0] as! Int
+            BDPlugin.holdingQueue?.maxConcurrentByHost = args[1] as! Int
+            BDPlugin.holdingQueue?.maxConcurrentByGroup = args[2] as! Int
+        }
         result(nil)
     }
     

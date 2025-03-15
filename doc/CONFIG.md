@@ -15,6 +15,7 @@ The following configurations are supported:
   - `(Config.checkAvailableSpace, false)` or `(Config.checkAvailableSpace, Config.never)`turns off checking available space
 * Using a holding queue to limit the number of tasks running concurrently
   - `(Config.holdingQueue, (int? maxConcurrent, int? maxConcurrentByHost, int? maxConcurrentByGroup))` activates the holding queue and sets the constraints. Pass `null` for no constraint
+  - `(Config.holdingQueue, false)` or `(Config.holdingQueue, Config.never)` deactivates the holding queue (make sure it is empty before deactivating)
   - Using the holding queue adds a queue on the native side where tasks may have to wait before being enqueued with the Android WorkManager or iOS URLSessions. Because the holding queue lives on the native side (not Dart) tasks will continue to get pulled from the holding queue even when the app is suspended by the OS. This is different from the `TaskQueue`, which lives on the Dart side and suspends when the app is suspended by the OS
   - When using a holding queue:
     - Tasks will be taken out of the queue based on their priority and time of creation, provided they pass the constraints imposed by the `maxConcurrent` values
