@@ -1,4 +1,7 @@
+## 9.2.0
 * Adds `updates` broadcast stream to the `database` property, which emits every `TaskRecord` update made to the database.
+* Fixes issue with `start` and `rescheduleKilledTasks` when using group names for tasks
+* Minor bug fixes and enhancements
 
 ## 9.1.1
 * Adds optional `group` parameter to `resumeAll`
@@ -43,6 +46,9 @@ New/modified `Task` types:
 *   `UriDownloadTask`: Downloads a file to a specified directory URI. On Android, this bypasses the temp file used in the traditional approach and downloads directly to the destination.
 *   `UriUploadTask`: Uploads a file from a given file URI. If the `filename` is omitted, it will be based on the task's URL.
 *   `MultiUploadTask`: now accepts Uri where previously only filename or file path was allowed
+
+## 8.9.5
+* Fixes issue with `start` and `rescheduleKilledTasks` when using group names for tasks
 
 ## 8.9.4
 * Modifies the interval between `TaskProgressUpdate` such that an update is sent at least once every 2.5 seconds if progress has been made, even if it less than 2% of the file size
