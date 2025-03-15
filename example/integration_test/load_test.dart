@@ -34,6 +34,20 @@ void main() {
       expect(statusCallbackCounter, equals(3 * numTasks));
     });
 
+    testWidgets('test enqueue failures', (widgetTester) async {
+      final tasks = <Task>[
+        DownloadTask(url: workingUrl),
+        DownloadTask(url: "invalid url"),
+        DataTask(
+            url: workingUrl,
+            post:
+                "{'data': '${List.generate(15001, (index) => 'a').join()}'}")
+      ];
+      FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
+      final enqueueResult = await FileDownloader().enqueueAll(tasks);
+      expect(enqueueResult, equals([true, false, false]));
+    });
+
     testWidgets('Enqueue Performance Comparison', (widgetTester) async {
       const numTasks = 1000; // Increase for more significant results
       final tasks = <Task>[];
