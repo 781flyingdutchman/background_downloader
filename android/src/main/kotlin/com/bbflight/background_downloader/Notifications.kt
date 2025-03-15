@@ -470,76 +470,80 @@ object NotificationService {
                 )
             stateChange = groupNotification.update(taskWorker.task, notificationType)
             groupNotifications[groupNotificationId] = groupNotification
-        }
-        if (stateChange) {
-            // need to update the group notification
-            taskWorker.notificationId = groupNotification.notificationId
-            val hasError = groupNotification.hasError
-            val isFinished = groupNotification.isFinished
-            val notification = if (isFinished) {
-                if (hasError) groupNotification.notificationConfig.error else groupNotification.notificationConfig.complete
-            } else groupNotification.notificationConfig.running
-            if (notification == null) {
-                addToNotificationQueue(taskWorker) // removes notification
-            } else {
-                // need to show a notification
-                if (!createdNotificationChannel) {
-                    createNotificationChannel(taskWorker.applicationContext)
-                }
-                val iconDrawable = if (isFinished) {
-                    if (hasError) R.drawable.outline_error_outline_24 else R.drawable.outline_download_done_24
+            if (stateChange) {
+                // need to update the group notification
+                taskWorker.notificationId = groupNotification.notificationId
+                val hasError = groupNotification.hasError
+                val isFinished = groupNotification.isFinished
+                val notification = if (isFinished) {
+                    if (hasError) groupNotification.notificationConfig.error else groupNotification.notificationConfig.complete
+                } else groupNotification.notificationConfig.running
+                if (notification == null) {
+                    addToNotificationQueue(taskWorker) // removes notification
                 } else {
-                    if (taskWorker.task.isDownloadTask()) R.drawable.outline_file_download_24 else R.drawable.outline_file_upload_24
-                }
-                val builder = Builder(
-                    taskWorker.applicationContext, notificationChannelId
-                ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
-                // title and body interpolation of tokens
-                val progress = groupNotification.progress
-                val title = replaceTokens(
-                    notification.title,
-                    taskWorker.task,
-                    progress,
-                    groupNotification = groupNotification
-                )
-                if (title.isNotEmpty()) {
-                    builder.setContentTitle(title)
-                }
-                val body = replaceTokens(
-                    notification.body,
-                    taskWorker.task,
-                    progress,
-                    groupNotification = groupNotification
-                )
-                if (body.isNotEmpty()) {
-                    builder.setContentText(body)
-                }
-                // progress bar
-                val progressBar =
-                    groupNotification.notificationConfig.progressBar && (notification == groupNotification.notificationConfig.running)
-                if (progressBar && progress >= 0) {
-                    if (progress <= 1) {
-                        builder.setProgress(100, (progress * 100).roundToInt(), false)
-                    } else { // > 1 means indeterminate
-                        builder.setProgress(100, 0, true)
+                    // need to show a notification
+                    if (!createdNotificationChannel) {
+                        createNotificationChannel(taskWorker.applicationContext)
                     }
-                }
-                addGroupNotificationActions(
-                    taskWorker,
-                    notificationType,
-                    groupNotification,
-                    builder
-                )
-                addToNotificationQueue(taskWorker, notificationType, builder) // shows notification
-            }
-            if (isFinished) {
-                // remove only if not re-activated within 5 seconds
-                withContext(Dispatchers.Default) {
-                    launch {
-                        delay(5000)
-                        if (groupNotification.isFinished) {
-                            groupNotifications.remove(groupNotificationId)
+                    val iconDrawable = if (isFinished) {
+                        if (hasError) R.drawable.outline_error_outline_24 else R.drawable.outline_download_done_24
+                    } else {
+                        if (taskWorker.task.isDownloadTask()) R.drawable.outline_file_download_24 else R.drawable.outline_file_upload_24
+                    }
+                    val builder = Builder(
+                        taskWorker.applicationContext, notificationChannelId
+                    ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
+                    // title and body interpolation of tokens
+                    val progress = groupNotification.progress
+                    val title = replaceTokens(
+                        notification.title,
+                        taskWorker.task,
+                        progress,
+                        groupNotification = groupNotification
+                    )
+                    if (title.isNotEmpty()) {
+                        builder.setContentTitle(title)
+                    }
+                    val body = replaceTokens(
+                        notification.body,
+                        taskWorker.task,
+                        progress,
+                        groupNotification = groupNotification
+                    )
+                    if (body.isNotEmpty()) {
+                        builder.setContentText(body)
+                    }
+                    // progress bar
+                    val progressBar =
+                        groupNotification.notificationConfig.progressBar && (notification == groupNotification.notificationConfig.running)
+                    if (progressBar && progress >= 0) {
+                        if (progress <= 1) {
+                            builder.setProgress(100, (progress * 100).roundToInt(), false)
+                        } else { // > 1 means indeterminate
+                            builder.setProgress(100, 0, true)
                         }
+                    }
+                    addGroupNotificationActions(
+                        taskWorker,
+                        notificationType,
+                        groupNotification,
+                        builder
+                    )
+                    addToNotificationQueue(
+                        taskWorker,
+                        notificationType,
+                        builder
+                    ) // shows notification
+                }
+            }
+        }
+        if (stateChange && groupNotification.isFinished) {
+            // remove only if not re-activated within 5 seconds
+            withContext(Dispatchers.Default) {
+                launch {
+                    delay(5000)
+                    if (groupNotification.isFinished) {
+                        groupNotifications.remove(groupNotificationId)
                     }
                 }
             }
