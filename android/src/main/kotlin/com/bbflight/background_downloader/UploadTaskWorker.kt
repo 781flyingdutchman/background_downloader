@@ -578,13 +578,6 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
         // characters). We follow their behavior.
         return value.replace(newlineRegEx, "%0D%0A").replace("\"", "%22")
     }
-
-    /**
-     * Returns the length of the [string] in bytes when utf-8 encoded
-     */
-    private fun lengthInBytes(string: String): Int {
-        return string.toByteArray().size
-    }
 }
 
 /**

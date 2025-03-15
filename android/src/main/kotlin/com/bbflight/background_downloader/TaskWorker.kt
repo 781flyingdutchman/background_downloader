@@ -547,7 +547,7 @@ open class TaskWorker(
         try {
             if ((task.isDownloadTask() || task.isDataTask()) && task.post != null) {
                 connection.doOutput = true
-                connection.setFixedLengthStreamingMode(task.post!!.length)
+                connection.setFixedLengthStreamingMode(lengthInBytes(task.post!!))
                 DataOutputStream(connection.outputStream).use { it.writeBytes(task.post) }
             }
             return process(connection)
@@ -881,4 +881,11 @@ suspend fun getModifiedTask(context: Context, task: Task): Task {
         Callbacks.invokeOnTaskStartCallback(context, authTask)
     }
     return modifiedTask ?: authTask
+}
+
+/**
+ * Returns the length of the [string] in bytes when utf-8 encoded
+ */
+fun lengthInBytes(string: String): Int {
+    return string.toByteArray().size
 }
