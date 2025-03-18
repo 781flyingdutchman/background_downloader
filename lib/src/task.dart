@@ -1373,7 +1373,7 @@ final class DataTask extends Task {
   /// [displayName] human readable name for this task
   /// [creationTime] time of task creation, 'now' by default.
   DataTask(
-      {String? taskId,
+      {super.taskId,
       required super.url,
       super.urlQueryParameters,
       super.headers,
