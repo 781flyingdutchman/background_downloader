@@ -106,6 +106,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             Collections.synchronizedSet(mutableSetOf<String>()) // ensures correctness when enqueueing task
         val notificationConfigJsonStrings =
             Collections.synchronizedMap(mutableMapOf<String, String>()) // by taskId
+        val completedGroupNotificationIds = Collections.synchronizedSet(mutableSetOf<String>())
         var forceFailPostOnBackgroundChannel = false
         val prefsLock = ReentrantReadWriteLock()
         val remainingBytesToDownload =

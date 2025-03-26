@@ -258,7 +258,8 @@ class NotificationReceiver : BroadcastReceiver() {
                     NotificationService.groupNotifications[groupNotificationName]
                 if (groupNotification != null) {
                     runBlocking {
-                        BDPlugin.cancelTasksWithIds(context,
+                        BDPlugin.cancelTasksWithIds(
+                            context,
                             groupNotification.runningTasks.map { task -> task.taskId })
                     }
                 }
@@ -530,7 +531,12 @@ object NotificationService {
                     groupNotification,
                     builder
                 )
-                addToNotificationQueue(taskWorker, notificationType, builder) // shows notification
+                addToNotificationQueue(
+                    taskWorker,
+                    notificationType,
+                    builder,
+                    groupNotificationId
+                ) // shows notification
             }
             if (isFinished) {
                 // remove only if not re-activated within 5 seconds
@@ -916,21 +922,38 @@ object NotificationService {
      * queue if needed
      */
     private suspend fun addToNotificationQueue(
-        taskWorker: TaskWorker, notificationType: NotificationType? = null, builder: Builder? = null
+        taskWorker: TaskWorker,
+        notificationType: NotificationType? = null,
+        builder: Builder? = null,
+        groupNotificationId: String? = null
     ) {
-        queue.send(NotificationData(taskWorker, notificationType, builder))
+        queue.send(NotificationData(taskWorker, notificationType, builder, groupNotificationId))
     }
 
     /**
      * Process the [notificationData], i.e. send the notification
      */
     private suspend fun processNotificationData(notificationData: NotificationData) {
+        if (BDPlugin.completedGroupNotificationIds.contains(notificationData.groupNotificationId)) {
+            return // ignore updates that happen after the group notification has completed
+        }
         val now = System.currentTimeMillis()
         val elapsed = now - lastNotificationTime
         if (elapsed < 200) {
             delay(200 - elapsed)
         }
         if (notificationData.notificationType != null && notificationData.builder != null) {
+            if (notificationData.groupNotificationId != null &&
+                notificationData.notificationType == NotificationType.running ||
+                notificationData.notificationType == NotificationType.error
+            ) {
+                // mark the group notification as completed, and remove that marker in 5 seconds
+                BDPlugin.completedGroupNotificationIds.add(notificationData.groupNotificationId)
+                CoroutineScope(Dispatchers.IO).launch {
+                    delay(3000)
+                    BDPlugin.completedGroupNotificationIds.remove(notificationData.groupNotificationId)
+                }
+            }
             displayNotification(
                 notificationData.taskWorker,
                 notificationData.notificationType,
@@ -963,5 +986,6 @@ object NotificationService {
 data class NotificationData(
     val taskWorker: TaskWorker,
     val notificationType: NotificationType?,
-    val builder: Builder?
+    val builder: Builder?,
+    val groupNotificationId: String?
 )
