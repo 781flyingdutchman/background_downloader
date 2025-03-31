@@ -1,9 +1,11 @@
 package com.bbflight.background_downloader
 
 import android.annotation.SuppressLint
+import android.app.ForegroundServiceStartNotAllowedException
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -221,17 +223,69 @@ class NotificationReceiver : BroadcastReceiver() {
                                 keyNotificationConfig
                             )
                             if (notificationConfigJsonString != null) {
-                                if (!BDPlugin.doEnqueue(
+                                try {
+                                    attemptResume(
                                         context,
-                                        resumeData.task,
-                                        notificationConfigJsonString,
-                                        resumeData
+                                        taskId,
+                                        resumeData,
+                                        notificationConfigJsonString
                                     )
-                                ) {
-                                    Log.i(TAG, "Could not enqueue taskId $taskId to resume")
-                                    BDPlugin.holdingQueue?.taskFinished(resumeData.task)
-                                } else {
-                                    Log.i(TAG, "Resumed taskId $taskId from notification")
+                                } catch (e: Exception) {
+                                    if (Build.VERSION.SDK_INT > Build.VERSION_CODES.S && e is ForegroundServiceStartNotAllowedException) {
+                                        // See issue #363: https://github.com/bbflight/background_downloader/issues/363
+                                        // ForegroundServiceStartNotAllowedException if resume button is clicked
+                                        // when app is in background -> Bring app to foreground first.
+                                        val launchIntent =
+                                            context.packageManager.getLaunchIntentForPackage(
+                                                context.packageName
+                                            )?.apply {
+                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            }
+                                        if (launchIntent != null) {
+                                            CoroutineScope(Dispatchers.Main).launch {
+                                                try {
+                                                    // Start the activity, wait, then resume
+                                                    context.startActivity(launchIntent)
+                                                    delay(3000)
+                                                    attemptResume(
+                                                        context,
+                                                        taskId,
+                                                        resumeData,
+                                                        notificationConfigJsonString
+                                                    )
+                                                } catch (activityException: ActivityNotFoundException) {
+                                                    Log.e(
+                                                        TAG,
+                                                        "When resuming taskId $taskId, could not find activity to launch for package ${context.packageName}",
+                                                        activityException
+                                                    )
+                                                } catch (securityException: SecurityException) {
+                                                    Log.e(
+                                                        TAG,
+                                                        "When resuming taskId $taskId, SecurityException starting activity: ${securityException.message}",
+                                                        securityException
+                                                    )
+                                                } catch (e: Exception) {
+                                                    Log.e(
+                                                        TAG,
+                                                        "Exception resuming taskId $taskId: ${e.message}",
+                                                        e
+                                                    )
+                                                }
+                                            }
+                                        } else {
+                                            Log.e(
+                                                TAG,
+                                                "When resuming taskId $taskId, could not get launch intent for package ${context.packageName}"
+                                            )
+                                        }
+                                    } else {
+                                        Log.e(
+                                            TAG,
+                                            "Error resuming taskId $taskId: ${e.message}",
+                                            e
+                                        )
+                                    }
                                 }
                             } else {
                                 BDPlugin.cancelActiveTaskWithId(
@@ -258,11 +312,32 @@ class NotificationReceiver : BroadcastReceiver() {
                     NotificationService.groupNotifications[groupNotificationName]
                 if (groupNotification != null) {
                     runBlocking {
-                        BDPlugin.cancelTasksWithIds(context,
+                        BDPlugin.cancelTasksWithIds(
+                            context,
                             groupNotification.runningTasks.map { task -> task.taskId })
                     }
                 }
             }
+        }
+    }
+
+    private suspend fun attemptResume(
+        context: Context,
+        taskId: String,
+        resumeData: ResumeData,
+        notificationConfigJsonString: String?
+    ) {
+        if (!BDPlugin.doEnqueue(
+                context,
+                resumeData.task,
+                notificationConfigJsonString,
+                resumeData
+            )
+        ) {
+            Log.i(TAG, "Could not enqueue taskId $taskId to resume")
+            BDPlugin.holdingQueue?.taskFinished(resumeData.task)
+        } else {
+            Log.i(TAG, "Resumed taskId $taskId from notification")
         }
     }
 }
