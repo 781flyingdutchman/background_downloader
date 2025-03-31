@@ -534,8 +534,7 @@ object NotificationService {
                 addToNotificationQueue(
                     taskWorker,
                     notificationType,
-                    builder,
-                    groupNotificationId
+                    builder
                 ) // shows notification
             }
             if (isFinished) {
@@ -787,25 +786,11 @@ object NotificationService {
                     // to prevent the 'not running' notification getting killed as the foreground
                     // process is terminated, this notification is shown regularly, but with
                     // a delay
-                    CoroutineScope(Dispatchers.Main).launch {
-                        delay(200)
-                        notify(taskWorker.notificationId, androidNotification)
-                    }
+                    delay(200)
+                    notify(taskWorker.notificationId, androidNotification)
                 }
             } else {
-                val now = System.currentTimeMillis()
-                val timeSinceLastUpdate = now - taskWorker.lastNotificationTime
-                taskWorker.lastNotificationTime = now
-                if (notificationType == NotificationType.running || timeSinceLastUpdate > 2000) {
-                    notify(taskWorker.notificationId, androidNotification)
-                } else {
-                    // to prevent the 'not running' notification getting ignored
-                    // due to too frequent updates, post it with a delay
-                    CoroutineScope(Dispatchers.Main).launch {
-                        delay(2000 - java.lang.Long.max(timeSinceLastUpdate, 1000L))
-                        notify(taskWorker.notificationId, androidNotification)
-                    }
-                }
+                notify(taskWorker.notificationId, androidNotification)
             }
         }
     }
@@ -924,36 +909,21 @@ object NotificationService {
     private suspend fun addToNotificationQueue(
         taskWorker: TaskWorker,
         notificationType: NotificationType? = null,
-        builder: Builder? = null,
-        groupNotificationId: String? = null
+        builder: Builder? = null
     ) {
-        queue.send(NotificationData(taskWorker, notificationType, builder, groupNotificationId))
+        queue.send(NotificationData(taskWorker, notificationType, builder))
     }
 
     /**
      * Process the [notificationData], i.e. send the notification
      */
     private suspend fun processNotificationData(notificationData: NotificationData) {
-        if (BDPlugin.completedGroupNotificationIds.contains(notificationData.groupNotificationId)) {
-            return // ignore updates that happen after the group notification has completed
-        }
         val now = System.currentTimeMillis()
         val elapsed = now - lastNotificationTime
-        if (elapsed < 200) {
-            delay(200 - elapsed)
+        if (elapsed < 300) {
+            delay(300 - elapsed)
         }
         if (notificationData.notificationType != null && notificationData.builder != null) {
-            if (notificationData.groupNotificationId != null &&
-                notificationData.notificationType == NotificationType.running ||
-                notificationData.notificationType == NotificationType.error
-            ) {
-                // mark the group notification as completed, and remove that marker in 5 seconds
-                BDPlugin.completedGroupNotificationIds.add(notificationData.groupNotificationId)
-                CoroutineScope(Dispatchers.IO).launch {
-                    delay(3000)
-                    BDPlugin.completedGroupNotificationIds.remove(notificationData.groupNotificationId)
-                }
-            }
             displayNotification(
                 notificationData.taskWorker,
                 notificationData.notificationType,
@@ -986,6 +956,5 @@ object NotificationService {
 data class NotificationData(
     val taskWorker: TaskWorker,
     val notificationType: NotificationType?,
-    val builder: Builder?,
-    val groupNotificationId: String?
+    val builder: Builder?
 )
