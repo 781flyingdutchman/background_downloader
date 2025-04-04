@@ -169,6 +169,8 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             : responseStatusCode == 404
             ? TaskStatus.notFound
             : TaskStatus.failed
+            let notificationType = finalStatus == .complete ? NotificationType.complete : NotificationType.error 
+            updateNotification(task: bgdTask, notificationType: notificationType, notificationConfig: notificationConfig)
             processStatusUpdate(task: bgdTask, status: finalStatus, taskException: taskException, responseBody: responseBody, responseHeaders: responseHeaders, responseStatusCode: responseStatusCode)
         }
     }
