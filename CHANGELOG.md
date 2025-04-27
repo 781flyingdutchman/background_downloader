@@ -1,3 +1,6 @@
+## 9.2.1
+* Minor bug fixes
+
 ## 9.2.0
 * Adds `updates` broadcast stream to the `database` property, which emits every `TaskRecord` update made to the database.
 * Fixes issue with `start` and `rescheduleKilledTasks` when using group names for tasks
