@@ -22,9 +22,7 @@ func providesStatusUpdates(downloadTask: Task) -> Bool {
     return downloadTask.updates == Updates.statusChange.rawValue || downloadTask.updates == Updates.statusChangeAndProgressUpdates.rawValue
 }
 
-/// True if this task is a DownloadTask, false if not
-///
-/// A ParallelDownloadTask is also a DownloadTask
+/// True if this task is a DownloadTask, UriDownloadTask or ParallelDownloadTask
 func isDownloadTask(task: Task) -> Bool {
     return task.taskType == "DownloadTask" || task.taskType == "UriDownloadTask" || task.taskType == "ParallelDownloadTask"
 }
