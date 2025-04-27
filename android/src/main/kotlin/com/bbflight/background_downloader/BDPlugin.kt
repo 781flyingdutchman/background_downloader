@@ -47,6 +47,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
+import androidx.core.content.edit
 
 
 /**
@@ -213,9 +214,9 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 val prefs = PreferenceManager.getDefaultSharedPreferences(context)
                 val tasksMap = getTaskMap(prefs)
                 tasksMap[task.taskId] = task
-                val editor = prefs.edit()
-                editor.putString(keyTasksMap, Json.encodeToString(tasksMap))
-                editor.apply()
+                prefs.edit {
+                    putString(keyTasksMap, Json.encodeToString(tasksMap))
+                }
             }
             return true
         }
@@ -397,9 +398,9 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         if (allWorkInfos.isEmpty()) {
             prefsLock.write {
                 // remove persistent storage if no jobs found at all
-                val editor = prefs.edit()
-                editor.remove(keyTasksMap)
-                editor.apply()
+                prefs.edit {
+                    remove(keyTasksMap)
+                }
             }
         }
         requireWifi = RequireWiFi.entries[prefs.getInt(keyRequireWiFi, 0)]
@@ -864,9 +865,9 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         prefsLock.write {
             val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
             val jsonString = prefs.getString(prefsKey, "{}")
-            val editor = prefs.edit()
-            editor.remove(prefsKey)
-            editor.apply()
+            prefs.edit {
+                remove(prefsKey)
+            }
             result.success(jsonString)
         }
     }
@@ -1201,7 +1202,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private fun methodConfigHoldingQueue(call: MethodCall, result: Result) {
         val arguments = call.arguments as List<*>
         if (arguments.isEmpty()) { // deactivate the holding queue
-            holdingQueue = null;
+            holdingQueue = null
         } else {
             holdingQueue = holdingQueue ?: HoldingQueue(WorkManager.getInstance(applicationContext))
             holdingQueue?.maxConcurrent = arguments[0] as Int

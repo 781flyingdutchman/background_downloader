@@ -605,7 +605,11 @@ object NotificationService {
                     groupNotification,
                     builder
                 )
-                addToNotificationQueue(taskWorker, notificationType, builder) // shows notification
+                addToNotificationQueue(
+                    taskWorker,
+                    notificationType,
+                    builder
+                ) // shows notification
             }
             if (isFinished) {
                 // remove only if not re-activated within 5 seconds
@@ -856,25 +860,11 @@ object NotificationService {
                     // to prevent the 'not running' notification getting killed as the foreground
                     // process is terminated, this notification is shown regularly, but with
                     // a delay
-                    CoroutineScope(Dispatchers.Main).launch {
-                        delay(200)
-                        notify(taskWorker.notificationId, androidNotification)
-                    }
+                    delay(200)
+                    notify(taskWorker.notificationId, androidNotification)
                 }
             } else {
-                val now = System.currentTimeMillis()
-                val timeSinceLastUpdate = now - taskWorker.lastNotificationTime
-                taskWorker.lastNotificationTime = now
-                if (notificationType == NotificationType.running || timeSinceLastUpdate > 2000) {
-                    notify(taskWorker.notificationId, androidNotification)
-                } else {
-                    // to prevent the 'not running' notification getting ignored
-                    // due to too frequent updates, post it with a delay
-                    CoroutineScope(Dispatchers.Main).launch {
-                        delay(2000 - java.lang.Long.max(timeSinceLastUpdate, 1000L))
-                        notify(taskWorker.notificationId, androidNotification)
-                    }
-                }
+                notify(taskWorker.notificationId, androidNotification)
             }
         }
     }
@@ -991,7 +981,9 @@ object NotificationService {
      * queue if needed
      */
     private suspend fun addToNotificationQueue(
-        taskWorker: TaskWorker, notificationType: NotificationType? = null, builder: Builder? = null
+        taskWorker: TaskWorker,
+        notificationType: NotificationType? = null,
+        builder: Builder? = null
     ) {
         queue.send(NotificationData(taskWorker, notificationType, builder))
     }
@@ -1002,8 +994,8 @@ object NotificationService {
     private suspend fun processNotificationData(notificationData: NotificationData) {
         val now = System.currentTimeMillis()
         val elapsed = now - lastNotificationTime
-        if (elapsed < 200) {
-            delay(200 - elapsed)
+        if (elapsed < 300) {
+            delay(300 - elapsed)
         }
         if (notificationData.notificationType != null && notificationData.builder != null) {
             displayNotification(

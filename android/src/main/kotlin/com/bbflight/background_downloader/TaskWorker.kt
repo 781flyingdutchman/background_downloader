@@ -33,6 +33,7 @@ import java.net.URL
 import kotlin.concurrent.read
 import kotlin.concurrent.write
 import java.lang.Double.min as doubleMin
+import androidx.core.content.edit
 
 
 /***
@@ -227,12 +228,12 @@ open class TaskWorker(
                 BDPlugin.prefsLock.write {
                     val tasksMap = getTaskMap(prefs)
                     tasksMap.remove(task.taskId)
-                    val editor = prefs.edit()
-                    editor.putString(
-                        BDPlugin.keyTasksMap,
-                        Json.encodeToString(tasksMap)
-                    )
-                    editor.apply()
+                    prefs.edit {
+                        putString(
+                            BDPlugin.keyTasksMap,
+                            Json.encodeToString(tasksMap)
+                        )
+                    }
                 }
                 QueueService.cleanupTaskId(task.taskId)
                 if (task.options?.hasOnFinishCallback() == true) {
@@ -264,25 +265,26 @@ open class TaskWorker(
             downloadSpeed: Double = -1.0, timeRemaining: Long = -1000
         ) {
             if (task.providesProgressUpdates()) {
-                postOnBackgroundChannel("progressUpdate", task,
+                postOnBackgroundChannel(
+                    "progressUpdate", task,
                     mutableListOf(progress, expectedFileSize, downloadSpeed, timeRemaining),
                     onFail =
-                    {
-                        // unsuccessful post, so store in local prefs
-                        Log.d(TAG, "Could not post progress update -> storing locally")
-                        storeLocally(
-                            BDPlugin.keyProgressUpdateMap,
-                            task.taskId,
-                            Json.encodeToString(
-                                TaskProgressUpdate(
-                                    task,
-                                    progress,
-                                    expectedFileSize
-                                )
-                            ),
-                            prefs
-                        )
-                    })
+                        {
+                            // unsuccessful post, so store in local prefs
+                            Log.d(TAG, "Could not post progress update -> storing locally")
+                            storeLocally(
+                                BDPlugin.keyProgressUpdateMap,
+                                task.taskId,
+                                Json.encodeToString(
+                                    TaskProgressUpdate(
+                                        task,
+                                        progress,
+                                        expectedFileSize
+                                    )
+                                ),
+                                prefs
+                            )
+                        })
             }
         }
 
@@ -310,16 +312,16 @@ open class TaskWorker(
                     resumeData.requiredStartByte,
                     resumeData.eTag
                 ), onFail =
-                {
-                    // unsuccessful post, so store in local prefs
-                    Log.d(TAG, "Could not post resume data -> storing locally")
-                    storeLocally(
-                        BDPlugin.keyResumeDataMap,
-                        resumeData.task.taskId,
-                        Json.encodeToString(resumeData),
-                        prefs
-                    )
-                })
+                    {
+                        // unsuccessful post, so store in local prefs
+                        Log.d(TAG, "Could not post resume data -> storing locally")
+                        storeLocally(
+                            BDPlugin.keyResumeDataMap,
+                            resumeData.task.taskId,
+                            Json.encodeToString(resumeData),
+                            prefs
+                        )
+                    })
         }
 
         /**
@@ -336,11 +338,11 @@ open class TaskWorker(
                 val jsonString = prefs.getString(prefsKey, "{}") as String
                 val mapByTaskId = Json.decodeFromString<MutableMap<String, String>>(jsonString)
                 mapByTaskId[taskId] = item
-                val editor = prefs.edit()
-                editor.putString(
-                    prefsKey, Json.encodeToString(mapByTaskId)
-                )
-                editor.apply()
+                prefs.edit {
+                    putString(
+                        prefsKey, Json.encodeToString(mapByTaskId)
+                    )
+                }
             }
         }
 
@@ -365,7 +367,6 @@ open class TaskWorker(
     var notificationConfig: NotificationConfig? = null
     var notificationId = 0
     var notificationProgress = 2.0 // indeterminate
-    var lastNotificationTime = 0L
 
     // additional parameters for final TaskStatusUpdate
     var taskException: TaskException? = null
@@ -587,7 +588,7 @@ open class TaskWorker(
                     )
                     taskException = TaskException(
                         ExceptionType.general, description =
-                        "Error for url ${task.url}: ${e.message}"
+                            "Error for url ${task.url}: ${e.message}"
                     )
                 }
             }
