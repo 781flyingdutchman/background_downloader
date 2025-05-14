@@ -2582,7 +2582,7 @@ void main() {
         success = await FileDownloader().openFile(task: task);
         expect(success, isFalse);
         // change to a file without extension
-        task = task.copyWith(filename: 'fileWithoutExtension');
+        task = task.copyWith(filename: 'fileWithoutExtension with space');
         success = await FileDownloader().openFile(task: task);
         expect(success, isFalse);
       } else {

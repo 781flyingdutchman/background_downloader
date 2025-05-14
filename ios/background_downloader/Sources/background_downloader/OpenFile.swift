@@ -11,7 +11,7 @@ import UIKit
 
 ///
 func doOpenFile(filePath: String, mimeType: String?) -> Bool {
-    let fileUrl = URL(string: "file:///\(filePath)")!
+    let fileUrl = URL(fileURLWithPath: filePath)
     let documentInteractionController = UIDocumentInteractionController(url: fileUrl)
     let delegate = DocumentInteractionControllerDelegate()
     documentInteractionController.delegate = delegate
