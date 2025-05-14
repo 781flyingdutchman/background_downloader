@@ -29,6 +29,15 @@ Future<void> doUploadTask(UploadTask task, SendPort sendPort) async {
 
 /// Do the binary upload and return the TaskStatus
 ///
+/// Content-Disposition header will be:
+/// - set to 'attachment = "filename"' if the task.headers field does not contain
+///   an entry for 'Content-Disposition'
+/// - not set at all (i.e. omitted) if the task.headers field contains an entry
+///   for 'Content-Disposition' with the value '' (an empty string)
+/// - set to the value of task.headers['Content-Disposition'] in all other cases
+///
+/// The mime-type will be set to [Task.mimeType]
+///
 /// Sends updates via the [sendPort] and can be commanded to cancel via
 /// the [messagesToIsolate] queue
 Future<(Task, TaskStatus)> binaryUpload(
@@ -81,8 +90,14 @@ Future<(Task, TaskStatus)> binaryUpload(
     request.headers.addAll(task.headers);
     request.contentLength = contentLength;
     request.headers['Content-Type'] = task.mimeType;
-    request.headers['Content-Disposition'] =
-        'attachment; filename="${Uri.encodeComponent(task.filename)}"';
+    final taskContentDisposition = task.headers['Content-Disposition'] ??
+        task.headers['content-disposition'];
+    if (taskContentDisposition != '') {
+      request.headers['Content-Disposition'] = taskContentDisposition ??
+          'attachment; filename="${Uri.encodeComponent(task.filename)}"';
+    } else {
+      request.headers.remove('Content-Disposition');
+    }
     request.persistentConnection = false;
     // initiate the request and handle completion async
     final requestCompleter = Completer();

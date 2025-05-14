@@ -194,7 +194,7 @@ class Task(
 
     /** True if this task is an UploadTask or MultiUploadTask */
     fun isUploadTask(): Boolean {
-        return taskType == "UploadTask" || taskType == "MultiUploadTask"
+        return taskType == "UploadTask" || taskType == "UriUploadTask" || taskType == "MultiUploadTask"
     }
 
     /** True if this task is a ParallelDownloadTask */

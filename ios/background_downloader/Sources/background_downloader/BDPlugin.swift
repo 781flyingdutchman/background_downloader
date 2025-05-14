@@ -267,8 +267,11 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         var baseRequest = URLRequest(url: url)
         baseRequest.httpMethod = task.httpRequestMethod
         for (key, value) in task.headers {
-            // copy headers unless Range header in UploadTask
-            if key != "Range" || task.taskType != "UploadTask" {
+            // For UploadTask, copy headers
+            // unless it's "Range" or "Content-Disposition" (case-insensitive).
+            // For other task types, copy all headers.
+            if !isUploadTask(task: task) ||
+               (key.lowercased() != "range" && key.lowercased() != "content-disposition") {
                 baseRequest.setValue(value, forHTTPHeaderField: key)
             }
         }
@@ -308,6 +311,13 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     }
     
     /// Schedule an upload task
+    ///
+    /// For binary uploads, the mime-type will be set to [Task.mimeType] and the Content-Disposition header will be:
+    /// - set to 'attachment = "filename"' if the task.headers field does not contain
+    ///   an entry for 'Content-Disposition'
+    /// - not set at all (i.e. omitted) if the task.headers field contains an entry
+    ///   for 'Content-Disposition' with the value '' (an empty string)
+    /// - set to the value of task.headers['Content-Disposition'] in all other cases
     private func scheduleUpload(task: Task, taskDescription: String, baseRequest: URLRequest, notificationConfigJsonString: String?) async -> Bool  {
         var request = baseRequest
         if isBinaryUploadTask(task: task) {
@@ -353,11 +363,18 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                 ? getMimeType(fromFilename: fileUrl.path)
                 : task.mimeType ?? "application/octet-stream"
             request.setValue(resolvedMimeType, forHTTPHeaderField: "Content-Type")
-            if let encodedFilename = filename?.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
-                request.setValue("attachment; filename=\"\(encodedFilename)\"", forHTTPHeaderField: "Content-Disposition")
-            } else {
-                os_log("Could not encode task.fileName %@", log: log, type: .info, task.filename)
-                return false
+            let taskContentDisposition = task.headers["Content-Disposition"] ?? task.headers["content-disposition"]
+            if (taskContentDisposition != "") {
+                if taskContentDisposition == nil {
+                    if let encodedFilename = filename?.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
+                        request.setValue("attachment; filename=\"\(encodedFilename)\"", forHTTPHeaderField: "Content-Disposition")
+                    } else {
+                        os_log("Could not encode task.fileName %@", log: log, type: .info, task.filename)
+                        return false
+                    }
+                } else {
+                    request.setValue(taskContentDisposition!, forHTTPHeaderField: "Content-Disposition")
+                }
             }
             var uploadFileUrl = fileUrl // if no range given
             if let rangeHeader = task.headers["Range"] {

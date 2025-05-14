@@ -93,8 +93,14 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
     /**
      * Process the binary upload of the file
      *
-     * Content-Disposition will be set to "attachment" with filename [Task.filename], and the
-     * mime-type will be set to [Task.mimeType]
+     * Content-Disposition header will be:
+     *   - set to 'attachment = "filename"' if the task.headers field does not contain an entry for
+     *     'Content-Disposition'
+     *   - not set at all (i.e. omitted) if the task.headers field contains an entry for
+     *     'Content-Disposition' with the value "" (an empty string)
+     *   - set to the value of task.headers['Content-Disposition'] in all other cases
+     *
+     * The mime-type will be set to [Task.mimeType]
      *
      * Returns the [TaskStatus]
      */
@@ -223,9 +229,15 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
         determineRunInForeground(task, contentLength)
         Log.d(TAG, "Binary upload for taskId ${task.taskId}")
         connection.setRequestProperty("Content-Type", resolvedMimeType)
-        connection.setRequestProperty(
-            "Content-Disposition", "attachment; filename=\"" + Uri.encode(task.filename) + "\""
-        )
+        val taskContentDisposition =
+            task.headers["Content-Disposition"] ?: task.headers["content-disposition"]
+        if (taskContentDisposition != "") {
+            connection.setRequestProperty(
+                "Content-Disposition",
+                taskContentDisposition
+                    ?: ("attachment; filename=\"" + Uri.encode(task.filename) + "\"")
+            )
+        }
         connection.setRequestProperty("Content-Length", contentLength.toString())
         connection.setFixedLengthStreamingMode(contentLength)
         return withContext(Dispatchers.IO) {
