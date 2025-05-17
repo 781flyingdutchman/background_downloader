@@ -2631,7 +2631,7 @@ void main() {
             'task.baseDirectory is ${task.baseDirectory} and path is ${await task.filePath()}');
         Task.useExternalStorage = false;
       }
-    }, skip: Platform.isAndroid); // TODO test hangs on Android, so skipping for now
+    });
 
     testWidgets('Android external storage', (widgetTester) async {
       // configure use of external storage

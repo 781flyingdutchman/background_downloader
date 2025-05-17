@@ -704,6 +704,11 @@ Uploads are very similar to downloads, except:
 
 There are two ways to upload a file to a server: binary upload (where the file is included in the POST body) and form/multi-part upload. Which type of upload is appropriate depends on the server you are uploading to. The upload will be done using the binary upload method only if you have set the `post` field of the `UploadTask` to 'binary'.
 
+For binary uploads, the `Content-Disposition` header sent to the server will be:
+- set to 'attachment = "filename"' if the task.headers field does not contain an entry for 'Content-Disposition' (with 'filename' replaced by the actual filename)
+- not set at all (i.e. omitted) if the task.headers field contains an entry for 'Content-Disposition' with the value '' (an empty string)
+- set to the value of `task.headers['Content-Disposition']` in all other cases
+
 ### Single file upload
 
 If you already have a `File` object, you can create your `UploadTask` using `UploadTask.fromFile`, though note that this will create a task with an absolute path reference and `BaseDirectory.root`, which can cause problems on mobile platforms (see [here](#specifying-the-location-of-the-file-to-download-or-upload)). Preferably, use `Task.split` to break your `File` or filePath into appropriate baseDirectory, directory and filename and use that to create your `UploadTask`.
