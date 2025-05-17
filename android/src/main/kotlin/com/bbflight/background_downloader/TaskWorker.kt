@@ -521,8 +521,12 @@ open class TaskWorker(
                 requestMethod = task.httpRequestMethod
                 connectTimeout = requestTimeoutSeconds * 1000
                 for (header in task.headers) {
-                    // copy headers unless Range header in UploadTask
-                    if (header.key != "Range" || task.taskType != "UploadTask") {
+                    // For UploadTask, copy headers unless it's "Range" or "Content-Disposition".
+                    // For other task types, copy all headers.
+                    if (!task.isUploadTask() ||
+                        (!header.key.equals("Range", ignoreCase = true) &&
+                                !header.key.equals("Content-Disposition", ignoreCase = true))
+                    ) {
                         setRequestProperty(header.key, header.value)
                     }
                 }
