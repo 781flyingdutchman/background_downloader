@@ -22,6 +22,9 @@ import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
+import android.system.Os
+import android.system.ErrnoException
+import android.system.OsConstants
 import kotlin.math.absoluteValue
 import kotlin.random.Random
 
@@ -260,9 +263,11 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
                                     StandardCopyOption.REPLACE_EXISTING
                                 )
                             }
+                            setFileOwnership(destFile)
                         } else {
                             tempFile.copyTo(destFile, overwrite = true)
                             deleteTempFile()
+                            setFileOwnership(destFile)
                         }
                         Log.i(
                             TAG, "Successfully downloaded taskId ${task.taskId} to $destFilePath"
@@ -540,5 +545,33 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
         }
     }
 
+    /**
+     * Sets the group ownership of the downloaded file.
+     *
+     * Determines the correct GID based on whether the file is on external or internal storage
+     * and then calls Os.chown. Logs success or failure.
+     */
+    private fun setFileOwnership(destFile: File) {
+        try {
+            val finalPath = destFile.absolutePath
+            val appUid = applicationContext.applicationInfo.uid
+            // Heuristic to determine if path is on external storage.
+            // This could be improved by checking against Environment.getExternalStorageDirectory()
+            // or context.getExternalFilesDirs() if a Context is readily available and appropriate.
+            val isExternalStorage = finalPath.contains("/Android/data/") || finalPath.contains("/sdcard/")
+
+            val gid = if (isExternalStorage) {
+                1078 // AID_EXT_DATA_RW
+            } else {
+                appUid // App's own GID for internal storage
+            }
+            Os.chown(finalPath, -1, gid) // -1 for UID means keep current owner
+            Log.i(TAG, "Changed group ownership for $finalPath to GID $gid")
+        } catch (e: ErrnoException) {
+            // Log the error, common if the filesystem doesn't support chown or due to permissions.
+            // Check OsConstants for specific errno values if needed.
+            Log.w(TAG, "Failed to change group ownership for ${destFile.absolutePath}: ${e.message}")
+        }
+    }
 
 }
