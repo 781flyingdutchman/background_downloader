@@ -231,7 +231,86 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
             range: NSMakeRange(0, (value as NSString).length), withTemplate: "%0D%0A")
         return newlinesReplaced.replacingOccurrences(of: "\"", with: "%22")
     }
+
     
+    func processTusUpload(task: UploadTask, request: NSMutableURLRequest) -> Bool {
+        os_log("Starting tus upload for taskId %@", log: log, type: .debug, task.taskId)
+        
+        // Get the file path
+        guard let filePath = getFilePath(for: task) else {
+            os_log("File to upload does not exist", log: log, type: .error)
+            return false
+        }
+        
+        let fileURL = URL(fileURLWithPath: filePath)
+        
+        do {
+            let fileAttributes = try FileManager.default.attributesOfItem(atPath: filePath)
+            let fileSize = fileAttributes[.size] as! Int64
+            
+            os_log("tus upload file size: %d bytes", log: log, type: .debug, fileSize)
+            
+            // Determine if it's a creation or an update
+            let isUpdate = task.headers["Upload-Offset"] != nil
+            
+            if !isUpdate {
+                // Step 1: Upload creation - Initial POST request
+                request.httpMethod = "POST"
+                request.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
+                request.setValue(String(fileSize), forHTTPHeaderField: "Upload-Length")
+                request.setValue("application/offset+octet-stream", forHTTPHeaderField: "Content-Type")
+                
+                // Add metadata
+                let fileName = fileURL.lastPathComponent
+                var metadata = "filename \(Data(fileName.utf8).base64EncodedString())"
+                if !task.mimeType!.isEmpty {
+                    metadata.append(",filetype \(Data(task.mimeType!.utf8).base64EncodedString())")
+                }
+                request.setValue(metadata, forHTTPHeaderField: "Upload-Metadata")
+                
+                return true
+            } else {
+                // Step 2: Upload chunks - PATCH request
+                let uploadOffset = Int64(task.headers["Upload-Offset"] ?? "0") ?? 0
+                
+                request.httpMethod = "PATCH"
+                request.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
+                request.setValue(String(uploadOffset), forHTTPHeaderField: "Upload-Offset")
+                request.setValue("application/offset+octet-stream", forHTTPHeaderField: "Content-Type")
+                
+                // Limit the chunk size to 5MB like in the Android version
+                let bytesRemaining = fileSize - uploadOffset
+                let chunkSize = min(bytesRemaining, 5 * 1024 * 1024)
+                
+                // Open the file and skip the already uploaded bytes
+                let fileHandle = try FileHandle(forReadingFrom: fileURL)
+                try fileHandle.seek(toOffset: UInt64(uploadOffset))
+                
+                //Read the chunk
+                let data = fileHandle.readData(ofLength: Int(chunkSize))
+                fileHandle.closeFile()
+                
+                request.httpBody = data
+                
+                return true
+            }
+        } catch {
+            os_log("Error setting up tus upload: %@", log: log, type: .error, error.localizedDescription)
+            return false
+        }
+    }
+    
+    
+    // Modifier la méthode upload pour ajouter la prise en charge de tus
+    func upload(task: Task, config: NotificationConfig?) -> Bool {
+        // Configuration de base
+        
+        if task.post?.lowercased() == "tus" {
+            return processTusUpload(task: task as! UploadTask, request: request)
+        } else if task.post?.lowercased() == "binary" {
+            return processBinaryUpload(task: task as! UploadTask, request: request)
+        } else {
+            return processMultipartUpload(task: task as! UploadTask, request: request)
+        }
+    }
 }
-
-

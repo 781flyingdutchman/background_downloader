@@ -74,10 +74,11 @@ class NotificationConfig(
     val canceled: TaskNotification?,
     val progressBar: Boolean,
     val tapOpensFile: Boolean,
+    val showCancelButton: Boolean,
     val groupNotificationId: String
 ) {
     override fun toString(): String {
-        return "NotificationConfig(running=$running, complete=$complete, error=$error, paused=$paused, progressBar=$progressBar, tapOpensFile=$tapOpensFile, groupNotificationId=$groupNotificationId)"
+        return "NotificationConfig(running=$running, complete=$complete, error=$error, paused=$paused, canceled=$canceled, progressBar=$progressBar, tapOpensFile=$tapOpensFile, showCancelButton=$showCancelButton, groupNotificationId=$groupNotificationId)"
     }
 }
 
@@ -640,33 +641,37 @@ object NotificationService {
         // add buttons depending on notificationType
         when (notificationType) {
             NotificationType.running -> {
-                // cancel button when running
-                val cancelOrPauseBundle = Bundle().apply {
+                val actionBundle = Bundle().apply {
                     putString(NotificationReceiver.keyTaskId, taskWorker.task.taskId)
                 }
-                val cancelIntent =
-                    Intent(taskWorker.applicationContext, NotificationReceiver::class.java).apply {
-                        action = NotificationReceiver.actionCancelActive
-                        putExtra(NotificationReceiver.keyBundle, cancelOrPauseBundle)
-                    }
-                val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
-                    taskWorker.applicationContext,
-                    taskWorker.notificationId,
-                    cancelIntent,
-                    PendingIntent.FLAG_IMMUTABLE
-                )
-                builder.addAction(
-                    R.drawable.outline_cancel_24,
-                    BDPlugin.notificationButtonText["Cancel"],
-                    cancelPendingIntent
-                )
-                if (taskWorker.taskCanResume && (taskWorker.notificationConfig?.paused != null)) {
+                
+                if (taskWorker.notificationConfig?.showCancelButton != false) {
+                    // cancel button when running
+                    val cancelIntent =
+                        Intent(taskWorker.applicationContext, NotificationReceiver::class.java).apply {
+                            action = NotificationReceiver.actionCancelActive
+                            putExtra(NotificationReceiver.keyBundle, actionBundle)
+                        }
+                    val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
+                        taskWorker.applicationContext,
+                        taskWorker.notificationId,
+                        cancelIntent,
+                        PendingIntent.FLAG_IMMUTABLE
+                    )
+                    builder.addAction(
+                        R.drawable.outline_cancel_24,
+                        BDPlugin.notificationButtonText["Cancel"],
+                        cancelPendingIntent
+                    )
+                }
+                
+                if (taskWorker.taskCanResume) {
                     // pause button when running and paused notification configured
                     val pauseIntent = Intent(
                         taskWorker.applicationContext, NotificationReceiver::class.java
                     ).apply {
                         action = NotificationReceiver.actionPause
-                        putExtra(NotificationReceiver.keyBundle, cancelOrPauseBundle)
+                        putExtra(NotificationReceiver.keyBundle, actionBundle)
                     }
                     val pausePendingIntent: PendingIntent = PendingIntent.getBroadcast(
                         taskWorker.applicationContext,
@@ -794,7 +799,8 @@ object NotificationService {
         // add tap action for all notifications
         addTapIntent(taskWorker, "", notificationType, builder)
         // add cancel button for running notification
-        if (notificationType == NotificationType.running) {
+        if (notificationType == NotificationType.running && 
+            groupNotification.notificationConfig.showCancelButton != false) {
             val cancelBundle = Bundle().apply {
                 putString(NotificationReceiver.keyGroupNotificationName, groupNotification.name)
             }

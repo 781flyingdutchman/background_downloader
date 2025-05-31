@@ -29,6 +29,7 @@ struct NotificationConfig : Codable {
     let canceled: NotificationContents?
     let progressBar: Bool
     let tapOpensFile: Bool
+    let showCancelButton: Bool
     let groupNotificationId: String
 }
 
@@ -154,7 +155,9 @@ actor GroupNotification {
 
 enum NotificationCategory : String, CaseIterable {
     case runningWithPause = "running_with_pause";
+    case runningWithPauseNoCancel = "running_with_pause_no_cancel";
     case runningWithoutPause = "running_without_pause";
+    case runningWithoutPauseNoCancel = "running_without_pause_no_cancel";
     case paused = "paused"
     case complete = "complete"
     case error = "error"
@@ -267,7 +270,7 @@ private func updateGroupNotification(
         if previousNotification.isEmpty || previousNotification.first?.request.content.title != content.title || previousNotification.first?.request.content.body != content.body
         {
             if !isFinished {
-                addCancelActionToNotificationGroup(content: content)
+                addCancelActionToNotificationGroup(content: content, notificationConfig: notificationConfig)
             }
             let request = UNNotificationRequest(identifier: await groupNotification.notificationId,
                                                 content: content, trigger: nil)
@@ -311,7 +314,17 @@ func addNotificationActions(task: Task, notificationType: NotificationType, cont
     BDPlugin.propertyLock.withLock( {
         switch notificationType {
         case .running:
-            content.categoryIdentifier = BDPlugin.taskIdsThatCanResume.contains(task.taskId) && notificationConfig.paused != nil ? NotificationCategory.runningWithPause.rawValue : NotificationCategory.runningWithoutPause.rawValue
+            if notificationConfig.showCancelButton == false {
+                // Si showCancelButton est false, utiliser une catégorie sans bouton d'annulation
+                content.categoryIdentifier = BDPlugin.taskIdsThatCanResume.contains(task.taskId) && notificationConfig.paused != nil ? 
+                    NotificationCategory.runningWithPauseNoCancel.rawValue : 
+                    NotificationCategory.runningWithoutPauseNoCancel.rawValue
+            } else {
+                // Par défaut, montrer le bouton d'annulation
+                content.categoryIdentifier = BDPlugin.taskIdsThatCanResume.contains(task.taskId) && notificationConfig.paused != nil ? 
+                    NotificationCategory.runningWithPause.rawValue : 
+                    NotificationCategory.runningWithoutPause.rawValue
+            }
         case .paused:
             content.categoryIdentifier = NotificationCategory.paused.rawValue
         case .complete:
@@ -325,8 +338,13 @@ func addNotificationActions(task: Task, notificationType: NotificationType, cont
 }
 
 /// Add cancel action button to the notificationGroup
-func addCancelActionToNotificationGroup(content: UNMutableNotificationContent) {
-    content.categoryIdentifier = NotificationCategory.runningWithoutPause.rawValue
+func addCancelActionToNotificationGroup(content: UNMutableNotificationContent, notificationConfig: NotificationConfig) {
+    // Vérifier si le bouton d'annulation doit être affiché
+    if notificationConfig.showCancelButton == false {
+        content.categoryIdentifier = NotificationCategory.runningWithoutPauseNoCancel.rawValue
+    } else {
+        content.categoryIdentifier = NotificationCategory.runningWithoutPause.rawValue
+    }
 }
 
 /// Returns the notificationType related to this [status]
@@ -394,6 +412,7 @@ func registerNotificationCategories() {
     let resumeAction = UNNotificationAction(identifier: "resume_action",
                                             title: localize?["Resume"] as? String ?? "Resume",
                                             options: [])
+    
     // Define the notification categories using these actions
     let runningWithPauseCategory =
     UNNotificationCategory(identifier: NotificationCategory.runningWithPause.rawValue,
@@ -401,39 +420,69 @@ func registerNotificationCategories() {
                            intentIdentifiers: [],
                            hiddenPreviewsBodyPlaceholder: "",
                            options: .customDismissAction)
+    
+    let runningWithPauseNoCancelCategory =
+    UNNotificationCategory(identifier: NotificationCategory.runningWithPauseNoCancel.rawValue,
+                           actions: [pauseAction],
+                           intentIdentifiers: [],
+                           hiddenPreviewsBodyPlaceholder: "",
+                           options: .customDismissAction)
+    
     let runningWithoutPauseCategory =
     UNNotificationCategory(identifier: NotificationCategory.runningWithoutPause.rawValue,
                            actions: [cancelAction],
                            intentIdentifiers: [],
                            hiddenPreviewsBodyPlaceholder: "",
                            options: .customDismissAction)
-    let pausedCategory =
+    
+    let runningWithoutPauseNoCancelCategory =
+    UNNotificationCategory(identifier: NotificationCategory.runningWithoutPauseNoCancel.rawValue,
+                           actions: [],
+                           intentIdentifiers: [],
+                           hiddenPreviewsBodyPlaceholder: "",
+                           options: .customDismissAction)
+    
+    // Autres catégories inchangées
+    let pausedCategory = 
     UNNotificationCategory(identifier: NotificationCategory.paused.rawValue,
                            actions: [cancelInactiveAction, resumeAction],
                            intentIdentifiers: [],
                            hiddenPreviewsBodyPlaceholder: "",
                            options: .customDismissAction)
+    
     let completeCategory =
     UNNotificationCategory(identifier: NotificationCategory.complete.rawValue,
                            actions: [],
                            intentIdentifiers: [],
                            hiddenPreviewsBodyPlaceholder: "",
                            options: .customDismissAction)
+    
     let errorCategory =
     UNNotificationCategory(identifier: NotificationCategory.error.rawValue,
                            actions: [],
                            intentIdentifiers: [],
                            hiddenPreviewsBodyPlaceholder: "",
                            options: .customDismissAction)
+    
     let canceledCategory =
     UNNotificationCategory(identifier: NotificationCategory.canceled.rawValue,
                            actions: [],
                            intentIdentifiers: [],
                            hiddenPreviewsBodyPlaceholder: "",
                            options: .customDismissAction)
+    
     // Register the notification type.
     let notificationCenter = UNUserNotificationCenter.current()
-    notificationCenter.setNotificationCategories([runningWithPauseCategory, runningWithoutPauseCategory, pausedCategory, completeCategory, errorCategory, canceledCategory])
+    notificationCenter.setNotificationCategories([
+        runningWithPauseCategory, 
+        runningWithPauseNoCancelCategory,
+        runningWithoutPauseCategory, 
+        runningWithoutPauseNoCancelCategory,
+        pausedCategory, 
+        completeCategory, 
+        errorCategory, 
+        canceledCategory
+    ])
 }
 
 /// Returns a JSON string for this NotificationConfig, or nil
