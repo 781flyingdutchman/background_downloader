@@ -24,7 +24,6 @@ import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import android.system.Os
 import android.system.ErrnoException
-import android.system.OsConstants
 import kotlin.math.absoluteValue
 import kotlin.random.Random
 
@@ -201,7 +200,7 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
                     // other URL scheme will be attempted to resolve using content resolver
                     val resolver = applicationContext.contentResolver
                     // create destination Uri if not already exists
-                    var documentFile = DocumentFile.fromTreeUri(applicationContext, directoryUri)
+                    val documentFile = DocumentFile.fromTreeUri(applicationContext, directoryUri)
                     destUri = destUri ?: documentFile?.createFile(task.mimeType, uriFilename)?.uri
                     if (destUri == null) {
                         val message =
@@ -380,7 +379,7 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
      * Return destination filePath where the filename is set based on response headers, and
      * update the [task] accordingly
      */
-    private suspend fun destFilePath(connection: HttpURLConnection): String {
+    private fun destFilePath(connection: HttpURLConnection): String {
         val destFilePath = task.filePath(applicationContext)
         task = task.withSuggestedFilenameFromResponseHeaders(
             applicationContext,
@@ -447,8 +446,10 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
         }
         val contentRanges = connection.headerFields["Content-Range"]
         if (contentRanges == null || contentRanges.size > 1) {
-            Log.i(TAG, "Could not " +
-                    "process partial response Content-Range")
+            Log.i(
+                TAG, "Could not " +
+                        "process partial response Content-Range"
+            )
             return false
         }
         val range = contentRanges.first()
@@ -548,29 +549,23 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
     /**
      * Sets the group ownership of the downloaded file.
      *
-     * Determines the correct GID based on whether the file is on external or internal storage
-     * and then calls Os.chown. Logs success or failure.
+     * Determines the app's GID and then calls Os.chown. Logs success or failure.
+     * Likely to fail if the file is in external storage.
+     *
+     * Reason for changing ownership os to unmark file as a cache file (issue #498)
      */
     private fun setFileOwnership(destFile: File) {
         try {
             val finalPath = destFile.absolutePath
-            val appUid = applicationContext.applicationInfo.uid
-            // Heuristic to determine if path is on external storage.
-            // This could be improved by checking against Environment.getExternalStorageDirectory()
-            // or context.getExternalFilesDirs() if a Context is readily available and appropriate.
-            val isExternalStorage = finalPath.contains("/Android/data/") || finalPath.contains("/sdcard/")
-
-            val gid = if (isExternalStorage) {
-                1078 // AID_EXT_DATA_RW
-            } else {
-                appUid // App's own GID for internal storage
-            }
+            val gid = applicationContext.applicationInfo.uid // App's own GID
             Os.chown(finalPath, -1, gid) // -1 for UID means keep current owner
-            Log.i(TAG, "Changed group ownership for $finalPath to GID $gid")
         } catch (e: ErrnoException) {
             // Log the error, common if the filesystem doesn't support chown or due to permissions.
             // Check OsConstants for specific errno values if needed.
-            Log.w(TAG, "Failed to change group ownership for ${destFile.absolutePath}: ${e.message}")
+            Log.w(
+                TAG,
+                "Failed to change group ownership for ${destFile.absolutePath}: ${e.message}"
+            )
         }
     }
 
