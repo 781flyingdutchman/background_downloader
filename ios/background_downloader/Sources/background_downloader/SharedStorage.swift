@@ -64,6 +64,9 @@ private func moveToPhotoLibrary(filePath: String, destination: SharedStorage) as
         os_log("Cannot move to shared storage: permission to add to photos library denied by user", log: log, type: .info)
         return nil
     }
+#if BYPASS_PERMISSION_IOSADDTOPHOTOLIBRARY
+    return nil
+#else
     guard let fileURL = URL(string: filePath) else {
         os_log("filePath invalid: %@", log: log, type: .info, filePath)
         return nil
@@ -87,6 +90,7 @@ private func moveToPhotoLibrary(filePath: String, destination: SharedStorage) as
         }
     }
     return result.isEmpty ? nil : result
+#endif
 }
 
 /// Returns the path to the file at [filePath] in shared storage [destination] subdir [directory], or null
@@ -116,6 +120,9 @@ public func pathInPhotoLibrary(localId: String, destination: SharedStorage) asyn
         os_log("Cannot get path in shared storage: permission to access photos library denied by user", log: log, type: .info)
         return nil
     }
+#if BYPASS_PERMISSION_IOSCHANGEPHOTOLIBRARY
+    return nil
+#else
     let assetResult = PHAsset.fetchAssets(withLocalIdentifiers: [localId], options: nil)
     guard let asset = assetResult.firstObject else {
         os_log("Photos asset not found", log: log, type: .info)
@@ -135,6 +142,7 @@ public func pathInPhotoLibrary(localId: String, destination: SharedStorage) asyn
         })
     }
     return result.isEmpty ? nil : result
+#endif
 }
 
 
