@@ -38,6 +38,7 @@ import kotlinx.serialization.json.Json
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
+import kotlin.text.Regex.Companion.escapeReplacement
 
 /**
  * Notification specification
@@ -935,9 +936,10 @@ object NotificationService {
         val output = displayNameRegEx.replace(
             fileNameRegEx.replace(
                 metaDataRegEx.replace(
-                    input, task.metaData
-                ), task.filename
-            ), task.displayName
+                    input, escapeReplacement(task.metaData)
+
+                ), escapeReplacement(task.filename)
+            ), escapeReplacement(task.displayName)
         )
 
         // progress
