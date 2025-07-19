@@ -1,12 +1,19 @@
+## 9.2.3
+
+* Minor bug fixes
+  - [Android] Unmarking temp files as cache after move to download destination
+  - [iOS] Improved permissions bypassing
+  - [Android] Use of $ sign in notification substitutions
+  - [iOS] Crash on returning app to foreground when app is suspended
+
 ## 9.2.2
 * Adds option to set the `Content-Disposition` header for binary uploads
+* Fixes bug on iOS when using `openFile` with a filepath containing spaces
 
 For binary uploads, the `Content-Disposition` header will be:
 - set to 'attachment = "filename"' if the task.headers field does not contain an entry for 'Content-Disposition' (the prior default)
 - not set at all (i.e. omitted) if the task.headers field contains an entry for 'Content-Disposition' with the value '' (an empty string)
 - set to the value of `task.headers['Content-Disposition']` in all other cases
-
-* Fixes bug on iOS when using `openFile` with a filepath containing spaces
 
 ## 9.2.1
 * Minor bug fixes
