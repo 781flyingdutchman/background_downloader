@@ -754,6 +754,7 @@ interface class FileDownloader {
   /// [paused] is the notification shown when the task is paused
   /// [canceled] is the notification shown when the task is canceled programmatically
   ///    or by the user via a notification button
+  /// [showCancelButton] if set will show a cancel button
   /// [progressBar] if set will show a progress bar
   /// [tapOpensFile] if set will attempt to open the file when the [complete]
   ///     notification is tapped
@@ -794,6 +795,7 @@ interface class FileDownloader {
       TaskNotification? canceled,
       bool progressBar = false,
       bool tapOpensFile = false,
+      bool showCancelButton = true,
       String groupNotificationId = ''}) {
     _addOrUpdateTaskNotificationConfig(TaskNotificationConfig(
         taskOrGroup: task,
@@ -804,6 +806,7 @@ interface class FileDownloader {
         canceled: canceled,
         progressBar: progressBar,
         tapOpensFile: tapOpensFile,
+        showCancelButton: showCancelButton,
         groupNotificationId: groupNotificationId));
     return this;
   }
@@ -821,6 +824,7 @@ interface class FileDownloader {
   /// [paused] is the notification shown when the task is paused
   /// [canceled] is the notification shown when the task is canceled programmatically
   ///    or by the user via a notification button
+  /// [showCancelButton] if set will show a cancel button
   /// [progressBar] if set will show a progress bar
   /// [tapOpensFile] if set will attempt to open the file when the [complete]
   ///     notification is tapped
@@ -859,6 +863,7 @@ interface class FileDownloader {
       TaskNotification? error,
       TaskNotification? paused,
       TaskNotification? canceled,
+      bool showCancelButton = true,
       bool progressBar = false,
       bool tapOpensFile = false,
       String groupNotificationId = ''}) {
@@ -869,6 +874,7 @@ interface class FileDownloader {
         error: error,
         paused: paused,
         canceled: canceled,
+        showCancelButton: showCancelButton,
         progressBar: progressBar,
         tapOpensFile: tapOpensFile,
         groupNotificationId: groupNotificationId));
@@ -888,6 +894,7 @@ interface class FileDownloader {
   /// [paused] is the notification shown when the task is paused
   /// [canceled] is the notification shown when the task is canceled programmatically
   ///    or by the user via a notification button
+  /// [showCancelButton] if set will show a cancel button
   /// [progressBar] if set will show a progress bar
   /// [tapOpensFile] if set will attempt to open the file when the [complete]
   ///     notification is tapped
@@ -926,6 +933,7 @@ interface class FileDownloader {
       TaskNotification? error,
       TaskNotification? paused,
       TaskNotification? canceled,
+      bool showCancelButton = true,
       bool progressBar = false,
       bool tapOpensFile = false,
       String groupNotificationId = ''}) {
@@ -936,6 +944,7 @@ interface class FileDownloader {
         error: error,
         paused: paused,
         canceled: canceled,
+        showCancelButton: showCancelButton,
         progressBar: progressBar,
         tapOpensFile: tapOpensFile,
         groupNotificationId: groupNotificationId));
