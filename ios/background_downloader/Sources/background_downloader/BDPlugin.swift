@@ -30,6 +30,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                                         lastProgressValue: Double,
                                         lastTotalBytesDone: Int64,
                                         lastNetworkSpeed: Double)]() // upadtetime, progress %, bytes, speed
+    static var initialResponseDataProcessed = Set<String>() // by taskId
     static var uploaderForUrlSessionTaskIdentifier = [Int:Uploader]() // maps from UrlSessionTask TaskIdentifier
     static var haveregisteredNotificationCategories = false
     static var requireWiFi = RequireWiFi.asSetByTask // global setting

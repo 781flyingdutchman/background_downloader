@@ -140,6 +140,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
                         }
                         BDPlugin.propertyLock.withLock({
                             _ = BDPlugin.progressInfo.removeValue(forKey: bgdTask.taskId) // ensure .running update on resume
+                            BDPlugin.initialResponseDataProcessed.remove(bgdTask.taskId)
                         })
                         return
                     }
@@ -190,10 +191,21 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             BDPlugin.progressInfo[task.taskId]
         })
         if progressInfo == nil {
+            // first 'didWriteData' call, so send 'running' status update and show notification
+            os_log("Starting/resuming taskId %@", log: log, type: .info, task.taskId)
+            processStatusUpdate(task: task, status: TaskStatus.running)
+            processProgressUpdate(task: task, progress: 0.0)
+            BDPlugin.propertyLock.withLock({
+                BDPlugin.progressInfo[task.taskId] = (lastProgressUpdateTime: 0, lastProgressValue: 0.0, lastTotalBytesDone: 0, lastNetworkSpeed: -1.0)
+            })
+            let notificationConfig = getNotificationConfigFrom(urlSessionTask: downloadTask)
+            if (notificationConfig != nil) {
+                updateNotification(task: task, notificationType: .running, notificationConfig: notificationConfig)
+            }
+        }
+        if !BDPlugin.propertyLock.withLock({ BDPlugin.initialResponseDataProcessed.contains(task.taskId) }) {
             // response can be nil in cases when progressInfo is nil due to app resuming in foreground
             if let response = downloadTask.response as? HTTPURLResponse {
-                // first 'didWriteData' call
-                os_log("Starting/resuming taskId %@", log: log, type: .info, task.taskId)
                 // get suggested filename if needed
                 let (filename, uri) = unpack(packedString: task.filename)
                 if filename == "?" {
@@ -236,12 +248,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
                     }
                     return
                 }
-                // Send 'running' status update and check if the task is resumable
-                processStatusUpdate(task: task, status: TaskStatus.running)
-                processProgressUpdate(task: task, progress: 0.0)
-                BDPlugin.propertyLock.withLock({
-                    BDPlugin.progressInfo[task.taskId] = (lastProgressUpdateTime: 0, lastProgressValue: 0.0, lastTotalBytesDone: 0, lastNetworkSpeed: -1.0)
-                })
+                // check if the task is resumable
                 if task.allowPause {
                     let acceptRangesHeader = (downloadTask.response as? HTTPURLResponse)?.allHeaderFields["Accept-Ranges"]
                     let taskCanResume = acceptRangesHeader as? String == "bytes"
@@ -252,11 +259,9 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
                         })
                     }
                 }
-                // notify if needed
-                let notificationConfig = getNotificationConfigFrom(urlSessionTask: downloadTask)
-                if (notificationConfig != nil) {
-                    updateNotification(task: task, notificationType: .running, notificationConfig: notificationConfig)
-                }
+                BDPlugin.propertyLock.withLock( {
+                    BDPlugin.initialResponseDataProcessed.insert(task.taskId)
+                })
             }
         }
         let contentLength = BDPlugin.propertyLock.withLock({
@@ -312,6 +317,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
             let charSet = BDPlugin.charSets.removeValue(forKey: taskId)
             BDPlugin.tasksWithModifications.removeValue(forKey: taskId)
             BDPlugin.tasksWithContentLengthOverride.removeValue(forKey: taskId)
+            BDPlugin.initialResponseDataProcessed.remove(taskId)
             return (mimeType, charSet)
         })
         let notificationConfig = getNotificationConfigFrom(urlSessionTask: downloadTask)
