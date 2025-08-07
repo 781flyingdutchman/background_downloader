@@ -206,6 +206,9 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
         if !BDPlugin.propertyLock.withLock({ BDPlugin.initialResponseDataProcessed.contains(task.taskId) }) {
             // response can be nil in cases when progressInfo is nil due to app resuming in foreground
             if let response = downloadTask.response as? HTTPURLResponse {
+                BDPlugin.propertyLock.withLock( {
+                    BDPlugin.initialResponseDataProcessed.insert(task.taskId)
+                })
                 // get suggested filename if needed
                 let (filename, uri) = unpack(packedString: task.filename)
                 if filename == "?" {
@@ -259,9 +262,6 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
                         })
                     }
                 }
-                BDPlugin.propertyLock.withLock( {
-                    BDPlugin.initialResponseDataProcessed.insert(task.taskId)
-                })
             }
         }
         let contentLength = BDPlugin.propertyLock.withLock({
