@@ -48,6 +48,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
 import androidx.core.content.edit
+import androidx.work.OneTimeWorkRequest
 
 
 /**
@@ -160,30 +161,35 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             val constraints = Constraints.Builder().setRequiredNetworkType(
                 if (taskRequiresWifi) NetworkType.UNMETERED else NetworkType.CONNECTED
             ).build()
-            val requestBuilder = when (task.taskType) {
-                "ParallelDownloadTask" -> OneTimeWorkRequestBuilder<ParallelDownloadTaskWorker>()
-                "DownloadTask" -> OneTimeWorkRequestBuilder<DownloadTaskWorker>()
-                "UriDownloadTask" -> OneTimeWorkRequestBuilder<DownloadTaskWorker>()
-                "UploadTask" -> OneTimeWorkRequestBuilder<UploadTaskWorker>()
-                "UriUploadTask" -> OneTimeWorkRequestBuilder<UploadTaskWorker>()
-                "MultiUploadTask" -> OneTimeWorkRequestBuilder<UploadTaskWorker>()
-                "DataTask" -> OneTimeWorkRequestBuilder<DataTaskWorker>()
-                else -> {
-                    Log.w(TAG, "Unknown taskType: ${task.taskType}")
-                    return false
-                }
-            }
-            requestBuilder.setInputData(data)
-                .setConstraints(constraints).addTag(TAG).addTag("taskId=${task.taskId}")
-                .addTag("group=${task.group}")
+            val requestBuilder: OneTimeWorkRequest.Builder =
+                createRequestBuilder(task, data, constraints) ?: return false
             if (initialDelayMillis != 0L) {
                 requestBuilder.setInitialDelay(initialDelayMillis, TimeUnit.MILLISECONDS)
             }
-            if (task.priority < 5 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val expedited = task.priority < 5 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+            if (expedited) {
                 requestBuilder.setExpedited(policy = OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             }
             val workManager = WorkManager.getInstance(context)
-            val operation = workManager.enqueue(requestBuilder.build())
+            val operation = try {
+                workManager.enqueue(requestBuilder.build())
+            } catch (e: IllegalStateException) {
+                if (expedited) {
+                    // known to happen on some devices, fallback to non-expedited
+                    Log.i(TAG, "Could not enqueue expedited task, falling back to non-expedited")
+                    val nonExpeditedRequestBuilder =
+                        createRequestBuilder(task, data, constraints) ?: return false
+                    if (initialDelayMillis != 0L) {
+                        nonExpeditedRequestBuilder.setInitialDelay(
+                            initialDelayMillis,
+                            TimeUnit.MILLISECONDS
+                        )
+                    }
+                    workManager.enqueue(nonExpeditedRequestBuilder.build())
+                } else {
+                    throw e
+                }
+            }
             try {
                 withContext(Dispatchers.IO) {
                     operation.result.get()
@@ -197,7 +203,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             } catch (_: Throwable) {
                 Log.w(
                     TAG,
-                    "Unable to start background request for taskId ${task.taskId} in operation: $operation"
+                    "Unable to start background request for taskId ${task.taskId}"
                 )
                 return false
             }
@@ -224,6 +230,35 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         /** True if task requires WiFi, based on global and task-specific settings */
         fun taskRequiresWifi(task: Task): Boolean {
             return (requireWifi == RequireWiFi.forAllTasks || (requireWifi == RequireWiFi.asSetByTask && task.requiresWiFi))
+        }
+
+        /**
+         * Create a [OneTimeWorkRequestBuilder] for the given [task], [data] and [constraints]
+         *
+         * Returns the builder, or null if the task type is unknown
+         */
+        private fun createRequestBuilder(
+            task: Task,
+            data: Data,
+            constraints: Constraints
+        ): OneTimeWorkRequest.Builder? {
+            val requestBuilder = when (task.taskType) {
+                "ParallelDownloadTask" -> OneTimeWorkRequestBuilder<ParallelDownloadTaskWorker>()
+                "DownloadTask" -> OneTimeWorkRequestBuilder<DownloadTaskWorker>()
+                "UriDownloadTask" -> OneTimeWorkRequestBuilder<DownloadTaskWorker>()
+                "UploadTask" -> OneTimeWorkRequestBuilder<UploadTaskWorker>()
+                "UriUploadTask" -> OneTimeWorkRequestBuilder<UploadTaskWorker>()
+                "MultiUploadTask" -> OneTimeWorkRequestBuilder<UploadTaskWorker>()
+                "DataTask" -> OneTimeWorkRequestBuilder<DataTaskWorker>()
+                else -> {
+                    Log.w(TAG, "Unknown taskType: ${task.taskType}")
+                    return null
+                }
+            }
+            requestBuilder.setInputData(data)
+                .setConstraints(constraints).addTag(TAG).addTag("taskId=${task.taskId}")
+                .addTag("group=${task.group}")
+            return requestBuilder
         }
 
         /** cancel tasks with [taskIds] and return true if successful */
