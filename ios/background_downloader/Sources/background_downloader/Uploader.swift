@@ -194,7 +194,7 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
          var header = "Content-Disposition: form-data; name=\"\(browserEncode(name))\""
         if isJsonString(value) {
             header = "\(header)\r\n" +
-            "Content-Type: application/json; charset=utf-8\r\n"
+            "Content-Type: application/json; charset=utf-8"
         } else if !isPlainAscii(value) {
             header = "\(header)\r\n" +
             "Content-Type: text/plain; charset=utf-8\r\n" +
