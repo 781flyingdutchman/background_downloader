@@ -373,7 +373,7 @@ String headerForField(String name, String value) {
   var header = 'content-disposition: form-data; name="${browserEncode(name)}"';
   if (isJsonString(value)) {
     header = '$header\r\n'
-        'content-type: application/json; charset=utf-8\r\n';
+        'content-type: application/json; charset=utf-8';
   } else if (!isPlainAscii(value)) {
     header = '$header\r\n'
         'content-type: text/plain; charset=utf-8\r\n'
