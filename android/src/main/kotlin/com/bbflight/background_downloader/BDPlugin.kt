@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.edit
 import androidx.preference.PreferenceManager
 import androidx.work.Constraints
 import androidx.work.Data
@@ -15,6 +16,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import com.bbflight.background_downloader.BDPlugin.Companion.backgroundChannel
 import com.bbflight.background_downloader.TaskWorker.Companion.processStatusUpdate
 import com.bbflight.background_downloader.TaskWorker.Companion.taskToJsonString
 import io.flutter.embedding.engine.FlutterEngine
@@ -30,7 +32,7 @@ import io.flutter.plugin.common.PluginRegistry
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -47,7 +49,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
-import androidx.core.content.edit
 
 
 /**
@@ -363,7 +364,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private var channel: MethodChannel? = null
     private var backgroundChannel: MethodChannel? = null
     private lateinit var applicationContext: Context
-    private var scope: CoroutineScope? = null
+    private lateinit var pluginScope: CoroutineScope
     private var binaryMessenger: BinaryMessenger? = null
     var activity: Activity? = null
 
@@ -373,6 +374,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         applicationContext = flutterPluginBinding.applicationContext
+        pluginScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         binaryMessenger = flutterPluginBinding.binaryMessenger
         backgroundChannel =
             MethodChannel(
@@ -414,6 +416,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * BackgroundChannel is set to null, and references to it removed if it no longer in use anywhere
      * */
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        pluginScope.cancel()
         channel?.setMethodCallHandler(null)
         channel = null
         bgChannelByTaskId =
@@ -556,12 +559,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Returns a list of booleans indicating the success of each individual enqueue operation.
      */
     private fun methodEnqueueAll(call: MethodCall, result: Result) {
-        if (scope == null) {
-            result.success(emptyList<Boolean>())
-            return
-        }
         val plugin = this
-        scope!!.launch(Dispatchers.IO) {
+        pluginScope.launch(Dispatchers.IO) {
             val args = call.arguments as List<*>
             val taskListJsonString = args[0] as String
             val notificationConfigListJsonString = args[1] as String
@@ -715,11 +714,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Returns true if all cancellations were successful
      */
     private fun methodCancelTasksWithIds(call: MethodCall, result: Result) {
-        if (scope == null) {
-            result.success(false) // Or handle the error appropriately
-            return
-        }
-        scope!!.launch(Dispatchers.IO) {
+        pluginScope.launch(Dispatchers.IO) {
             @Suppress("UNCHECKED_CAST") val taskIds = call.arguments as List<String>
             withContext(Dispatchers.Main) {
                 result.success(cancelTasksWithIds(applicationContext, taskIds))
@@ -1293,9 +1288,9 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     var success = false
                     while (retries < 5 && !success) {
                         try {
-                            if (backgroundChannel != null && scope != null) {
+                            if (backgroundChannel != null) {
                                 val resultCompleter = CompletableDeferred<Boolean>()
-                                scope?.launch {
+                                pluginScope.launch {
                                     backgroundChannel?.invokeMethod(
                                         "notificationTap",
                                         listOf(taskJsonMapString, notificationTypeOrdinal),
@@ -1366,7 +1361,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private fun attach(binding: ActivityPluginBinding) {
         detach()
         activity = binding.activity
-        scope = MainScope()
         binding.addRequestPermissionsResultListener(this)
         binding.addActivityResultListener(this)
         binding.addOnNewIntentListener(fun(intent: Intent?): Boolean {
@@ -1390,8 +1384,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private fun detach() {
         activity = null
-        scope?.cancel()
-        scope = null
     }
 
     /**
