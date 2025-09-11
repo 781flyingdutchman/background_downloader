@@ -1,3 +1,12 @@
+## 9.2.4
+
+* Minor bug fixes
+  - [iOS] Notification update after killed app resumes
+  - [Android] Use of UTF-8 characters in `post` field
+  - Multipart upload remove extraneous CR/LF after header
+  - [Android] Fallback for expedited tasks when encountering OS error
+  - [Android] fix `enqueAll` and similar calls when no Activity attached
+
 ## 9.2.3
 
 * Minor bug fixes
