@@ -548,7 +548,7 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
     static func getAllTasks() async -> [Task] {
         UrlSessionDelegate.createUrlSession()
         guard let urlSessionTasks = await UrlSessionDelegate.urlSession?.allTasks else { return [] }
-        return urlSessionTasks.map({ getTaskFrom(urlSessionTask: $0) }).filter({ $0 != nil }) as? [Task] ?? []
+        return urlSessionTasks.compactMap({ getTaskFrom(urlSessionTask: $0) })
     }
     
     /// Return the active task with this taskId, or nil

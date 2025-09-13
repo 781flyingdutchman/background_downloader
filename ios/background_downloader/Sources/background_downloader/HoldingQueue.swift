@@ -196,7 +196,7 @@ class HoldingQueue {
             await stateLock.unlock()
             return
         }
-        let tasks: [Task] = urlSessionTasks.filter({ $0.state != .completed }).map({ getTaskFrom(urlSessionTask: $0)}).filter({ $0 != nil}).map({ $0!})
+        let tasks: [Task] = urlSessionTasks.filter({ $0.state != .completed }).compactMap({ getTaskFrom(urlSessionTask: $0)})
         concurrent = tasks.count
         concurrentByHost.removeAll()
         concurrentByGroup.removeAll()
