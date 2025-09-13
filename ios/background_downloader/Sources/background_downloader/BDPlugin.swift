@@ -479,12 +479,12 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         let group = call.arguments as? String
         var tasksAsListOfJsonStrings = [String]()
         await BDPlugin.holdingQueue?.stateLock.lock()
-        if let heldTasksJsonStrings = BDPlugin.holdingQueue?.allTasks(group: group).map({jsonStringFor(task: $0)}).filter({$0 != nil}).map({$0!}) {
+        if let heldTasksJsonStrings = BDPlugin.holdingQueue?.allTasks(group: group).compactMap({jsonStringFor(task: $0)}) {
             tasksAsListOfJsonStrings.append(contentsOf:  heldTasksJsonStrings)
         }
         UrlSessionDelegate.createUrlSession()
         if let urlSessionTasks = await UrlSessionDelegate.urlSession?.allTasks {
-            tasksAsListOfJsonStrings.append(contentsOf: urlSessionTasks.filter({ $0.state == .running || $0.state == .suspended }).map({ getTaskFrom(urlSessionTask: $0)}).filter({group == nil || $0?.group == group }).map({ jsonStringFor(task: $0!) }).filter({ $0 != nil }).map({$0!}))
+            tasksAsListOfJsonStrings.append(contentsOf: urlSessionTasks.filter({ $0.state == .running || $0.state == .suspended }).compactMap({ getTaskFrom(urlSessionTask: $0)}).filter({group == nil || $0.group == group }).compactMap({ jsonStringFor(task: $0) }))
         }
         await BDPlugin.holdingQueue?.stateLock.unlock()
         os_log("Returning %d unfinished tasks", log: log, type: .debug, tasksAsListOfJsonStrings.count)
