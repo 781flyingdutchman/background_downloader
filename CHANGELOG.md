@@ -1,3 +1,9 @@
+## 9.2.5
+
+* Minor bug fixes
+  - [iOS] catch file write errors in multi-part uploads
+  - [iOS] fix optional unwrap error 
+
 ## 9.2.4
 
 * Minor bug fixes
