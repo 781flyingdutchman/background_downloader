@@ -165,7 +165,13 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
                 return true
             }
             let data = Data.init(bytesNoCopy: buffer, count: bytesRead, deallocator: .none)
-            fileHandle.write(data)
+            do {
+                try fileHandle.write(contentsOf: data)
+            } catch {
+                os_log("Error writing to file for taskId %@: %@", log: log, type: .error, task.taskId, error.localizedDescription)
+                inputStream.close()
+                return false
+            }
         }
         inputStream.close()
         return true
@@ -176,7 +182,12 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
         guard let epilogue = text.data(using: .utf8) else {
             return false
         }
-        fileHandle.write(epilogue)
+        do {
+            try fileHandle.write(contentsOf: epilogue)
+        } catch {
+            os_log("Error writing to file for taskId %@: %@", log: log, type: .error, task.taskId, error.localizedDescription)
+            return false
+        }
         totalBytesWritten += Int64(epilogue.count)
         return true
     }
