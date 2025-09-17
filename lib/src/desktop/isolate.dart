@@ -62,7 +62,8 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
     bool isResume,
     Duration? requestTimeout,
     Map<String, dynamic> proxy,
-    bool bypassTLSCertificateValidation
+    bool bypassTLSCertificateValidation,
+    bool allowWeakETag
   ) = await messagesToIsolate.next;
   DesktopDownloader.setHttpClient(
       requestTimeout, proxy, bypassTLSCertificateValidation);
@@ -105,8 +106,13 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
     await switch (task) {
       ParallelDownloadTask() => doParallelDownloadTask(task, resumeData,
           isResume, requestTimeout ?? const Duration(seconds: 60), sendPort),
-      DownloadTask() => doDownloadTask(task, resumeData, isResume,
-          requestTimeout ?? const Duration(seconds: 60), sendPort),
+      DownloadTask() => doDownloadTask(
+          task,
+          resumeData,
+          isResume,
+          requestTimeout ?? const Duration(seconds: 60),
+          sendPort,
+          allowWeakETag),
       UploadTask() => doUploadTask(task, sendPort),
       DataTask() => doDataTask(task, sendPort),
       _ => throw UnimplementedError(),

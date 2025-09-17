@@ -84,6 +84,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         const val keyConfigUseCacheDir = "com.bbflight.background_downloader.config.useCacheDir"
         const val keyConfigUseExternalStorage =
             "com.bbflight.background_downloader.config.useExternalStorage"
+        const val keyConfigAllowWeakETag =
+            "com.bbflight.background_downloader.config.allowWeakETag"
 
 
         @SuppressLint("StaticFieldLeak")
@@ -509,6 +511,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 "configUseCacheDir" -> methodConfigUseCacheDir(call, result)
                 "configUseExternalStorage" -> methodConfigUseExternalStorage(call, result)
                 "configHoldingQueue" -> methodConfigHoldingQueue(call, result)
+                "configAllowWeakETag" -> methodConfigAllowWeakETag(call, result)
                 "platformVersion" -> methodPlatformVersion(result)
                 "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
                     call, result
@@ -1166,15 +1169,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Store the proxy address config in shared preferences
      */
     private fun methodConfigProxyAddress(call: MethodCall, result: Result) {
-        PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
-            val address = call.arguments as String?
-            if (address != null) {
-                putString(keyConfigProxyAddress, address)
-            } else {
-                remove(keyConfigProxyAddress)
-            }
-            apply()
-        }
+        updateSharedPreferences(keyConfigProxyAddress, call.arguments as String?)
         result.success(null)
     }
 
@@ -1182,7 +1177,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Store the proxy port config in shared preferences
      */
     private fun methodConfigProxyPort(call: MethodCall, result: Result) {
-        updateSharedPreferences(keyConfigProxyPort, call.arguments as Int?)
+        updateSharedPreferences(keyConfigProxyPort, call.arguments)
         result.success(null)
     }
 
@@ -1190,7 +1185,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Store the requestTimeout config in shared preferences
      */
     private fun methodConfigRequestTimeout(call: MethodCall, result: Result) {
-        updateSharedPreferences(keyConfigRequestTimeout, call.arguments as Int?)
+        updateSharedPreferences(keyConfigRequestTimeout, call.arguments)
         result.success(null)
     }
 
@@ -1206,7 +1201,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Store the availableSpace config in shared preferences
      */
     private fun methodConfigCheckAvailableSpace(call: MethodCall, result: Result) {
-        updateSharedPreferences(keyConfigCheckAvailableSpace, call.arguments as Int?)
+        updateSharedPreferences(keyConfigCheckAvailableSpace, call.arguments)
         result.success(null)
     }
 
@@ -1214,7 +1209,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Store the useCacheDir config in shared preferences
      */
     private fun methodConfigUseCacheDir(call: MethodCall, result: Result) {
-        updateSharedPreferences(keyConfigUseCacheDir, call.arguments as Int?)
+        updateSharedPreferences(keyConfigUseCacheDir, call.arguments)
         result.success(null)
     }
 
@@ -1222,7 +1217,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Store the useExternalStorage config in shared preferences
      */
     private fun methodConfigUseExternalStorage(call: MethodCall, result: Result) {
-        updateSharedPreferences(keyConfigUseExternalStorage, call.arguments as Int?)
+        updateSharedPreferences(keyConfigUseExternalStorage, call.arguments)
         result.success(null)
     }
 
@@ -1240,6 +1235,14 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             holdingQueue?.maxConcurrentByHost = arguments[1] as Int
             holdingQueue?.maxConcurrentByGroup = arguments[2] as Int
         }
+        result.success(null)
+    }
+
+    /**
+     * Store the allowWeakETag config in shared preferences
+     */
+    private fun methodConfigAllowWeakETag(call: MethodCall, result: Result) {
+        updateSharedPreferences(keyConfigAllowWeakETag, call.arguments)
         result.success(null)
     }
 
@@ -1289,12 +1292,17 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      *
      * If [value] is null, the [key] is deleted
      */
-    private fun updateSharedPreferences(key: String, value: Int?) {
+    private fun updateSharedPreferences(key: String, value: Any?) {
         PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
-            if (value != null) {
-                putInt(key, value)
-            } else {
-                remove(key)
+            when (value) {
+                is String -> putString(key, value)
+                is Int -> putInt(key, value)
+                is Boolean -> putBoolean(key, value)
+                null -> remove(key)
+                else -> {
+                    Log.w(TAG, "Unsupported type for updateSharedPreferences")
+                    return@apply
+                }
             }
             apply()
         }

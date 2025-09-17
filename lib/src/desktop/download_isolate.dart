@@ -22,8 +22,13 @@ late DownloadTask downloadTask; // global because filename may change
 ///
 /// Sends updates via the [sendPort] and can be commanded to cancel/pause via
 /// the [messagesToIsolate] queue
-Future<void> doDownloadTask(DownloadTask task, ResumeData? resumeData,
-    bool isResume, Duration requestTimeout, SendPort sendPort) async {
+Future<void> doDownloadTask(
+    DownloadTask task,
+    ResumeData? resumeData,
+    bool isResume,
+    Duration requestTimeout,
+    SendPort sendPort,
+    bool allowWeakETag) async {
   // use downloadTask from here on as a 'global' variable in this isolate,
   // as we may change the filename of the task
   downloadTask = task;
@@ -71,8 +76,23 @@ Future<void> doDownloadTask(DownloadTask task, ResumeData? resumeData,
       }
       isResume =
           isResume && response.statusCode == 206; // confirm resume response
-      if (isResume && (eTagHeader != eTag || eTag?.startsWith('W/') == true)) {
-        throw TaskException('Cannot resume: ETag is not identical, or is weak');
+      if (isResume) {
+        var resumeIsAllowed = false;
+        if (eTag == null || eTagHeader == null) {
+          resumeIsAllowed = true;
+        } else if (eTag.startsWith('W/')) {
+          if (allowWeakETag && (eTagHeader?.startsWith('W/') ?? false)) {
+            resumeIsAllowed = true;
+          }
+        } else {
+          if (eTag == eTagHeader) {
+            resumeIsAllowed = true;
+          }
+        }
+        if (!resumeIsAllowed) {
+          throw TaskException(
+              'Cannot resume: ETag is not identical, or is weak');
+        }
       }
       if (!downloadTask.hasFilename) {
         downloadTask = await taskWithSuggestedFilename(

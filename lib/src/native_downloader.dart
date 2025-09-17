@@ -625,6 +625,10 @@ final class AndroidDownloader extends NativeDownloader {
             .invokeMethod('configUseExternalStorage', Config.argToInt(whenTo));
         Task.useExternalStorage = whenTo == Config.always;
 
+      case (Config.allowWeakETag, bool allow):
+        await NativeDownloader.methodChannel
+            .invokeMethod('configAllowWeakETag', allow);
+
       default:
         return (
           configItem.$1,

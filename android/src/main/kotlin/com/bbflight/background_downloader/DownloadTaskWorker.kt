@@ -70,6 +70,8 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
     override suspend fun process(
         connection: HttpURLConnection,
     ): TaskStatus {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
+        val allowWeakETag = prefs.getBoolean(BDPlugin.keyConfigAllowWeakETag, false)
         responseStatusCode = connection.responseCode
         if (connection.responseCode in 200..206) {
             // determine if we are using Uri or not.  Uri means pause/resume not allowed
@@ -91,14 +93,28 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
                 deleteTempFile()
                 return TaskStatus.failed
             }
-            if (isResume && (eTagHeader != eTag || eTag?.subSequence(0, 1) == "W/")) {
-                deleteTempFile()
-                Log.i(TAG, "Cannot resume: ETag is not identical, or is weak")
-                taskException = TaskException(
-                    ExceptionType.resume,
-                    description = "Cannot resume: ETag is not identical, or is weak"
-                )
-                return TaskStatus.failed
+            if (isResume) {
+                var resumeIsAllowed = false
+                if (eTag == null || eTagHeader == null) {
+                    resumeIsAllowed = true
+                } else if (eTag.startsWith("W/")) {
+                    if (allowWeakETag && eTagHeader?.startsWith("W/") == true) {
+                        resumeIsAllowed = true
+                    }
+                } else {
+                    if (eTag == eTagHeader) {
+                        resumeIsAllowed = true
+                    }
+                }
+                if (!resumeIsAllowed) {
+                    deleteTempFile()
+                    Log.i(TAG, "Cannot resume: ETag is not identical, or is weak")
+                    taskException = TaskException(
+                        ExceptionType.resume,
+                        description = "Cannot resume: ETag is not identical, or is weak"
+                    )
+                    return TaskStatus.failed
+                }
             }
             // Determine destination - either [destFilePath] or [destUri]
             // If no filename is set, get from headers or url, and update the task
