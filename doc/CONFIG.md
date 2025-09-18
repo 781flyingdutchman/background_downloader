@@ -26,6 +26,8 @@ The following configurations are supported:
 * HTTP Proxy
   - `(Config.proxy, (String address, int port))` sets the proxy to this address and port (note: address and port are contained in a record)
   - `(Config.proxy, false)` removes the proxy
+* [Android, Desktop] Resume with weak ETag
+  - `(Config.allowWeakETag, bool allow)` allows a download to resume even if the server provides a weak ETag, provided the original ETag was also weak. This is useful for servers that use weak ETags for content that is semantically equivalent. By default this is `false`. This option is not available on iOS.
 * [Android, Desktop] Bypassing HTTPS (TLS) certificate validation
   - `(Config.bypassTLSCertificateValidation, bool bypass)`  bypasses TLS certificate validation for HTTPS connections. This is insecure, and can not be used in release mode. It is meant to make it easier to use a local server with a self-signed certificate during development only. On Android, to turn the bypass off, restart your app with this configuration removed.
 * [Android] run task in foreground (removes 9 minute timeout and may improve chances of task surviving background). 
