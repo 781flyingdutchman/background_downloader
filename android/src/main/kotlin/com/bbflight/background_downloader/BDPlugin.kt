@@ -1326,7 +1326,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                         try {
                             if (backgroundChannel != null) {
                                 val resultCompleter = CompletableDeferred<Boolean>()
-                                pluginScope.launch {
+                                withContext(Dispatchers.Main) {
                                     backgroundChannel?.invokeMethod(
                                         "notificationTap",
                                         listOf(taskJsonMapString, notificationTypeOrdinal),
