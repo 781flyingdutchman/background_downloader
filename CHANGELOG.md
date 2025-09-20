@@ -1,3 +1,11 @@
+## 9.2.6
+
+* Bug fix
+  - [Android] Fix Tap to open (on notification) bug, introduced in 9.2.4
+
+* Version upgrades
+  - [Android] compileSDK set to 36, targetSDK for example app set to 36, Kotlin compiler in example app set to 2.1.0
+
 ## 9.2.5
 
 * Minor bug fixes
