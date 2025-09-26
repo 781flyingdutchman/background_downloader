@@ -601,7 +601,7 @@ final class DesktopDownloader extends BaseDownloader {
   }
 
   /// Recreates the [httpClient] used for Requests and isolate downloads/uploads
-  static _recreateClient() {
+  static void _recreateClient() {
     final client = HttpClient();
     client.connectionTimeout = requestTimeout;
     client.findProxy = proxy.isNotEmpty

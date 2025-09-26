@@ -738,7 +738,7 @@ final class DownloadTask extends Task {
   /// The suggested filename is obtained by making a HEAD request to the url
   /// represented by the [DownloadTask], including urlQueryParameters and headers
   Future<DownloadTask> withSuggestedFilename(
-      {unique = false,
+      {bool unique = false,
       Future<DownloadTask> Function(
               DownloadTask task, Map<String, String> headers, bool unique)
           taskWithFilenameBuilder = taskWithSuggestedFilename}) async {

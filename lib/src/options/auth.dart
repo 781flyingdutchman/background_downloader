@@ -294,7 +294,7 @@ class Auth {
 
   /// Returns true if the [accessTokenExpiryTime is after now plus
   /// the [bufferTime], otherwise returns false
-  bool isTokenExpired({bufferTime = const Duration(seconds: 10)}) {
+  bool isTokenExpired({Duration bufferTime = const Duration(seconds: 10)}) {
     if (accessTokenExpiryTime == null) return false;
     return DateTime.now().add(bufferTime).isAfter(accessTokenExpiryTime!);
   }

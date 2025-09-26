@@ -21,8 +21,8 @@ abstract class CollectionRefImpl {
   ///
   /// `where` is not implemented
   CollectionRef where(
-    field, {
-    isEqualTo,
+    dynamic field, {
+    dynamic isEqualTo,
   });
 
   /// Delete collection

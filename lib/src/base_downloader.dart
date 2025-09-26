@@ -920,7 +920,7 @@ abstract base class BaseDownloader {
   /// If the task is in final state, also removes the reference to the
   /// task-specific callbacks and completes the completer associated
   /// with this task
-  _awaitTaskStatusCallback(TaskStatusUpdate statusUpdate) {
+  void _awaitTaskStatusCallback(TaskStatusUpdate statusUpdate) {
     final task = statusUpdate.task;
     final status = statusUpdate.status;
     _shortTaskStatusCallbacks[task.taskId]?.call(status);
@@ -950,7 +950,7 @@ abstract base class BaseDownloader {
   /// Internal callback function that only passes progress updates on
   /// to the task-specific progress callback passed as parameter
   /// to the [enqueueAndAwait] call
-  _awaitTaskProgressCallBack(TaskProgressUpdate progressUpdate) {
+  void _awaitTaskProgressCallBack(TaskProgressUpdate progressUpdate) {
     _shortTaskProgressCallbacks[progressUpdate.task.taskId]
         ?.call(progressUpdate.progress);
     _taskProgressCallbacks[progressUpdate.task.taskId]?.call(progressUpdate);
