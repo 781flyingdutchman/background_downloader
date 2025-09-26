@@ -1,0 +1,44 @@
+# .github/workflows/issue-triage.yml
+
+name: 'AI Issue Triage by Jules'
+
+# Trigger the workflow whenever a new issue is opened
+on:
+  issues:
+    types: [opened]
+
+# Grant permissions for the workflow to read issues and write comments
+permissions:
+  issues: write
+
+jobs:
+  triage-issue:
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Check out the repository's code
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Python environment
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      # Step 3: Install necessary Python libraries
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-generativeai PyGithub
+
+      # Step 4: Run the AI triage script
+      - name: Run AI Triage
+        env:
+          # Pass secrets and context to the script
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          REPO_NAME: ${{ github.repository }}
+        run: python .github/workflows/triage.py
