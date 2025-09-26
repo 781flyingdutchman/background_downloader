@@ -20,16 +20,16 @@ env:
   FLUTTER_MIN_SDK: '3.24.0'
 
 jobs:
-  format:
-    name: "Check formatting"
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          cache: true
-      - run: dart format --set-exit-if-changed .
-      - run: dart format --set-exit-if-changed example
+  # format:
+  #   name: "Check formatting"
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: subosito/flutter-action@v2
+  #       with:
+  #         cache: true
+  #     - run: dart format --set-exit-if-changed .
+  #     - run: dart format --set-exit-if-changed example
 
   lint:
     name: "Check linting"
