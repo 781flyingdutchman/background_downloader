@@ -14,6 +14,14 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
+import java.net.URL
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.io.IOException
+import java.net.ProtocolException
+import kotlinx.coroutines.isActive
+
 
 class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParameters) :
     TaskWorker(applicationContext, workerParams) {
@@ -43,10 +51,10 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
     ): TaskStatus {
         connection.doOutput = true
         val transferBytesResult =
-            if (task.post?.lowercase() == "binary") {
-                processBinaryUpload(connection)
-            } else {
-                processMultipartUpload(connection)
+            when (task.post?.lowercase()) {
+                "binary" -> processBinaryUpload(connection)
+                "tus" -> processTusUpload(connection)
+                else -> processMultipartUpload(connection)
             }
         when (transferBytesResult) {
             TaskStatus.canceled -> {
@@ -259,7 +267,6 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
             }
         }
     }
-
 
     /**
      * Process the multi-part upload of one or more files, and potential form fields
@@ -589,6 +596,342 @@ class UploadTaskWorker(applicationContext: Context, workerParams: WorkerParamete
         // `\r\n`; URL-encode `"`; and do nothing else (even for `%` or non-ASCII
         // characters). We follow their behavior.
         return value.replace(newlineRegEx, "%0D%0A").replace("\"", "%22")
+    }
+
+    private suspend fun processTusUpload(
+        connection: HttpURLConnection
+    ): TaskStatus {
+        try {
+            Log.d(TAG, "Starting tus upload for taskId ${task.taskId}")
+            
+            // Obtenir le chemin du fichier
+            val filePath = task.filePath(applicationContext)
+            val file = File(filePath)
+            if (!file.exists() || !file.isFile) {
+                val message = "File to upload does not exist: $filePath"
+                Log.e(TAG, message)
+                taskException = TaskException(
+                    ExceptionType.fileSystem,
+                    description = message
+                )
+                return TaskStatus.failed
+            }
+            
+            Log.d(TAG, "tus upload file size: ${file.length()} bytes")
+            
+            // Implémentation personnalisée du protocole TUS sans dépendance externe
+            
+            // Étape 1: Création de l'upload - Requête POST initiale
+            val fileSize = file.length()
+            val createURL = URL(task.url)
+            val createConnection = createURL.openConnection() as HttpURLConnection
+            createConnection.requestMethod = "POST"
+            createConnection.doOutput = false
+            createConnection.setRequestProperty("Tus-Resumable", "1.0.0")
+            createConnection.setRequestProperty("Upload-Length", fileSize.toString())
+            createConnection.setRequestProperty("Content-Type", "application/offset+octet-stream")
+            
+            // Ajouter des métadonnées
+            val metadata = StringBuilder()
+            metadata.append("filename ${encodeBase64(file.name)}")
+            if (task.mimeType.isNotEmpty()) {
+                metadata.append(",filetype ${encodeBase64(task.mimeType)}")
+            }
+            createConnection.setRequestProperty("Upload-Metadata", metadata.toString())
+            
+            // Ajouter les en-têtes personnalisés
+            for (header in task.headers) {
+                if (header.key != "Tus-Resumable" && 
+                    header.key != "Upload-Length" && 
+                    header.key != "Content-Type" &&
+                    header.key != "Upload-Metadata") {
+                    createConnection.setRequestProperty(header.key, header.value)
+                }
+            }
+            
+            withContext(Dispatchers.IO) {
+                createConnection.connect()
+            }
+            
+            if (createConnection.responseCode != 201) {
+                val message = "tus creation failed with status ${createConnection.responseCode}"
+                Log.e(TAG, message)
+                taskException = TaskException(
+                    ExceptionType.httpResponse,
+                    httpResponseCode = createConnection.responseCode,
+                    description = message
+                )
+                return TaskStatus.failed
+            }
+            
+            // Obtenir l'URL de la ressource créée
+            val resourceURL = createConnection.getHeaderField("Location")
+            if (resourceURL == null) {
+                val message = "No resource URL in tus response"
+                Log.e(TAG, message)
+                taskException = TaskException(
+                    ExceptionType.httpResponse,
+                    description = message
+                )
+                return TaskStatus.failed
+            }
+            
+            Log.d(TAG, "tus resource created at: $resourceURL")
+            
+            // Avant de commencer le PATCH, vérifier l'offset actuel
+            var offset = 0L
+            val chunkSize = 5 * 1024 * 1024 // Réduire à 5MB pour éviter les problèmes
+            
+            try {
+                // Vérifier l'offset initial avec une requête HEAD
+                val headURL = URL(resourceURL)
+                val headConnection = headURL.openConnection() as HttpURLConnection
+                headConnection.requestMethod = "HEAD"
+                headConnection.setRequestProperty("Tus-Resumable", "1.0.0")
+                
+                // Ajouter les en-têtes d'authentification si nécessaire
+                for (header in task.headers) {
+                    if (header.key.startsWith("Authorization") || header.key.startsWith("X-")) {
+                        headConnection.setRequestProperty(header.key, header.value)
+                    }
+                }
+                
+                withContext(Dispatchers.IO) {
+                    headConnection.connect()
+                }
+                
+                if (headConnection.responseCode == 200) {
+                    val offsetHeader = headConnection.getHeaderField("Upload-Offset")
+                    if (offsetHeader != null) {
+                        offset = offsetHeader.toLong()
+                        Log.d(TAG, "tus HEAD reports current offset: $offset")
+                    }
+                } else {
+                    Log.w(TAG, "tus HEAD request failed with code ${headConnection.responseCode}, assuming offset 0")
+                }
+                
+                headConnection.disconnect()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error getting initial offset: ${e.message}, assuming offset 0")
+            }
+            
+            // Variable pour le suivi de progression
+            var lastOffset = offset
+            var lastProgressUpdateTime = System.currentTimeMillis()
+            
+            try {
+                // Job pour suivre la progression
+                val progressJob = CoroutineScope(Dispatchers.Default).launch {
+                    while (isActive) {
+                        val now = System.currentTimeMillis()
+                        
+                        // Mettre à jour la progression si besoin
+                        if (offset > lastOffset && (offset - lastOffset > fileSize * 0.02 || now > lastProgressUpdateTime + 2000)) {
+                            val progress = offset.toDouble() / fileSize
+                            
+                            // Calculer la vitesse réseau et le temps restant comme dans TaskWorker.updateProgressAndNotify
+                            val timeSinceLastUpdate = now - lastProgressUpdateTime
+                            val bytesSinceLastUpdate = offset - lastOffset
+                            val currentNetworkSpeed: Double = if (timeSinceLastUpdate > 3600000)
+                                -1.0 else bytesSinceLastUpdate / (timeSinceLastUpdate * 1000.0)
+                            val networkSpeed = if (super.networkSpeed == -1.0) 
+                                currentNetworkSpeed 
+                            else 
+                                (super.networkSpeed * 3.0 + currentNetworkSpeed) / 4.0
+                                
+                            // Calculer le temps restant
+                            val remainingBytes = (1 - progress) * fileSize
+                            val timeRemaining: Long = if (networkSpeed == -1.0) 
+                                -1000 
+                            else 
+                                (remainingBytes / networkSpeed / 1000).toLong()
+                            
+                            // Mettre à jour la notification ET envoyer une mise à jour complète au flux d'événements
+                            super.updateProgressAndNotify(progress, fileSize, task)
+                            TaskWorker.processProgressUpdate(
+                                task,
+                                progress,
+                                prefs,
+                                fileSize,
+                                networkSpeed,
+                                timeRemaining
+                            )
+                            
+                            lastOffset = offset
+                            lastProgressUpdateTime = now
+                        }
+                        
+                        delay(500)
+                    }
+                }
+                
+                try {
+                    // Upload le fichier par chunks
+                    withContext(Dispatchers.IO) {
+                        try {
+                            val uploadURL = URL(resourceURL)
+                            val inputStream = FileInputStream(file)
+                            
+                            // Skip to current offset
+                            if (offset > 0) {
+                                inputStream.skip(offset)
+                            }
+                            
+                            inputStream.use { input ->
+                                while (offset < fileSize) {
+                                    val bytesRemaining = fileSize - offset
+                                    val currentChunkSize = minOf(chunkSize.toLong(), bytesRemaining)
+                                    
+                                    val patchConnection = uploadURL.openConnection() as HttpURLConnection
+                                    patchConnection.requestMethod = "PATCH"
+                                    patchConnection.doOutput = true
+                                    patchConnection.setRequestProperty("Tus-Resumable", "1.0.0")
+                                    patchConnection.setRequestProperty("Upload-Offset", offset.toString())
+                                    patchConnection.setRequestProperty("Content-Type", "application/offset+octet-stream")
+                                    patchConnection.setFixedLengthStreamingMode(currentChunkSize.toInt())
+                                    
+                                    // Ajouter les en-têtes personnalisés
+                                    for (header in task.headers) {
+                                        if (header.key != "Content-Type" && header.key != "Tus-Resumable" && 
+                                            header.key != "Upload-Offset" && header.key != "Upload-Length") {
+                                            patchConnection.setRequestProperty(header.key, header.value)
+                                        }
+                                    }
+                                    
+                                    Log.d(TAG, "tus sending PATCH with offset=$offset, chunkSize=$currentChunkSize")
+                                    
+                                    // Envoyer le chunk
+                                    patchConnection.connect()
+                                    
+                                    try {
+                                        DataOutputStream(patchConnection.outputStream).use { output ->
+                                            val buffer = ByteArray(8192)
+                                            var bytesRead = 0
+                                            var totalBytesUploaded = 0L
+                                            
+                                            while (totalBytesUploaded < currentChunkSize && 
+                                                  input.read(buffer, 0, minOf(buffer.size, (currentChunkSize - totalBytesUploaded).toInt()))
+                                                      .also { bytesRead = it } > 0) {
+                                                output.write(buffer, 0, bytesRead)
+                                                totalBytesUploaded += bytesRead
+                                            }
+                                        }
+                                        
+                                        // Vérifier la réponse
+                                        val responseCode = patchConnection.responseCode
+                                        if (responseCode !in 200..204) {
+                                            // En cas d'erreur 409 (Conflict) ou 400 (Bad Request), essayer de récupérer l'offset actuel
+                                            if (responseCode == 409 || responseCode == 400) {
+                                                val headConnection = uploadURL.openConnection() as HttpURLConnection
+                                                headConnection.requestMethod = "HEAD"
+                                                headConnection.setRequestProperty("Tus-Resumable", "1.0.0")
+                                                
+                                                // Ajouter les en-têtes d'authentification
+                                                for (header in task.headers) {
+                                                    if (header.key.startsWith("Authorization") || header.key.startsWith("X-")) {
+                                                        headConnection.setRequestProperty(header.key, header.value)
+                                                    }
+                                                }
+                                                
+                                                headConnection.connect()
+                                                
+                                                if (headConnection.responseCode == 200) {
+                                                    val serverOffset = headConnection.getHeaderField("Upload-Offset")?.toLongOrNull() ?: 0L
+                                                    Log.d(TAG, "tus server reports offset $serverOffset, our offset was $offset")
+                                                    
+                                                    if (serverOffset > offset) {
+                                                        // Le serveur est en avance, on s'adapte
+                                                        offset = serverOffset
+                                                        // On repositionne le stream à la nouvelle position
+                                                        input.close()
+                                                        val newInputStream = FileInputStream(file)
+                                                        newInputStream.skip(offset)
+                                                        val input = newInputStream
+                                                        continue
+                                                    } else if (serverOffset < offset) {
+                                                        // Le serveur est en retard, erreur grave
+                                                        throw ProtocolException("Server offset ($serverOffset) is behind our offset ($offset)")
+                                                    }
+                                                }
+                                                
+                                                headConnection.disconnect()
+                                                // Attendre un peu avant de réessayer avec Thread.sleep au lieu de delay
+                                                Thread.sleep(1000)
+                                                continue
+                                            } else {
+                                                throw ProtocolException("Unexpected response code $responseCode during PATCH")
+                                            }
+                                        }
+                                        
+                                        // Obtenir le nouvel offset
+                                        val newOffset = patchConnection.getHeaderField("Upload-Offset")?.toLongOrNull()
+                                        if (newOffset == null) {
+                                            throw ProtocolException("No Upload-Offset in PATCH response")
+                                        }
+                                        
+                                        offset = newOffset
+                                        Log.d(TAG, "tus PATCH progress: $offset / $fileSize bytes")
+                                    } finally {
+                                        // Nettoyer la connexion
+                                        patchConnection.disconnect()
+                                    }
+                                }
+                            }
+                            
+                            Log.d(TAG, "tus PATCH transferBytes result: complete")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error during TUS upload chunk: ${e.message}", e)
+                            throw e
+                        }
+                    }
+                    
+                    Log.i(TAG, "Successfully uploaded taskId ${task.taskId}")
+                    
+                    // Définir le code de statut
+                    responseStatusCode = 204 // Conventionnellement utilisé pour les uploads TUS réussis
+                    
+                    return TaskStatus.complete
+                } finally {
+                    progressJob.cancel()
+                }
+            } catch (e: IOException) {
+                Log.e(TAG, "I/O error during TUS upload: ${e.message}", e)
+                taskException = TaskException(
+                    ExceptionType.fileSystem,
+                    description = e.message ?: "I/O error during upload"
+                )
+                return TaskStatus.failed
+            } catch (e: ProtocolException) {
+                Log.e(TAG, "Protocol error during TUS upload: ${e.message}", e)
+                taskException = TaskException(
+                    ExceptionType.httpResponse,
+                    description = e.message ?: "Protocol error during upload"
+                )
+                return TaskStatus.failed
+            } catch (e: Exception) {
+                Log.e(TAG, "Error during TUS upload: ${e.message}", e)
+                taskException = TaskException(
+                    ExceptionType.general,
+                    description = e.message ?: "Unknown error during upload"
+                )
+                return TaskStatus.failed
+            }
+        } catch (e: Exception) {
+            val message = "Exception in tus upload setup: ${e.message}"
+            Log.e(TAG, message, e)
+            taskException = TaskException(
+                ExceptionType.general,
+                description = message
+            )
+            return TaskStatus.failed
+        }
+    }
+    
+    /**
+     * Encode une chaîne en Base64 pour les métadonnées TUS
+     */
+    private fun encodeBase64(input: String): String {
+        return java.util.Base64.getEncoder().encodeToString(input.toByteArray())
     }
 }
 

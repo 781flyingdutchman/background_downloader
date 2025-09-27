@@ -469,6 +469,7 @@ final class TaskNotificationConfig {
   final bool progressBar;
   final bool tapOpensFile;
   final String groupNotificationId;
+  final bool showCancelButton;
 
   /// Create notification configuration that determines what notifications are shown,
   /// whether a progress bar is shown (Android only), and whether tapping
@@ -502,6 +503,7 @@ final class TaskNotificationConfig {
       this.error,
       this.paused,
       this.canceled,
+      this.showCancelButton = true,
       this.progressBar = false,
       this.tapOpensFile = false,
       this.groupNotificationId = ''}) {
@@ -524,7 +526,8 @@ final class TaskNotificationConfig {
         'canceled': canceled?.toJson(),
         'progressBar': progressBar,
         'tapOpensFile': tapOpensFile,
-        'groupNotificationId': groupNotificationId
+        'groupNotificationId': groupNotificationId,
+        'showCancelButton': showCancelButton
       };
 
   @override
