@@ -27,9 +27,9 @@ sealed class UriUtils {
 
   factory UriUtils.withDownloader(BaseDownloader downloader) =>
       switch (downloader) {
-        AndroidDownloader() => AndroidUriUtils(downloader),
-        IOSDownloader() => IOSUriUtils(downloader),
-        _ => DesktopUriUtils(downloader)
+        AndroidDownloader() => _AndroidUriUtils(downloader),
+        IOSDownloader() => _IOSUriUtils(downloader),
+        _ => _DesktopUriUtils(downloader)
       };
 
   /// Opens a directory picker dialog and returns the selected directory's URI.
@@ -254,8 +254,8 @@ sealed class UriUtils {
   }
 }
 
-final class DesktopUriUtils extends UriUtils {
-  DesktopUriUtils(super.downloader);
+final class _DesktopUriUtils extends UriUtils {
+  _DesktopUriUtils(super.downloader);
 
   @override
   Future<Uri?> pickDirectory(
@@ -371,11 +371,11 @@ final class DesktopUriUtils extends UriUtils {
   }
 }
 
-final class NativeUriUtils extends UriUtils {
+final class _NativeUriUtils extends UriUtils {
   final _methodChannel =
       MethodChannel('com.bbflight.background_downloader.uriutils');
 
-  NativeUriUtils(super.downloader);
+  _NativeUriUtils(super.downloader);
 
   @override
   Future<Uri?> pickDirectory(
@@ -499,12 +499,12 @@ final class NativeUriUtils extends UriUtils {
   }
 }
 
-final class AndroidUriUtils extends NativeUriUtils {
-  AndroidUriUtils(super.downloader);
+final class _AndroidUriUtils extends _NativeUriUtils {
+  _AndroidUriUtils(super.downloader);
 }
 
-final class IOSUriUtils extends NativeUriUtils {
-  IOSUriUtils(super.downloader);
+final class _IOSUriUtils extends _NativeUriUtils {
+  _IOSUriUtils(super.downloader);
 
   @override
   Future<Uri?> activate(Uri uri) async {
