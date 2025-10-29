@@ -11,6 +11,18 @@ import '../task.dart';
 abstract interface class TaskQueue {
   /// Signals that [task] has finished
   void taskFinished(Task task);
+
+  /// Pauses all task processing in the queue.
+  ///
+  /// Default implementation is a no-op to ensure backwards compatibility
+  /// with subclasses that don't override this method
+  Future<void> pauseAll() async {}
+
+  /// Resumes all task processing in the queue
+  ///
+  /// Default implementation is a no-op to ensure backwards compatibility
+  /// with subclasses that don't override this method
+  Future<void> resumeAll() async {}
 }
 
 /// TaskQueue that holds all information in memory
@@ -43,8 +55,21 @@ class MemoryTaskQueue implements TaskQueue {
 
   final _enqueueErrorsStreamController = StreamController<Task>();
 
+  var _paused = false;
+
   MemoryTaskQueue() {
     _readyForEnqueue.complete();
+  }
+
+  @override
+  Future<void> pauseAll() async {
+    _paused = true;
+  }
+
+  @override
+  Future<void> resumeAll() async {
+    _paused = false;
+    advanceQueue();
   }
 
   /// Add one [task] to the queue and advance the queue if possible
@@ -113,6 +138,9 @@ class MemoryTaskQueue implements TaskQueue {
   /// next item in the queue is enqueued, so the queue keeps going until
   /// empty, or until it cannot enqueue another task
   void advanceQueue() async {
+    if (_paused) {
+      return;
+    }
     if (_readyForEnqueue.isCompleted) {
       final task = getNextTask();
       if (task == null) {

@@ -3109,6 +3109,26 @@ void main() {
       expect(elapsedTime.inMilliseconds, greaterThan(20));
     });
 
+    testWidgets('TaskQueue pauseAll', (widgetTester) async {
+      final tq = MemoryTaskQueue();
+      tq.maxConcurrent = 1;
+      FileDownloader().addTaskQueue(tq);
+      final task1 = DownloadTask(url: urlWithLongContentLength);
+      final task2 = DownloadTask(url: urlWithLongContentLength);
+      tq.add(task1);
+      tq.add(task2);
+      await Future.delayed(const Duration(
+          milliseconds: 500)); // allow first task to start
+      await FileDownloader().pauseAll();
+      await Future.delayed(const Duration(
+          seconds: 2)); // allow for second task to start if not paused
+      expect(tq.numActive, equals(1));
+      expect(tq.numWaiting, equals(1));
+      // cleanup
+      await FileDownloader().cancelAll();
+      FileDownloader().removeTaskQueue(tq);
+    });
+
     testWidgets('TaskQueue', (widgetTester) async {
       final completer = Completer<bool>();
       final tasks = <Task>{};
