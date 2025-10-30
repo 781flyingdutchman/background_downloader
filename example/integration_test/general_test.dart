@@ -2599,6 +2599,17 @@ void main() {
         expect(success, isTrue);
       }
     });
+
+    testWidgets('openFile epub', (widgetTester) async {
+      final shakespeare = await rootBundle.loadString('assets/sample.epub');
+      final tempDir = await getTemporaryDirectory();
+      final filePath = '${tempDir.path}/sample.epub';
+      await File(filePath).writeAsString(shakespeare);
+      final success = await FileDownloader().openFile(filePath: filePath);
+      if (!Platform.isAndroid) {
+        expect(success, isTrue);
+      }
+    });
   });
 
   group('Directories', () {
