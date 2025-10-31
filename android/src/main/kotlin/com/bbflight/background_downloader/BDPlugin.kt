@@ -400,7 +400,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private var channel: MethodChannel? = null
     private var backgroundChannel: MethodChannel? = null
     private lateinit var applicationContext: Context
-    private lateinit var pluginScope: CoroutineScope
+    private lateinit var mainScope: CoroutineScope
+    private lateinit var ioScope: CoroutineScope
     private var binaryMessenger: BinaryMessenger? = null
     var activity: Activity? = null
 
@@ -410,7 +411,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         applicationContext = flutterPluginBinding.applicationContext
-        pluginScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         binaryMessenger = flutterPluginBinding.binaryMessenger
         backgroundChannel =
             MethodChannel(
@@ -452,7 +454,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * BackgroundChannel is set to null, and references to it removed if it no longer in use anywhere
      * */
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        pluginScope.cancel()
+        mainScope.cancel()
+        ioScope.cancel()
         channel?.setMethodCallHandler(null)
         channel = null
         bgChannelByTaskId =
@@ -596,7 +599,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private fun methodEnqueueAll(call: MethodCall, result: Result) {
         val plugin = this
-        pluginScope.launch(Dispatchers.IO) {
+        ioScope.launch(Dispatchers.IO) {
             val args = call.arguments as List<*>
             val taskListJsonString = args[0] as String
             val notificationConfigListJsonString = args[1] as String
@@ -750,7 +753,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Returns true if all cancellations were successful
      */
     private fun methodCancelTasksWithIds(call: MethodCall, result: Result) {
-        pluginScope.launch(Dispatchers.IO) {
+        ioScope.launch(Dispatchers.IO) {
             @Suppress("UNCHECKED_CAST") val taskIds = call.arguments as List<String>
             withContext(Dispatchers.Main) {
                 result.success(cancelTasksWithIds(applicationContext, taskIds))
