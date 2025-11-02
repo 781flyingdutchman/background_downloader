@@ -92,9 +92,8 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
                 return false
             }
             let derivedFilename = path.components(separatedBy: "/").last!
-            if filesData.count == 1 {
+            if filesData.count == 1 && task.taskType != "MultiUploadTask" {
                 // only for single file uploads do we set the task's filename property
-                
                 let newTask = task.copyWith(filename: maybeFileUri != nil
                                             ? pack(filename: derivedFilename, uri: maybeFileUri!)
                                             : derivedFilename)
