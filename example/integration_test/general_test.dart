@@ -3544,14 +3544,14 @@ void main() {
           url: dataTaskPostUrl,
           headers: dataTaskHeaders); // without 'POST' will fail
       expect(await FileDownloader().enqueue(t), isTrue);
-      await Future.delayed(const Duration(seconds: 1));
+      await Future.delayed(const Duration(seconds: 5));
       expect(lastUpdate.status, equals(TaskStatus.failed));
       final t2 = DataTask(
           url: dataTaskPostUrl,
           headers: dataTaskHeaders,
           httpRequestMethod: 'POST'); // with 'POST' will succeed
       expect(await FileDownloader().enqueue(t2), isTrue);
-      await Future.delayed(const Duration(seconds: 1));
+      await Future.delayed(const Duration(seconds: 3));
       expect(lastUpdate.status, equals(TaskStatus.complete));
       print(lastUpdate.responseBody);
       final json = jsonDecode(lastUpdate.responseBody!);
@@ -3571,7 +3571,7 @@ void main() {
           headers: dataTaskHeaders,
           post: 'My data'); // should auto set 'POST' method
       expect(await FileDownloader().enqueue(t), isTrue);
-      await Future.delayed(const Duration(seconds: 1));
+      await Future.delayed(const Duration(seconds: 3));
       print(lastUpdate.responseStatusCode);
       expect(lastUpdate.status, equals(TaskStatus.complete));
       print(lastUpdate.responseBody);
@@ -3591,7 +3591,7 @@ void main() {
       final t = DataTask(
           url: dataTaskPostUrl, headers: dataTaskHeaders, json: jsonData);
       expect(await FileDownloader().enqueue(t), isTrue);
-      await Future.delayed(const Duration(seconds: 1));
+      await Future.delayed(const Duration(seconds: 3));
       print(lastUpdate.responseStatusCode);
       expect(lastUpdate.status, equals(TaskStatus.complete));
       print(lastUpdate.responseBody);
@@ -3612,7 +3612,7 @@ void main() {
           url: 'https://httpbin.org/status/400', // force 400 code
           headers: dataTaskHeaders);
       expect(await FileDownloader().enqueue(t), isTrue);
-      await Future.delayed(const Duration(seconds: 2));
+      await Future.delayed(const Duration(seconds: 3));
       expect(lastUpdate.status, equals(TaskStatus.failed));
       final exception = lastUpdate.exception!;
       print(exception);
@@ -3635,7 +3635,7 @@ void main() {
           headers: dataTaskHeaders,
           retries: 2);
       expect(await FileDownloader().enqueue(t), isTrue);
-      await Future.delayed(const Duration(seconds: 10));
+      await Future.delayed(const Duration(seconds: 20));
       expect(lastUpdate.status, equals(TaskStatus.failed));
       expect(lastUpdate.task.retries, equals(2));
       expect(lastUpdate.task.retriesRemaining, equals(0));

@@ -548,7 +548,6 @@ open class TaskWorker(
      * Returns the [TaskStatus]
      * */
     open suspend fun connectAndProcess(connection: HttpURLConnection): TaskStatus {
-
         try {
             if ((task.isDownloadTask() || task.isDataTask()) && task.post != null) {
                 val bytes = task.post!!.toByteArray();

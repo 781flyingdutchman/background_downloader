@@ -16,7 +16,7 @@ class DataTaskWorker(applicationContext: Context, workerParams: WorkerParameters
         connection: HttpURLConnection,
     ): TaskStatus {
         responseStatusCode = connection.responseCode
-        if (connection.responseCode in 200..206) {
+        if (responseStatusCode in 200..206) {
             extractResponseHeaders(connection.headerFields)
             extractContentType(connection.headerFields)
             // transfer the bytes from the server to the temp file
@@ -42,7 +42,7 @@ class DataTaskWorker(applicationContext: Context, workerParams: WorkerParameters
                 ExceptionType.httpResponse, httpResponseCode = connection.responseCode,
                 description = if (errorContent?.isNotEmpty() == true) errorContent else connection.responseMessage
             )
-            return if (connection.responseCode == 404) {
+            return if (responseStatusCode == 404) {
                 responseBody = errorContent
                 TaskStatus.notFound
             } else {
