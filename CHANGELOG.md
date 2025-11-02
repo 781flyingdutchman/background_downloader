@@ -1,3 +1,15 @@
+## 9.3.0
+
+Main change is in Android concurrency, triggered by the [Great Thread Merge](https://github.com/flutter/flutter/issues/150525) that causes UI blocking issues for recent versions of Flutter. The concurrency approach has been changed, but note this can cause minor changes in - for example - the sequence in which certain events happen.
+
+* Feature improvements
+  - Add pause and resume functionality to TaskQueue using `pauseAll` and `resumeAll`. These methods are now called when pausing or resuming all tasks using the `FileDownloader`
+
+* Bug fixes
+  - Fix issue with MultiUploadTask when uploading only one file
+  - UriUtils subclasses are now private, as they should have been to start with
+  - Address Dart analyzer recommendations
+
 ## 9.2.6
 
 * Bug fix

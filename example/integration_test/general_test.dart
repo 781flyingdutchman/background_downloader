@@ -3117,8 +3117,8 @@ void main() {
       final task2 = DownloadTask(url: urlWithLongContentLength);
       tq.add(task1);
       tq.add(task2);
-      await Future.delayed(const Duration(
-          milliseconds: 500)); // allow first task to start
+      await Future.delayed(
+          const Duration(milliseconds: 500)); // allow first task to start
       await FileDownloader().pauseAll();
       await Future.delayed(const Duration(
           seconds: 2)); // allow for second task to start if not paused
