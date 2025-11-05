@@ -847,8 +847,8 @@ final class UploadTask extends Task {
       super.creationTime,
       super.options})
       : assert(filename.isNotEmpty, 'A filename is required'),
-        assert(post == null || post == 'binary',
-            'post field must be null, or "binary" for binary file upload'),
+        assert(post == null || post == 'binary' || post == 'tus',
+            'post field must be null, "binary" for binary file upload, or "tus" for tus protocol'),
         assert(fields == null || fields.isEmpty || post != 'binary',
             'fields only allowed for multi-part uploads'),
         fields = fields ?? {},
