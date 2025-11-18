@@ -23,6 +23,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     public static var keyConfigProxyPort = "com.bbflight.background_downloader.config.proxyPort"
     public static var keyConfigCheckAvailableSpace = "com.bbflight.background_downloader.config.checkAvailableSpace"
     public static var keyConfigExcludeFromCloudBackup = "com.bbflight.background_downloader.config.excludeFromCloudBackup"
+    public static var keyConfigSkipExistingFiles = "com.bbflight.background_downloader.config.skipExistingFiles"
     public static var keyRequireWiFi = "com.bbflight.background_downloader.requireWiFi"
     public static var forceFailPostOnBackgroundChannel = false
     
@@ -146,6 +147,8 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                 methodConfigHoldingQueue(call: call, result: result)
             case "configExcludeFromCloudBackup":
                 storeInUserDefaults(key: BDPlugin.keyConfigExcludeFromCloudBackup, value: call.arguments, result: result)
+            case "configSkipExistingFiles":
+                storeInUserDefaults(key: BDPlugin.keyConfigSkipExistingFiles, value: call.arguments, result: result)
             case "platformVersion":
                 result(UIDevice.current.systemVersion)
             case "forceFailPostOnBackgroundChannel":
@@ -251,6 +254,39 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             os_log("Could not decode %@ to Task", log: log, taskJsonString)
             return false
         }
+        // Check if the file should be skipped
+        if !isResume {
+            let skipExistingFiles = UserDefaults.standard.value(forKey: BDPlugin.keyConfigSkipExistingFiles)
+            if let skipConfig = skipExistingFiles {
+                if let configString = skipConfig as? String, configString == "never" {
+                    // continue
+                } else {
+                    let filePath = getFilePath(for: task)
+                    if let path = filePath, FileManager.default.fileExists(atPath: path) {
+                        var skip = false
+                        if let configString = skipConfig as? String, configString == "always" {
+                            skip = true
+                        } else if let minFileSize = skipConfig as? Int {
+                            do {
+                                let attributes = try FileManager.default.attributesOfItem(atPath: path)
+                                if let fileSize = attributes[.size] as? Int64 {
+                                    if fileSize > minFileSize {
+                                        skip = true
+                                    }
+                                }
+                            } catch {
+                                // Ignore
+                            }
+                        }
+                        if skip {
+                            processStatusUpdate(task: task, status: .complete, responseStatusCode: 304)
+                            return true
+                        }
+                    }
+                }
+            }
+        }
+
         if notificationConfigJsonString != nil {
             BDPlugin.propertyLock.withLock {
                 BDPlugin.notificationConfigJsonStrings[task.taskId] = notificationConfigJsonString

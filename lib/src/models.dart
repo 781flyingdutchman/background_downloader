@@ -575,6 +575,7 @@ final class Config {
   static const useCacheDir = 'useCacheDir';
   static const useExternalStorage = 'useExternalStorage';
   static const holdingQueue = 'holdingQueue';
+  static const skipExistingFiles = 'skipExistingFiles';
 
   // Config arguments
   static const always = 'always'; // int 0 on native side

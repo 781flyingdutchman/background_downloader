@@ -88,6 +88,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         const val keyConfigUseCacheDir = "com.bbflight.background_downloader.config.useCacheDir"
         const val keyConfigUseExternalStorage =
             "com.bbflight.background_downloader.config.useExternalStorage"
+        const val keyConfigSkipExistingFiles =
+            "com.bbflight.background_downloader.config.skipExistingFiles"
 
 
         @SuppressLint("StaticFieldLeak")
@@ -514,6 +516,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     "configUseCacheDir" -> methodConfigUseCacheDir(call)
                     "configUseExternalStorage" -> methodConfigUseExternalStorage(call)
                     "configHoldingQueue" -> methodConfigHoldingQueue(call)
+                    "configSkipExistingFiles" -> methodConfigSkipExistingFiles(call)
                     "platformVersion" -> methodPlatformVersion()
                     "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
                         call
@@ -1320,6 +1323,33 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             apply()
         }
         Log.d(TAG, "Setting preference key $key to $value")
+    }
+
+    private fun updateSharedPreferences(key: String, value: String?) {
+        PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
+            if (value != null) {
+                putString(key, value)
+            } else {
+                remove(key)
+            }
+            apply()
+        }
+        Log.d(TAG, "Setting preference key $key to $value")
+    }
+
+    /**
+     * Store the skipExistingFiles config in shared preferences
+     */
+    private suspend fun methodConfigSkipExistingFiles(call: MethodCall): Any? {
+        withContext(ioScope.coroutineContext) {
+            val value = call.arguments
+            if (value is String) {
+                updateSharedPreferences(keyConfigSkipExistingFiles, value)
+            } else if (value is Int) {
+                updateSharedPreferences(keyConfigSkipExistingFiles, value.toString())
+            }
+        }
+        return null
     }
 
 // ActivityAware implementation to capture Activity context needed for permissions and intents

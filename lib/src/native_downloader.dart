@@ -494,6 +494,10 @@ abstract base class NativeDownloader extends BaseDownloader {
         await NativeDownloader.methodChannel
             .invokeMethod('configHoldingQueue', []);
 
+      case (Config.skipExistingFiles, dynamic value):
+        await NativeDownloader.methodChannel
+            .invokeMethod('configSkipExistingFiles', value);
+
       default:
         return (
           configItem.$1,

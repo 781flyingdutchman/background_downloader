@@ -1059,6 +1059,43 @@ void main() {
               'please check your spelling and try again.</p>\n'));
       expect(result.responseStatusCode, equals(404));
     });
+
+    testWidgets('skipExistingFiles', (widgetTester) async {
+      // Test skipping a file that already exists
+      final task = DownloadTask(url: workingUrl, filename: 'existing.html');
+      final path =
+          join((await getApplicationDocumentsDirectory()).path, task.filename);
+      await File(path).writeAsString('dummy content');
+
+      await FileDownloader()
+          .configure(globalConfig: (Config.skipExistingFiles, Config.always));
+      var result = await FileDownloader().download(task);
+      expect(result.status, equals(TaskStatus.complete));
+      expect(result.responseStatusCode, equals(304));
+
+      // Test with file size condition
+      await FileDownloader().configure(
+          globalConfig: (Config.skipExistingFiles, 10)); // 10 bytes
+      result = await FileDownloader().download(task);
+      expect(result.status, equals(TaskStatus.complete));
+      expect(result.responseStatusCode, equals(304)); // dummy content is > 10
+
+      await FileDownloader().configure(
+          globalConfig: (Config.skipExistingFiles, 100)); // 100 bytes
+      result = await FileDownloader().download(task);
+      expect(result.status,
+          equals(TaskStatus.complete)); // should download again
+      expect(result.responseStatusCode, equals(200));
+
+      await FileDownloader()
+          .configure(globalConfig: (Config.skipExistingFiles, Config.never));
+      result = await FileDownloader().download(task);
+      expect(result.status,
+          equals(TaskStatus.complete)); // should download again
+      expect(result.responseStatusCode, equals(200));
+
+      await File(path).delete();
+    });
   });
 
   group('Retries', () {

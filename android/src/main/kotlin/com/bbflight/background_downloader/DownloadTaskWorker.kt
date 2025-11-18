@@ -70,6 +70,31 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
     override suspend fun process(
         connection: HttpURLConnection,
     ): TaskStatus {
+        // Check if the file should be skipped
+        val skipExistingFiles = prefs.getString(BDPlugin.keyConfigSkipExistingFiles, "never")
+        if (skipExistingFiles != "never") {
+            val filePath = task.filePath(applicationContext)
+            val file = File(filePath)
+            if (file.exists()) {
+                var skip = false
+                if (skipExistingFiles == "always") {
+                    skip = true
+                } else {
+                    val minFileSize = skipExistingFiles?.toIntOrNull()
+                    if (minFileSize != null) {
+                        val fileSize = file.length()
+                        if (fileSize > minFileSize) {
+                            skip = true
+                        }
+                    }
+                }
+                if (skip) {
+                    responseStatusCode = 304
+                    return TaskStatus.complete
+                }
+            }
+        }
+
         responseStatusCode = connection.responseCode
         if (connection.responseCode in 200..206) {
             // determine if we are using Uri or not.  Uri means pause/resume not allowed
