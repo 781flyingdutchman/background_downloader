@@ -88,6 +88,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         const val keyConfigUseCacheDir = "com.bbflight.background_downloader.config.useCacheDir"
         const val keyConfigUseExternalStorage =
             "com.bbflight.background_downloader.config.useExternalStorage"
+        const val keyConfigSkipExistingFiles =
+            "com.bbflight.background_downloader.config.skipExistingFiles"
 
 
         @SuppressLint("StaticFieldLeak")
@@ -514,6 +516,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     "configUseCacheDir" -> methodConfigUseCacheDir(call)
                     "configUseExternalStorage" -> methodConfigUseExternalStorage(call)
                     "configHoldingQueue" -> methodConfigHoldingQueue(call)
+                    "configSkipExistingFiles" -> methodConfigSkipExistingFiles(call)
                     "platformVersion" -> methodPlatformVersion()
                     "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
                         call
@@ -1320,6 +1323,16 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             apply()
         }
         Log.d(TAG, "Setting preference key $key to $value")
+    }
+
+    /**
+     * Store the skipExistingFiles config in shared preferences
+     */
+    private suspend fun methodConfigSkipExistingFiles(call: MethodCall): Any? {
+        withContext(ioScope.coroutineContext) {
+            updateSharedPreferences(keyConfigSkipExistingFiles, call.arguments as Int?)
+        }
+        return null
     }
 
 // ActivityAware implementation to capture Activity context needed for permissions and intents

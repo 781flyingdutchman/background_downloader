@@ -1091,6 +1091,7 @@ Then do the same thing in macos/Runner/Release.entitlements.
 Several aspects of the downloader can be configured on startup:
 * Setting the request timeout value and, for iOS only, the 'resourceTimeout'
 * Checking available space before attempting a download
+* Skipping file download if the destination file already exists
 * Activating a holding queue to manage how many tasks are executed concurrently
 * On Android, when to use the `cacheDir` for temporary files
 * Setting a proxy

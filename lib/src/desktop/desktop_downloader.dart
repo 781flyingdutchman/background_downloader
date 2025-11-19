@@ -45,6 +45,7 @@ final class DesktopDownloader extends BaseDownloader {
   static Duration? _requestTimeout;
   static var _proxy = <String, dynamic>{}; // 'address' and 'port'
   static var _bypassTLSCertificateValidation = false;
+  static int _skipExistingFiles = -1;
 
   factory DesktopDownloader() => _singleton;
 
@@ -125,6 +126,20 @@ final class DesktopDownloader extends BaseDownloader {
   /// 'forwarded' to the [backgroundChannel] and processed by the
   /// [FileDownloader]
   Future<void> _executeTask(Task task) async {
+    // Check if the file should be skipped
+    if (task is DownloadTask && _skipExistingFiles != -1) {
+      final filePath = await task.filePath();
+      final file = File(filePath);
+      if (await file.exists()) {
+        final fileSize = await file.length();
+        if (fileSize > _skipExistingFiles * 1024 * 1024) {
+          processStatusUpdate(TaskStatusUpdate(
+              task, TaskStatus.complete, null, null, null, 304));
+          return;
+        }
+      }
+    }
+
     final resumeData = await getResumeData(task.taskId);
     if (resumeData != null) {
       await removeResumeData(task.taskId);
@@ -550,6 +565,17 @@ final class DesktopDownloader extends BaseDownloader {
         maxConcurrent = unlimited;
         maxConcurrentByHost = unlimited;
         maxConcurrentByGroup = unlimited;
+
+      case (Config.skipExistingFiles, int value):
+        _skipExistingFiles = value;
+
+      case (Config.skipExistingFiles, Config.never):
+      case (Config.skipExistingFiles, false):
+        _skipExistingFiles = -1;
+
+      case (Config.skipExistingFiles, Config.always):
+      case (Config.skipExistingFiles, true):
+        _skipExistingFiles = 0;
 
       default:
         return (
