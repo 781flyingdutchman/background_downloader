@@ -1067,28 +1067,28 @@ void main() {
           join((await getApplicationDocumentsDirectory()).path, task.filename);
       await File(path).writeAsString('dummy content');
 
-      await FileDownloader()
-          .configure(globalConfig: (Config.skipExistingFiles, Config.always));
+      await FileDownloader().configure(
+          globalConfig: (Config.skipExistingFiles, Config.always)); // maps to 0
       var result = await FileDownloader().download(task);
       expect(result.status, equals(TaskStatus.complete));
       expect(result.responseStatusCode, equals(304));
 
       // Test with file size condition
-      await FileDownloader().configure(
-          globalConfig: (Config.skipExistingFiles, 10)); // 10 bytes
+      await FileDownloader()
+          .configure(globalConfig: (Config.skipExistingFiles, 0)); // 0 MB
       result = await FileDownloader().download(task);
       expect(result.status, equals(TaskStatus.complete));
-      expect(result.responseStatusCode, equals(304)); // dummy content is > 10
+      expect(result.responseStatusCode, equals(304)); // dummy content is > 0
 
-      await FileDownloader().configure(
-          globalConfig: (Config.skipExistingFiles, 100)); // 100 bytes
+      await FileDownloader()
+          .configure(globalConfig: (Config.skipExistingFiles, 1)); // 1 MB
       result = await FileDownloader().download(task);
       expect(result.status,
           equals(TaskStatus.complete)); // should download again
       expect(result.responseStatusCode, equals(200));
 
-      await FileDownloader()
-          .configure(globalConfig: (Config.skipExistingFiles, Config.never));
+      await FileDownloader().configure(
+          globalConfig: (Config.skipExistingFiles, Config.never)); // maps to -1
       result = await FileDownloader().download(task);
       expect(result.status,
           equals(TaskStatus.complete)); // should download again

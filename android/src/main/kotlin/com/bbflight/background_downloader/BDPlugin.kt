@@ -1325,29 +1325,12 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         Log.d(TAG, "Setting preference key $key to $value")
     }
 
-    private fun updateSharedPreferences(key: String, value: String?) {
-        PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
-            if (value != null) {
-                putString(key, value)
-            } else {
-                remove(key)
-            }
-            apply()
-        }
-        Log.d(TAG, "Setting preference key $key to $value")
-    }
-
     /**
      * Store the skipExistingFiles config in shared preferences
      */
     private suspend fun methodConfigSkipExistingFiles(call: MethodCall): Any? {
         withContext(ioScope.coroutineContext) {
-            val value = call.arguments
-            if (value is String) {
-                updateSharedPreferences(keyConfigSkipExistingFiles, value)
-            } else if (value is Int) {
-                updateSharedPreferences(keyConfigSkipExistingFiles, value.toString())
-            }
+            updateSharedPreferences(keyConfigSkipExistingFiles, call.arguments as Int?)
         }
         return null
     }

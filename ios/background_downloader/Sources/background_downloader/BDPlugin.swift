@@ -148,7 +148,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             case "configExcludeFromCloudBackup":
                 storeInUserDefaults(key: BDPlugin.keyConfigExcludeFromCloudBackup, value: call.arguments, result: result)
             case "configSkipExistingFiles":
-                storeInUserDefaults(key: BDPlugin.keyConfigSkipExistingFiles, value: call.arguments, result: result)
+                storeInUserDefaults(key: BDPlugin.keyConfigSkipExistingFiles, value: call.arguments as? Int, result: result)
             case "platformVersion":
                 result(UIDevice.current.systemVersion)
             case "forceFailPostOnBackgroundChannel":
@@ -256,32 +256,20 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         }
         // Check if the file should be skipped
         if !isResume {
-            let skipExistingFiles = UserDefaults.standard.value(forKey: BDPlugin.keyConfigSkipExistingFiles)
-            if let skipConfig = skipExistingFiles {
-                if let configString = skipConfig as? String, configString == "never" {
-                    // continue
-                } else {
-                    let filePath = getFilePath(for: task)
-                    if let path = filePath, FileManager.default.fileExists(atPath: path) {
-                        var skip = false
-                        if let configString = skipConfig as? String, configString == "always" {
-                            skip = true
-                        } else if let minFileSize = skipConfig as? Int {
-                            do {
-                                let attributes = try FileManager.default.attributesOfItem(atPath: path)
-                                if let fileSize = attributes[.size] as? Int64 {
-                                    if fileSize > minFileSize {
-                                        skip = true
-                                    }
-                                }
-                            } catch {
-                                // Ignore
+            let skipThreshold = UserDefaults.standard.object(forKey: BDPlugin.keyConfigSkipExistingFiles) as? Int ?? -1
+            if skipThreshold != -1 {
+                let filePath = getFilePath(for: task)
+                if let path = filePath, FileManager.default.fileExists(atPath: path) {
+                    do {
+                        let attributes = try FileManager.default.attributesOfItem(atPath: path)
+                        if let fileSize = attributes[.size] as? Int64 {
+                            if fileSize > skipThreshold * 1024 * 1024 {
+                                processStatusUpdate(task: task, status: .complete, responseStatusCode: 304)
+                                return true
                             }
                         }
-                        if skip {
-                            processStatusUpdate(task: task, status: .complete, responseStatusCode: 304)
-                            return true
-                        }
+                    } catch {
+                        // Ignore
                     }
                 }
             }

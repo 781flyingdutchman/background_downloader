@@ -71,24 +71,13 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
         connection: HttpURLConnection,
     ): TaskStatus {
         // Check if the file should be skipped
-        val skipExistingFiles = prefs.getString(BDPlugin.keyConfigSkipExistingFiles, "never")
-        if (skipExistingFiles != "never") {
+        val skipThreshold = prefs.getInt(BDPlugin.keyConfigSkipExistingFiles, -1)
+        if (skipThreshold != -1) {
             val filePath = task.filePath(applicationContext)
             val file = File(filePath)
             if (file.exists()) {
-                var skip = false
-                if (skipExistingFiles == "always") {
-                    skip = true
-                } else {
-                    val minFileSize = skipExistingFiles?.toIntOrNull()
-                    if (minFileSize != null) {
-                        val fileSize = file.length()
-                        if (fileSize > minFileSize) {
-                            skip = true
-                        }
-                    }
-                }
-                if (skip) {
+                val fileSize = file.length()
+                if (fileSize > skipThreshold * 1024 * 1024) {
                     responseStatusCode = 304
                     return TaskStatus.complete
                 }
