@@ -133,8 +133,8 @@ final class DesktopDownloader extends BaseDownloader {
       if (await file.exists()) {
         final fileSize = await file.length();
         if (fileSize > _skipExistingFiles * 1024 * 1024) {
-          processStatusUpdate(
-              TaskStatusUpdate(task, TaskStatus.complete, null, null, null, 304));
+          processStatusUpdate(TaskStatusUpdate(
+              task, TaskStatus.complete, null, null, null, 304));
           return;
         }
       }
@@ -570,9 +570,11 @@ final class DesktopDownloader extends BaseDownloader {
         _skipExistingFiles = value;
 
       case (Config.skipExistingFiles, Config.never):
+      case (Config.skipExistingFiles, false):
         _skipExistingFiles = -1;
 
       case (Config.skipExistingFiles, Config.always):
+      case (Config.skipExistingFiles, true):
         _skipExistingFiles = 0;
 
       default:

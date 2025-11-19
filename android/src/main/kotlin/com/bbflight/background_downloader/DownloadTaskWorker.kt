@@ -77,7 +77,7 @@ class DownloadTaskWorker(applicationContext: Context, workerParams: WorkerParame
             val file = File(filePath)
             if (file.exists()) {
                 val fileSize = file.length()
-                if (fileSize > skipThreshold * 1024 * 1024) {
+                if (fileSize > skipThreshold * 1024L * 1024L) {
                     responseStatusCode = 304
                     return TaskStatus.complete
                 }

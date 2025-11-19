@@ -499,10 +499,12 @@ abstract base class NativeDownloader extends BaseDownloader {
             .invokeMethod('configSkipExistingFiles', value);
 
       case (Config.skipExistingFiles, Config.never):
+      case (Config.skipExistingFiles, false):
         await NativeDownloader.methodChannel
             .invokeMethod('configSkipExistingFiles', -1);
 
       case (Config.skipExistingFiles, Config.always):
+      case (Config.skipExistingFiles, true):
         await NativeDownloader.methodChannel
             .invokeMethod('configSkipExistingFiles', 0);
 

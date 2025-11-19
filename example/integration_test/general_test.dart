@@ -1065,13 +1065,15 @@ void main() {
       final task = DownloadTask(url: workingUrl, filename: 'existing.html');
       final path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
-      await File(path).writeAsString('dummy content');
+      var dummyContent = 'dummy content';
+      await File(path).writeAsString(dummyContent);
 
       await FileDownloader().configure(
           globalConfig: (Config.skipExistingFiles, Config.always)); // maps to 0
       var result = await FileDownloader().download(task);
       expect(result.status, equals(TaskStatus.complete));
       expect(result.responseStatusCode, equals(304));
+      expect(File(path).readAsStringSync(), equals(dummyContent));
 
       // Test with file size condition
       await FileDownloader()
@@ -1079,20 +1081,24 @@ void main() {
       result = await FileDownloader().download(task);
       expect(result.status, equals(TaskStatus.complete));
       expect(result.responseStatusCode, equals(304)); // dummy content is > 0
+      expect(File(path).readAsStringSync(), equals(dummyContent));
 
       await FileDownloader()
           .configure(globalConfig: (Config.skipExistingFiles, 1)); // 1 MB
       result = await FileDownloader().download(task);
-      expect(result.status,
-          equals(TaskStatus.complete)); // should download again
+      expect(
+          result.status, equals(TaskStatus.complete)); // should download again
       expect(result.responseStatusCode, equals(200));
+      expect(File(path).readAsStringSync(), isNot(equals(dummyContent)));
 
+      await File(path).writeAsString(dummyContent);
       await FileDownloader().configure(
           globalConfig: (Config.skipExistingFiles, Config.never)); // maps to -1
       result = await FileDownloader().download(task);
-      expect(result.status,
-          equals(TaskStatus.complete)); // should download again
+      expect(
+          result.status, equals(TaskStatus.complete)); // should download again
       expect(result.responseStatusCode, equals(200));
+      expect(File(path).readAsStringSync(), isNot(equals(dummyContent)));
 
       await File(path).delete();
     });

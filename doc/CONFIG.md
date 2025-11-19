@@ -12,7 +12,11 @@ The following configurations are supported:
   - `(Config.resourceTimeout, Duration? duration)` sets the iOS resourceTimeout, or if null resets to default. This is the time allowed to complete the download/upload
 * Checking available space
   - `(Config.checkAvailableSpace, int minMegabytes)` ensures a file download fails if less than `minMegabytes` space will be available after this download completes
-  - `(Config.checkAvailableSpace, false)` or `(Config.checkAvailableSpace, Config.never)`turns off checking available space
+  - `(Config.checkAvailableSpace, false)` or `(Config.checkAvailableSpace, Config.never)` turns off checking available space
+* Skipping download if destination file already present. Note the skip check is done at the moment the file is enqueued, not when it starts downloading.
+  - `(Config.skipExistingFiles, true)` or `(Config.skipExistingFiles, Config.always)` skips download if the file is already present, and returns a `TaskStatusUpdate` with `TaskStatus.complete` and a 304 `responseStatusCode`
+  - `(Config.skipExistingFiles, int minMegabytes)` only skips if the file exists *and* is greater than `minMegabytes` in size
+  - `(Config.skipExistingFiles, false)` or `(Config.skipExistingFiles, Config.never)` is the default, and never skips file downloads
 * Using a holding queue to limit the number of tasks running concurrently
   - `(Config.holdingQueue, (int? maxConcurrent, int? maxConcurrentByHost, int? maxConcurrentByGroup))` activates the holding queue and sets the constraints. Pass `null` for no constraint
   - `(Config.holdingQueue, false)` or `(Config.holdingQueue, Config.never)` deactivates the holding queue (make sure it is empty before deactivating)
