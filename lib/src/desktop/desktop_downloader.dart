@@ -133,8 +133,8 @@ final class DesktopDownloader extends BaseDownloader {
       if (await file.exists()) {
         final fileSize = await file.length();
         if (fileSize > _skipExistingFiles * 1024 * 1024) {
-          processStatusUpdate(TaskStatusUpdate(task, TaskStatus.complete,
-              responseStatusCode: 304));
+          processStatusUpdate(
+              TaskStatusUpdate(task, TaskStatus.complete, null, null, null, 304));
           return;
         }
       }
