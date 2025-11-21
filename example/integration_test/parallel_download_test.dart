@@ -299,6 +299,7 @@ void main() {
       expect(await FileDownloader().pause(task), isTrue);
       await Future.delayed(const Duration(seconds: 1));
       expect(lastStatus, equals(TaskStatus.paused));
+      await Future.delayed(const Duration(seconds: 1));
       expect(lastProgress, equals(progressPaused));
       await Future.delayed(const Duration(seconds: 2));
       expect(await FileDownloader().resume(task), isTrue);

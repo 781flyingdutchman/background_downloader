@@ -91,23 +91,17 @@ abstract base class NativeDownloader extends BaseDownloader {
         ):
         final status = TaskStatus.values[statusOrdinal];
         if (task.group != BaseDownloader.chunkGroup) {
-          final Map<String, String>? cleanResponseHeaders = responseHeaders ==
-                  null
-              ? null
-              : {
-                  for (var entry in responseHeaders.entries.where(
-                      (entry) => entry.key != null && entry.value != null))
-                    entry.key.toString().toLowerCase(): entry.value.toString()
-                };
-          processStatusUpdate(TaskStatusUpdate(
-              task,
-              status,
-              null,
-              responseBody,
-              cleanResponseHeaders,
-              responseStatusCode,
-              mimeType,
-              charSet));
+          final Map<String, String>? cleanResponseHeaders =
+              responseHeaders == null
+                  ? null
+                  : {
+                      for (var entry in responseHeaders.entries.where(
+                          (entry) => entry.key != null && entry.value != null))
+                        entry.key.toString().toLowerCase():
+                            entry.value.toString()
+                    };
+          processStatusUpdate(TaskStatusUpdate(task, status, null, responseBody,
+              cleanResponseHeaders, responseStatusCode, mimeType, charSet));
         } else {
           // this is a chunk task, so pass to native
           Future.delayed(const Duration(milliseconds: 100)).then((_) =>
@@ -142,14 +136,14 @@ abstract base class NativeDownloader extends BaseDownloader {
               TaskStatusUpdate(task, status, exception, responseBody));
         } else {
           // this is a chunk task, so pass to native
-          Future.delayed(const Duration(milliseconds: 100)).then((_) =>
-              methodChannel.invokeMethod('chunkStatusUpdate', [
-                Chunk.getParentTaskId(task),
-                task.taskId,
-                status.index,
-                exception?.toJsonString(),
-                responseBody
-              ]));
+          Future.delayed(const Duration(milliseconds: 100))
+              .then((_) => methodChannel.invokeMethod('chunkStatusUpdate', [
+                    Chunk.getParentTaskId(task),
+                    task.taskId,
+                    status.index,
+                    exception?.toJsonString(),
+                    responseBody
+                  ]));
         }
 
       case (
@@ -217,8 +211,8 @@ abstract base class NativeDownloader extends BaseDownloader {
 
       // for permission request results
       case ('permissionRequestResult', int statusOrdinal):
-        permissionsService.onPermissionRequestResult(
-            PermissionStatus.values[statusOrdinal]);
+        permissionsService
+            .onPermissionRequestResult(PermissionStatus.values[statusOrdinal]);
 
       default:
         log.warning('Background channel: no match for message $message');
