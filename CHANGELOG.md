@@ -1,3 +1,8 @@
+## 9.4.0
+
+* Improves concurrency on mobile platforms by moving JSON encoding and decoding to an isolate, and introducing a job queue to ensure ordered message execution.
+* Adds `Config.skipExistingFiles` configuration option to skip the download if the destination file already exists (and conditionally does this only for files greater than a certain size)
+
 ## 9.3.0
 
 Main change is in Android concurrency, triggered by the [Great Thread Merge](https://github.com/flutter/flutter/issues/150525) that causes UI blocking issues for recent versions of Flutter. The concurrency approach has been changed, but note this can cause minor changes in - for example - the sequence in which certain events happen.
