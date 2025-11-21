@@ -575,6 +575,7 @@ final class Config {
   static const useCacheDir = 'useCacheDir';
   static const useExternalStorage = 'useExternalStorage';
   static const holdingQueue = 'holdingQueue';
+  static const allowWeakETag = 'allowWeakETag';
   static const skipExistingFiles = 'skipExistingFiles';
 
   // Config arguments

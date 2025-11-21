@@ -45,6 +45,7 @@ final class DesktopDownloader extends BaseDownloader {
   static Duration? _requestTimeout;
   static var _proxy = <String, dynamic>{}; // 'address' and 'port'
   static var _bypassTLSCertificateValidation = false;
+  static var _allowWeakETag = false;
   static int _skipExistingFiles = -1;
 
   factory DesktopDownloader() => _singleton;
@@ -174,7 +175,8 @@ final class DesktopDownloader extends BaseDownloader {
       isResume,
       requestTimeout,
       proxy,
-      bypassTLSCertificateValidation
+      bypassTLSCertificateValidation,
+      _allowWeakETag
     ));
     if (_isolateSendPorts.keys.contains(task)) {
       // if already registered with null value, cancel immediately
@@ -565,6 +567,9 @@ final class DesktopDownloader extends BaseDownloader {
         maxConcurrent = unlimited;
         maxConcurrentByHost = unlimited;
         maxConcurrentByGroup = unlimited;
+
+      case (Config.allowWeakETag, bool allow):
+        _allowWeakETag = allow;
 
       case (Config.skipExistingFiles, int value):
         _skipExistingFiles = value;

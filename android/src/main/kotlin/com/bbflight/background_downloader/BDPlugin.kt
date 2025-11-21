@@ -88,6 +88,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         const val keyConfigUseCacheDir = "com.bbflight.background_downloader.config.useCacheDir"
         const val keyConfigUseExternalStorage =
             "com.bbflight.background_downloader.config.useExternalStorage"
+        const val keyConfigAllowWeakETag =
+            "com.bbflight.background_downloader.config.allowWeakETag"
         const val keyConfigSkipExistingFiles =
             "com.bbflight.background_downloader.config.skipExistingFiles"
 
@@ -516,6 +518,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     "configUseCacheDir" -> methodConfigUseCacheDir(call)
                     "configUseExternalStorage" -> methodConfigUseExternalStorage(call)
                     "configHoldingQueue" -> methodConfigHoldingQueue(call)
+                    "configAllowWeakETag" -> methodConfigAllowWeakETag(call)
                     "configSkipExistingFiles" -> methodConfigSkipExistingFiles(call)
                     "platformVersion" -> methodPlatformVersion()
                     "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
@@ -1177,15 +1180,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private suspend fun methodConfigProxyAddress(call: MethodCall): Any? {
         withContext(ioScope.coroutineContext) {
-            PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
-                val address = call.arguments as String?
-                if (address != null) {
-                    putString(keyConfigProxyAddress, address)
-                } else {
-                    remove(keyConfigProxyAddress)
-                }
-                apply()
-            }
+            updateSharedPreferences(keyConfigProxyAddress, call.arguments as String?)
         }
         return null
     }
@@ -1195,7 +1190,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private suspend fun methodConfigProxyPort(call: MethodCall): Any? {
         withContext(ioScope.coroutineContext) {
-            updateSharedPreferences(keyConfigProxyPort, call.arguments as Int?)
+            updateSharedPreferences(keyConfigProxyPort, call.arguments)
         }
         return null
     }
@@ -1205,7 +1200,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private suspend fun methodConfigRequestTimeout(call: MethodCall): Any? {
         withContext(ioScope.coroutineContext) {
-            updateSharedPreferences(keyConfigRequestTimeout, call.arguments as Int?)
+            updateSharedPreferences(keyConfigRequestTimeout, call.arguments)
         }
         return null
     }
@@ -1225,7 +1220,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private suspend fun methodConfigCheckAvailableSpace(call: MethodCall): Any? {
         withContext(ioScope.coroutineContext) {
-            updateSharedPreferences(keyConfigCheckAvailableSpace, call.arguments as Int?)
+            updateSharedPreferences(keyConfigCheckAvailableSpace, call.arguments)
         }
         return null
     }
@@ -1235,7 +1230,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private suspend fun methodConfigUseCacheDir(call: MethodCall): Any? {
         withContext(ioScope.coroutineContext) {
-            updateSharedPreferences(keyConfigUseCacheDir, call.arguments as Int?)
+            updateSharedPreferences(keyConfigUseCacheDir, call.arguments)
         }
         return null
     }
@@ -1245,7 +1240,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private suspend fun methodConfigUseExternalStorage(call: MethodCall): Any? {
         withContext(ioScope.coroutineContext) {
-            updateSharedPreferences(keyConfigUseExternalStorage, call.arguments as Int?)
+            updateSharedPreferences(keyConfigUseExternalStorage, call.arguments)
         }
         return null
     }
@@ -1263,6 +1258,16 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             holdingQueue?.maxConcurrent = arguments[0] as Int
             holdingQueue?.maxConcurrentByHost = arguments[1] as Int
             holdingQueue?.maxConcurrentByGroup = arguments[2] as Int
+        }
+        return null
+    }
+
+    /**
+     * Store the allowWeakETag config in shared preferences
+     */
+    private suspend fun methodConfigAllowWeakETag(call: MethodCall): Any? {
+        withContext(ioScope.coroutineContext) {
+            updateSharedPreferences(keyConfigAllowWeakETag, call.arguments)
         }
         return null
     }
@@ -1313,12 +1318,17 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      *
      * If [value] is null, the [key] is deleted
      */
-    private fun updateSharedPreferences(key: String, value: Int?) {
+    private fun updateSharedPreferences(key: String, value: Any?) {
         PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
-            if (value != null) {
-                putInt(key, value)
-            } else {
-                remove(key)
+            when (value) {
+                is String -> putString(key, value)
+                is Int -> putInt(key, value)
+                is Boolean -> putBoolean(key, value)
+                null -> remove(key)
+                else -> {
+                    Log.w(TAG, "Unsupported type for updateSharedPreferences")
+                    return@apply
+                }
             }
             apply()
         }
@@ -1330,7 +1340,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private suspend fun methodConfigSkipExistingFiles(call: MethodCall): Any? {
         withContext(ioScope.coroutineContext) {
-            updateSharedPreferences(keyConfigSkipExistingFiles, call.arguments as Int?)
+            updateSharedPreferences(keyConfigSkipExistingFiles, call.arguments)
         }
         return null
     }

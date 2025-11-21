@@ -2323,6 +2323,70 @@ void main() {
       }
     });
 
+    testWidgets('pause and resume with weak ETag', (widgetTester) async {
+      // iOS manages resume for us, so we cannot test this
+      if (!Platform.isIOS) {
+        FileDownloader().registerCallbacks(
+            taskStatusCallback: statusCallback,
+            taskProgressCallback: progressCallback);
+        task = DownloadTask(
+            url: urlWithContentLength,
+            filename: defaultFilename,
+            updates: Updates.statusAndProgress,
+            allowPause: true);
+        expect(await FileDownloader().enqueue(task), isTrue);
+        await someProgressCompleter.future;
+        expect(await FileDownloader().pause(task), isTrue);
+        await Future.delayed(const Duration(milliseconds: 500));
+        expect(lastStatus, equals(TaskStatus.paused));
+        // mess with the ResumeData to make it a weak ETag
+        final resumeData = await FileDownloader()
+            .database
+            .storage
+            .retrieveResumeData(task.taskId);
+        final newResumeData = ResumeData(task, resumeData!.data,
+            resumeData.requiredStartByte, 'W/"weakTag"');
+        await FileDownloader().database.storage.storeResumeData(newResumeData);
+        // resume, should fail
+        expect(await FileDownloader().resume(task), isTrue);
+        await statusCallbackCompleter.future;
+        expect(lastStatus, equals(TaskStatus.failed));
+        expect(lastException?.description,
+            equals('Cannot resume: ETag is not identical, or is weak'));
+        // now configure to allow weak Etag and try again
+        await FileDownloader()
+            .configure(globalConfig: (Config.allowWeakETag, true));
+        // create a new task and do the same thing
+        statusCallbackCompleter = Completer();
+        someProgressCompleter = Completer();
+        task = DownloadTask(
+            url: urlWithContentLength,
+            filename: defaultFilename,
+            updates: Updates.statusAndProgress,
+            allowPause: true);
+        expect(await FileDownloader().enqueue(task), isTrue);
+        await someProgressCompleter.future;
+        expect(await FileDownloader().pause(task), isTrue);
+        await Future.delayed(const Duration(milliseconds: 500));
+        expect(lastStatus, equals(TaskStatus.paused));
+        // mess with the ResumeData to make it a weak ETag
+        final resumeData2 = await FileDownloader()
+            .database
+            .storage
+            .retrieveResumeData(task.taskId);
+        final newResumeData2 = ResumeData(task, resumeData2!.data,
+            resumeData2.requiredStartByte, 'W/"weakTag"');
+        await FileDownloader().database.storage.storeResumeData(newResumeData2);
+        // resume, should succeed
+        expect(await FileDownloader().resume(task), isTrue);
+        await statusCallbackCompleter.future;
+        expect(lastStatus, equals(TaskStatus.complete));
+        // configure back to default
+        await FileDownloader()
+            .configure(globalConfig: (Config.allowWeakETag, false));
+      }
+    });
+
     testWidgets('pause task that cannot be paused', (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
