@@ -215,4 +215,97 @@ void main() {
       expect(errorCount, greaterThan(3));
     });
   });
+
+  group('Pause and Resume', () {
+    test('pauseAll global', () async {
+      tq.maxConcurrent = 2;
+      for (var n = 0; n < 10; n++) {
+        task = DownloadTask(taskId: '$n', url: 'testUrl');
+        tq.add(task);
+      }
+      expect(tq.waiting.length, equals(10));
+
+      // Initial processing
+      await Future.delayed(const Duration(seconds: 1));
+      // Should have dequeued 2 tasks
+      expect(tq.waiting.length, lessThan(10));
+      expect(tq.numActive, equals(2));
+
+      await tq.pauseAll();
+
+      // Wait a bit - queue should not advance
+      final waitingBefore = tq.waiting.length;
+      await Future.delayed(const Duration(seconds: 6)); // wait for active tasks to finish
+      // Active tasks finish, but no new tasks should be dequeued
+      expect(tq.waiting.length, equals(waitingBefore));
+      expect(tq.numActive, equals(0));
+
+      await tq.resumeAll();
+      await Future.delayed(const Duration(seconds: 1));
+      expect(tq.numActive, equals(2));
+    });
+
+    test('pauseAll by group', () async {
+      tq.maxConcurrent = 4;
+      for (var n = 0; n < 5; n++) {
+        task = DownloadTask(taskId: 'A-$n', url: 'testUrl', group: 'A');
+        tq.add(task);
+      }
+      for (var n = 0; n < 5; n++) {
+        task = DownloadTask(taskId: 'B-$n', url: 'testUrl', group: 'B');
+        tq.add(task);
+      }
+
+      // Pause group A immediately
+      await tq.pauseAll(group: 'A');
+
+      // Wait for queue to process
+      await Future.delayed(const Duration(seconds: 2));
+
+      // Tasks from group A should be waiting, group B should be active
+      expect(tq.numActiveWithGroup('B'), greaterThan(0));
+      expect(tq.numActiveWithGroup('A'), equals(0));
+
+      // Wait for B to finish
+      await Future.delayed(const Duration(seconds: 6));
+      expect(tq.numActiveWithGroup('B'), equals(0));
+
+      // A should still be waiting
+      expect(tq.numWaitingWithGroup('A'), equals(5));
+
+      await tq.resumeAll(group: 'A');
+      await Future.delayed(const Duration(seconds: 1));
+      expect(tq.numActiveWithGroup('A'), greaterThan(0));
+    });
+
+    test('pauseAll by specific tasks', () async {
+        tq.maxConcurrent = 5;
+        final tasksA = <DownloadTask>[];
+        final tasksB = <DownloadTask>[];
+
+        for (var n = 0; n < 5; n++) {
+            var t = DownloadTask(taskId: 'A-$n', url: 'testUrl', group: 'A');
+            tasksA.add(t);
+            tq.add(t);
+        }
+        for (var n = 0; n < 5; n++) {
+            var t = DownloadTask(taskId: 'B-$n', url: 'testUrl', group: 'B');
+            tasksB.add(t);
+            tq.add(t);
+        }
+
+        // Pause specific tasks from group A
+        await tq.pauseAll(tasks: tasksA);
+
+        await Future.delayed(const Duration(seconds: 2));
+
+        // Group B should be running, Group A should be paused
+        expect(tq.numActiveWithGroup('B'), greaterThan(0));
+        expect(tq.numActiveWithGroup('A'), equals(0));
+
+        await tq.resumeAll(tasks: tasksA);
+        await Future.delayed(const Duration(seconds: 2));
+        expect(tq.numActiveWithGroup('A'), greaterThan(0));
+    });
+  });
 }
