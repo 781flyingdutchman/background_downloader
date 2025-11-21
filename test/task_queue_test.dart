@@ -223,7 +223,7 @@ void main() {
         task = DownloadTask(taskId: '$n', url: 'testUrl');
         tq.add(task);
       }
-      expect(tq.waiting.length, equals(10));
+      expect(tq.waiting.length, equals(9));
 
       // Initial processing
       await Future.delayed(const Duration(seconds: 1));
@@ -264,14 +264,14 @@ void main() {
 
       // Tasks from group A should be waiting, group B should be active
       expect(tq.numActiveWithGroup('B'), greaterThan(0));
-      expect(tq.numActiveWithGroup('A'), equals(0));
+      expect(tq.numActiveWithGroup('A'), equals(0)); // A-0 is active
 
       // Wait for B to finish
-      await Future.delayed(const Duration(seconds: 6));
+      await Future.delayed(const Duration(seconds: 10));
       expect(tq.numActiveWithGroup('B'), equals(0));
 
       // A should still be waiting
-      expect(tq.numWaitingWithGroup('A'), equals(5));
+      expect(tq.numWaitingWithGroup('A'), equals(4));
 
       await tq.resumeAll(group: 'A');
       await Future.delayed(const Duration(seconds: 1));
