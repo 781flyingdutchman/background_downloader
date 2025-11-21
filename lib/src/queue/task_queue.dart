@@ -12,17 +12,24 @@ abstract interface class TaskQueue {
   /// Signals that [task] has finished
   void taskFinished(Task task);
 
-  /// Pauses all task processing in the queue.
+  /// Pauses task processing in the queue.
+  ///
+  /// If [tasks] or [group] are provided, pauses only those tasks.
+  /// If both are null, pauses all tasks.
   ///
   /// Default implementation is a no-op to ensure backwards compatibility
   /// with subclasses that don't override this method
-  Future<void> pauseAll() async {}
+  Future<void> pauseAll({Iterable<DownloadTask>? tasks, String? group}) async {}
 
-  /// Resumes all task processing in the queue
+  /// Resumes task processing in the queue
+  ///
+  /// If [tasks] or [group] are provided, resumes only those tasks.
+  /// If both are null, resumes all tasks.
   ///
   /// Default implementation is a no-op to ensure backwards compatibility
   /// with subclasses that don't override this method
-  Future<void> resumeAll() async {}
+  Future<void> resumeAll(
+      {Iterable<DownloadTask>? tasks, String? group}) async {}
 }
 
 /// TaskQueue that holds all information in memory
@@ -56,19 +63,49 @@ class MemoryTaskQueue implements TaskQueue {
   final _enqueueErrorsStreamController = StreamController<Task>();
 
   var _paused = false;
+  final _pausedTaskIds = <String>{};
 
   MemoryTaskQueue() {
     _readyForEnqueue.complete();
   }
 
   @override
-  Future<void> pauseAll() async {
-    _paused = true;
+  Future<void> pauseAll({Iterable<DownloadTask>? tasks, String? group}) async {
+    if (tasks == null && group == null) {
+      _paused = true;
+    } else {
+      // pause specific tasks/groups
+      if (group != null) {
+        final tasksToPause = waiting.unorderedElements
+            .where((task) => task.group == group && task is DownloadTask);
+        _pausedTaskIds.addAll(tasksToPause.map((e) => e.taskId));
+      }
+      if (tasks != null) {
+        _pausedTaskIds.addAll(tasks.map((e) => e.taskId));
+      }
+    }
   }
 
   @override
-  Future<void> resumeAll() async {
-    _paused = false;
+  Future<void> resumeAll({Iterable<DownloadTask>? tasks, String? group}) async {
+    if (tasks == null && group == null) {
+      _paused = false;
+      _pausedTaskIds.clear();
+    } else {
+      // resume specific tasks/groups
+      if (group != null) {
+        final tasksToResume = waiting.unorderedElements
+            .where((task) => task.group == group && task is DownloadTask);
+        for (final task in tasksToResume) {
+          _pausedTaskIds.remove(task.taskId);
+        }
+      }
+      if (tasks != null) {
+        for (final task in tasks) {
+          _pausedTaskIds.remove(task.taskId);
+        }
+      }
+    }
     advanceQueue();
   }
 
@@ -171,6 +208,10 @@ class MemoryTaskQueue implements TaskQueue {
     final tasksThatHaveToWait = <Task>[];
     while (waiting.isNotEmpty) {
       var task = waiting.removeFirst();
+      if (_pausedTaskIds.contains(task.taskId)) {
+        tasksThatHaveToWait.add(task);
+        continue;
+      }
       if (numActiveWithHostname(task.hostName) < maxConcurrentByHost &&
           numActiveWithGroup(task.group) < maxConcurrentByGroup) {
         waiting.addAll(tasksThatHaveToWait); // put back in queue

@@ -687,7 +687,7 @@ interface class FileDownloader {
   Future<List<DownloadTask>> pauseAll(
       {Iterable<DownloadTask>? tasks, String? group}) {
     for (final taskQueue in _downloader.taskQueues) {
-      taskQueue.pauseAll();
+      taskQueue.pauseAll(tasks: tasks, group: group);
     }
     return _downloader.pauseAll(tasks: tasks, group: group);
   }
@@ -729,7 +729,7 @@ interface class FileDownloader {
       await Future.delayed(interval);
     }
     for (final taskQueue in _downloader.taskQueues) {
-      taskQueue.resumeAll();
+      taskQueue.resumeAll(tasks: tasks, group: group);
     }
     return results;
   }
