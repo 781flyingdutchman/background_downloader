@@ -3564,13 +3564,16 @@ void main() {
 
   group('DataTask', () {
     test('dataTask get', () async {
-      var lastUpdate = TaskStatusUpdate(task, TaskStatus.paused);
+      var completer = Completer<TaskStatusUpdate>();
       FileDownloader().registerCallbacks(taskStatusCallback: (update) {
-        lastUpdate = update;
+        if (update.status.isFinalState) {
+          completer.complete(update);
+        }
       });
       final t = DataTask(url: dataTaskGetUrl, headers: dataTaskHeaders);
       expect(await FileDownloader().enqueue(t), isTrue);
-      await Future.delayed(const Duration(seconds: 2));
+      final lastUpdate =
+          await completer.future.timeout(const Duration(seconds: 30));
       expect(lastUpdate.status, equals(TaskStatus.complete));
       final json = jsonDecode(lastUpdate.responseBody!);
       final args = json['args'] as Map<String, dynamic>;
@@ -3579,22 +3582,27 @@ void main() {
     });
 
     test('dataTask post no data', () async {
-      var lastUpdate = TaskStatusUpdate(task, TaskStatus.paused);
+      var completer = Completer<TaskStatusUpdate>();
       FileDownloader().registerCallbacks(taskStatusCallback: (update) {
-        lastUpdate = update;
+        if (update.status.isFinalState) {
+          completer.complete(update);
+        }
       });
       final t = DataTask(
           url: dataTaskPostUrl,
           headers: dataTaskHeaders); // without 'POST' will fail
       expect(await FileDownloader().enqueue(t), isTrue);
-      await Future.delayed(const Duration(seconds: 5));
+      var lastUpdate =
+          await completer.future.timeout(const Duration(seconds: 30));
       expect(lastUpdate.status, equals(TaskStatus.failed));
+
+      completer = Completer<TaskStatusUpdate>();
       final t2 = DataTask(
           url: dataTaskPostUrl,
           headers: dataTaskHeaders,
           httpRequestMethod: 'POST'); // with 'POST' will succeed
       expect(await FileDownloader().enqueue(t2), isTrue);
-      await Future.delayed(const Duration(seconds: 3));
+      lastUpdate = await completer.future.timeout(const Duration(seconds: 30));
       expect(lastUpdate.status, equals(TaskStatus.complete));
       print(lastUpdate.responseBody);
       final json = jsonDecode(lastUpdate.responseBody!);
@@ -3605,16 +3613,19 @@ void main() {
     });
 
     test('dataTask post with data', () async {
-      var lastUpdate = TaskStatusUpdate(task, TaskStatus.paused);
+      var completer = Completer<TaskStatusUpdate>();
       FileDownloader().registerCallbacks(taskStatusCallback: (update) {
-        lastUpdate = update;
+        if (update.status.isFinalState) {
+          completer.complete(update);
+        }
       });
       final t = DataTask(
           url: dataTaskPostUrl,
           headers: dataTaskHeaders,
           post: 'My data'); // should auto set 'POST' method
       expect(await FileDownloader().enqueue(t), isTrue);
-      await Future.delayed(const Duration(seconds: 3));
+      final lastUpdate =
+          await completer.future.timeout(const Duration(seconds: 30));
       print(lastUpdate.responseStatusCode);
       expect(lastUpdate.status, equals(TaskStatus.complete));
       print(lastUpdate.responseBody);
@@ -3626,15 +3637,18 @@ void main() {
     });
 
     test('dataTask post with json data', () async {
-      var lastUpdate = TaskStatusUpdate(task, TaskStatus.paused);
+      var completer = Completer<TaskStatusUpdate>();
       FileDownloader().registerCallbacks(taskStatusCallback: (update) {
-        lastUpdate = update;
+        if (update.status.isFinalState) {
+          completer.complete(update);
+        }
       });
       var jsonData = {'key': 'value'};
       final t = DataTask(
           url: dataTaskPostUrl, headers: dataTaskHeaders, json: jsonData);
       expect(await FileDownloader().enqueue(t), isTrue);
-      await Future.delayed(const Duration(seconds: 3));
+      final lastUpdate =
+          await completer.future.timeout(const Duration(seconds: 30));
       print(lastUpdate.responseStatusCode);
       expect(lastUpdate.status, equals(TaskStatus.complete));
       print(lastUpdate.responseBody);
@@ -3647,15 +3661,18 @@ void main() {
     });
 
     test('dataTask with error', () async {
-      var lastUpdate = TaskStatusUpdate(task, TaskStatus.paused);
+      var completer = Completer<TaskStatusUpdate>();
       FileDownloader().registerCallbacks(taskStatusCallback: (update) {
-        lastUpdate = update;
+        if (update.status.isFinalState) {
+          completer.complete(update);
+        }
       });
       final t = DataTask(
           url: 'https://httpbin.org/status/400', // force 400 code
           headers: dataTaskHeaders);
       expect(await FileDownloader().enqueue(t), isTrue);
-      await Future.delayed(const Duration(seconds: 3));
+      final lastUpdate =
+          await completer.future.timeout(const Duration(seconds: 30));
       expect(lastUpdate.status, equals(TaskStatus.failed));
       final exception = lastUpdate.exception!;
       print(exception);
@@ -3665,12 +3682,14 @@ void main() {
     });
 
     test('dataTask with retries', () async {
-      var lastUpdate = TaskStatusUpdate(task, TaskStatus.paused);
+      var completer = Completer<TaskStatusUpdate>();
       var retryCount = 0;
       FileDownloader().registerCallbacks(taskStatusCallback: (update) {
-        lastUpdate = update;
         if (update.status == TaskStatus.waitingToRetry) {
           retryCount++;
+        }
+        if (update.status.isFinalState) {
+          completer.complete(update);
         }
       });
       final t = DataTask(
@@ -3678,7 +3697,8 @@ void main() {
           headers: dataTaskHeaders,
           retries: 2);
       expect(await FileDownloader().enqueue(t), isTrue);
-      await Future.delayed(const Duration(seconds: 20));
+      final lastUpdate =
+          await completer.future.timeout(const Duration(seconds: 30));
       expect(lastUpdate.status, equals(TaskStatus.failed));
       expect(lastUpdate.task.retries, equals(2));
       expect(lastUpdate.task.retriesRemaining, equals(0));
@@ -3688,9 +3708,8 @@ void main() {
     test('cancel dataTask', () async {
       /// Cancellation is only relevant when the task is waiting to retry.
       /// Cancellation of a running DataTask has no effect
-      var lastUpdate = TaskStatusUpdate(task, TaskStatus.paused);
+      var completer = Completer<TaskStatusUpdate>();
       FileDownloader().registerCallbacks(taskStatusCallback: (update) {
-        lastUpdate = update;
         if (update.status == TaskStatus.waitingToRetry) {
           // cancel with some delay (otherwise the waitingToRetry status has
           // not been registered yet)
@@ -3700,13 +3719,17 @@ void main() {
                   .cancelTaskWithId(update.task.taskId)
                   .then((success) => expect(success, isTrue)));
         }
+        if (update.status.isFinalState) {
+          completer.complete(update);
+        }
       });
       final t = DataTask(
           url: 'https://httpbin.org/status/400', // force 400 code
           headers: dataTaskHeaders,
           retries: 2);
       expect(await FileDownloader().enqueue(t), isTrue);
-      await Future.delayed(const Duration(seconds: 3));
+      final lastUpdate =
+          await completer.future.timeout(const Duration(seconds: 30));
       expect(lastUpdate.status, equals(TaskStatus.canceled));
       expect(lastUpdate.task.retriesRemaining, greaterThan(0));
     });
