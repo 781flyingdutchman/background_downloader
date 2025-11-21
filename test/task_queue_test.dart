@@ -31,15 +31,15 @@ const workingUrl = 'https://google.com';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  final tq = TestTaskQueue();
+  late TestTaskQueue tq;
 
   var task = DownloadTask(url: 'testUrl');
 
   setUp(() {
+    tq = TestTaskQueue();
     tq.probFailure = 0;
     tq.maxConcurrent = 10000000;
     tq.minInterval = const Duration(milliseconds: 550);
-    tq.reset();
   });
 
   group('Add to queue', () {
