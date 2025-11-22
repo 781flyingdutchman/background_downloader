@@ -3114,10 +3114,13 @@ void main() {
   group('Cookies', () {
     testWidgets('cookie from live set-cookie response header',
         (widgetTester) async {
-      final response = await FileDownloader().request(task);
+      final request = Request(
+          url:
+              'https://httpbin.org/response-headers?Set-Cookie=test_cookie=test_value');
+      final response = await FileDownloader().request(request);
       print(response.headers['set-cookie']);
-      final cookies = Request.cookieHeader(response, task.url);
-      expect(cookies['Cookie']?.startsWith('AEC'), isTrue);
+      final cookies = Request.cookieHeader(response, request.url);
+      expect(cookies['Cookie'], equals('test_cookie=test_value'));
     });
   });
 
