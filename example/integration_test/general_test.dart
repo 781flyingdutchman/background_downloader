@@ -3306,6 +3306,12 @@ void main() {
     });
 
     test('holdingQueue cancel tasks', () async {
+      // wait for all tasks to finish (there is often carry-over from the
+      // preceding test
+      while ((await FileDownloader().allTaskIds()).isNotEmpty) {
+        print('Waiting to clear all tasks');
+        await Future.delayed(const Duration(seconds: 1));
+      }
       expect(
           (await FileDownloader().configure(
                   globalConfig: (Config.holdingQueue, (1, null, null))))
