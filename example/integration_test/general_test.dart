@@ -598,6 +598,9 @@ void main() {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
+      // download a large file, so we have time to cancel
+      task = DownloadTask(
+          url: urlWithContentLength, filename: defaultFilename);
       expect(await FileDownloader().enqueue(task), isTrue);
       var taskIds = await FileDownloader().allTaskIds();
       expect(taskIds.length, equals(1));
