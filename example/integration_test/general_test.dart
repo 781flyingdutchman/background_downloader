@@ -549,6 +549,7 @@ void main() {
         (widgetTester) async {
       print('Starting allTasks with allGroups set to true');
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
+      task = DownloadTask(url: urlWithContentLength, filename: defaultFilename);
       final task2 = task.copyWith(group: 'group2');
       expect(await FileDownloader().enqueue(task), isTrue);
       expect(await FileDownloader().enqueue(task2), isTrue);
