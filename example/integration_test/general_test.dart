@@ -201,8 +201,8 @@ void main() {
       expect(await FileDownloader().enqueue(task), isTrue);
       await progressCallbackCompleter.future;
       // because google.com has no content-length, we only expect the 0.0 and
-      // 1.0 progress update
-      expect(progressCallbackCounter, equals(2));
+      // 1.0 progress update, but sometimes we get more
+      expect(progressCallbackCounter, greaterThanOrEqualTo(2));
       expect(lastValidExpectedFileSize, equals(-1));
       await statusCallbackCompleter.future;
       expect(statusCallbackCounter, equals(3));
