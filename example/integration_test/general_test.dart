@@ -506,7 +506,10 @@ void main() {
       print('Starting reset');
       await Future.delayed(const Duration(seconds: 2)); // clear cancellations
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
-      expect(await FileDownloader().enqueue(task), isTrue);
+      // use a larger file to ensure the task does not complete before reset is called
+      var resetTask =
+          DownloadTask(url: urlWithContentLength, filename: defaultFilename);
+      expect(await FileDownloader().enqueue(resetTask), isTrue);
       expect(await FileDownloader().reset(group: 'non-default'), equals(0));
       expect(await FileDownloader().reset(), equals(1));
       await Future.delayed(const Duration(seconds: 1));
