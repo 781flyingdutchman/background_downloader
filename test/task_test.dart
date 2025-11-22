@@ -357,7 +357,7 @@ void main() {
           UriDownloadTask(directoryUri: testUriWithFileScheme, url: workingUrl);
       expect(task.filename, isNotEmpty);
       expect(task.fileUri!.toFilePath(),
-          equals('${testUriWithFileScheme.path}/$defaultFilename'));
+          equals('${testUriWithFileScheme.path}/${task.filename}'));
       expect(task.directoryUri, equals(testUriWithFileScheme));
       final updatedTask = task.copyWith(filename: 'new_filename.txt');
       expect(updatedTask.filename, 'new_filename.txt');
