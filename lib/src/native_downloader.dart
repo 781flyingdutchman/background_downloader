@@ -422,7 +422,7 @@ abstract base class NativeDownloader extends BaseDownloader {
 
   @override
   Future<Duration> getTaskTimeout() async {
-    if (Platform.isAndroid) {
+    if (defaultTargetPlatform == TargetPlatform.android) {
       final timeoutMillis =
           await methodChannel.invokeMethod<int>('getTaskTimeout') ?? 0;
       return Duration(milliseconds: timeoutMillis);

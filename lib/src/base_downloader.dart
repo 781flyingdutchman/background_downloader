@@ -114,14 +114,16 @@ abstract base class BaseDownloader {
 
   factory BaseDownloader.instance(
       PersistentStorage persistentStorage, Database database) {
-    final instance = Platform.isAndroid
-        ? AndroidDownloader()
-        : Platform.isIOS
-            ? IOSDownloader()
-            : Platform.isLinux || Platform.isMacOS || Platform.isWindows
-                ? DesktopDownloader()
-                : throw ArgumentError(
-                    '${Platform.operatingSystem} is not a supported platform');
+    final instance = switch (defaultTargetPlatform) {
+      TargetPlatform.android => AndroidDownloader(),
+      TargetPlatform.iOS => IOSDownloader(),
+      TargetPlatform.linux ||
+      TargetPlatform.macOS ||
+      TargetPlatform.windows =>
+        DesktopDownloader(),
+      _ => throw ArgumentError(
+          'Platform $defaultTargetPlatform is not supported'),
+    };
     instance._storage = persistentStorage;
     instance.database = database;
     unawaited(instance.initialize());

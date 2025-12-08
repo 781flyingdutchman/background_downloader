@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 
 import 'native_downloader.dart';
@@ -38,14 +39,16 @@ base class PermissionsService implements Permissions {
 
   /// Creates a [PermissionsService] appropriate for this platform
   factory PermissionsService.instance() {
-    return Platform.isAndroid
-        ? AndroidPermissionsService()
-        : Platform.isIOS
-            ? IOSPermissionsService()
-            : Platform.isLinux || Platform.isMacOS || Platform.isWindows
-                ? PermissionsService()
-                : throw ArgumentError(
-                    '${Platform.operatingSystem} is not a supported platform');
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android => AndroidPermissionsService(),
+      TargetPlatform.iOS => IOSPermissionsService(),
+      TargetPlatform.linux ||
+      TargetPlatform.macOS ||
+      TargetPlatform.windows =>
+        PermissionsService(),
+      _ => throw ArgumentError(
+          'Platform $defaultTargetPlatform is not supported'),
+    };
   }
 
   @override

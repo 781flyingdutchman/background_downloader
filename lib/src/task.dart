@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math' show Random;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:mime/mime.dart';
@@ -380,11 +381,12 @@ sealed class Task extends Request implements Comparable {
         if (t.fileUri != null) {
           assert(t.fileUri?.scheme == 'file',
               'fileUri must be a URI scheme to return a path');
-          return t.fileUri!.toFilePath(windows: Platform.isWindows);
+          return t.fileUri!
+              .toFilePath(windows: defaultTargetPlatform == TargetPlatform.windows);
         } else {
           assert(t.directoryUri?.scheme == 'file',
               'directoryUri must be a URI scheme to return a path');
-          return '${t.directoryUri!.toFilePath(windows: Platform.isWindows)}${Platform.pathSeparator}${withFilename ?? filename}';
+          return '${t.directoryUri!.toFilePath(windows: defaultTargetPlatform == TargetPlatform.windows)}${Platform.pathSeparator}${withFilename ?? filename}';
         }
       default:
         return p.join(await baseDirectoryPath(baseDirectory), directory,
@@ -415,7 +417,8 @@ sealed class Task extends Request implements Comparable {
       (BaseDirectory.applicationSupport, false) =>
         await getApplicationSupportDirectory(),
       (BaseDirectory.applicationLibrary, false)
-          when Platform.isMacOS || Platform.isIOS =>
+          when defaultTargetPlatform == TargetPlatform.macOS ||
+              defaultTargetPlatform == TargetPlatform.iOS =>
         await getLibraryDirectory(),
       (BaseDirectory.applicationLibrary, false) => Directory(
           p.join((await getApplicationSupportDirectory()).path, 'Library')),
@@ -428,7 +431,8 @@ sealed class Task extends Request implements Comparable {
       (BaseDirectory.applicationLibrary, true) =>
         Directory(p.join(externalStorageDirectory!.path, 'Library'))
     };
-    return (Platform.isWindows && baseDirectory == BaseDirectory.root)
+    return (defaultTargetPlatform == TargetPlatform.windows &&
+            baseDirectory == BaseDirectory.root)
         ? ''
         : baseDir.absolute.path;
   }
@@ -451,20 +455,21 @@ sealed class Task extends Request implements Comparable {
     // try to match the start of the absoluteDirectory to one of the
     // directories represented by the BaseDirectory enum.
     // Order matters, as some may be subdirs of others
-    final testSequence =
-        Platform.isAndroid || Platform.isLinux || Platform.isWindows
-            ? [
-                BaseDirectory.temporary,
-                BaseDirectory.applicationLibrary,
-                BaseDirectory.applicationSupport,
-                BaseDirectory.applicationDocuments
-              ]
-            : [
-                BaseDirectory.temporary,
-                BaseDirectory.applicationSupport,
-                BaseDirectory.applicationLibrary,
-                BaseDirectory.applicationDocuments
-              ];
+    final testSequence = defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.linux ||
+            defaultTargetPlatform == TargetPlatform.windows
+        ? [
+            BaseDirectory.temporary,
+            BaseDirectory.applicationLibrary,
+            BaseDirectory.applicationSupport,
+            BaseDirectory.applicationDocuments
+          ]
+        : [
+            BaseDirectory.temporary,
+            BaseDirectory.applicationSupport,
+            BaseDirectory.applicationLibrary,
+            BaseDirectory.applicationDocuments
+          ];
     for (final baseDirectoryEnum in testSequence) {
       final baseDirPath = await baseDirectoryPath(baseDirectoryEnum);
       final (match, directory) = _contains(baseDirPath, absoluteDirectoryPath);
@@ -928,7 +933,8 @@ final class UploadTask extends Task {
     for (int i = 0; i < fileFields.length; i++) {
       final fileUri = Uri.tryParse(filenames[i]);
       final filenameOrPath = (fileUri?.scheme == 'file')
-          ? fileUri!.toFilePath(windows: Platform.isWindows)
+          ? fileUri!.toFilePath(
+              windows: defaultTargetPlatform == TargetPlatform.windows)
           : filenames[i];
       final file = File(filenameOrPath);
       if (await file.exists()) {

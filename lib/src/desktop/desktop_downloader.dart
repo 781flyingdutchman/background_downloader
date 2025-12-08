@@ -428,7 +428,8 @@ final class DesktopDownloader extends BaseDownloader {
       {bool asUriString = false}) async {
     final fileUri = Uri.tryParse(filePath);
     if (fileUri case Uri(scheme: 'file')) {
-      filePath = fileUri.toFilePath(windows: Platform.isWindows);
+      filePath = fileUri.toFilePath(
+          windows: defaultTargetPlatform == TargetPlatform.windows);
     }
     final destDirectoryPath =
         await getDestinationDirectoryPath(destination, directory);
@@ -489,9 +490,9 @@ final class DesktopDownloader extends BaseDownloader {
 
   @override
   Future<bool> openFile(Task? task, String? filePath, String? mimeType) async {
-    final executable = Platform.isLinux
+    final executable = defaultTargetPlatform == TargetPlatform.linux
         ? 'xdg-open'
-        : Platform.isMacOS
+        : defaultTargetPlatform == TargetPlatform.macOS
             ? 'open'
             : 'start';
     filePath ??= await task!.filePath();
