@@ -235,7 +235,8 @@ void main() {
 
       // Wait a bit - queue should not advance
       final waitingBefore = tq.waiting.length;
-      await Future.delayed(const Duration(seconds: 6)); // wait for active tasks to finish
+      await Future.delayed(
+          const Duration(seconds: 6)); // wait for active tasks to finish
       // Active tasks finish, but no new tasks should be dequeued
       expect(tq.waiting.length, equals(waitingBefore));
       expect(tq.numActive, equals(0));

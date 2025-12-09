@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
@@ -46,8 +45,8 @@ base class PermissionsService implements Permissions {
       TargetPlatform.macOS ||
       TargetPlatform.windows =>
         PermissionsService(),
-      _ => throw ArgumentError(
-          'Platform $defaultTargetPlatform is not supported'),
+      _ =>
+        throw ArgumentError('Platform $defaultTargetPlatform is not supported'),
     };
   }
 

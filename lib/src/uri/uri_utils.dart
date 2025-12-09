@@ -523,15 +523,15 @@ final class _IOSUriUtils extends _NativeUriUtils {
 /// Extensions on String related to Uri and File
 extension StringUriExtensions on String {
   /// Converts a [filePath] to a file URI
-  Uri toFileUri() => Uri.file(this,
-      windows: defaultTargetPlatform == TargetPlatform.windows);
+  Uri toFileUri() =>
+      Uri.file(this, windows: defaultTargetPlatform == TargetPlatform.windows);
 }
 
 /// Extensions on Uri related to File and String
 extension UriExtensions on Uri {
   /// Returns the File represented by this [uri]
-  File toFile() => File(toFilePath(
-      windows: defaultTargetPlatform == TargetPlatform.windows));
+  File toFile() => File(
+      toFilePath(windows: defaultTargetPlatform == TargetPlatform.windows));
 
   /// True if Uri scheme is file
   bool get isFileUri => scheme == 'file';

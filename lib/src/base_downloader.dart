@@ -121,8 +121,8 @@ abstract base class BaseDownloader {
       TargetPlatform.macOS ||
       TargetPlatform.windows =>
         DesktopDownloader(),
-      _ => throw ArgumentError(
-          'Platform $defaultTargetPlatform is not supported'),
+      _ =>
+        throw ArgumentError('Platform $defaultTargetPlatform is not supported'),
     };
     instance._storage = persistentStorage;
     instance.database = database;

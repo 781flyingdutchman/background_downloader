@@ -2,7 +2,6 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' show Random;
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -381,8 +380,8 @@ sealed class Task extends Request implements Comparable {
         if (t.fileUri != null) {
           assert(t.fileUri?.scheme == 'file',
               'fileUri must be a URI scheme to return a path');
-          return t.fileUri!
-              .toFilePath(windows: defaultTargetPlatform == TargetPlatform.windows);
+          return t.fileUri!.toFilePath(
+              windows: defaultTargetPlatform == TargetPlatform.windows);
         } else {
           assert(t.directoryUri?.scheme == 'file',
               'directoryUri must be a URI scheme to return a path');
