@@ -17,6 +17,8 @@ class TaskOptions {
   final int? _beforeTaskStartRawHandle;
   final int? _onTaskStartRawHandle;
   final int? _onTaskFinishedRawHandle;
+
+  /// The [Auth] object associated with this task
   final Auth? auth;
 
   /// Constructor for [TaskOptions], containing "native" callbacks:

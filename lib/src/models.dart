@@ -413,11 +413,35 @@ class ResumeData {
 }
 
 /// Types of undelivered data that can be requested
-enum Undelivered { resumeData, statusUpdates, progressUpdates }
+enum Undelivered {
+  /// Resume data
+  resumeData,
+
+  /// Status updates
+  statusUpdates,
+
+  /// Progress updates
+  progressUpdates
+}
 
 /// Notification types, as configured in [TaskNotificationConfig] and passed
 /// on to [TaskNotificationTapCallback]
-enum NotificationType { running, complete, error, paused, canceled }
+enum NotificationType {
+  /// Task is running
+  running,
+
+  /// Task has completed
+  complete,
+
+  /// Task has failed
+  error,
+
+  /// Task is paused
+  paused,
+
+  /// Task is canceled
+  canceled
+}
 
 /// Notification specification for a [Task]
 ///
@@ -564,25 +588,57 @@ enum SharedStorage {
 
 final class Config {
   // Config topics
+
+  /// Config string for request timeout
   static const requestTimeout = 'requestTimeout';
+
+  /// Config string for resource timeout
   static const resourceTimeout = 'resourceTimeout';
+
+  /// Config string for check available space
   static const checkAvailableSpace = 'checkAvailableSpace';
+
+  /// Config string for proxy
   static const proxy = 'proxy';
+
+  /// Config string for bypass TLS certificate validation
   static const bypassTLSCertificateValidation =
       'bypassTLSCertificateValidation';
+
+  /// Config string for run in foreground
   static const runInForeground = 'runInForeground';
+
+  /// Config string for run in foreground if file larger than
   static const runInForegroundIfFileLargerThan =
       'runInForegroundIfFileLargerThan';
+
+  /// Config string for localize
   static const localize = 'localize';
+
+  /// Config string for exclude from cloud backup
   static const excludeFromCloudBackup = 'excludeFromCloudBackup';
+
+  /// Config string for use cache dir
   static const useCacheDir = 'useCacheDir';
+
+  /// Config string for use external storage
   static const useExternalStorage = 'useExternalStorage';
+
+  /// Config string for holding queue
   static const holdingQueue = 'holdingQueue';
+
+  /// Config string for skip existing files
   static const skipExistingFiles = 'skipExistingFiles';
 
   // Config arguments
+
+  /// Config argument for always
   static const always = 'always'; // int 0 on native side
+
+  /// Config argument for never
   static const never = 'never'; // int -1 on native side
+
+  /// Config argument for when able
   static const whenAble = 'whenAble'; // int -2 on native side
 
   /// Returns the int equivalent of commonly used String arguments

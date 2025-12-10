@@ -26,6 +26,7 @@ final _log = Logger('FileDownloader');
 ///
 /// An equality test on a [Request] is an equality test on the [url]
 base class Request {
+  /// List of valid HTTP methods
   final validHttpMethods = ['GET', 'POST', 'HEAD', 'PUT', 'DELETE', 'PATCH'];
 
   /// String representation of the url, urlEncoded
