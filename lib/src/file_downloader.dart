@@ -338,7 +338,7 @@ interface class FileDownloader {
   /// Enqueues a list of files to download and returns when all downloads
   /// have finished (successfully or otherwise). The returned value is a
   /// [Batch] object that contains the original [tasks], the
-  /// [results] and convenience getters to filter successful and failed results.
+  /// [Batch.results] and convenience getters to filter successful and failed results.
   ///
   /// If an optional [batchProgressCallback] function is provided, it will be
   /// called upon completion (successfully or otherwise) of each task in the
@@ -377,7 +377,7 @@ interface class FileDownloader {
   /// Enqueues a list of files to upload and returns when all uploads
   /// have finished (successfully or otherwise). The returned value is a
   /// [Batch] object that contains the original [tasks], the
-  /// [results] and convenience getters to filter successful and failed results.
+  /// [Batch.results] and convenience getters to filter successful and failed results.
   ///
   /// If an optional [batchProgressCallback] function is provided, it will be
   /// called upon completion (successfully or otherwise) of each task in the
@@ -469,7 +469,7 @@ interface class FileDownloader {
   /// This method acts on a [group] of tasks. If omitted, the [defaultGroup]
   /// is used, which is the group used when you [enqueue] a task.
   ///
-  /// If an [ignoreTask] is provided, it will be excluded from the test. This
+  /// If an [ignoreTaskId] is provided, it will be excluded from the test. This
   /// allows you to test for [tasksFinished] within the status update callback
   /// for a task that just finished. In that situation, that task may still
   /// be returned by the platform as 'active', but you already know it is not.
@@ -777,7 +777,7 @@ interface class FileDownloader {
   ///    The first character of the [groupNotificationId] cannot be '*'.
   ///
   /// The [TaskNotification] is the actual notification shown for a [Task], and
-  /// [body] and [title] may contain special strings to substitute display values:
+  /// [TaskNotification.body] and [TaskNotification.title] may contain special strings to substitute display values:
   /// {filename} to insert the [Task.filename]
   /// {metaData} to insert the [Task.metaData]
   /// {displayName} to insert the [Task.displayName]
@@ -844,7 +844,7 @@ interface class FileDownloader {
   ///    The first character of the [groupNotificationId] cannot be '*'.
   ///
   /// The [TaskNotification] is the actual notification shown for a [Task], and
-  /// [body] and [title] may contain special strings to substitute display values:
+  /// [TaskNotification.body] and [TaskNotification.title] may contain special strings to substitute display values:
   /// {filename} to insert the [Task.filename]
   /// {metaData} to insert the [Task.metaData]
   /// {displayName} to insert the [Task.displayName]
@@ -959,17 +959,17 @@ interface class FileDownloader {
   /// Perform a server request for this [request]
   ///
   /// A server request returns an [http.Response] object that includes
-  /// the [body] as String, the [bodyBytes] as [UInt8List] and the [json]
+  /// the [http.Response.body] as String, the [http.Response.bodyBytes] as [Uint8List] and the [json]
   /// representation if available.
-  /// It also contains the [statusCode] and [reasonPhrase] that may indicate
+  /// It also contains the [http.Response.statusCode] and [http.Response.reasonPhrase] that may indicate
   /// an error, and several other fields that may be useful.
-  /// A local error (e.g. a SocketException) will yield [statusCode] 499, with
-  /// details in the [reasonPhrase]
+  /// A local error (e.g. a SocketException) will yield [http.Response.statusCode] 499, with
+  /// details in the [http.Response.reasonPhrase]
   ///
-  /// The request will abide by the [retries] set on the [request], and set
-  /// [headers] included in the [request]
+  /// The request will abide by the [Request.retries] set on the [request], and set
+  /// [Request.headers] included in the [request]
   ///
-  /// The [http.Client] object used for this request is the [httpClient] field of
+  /// The [http.Client] object used for this request is the [DesktopDownloader.httpClient] field of
   /// the downloader. If not set, the default [http.Client] will be used.
   /// The request is executed on an Isolate, to ensure minimal interference
   /// with the main Isolate

@@ -44,7 +44,7 @@ enum TaskStatus {
 
   /// Task is in paused state and may be able to resume
   ///
-  /// To resume a paused Task, call [resumeTaskWithId]. If the resume is
+  /// To resume a paused Task, call [FileDownloader.resume]. If the resume is
   /// possible, status will change to [TaskStatus.running] and continue from
   /// there. If resume fails (e.g. because the temp file with the partial
   /// download has been deleted by the operating system) status will switch
@@ -118,11 +118,11 @@ enum Updates {
 }
 
 /// Signature for a function you can register to be called
-/// when the status of a [task] changes.
+/// when the status of a [Task] changes.
 typedef TaskStatusCallback = void Function(TaskStatusUpdate update);
 
 /// Signature for a function you can register to be called
-/// for every progress change of a [task].
+/// for every progress change of a [Task].
 ///
 /// A successfully completed task will always finish with progress 1.0
 /// [TaskStatus.failed] results in progress -1.0
@@ -137,8 +137,8 @@ typedef TaskProgressCallback = void Function(TaskProgressUpdate update);
 typedef TaskNotificationTapCallback = void Function(
     Task task, NotificationType notificationType);
 
-/// Signature for a function you can provide to the [downloadBatch] or
-/// [uploadBatch] that will be called upon completion of each task
+/// Signature for a function you can provide to the [FileDownloader.downloadBatch] or
+/// [FileDownloader.uploadBatch] that will be called upon completion of each task
 /// in the batch.
 ///
 /// [succeeded] will count the number of successful downloads, and
@@ -325,6 +325,9 @@ class TaskProgressUpdate extends TaskUpdate {
   /// If true, [timeRemaining] contains a valid value
   bool get hasTimeRemaining => !timeRemaining.isNegative;
 
+  /// Use the [hasExpectedFileSize], [hasNetworkSpeed] and [hasTimeRemaining]
+  /// getters to determine whether a field is valid
+  ///
   /// String is '-- MB/s' if N/A, otherwise in MB/s or kB/s
   String get networkSpeedAsString => switch (networkSpeed) {
         <= 0 => '-- MB/s',
@@ -439,7 +442,7 @@ final class TaskNotification {
 
 /// Notification configuration object
 ///
-/// Determines how a [taskOrGroup] or [group] of tasks needs to be notified
+/// Determines how a [taskOrGroup] or [Task.group] of tasks needs to be notified
 ///
 /// [running] is the notification used while the task is in progress
 /// [complete] is the notification used when the task completed
