@@ -55,11 +55,11 @@ final class UriDownloadTask extends DownloadTask with _UriTaskMixin {
   /// easier to get access to a file system location without the need for
   /// app permissions, provided the user has chosen that location using a
   /// file picker.  They follow the content:// scheme, and can be obtained
-  /// by calling [pickDirectory] from [FileDownloader].
+  /// by calling [UriUtils.pickDirectory].
   ///
   /// For other platforms:
   /// File URIs follow the file:// scheme and point to a destination on the
-  /// file system. A file:// URI is returned from [pickDirectory] on platforms
+  /// file system. A file:// URI is returned from [UriUtils.pickDirectory] on platforms
   /// other than Android.
   ///
   /// The [directoryUri] can be obtained using the
@@ -115,7 +115,7 @@ final class UriDownloadTask extends DownloadTask with _UriTaskMixin {
 
   /// Creates [Task] object from JsonMap
   ///
-  /// Only used by subclasses. Use [createFromJsonMap] to create a properly
+  /// Only used by subclasses. Use [Task.createFromJson] to create a properly
   /// subclassed [Task] from the [json]
   UriDownloadTask.fromJson(super.json) : super.fromJson();
 
@@ -168,7 +168,7 @@ final class UriDownloadTask extends DownloadTask with _UriTaskMixin {
 final class UriUploadTask extends UploadTask with _UriTaskMixin {
   /// Creates [UploadTask] from a URI
   ///
-  /// The [uri] will can be obtained
+  /// The [fileUri] will can be obtained
   /// using [fileUri] (do not access the [filename] property directly).
   /// If a [filename] argument is supplied in this constructor,
   /// it will be used, otherwise the filename will be derived from the URL
@@ -206,7 +206,7 @@ final class UriUploadTask extends UploadTask with _UriTaskMixin {
 
   /// Creates [Task] object from JsonMap
   ///
-  /// Only used by subclasses. Use [createFromJsonMap] to create a properly
+  /// Only used by subclasses. Use [Task.createFromJson] to create a properly
   /// subclassed [Task] from the [json]
   UriUploadTask.fromJson(super.json) : super.fromJson();
 

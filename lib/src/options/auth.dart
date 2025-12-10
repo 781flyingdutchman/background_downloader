@@ -78,16 +78,46 @@ import 'auth_callback.dart';
 class Auth {
   static final log = Logger('Auth');
 
+  /// The access token used for authentication
   String? accessToken;
+
+  /// Headers to use for access requests. Can contain {accessToken} and
+  /// {refreshToken} which will be replaced by the actual tokens
   Map<String, String> accessHeaders;
+
+  /// Query parameters to use for access requests. Can contain {accessToken} and
+  /// {refreshToken} which will be replaced by the actual tokens
   Map<String, String> accessQueryParams;
+
+  /// Time when the access token expires
   DateTime? accessTokenExpiryTime;
+
+  /// The refresh token used to obtain a new access token
   String? refreshToken;
+
+  /// Headers to use for refresh requests. Can contain {accessToken} and
+  /// {refreshToken} which will be replaced by the actual tokens
   Map<String, String> refreshHeaders;
+
+  /// Query parameters to use for refresh requests. Can contain {accessToken} and
+  /// {refreshToken} which will be replaced by the actual tokens
   Map<String, String> refreshQueryParams;
+
+  /// The URL to use for refreshing the token
   String? refreshUrl;
   int? _onAuthRawHandle; // for callback
 
+  /// Creates an [Auth] object
+  ///
+  /// [accessToken] is the initial access token
+  /// [accessHeaders] are headers to use for access requests
+  /// [accessQueryParams] are query parameters to use for access requests
+  /// [accessTokenExpiryTime] is the time when the access token expires
+  /// [refreshToken] is the initial refresh token
+  /// [refreshUrl] is the URL to use for refreshing the token
+  /// [refreshHeaders] are headers to use for refresh requests
+  /// [refreshQueryParams] are query parameters to use for refresh requests
+  /// [onAuth] is a callback to be called when the access token expires
   Auth(
       {this.accessToken,
       this.accessHeaders = const {},

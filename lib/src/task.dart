@@ -26,6 +26,7 @@ final _log = Logger('FileDownloader');
 ///
 /// An equality test on a [Request] is an equality test on the [url]
 base class Request {
+  /// List of valid HTTP methods
   final validHttpMethods = ['GET', 'POST', 'HEAD', 'PUT', 'DELETE', 'PATCH'];
 
   /// String representation of the url, urlEncoded
@@ -127,7 +128,7 @@ base class Request {
   /// The regex pattern to split the cookies in `Set-Cookie`.
   static final _regexSplitSetCookies = RegExp(',(?=[^ ])');
 
-  /// Returns the cookie header appropriate for this [request],
+  /// Returns the cookie header appropriate for this [Request],
   /// taken from the [cookies] list.
   ///
   /// [cookies] can be a `List<Cookie>` or the 'Set-Cookie' header value
@@ -341,6 +342,8 @@ sealed class Task extends Request implements Comparable {
   }
 
   /// Create a new [Task] subclass from the provided [json]
+  ///
+  /// Use [Task.createFromJson] to create a properly subclassed [Task] from the [json]
   factory Task.createFromJson(Map<String, dynamic> json) =>
       switch (json['taskType']) {
         'DownloadTask' => DownloadTask.fromJson(json),
@@ -524,7 +527,7 @@ sealed class Task extends Request implements Comparable {
 
   /// Creates [Task] object from JsonMap
   ///
-  /// Only used by subclasses. Use [createFromJsonMap] to create a properly
+  /// Only used by subclasses. Use [Task.createFromJson] to create a properly
   /// subclassed [Task] from the [json]
   Task.fromJson(super.json)
       : taskId = json['taskId'] ?? '',
@@ -796,7 +799,7 @@ final class UploadTask extends Task {
   /// Map of name/value pairs to encode as form fields in a multi-part upload.
   /// To specify multiple values for a single name, format the value as
   /// '"value1", "value2", "value3"' so that it matches the following
-  /// RegEx: ^(?:"[^"]+"\s*,\s*)+"[^"]+"$
+  /// RegEx: `^(?:"[^"]+"\s*,\s*)+"[^"]+"$`
   final Map<String, String> fields;
 
   /// Creates [UploadTask]

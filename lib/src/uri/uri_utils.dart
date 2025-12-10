@@ -164,7 +164,7 @@ sealed class UriUtils {
   /// Move the file represented by the [task] to a shared storage
   /// [destination] and potentially a [directory] within that destination. If
   /// the [mimeType] is not provided we will attempt to derive it from the
-  /// [Task.fileUri]
+  /// [UriTask.fileUri]
   ///
   /// Returns the Uri of the stored file, or null if not successful.
   ///
@@ -223,7 +223,7 @@ sealed class UriUtils {
     return uriString != null ? Uri.tryParse(uriString) : null;
   }
 
-  /// Returns the Uri of the file represented by [filePath] in shared
+  /// Returns the Uri of the file represented by [fileUri] in shared
   /// storage [destination] and potentially a [directory] within that
   /// destination.
   ///
@@ -522,7 +522,7 @@ final class _IOSUriUtils extends _NativeUriUtils {
 
 /// Extensions on String related to Uri and File
 extension StringUriExtensions on String {
-  /// Converts a [filePath] to a file URI
+  /// Converts this filePath to a file URI
   Uri toFileUri() =>
       Uri.file(this, windows: defaultTargetPlatform == TargetPlatform.windows);
 }
