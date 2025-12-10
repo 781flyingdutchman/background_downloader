@@ -20,6 +20,9 @@ final class DesktopDownloader extends BaseDownloader {
   static var proxy = <String, dynamic>{}; // 'address' and 'port'
   static var bypassTLSCertificateValidation = false;
 
+  /// Sets the HTTP client used for requests
+  ///
+  /// This is a stub implementation
   static void setHttpClient(Duration? requestTimeout,
       Map<String, dynamic> proxy, bool bypassTLSCertificateValidation) {
     requestTimeout = requestTimeout;
