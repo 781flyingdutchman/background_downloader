@@ -1,3 +1,8 @@
+## 9.4.1
+
+* Refine TaskQueue pauseAll/resumeAll to support specific tasks and groups. Updated `TaskQueue` interface to accept optional `tasks` and `group` parameters in `pauseAll` and `resumeAll` and implemented this for the `MemoryTaskQueue`
+* Change platform checks from `Platform.isAndroid` etc to `defaultTargetPlatform` which should lead to better tree shaking and smaller memory size
+
 ## 9.4.0
 
 * Improves concurrency on mobile platforms by moving JSON encoding and decoding to an isolate, and introducing a job queue to ensure ordered message execution.
