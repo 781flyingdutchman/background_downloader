@@ -18,8 +18,8 @@ void main() {
       final directoryUri = await FileDownloader().uri.pickDirectory();
       print('directoryUri=$directoryUri');
       expect(directoryUri, isNotNull);
-      final task =
-          UriDownloadTask(url: workingUrl, directoryUri: directoryUri!);
+      final task = UriDownloadTask(
+          url: urlWithoutContentLength, directoryUri: directoryUri!);
       expect(
           allDigitsRegex.hasMatch(task.filename), isTrue); // filename omitted
       expect(task.directoryUri, equals(directoryUri));
@@ -173,7 +173,8 @@ void main() {
     if (Platform.isIOS) {
       expect(directoryUri!.scheme, equals('urlbookmark'));
     }
-    final task = UriDownloadTask(url: workingUrl, directoryUri: directoryUri!);
+    final task = UriDownloadTask(
+        url: urlWithoutContentLength, directoryUri: directoryUri!);
     expect(allDigitsRegex.hasMatch(task.filename), isTrue); // filename omitted
     expect(task.directoryUri, equals(directoryUri));
     final result = await FileDownloader().download(task);

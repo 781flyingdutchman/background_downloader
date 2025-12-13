@@ -1,0 +1,20 @@
+00:00 +0: loading /Users/bram/StudioProjects/background_downloader/example/integration_test/general_test.dart                                                                                          Error: Couldn't resolve the package 'integration_test' in 'package:integration_test/integration_test.dart'.
+example/integration_test/general_test.dart:18:8: Error: Not found: 'package:integration_test/integration_test.dart'
+import 'package:integration_test/integration_test.dart';
+       ^
+example/integration_test/general_test.dart:21:3: Error: Undefined name 'IntegrationTestWidgetsFlutterBinding'.
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+00:00 +0 -1: loading /Users/bram/StudioProjects/background_downloader/example/integration_test/general_test.dart [E]                                                                                   
+  Failed to load "/Users/bram/StudioProjects/background_downloader/example/integration_test/general_test.dart":
+  Compilation failed for testPath=/Users/bram/StudioProjects/background_downloader/example/integration_test/general_test.dart: Error: Couldn't resolve the package 'integration_test' in 'package:integration_test/integration_test.dart'.
+  example/integration_test/general_test.dart:18:8: Error: Not found: 'package:integration_test/integration_test.dart'
+  import 'package:integration_test/integration_test.dart';
+         ^
+  example/integration_test/general_test.dart:21:3: Error: Undefined name 'IntegrationTestWidgetsFlutterBinding'.
+    IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  .
+
+To run this test again: /Users/bram/development/flutter/bin/cache/dart-sdk/bin/dart test /Users/bram/StudioProjects/background_downloader/example/integration_test/general_test.dart -p vm --plain-name 'loading /Users/bram/StudioProjects/background_downloader/example/integration_test/general_test.dart'
+00:00 +0 -1: Some tests failed.                                                                                                                                                                        

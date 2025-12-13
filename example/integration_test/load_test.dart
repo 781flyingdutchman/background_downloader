@@ -17,7 +17,7 @@ void main() {
       const numTasks = 10;
       final tasks = <Task>[];
       for (var n = 0; n < numTasks; n++) {
-        tasks.add(DownloadTask(url: workingUrl));
+        tasks.add(DownloadTask(url: urlWithoutContentLength));
       }
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       final enqueueResult = await FileDownloader().enqueueAll(tasks);
@@ -36,10 +36,10 @@ void main() {
 
     testWidgets('test enqueue failures', (widgetTester) async {
       final tasks = <Task>[
-        DownloadTask(url: workingUrl),
+        DownloadTask(url: urlWithoutContentLength),
         DownloadTask(url: "invalid url"),
         DataTask(
-            url: workingUrl,
+            url: urlWithoutContentLength,
             post: "{'data': '${List.generate(15001, (index) => 'a').join()}'}")
       ];
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
@@ -60,10 +60,7 @@ void main() {
       final tasks2 = <Task>[];
       for (var n = 0; n < numTasks; n++) {
         tasks.add(DownloadTask(
-            url: 'https://example.com/file.txt',
-            updates: Updates.none)); // Use a dummy URL
-        tasks2.add(DownloadTask(
-            url: 'https://example.com/file.txt',
+            url: urlWithContentLength,
             updates: Updates.none)); // Use a dummy URL
       }
 

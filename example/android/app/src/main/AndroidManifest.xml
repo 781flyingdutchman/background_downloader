@@ -12,7 +12,8 @@
     <application
         android:label="background_downloader_example"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
         <activity
             android:name=".example.MainActivity"
             android:exported="true"

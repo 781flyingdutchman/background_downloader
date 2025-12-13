@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' hide equals;
 import 'package:path_provider/path_provider.dart';
+import 'test_utils.dart';
 
 var statusCallbackCounter = 0;
 var progressCallbackCounter = 0;
@@ -26,13 +27,8 @@ var lastValidNetworkSpeed = -1.0;
 var lastValidTimeRemaining = const Duration(seconds: -1);
 TaskException? lastException;
 
-const workingUrl = 'https://google.com';
-const failingUrl = 'https://avmaps-dot-bbflightserver-hrd.appspot'
-    '.com/public/get_current_app_data?key=background_downloader_integration_test';
-const urlWithContentLength = 'https://storage.googleapis'
-    '.com/approachcharts/test/5MB-test.ZIP';
-const urlWithLongContentLength = 'https://storage.googleapis'
-    '.com/approachcharts/test/57MB-test.ZIP';
+final workingUrl = urlWithoutContentLength;
+final failingUrl = urlWithFailure;
 const urlWithContentLengthFileSize = 6207471;
 const urlWithLongContentLengthFileSize = 59673498;
 
@@ -217,7 +213,7 @@ void main() {
     });
 
     testWidgets('no content length', (widgetTester) async {
-      task = task.copyWith(url: 'https://google.com');
+      task = task.copyWith(url: 'http://127.0.0.1:8080/');
       if (Platform.isIOS) {
         // different from a normal download task, enqueue fails immediately
         expect(await FileDownloader().enqueue(task), isFalse);
@@ -243,8 +239,7 @@ void main() {
     });
 
     testWidgets('not found', (widgetTester) async {
-      task = task.copyWith(
-          url: 'https://avmaps-dot-bbflightserver-hrd.appspot.com/something');
+      task = task.copyWith(url: 'http://127.0.0.1:8080/something');
       if (Platform.isIOS) {
         // different from a normal download task, enqueue fails immediately
         expect(await FileDownloader().enqueue(task), isFalse);

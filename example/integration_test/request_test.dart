@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider/path_provider.dart';
+import 'test_utils.dart';
 
 // Helper function to get a temporary directory for file operations.
 Future<Directory> getTempDir() async {
@@ -44,7 +45,7 @@ void main() {
     test('GET request with FileDownloader().request', () async {
       const taskId = 'get-request-test';
       final request = Request(
-        url: 'https://httpbin.org/get?taskId=$taskId',
+        url: 'http://$localServerHostPort/get?taskId=$taskId',
         httpRequestMethod: 'GET',
       );
       final result = await downloader.request(request);
@@ -61,7 +62,7 @@ void main() {
     test('POST request with FileDownloader().request', () async {
       const taskId = 'post-request-test';
       final request = Request(
-          url: 'https://httpbin.org/post?taskId=$taskId',
+          url: 'http://$localServerHostPort/post?taskId=$taskId',
           httpRequestMethod: 'POST',
           post: '{"testKey": "testValue"}');
       final result = await downloader.request(request);
@@ -78,7 +79,7 @@ void main() {
     test('PUT request with FileDownloader().request', () async {
       const taskId = 'put-request-test';
       final request = Request(
-          url: 'https://httpbin.org/put?taskId=$taskId',
+          url: 'http://$localServerHostPort/put?taskId=$taskId',
           httpRequestMethod: 'PUT',
           post: '{"testKey": "putValue"}');
       final result = await downloader.request(request);
@@ -94,7 +95,7 @@ void main() {
     test('PATCH request with FileDownloader().request', () async {
       const taskId = 'patch-request-test';
       final request = Request(
-          url: 'https://httpbin.org/patch?taskId=$taskId',
+          url: 'http://$localServerHostPort/patch?taskId=$taskId',
           httpRequestMethod: 'PATCH',
           post: '{"testKey": "patchValue"}');
       final result = await downloader.request(request);
@@ -110,7 +111,7 @@ void main() {
     test('DELETE request with FileDownloader().request', () async {
       const taskId = 'delete-request-test';
       final task = Request(
-          url: 'https://httpbin.org/delete?taskId=$taskId',
+          url: 'http://$localServerHostPort/delete?taskId=$taskId',
           httpRequestMethod: 'DELETE');
       final result = await downloader.request(task);
       expect(result.statusCode, 200);
@@ -124,7 +125,7 @@ void main() {
     test('HEAD request with FileDownloader().request', () async {
       const taskId = 'head-request-test';
       final request = Request(
-          url: 'https://httpbin.org/get?taskId=$taskId',
+          url: 'http://$localServerHostPort/get?taskId=$taskId',
           // Use GET endpoint for HEAD
           httpRequestMethod: 'HEAD');
 
@@ -143,7 +144,7 @@ void main() {
         'Authorization': 'Bearer mytoken',
       };
       final request = Request(
-          url: 'https://httpbin.org/post?taskId=$taskId',
+          url: 'http://$localServerHostPort/post?taskId=$taskId',
           httpRequestMethod: 'POST',
           headers: customHeaders,
           post: '{"testKey": "testValue"}');
@@ -182,7 +183,7 @@ void main() {
     test('GET request with FileDownloader().download', () async {
       const taskId = 'get-download-test';
       final task = DownloadTask(
-          url: 'https://httpbin.org/get?taskId=$taskId',
+          url: 'http://$localServerHostPort/get?taskId=$taskId',
           httpRequestMethod: 'GET',
           taskId: taskId);
       final result = await downloader.download(task);
@@ -200,7 +201,7 @@ void main() {
     test('POST request with FileDownloader().download', () async {
       const taskId = 'post-download-test';
       final task = DownloadTask(
-        url: 'https://httpbin.org/post?taskId=$taskId',
+        url: 'http://$localServerHostPort/post?taskId=$taskId',
         httpRequestMethod: 'POST',
         headers: {'Content-type': 'text/plain'},
         taskId: taskId,
@@ -222,7 +223,7 @@ void main() {
     test('PUT request with FileDownloader().download', () async {
       const taskId = 'put-download-test';
       final task = DownloadTask(
-        url: 'https://httpbin.org/put?taskId=$taskId',
+        url: 'http://$localServerHostPort/put?taskId=$taskId',
         httpRequestMethod: 'PUT',
         headers: {'Content-type': 'text/plain'},
         taskId: taskId,
@@ -244,7 +245,7 @@ void main() {
     test('PATCH request with FileDownloader().download', () async {
       const taskId = 'patch-download-test';
       final task = DownloadTask(
-        url: 'https://httpbin.org/patch?taskId=$taskId',
+        url: 'http://$localServerHostPort/patch?taskId=$taskId',
         httpRequestMethod: 'PATCH',
         headers: {'Content-type': 'text/plain'},
         taskId: taskId,
@@ -266,7 +267,7 @@ void main() {
     test('DELETE request with FileDownloader().download', () async {
       const taskId = 'delete-download-test';
       final task = DownloadTask(
-          url: 'https://httpbin.org/delete?taskId=$taskId',
+          url: 'http://$localServerHostPort/delete?taskId=$taskId',
           httpRequestMethod: 'DELETE',
           taskId: taskId);
       final result = await downloader.download(task);
@@ -284,7 +285,8 @@ void main() {
     test('HEAD request with FileDownloader().download', () async {
       const taskId = 'head-download-test';
       final task = DownloadTask(
-          url: 'https://httpbin.org/get?taskId=$taskId', //Use get for HEAD
+          url:
+              'http://$localServerHostPort/get?taskId=$taskId', //Use get for HEAD
           httpRequestMethod: 'HEAD',
           taskId: taskId);
       final result = await downloader.download(task);
@@ -307,7 +309,7 @@ void main() {
         'Authorization': 'Bearer mytoken',
       };
       final task = DownloadTask(
-          url: 'https://httpbin.org/post?taskId=$taskId',
+          url: 'http://127.0.0.1:8080/post?taskId=$taskId',
           httpRequestMethod: 'POST',
           headers: {'Content-type': 'text/plain', ...customHeaders},
           post: 'TestPost',

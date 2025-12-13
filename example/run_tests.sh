@@ -4,6 +4,55 @@
 #   ./run_tests.sh              # runs all tests (except interactive)
 #   ./run_tests.sh file1.dart file2.dart  # runs only integration_test/file1.dart and integration_test/file2.dart
 
+# Determine python executable
+if [ -d "../.venv" ]; then
+    PYTHON_EXEC="../.venv/bin/python3"
+elif [ -d ".venv" ]; then
+    PYTHON_EXEC=".venv/bin/python3"
+else
+    PYTHON_EXEC="python3"
+fi
+
+# Define cleanup function for trap
+cleanup() {
+    if [ "$SERVER_STARTED" = true ]; then
+        echo "Shutting down test server..."
+        curl -X POST "http://127.0.0.1:8080/shutdown" > /dev/null 2>&1
+    fi
+    if type deactivate > /dev/null 2>&1; then
+        : # Deactivation not needed as we didn't activate
+    fi
+    unset PYTHON_EXEC
+}
+trap cleanup EXIT
+
+# Check/Start Server
+SERVER_URL="http://127.0.0.1:8080"
+SERVER_STARTED=false
+
+if curl --output /dev/null --silent --head --fail "$SERVER_URL"; then
+    echo "Test server is already running."
+else
+    echo "Starting test server..."
+    # Start server in background, assuming CWD is example/
+    $PYTHON_EXEC ../test_server/test_server.py > /dev/null 2>&1 &
+    
+    # Wait for up
+    for i in {1..10}; do
+        sleep 1
+        if curl --output /dev/null --silent --head --fail "$SERVER_URL"; then
+            echo "Test server up."
+            SERVER_STARTED=true
+            break
+        fi
+    done
+    
+    if [ "$SERVER_STARTED" = false ]; then
+        echo "Failed to start test server."
+        exit 1
+    fi
+fi
+
 echo "Running Flutter integration tests..."
 
 # The directory containing integration tests.
@@ -17,7 +66,7 @@ LOGFILE="integration_test/logs/$(($(date +%s))).log"
 
 # List of device IDs to run tests on.
 DEVICE_IDS=(
-  "944AE104-FC21-4B38-9806-056D1078419B"     # iOS emulator
+  "047E4BA3-288A-4F5F-A982-4EEEF7A7787F"     # iOS emulator
   "emulator-5554"                          # Android Emulator
   "macos"                                  # macOS target
 )

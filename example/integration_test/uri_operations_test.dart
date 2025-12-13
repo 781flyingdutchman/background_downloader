@@ -162,7 +162,8 @@ void main() {
     test('download file without filename', () async {
       final directory = await getApplicationDocumentsDirectory();
       final directoryUri = Uri.file(directory.path);
-      final task = UriDownloadTask(url: workingUrl, directoryUri: directoryUri);
+      final task = UriDownloadTask(
+          url: urlWithoutContentLength, directoryUri: directoryUri);
       expect(
           allDigitsRegex.hasMatch(task.filename), isTrue); // filename omitted
       expect(task.directoryUri, equals(directoryUri));

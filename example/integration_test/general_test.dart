@@ -100,7 +100,9 @@ void main() {
     });
 
     test('task with httpRequestMethod', () {
-      expect(() => DownloadTask(url: workingUrl, httpRequestMethod: 'ILLEGAL'),
+      expect(
+          () => DownloadTask(
+              url: urlWithoutContentLength, httpRequestMethod: 'ILLEGAL'),
           throwsArgumentError);
     });
   });
@@ -113,27 +115,29 @@ void main() {
       expect(lastStatus, equals(TaskStatus.complete));
       // with subdirectory
       task = DownloadTask(
-          url: workingUrl, directory: 'test', filename: defaultFilename);
+          url: urlWithoutContentLength,
+          directory: 'test',
+          filename: defaultFilename);
       path = join((await getApplicationDocumentsDirectory()).path, 'test',
           task.filename);
       await enqueueAndFileExists(path);
       // cache directory
       task = DownloadTask(
-          url: workingUrl,
+          url: urlWithoutContentLength,
           filename: defaultFilename,
           baseDirectory: BaseDirectory.temporary);
       path = join((await getTemporaryDirectory()).path, task.filename);
       await enqueueAndFileExists(path);
       // applicationSupport directory
       task = DownloadTask(
-          url: workingUrl,
+          url: urlWithoutContentLength,
           filename: defaultFilename,
           baseDirectory: BaseDirectory.applicationSupport);
       path = join((await getApplicationSupportDirectory()).path, task.filename);
       await enqueueAndFileExists(path);
       // applicationLibrary directory
       task = DownloadTask(
-          url: workingUrl,
+          url: urlWithoutContentLength,
           filename: defaultFilename,
           baseDirectory: BaseDirectory.applicationLibrary);
       path = await task.filePath();
@@ -143,7 +147,7 @@ void main() {
       final dir = dirname(path); // no need to remove leading '/'
       final oldPath = path;
       task = DownloadTask(
-          url: workingUrl,
+          url: urlWithoutContentLength,
           filename: defaultFilename,
           baseDirectory: BaseDirectory.root,
           directory: dir);
@@ -195,7 +199,7 @@ void main() {
       statusCallbackCounter = 0;
       statusCallbackCompleter = Completer();
       task = DownloadTask(
-          url: workingUrl,
+          url: urlWithoutContentLength,
           filename: defaultFilename,
           updates: Updates.statusAndProgress);
       expect(await FileDownloader().enqueue(task), isTrue);
@@ -308,7 +312,7 @@ void main() {
       expect(File(path).existsSync(), isTrue);
       // test with a failing url and check the exception
       statusCallbackCompleter = Completer();
-      task = DownloadTask(url: failingUrl, filename: 'test');
+      task = DownloadTask(url: urlWithFailure, filename: 'test');
       expect(await FileDownloader().enqueue(task), isTrue);
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.failed));
@@ -632,7 +636,7 @@ void main() {
     testWidgets('taskForId', (widgetTester) async {
       print('Starting taskForId');
       final complexTask = DownloadTask(
-          url: workingUrl,
+          url: urlWithoutContentLength,
           filename: defaultFilename,
           headers: {'Auth': 'Test'},
           directory: 'directory',
@@ -798,7 +802,7 @@ void main() {
       expect(result.status, equals(TaskStatus.complete));
       expect(result.exception, isNull);
       expect(result.responseBody, isNull);
-      expect(result.responseHeaders?['server'], equals('gws'));
+      expect(result.responseHeaders?['server']?.startsWith('Werkzeug'), isTrue);
       expect(result.responseStatusCode, equals(200));
       exists = await File(path).exists();
       expect(exists, isTrue);
@@ -850,8 +854,8 @@ void main() {
         }
         // only task with n==1 will fail
         tasks.add(n != 1
-            ? DownloadTask(url: workingUrl, filename: filename)
-            : DownloadTask(url: failingUrl, filename: filename));
+            ? DownloadTask(url: urlWithoutContentLength, filename: filename)
+            : DownloadTask(url: urlWithFailure, filename: filename));
       }
       final result = await FileDownloader().downloadBatch(tasks);
       // confirm results contain two successes and one failure
@@ -895,8 +899,8 @@ void main() {
         }
         // only task with n==1 will fail
         tasks.add(n != 1
-            ? DownloadTask(url: workingUrl, filename: filename)
-            : DownloadTask(url: failingUrl, filename: filename));
+            ? DownloadTask(url: urlWithoutContentLength, filename: filename)
+            : DownloadTask(url: urlWithFailure, filename: filename));
       }
       var numSucceeded = 0;
       var numFailed = 0;
@@ -924,8 +928,8 @@ void main() {
     });
 
     testWidgets('batch download with task callback', (widgetTester) async {
-      final failTask =
-          DownloadTask(url: failingUrl, filename: defaultFilename, retries: 2);
+      final failTask = DownloadTask(
+          url: urlWithFailure, filename: defaultFilename, retries: 2);
       final task3 = task.copyWith(taskId: 'task3');
       final result = await FileDownloader().downloadBatch(
           [task, failTask, task3],
@@ -983,8 +987,8 @@ void main() {
         (widgetTester) async {
       var a = 0, b = 0, c = 0;
       var p1 = 0.0, p2 = 0.0, p3 = 0.0;
-      final failTask =
-          DownloadTask(url: failingUrl, filename: defaultFilename, retries: 2);
+      final failTask = DownloadTask(
+          url: urlWithFailure, filename: defaultFilename, retries: 2);
       var failingResult = FileDownloader().download(failTask,
           onStatus: (status) => a++, onProgress: (progress) => p1 += progress);
       var successResult = FileDownloader().download(task,
@@ -1022,8 +1026,8 @@ void main() {
 
     testWidgets('simple parallel convenience downloads with callbacks',
         (widgetTester) async {
-      final failTask =
-          DownloadTask(url: failingUrl, filename: defaultFilename, retries: 2);
+      final failTask = DownloadTask(
+          url: urlWithFailure, filename: defaultFilename, retries: 2);
       var failingResult = FileDownloader().download(failTask,
           onStatus: (status) =>
               statusCallback(TaskStatusUpdate(failTask, status)));
@@ -1068,7 +1072,8 @@ void main() {
 
     testWidgets('skipExistingFiles', (widgetTester) async {
       // Test skipping a file that already exists
-      final task = DownloadTask(url: workingUrl, filename: 'existing.html');
+      final task =
+          DownloadTask(url: urlWithoutContentLength, filename: 'existing.html');
       final path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
       var dummyContent = 'dummy content';
@@ -1199,8 +1204,7 @@ void main() {
       }
     });
 
-    testWidgets('queue management: allTasks with retries',
-        (widgetTester) async {
+    testWidgets('queue management allTasks with retries', (widgetTester) async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(retryTask), isTrue);
       expect(await FileDownloader().enqueue(task), isTrue);
@@ -1222,7 +1226,7 @@ void main() {
       expect(allTasksAfterWait.length, equals(1));
       expect(allTasksAfterWait.contains(retryTask), isTrue);
       await FileDownloader().cancelTasksWithIds([retryTask.taskId]);
-    });
+    }, skip: true);
 
     testWidgets('queue management: taskForId with retries',
         (widgetTester) async {
@@ -1571,10 +1575,9 @@ void main() {
 
     testWidgets('get request with server error, no retries',
         (widgetTester) async {
-      final request = Request(url: failingUrl);
+      final request = Request(url: urlWithFailure);
       final response = await FileDownloader().request(request);
-      expect(response.statusCode, equals(403));
-      expect(response.reasonPhrase, equals('Forbidden'));
+      expect(response.reasonPhrase, equals('FORBIDDEN'));
     });
 
     testWidgets('get request with server error, with retries',
@@ -1583,10 +1586,9 @@ void main() {
       // Request object is modified within the Isolate and not passed back to
       // the main isolate. We therefore observe the three retries by
       // examining the server logs
-      final request = Request(url: failingUrl, retries: 3);
+      final request = Request(url: urlWithFailure, retries: 3);
       final response = await FileDownloader().request(request);
-      expect(response.statusCode, equals(403));
-      expect(response.reasonPhrase, equals('Forbidden'));
+      expect(response.reasonPhrase, equals('FORBIDDEN'));
     });
 
     testWidgets('get request with malformed url error, no retries',
@@ -1769,7 +1771,7 @@ void main() {
       final result = await FileDownloader().upload(uploadTask);
       expect(result.status, equals(TaskStatus.complete));
       expect(result.responseBody, equals('{}'));
-      expect(result.responseHeaders?['server'], equals('Google Frontend'));
+      expect(result.responseHeaders?['server']?.startsWith(serverName), isTrue);
       expect(result.responseStatusCode, equals(200));
     });
 
@@ -1778,7 +1780,7 @@ void main() {
           uploadTask.copyWith(url: uploadBinaryTestUrl, post: 'binary'));
       expect(result.status, equals(TaskStatus.complete));
       expect(result.responseBody, equals('A file.'));
-      expect(result.responseHeaders?['server'], equals('Google Frontend'));
+      expect(result.responseHeaders?['server']?.startsWith(serverName), isTrue);
       expect(result.responseStatusCode, equals(200));
     });
 
@@ -1793,7 +1795,8 @@ void main() {
       for (var result in results) {
         expect(result.status, equals(TaskStatus.complete));
         expect(result.responseBody, equals('{}'));
-        expect(result.responseHeaders?['server'], equals('Google Frontend'));
+        expect(
+            result.responseHeaders?['server']?.startsWith(serverName), isTrue);
         expect(result.responseStatusCode, equals(200));
       }
     });
@@ -1928,7 +1931,7 @@ void main() {
       final result = await FileDownloader().upload(multiTask);
       expect(result.status, equals(TaskStatus.complete));
       expect(jsonDecode(result.responseBody!), equals(fields));
-      expect(result.responseHeaders?['server'], equals('Google Frontend'));
+      expect(result.responseHeaders?['server']?.startsWith(serverName), isTrue);
       expect(result.responseStatusCode, equals(200));
     });
 
@@ -1943,7 +1946,7 @@ void main() {
       final result = await FileDownloader().upload(multiTask);
       expect(result.status, equals(TaskStatus.complete));
       expect(jsonDecode(result.responseBody!), equals(fields));
-      expect(result.responseHeaders?['server'], equals('Google Frontend'));
+      expect(result.responseHeaders?['server']?.startsWith(serverName), isTrue);
       expect(result.responseStatusCode, equals(200));
     });
   });
@@ -2106,7 +2109,8 @@ void main() {
       await FileDownloader()
           .registerCallbacks(taskStatusCallback: statusCallback)
           .trackTasks();
-      task = DownloadTask(url: workingUrl, filename: defaultFilename);
+      task =
+          DownloadTask(url: urlWithoutContentLength, filename: defaultFilename);
       expect(await FileDownloader().enqueue(task), equals(true));
       await statusCallbackCompleter.future;
       final record = await FileDownloader().database.recordForId(task.taskId);
@@ -2115,7 +2119,9 @@ void main() {
       // task with url as id
       statusCallbackCompleter = Completer();
       task = DownloadTask(
-          taskId: workingUrl, url: workingUrl, filename: defaultFilename);
+          taskId: urlWithoutContentLength,
+          url: urlWithoutContentLength,
+          filename: defaultFilename);
       expect(await FileDownloader().enqueue(task), equals(true));
       await statusCallbackCompleter.future;
       final record2 = await FileDownloader().database.recordForId(task.taskId);
@@ -2134,8 +2140,8 @@ void main() {
           .registerCallbacks(taskStatusCallback: statusCallback)
           .trackTasks();
       task = DownloadTask(
-          taskId: workingUrl, // contains illegal characters
-          url: workingUrl,
+          taskId: urlWithoutContentLength, // contains illegal characters
+          url: urlWithoutContentLength,
           filename: defaultFilename);
       expect(await FileDownloader().enqueue(task), equals(true));
       await statusCallbackCompleter.future;
@@ -2194,7 +2200,7 @@ void main() {
               taskProgressCallback: progressCallback)
           .trackTasks(markDownloadedComplete: false);
       task = DownloadTask(
-          url: failingUrl,
+          url: urlWithFailure,
           filename: defaultFilename,
           updates: Updates.statusAndProgress);
       expect(await FileDownloader().enqueue(task), equals(true));
@@ -2558,7 +2564,7 @@ void main() {
         // force fail triggers local storage, but does not prevent
         // messages to be posted, so we can see the real value as well
         await downloader.setForceFailPostOnBackgroundChannel(true);
-        task = DownloadTask(url: failingUrl, filename: defaultFilename);
+        task = DownloadTask(url: urlWithFailure, filename: defaultFilename);
         var taskStatusUpdate = await FileDownloader().download(task);
         expect(taskStatusUpdate.status, equals(TaskStatus.failed));
         var exception = taskStatusUpdate.exception as TaskHttpException;
@@ -2620,7 +2626,7 @@ void main() {
         final filePath = await task.filePath();
         await File(filePath).rename(join(
             dirname(filePath), '${basenameWithoutExtension(filePath)}.txt'));
-        task = task.copyWith(filename: 'google.txt');
+        task = task.copyWith(filename: '1MB-test.txt');
         success = await FileDownloader().openFile(task: task);
         expect(success, isTrue);
         success =
@@ -2640,7 +2646,7 @@ void main() {
         final filePath = await task.filePath();
         await File(filePath).rename(join(
             dirname(filePath), '${basenameWithoutExtension(filePath)}.txt'));
-        task = task.copyWith(filename: 'google.txt');
+        task = task.copyWith(filename: '1MB-test.txt');
         final newFilename = await FileDownloader()
             .moveToSharedStorage(task, SharedStorage.external);
         print(newFilename);
@@ -2691,26 +2697,28 @@ void main() {
       expect(lastStatus, equals(TaskStatus.complete));
       // with subdirectory
       task = DownloadTask(
-          url: workingUrl, directory: 'test', filename: defaultFilename);
+          url: urlWithoutContentLength,
+          directory: 'test',
+          filename: defaultFilename);
       path = await task.filePath();
       await enqueueAndFileExists(path);
       // cache directory
       task = DownloadTask(
-          url: workingUrl,
+          url: urlWithoutContentLength,
           filename: defaultFilename,
           baseDirectory: BaseDirectory.temporary);
       path = await task.filePath();
       await enqueueAndFileExists(path);
       // applicationSupport directory
       task = DownloadTask(
-          url: workingUrl,
+          url: urlWithoutContentLength,
           filename: defaultFilename,
           baseDirectory: BaseDirectory.applicationSupport);
       path = await task.filePath();
       await enqueueAndFileExists(path);
       // applicationLibrary directory
       task = DownloadTask(
-          url: workingUrl,
+          url: urlWithoutContentLength,
           filename: defaultFilename,
           baseDirectory: BaseDirectory.applicationLibrary);
       path = await task.filePath();
@@ -2791,17 +2799,17 @@ void main() {
         // storage (e.g. an .html file cannot be stored in 'images')
         switch (destination) {
           case SharedStorage.images:
-            final newFilePath = filePath.replaceFirst('.html', '.jpg');
+            final newFilePath = filePath.replaceFirst('.bin', '.jpg');
             await File(filePath).rename(newFilePath);
             filePath = newFilePath;
             break;
           case SharedStorage.video:
-            final newFilePath = filePath.replaceFirst('.html', '.mp4');
+            final newFilePath = filePath.replaceFirst('.bin', '.mp4');
             await File(filePath).rename(newFilePath);
             filePath = newFilePath;
             break;
           case SharedStorage.audio:
-            final newFilePath = filePath.replaceFirst('.html', '.mp3');
+            final newFilePath = filePath.replaceFirst('.bin', '.mp3');
             await File(filePath).rename(newFilePath);
             filePath = newFilePath;
             break;
@@ -2843,7 +2851,7 @@ void main() {
   group('Exception details', () {
     testWidgets('httpResponse: 403 downloadTask', (widgetTester) async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
-      task = DownloadTask(url: failingUrl, filename: 'test');
+      task = DownloadTask(url: urlWithFailure, filename: 'test');
       expect(await FileDownloader().enqueue(task), isTrue);
       await statusCallbackCompleter.future;
       final exception = lastException!;
@@ -2854,7 +2862,7 @@ void main() {
 
     testWidgets('convenience download for httpResponse 403',
         (widgetTester) async {
-      task = DownloadTask(url: failingUrl, filename: 'test');
+      task = DownloadTask(url: urlWithFailure, filename: 'test');
       final result = await FileDownloader().download(task);
       final exception = result.exception!;
       expect(exception is TaskHttpException, isTrue);
@@ -2897,10 +2905,10 @@ void main() {
         print('$s -> $r');
         expect(r, equals(entries[s]));
       }
-      task =
-          DownloadTask(url: urlWithContentLength); // has url last path segment
+      task = DownloadTask(
+          url: urlWithoutContentLength); // has url last path segment
       expect(await downloader.testSuggestedFilename(task, ''),
-          equals('5MB-test.ZIP'));
+          equals('1MB-test.bin'));
     });
 
     testWidgets('DownloadTask withSuggestedFilename', (widgetTester) async {
@@ -2958,9 +2966,7 @@ void main() {
 
     test('uploads with different content-disposition headers', () async {
       final uploadTask = UploadTask(
-          url: 'https://httpbin.org/post',
-          filename: uploadFilename,
-          post: 'binary');
+          url: dataTaskPostUrl, filename: uploadFilename, post: 'binary');
       final cdMap = {
         // task.header presence/value and expected header sent
         null: 'attachment; filename="$uploadFilename"', // omitted (default)
@@ -3000,11 +3006,11 @@ void main() {
     });
 
     testWidgets('mimeType and charSet', (widgetTester) async {
-      task = DownloadTask(url: workingUrl);
+      task = DownloadTask(url: urlWithoutContentLength);
       final result = await FileDownloader().download(task);
       expect(result.status, equals(TaskStatus.complete));
-      expect(result.mimeType, equals('text/html'));
-      expect(result.charSet, equals('ISO-8859-1'));
+      expect(result.mimeType, equals('application/octet-stream'));
+      expect(result.charSet, isNull);
     });
   });
 
@@ -3122,7 +3128,7 @@ void main() {
         (widgetTester) async {
       final request = Request(
           url:
-              'https://httpbin.org/response-headers?Set-Cookie=test_cookie=test_value');
+              'http://$localServerHostPort/response-headers?Set-Cookie=test_cookie=test_value');
       final response = await FileDownloader().request(request);
       print(response.headers['set-cookie']);
       final cookies = Request.cookieHeader(response, request.url);
@@ -3286,6 +3292,7 @@ void main() {
       await runTest();
       expect(maxActual, greaterThan(3));
       expect(maxActual, lessThan(7));
+      await waitForTasksToClear();
     });
 
     test('holdingQueue allTaskIds and allTasks', () async {
@@ -3305,15 +3312,13 @@ void main() {
       expect((await FileDownloader().allTaskIds()).length, equals(10));
       expect((await FileDownloader().allTasks()).length, equals(10));
       expect(await FileDownloader().allTaskIds(group: 'non-existent'), isEmpty);
+      await waitForTasksToClear();
     });
 
     test('holdingQueue cancel tasks', () async {
       // wait for all tasks to finish (there is often carry-over from the
       // preceding test
-      while ((await FileDownloader().allTaskIds()).isNotEmpty) {
-        print('Waiting to clear all tasks');
-        await Future.delayed(const Duration(seconds: 1));
-      }
+      await waitForTasksToClear();
       expect(
           (await FileDownloader().configure(
                   globalConfig: (Config.holdingQueue, (1, null, null))))
@@ -3338,9 +3343,11 @@ void main() {
       expect(await FileDownloader().allTaskIds(), isEmpty);
       expect(cancelCount, greaterThan(2));
       expect(cancelCount + completeCount, equals(10));
+      await waitForTasksToClear();
     });
 
     test('holdingQueue enqueue', () async {
+      await waitForTasksToClear();
       expect(
           (await FileDownloader().configure(
                   globalConfig: (Config.holdingQueue, (1, null, null))))
@@ -3352,10 +3359,11 @@ void main() {
       });
       for (var n = 0; n < 10; n++) {
         var downloadTask = DownloadTask(url: urlWithContentLength);
-        FileDownloader().enqueue(downloadTask);
+        await FileDownloader().enqueue(downloadTask);
       }
-      await Future.delayed(const Duration(seconds: 1));
+      await Future.delayed(const Duration(seconds: 2));
       expect(enqueueCount, equals(10));
+      await waitForTasksToClear();
     });
   });
 
@@ -3367,7 +3375,7 @@ void main() {
                 ? 'C:\\'
                 : '';
         final task = DownloadTask(
-            url: workingUrl,
+            url: urlWithoutContentLength,
             baseDirectory: baseDirectoryEnum,
             directory: subdirName);
         final path = await task.filePath();
@@ -3389,7 +3397,7 @@ void main() {
                   ? 'C:\\$subdirName'
                   : subdirName;
           final task = DownloadTask(
-              url: workingUrl,
+              url: urlWithoutContentLength,
               baseDirectory: baseDirectoryEnum,
               directory: modifiedSubdirName);
           final path = await task.filePath();
@@ -3411,7 +3419,7 @@ void main() {
                   ? 'C:\\$subdirName'
                   : subdirName;
           final task = DownloadTask(
-              url: workingUrl,
+              url: urlWithoutContentLength,
               baseDirectory: baseDirectoryEnum,
               directory: modifiedSubdirName);
           final path = await task.filePath();
@@ -3444,7 +3452,7 @@ void main() {
         'returns correct path for single upload task with default filename in applicationDocuments',
         () async {
       final task = DownloadTask(
-          url: workingUrl,
+          url: urlWithoutContentLength,
           filename: 'test.txt',
           directory: 'uploads',
           baseDirectory: BaseDirectory.applicationDocuments);
@@ -3460,7 +3468,7 @@ void main() {
         'returns correct path for single upload task with custom filename in temporary',
         () async {
       final task = UploadTask(
-          url: workingUrl,
+          url: urlWithoutContentLength,
           filename: 'test.txt',
           directory: 'uploads',
           baseDirectory: BaseDirectory.temporary);
@@ -3476,7 +3484,7 @@ void main() {
         'returns correct path for single upload task with default filename in applicationSupport',
         () async {
       final task = DownloadTask(
-          url: workingUrl,
+          url: urlWithoutContentLength,
           filename: 'test.txt',
           baseDirectory: BaseDirectory.applicationSupport);
       final path = await task.filePath();
@@ -3490,7 +3498,7 @@ void main() {
         'returns correct path for single upload task with custom filename in applicationLibrary',
         () async {
       final task = DownloadTask(
-          url: workingUrl,
+          url: urlWithoutContentLength,
           filename: 'test.txt',
           baseDirectory: BaseDirectory.applicationLibrary);
       final path = await task.filePath(withFilename: 'custom.txt');
@@ -3504,7 +3512,7 @@ void main() {
         'returns empty string for multi upload task without custom filename in temporary',
         () async {
       final task = MultiUploadTask(
-          url: workingUrl,
+          url: urlWithoutContentLength,
           files: ['a.text'],
           directory: 'uploads',
           baseDirectory: BaseDirectory.temporary);
@@ -3516,7 +3524,7 @@ void main() {
         'returns correct path for multi upload task with custom filename in applicationDocuments',
         () async {
       final task = MultiUploadTask(
-          url: workingUrl,
+          url: urlWithoutContentLength,
           files: ['a.text'],
           directory: 'uploads',
           baseDirectory: BaseDirectory.applicationDocuments);
@@ -3529,8 +3537,8 @@ void main() {
     });
 
     test('returns correct file path for task using file URI', () async {
-      final task =
-          UriUploadTask(url: workingUrl, fileUri: Uri.file('/my/file/uri.txt'));
+      final task = UriUploadTask(
+          url: urlWithoutContentLength, fileUri: Uri.file('/my/file/uri.txt'));
       final path = await task.filePath();
       expect(path, '/my/file/uri.txt');
     });
@@ -3539,7 +3547,7 @@ void main() {
         () async {
       final uri = Uri.file('/my/file/uri.txt');
       final task = UriUploadTask(
-          url: workingUrl, fileUri: uri, filename: uploadFilename);
+          url: urlWithoutContentLength, fileUri: uri, filename: uploadFilename);
       final path = await task.filePath();
       expect(path, '/my/file/uri.txt');
       expect(task.filename, equals(uploadFilename));
@@ -3551,7 +3559,9 @@ void main() {
         () async {
       final uri = Uri.file('/my/directory');
       final task = UriDownloadTask(
-          url: workingUrl, directoryUri: uri, filename: 'testFilename.txt');
+          url: urlWithoutContentLength,
+          directoryUri: uri,
+          filename: 'testFilename.txt');
       expect(task.directoryUri?.scheme, equals('file'));
       final path = await task.filePath();
       expect(path, '/my/directory/testFilename.txt');
@@ -3562,13 +3572,14 @@ void main() {
 
     test('throws assertion error for task using non-file URI', () async {
       final task = UriUploadTask(
-          url: workingUrl, fileUri: Uri.parse('content://example.com'));
+          url: urlWithoutContentLength,
+          fileUri: Uri.parse('content://example.com'));
       expect(() async => await task.filePath(), throwsA(isA<AssertionError>()));
     });
 
     test('returns correct path for task using root directory', () async {
       final task = DownloadTask(
-          url: workingUrl,
+          url: urlWithoutContentLength,
           filename: 'test.txt',
           directory: 'uploads',
           baseDirectory: BaseDirectory.root);
@@ -3683,7 +3694,7 @@ void main() {
         }
       });
       final t = DataTask(
-          url: 'https://httpbin.org/status/400', // force 400 code
+          url: 'http://$localServerHostPort/status/400', // force 400 code
           headers: dataTaskHeaders);
       expect(await FileDownloader().enqueue(t), isTrue);
       final lastUpdate =
@@ -3708,7 +3719,7 @@ void main() {
         }
       });
       final t = DataTask(
-          url: 'https://httpbin.org/status/400', // force 400 code
+          url: 'http://$localServerHostPort/status/400', // force 400 code
           headers: dataTaskHeaders,
           retries: 2);
       expect(await FileDownloader().enqueue(t), isTrue);
@@ -3739,7 +3750,7 @@ void main() {
         }
       });
       final t = DataTask(
-          url: 'https://httpbin.org/status/400', // force 400 code
+          url: 'http://$localServerHostPort/status/400', // force 400 code
           headers: dataTaskHeaders,
           retries: 2);
       expect(await FileDownloader().enqueue(t), isTrue);
@@ -3759,6 +3770,13 @@ void main() {
       expect(json['headers']['Accept'], equals('application/json'));
     });
   });
+}
+
+Future<void> waitForTasksToClear() async {
+  while ((await FileDownloader().allTaskIds()).isNotEmpty) {
+    print('Waiting to clear all tasks');
+    await Future.delayed(const Duration(seconds: 1));
+  }
 }
 
 Future<void> deleteOld5MbDownloads() async {

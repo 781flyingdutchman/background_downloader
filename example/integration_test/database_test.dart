@@ -6,9 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:background_downloader/src/localstore/localstore.dart';
+import 'test_utils.dart';
 
 const def = 'default';
-const workingUrl = 'https://google.com';
+final workingUrl = urlWithoutContentLength;
 const defaultFilename = 'google.html';
 const tasksPath = LocalStorePersistentStorage.taskRecordsPath;
 final task = DownloadTask(url: workingUrl, filename: defaultFilename);

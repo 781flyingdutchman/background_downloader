@@ -27,41 +27,40 @@ var lastValidNetworkSpeed = -1.0;
 var lastValidTimeRemaining = const Duration(seconds: -1);
 TaskException? lastException;
 
-const workingUrl = 'https://google.com';
-const failingUrl = 'https://avmaps-dot-bbflightserver-hrd.appspot'
-    '.com/public/get_current_app_data?key=background_downloader_integration_test';
-const urlWithContentLength = 'https://storage.googleapis'
-    '.com/approachcharts/test/5MB-test.ZIP';
-const urlWithLongContentLength = 'https://storage.googleapis'
-    '.com/approachcharts/test/57MB-test.ZIP';
-const getTestUrl =
-    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_get_data';
-const getRedirectTestUrl =
-    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_get_redirect';
-const postTestUrl =
-    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_post_data';
-const uploadTestUrl = // for multipart
-    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_upload_file';
-const uploadBinaryTestUrl = // for binary
-    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_upload_binary_file';
-const uploadMultiTestUrl = // for multipart with multiple files
-    'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_multi_upload_file';
-const dataTaskGetUrl = 'https://httpbin.org/get';
-const dataTaskPostUrl = 'https://httpbin.org/post';
+final localServerHostPort =
+    Platform.isAndroid ? '10.0.2.2:8080' : '127.0.0.1:8080';
+
+final urlWithoutContentLength =
+    'http://$localServerHostPort/files/1MB-test.bin?no_content_length=true';
+final urlWithFailure = 'http://$localServerHostPort/fail';
+final urlWithContentLength = 'http://$localServerHostPort/files/5MB-test.ZIP';
+final urlWithLongContentLength =
+    'http://$localServerHostPort/files/57MB-test.ZIP';
+final getTestUrl = 'http://$localServerHostPort/echo_get';
+final getRedirectTestUrl = 'http://$localServerHostPort/redirect';
+final postTestUrl = 'http://$localServerHostPort/echo_post';
+final uploadTestUrl = 'http://$localServerHostPort/upload_file';
+final uploadBinaryTestUrl = 'http://$localServerHostPort/upload_binary';
+final uploadMultiTestUrl = 'http://$localServerHostPort/upload_multi';
+final refreshTestUrl = 'http://$localServerHostPort/refresh';
+final dataTaskGetUrl = 'http://$localServerHostPort/get';
+final dataTaskPostUrl = 'http://$localServerHostPort/post';
 final dataTaskHeaders = {'accept': 'application/json'};
+const serverName = 'Werkzeug';
 
 const urlWithContentLengthFileSize = 6207471;
 
-const defaultFilename = 'google.html';
+const defaultFilename = '1MB-test.bin';
 const postFilename = 'post.txt';
 const uploadFilename = 'a_file.txt';
 const uploadFilename2 = 'second_file.txt';
 const largeFilename = '5MB-test.ZIP';
 
-var task = DownloadTask(url: workingUrl, filename: defaultFilename);
+var task =
+    DownloadTask(url: urlWithoutContentLength, filename: defaultFilename);
 
 var retryTask =
-    DownloadTask(url: failingUrl, filename: defaultFilename, retries: 3);
+    DownloadTask(url: urlWithFailure, filename: defaultFilename, retries: 3);
 
 var uploadTask = UploadTask(url: uploadTestUrl, filename: uploadFilename);
 var uploadTaskBinary = uploadTask.copyWith(post: 'binary');
@@ -128,9 +127,9 @@ Future<void> defaultSetup() async {
   await FileDownloader().reset();
   await FileDownloader().reset(group: 'someGroup');
 // recreate the tasks
-  task = DownloadTask(url: workingUrl, filename: defaultFilename);
+  task = DownloadTask(url: urlWithoutContentLength, filename: defaultFilename);
   retryTask =
-      DownloadTask(url: failingUrl, filename: defaultFilename, retries: 3);
+      DownloadTask(url: urlWithFailure, filename: defaultFilename, retries: 3);
   uploadTask = UploadTask(url: uploadTestUrl, filename: uploadFilename);
   uploadTaskBinary =
       uploadTask.copyWith(url: uploadBinaryTestUrl, post: 'binary');
