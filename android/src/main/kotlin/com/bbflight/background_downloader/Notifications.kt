@@ -358,6 +358,7 @@ object NotificationService {
     private val scope = CoroutineScope(Dispatchers.Default)
     private var lastNotificationTime: Long = 0
     private var createdNotificationChannel = false
+    private const val MIN_NOTIFICATION_INTERVAL_MS = 100L
 
     /**
      * Starts listening to the queue and processes each item
@@ -379,6 +380,10 @@ object NotificationService {
      */
     private suspend fun processQueue() {
         while (true) {
+            val timeSinceLastNotification = System.currentTimeMillis() - lastNotificationTime
+            if (timeSinceLastNotification < MIN_NOTIFICATION_INTERVAL_MS) {
+                delay(MIN_NOTIFICATION_INTERVAL_MS - timeSinceLastNotification)
+            }
             val notificationData = mutex.withLock {
                 if (pendingNotifications.isEmpty()) {
                     return@withLock null
@@ -407,6 +412,7 @@ object NotificationService {
             }
             if (notificationData != null) {
                 processNotificationData(notificationData)
+                lastNotificationTime = System.currentTimeMillis()
             } else {
                 break
             }
@@ -1038,11 +1044,6 @@ object NotificationService {
      * Process the [notificationData], i.e. send the notification
      */
     private suspend fun processNotificationData(notificationData: NotificationData) {
-        val now = System.currentTimeMillis()
-        val elapsed = now - lastNotificationTime
-        if (elapsed < 300) {
-            delay(300 - elapsed)
-        }
         if (notificationData.notificationType != null && notificationData.builder != null) {
             displayNotification(
                 notificationData.taskWorker,
@@ -1055,7 +1056,6 @@ object NotificationService {
                 cancel(notificationData.taskWorker.notificationId)
             }
         }
-        lastNotificationTime = System.currentTimeMillis()
     }
 
     /**
