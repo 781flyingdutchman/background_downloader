@@ -463,6 +463,7 @@ object NotificationService {
         val builder = Builder(
             taskWorker.applicationContext, notificationChannelId
         ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
+            .setShowWhen(notificationType != NotificationType.running)
         // use stored progress if notificationType is .paused
         taskWorker.notificationProgress =
             if (notificationType == NotificationType.paused) taskWorker.notificationProgress else progress
@@ -570,6 +571,7 @@ object NotificationService {
                 val builder = Builder(
                     taskWorker.applicationContext, notificationChannelId
                 ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
+                    .setShowWhen(isFinished)
                 // title and body interpolation of tokens
                 val progress = groupNotification.progress
                 val title = replaceTokens(
