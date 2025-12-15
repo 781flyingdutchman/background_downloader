@@ -11,7 +11,7 @@ import 'task.dart';
 ///
 /// Stores [TaskRecord] objects.
 ///
-/// This object is accessed by the [Downloader] and [BaseDownloader]
+/// This object is accessed by the [FileDownloader] and [BaseDownloader]
 interface class Database {
   static Database? _instance;
   late final PersistentStorage _storage;
@@ -136,7 +136,7 @@ interface class Database {
 /// Record containing task, task status and task progress.
 ///
 /// [TaskRecord] represents the state of the task as recorded in persistent
-/// storage if [trackTasks] has been called to activate this.
+/// storage if [FileDownloader.trackTasks] has been called to activate this.
 final class TaskRecord {
   final Task task;
   final TaskStatus status;

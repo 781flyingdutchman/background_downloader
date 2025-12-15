@@ -17,6 +17,8 @@ class TaskOptions {
   final int? _beforeTaskStartRawHandle;
   final int? _onTaskStartRawHandle;
   final int? _onTaskFinishedRawHandle;
+
+  /// The [Auth] object associated with this task
   final Auth? auth;
 
   /// Constructor for [TaskOptions], containing "native" callbacks:
@@ -67,7 +69,7 @@ class TaskOptions {
         _onTaskFinishedRawHandle = json['onTaskFinishedRawHandle'] as int?,
         auth = json['auth'] != null ? Auth.fromJson(json['auth']) : null;
 
-  /// Returns the [BeforeTaskStartCallback] registered with this [TaskOption], or null
+  /// Returns the [BeforeTaskStartCallback] registered with this [TaskOptions], or null
   BeforeTaskStartCallback? get beforeTaskStartCallBack =>
       _beforeTaskStartRawHandle != null
           ? PluginUtilities.getCallbackFromHandle(
@@ -75,14 +77,14 @@ class TaskOptions {
               as BeforeTaskStartCallback
           : null;
 
-  /// Returns the [OnTaskStartCallback] registered with this [TaskOption], or null
+  /// Returns the [OnTaskStartCallback] registered with this [TaskOptions], or null
   OnTaskStartCallback? get onTaskStartCallBack => _onTaskStartRawHandle != null
       ? PluginUtilities.getCallbackFromHandle(
               CallbackHandle.fromRawHandle(_onTaskStartRawHandle))
           as OnTaskStartCallback
       : null;
 
-  /// Returns the [OnTaskFinishedCallback] registered with this [TaskOption], or null
+  /// Returns the [OnTaskFinishedCallback] registered with this [TaskOptions], or null
   OnTaskFinishedCallback? get onTaskFinishedCallBack =>
       _onTaskFinishedRawHandle != null
           ? PluginUtilities.getCallbackFromHandle(
