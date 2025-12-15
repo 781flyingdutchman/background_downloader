@@ -358,7 +358,7 @@ object NotificationService {
     private val scope = CoroutineScope(Dispatchers.Default)
     private var lastNotificationTime: Long = 0
     private var createdNotificationChannel = false
-    private const val MIN_NOTIFICATION_INTERVAL_MS = 100L
+    private const val MIN_NOTIFICATION_INTERVAL_MS = 300L
 
     /**
      * Starts listening to the queue and processes each item
