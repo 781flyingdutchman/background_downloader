@@ -1,8 +1,3 @@
-/// A comprehensive background file downloader and uploader for iOS, Android, Desktop and Web
-///
-/// Use [FileDownloader] to download and upload files.
-library background_downloader;
-
 export 'src/database.dart';
 export 'src/exceptions.dart';
 export 'src/file_downloader.dart';
