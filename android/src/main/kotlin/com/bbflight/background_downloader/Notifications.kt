@@ -353,10 +353,12 @@ object NotificationService {
     private const val notificationChannelId = "background_downloader"
 
     private val mutex = Mutex()
-    private val queue = Channel<NotificationData>(capacity = Channel.UNLIMITED)
+    private val queue = Channel<Unit>(Channel.CONFLATED)
+    private val pendingNotifications = java.util.ArrayDeque<NotificationData>()
     private val scope = CoroutineScope(Dispatchers.Default)
     private var lastNotificationTime: Long = 0
     private var createdNotificationChannel = false
+    private const val MIN_NOTIFICATION_INTERVAL_MS = 300L
 
     /**
      * Starts listening to the queue and processes each item
@@ -366,8 +368,53 @@ object NotificationService {
      */
     init {
         scope.launch {
-            for (notificationData in queue) {
+            for (event in queue) {
+                processQueue()
+            }
+        }
+    }
+
+    /**
+     * Process the queue, one by one, but collapsing progress updates
+     * for the same notificationId
+     */
+    private suspend fun processQueue() {
+        while (true) {
+            val timeSinceLastNotification = System.currentTimeMillis() - lastNotificationTime
+            if (timeSinceLastNotification < MIN_NOTIFICATION_INTERVAL_MS) {
+                delay(MIN_NOTIFICATION_INTERVAL_MS - timeSinceLastNotification)
+            }
+            val notificationData = mutex.withLock {
+                if (pendingNotifications.isEmpty()) {
+                    return@withLock null
+                }
+                var candidate = pendingNotifications.removeFirst()
+                // if the candidate is a progress update, check if there are more
+                // progress updates for the same notificationId in the queue
+                // and if so, use the last one
+                if (candidate.notificationType == NotificationType.running) {
+                    val iterator = pendingNotifications.iterator()
+                    while (iterator.hasNext()) {
+                        val next = iterator.next()
+                        if (next.taskWorker.notificationId == candidate.taskWorker.notificationId) {
+                            if (next.notificationType == NotificationType.running) {
+                                // Found a newer progress update, supersede the current candidate
+                                candidate = next
+                                iterator.remove()
+                            } else {
+                                // Found a non-running update (barrier), stop looking for this task
+                                break
+                            }
+                        }
+                    }
+                }
+                candidate
+            }
+            if (notificationData != null) {
                 processNotificationData(notificationData)
+                lastNotificationTime = System.currentTimeMillis()
+            } else {
+                break
             }
         }
     }
@@ -463,6 +510,7 @@ object NotificationService {
         val builder = Builder(
             taskWorker.applicationContext, notificationChannelId
         ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
+            .setShowWhen(notificationType != NotificationType.running)
         // use stored progress if notificationType is .paused
         taskWorker.notificationProgress =
             if (notificationType == NotificationType.paused) taskWorker.notificationProgress else progress
@@ -570,6 +618,7 @@ object NotificationService {
                 val builder = Builder(
                     taskWorker.applicationContext, notificationChannelId
                 ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
+                    .setShowWhen(isFinished)
                 // title and body interpolation of tokens
                 val progress = groupNotification.progress
                 val title = replaceTokens(
@@ -987,18 +1036,16 @@ object NotificationService {
         notificationType: NotificationType? = null,
         builder: Builder? = null
     ) {
-        queue.send(NotificationData(taskWorker, notificationType, builder))
+        mutex.withLock {
+            pendingNotifications.add(NotificationData(taskWorker, notificationType, builder))
+        }
+        queue.send(Unit)
     }
 
     /**
      * Process the [notificationData], i.e. send the notification
      */
     private suspend fun processNotificationData(notificationData: NotificationData) {
-        val now = System.currentTimeMillis()
-        val elapsed = now - lastNotificationTime
-        if (elapsed < 300) {
-            delay(300 - elapsed)
-        }
         if (notificationData.notificationType != null && notificationData.builder != null) {
             displayNotification(
                 notificationData.taskWorker,
@@ -1011,7 +1058,6 @@ object NotificationService {
                 cancel(notificationData.taskWorker.notificationId)
             }
         }
-        lastNotificationTime = System.currentTimeMillis()
     }
 
     /**
