@@ -43,3 +43,6 @@ Gemfile*
 
 # generated files
 *.mocks.dart
+
+# test files for uploading and downloading
+test_server/files/
