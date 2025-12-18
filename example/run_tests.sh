@@ -88,6 +88,8 @@ else
   done < <(find "$TEST_DIR" -path "$TEST_DIR/interactive" -prune -o -type f -name "*_test.dart" -print0)
 fi
 
+TOTAL_START_TIME=$(date +%s)
+
 # Loop over each test file.
 for test_file in "${TEST_FILES[@]}"; do
   test_name=$(basename "$test_file")
@@ -95,6 +97,7 @@ for test_file in "${TEST_FILES[@]}"; do
   # Loop through each device ID.
   for device_id in "${DEVICE_IDS[@]}"; do
     echo "Running test: $test_name on device: $device_id..."
+    TEST_START_TIME=$(date +%s)
     set -o pipefail
     flutter test "$test_file" --reporter=expanded -d "$device_id" 2>&1 | \
 awk '
@@ -155,13 +158,16 @@ awk '
     # Get the exit code immediately.
     RESULT=${PIPESTATUS[0]}
 
+    TEST_END_TIME=$(date +%s)
+    TEST_DURATION=$((TEST_END_TIME - TEST_START_TIME))
+
     # Check the result and log.
     if [ "$RESULT" -ne 0 ]; then
-      echo "---FAILED--- Test: $test_name on device: $device_id" | tee -a "$LOGFILE"
+      echo "---FAILED--- Test: $test_name on device: $device_id (Duration: ${TEST_DURATION}s)" | tee -a "$LOGFILE"
       cat temp_output.txt | tee -a "$LOGFILE"
       echo "" | tee -a "$LOGFILE"
     else
-      echo "---PASSED--- Test: $test_name on device: $device_id" | tee -a "$LOGFILE"
+      echo "---PASSED--- Test: $test_name on device: $device_id (Duration: ${TEST_DURATION}s)" | tee -a "$LOGFILE"
       echo "" | tee -a "$LOGFILE"
     fi
 
@@ -169,4 +175,6 @@ awk '
   done
 done
 
-echo "Tests completed."
+TOTAL_END_TIME=$(date +%s)
+TOTAL_DURATION=$((TOTAL_END_TIME - TOTAL_START_TIME))
+echo "Tests completed. Total duration: ${TOTAL_DURATION}s" | tee -a "$LOGFILE"
