@@ -97,10 +97,8 @@ for test_file in "${TEST_FILES[@]}"; do
     echo "Running test: $test_name on device: $device_id..."
     set -o pipefail
     flutter test "$test_file" --reporter=expanded -d "$device_id" 2>&1 | \
-    awk '
+awk '
           # A helper function that “canonicalizes” the test description.
-          # It removes any trailing " [E]" so that multiple header lines for the same test
-          # (one normal, one failing) compare equal.
           function canonical(desc) {
               sub(/ \[E\]$/, "", desc);
               return desc;
@@ -112,40 +110,29 @@ for test_file in "${TEST_FILES[@]}"; do
               failing = 0;        # Flag: 1 if this test block has a failure indicator.
           }
 
-          # Detect a header line by matching the timestamp and count pattern.
-          # The pattern now allows an optional failure count (the " -[0-9]+" part).
-         /^[0-9]{2}:[0-9]{2} \+[0-9]+( -[0-9]+)?:/ {
-              # Extract the header. For example, a header might be:
-              #   "00:05 +8 -3: Other utils open file from URI"
-              # or
-              #   "00:00 +0: upgrade from version 0"
-              # or
-              #   "00:00 +0 -1: upgrade from version 0 [E]"
+          # IMPROVED REGEX:
+          # Matches timestamp followed by any combination of +, ~, -, and numbers.
+          /^[0-9]{2}:[0-9]{2} [ +~-0-9]+:/ {
               header = $0;
-              # Remove the timestamp/count prefix.
+              # Remove the timestamp/count prefix to get the description.
               desc = $0;
-              sub(/^[0-9]{2}:[0-9]{2} \+[0-9]+( -[0-9]+)?: /, "", desc);
-              # Canonicalize the description.
+              sub(/^[0-9]{2}:[0-9]{2} [ +~-0-9]+: /, "", desc);
               desc = canonical(desc);
 
               if (currentTest == "") {
-                  # First header encountered.
                   currentTest = desc;
                   block = block $0 "\n";
                   if ($0 ~ /\[E\]/) { failing = 1; }
               }
               else if (desc == currentTest) {
-                  # Another header line for the same test (for example, a failing header).
                   block = block $0 "\n";
                   if ($0 ~ /\[E\]/) { failing = 1; }
               }
               else {
-                  # We have reached a header for a new test.
-                  # If the previous block was marked as failing, print it.
+                  # New test detected. Print the previous block ONLY if it failed.
                   if (failing == 1) {
                       print block "\n";
                   }
-                  # Reset the block with the current header line.
                   block = $0 "\n";
                   currentTest = desc;
                   failing = ($0 ~ /\[E\]/) ? 1 : 0;
@@ -153,14 +140,12 @@ for test_file in "${TEST_FILES[@]}"; do
               next;
           }
 
-          # For all other lines, simply add them to the current block.
           {
               block = block $0 "\n";
               if ($0 ~ /\[E\]/) { failing = 1; }
           }
 
           END {
-              # At the end of input, flush the block if it was marked failing.
               if (block != "" && failing == 1) {
                   print block "\n";
               }

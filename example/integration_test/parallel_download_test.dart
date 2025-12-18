@@ -213,7 +213,7 @@ void main() {
     });
 
     testWidgets('no content length', (widgetTester) async {
-      task = task.copyWith(url: 'http://127.0.0.1:8080/');
+      task = task.copyWith(url: 'http://$localServerHostPort/');
       if (Platform.isIOS) {
         // different from a normal download task, enqueue fails immediately
         expect(await FileDownloader().enqueue(task), isFalse);
@@ -239,7 +239,7 @@ void main() {
     });
 
     testWidgets('not found', (widgetTester) async {
-      task = task.copyWith(url: 'http://127.0.0.1:8080/something');
+      task = task.copyWith(url: 'http://$localServerHostPort/something');
       if (Platform.isIOS) {
         // different from a normal download task, enqueue fails immediately
         expect(await FileDownloader().enqueue(task), isFalse);

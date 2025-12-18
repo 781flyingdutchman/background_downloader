@@ -309,7 +309,7 @@ void main() {
         'Authorization': 'Bearer mytoken',
       };
       final task = DownloadTask(
-          url: 'http://127.0.0.1:8080/post?taskId=$taskId',
+          url: 'http://$localServerHostPort/post?taskId=$taskId',
           httpRequestMethod: 'POST',
           headers: {'Content-type': 'text/plain', ...customHeaders},
           post: 'TestPost',

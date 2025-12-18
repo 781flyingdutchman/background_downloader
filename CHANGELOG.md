@@ -1,3 +1,9 @@
+## 9.4.2
+
+* Improve Android notification handling
+* Add local test server to reduce test suite flakiness
+* Improve code documentation
+
 ## 9.4.1
 
 * Refine TaskQueue pauseAll/resumeAll to support specific tasks and groups. Updated `TaskQueue` interface to accept optional `tasks` and `group` parameters in `pauseAll` and `resumeAll` and implemented this for the `MemoryTaskQueue`
