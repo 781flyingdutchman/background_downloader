@@ -1,0 +1,237 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:isolate';
+
+import 'base_downloader.dart';
+import 'models.dart';
+import 'task.dart';
+
+/// Commands to be executed by the background isolate
+sealed class JsonCommand {
+  final int id;
+  const JsonCommand(this.id);
+}
+
+class _TaskFromJson extends JsonCommand {
+  final String jsonString;
+  const _TaskFromJson(int id, this.jsonString) : super(id);
+}
+
+class _DownloadTaskListFromJson extends JsonCommand {
+  final String jsonString;
+  const _DownloadTaskListFromJson(int id, this.jsonString) : super(id);
+}
+
+class _TaskListFromListStrings extends JsonCommand {
+  final List<dynamic> jsonStrings;
+  const _TaskListFromListStrings(int id, this.jsonStrings) : super(id);
+}
+
+class _TaskAndNotificationConfigJsonStrings extends JsonCommand {
+  final List<Task> tasks;
+  final Set<TaskNotificationConfig> notificationConfigs;
+  const _TaskAndNotificationConfigJsonStrings(
+      int id, this.tasks, this.notificationConfigs)
+      : super(id);
+}
+
+/// Singleton object that manages a background isolate for JSON encoding/decoding
+class JsonProcessor {
+  static final JsonProcessor _instance = JsonProcessor._internal();
+
+  static JsonProcessor get instance => _instance;
+
+  JsonProcessor._internal();
+
+  Isolate? _isolate;
+  SendPort? _sendPort;
+  final Map<int, Completer<dynamic>> _pendingCompleters = {};
+  Timer? _shutdownTimer;
+  int _nextId = 0;
+  bool _isStarting = false;
+  final Completer<void> _startCompleter = Completer<void>();
+
+  /// Public API
+
+  Future<Task> processTaskFromJson(String jsonString) async {
+    return await _process<Task>((id) => _TaskFromJson(id, jsonString));
+  }
+
+  Future<List<DownloadTask>> processDownloadTaskListFromJson(
+      String jsonString) async {
+    return await _process<List<DownloadTask>>(
+        (id) => _DownloadTaskListFromJson(id, jsonString));
+  }
+
+  Future<List<Task>> processTaskListFromListStrings(
+      List<dynamic> jsonStrings) async {
+    return await _process<List<Task>>(
+        (id) => _TaskListFromListStrings(id, jsonStrings));
+  }
+
+  Future<(String, String)> processTaskAndNotificationConfigJsonStrings(
+      Iterable<Task> tasks,
+      Set<TaskNotificationConfig> notificationConfigs) async {
+    // Convert Iterable to List to ensure it's sendable and fixed
+    final taskList = tasks.toList();
+    return await _process<(String, String)>((id) =>
+        _TaskAndNotificationConfigJsonStrings(
+            id, taskList, notificationConfigs));
+  }
+
+  /// Internal processing logic
+
+  Future<T> _process<T>(JsonCommand Function(int id) commandBuilder) async {
+    await _ensureStarted();
+    _resetShutdownTimer();
+
+    final id = _nextId++;
+    final completer = Completer<T>();
+    _pendingCompleters[id] = completer;
+
+    final command = commandBuilder(id);
+    _sendPort!.send(command);
+
+    try {
+      final result = await completer.future;
+      return result as T;
+    } catch (e) {
+      rethrow;
+    } finally {
+      _resetShutdownTimer(); // Reset timer on completion too
+    }
+  }
+
+  Future<void> _ensureStarted() async {
+    if (_isolate != null) return;
+
+    if (_isStarting) {
+      await _startCompleter.future;
+      return;
+    }
+
+    _isStarting = true;
+    // reset start completer if it was completed previously (though unlikely if isolate is null)
+    if (_startCompleter.isCompleted) {
+      // should not happen if logic is correct, but for safety
+    }
+
+    try {
+      final receivePort = ReceivePort();
+      _isolate = await Isolate.spawn(_isolateMain, receivePort.sendPort);
+
+      // Wait for the isolate to send its SendPort
+      _sendPort = await receivePort.first as SendPort;
+
+      // Create a new receive port for responses
+      final responsePort = ReceivePort();
+      _sendPort!.send(responsePort.sendPort);
+
+      responsePort.listen(_handleResponse);
+
+      if (!_startCompleter.isCompleted) {
+        _startCompleter.complete();
+      }
+    } catch (e) {
+      _isStarting = false;
+      if (!_startCompleter.isCompleted) {
+        _startCompleter.completeError(e);
+      }
+      rethrow;
+    } finally {
+      _isStarting = false;
+    }
+  }
+
+  void _handleResponse(dynamic message) {
+    if (message is _JsonResponse) {
+      final completer = _pendingCompleters.remove(message.id);
+      if (completer != null) {
+        if (message.error != null) {
+          completer.completeError(message.error!);
+        } else {
+          completer.complete(message.result);
+        }
+      }
+    }
+  }
+
+  void _resetShutdownTimer() {
+    _shutdownTimer?.cancel();
+    _shutdownTimer = Timer(const Duration(minutes: 1), _shutdown);
+  }
+
+  void _shutdown() {
+    _isolate?.kill();
+    _isolate = null;
+    _sendPort = null;
+    _shutdownTimer?.cancel();
+    _shutdownTimer = null;
+
+    // Fail any pending requests
+    for (final completer in _pendingCompleters.values) {
+      if (!completer.isCompleted) {
+        completer.completeError(StateError('Background isolate shut down'));
+      }
+    }
+    _pendingCompleters.clear();
+  }
+}
+
+class _JsonResponse {
+  final int id;
+  final dynamic result;
+  final Object? error;
+
+  _JsonResponse(this.id, this.result, this.error);
+}
+
+void _isolateMain(SendPort mainSendPort) {
+  final receivePort = ReceivePort();
+  mainSendPort.send(receivePort.sendPort);
+
+  SendPort? replyPort;
+
+  receivePort.listen((message) async {
+    if (message is SendPort) {
+      replyPort = message;
+    } else if (message is JsonCommand) {
+      if (replyPort == null) return; // Should not happen if protocol is followed
+
+      try {
+        final result = await _executeCommand(message);
+        replyPort!.send(_JsonResponse(message.id, result, null));
+      } catch (e) {
+        replyPort!.send(_JsonResponse(message.id, null, e));
+      }
+    }
+  });
+}
+
+Future<dynamic> _executeCommand(JsonCommand command) async {
+  switch (command) {
+    case _TaskFromJson c:
+      return Task.createFromJson(jsonDecode(c.jsonString));
+
+    case _DownloadTaskListFromJson c:
+       return List<DownloadTask>.from(jsonDecode(c.jsonString,
+        reviver: (key, value) => switch (key) {
+              int _ => Task.createFromJson(value as Map<String, dynamic>),
+              _ => value
+            }));
+
+    case _TaskListFromListStrings c:
+      return c.jsonStrings
+        .map((e) => Task.createFromJson(jsonDecode(e as String)))
+        .toList();
+
+    case _TaskAndNotificationConfigJsonStrings c:
+      final tasksJsonString = jsonEncode(c.tasks);
+      final configs = c.tasks
+          .map((task) => BaseDownloader.notificationConfigForTaskUsingConfigSet(
+              task, c.notificationConfigs))
+          .toList();
+      final notificationConfigsJsonString = jsonEncode(configs);
+      return (tasksJsonString, notificationConfigsJsonString);
+  }
+}
