@@ -39,7 +39,7 @@ class _TaskAndNotificationConfigJsonStrings extends JsonCommand {
 class JsonProcessor {
   static final JsonProcessor _instance = JsonProcessor._internal();
 
-  static JsonProcessor get instance => _instance;
+  factory JsonProcessor() => _instance;
 
   JsonProcessor._internal();
 

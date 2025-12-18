@@ -51,7 +51,7 @@ abstract base class NativeDownloader extends BaseDownloader {
     final args = call.arguments as List<dynamic>;
     var taskJsonString = args.first as String;
     final task = taskJsonString.isNotEmpty
-        ? await JsonProcessor.instance.processTaskFromJson(taskJsonString)
+        ? await JsonProcessor().processTaskFromJson(taskJsonString)
         : DownloadTask(url: 'url');
     final message = (
       call.method,
@@ -189,7 +189,7 @@ abstract base class NativeDownloader extends BaseDownloader {
 
       // from ParallelDownloadTask
       case ('enqueueChild', String childTaskJsonString):
-        final childTask = await JsonProcessor.instance
+        final childTask = await JsonProcessor()
             .processTaskFromJson(childTaskJsonString);
         Future.delayed(const Duration(milliseconds: 100))
             .then((_) => FileDownloader().enqueue(childTask));
@@ -202,7 +202,7 @@ abstract base class NativeDownloader extends BaseDownloader {
 
       // from ParallelDownloadTask
       case ('pauseTasks', String listOfTasksJson):
-        final listOfTasks = await JsonProcessor.instance
+        final listOfTasks = await JsonProcessor()
             .processDownloadTaskListFromJson(listOfTasksJson);
         Future.delayed(const Duration(milliseconds: 100)).then((_) async {
           for (final chunkTask in listOfTasks) {
@@ -244,7 +244,7 @@ abstract base class NativeDownloader extends BaseDownloader {
     final (
       String tasksJsonString,
       String notificationConfigsJsonString
-    ) = await JsonProcessor.instance
+    ) = await JsonProcessor()
         .processTaskAndNotificationConfigJsonStrings(tasks, notificationConfigs);
     final result = await methodChannel.invokeMethod<List<Object?>>(
             'enqueueAll', [tasksJsonString, notificationConfigsJsonString]) ??
@@ -268,7 +268,7 @@ abstract base class NativeDownloader extends BaseDownloader {
     final result = await methodChannel.invokeMethod<List<dynamic>?>(
             'allTasks', allGroups ? null : group) ??
         [];
-    final tasks = await JsonProcessor.instance
+    final tasks = await JsonProcessor()
         .processTaskListFromListStrings(result);
     return [...retryAndPausedTasks, ...tasks];
   }
