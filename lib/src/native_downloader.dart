@@ -11,6 +11,7 @@ import 'chunk.dart';
 import 'exceptions.dart';
 import 'file_downloader.dart';
 import 'models.dart';
+import 'json_processor.dart';
 import 'permissions.dart';
 import 'queue/serial_job_queue.dart';
 import 'task.dart';
@@ -50,7 +51,7 @@ abstract base class NativeDownloader extends BaseDownloader {
     final args = call.arguments as List<dynamic>;
     var taskJsonString = args.first as String;
     final task = taskJsonString.isNotEmpty
-        ? await compute(_taskFromJson, taskJsonString)
+        ? await JsonProcessor.instance.processTaskFromJson(taskJsonString)
         : DownloadTask(url: 'url');
     final message = (
       call.method,
@@ -188,7 +189,8 @@ abstract base class NativeDownloader extends BaseDownloader {
 
       // from ParallelDownloadTask
       case ('enqueueChild', String childTaskJsonString):
-        final childTask = await compute(_taskFromJson, childTaskJsonString);
+        final childTask = await JsonProcessor.instance
+            .processTaskFromJson(childTaskJsonString);
         Future.delayed(const Duration(milliseconds: 100))
             .then((_) => FileDownloader().enqueue(childTask));
 
@@ -200,8 +202,8 @@ abstract base class NativeDownloader extends BaseDownloader {
 
       // from ParallelDownloadTask
       case ('pauseTasks', String listOfTasksJson):
-        final listOfTasks =
-            await compute(_downloadTaskListFromJson, listOfTasksJson);
+        final listOfTasks = await JsonProcessor.instance
+            .processDownloadTaskListFromJson(listOfTasksJson);
         Future.delayed(const Duration(milliseconds: 100)).then((_) async {
           for (final chunkTask in listOfTasks) {
             await FileDownloader().pause(chunkTask);
@@ -242,27 +244,12 @@ abstract base class NativeDownloader extends BaseDownloader {
     final (
       String tasksJsonString,
       String notificationConfigsJsonString
-    ) = await compute(
-        _taskAndNotificationConfigJsonStrings, (tasks, notificationConfigs));
+    ) = await JsonProcessor.instance
+        .processTaskAndNotificationConfigJsonStrings(tasks, notificationConfigs);
     final result = await methodChannel.invokeMethod<List<Object?>>(
             'enqueueAll', [tasksJsonString, notificationConfigsJsonString]) ??
         [];
     return result.map((item) => item is bool ? item : false).toList();
-  }
-
-  static (String, String) _taskAndNotificationConfigJsonStrings(
-      (
-        Iterable<Task>,
-        Set<TaskNotificationConfig>
-      ) tasksAndNotificationConfigs) {
-    final (tasks, notificationConfigs) = tasksAndNotificationConfigs;
-    final tasksJsonString = jsonEncode(tasks);
-    final configs = tasks
-        .map((task) => BaseDownloader.notificationConfigForTaskUsingConfigSet(
-            task, notificationConfigs))
-        .toList();
-    final notificationConfigsJsonString = jsonEncode(configs);
-    return (tasksJsonString, notificationConfigsJsonString);
   }
 
   @override
@@ -281,7 +268,8 @@ abstract base class NativeDownloader extends BaseDownloader {
     final result = await methodChannel.invokeMethod<List<dynamic>?>(
             'allTasks', allGroups ? null : group) ??
         [];
-    final tasks = await compute(_taskListFromListStrings, result);
+    final tasks = await JsonProcessor.instance
+        .processTaskListFromListStrings(result);
     return [...retryAndPausedTasks, ...tasks];
   }
 
@@ -513,45 +501,6 @@ abstract base class NativeDownloader extends BaseDownloader {
     return (configItem.$1, ''); // normal result
   }
 
-  /// Helper to create a Task from a JSON string, for use with [compute]
-  static Task _taskFromJson(String jsonString) {
-    return Task.createFromJson(jsonDecode(jsonString));
-  }
-
-  /// Helper to create a list of DownloadTasks from a JSON string, for use with [compute]
-  ///
-  /// Used for the 'pauseTasks' message
-  static List<DownloadTask> _downloadTaskListFromJson(String jsonString) {
-    return List<DownloadTask>.from(jsonDecode(jsonString,
-        reviver: (key, value) => switch (key) {
-              int _ => Task.createFromJson(value as Map<String, dynamic>),
-              _ => value
-            }));
-  }
-
-  /// Helper to create a list of Tasks from a list of JSON strings, for use with [compute]
-  ///
-  /// Used for the 'allTasks' message
-  static List<Task> _taskListFromListStrings(List<dynamic> jsonStrings) {
-    return jsonStrings
-        .map((e) => Task.createFromJson(jsonDecode(e as String)))
-        .toList();
-  }
-
-  /// Helper to create a TaskStatusUpdate from a JSON string, for use with [compute]
-  static TaskStatusUpdate _taskStatusUpdateFromJson(String jsonString) {
-    return TaskStatusUpdate.fromJsonString(jsonString);
-  }
-
-  /// Helper to encode a Task to a JSON string, for use with [compute]
-  static String _taskToJsonString(Task task) {
-    return jsonEncode(task.toJson());
-  }
-
-  /// Helper to encode a TaskStatusUpdate to a JSON string, for use with [compute]
-  static String _taskStatusUpdateToJsonString(TaskStatusUpdate update) {
-    return jsonEncode(update.toJson());
-  }
 }
 
 /// Android native downloader
@@ -769,21 +718,18 @@ void initCallbackDispatcher() {
     switch (call.method) {
       case 'beforeTaskStartCallback':
         final taskJsonString = call.arguments as String;
-        final task =
-            await compute(NativeDownloader._taskFromJson, taskJsonString);
+        final task = Task.createFromJson(jsonDecode(taskJsonString));
         final callBack = task.options?.beforeTaskStartCallBack;
         final taskStatusUpdate = await callBack?.call(task);
         if (taskStatusUpdate == null) {
           return null;
         }
-        return await compute(
-            NativeDownloader._taskStatusUpdateToJsonString, taskStatusUpdate);
+        return jsonEncode(taskStatusUpdate.toJson());
 
       case 'onTaskStartCallback':
       case 'onAuthCallback':
         final taskJsonString = call.arguments as String;
-        final task =
-            await compute(NativeDownloader._taskFromJson, taskJsonString);
+        final task = Task.createFromJson(jsonDecode(taskJsonString));
         final callBack = call.method == 'onTaskStartCallback'
             ? task.options?.onTaskStartCallBack
             : task.options?.auth?.onAuthCallback;
@@ -791,12 +737,12 @@ void initCallbackDispatcher() {
         if (newTask == null) {
           return null;
         }
-        return await compute(NativeDownloader._taskToJsonString, newTask);
+        return jsonEncode(newTask.toJson());
 
       case 'onTaskFinishedCallback':
         final taskUpdateJsonString = call.arguments as String;
-        final taskStatusUpdate = await compute(
-            NativeDownloader._taskStatusUpdateFromJson, taskUpdateJsonString);
+        final taskStatusUpdate =
+            TaskStatusUpdate.fromJsonString(taskUpdateJsonString);
         final callBack = taskStatusUpdate.task.options?.onTaskFinishedCallBack;
         await callBack?.call(taskStatusUpdate);
         return null;
