@@ -58,6 +58,12 @@ class MemoryTaskQueue implements TaskQueue {
   /// Set of tasks that have been enqueued with the FileDownloader
   final enqueued = <Task>{}; // by TaskId
 
+  /// Active tasks count by hostname
+  final _activeByHost = <String, int>{};
+
+  /// Active tasks count by group
+  final _activeByGroup = <String, int>{};
+
   var _readyForEnqueue = Completer();
 
   final _enqueueErrorsStreamController = StreamController<Task>();
@@ -159,12 +165,16 @@ class MemoryTaskQueue implements TaskQueue {
     if (group == null) {
       removeAll();
       enqueued.clear();
+      _activeByHost.clear();
+      _activeByGroup.clear();
     } else {
       removeTasksWithGroup(group);
       final tasksToRemove =
           enqueued.where((task) => task.group != group).toList(growable: false);
       for (final task in tasksToRemove) {
-        enqueued.remove(task);
+        if (enqueued.remove(task)) {
+          _decrementCounts(task);
+        }
       }
     }
   }
@@ -185,6 +195,7 @@ class MemoryTaskQueue implements TaskQueue {
       }
       _readyForEnqueue = Completer();
       enqueued.add(task);
+      _incrementCounts(task);
       enqueue(task).then((success) async {
         if (!success) {
           _log.warning(
@@ -235,6 +246,7 @@ class MemoryTaskQueue implements TaskQueue {
   @override
   void taskFinished(Task task) {
     if (enqueued.remove(task)) {
+      _decrementCounts(task);
       advanceQueue();
     }
   }
@@ -244,16 +256,44 @@ class MemoryTaskQueue implements TaskQueue {
   int get numActive => enqueued.length;
 
   /// Returns number of tasks active with this host name
-  int numActiveWithHostname(String hostname) => enqueued.fold(
-      0,
-      (previousValue, task) =>
-          task.hostName == hostname ? previousValue + 1 : previousValue);
+  int numActiveWithHostname(String hostname) => _activeByHost[hostname] ?? 0;
 
   /// Returns number of tasks active with this group
-  int numActiveWithGroup(String group) => enqueued.fold(
-      0,
-      (previousValue, task) =>
-          task.group == group ? previousValue + 1 : previousValue);
+  int numActiveWithGroup(String group) => _activeByGroup[group] ?? 0;
+
+  void _incrementCounts(Task task) {
+    try {
+      final host = task.hostName;
+      _activeByHost[host] = (_activeByHost[host] ?? 0) + 1;
+    } catch (_) {
+      // ignore invalid url
+    }
+    _activeByGroup[task.group] = (_activeByGroup[task.group] ?? 0) + 1;
+  }
+
+  void _decrementCounts(Task task) {
+    try {
+      final host = task.hostName;
+      if (_activeByHost.containsKey(host)) {
+        final newCount = _activeByHost[host]! - 1;
+        if (newCount <= 0) {
+          _activeByHost.remove(host);
+        } else {
+          _activeByHost[host] = newCount;
+        }
+      }
+    } catch (_) {
+      // ignore invalid url
+    }
+    if (_activeByGroup.containsKey(task.group)) {
+      final newCount = _activeByGroup[task.group]! - 1;
+      if (newCount <= 0) {
+        _activeByGroup.remove(task.group);
+      } else {
+        _activeByGroup[task.group] = newCount;
+      }
+    }
+  }
 
   /// True if queue is empty
   bool get isEmpty => waiting.isEmpty;
