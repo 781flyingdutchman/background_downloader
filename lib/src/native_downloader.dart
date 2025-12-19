@@ -51,7 +51,7 @@ abstract base class NativeDownloader extends BaseDownloader {
     final args = call.arguments as List<dynamic>;
     var taskJsonString = args.first as String;
     final task = taskJsonString.isNotEmpty
-        ? await JsonProcessor.instance.decodeTask(taskJsonString)
+        ? await JsonProcessor().decodeTask(taskJsonString)
         : DownloadTask(url: 'url');
     final message = (
       call.method,
@@ -189,7 +189,7 @@ abstract base class NativeDownloader extends BaseDownloader {
 
       // from ParallelDownloadTask
       case ('enqueueChild', String childTaskJsonString):
-        final childTask = await JsonProcessor.instance
+        final childTask = await JsonProcessor()
             .decodeTask(childTaskJsonString);
         Future.delayed(const Duration(milliseconds: 100))
             .then((_) => FileDownloader().enqueue(childTask));
@@ -202,7 +202,7 @@ abstract base class NativeDownloader extends BaseDownloader {
 
       // from ParallelDownloadTask
       case ('pauseTasks', String listOfTasksJson):
-        final listOfTasks = await JsonProcessor.instance
+        final listOfTasks = await JsonProcessor()
             .decodeDownloadTaskList(listOfTasksJson);
         Future.delayed(const Duration(milliseconds: 100)).then((_) async {
           for (final chunkTask in listOfTasks) {
@@ -242,7 +242,7 @@ abstract base class NativeDownloader extends BaseDownloader {
       canResumeTask[task] = Completer();
     }
     final (String tasksJsonString, String notificationConfigsJsonString) =
-        await JsonProcessor.instance
+        await JsonProcessor()
             .encodeTaskAndNotificationConfig(
                 tasks, notificationConfigs);
     final result = await methodChannel.invokeMethod<List<Object?>>(
@@ -268,7 +268,7 @@ abstract base class NativeDownloader extends BaseDownloader {
             'allTasks', allGroups ? null : group) ??
         [];
     final tasks =
-        await JsonProcessor.instance.decodeTaskList(result);
+        await JsonProcessor().decodeTaskList(result);
     return [...retryAndPausedTasks, ...tasks];
   }
 

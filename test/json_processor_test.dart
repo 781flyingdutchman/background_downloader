@@ -16,7 +16,7 @@ void main() {
       final jsonString = jsonEncode(task.toJson());
 
       final result =
-          await JsonProcessor.instance.decodeTask(jsonString);
+          await JsonProcessor().decodeTask(jsonString);
 
       expect(result, isA<DownloadTask>());
       expect(result.url, equals(task.url));
@@ -30,7 +30,7 @@ void main() {
       final list = [task1, task2];
       final jsonString = jsonEncode(list);
 
-      final result = await JsonProcessor.instance
+      final result = await JsonProcessor()
           .decodeDownloadTaskList(jsonString);
 
       expect(result, hasLength(2));
@@ -47,7 +47,7 @@ void main() {
         jsonEncode(task2.toJson())
       ];
 
-      final result = await JsonProcessor.instance
+      final result = await JsonProcessor()
           .decodeTaskList(listStrings);
 
       expect(result, hasLength(2));
@@ -65,7 +65,7 @@ void main() {
             running: const TaskNotification('Running', 'body'))
       };
 
-      final (tasksJson, configsJson) = await JsonProcessor.instance
+      final (tasksJson, configsJson) = await JsonProcessor()
           .encodeTaskAndNotificationConfig(tasks, configs);
 
       final decodedTasks = jsonDecode(tasksJson);
@@ -90,7 +90,7 @@ void main() {
         headers: headers,
         metaData: 'some metadata ' * 100);
     final taskJsonString = jsonEncode(task.toJson());
-
+    print('taskJsonString is ${taskJsonString.length} characters');
     // 2. Benchmark
 
     const iterations = 1000;
@@ -108,44 +108,9 @@ void main() {
     // Method 2: JsonProcessor (Isolate)
     final stopwatchProcessor = Stopwatch()..start();
     for (var i = 0; i < iterations; i++) {
-      // Benchmark the round trip: Encode (locally for setup) -> Process (Decode in isolate) -> Return
-      // Note: The prompt asks for "runs a thousand... operations... using the json processor".
-      // JsonProcessor primarily exposes decoding or list encoding.
-      // To mimic the "Encode -> Decode" loop of the direct test:
-      // We will use processTaskFromJson which takes a string and returns a Task.
-      // So we must provide the string.
-
-      // Since processTaskFromJson only decodes, we match the Direct test's decode part primarily,
-      // but the Direct test did both.
-      // To be fair, let's assume we are measuring the "offloadable" part.
-      // The prompt says "runs a thousand Jason and code and Jason d. Code operations".
-      // "Json encode and Json decode".
-
-      // JsonProcessor doesn't have a public "encode this single task" method (it has list encoding).
-      // But it has `processTaskFromJson` (decode).
-      // The prompt says "One is using the json processor and the other is not".
-
-      // I will implement the loop as:
-      // Direct: jsonEncode(task) -> jsonDecode(string)
-      // Processor: jsonEncode(task) -> processTaskFromJson(string)
-      // This measures the overhead of sending the string to isolate + decoding there + returning Task.
-      // Ideally we'd offload encoding too, but `processTaskFromJson` expects a string.
-
-      // Wait, `_TaskAndNotificationConfigJsonStrings` does ENCODING in isolate.
-      // But that takes a list.
-
-      // I will stick to `processTaskFromJson` for the decode part, as that's the most common hot path for "commands fed to it".
-      // So:
-      // Direct: String -> Decode -> Task
-      // Processor: String -> Decode(in isolate) -> Task
-
-      // Let's refine: The prompt says "runs a thousand Jason and code and Jason d. Code operations on the same large task object".
-      // This implies full round trip.
-      // But JsonProcessor API is specific.
-      // I will assume the goal is to compare the "Isolate Round Trip" vs "Local execution".
-
       final decoded =
-          await JsonProcessor.instance.decodeTask(taskJsonString);
+          await JsonProcessor().decodeTask(taskJsonString);
+      // quick check to prevent optimization
       if (decoded.url.isEmpty) throw Exception('Validation failed');
     }
     stopwatchProcessor.stop();
