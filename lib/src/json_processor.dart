@@ -14,25 +14,24 @@ sealed class JsonCommand {
 
 class _TaskFromJson extends JsonCommand {
   final String jsonString;
-  const _TaskFromJson(int id, this.jsonString) : super(id);
+  const _TaskFromJson(super.id, this.jsonString);
 }
 
 class _DownloadTaskListFromJson extends JsonCommand {
   final String jsonString;
-  const _DownloadTaskListFromJson(int id, this.jsonString) : super(id);
+  const _DownloadTaskListFromJson(super.id, this.jsonString);
 }
 
 class _TaskListFromListStrings extends JsonCommand {
   final List<dynamic> jsonStrings;
-  const _TaskListFromListStrings(int id, this.jsonStrings) : super(id);
+  const _TaskListFromListStrings(super.id, this.jsonStrings);
 }
 
 class _TaskAndNotificationConfigJsonStrings extends JsonCommand {
   final List<Task> tasks;
   final Set<TaskNotificationConfig> notificationConfigs;
   const _TaskAndNotificationConfigJsonStrings(
-      int id, this.tasks, this.notificationConfigs)
-      : super(id);
+      super.id, this.tasks, this.notificationConfigs);
 }
 
 /// Singleton object that manages a background isolate for JSON encoding/decoding
@@ -53,23 +52,23 @@ class JsonProcessor {
 
   /// Public API
 
-  Future<Task> processTaskFromJson(String jsonString) async {
+  Future<Task> decodeTask(String jsonString) async {
     return await _process<Task>((id) => _TaskFromJson(id, jsonString));
   }
 
-  Future<List<DownloadTask>> processDownloadTaskListFromJson(
+  Future<List<DownloadTask>> decodeDownloadTaskList(
       String jsonString) async {
     return await _process<List<DownloadTask>>(
         (id) => _DownloadTaskListFromJson(id, jsonString));
   }
 
-  Future<List<Task>> processTaskListFromListStrings(
+  Future<List<Task>> decodeTaskList(
       List<dynamic> jsonStrings) async {
     return await _process<List<Task>>(
         (id) => _TaskListFromListStrings(id, jsonStrings));
   }
 
-  Future<(String, String)> processTaskAndNotificationConfigJsonStrings(
+  Future<(String, String)> encodeTaskAndNotificationConfig(
       Iterable<Task> tasks,
       Set<TaskNotificationConfig> notificationConfigs) async {
     // Convert Iterable to List to ensure it's sendable and fixed
@@ -94,7 +93,7 @@ class JsonProcessor {
 
     try {
       final result = await completer.future;
-      return result as T;
+      return result;
     } catch (e) {
       rethrow;
     } finally {
@@ -196,7 +195,8 @@ void _isolateMain(SendPort mainSendPort) {
     if (message is SendPort) {
       replyPort = message;
     } else if (message is JsonCommand) {
-      if (replyPort == null) return; // Should not happen if protocol is followed
+      if (replyPort == null)
+        return; // Should not happen if protocol is followed
 
       try {
         final result = await _executeCommand(message);
@@ -214,16 +214,16 @@ Future<dynamic> _executeCommand(JsonCommand command) async {
       return Task.createFromJson(jsonDecode(c.jsonString));
 
     case _DownloadTaskListFromJson c:
-       return List<DownloadTask>.from(jsonDecode(c.jsonString,
-        reviver: (key, value) => switch (key) {
-              int _ => Task.createFromJson(value as Map<String, dynamic>),
-              _ => value
-            }));
+      return List<DownloadTask>.from(jsonDecode(c.jsonString,
+          reviver: (key, value) => switch (key) {
+                int _ => Task.createFromJson(value as Map<String, dynamic>),
+                _ => value
+              }));
 
     case _TaskListFromListStrings c:
       return c.jsonStrings
-        .map((e) => Task.createFromJson(jsonDecode(e as String)))
-        .toList();
+          .map((e) => Task.createFromJson(jsonDecode(e as String)))
+          .toList();
 
     case _TaskAndNotificationConfigJsonStrings c:
       final tasksJsonString = jsonEncode(c.tasks);

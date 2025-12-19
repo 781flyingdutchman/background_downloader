@@ -1,9 +1,10 @@
+// ignore_for_file: avoid_print
+
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:background_downloader/background_downloader.dart';
 import 'package:background_downloader/src/json_processor.dart';
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('JsonProcessor Functional Tests', () {
@@ -14,7 +15,8 @@ void main() {
           headers: {'Cookie': 'foo=bar'});
       final jsonString = jsonEncode(task.toJson());
 
-      final result = await JsonProcessor.instance.processTaskFromJson(jsonString);
+      final result =
+          await JsonProcessor.instance.decodeTask(jsonString);
 
       expect(result, isA<DownloadTask>());
       expect(result.url, equals(task.url));
@@ -28,31 +30,43 @@ void main() {
       final list = [task1, task2];
       final jsonString = jsonEncode(list);
 
-      final result = await JsonProcessor.instance.processDownloadTaskListFromJson(jsonString);
+      final result = await JsonProcessor.instance
+          .decodeDownloadTaskList(jsonString);
 
       expect(result, hasLength(2));
       expect(result[0].url, equals(task1.url));
       expect(result[1].url, equals(task2.url));
     });
 
-    test('processTaskListFromListStrings decodes list of strings correctly', () async {
+    test('processTaskListFromListStrings decodes list of strings correctly',
+        () async {
       final task1 = DownloadTask(url: 'https://google.com/1', filename: '1');
       final task2 = DownloadTask(url: 'https://google.com/2', filename: '2');
-      final listStrings = [jsonEncode(task1.toJson()), jsonEncode(task2.toJson())];
+      final listStrings = [
+        jsonEncode(task1.toJson()),
+        jsonEncode(task2.toJson())
+      ];
 
-      final result = await JsonProcessor.instance.processTaskListFromListStrings(listStrings);
+      final result = await JsonProcessor.instance
+          .decodeTaskList(listStrings);
 
       expect(result, hasLength(2));
       expect(result[0].url, equals(task1.url));
       expect(result[1].url, equals(task2.url));
     });
 
-    test('processTaskAndNotificationConfigJsonStrings encodes correctly', () async {
+    test('processTaskAndNotificationConfigJsonStrings encodes correctly',
+        () async {
       final task = DownloadTask(url: 'https://google.com', filename: 'test');
       final tasks = [task];
-      final configs = {TaskNotificationConfig(taskOrGroup: task, running: const TaskNotification('Running', 'body'))};
+      final configs = {
+        TaskNotificationConfig(
+            taskOrGroup: task,
+            running: const TaskNotification('Running', 'body'))
+      };
 
-      final (tasksJson, configsJson) = await JsonProcessor.instance.processTaskAndNotificationConfigJsonStrings(tasks, configs);
+      final (tasksJson, configsJson) = await JsonProcessor.instance
+          .encodeTaskAndNotificationConfig(tasks, configs);
 
       final decodedTasks = jsonDecode(tasksJson);
       expect(decodedTasks, isA<List>());
@@ -74,17 +88,17 @@ void main() {
         url: 'https://example.com/very/long/path/' * 5,
         filename: 'large_task_filename.txt',
         headers: headers,
-        metaData: 'some metadata ' * 100
-    );
+        metaData: 'some metadata ' * 100);
     final taskJsonString = jsonEncode(task.toJson());
+
+    // 2. Benchmark
 
     const iterations = 1000;
 
     // Method 1: Direct (Main Thread)
     final stopwatchDirect = Stopwatch()..start();
     for (var i = 0; i < iterations; i++) {
-      final encoded = jsonEncode(task.toJson());
-      final decoded = Task.createFromJson(jsonDecode(encoded));
+      final decoded = Task.createFromJson(jsonDecode(taskJsonString));
       // quick check to prevent optimization
       if (decoded.url.isEmpty) throw Exception('Validation failed');
     }
@@ -130,11 +144,13 @@ void main() {
       // But JsonProcessor API is specific.
       // I will assume the goal is to compare the "Isolate Round Trip" vs "Local execution".
 
-      final decoded = await JsonProcessor.instance.processTaskFromJson(taskJsonString);
-       if (decoded.url.isEmpty) throw Exception('Validation failed');
+      final decoded =
+          await JsonProcessor.instance.decodeTask(taskJsonString);
+      if (decoded.url.isEmpty) throw Exception('Validation failed');
     }
     stopwatchProcessor.stop();
-    print('JsonProcessor (Isolate): ${stopwatchProcessor.elapsedMilliseconds} ms');
+    print(
+        'JsonProcessor (Isolate): ${stopwatchProcessor.elapsedMilliseconds} ms');
 
     // Allow isolate to shutdown naturally or force it if test runner hangs (timer is 1 min)
     // We don't have public shutdown.

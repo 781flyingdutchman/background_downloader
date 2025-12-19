@@ -51,7 +51,7 @@ abstract base class NativeDownloader extends BaseDownloader {
     final args = call.arguments as List<dynamic>;
     var taskJsonString = args.first as String;
     final task = taskJsonString.isNotEmpty
-        ? await JsonProcessor.instance.processTaskFromJson(taskJsonString)
+        ? await JsonProcessor.instance.decodeTask(taskJsonString)
         : DownloadTask(url: 'url');
     final message = (
       call.method,
@@ -190,7 +190,7 @@ abstract base class NativeDownloader extends BaseDownloader {
       // from ParallelDownloadTask
       case ('enqueueChild', String childTaskJsonString):
         final childTask = await JsonProcessor.instance
-            .processTaskFromJson(childTaskJsonString);
+            .decodeTask(childTaskJsonString);
         Future.delayed(const Duration(milliseconds: 100))
             .then((_) => FileDownloader().enqueue(childTask));
 
@@ -203,7 +203,7 @@ abstract base class NativeDownloader extends BaseDownloader {
       // from ParallelDownloadTask
       case ('pauseTasks', String listOfTasksJson):
         final listOfTasks = await JsonProcessor.instance
-            .processDownloadTaskListFromJson(listOfTasksJson);
+            .decodeDownloadTaskList(listOfTasksJson);
         Future.delayed(const Duration(milliseconds: 100)).then((_) async {
           for (final chunkTask in listOfTasks) {
             await FileDownloader().pause(chunkTask);
@@ -241,11 +241,10 @@ abstract base class NativeDownloader extends BaseDownloader {
     for (final task in tasks.where((task) => task.allowPause)) {
       canResumeTask[task] = Completer();
     }
-    final (
-      String tasksJsonString,
-      String notificationConfigsJsonString
-    ) = await JsonProcessor.instance
-        .processTaskAndNotificationConfigJsonStrings(tasks, notificationConfigs);
+    final (String tasksJsonString, String notificationConfigsJsonString) =
+        await JsonProcessor.instance
+            .encodeTaskAndNotificationConfig(
+                tasks, notificationConfigs);
     final result = await methodChannel.invokeMethod<List<Object?>>(
             'enqueueAll', [tasksJsonString, notificationConfigsJsonString]) ??
         [];
@@ -268,8 +267,8 @@ abstract base class NativeDownloader extends BaseDownloader {
     final result = await methodChannel.invokeMethod<List<dynamic>?>(
             'allTasks', allGroups ? null : group) ??
         [];
-    final tasks = await JsonProcessor.instance
-        .processTaskListFromListStrings(result);
+    final tasks =
+        await JsonProcessor.instance.decodeTaskList(result);
     return [...retryAndPausedTasks, ...tasks];
   }
 
@@ -500,7 +499,6 @@ abstract base class NativeDownloader extends BaseDownloader {
     }
     return (configItem.$1, ''); // normal result
   }
-
 }
 
 /// Android native downloader
