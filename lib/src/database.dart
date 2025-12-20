@@ -80,14 +80,8 @@ interface class Database {
   /// Only records that can be found in the database will be included in the
   /// list. TaskIds that cannot be found will be ignored.
   Future<List<TaskRecord>> recordsForIds(Iterable<String> taskIds) async {
-    final result = <TaskRecord>[];
-    for (var taskId in taskIds) {
-      final record = await recordForId(taskId);
-      if (record != null) {
-        result.add(record);
-      }
-    }
-    return result;
+    final records = await Future.wait(taskIds.map((id) => recordForId(id)));
+    return records.whereType<TaskRecord>().toList();
   }
 
   /// Delete all records
@@ -109,9 +103,7 @@ interface class Database {
 
   /// Delete records with these [taskIds]
   Future<void> deleteRecordsWithIds(Iterable<String> taskIds) async {
-    for (var taskId in taskIds) {
-      await _storage.removeTaskRecord(taskId);
-    }
+    await Future.wait(taskIds.map((taskId) => _storage.removeTaskRecord(taskId)));
   }
 
   /// Update or insert the record in the database
