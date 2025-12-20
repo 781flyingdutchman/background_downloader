@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:logging/logging.dart';
 import 'package:path/path.dart';
@@ -78,6 +80,9 @@ abstract interface class PersistentStorage {
   /// name and version, if needed
   /// This call runs async with the rest of the initialization
   Future<void> initialize();
+
+  /// Clean up the database
+  Future<void> cleanUp();
 }
 
 /// Default implementation of [PersistentStorage] using Localstore package
@@ -90,6 +95,7 @@ class LocalStorePersistentStorage implements PersistentStorage {
   static const resumeDataPath = 'backgroundDownloaderResumeData';
   static const pausedTasksPath = 'backgroundDownloaderPausedTasks';
   static const metaDataCollection = 'backgroundDownloaderDatabase';
+  static (int, int) cleanupConfig = (500, 10); // maxRecords, maxDays
 
   /// Stores [Map<String, dynamic>] formatted [document] in [collection] keyed under [identifier]
   Future<void> store(Map<String, dynamic> document, String collection,
@@ -256,6 +262,65 @@ class LocalStorePersistentStorage implements PersistentStorage {
         .collection(metaDataCollection)
         .doc('metaData')
         .set({'version': currentVersion});
+  }
+
+  @override
+  Future<void> cleanUp() async {
+    final supportDir = await getApplicationSupportDirectory();
+    final taskRecordsDir = join(supportDir.path, taskRecordsPath);
+    try {
+      if (await Directory(taskRecordsDir).exists()) {
+        await Isolate.run(() =>
+            _removeOldTaskRecords(taskRecordsDir, cleanupConfig));
+      }
+    } catch (e) {
+      log.fine('Error cleaning up database: $e');
+    }
+  }
+
+  /// Remove old task records, keeping [maxRecords] newest, and of the
+  /// remainder deleting those older than [maxDays] days
+  ///
+  /// This is run on an isolate, so cannot use [Localstore] directly
+  static Future<void> _removeOldTaskRecords(
+      String dirPath, (int, int) config) async {
+    final (maxRecords, maxDays) = config;
+    final dir = Directory(dirPath);
+    if (!await dir.exists()) {
+      return;
+    }
+    final files = await dir.list().toList();
+    if (files.length <= maxRecords) {
+      return;
+    }
+    // read all files to get the creation time, as a list of (File, creationTime)
+    final fileRecords = <(File, int)>[];
+    for (final file in files.whereType<File>()) {
+      try {
+        final content = await file.readAsString();
+        final json = jsonDecode(content);
+        final creationTime =
+            (json['task']['creationTime'] as num?)?.toInt() ?? 0;
+        fileRecords.add((file, creationTime));
+      } catch (e) {
+        // ignore error
+      }
+    }
+    // sort by creation time, descending (newest first)
+    fileRecords.sort((a, b) => b.$2.compareTo(a.$2));
+    // delete files that are over the limit and older than maxDays
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final maxAge = maxDays * 24 * 60 * 60 * 1000;
+    for (var i = maxRecords; i < fileRecords.length; i++) {
+      final (file, creationTime) = fileRecords[i];
+      if (now - creationTime > maxAge) {
+        try {
+          await file.delete();
+        } catch (e) {
+          // ignore error
+        }
+      }
+    }
   }
 }
 

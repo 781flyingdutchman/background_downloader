@@ -123,6 +123,11 @@ interface class Database {
   void destroy() {
     _instance = null;
   }
+
+  /// Clean up the database
+  ///
+  /// Removes old records based on configuration
+  Future<void> cleanUp() => _storage.cleanUp();
 }
 
 /// Record containing task, task status and task progress.

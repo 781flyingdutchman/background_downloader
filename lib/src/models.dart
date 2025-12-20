@@ -630,6 +630,9 @@ final class Config {
   /// Config string for skip existing files
   static const skipExistingFiles = 'skipExistingFiles';
 
+  /// Config string for database cleanup
+  static const databaseCleanup = 'databaseCleanup';
+
   // Config arguments
 
   /// Config argument for always

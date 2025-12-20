@@ -173,7 +173,17 @@ abstract base class BaseDownloader {
         rawPlatformConfig is List ? rawPlatformConfig : [rawPlatformConfig];
     return await Future.wait([...global, ...platform]
         .where((e) => e != null)
-        .map((e) => configureItem(e)));
+        .map((e) {
+      if (e.$1 == Config.databaseCleanup) {
+        if (e.$2 is (int, int)) {
+          LocalStorePersistentStorage.cleanupConfig = e.$2;
+        } else {
+          log.warning('databaseCleanup config must be a (int, int) record');
+        }
+        return Future.value((e.$1, ''));
+      }
+      return configureItem(e);
+    }));
   }
 
   /// Returns the config for the platform, e.g. the [androidConfig] parameter
