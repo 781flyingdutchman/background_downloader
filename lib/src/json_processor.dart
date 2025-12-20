@@ -195,8 +195,9 @@ void _isolateMain(SendPort mainSendPort) {
     if (message is SendPort) {
       replyPort = message;
     } else if (message is JsonCommand) {
-      if (replyPort == null)
+      if (replyPort == null) {
         return; // Should not happen if protocol is followed
+      }
 
       try {
         final result = await _executeCommand(message);

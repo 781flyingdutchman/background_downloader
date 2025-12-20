@@ -199,9 +199,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 }
             }
             try {
-                withContext(Dispatchers.IO) {
-                    operation.result.get()
-                }
+                operation.result.get()
                 val prefs = PreferenceManager.getDefaultSharedPreferences(context)
                 if (initialDelayMillis != 0L) {
                     delay(min(100L, initialDelayMillis))
@@ -407,7 +405,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     private var backgroundChannel: MethodChannel? = null
     private lateinit var applicationContext: Context
     private lateinit var mainScope: CoroutineScope
-    private lateinit var ioScope: CoroutineScope
+    private lateinit var defaultScope: CoroutineScope
     private var binaryMessenger: BinaryMessenger? = null
     var activity: Activity? = null
 
@@ -418,7 +416,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         applicationContext = flutterPluginBinding.applicationContext
         mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-        ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        defaultScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         binaryMessenger = flutterPluginBinding.binaryMessenger
         backgroundChannel =
             MethodChannel(
@@ -461,7 +459,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * */
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         mainScope.cancel()
-        ioScope.cancel()
+        defaultScope.cancel()
         channel?.setMethodCallHandler(null)
         channel = null
         bgChannelByTaskId =
@@ -544,7 +542,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Returns true if successful, and will emit a status update that the task is running.
      */
     private suspend fun methodEnqueue(call: MethodCall): Boolean =
-        withContext(ioScope.coroutineContext) {
+        withContext(defaultScope.coroutineContext) {
             // Arguments are a list of Task, NotificationConfig?, optionally followed
             // by tempFilePath, startByte and eTag if this enqueue is a resume from pause
             val args = call.arguments as List<*>
@@ -606,7 +604,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Returns a list of booleans indicating the success of each individual enqueue operation.
      */
     private suspend fun methodEnqueueAll(call: MethodCall): List<Boolean> =
-        withContext(ioScope.coroutineContext) {
+        withContext(defaultScope.coroutineContext) {
             val plugin = this@BDPlugin
             val args = call.arguments as List<*>
             val taskListJsonString = args[0] as String
@@ -681,7 +679,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      *
      * Returns the number of tasks canceled
      */
-    private suspend fun methodReset(call: MethodCall): Int = withContext(ioScope.coroutineContext) {
+    private suspend fun methodReset(call: MethodCall): Int = withContext(defaultScope.coroutineContext) {
         val group = call.arguments as String
         holdingQueue?.stateMutex?.lock()
         var counter = holdingQueue?.cancelAllTasks(applicationContext, group) ?: 0
@@ -722,7 +720,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * optionally filtered by group
      */
     private suspend fun methodAllTasks(call: MethodCall): List<String> =
-        withContext(ioScope.coroutineContext) {
+        withContext(defaultScope.coroutineContext) {
             val group = call.arguments as String?
             val tasksAsListOfJsonStrings = mutableListOf<String>()
             holdingQueue?.stateMutex?.lock()
@@ -760,7 +758,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Returns true if all cancellations were successful
      */
     private suspend fun methodCancelTasksWithIds(call: MethodCall): Boolean =
-        withContext(ioScope.coroutineContext) {
+        withContext(defaultScope.coroutineContext) {
             @Suppress("UNCHECKED_CAST") val taskIds = call.arguments as List<String>
             cancelTasksWithIds(applicationContext, taskIds)
         }
@@ -778,7 +776,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      */
     private suspend fun methodKillTaskWithId(call: MethodCall): Any? {
         val taskId = call.arguments as String
-        withContext(ioScope.coroutineContext) {
+        withContext(defaultScope.coroutineContext) {
             val workManager = WorkManager.getInstance(applicationContext)
             val operation = workManager.cancelAllWorkByTag("taskId=$taskId")
             try {
@@ -795,7 +793,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
     /** Returns Task for this taskId, or nil */
     private suspend fun methodTaskForId(call: MethodCall): String? =
-        withContext(ioScope.coroutineContext) {
+        withContext(defaultScope.coroutineContext) {
             val taskId = call.arguments as String
             Log.v(TAG, "Returning task for taskId $taskId")
             holdingQueue?.stateMutex?.lock()
@@ -848,7 +846,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * - taskStatus as ordinal in TaskStatus enum. If null, delete the notification
      */
     private suspend fun methodUpdateNotification(call: MethodCall): Any? =
-        withContext(ioScope.coroutineContext) {
+        withContext(defaultScope.coroutineContext) {
             val args = call.arguments as List<*>
             val taskJsonMapString = args[0] as String
             val notificationConfigJsonString = args[1] as String
@@ -869,7 +867,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Local storage of this map is then cleared
      */
     private suspend fun methodPopResumeData(): String {
-        return withContext(ioScope.coroutineContext) {
+        return withContext(defaultScope.coroutineContext) {
             popLocalStorage(keyResumeDataMap)
         }
     }
@@ -880,7 +878,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Local storage of this map is then cleared
      */
     private suspend fun methodPopStatusUpdates(): String {
-        return withContext(ioScope.coroutineContext) {
+        return withContext(defaultScope.coroutineContext) {
             popLocalStorage(keyStatusUpdateMap)
         }
     }
@@ -891,7 +889,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Local storage of this map is then cleared
      */
     private suspend fun methodPopProgressUpdates(): String {
-        return withContext(ioScope.coroutineContext) {
+        return withContext(defaultScope.coroutineContext) {
             popLocalStorage(keyProgressUpdateMap)
         }
     }
@@ -924,7 +922,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * - asUriString (Boolean): if set, returns the path not as a filePath but as a Uri
      */
     private suspend fun methodMoveToSharedStorage(call: MethodCall): String? =
-        withContext(ioScope.coroutineContext) {
+        withContext(defaultScope.coroutineContext) {
             val args = call.arguments as List<*>
             val filePath = args[0] as String
             val destination = SharedStorage.entries[args[1] as Int]
@@ -971,7 +969,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val destination = SharedStorage.entries[args[1] as Int]
         val directory = args[2] as String
         val asUriString = args[3] as Boolean
-        return withContext(ioScope.coroutineContext) {
+        return withContext(defaultScope.coroutineContext) {
             pathInSharedStorage(
                 applicationContext,
                 filePath,
@@ -1011,7 +1009,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      *
      * Returns true always
      */
-    private suspend fun methodRequireWiFi(call: MethodCall): Boolean = withContext(ioScope.coroutineContext) {
+    private suspend fun methodRequireWiFi(call: MethodCall): Boolean = withContext(defaultScope.coroutineContext) {
         val args = call.arguments as List<*>
         val newRequireWiFi = RequireWiFi.entries[args[0] as Int]
         val rescheduleRunning = args[1] as Boolean
@@ -1029,7 +1027,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Returns the current global setting for 'requireWiFi', as an ordinal
      */
     private suspend fun methodGetRequireWiFiSetting(): Int {
-        return withContext(ioScope.coroutineContext) {
+        return withContext(defaultScope.coroutineContext) {
             PreferenceManager.getDefaultSharedPreferences(applicationContext).getInt(
                 keyRequireWiFi, 0
             )
@@ -1043,7 +1041,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      *
      * Arguments are the parent TaskId, chunk taskId, taskStatusOrdinal
      */
-    private suspend fun methodUpdateChunkStatus(call: MethodCall): Any? = withContext(ioScope.coroutineContext) {
+    private suspend fun methodUpdateChunkStatus(call: MethodCall): Any? = withContext(defaultScope.coroutineContext) {
         val args = call.arguments as List<*>
         val taskId = args[0] as String
         val chunkTaskId = args[1] as String
@@ -1074,7 +1072,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      *
      * Arguments are the parent [TaskId, chunk taskId, progress]
      */
-    private suspend fun methodUpdateChunkProgress(call: MethodCall): Any? = withContext(ioScope.coroutineContext) {
+    private suspend fun methodUpdateChunkProgress(call: MethodCall): Any? = withContext(defaultScope.coroutineContext) {
         val args = call.arguments as List<*>
         val taskId = args[0] as String
         val chunkTaskId = args[1] as String
@@ -1136,7 +1134,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * that Dart is listening to the methodChannel before calling the callback.
      */
     private suspend fun methodRegisterCallbackDispatcher(call: MethodCall): Any? {
-        withContext(ioScope.coroutineContext) {
+        withContext(defaultScope.coroutineContext) {
             PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
                 val handle = call.arguments as Long?
                 if (handle != null) {
@@ -1159,7 +1157,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * is retrieved in [TaskWorker.doWork]
      */
     private suspend fun methodConfigForegroundFileSize(call: MethodCall): Any? {
-        withContext(ioScope.coroutineContext) {
+        withContext(defaultScope.coroutineContext) {
             val fileSize = call.arguments as Int
             updateSharedPreferences(keyConfigForegroundFileSize, fileSize)
             val msg = when (fileSize) {
@@ -1176,7 +1174,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Store the proxy address config in shared preferences
      */
     private suspend fun methodConfigProxyAddress(call: MethodCall): Any? {
-        withContext(ioScope.coroutineContext) {
+        withContext(defaultScope.coroutineContext) {
             PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
                 val address = call.arguments as String?
                 if (address != null) {
@@ -1194,7 +1192,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Store the proxy port config in shared preferences
      */
     private suspend fun methodConfigProxyPort(call: MethodCall): Any? {
-        withContext(ioScope.coroutineContext) {
+        withContext(defaultScope.coroutineContext) {
             updateSharedPreferences(keyConfigProxyPort, call.arguments as Int?)
         }
         return null
@@ -1204,7 +1202,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Store the requestTimeout config in shared preferences
      */
     private suspend fun methodConfigRequestTimeout(call: MethodCall): Any? {
-        withContext(ioScope.coroutineContext) {
+        withContext(defaultScope.coroutineContext) {
             updateSharedPreferences(keyConfigRequestTimeout, call.arguments as Int?)
         }
         return null
@@ -1214,7 +1212,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Bypass the certificate validation
      */
     private suspend fun methodConfigBypassTLSCertificateValidation(): Any? {
-        withContext(ioScope.coroutineContext) {
+        withContext(defaultScope.coroutineContext) {
             acceptUntrustedCertificates()
         }
         return null
@@ -1224,7 +1222,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Store the availableSpace config in shared preferences
      */
     private suspend fun methodConfigCheckAvailableSpace(call: MethodCall): Any? {
-        withContext(ioScope.coroutineContext) {
+        withContext(defaultScope.coroutineContext) {
             updateSharedPreferences(keyConfigCheckAvailableSpace, call.arguments as Int?)
         }
         return null
@@ -1234,7 +1232,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Store the useCacheDir config in shared preferences
      */
     private suspend fun methodConfigUseCacheDir(call: MethodCall): Any? {
-        withContext(ioScope.coroutineContext) {
+        withContext(defaultScope.coroutineContext) {
             updateSharedPreferences(keyConfigUseCacheDir, call.arguments as Int?)
         }
         return null
@@ -1244,7 +1242,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Store the useExternalStorage config in shared preferences
      */
     private suspend fun methodConfigUseExternalStorage(call: MethodCall): Any? {
-        withContext(ioScope.coroutineContext) {
+        withContext(defaultScope.coroutineContext) {
             updateSharedPreferences(keyConfigUseExternalStorage, call.arguments as Int?)
         }
         return null
@@ -1329,7 +1327,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * Store the skipExistingFiles config in shared preferences
      */
     private suspend fun methodConfigSkipExistingFiles(call: MethodCall): Any? {
-        withContext(ioScope.coroutineContext) {
+        withContext(defaultScope.coroutineContext) {
             updateSharedPreferences(keyConfigSkipExistingFiles, call.arguments as Int?)
         }
         return null
