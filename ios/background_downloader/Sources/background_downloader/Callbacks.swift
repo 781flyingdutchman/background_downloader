@@ -11,15 +11,19 @@ import os.log
 
 import UIKit
 
-
-/// Invoke a callback in Dart (via the method channel) and return the returned Task value or nil
-private func invokeCallback(withMethod methodName: String, forTask task: Task) async -> Any? {
+/// Helper function to get the callback channel with retry
+private func getCallbackChannel() async -> FlutterMethodChannel? {
     var retries = 0
     while BDPlugin.callbackChannel == nil && retries < 5 {
         try? await _Concurrency.Task.sleep(nanoseconds: 100_000_000) // 0.1 second
         retries += 1
     }
-    guard let callbackChannel = BDPlugin.callbackChannel else {
+    return BDPlugin.callbackChannel
+}
+
+/// Invoke a callback in Dart (via the method channel) and return the returned Task value or nil
+private func invokeCallback(withMethod methodName: String, forTask task: Task) async -> Any? {
+    guard let callbackChannel = await getCallbackChannel() else {
         os_log("Could not invoke %{public}@ for taskId %@: callbackChannel not set", log: log, type: .error, methodName, task.taskId)
         return nil
     }
@@ -60,12 +64,7 @@ func invokeOnAuthCallback(task: Task) async -> Task? {
 
 /// Invoke the onTaskFinishedCallback in Dart (via the method channel) and return true if successful
 func invokeOnTaskFinishedCallback(taskStatusUpdate: TaskStatusUpdate) async -> Bool {
-    var retries = 0
-    while BDPlugin.callbackChannel == nil && retries < 5 {
-        try? await _Concurrency.Task.sleep(nanoseconds: 100_000_000) // 0.1 second
-        retries += 1
-    }
-    guard let callbackChannel = BDPlugin.callbackChannel else {
+    guard let callbackChannel = await getCallbackChannel() else {
         os_log("Could not invoke onTaskFinishedCallback: callbackChannel not set", log: log, type: .error)
         return false
     }
