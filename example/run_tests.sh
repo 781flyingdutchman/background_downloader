@@ -115,11 +115,11 @@ awk '
 
           # IMPROVED REGEX:
           # Matches timestamp followed by any combination of +, ~, -, and numbers.
-          /^[0-9]{2}:[0-9]{2} [ +~-0-9]+:/ {
+          /^[0-9]{2}:[0-9]{2} [ +~0-9-]+:/ {
               header = $0;
               # Remove the timestamp/count prefix to get the description.
               desc = $0;
-              sub(/^[0-9]{2}:[0-9]{2} [ +~-0-9]+: /, "", desc);
+              sub(/^[0-9]{2}:[0-9]{2} [ +~0-9-]+: /, "", desc);
               desc = canonical(desc);
 
               if (currentTest == "") {
