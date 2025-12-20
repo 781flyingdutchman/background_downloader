@@ -228,28 +228,26 @@ class LocalStorePersistentStorage implements PersistentStorage {
         // move files from docDir to supportDir
         final docDir = await getApplicationDocumentsDirectory();
         final supportDir = await getApplicationSupportDirectory();
-        for (String path in [
+        await Future.wait([
           resumeDataPath,
           pausedTasksPath,
           taskRecordsPath
-        ]) {
+        ].map((path) async {
           try {
             final fromPath = join(docDir.path, path);
             if (await Directory(fromPath).exists()) {
               log.finest('Moving $path to support directory');
               final toPath = join(supportDir.path, path);
               await Directory(toPath).create(recursive: true);
-              await Directory(fromPath).list().forEach((entity) {
-                if (entity is File) {
-                  entity.copySync(join(toPath, basename(entity.path)));
-                }
-              });
+              final entities = await Directory(fromPath).list().toList();
+              await Future.wait(entities.whereType<File>().map((file) =>
+                  file.copy(join(toPath, basename(file.path)))));
               await Directory(fromPath).delete(recursive: true);
             }
           } catch (e) {
             log.fine('Error migrating database for path $path: $e');
           }
-        }
+        }));
 
       default:
         log.warning('Illegal starting version: $storedVersion');
@@ -337,16 +335,19 @@ class BasePersistentStorageMigrator implements PersistentStorageMigrator {
       PersistentStorage fromStorage, PersistentStorage toStorage) async {
     bool migratedSomething = false;
     await fromStorage.initialize();
-    for (final pausedTask in await fromStorage.retrieveAllPausedTasks()) {
-      await toStorage.storePausedTask(pausedTask);
+    final pausedTasks = await fromStorage.retrieveAllPausedTasks();
+    if (pausedTasks.isNotEmpty) {
+      await Future.wait(pausedTasks.map((e) => toStorage.storePausedTask(e)));
       migratedSomething = true;
     }
-    for (final resumeData in await fromStorage.retrieveAllResumeData()) {
-      await toStorage.storeResumeData(resumeData);
+    final resumeData = await fromStorage.retrieveAllResumeData();
+    if (resumeData.isNotEmpty) {
+      await Future.wait(resumeData.map((e) => toStorage.storeResumeData(e)));
       migratedSomething = true;
     }
-    for (final taskRecord in await fromStorage.retrieveAllTaskRecords()) {
-      await toStorage.storeTaskRecord(taskRecord);
+    final taskRecords = await fromStorage.retrieveAllTaskRecords();
+    if (taskRecords.isNotEmpty) {
+      await Future.wait(taskRecords.map((e) => toStorage.storeTaskRecord(e)));
       migratedSomething = true;
     }
     return migratedSomething;
@@ -369,12 +370,12 @@ class BasePersistentStorageMigrator implements PersistentStorageMigrator {
     if (await migrateFromPersistentStorage(localStore, toStorage)) {
       // delete all paths related to LocalStore
       final supportDir = await getApplicationSupportDirectory();
-      for (String collectionPath in [
+      await Future.wait([
         LocalStorePersistentStorage.resumeDataPath,
         LocalStorePersistentStorage.pausedTasksPath,
         LocalStorePersistentStorage.taskRecordsPath,
         LocalStorePersistentStorage.metaDataCollection
-      ]) {
+      ].map((collectionPath) async {
         try {
           final path = join(supportDir.path, collectionPath);
           if (await Directory(path).exists()) {
@@ -384,7 +385,7 @@ class BasePersistentStorageMigrator implements PersistentStorageMigrator {
         } catch (e) {
           log.fine('Error deleting collection path $collectionPath: $e');
         }
-      }
+      }));
       return true; // we migrated a database
     }
     return false; // we did not migrate a database

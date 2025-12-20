@@ -90,7 +90,7 @@ final class Utils implements UtilsImpl {
   Future<Map<String, dynamic>?> _getAll(List<FileSystemEntity> entries) async {
     final items = <String, dynamic>{};
     final dbDir = await Localstore.instance.databaseDirectory;
-    await Future.forEach(entries, (FileSystemEntity e) async {
+    await Future.wait(entries.map((e) async {
       final path = e.path.replaceAll(dbDir.path, '');
       final file = await _getFile(path);
       try {
@@ -104,7 +104,7 @@ final class Utils implements UtilsImpl {
       } on PathNotFoundException {
         // ignore if not found
       }
-    });
+    }));
 
     if (items.isEmpty) return null;
     return items;
