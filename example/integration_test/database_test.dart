@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:logging/logging.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:background_downloader/src/localstore/localstore.dart';
@@ -40,6 +41,10 @@ Future<void> deleteAllTaskDataFromFileSystem() async {
 
 void main() {
   setUp(() async {
+    Logger.root.level = Level.ALL;
+    Logger.root.onRecord.listen((LogRecord rec) {
+      print('${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
+    });
     WidgetsFlutterBinding.ensureInitialized();
     await deleteAllTaskDataFromFileSystem();
     Localstore.instance.clearCache();
@@ -156,5 +161,84 @@ void main() {
     final result3 = await FileDownloader().rescheduleKilledTasks();
     expect(result3.$1, isEmpty);
     expect(result3.$2, isEmpty);
+  });
+
+  testWidgets('cleanUp', (widgetTester) async {
+    // defaults
+    database.cleanUp();
+    // we need to access private vars to verify, but since we can't, we verify behavior
+    // add many records (more than 500)
+    for (int i = 0; i < 600; i++) {
+      final t = DownloadTask(
+          url: 'url',
+          filename: 'f$i',
+          taskId: 'id$i',
+          creationTime: DateTime.now());
+      final r = TaskRecord(t, TaskStatus.running, 0.5, 1000);
+      await database.updateRecord(r);
+    }
+    expect((await database.allRecords()).length, 600);
+    await Future.delayed(const Duration(seconds: 1));
+    // force cleanup
+    database.cleanUp();
+    await Future.delayed(const Duration(seconds: 25));
+    expect((await database.allRecords()).length, 500);
+
+    // Attempt with small numbers for test speed
+    await database.deleteAllRecords();
+    for (int i = 0; i < 10; i++) {
+      final t = DownloadTask(
+          url: 'url',
+          filename: 'f$i',
+          taskId: 'id$i',
+          creationTime: DateTime.now().subtract(Duration(days: i)));
+      final r = TaskRecord(t, TaskStatus.running, 0.5, 1000);
+      await database.updateRecord(r);
+    }
+    // Now we have 10 records, ages 0 to 9 days.
+    // Clean up older than 5 days.
+    database.cleanUp(maxAge: const Duration(days: 5), maxRecordCount: 100);
+    // records 6, 7, 8, 9 days old should be removed (4 records)
+    // 4 * 200ms = 800ms
+    await Future.delayed(const Duration(seconds: 2));
+    final records = await database.allRecords();
+    expect(records.length, equals(5));
+
+    // Clean up by count
+    database.cleanUp(maxRecordCount: 3);
+    // should remove 3 oldest records
+    // 3 * 200ms = 600ms
+    await Future.delayed(const Duration(seconds: 2));
+    final records2 = await database.allRecords();
+    expect(records2.length, equals(3));
+    await database.deleteAllRecords();
+  });
+
+  testWidgets('autoClean', (widgetTester) async {
+    await database.deleteAllRecords();
+    database.cleanUp(autoClean: true, maxRecordCount: 5);
+    // update 100 times
+    for (int i = 0; i < 110; i++) {
+      final t = DownloadTask(
+          url: 'url',
+          filename: 'f$i',
+          taskId: 'id$i',
+          creationTime: DateTime.now());
+      final r = TaskRecord(t, TaskStatus.running, 0.5, 1000);
+      await database.updateRecord(r);
+    }
+    // Triggered at 100. Should reduce to 5.
+    // 100 * 200ms = 20 seconds... this is too slow for tests if we delete many.
+    // But we process locally.
+    // Wait a bit
+    await Future.delayed(
+        const Duration(seconds: 30)); // Give it plenty of time?
+    // Actually, since we add 1 by 1, the count grows.
+    // At 100th update, we have 100 records.
+    // We want to keep 5. So we delete 95.
+    // 95 * 0.2s = 19 seconds.
+    final records = await database.allRecords();
+    expect(records.length, equals(5)); // 5 kept
+    await database.deleteAllRecords();
   });
 }

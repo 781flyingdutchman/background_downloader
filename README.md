@@ -370,6 +370,7 @@ In summary, to track your tasks persistently, follow these steps in order, immed
    a. Call `await FileDownloader().trackTasks()` if you want to track the tasks in a persistent database
    b. Call `await FileDownloader().resumeFromBackground()` to ensure events that happened while your app was in the background are processed
    c. If you are tracking tasks in the database, after ~5 seconds, call `await FileDownloader().rescheduleKilledTasks()` to reschedule tasks that are in the database as `enqueued` or `running` yet are not enqueued or running on the native side, or that are `waitingToRetry` but not registered as such. These tasks have been "lost", most likely because the user killed your app (which kills tasks on the native side without warning)
+   d. Optionall, call `await FileDownloader().database.cleanUp()` to clean up old or excess records in the database, or pass `autoCleanDatabase: true` to the `start()` call.
 
 The rest of this section details [event listeners](#using-an-event-listener), [callbacks](#using-callbacks) and the [database](#using-the-database-to-track-tasks) in detail.
 
@@ -461,6 +462,9 @@ You can interact with the `database` using `allRecords`, `allRecordsOlderThan`, 
 To listen to changes to the database, use the `FileDownloader().database.updates` stream of `TaskRecord` items, emitted after a record has been updated in the database. This is a `BroadcastStream`, so multiple listeners can attach/detach and re-attach to the stream, which makes it easy to use in UI components. Make sure to cancel your `StreamSubscription` appropriately.
 
 If a user kills your app (e.g. by swiping it away in the app tray) then tasks that are running (natively) are killed, and no indication is given to your application. This cannot be avoided. To guard for this, upon app startup you can ask the downloader to reschedule killed tasks, i.e. tasks that show up as `enqueued` or `running` in the database, yet are not enqueued or running on the native side, or are `waitingToRetry` but not registered as such. Method `rescheduleKilledTasks` returns a record with two lists, 1) successfully rescheduled tasks and 2) tasks that failed to reschedule. Together, those are the missing tasks. Reschedule missing tasks a few seconds after you have called `resumeFromBackground`, as that gives the downloader time to processes updates that may have happened while the app was suspended, or call `FileDownloader().start()` with `doRescheduleKilledTasks` set to true (the default).
+
+To remove old or excess records from the database, call `FileDownloader().database.cleanUp()`. You can pass a `maxAge` (Duration) or `maxRecordCount` (int) to customize the cleanup logic. If you don't pass any arguments, the defaults are 10 days and 500 records. If you want this to happen automatically, you can set `autoCleanDatabase` to `true` in your call to `FileDownloader().start()`.
+
 
 By default, the downloader uses a modified version of the [localstore](https://pub.dev/packages/localstore) package to store the `TaskRecord` and other objects. To use a different persistent storage solution, create a class that implements the [PersistentStorage](https://pub.dev/documentation/background_downloader/latest/background_downloader/PersistentStorage-class.html) interface, and initialize the downloader by calling `FileDownloader(persistentStorage: MyPersistentStorage())` as the first use of the `FileDownloader`.
 

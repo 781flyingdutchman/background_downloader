@@ -533,10 +533,15 @@ interface class FileDownloader {
   ///
   /// [doTrackTasks] and [doRescheduleKilledTasks] can be set to false to skip
   /// that step.  [resumeFromBackground] is always called.
+  ///
+  /// If [autoCleanDatabase] is true, [Database.cleanUp] is called after
+  /// initialization to clean up old or excess records in the database.
+  /// defaults to false.
   Future<void> start(
       {bool doTrackTasks = true,
       bool markDownloadedComplete = true,
-      bool doRescheduleKilledTasks = true}) async {
+      bool doRescheduleKilledTasks = true,
+      bool autoCleanDatabase = false}) async {
     if (doTrackTasks) {
       await FileDownloader()
           .trackTasks(markDownloadedComplete: markDownloadedComplete);
@@ -546,6 +551,9 @@ interface class FileDownloader {
       }
     }
     await FileDownloader().resumeFromBackground();
+    if (autoCleanDatabase) {
+      FileDownloader().database.cleanUp();
+    }
   }
 
   /// Activate tracking for tasks in this [group]
