@@ -124,6 +124,7 @@ jobs:
       - name: Setup Linux build environment
         run: |
           flutter config --enable-linux-desktop
+          sudo apt-get update
           sudo apt-get install -y ninja-build
           sudo apt-get install -y libgtk-3-dev
           export CMAKE_CXX_COMPILER=$(which g++)
