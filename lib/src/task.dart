@@ -21,6 +21,7 @@ import 'web_downloader.dart'
 part 'uri/uri_task.dart';
 
 final _log = Logger('FileDownloader');
+final _random = Random();
 
 /// A server Request
 ///
@@ -261,6 +262,20 @@ sealed class Task extends Request implements Comparable {
 
   static bool useExternalStorage = false; // for Android configuration only
 
+  static const _androidBaseDirs = [
+    BaseDirectory.temporary,
+    BaseDirectory.applicationLibrary,
+    BaseDirectory.applicationSupport,
+    BaseDirectory.applicationDocuments
+  ];
+
+  static const _otherBaseDirs = [
+    BaseDirectory.temporary,
+    BaseDirectory.applicationSupport,
+    BaseDirectory.applicationLibrary,
+    BaseDirectory.applicationDocuments
+  ];
+
   /// Uri schemes that are supported by the downloader in the context of
   /// a [Task] download directory or upload file
   static const allowedUriSchemes = ['file', 'content', 'urlbookmark', 'media'];
@@ -320,8 +335,8 @@ sealed class Task extends Request implements Comparable {
       this.priority = 5,
       super.creationTime,
       this.options})
-      : taskId = taskId ?? Random().nextInt(1 << 32).toString(),
-        filename = filename ?? Random().nextInt(1 << 32).toString(),
+      : taskId = taskId ?? _random.nextInt(1 << 32).toString(),
+        filename = filename ?? _random.nextInt(1 << 32).toString(),
         directory = _startsWithPathSeparator.hasMatch(directory)
             ? directory.substring(1)
             : directory {
@@ -460,18 +475,8 @@ sealed class Task extends Request implements Comparable {
     final testSequence = defaultTargetPlatform == TargetPlatform.android ||
             defaultTargetPlatform == TargetPlatform.linux ||
             defaultTargetPlatform == TargetPlatform.windows
-        ? [
-            BaseDirectory.temporary,
-            BaseDirectory.applicationLibrary,
-            BaseDirectory.applicationSupport,
-            BaseDirectory.applicationDocuments
-          ]
-        : [
-            BaseDirectory.temporary,
-            BaseDirectory.applicationSupport,
-            BaseDirectory.applicationLibrary,
-            BaseDirectory.applicationDocuments
-          ];
+        ? _androidBaseDirs
+        : _otherBaseDirs;
     for (final baseDirectoryEnum in testSequence) {
       final baseDirPath = await baseDirectoryPath(baseDirectoryEnum);
       final (match, directory) = _contains(baseDirPath, absoluteDirectoryPath);
