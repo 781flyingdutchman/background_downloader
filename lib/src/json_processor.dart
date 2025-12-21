@@ -56,20 +56,17 @@ class JsonProcessor {
     return await _process<Task>((id) => _TaskFromJson(id, jsonString));
   }
 
-  Future<List<DownloadTask>> decodeDownloadTaskList(
-      String jsonString) async {
+  Future<List<DownloadTask>> decodeDownloadTaskList(String jsonString) async {
     return await _process<List<DownloadTask>>(
         (id) => _DownloadTaskListFromJson(id, jsonString));
   }
 
-  Future<List<Task>> decodeTaskList(
-      List<dynamic> jsonStrings) async {
+  Future<List<Task>> decodeTaskList(List<dynamic> jsonStrings) async {
     return await _process<List<Task>>(
         (id) => _TaskListFromListStrings(id, jsonStrings));
   }
 
-  Future<(String, String)> encodeTaskAndNotificationConfig(
-      Iterable<Task> tasks,
+  Future<(String, String)> encodeTaskAndNotificationConfig(Iterable<Task> tasks,
       Set<TaskNotificationConfig> notificationConfigs) async {
     // Convert Iterable to List to ensure it's sendable and fixed
     final taskList = tasks.toList();

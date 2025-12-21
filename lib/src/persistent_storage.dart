@@ -228,11 +228,8 @@ class LocalStorePersistentStorage implements PersistentStorage {
         // move files from docDir to supportDir
         final docDir = await getApplicationDocumentsDirectory();
         final supportDir = await getApplicationSupportDirectory();
-        await Future.wait([
-          resumeDataPath,
-          pausedTasksPath,
-          taskRecordsPath
-        ].map((path) async {
+        await Future.wait([resumeDataPath, pausedTasksPath, taskRecordsPath]
+            .map((path) async {
           try {
             final fromPath = join(docDir.path, path);
             if (await Directory(fromPath).exists()) {
@@ -240,8 +237,9 @@ class LocalStorePersistentStorage implements PersistentStorage {
               final toPath = join(supportDir.path, path);
               await Directory(toPath).create(recursive: true);
               final entities = await Directory(fromPath).list().toList();
-              await Future.wait(entities.whereType<File>().map((file) =>
-                  file.copy(join(toPath, basename(file.path)))));
+              await Future.wait(entities
+                  .whereType<File>()
+                  .map((file) => file.copy(join(toPath, basename(file.path)))));
               await Directory(fromPath).delete(recursive: true);
             }
           } catch (e) {

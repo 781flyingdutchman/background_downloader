@@ -1,3 +1,10 @@
+## 9.4.3
+
+* Improve JSON processing to reduce UI jank
+* Optimize database operations
+* Add `database.cleanUp()` to simplify and automate database maintenance, and added database clean-up to `start()` command
+* Fix iOS background callback performance
+
 ## 9.4.2
 
 * Improve Android notification handling

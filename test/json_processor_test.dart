@@ -15,8 +15,7 @@ void main() {
           headers: {'Cookie': 'foo=bar'});
       final jsonString = jsonEncode(task.toJson());
 
-      final result =
-          await JsonProcessor().decodeTask(jsonString);
+      final result = await JsonProcessor().decodeTask(jsonString);
 
       expect(result, isA<DownloadTask>());
       expect(result.url, equals(task.url));
@@ -30,8 +29,7 @@ void main() {
       final list = [task1, task2];
       final jsonString = jsonEncode(list);
 
-      final result = await JsonProcessor()
-          .decodeDownloadTaskList(jsonString);
+      final result = await JsonProcessor().decodeDownloadTaskList(jsonString);
 
       expect(result, hasLength(2));
       expect(result[0].url, equals(task1.url));
@@ -47,8 +45,7 @@ void main() {
         jsonEncode(task2.toJson())
       ];
 
-      final result = await JsonProcessor()
-          .decodeTaskList(listStrings);
+      final result = await JsonProcessor().decodeTaskList(listStrings);
 
       expect(result, hasLength(2));
       expect(result[0].url, equals(task1.url));
@@ -65,8 +62,8 @@ void main() {
             running: const TaskNotification('Running', 'body'))
       };
 
-      final (tasksJson, configsJson) = await JsonProcessor()
-          .encodeTaskAndNotificationConfig(tasks, configs);
+      final (tasksJson, configsJson) =
+          await JsonProcessor().encodeTaskAndNotificationConfig(tasks, configs);
 
       final decodedTasks = jsonDecode(tasksJson);
       expect(decodedTasks, isA<List>());
@@ -108,8 +105,7 @@ void main() {
     // Method 2: JsonProcessor (Isolate)
     final stopwatchProcessor = Stopwatch()..start();
     for (var i = 0; i < iterations; i++) {
-      final decoded =
-          await JsonProcessor().decodeTask(taskJsonString);
+      final decoded = await JsonProcessor().decodeTask(taskJsonString);
       // quick check to prevent optimization
       if (decoded.url.isEmpty) throw Exception('Validation failed');
     }
