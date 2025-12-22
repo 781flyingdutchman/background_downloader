@@ -146,7 +146,7 @@ final class Utils implements UtilsImpl {
 
   Future<dynamic> _readFile(RandomAccessFile file) async {
     try {
-      await file.lock(FileLock.shared);
+      await file.lock(FileLock.blockingShared);
       final length = await file.length();
       await file.setPosition(0);
       final buffer = Uint8List(length);
@@ -180,7 +180,7 @@ final class Utils implements UtilsImpl {
     final file = await _getFile(path);
     try {
       final randomAccessFile = await file!.open(mode: FileMode.append);
-      await randomAccessFile.lock();
+      await randomAccessFile.lock(FileLock.blockingExclusive);
       await randomAccessFile.setPosition(0);
       await randomAccessFile.writeFrom(buffer);
       await randomAccessFile.truncate(buffer.length);
