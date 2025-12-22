@@ -145,11 +145,14 @@ final class Utils implements UtilsImpl {
   }
 
   Future<dynamic> _readFile(RandomAccessFile file) async {
-    final length = await file.length();
-    await file.setPosition(0);
-    final buffer = Uint8List(length);
-    await file.readInto(buffer);
     try {
+      await file.lock(FileLock.shared);
+      final length = await file.length();
+      await file.setPosition(0);
+      final buffer = Uint8List(length);
+      await file.readInto(buffer);
+      await file.unlock();
+
       final contentText = utf8.decode(buffer);
       final data = json.decode(contentText) as Map<String, dynamic>;
       return data;
