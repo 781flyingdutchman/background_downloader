@@ -147,15 +147,18 @@ final class Utils implements UtilsImpl {
   Future<dynamic> _readFile(RandomAccessFile file) async {
     try {
       await file.lock(FileLock.blockingShared);
-      final length = await file.length();
-      await file.setPosition(0);
-      final buffer = Uint8List(length);
-      await file.readInto(buffer);
-      await file.unlock();
+      try {
+        final length = await file.length();
+        await file.setPosition(0);
+        final buffer = Uint8List(length);
+        await file.readInto(buffer);
 
-      final contentText = utf8.decode(buffer);
-      final data = json.decode(contentText) as Map<String, dynamic>;
-      return data;
+        final contentText = utf8.decode(buffer);
+        final data = json.decode(contentText) as Map<String, dynamic>;
+        return data;
+      } finally {
+        await file.unlock();
+      }
     } catch (e) {
       return e;
     }
@@ -180,12 +183,18 @@ final class Utils implements UtilsImpl {
     final file = await _getFile(path);
     try {
       final randomAccessFile = await file!.open(mode: FileMode.append);
-      await randomAccessFile.lock(FileLock.blockingExclusive);
-      await randomAccessFile.setPosition(0);
-      await randomAccessFile.writeFrom(buffer);
-      await randomAccessFile.truncate(buffer.length);
-      await randomAccessFile.unlock();
-      await randomAccessFile.close();
+      try {
+        await randomAccessFile.lock(FileLock.blockingExclusive);
+        try {
+          await randomAccessFile.setPosition(0);
+          await randomAccessFile.writeFrom(buffer);
+          await randomAccessFile.truncate(buffer.length);
+        } finally {
+          await randomAccessFile.unlock();
+        }
+      } finally {
+        await randomAccessFile.close();
+      }
     } on PathNotFoundException {
       // ignore if path not found
     }
