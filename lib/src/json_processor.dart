@@ -212,11 +212,10 @@ Future<dynamic> _executeCommand(JsonCommand command) async {
       return Task.createFromJson(jsonDecode(c.jsonString));
 
     case _DownloadTaskListFromJson c:
-      return List<DownloadTask>.from(jsonDecode(c.jsonString,
-          reviver: (key, value) => switch (key) {
-                int _ => Task.createFromJson(value as Map<String, dynamic>),
-                _ => value
-              }));
+      return (jsonDecode(c.jsonString) as List)
+          .map((e) => Task.createFromJson(e as Map<String, dynamic>))
+          .cast<DownloadTask>()
+          .toList();
 
     case _TaskListFromListStrings c:
       return c.jsonStrings
