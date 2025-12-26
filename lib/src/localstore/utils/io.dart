@@ -37,22 +37,26 @@ final class Utils implements UtilsImpl {
       if (!await dir.exists()) {
         return {};
       }
-      List<FileSystemEntity> entries =
-          dir.listSync(recursive: false).whereType<File>().toList();
+      final entries =
+          await dir.list(recursive: false).where((e) => e is File).toList();
       return await _getAll(entries);
     } else {
       try {
         // Reads the document referenced by this [DocumentRef].
         final file = await _getFile(path);
-        final randomAccessFile = file!.openSync(mode: FileMode.append);
-        final data = await _readFile(randomAccessFile);
-        randomAccessFile.closeSync();
-        if (data is Map<String, dynamic>) {
-          final key = path.replaceAll(lastPathComponentRegEx, '');
-          // ignore: close_sinks
-          final storage = _storageCache.putIfAbsent(key, () => _newStream(key));
-          storage.add(data);
-          return data;
+        final randomAccessFile = await file!.open(mode: FileMode.append);
+        try {
+          final data = await _readFile(randomAccessFile);
+          if (data is Map<String, dynamic>) {
+            final key = path.replaceAll(lastPathComponentRegEx, '');
+            // ignore: close_sinks
+            final storage =
+                _storageCache.putIfAbsent(key, () => _newStream(key));
+            storage.add(data);
+            return data;
+          }
+        } finally {
+          await randomAccessFile.close();
         }
       } on PathNotFoundException {
         // return null if not found
@@ -95,11 +99,13 @@ final class Utils implements UtilsImpl {
       final file = await _getFile(path);
       try {
         final randomAccessFile = await file!.open(mode: FileMode.append);
-        final data = await _readFile(randomAccessFile);
-        await randomAccessFile.close();
-
-        if (data is Map<String, dynamic>) {
-          items[path] = data;
+        try {
+          final data = await _readFile(randomAccessFile);
+          if (data is Map<String, dynamic>) {
+            items[path] = data;
+          }
+        } finally {
+          await randomAccessFile.close();
         }
       } on PathNotFoundException {
         // ignore if not found
@@ -126,29 +132,31 @@ final class Utils implements UtilsImpl {
     final fullPath = '${dbDir.path}$path';
     final dir = Directory(fullPath);
     try {
-      List<FileSystemEntity> entries =
-          dir.listSync(recursive: false).whereType<File>().toList();
-      for (var e in entries) {
+      final entries =
+          await dir.list(recursive: false).where((e) => e is File).toList();
+      await Future.wait(entries.map((e) async {
         final path = e.path.replaceAll(dbDir.path, '');
         final file = await _getFile(path);
-        final randomAccessFile = file!.openSync(mode: FileMode.append);
-        _readFile(randomAccessFile).then((data) {
-          randomAccessFile.closeSync();
+        final randomAccessFile = await file!.open(mode: FileMode.append);
+        try {
+          final data = await _readFile(randomAccessFile);
           if (data is Map<String, dynamic>) {
             storage.add(data);
           }
-        });
-      }
+        } finally {
+          await randomAccessFile.close();
+        }
+      }));
     } catch (e) {
       return e;
     }
   }
 
   Future<dynamic> _readFile(RandomAccessFile file) async {
-    final length = file.lengthSync();
-    file.setPositionSync(0);
+    final length = await file.length();
+    await file.setPosition(0);
     final buffer = Uint8List(length);
-    file.readIntoSync(buffer);
+    await file.readInto(buffer);
     try {
       final contentText = utf8.decode(buffer);
       final data = json.decode(contentText) as Map<String, dynamic>;
@@ -165,7 +173,7 @@ final class Utils implements UtilsImpl {
 
     final file = File('${dbDir.path}$path');
 
-    if (!file.existsSync()) file.createSync(recursive: true);
+    if (!await file.exists()) await file.create(recursive: true);
     _fileCache.putIfAbsent(path, () => file);
 
     return file;
@@ -176,13 +184,16 @@ final class Utils implements UtilsImpl {
     final buffer = utf8.encode(serialized);
     final file = await _getFile(path);
     try {
-      final randomAccessFile = file!.openSync(mode: FileMode.append);
-      randomAccessFile.lockSync();
-      randomAccessFile.setPositionSync(0);
-      randomAccessFile.writeFromSync(buffer);
-      randomAccessFile.truncateSync(buffer.length);
-      randomAccessFile.unlockSync();
-      randomAccessFile.closeSync();
+      final randomAccessFile = await file!.open(mode: FileMode.append);
+      try {
+        await randomAccessFile.lock();
+        await randomAccessFile.setPosition(0);
+        await randomAccessFile.writeFrom(buffer);
+        await randomAccessFile.truncate(buffer.length);
+        await randomAccessFile.unlock();
+      } finally {
+        await randomAccessFile.close();
+      }
     } on PathNotFoundException {
       // ignore if path not found
     }
