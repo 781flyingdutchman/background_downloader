@@ -892,13 +892,19 @@ object NotificationService {
             if (taskWorker.runInForeground) {
                 if (notificationType == NotificationType.running && taskWorker.isActive) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                        taskWorker.setForeground(
-                            ForegroundInfo(
-                                taskWorker.notificationId,
-                                androidNotification,
-                                FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                        try {
+                            taskWorker.setForeground(
+                                ForegroundInfo(
+                                    taskWorker.notificationId,
+                                    androidNotification,
+                                    FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                                )
                             )
-                        )
+                        } catch (e: ForegroundServiceStartNotAllowedException) {
+                            Log.w(TAG, "Could not start foreground service: ${e.message}")
+                            taskWorker.runInForeground = false
+                            notify(taskWorker.notificationId, androidNotification)
+                        }
                     } else {
                         taskWorker.setForeground(
                             ForegroundInfo(
