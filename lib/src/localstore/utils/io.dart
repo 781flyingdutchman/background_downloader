@@ -38,15 +38,15 @@ final class Utils implements UtilsImpl {
         return {};
       }
       List<FileSystemEntity> entries =
-          dir.listSync(recursive: false).whereType<File>().toList();
-      return await _getAll(entries);
+          await dir.list(recursive: false).toList();
+      return await _getAll(entries.whereType<File>().toList());
     } else {
       try {
         // Reads the document referenced by this [DocumentRef].
         final file = await _getFile(path);
-        final randomAccessFile = file!.openSync(mode: FileMode.append);
+        final randomAccessFile = await file!.open(mode: FileMode.append);
         final data = await _readFile(randomAccessFile);
-        randomAccessFile.closeSync();
+        await randomAccessFile.close();
         if (data is Map<String, dynamic>) {
           final key = path.replaceAll(lastPathComponentRegEx, '');
           // ignore: close_sinks
@@ -126,18 +126,18 @@ final class Utils implements UtilsImpl {
     final fullPath = '${dbDir.path}$path';
     final dir = Directory(fullPath);
     try {
-      List<FileSystemEntity> entries =
-          dir.listSync(recursive: false).whereType<File>().toList();
-      for (var e in entries) {
-        final path = e.path.replaceAll(dbDir.path, '');
-        final file = await _getFile(path);
-        final randomAccessFile = file!.openSync(mode: FileMode.append);
-        _readFile(randomAccessFile).then((data) {
-          randomAccessFile.closeSync();
+      if (await dir.exists()) {
+        final entries = await dir.list(recursive: false).toList();
+        await Future.wait(entries.whereType<File>().map((e) async {
+          final path = e.path.replaceAll(dbDir.path, '');
+          final file = await _getFile(path);
+          final randomAccessFile = await file!.open(mode: FileMode.append);
+          final data = await _readFile(randomAccessFile);
+          await randomAccessFile.close();
           if (data is Map<String, dynamic>) {
             storage.add(data);
           }
-        });
+        }));
       }
     } catch (e) {
       return e;
@@ -145,14 +145,20 @@ final class Utils implements UtilsImpl {
   }
 
   Future<dynamic> _readFile(RandomAccessFile file) async {
-    final length = file.lengthSync();
-    file.setPositionSync(0);
-    final buffer = Uint8List(length);
-    file.readIntoSync(buffer);
     try {
-      final contentText = utf8.decode(buffer);
-      final data = json.decode(contentText) as Map<String, dynamic>;
-      return data;
+      await file.lock(FileLock.blockingShared);
+      try {
+        final length = await file.length();
+        await file.setPosition(0);
+        final buffer = Uint8List(length);
+        await file.readInto(buffer);
+
+        final contentText = utf8.decode(buffer);
+        final data = json.decode(contentText) as Map<String, dynamic>;
+        return data;
+      } finally {
+        await file.unlock();
+      }
     } catch (e) {
       return e;
     }
@@ -165,7 +171,18 @@ final class Utils implements UtilsImpl {
 
     final file = File('${dbDir.path}$path');
 
-    if (!file.existsSync()) file.createSync(recursive: true);
+    if (!await file.exists()) {
+      try {
+        await file.create(recursive: true);
+      } catch (e) {
+        // Retry once in case of race condition with concurrent delete
+        try {
+          await file.create(recursive: true);
+        } catch (e) {
+           _log.warning('Failed to create file $path: $e');
+        }
+      }
+    }
     _fileCache.putIfAbsent(path, () => file);
 
     return file;
@@ -176,13 +193,19 @@ final class Utils implements UtilsImpl {
     final buffer = utf8.encode(serialized);
     final file = await _getFile(path);
     try {
-      final randomAccessFile = file!.openSync(mode: FileMode.append);
-      randomAccessFile.lockSync();
-      randomAccessFile.setPositionSync(0);
-      randomAccessFile.writeFromSync(buffer);
-      randomAccessFile.truncateSync(buffer.length);
-      randomAccessFile.unlockSync();
-      randomAccessFile.closeSync();
+      final randomAccessFile = await file!.open(mode: FileMode.append);
+      try {
+        await randomAccessFile.lock(FileLock.blockingExclusive);
+        try {
+          await randomAccessFile.setPosition(0);
+          await randomAccessFile.writeFrom(buffer);
+          await randomAccessFile.truncate(buffer.length);
+        } finally {
+          await randomAccessFile.unlock();
+        }
+      } finally {
+        await randomAccessFile.close();
+      }
     } on PathNotFoundException {
       // ignore if path not found
     }
@@ -195,12 +218,10 @@ final class Utils implements UtilsImpl {
   Future _deleteFile(String path) async {
     final dbDir = await Localstore.instance.databaseDirectory;
     final file = File('${dbDir.path}$path');
-    if (await file.exists()) {
-      try {
-        await file.delete();
-      } catch (e) {
-        _log.finest(e);
-      }
+    try {
+      await file.delete();
+    } catch (e) {
+      _log.finest('Error deleting file $path: $e');
     }
     _fileCache.remove(path);
   }
@@ -208,12 +229,10 @@ final class Utils implements UtilsImpl {
   Future _deleteDirectory(String path) async {
     final dbDir = await Localstore.instance.databaseDirectory;
     final dir = Directory('${dbDir.path}$path');
-    if (await dir.exists()) {
-      try {
-        await dir.delete(recursive: true);
-      } catch (e) {
-        _log.finest(e);
-      }
+    try {
+      await dir.delete(recursive: true);
+    } catch (e) {
+      _log.finest('Error deleting directory $path: $e');
     }
     _fileCache.removeWhere((key, value) => key.startsWith(path));
   }
