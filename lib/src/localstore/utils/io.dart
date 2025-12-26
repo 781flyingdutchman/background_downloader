@@ -171,7 +171,18 @@ final class Utils implements UtilsImpl {
 
     final file = File('${dbDir.path}$path');
 
-    if (!await file.exists()) await file.create(recursive: true);
+    if (!await file.exists()) {
+      try {
+        await file.create(recursive: true);
+      } catch (e) {
+        // Retry once in case of race condition with concurrent delete
+        try {
+          await file.create(recursive: true);
+        } catch (e) {
+           _log.warning('Failed to create file $path: $e');
+        }
+      }
+    }
     _fileCache.putIfAbsent(path, () => file);
 
     return file;
@@ -207,12 +218,10 @@ final class Utils implements UtilsImpl {
   Future _deleteFile(String path) async {
     final dbDir = await Localstore.instance.databaseDirectory;
     final file = File('${dbDir.path}$path');
-    if (await file.exists()) {
-      try {
-        await file.delete();
-      } catch (e) {
-        _log.finest(e);
-      }
+    try {
+      await file.delete();
+    } catch (e) {
+      _log.finest('Error deleting file $path: $e');
     }
     _fileCache.remove(path);
   }
@@ -220,12 +229,10 @@ final class Utils implements UtilsImpl {
   Future _deleteDirectory(String path) async {
     final dbDir = await Localstore.instance.databaseDirectory;
     final dir = Directory('${dbDir.path}$path');
-    if (await dir.exists()) {
-      try {
-        await dir.delete(recursive: true);
-      } catch (e) {
-        _log.finest(e);
-      }
+    try {
+      await dir.delete(recursive: true);
+    } catch (e) {
+      _log.finest('Error deleting directory $path: $e');
     }
     _fileCache.removeWhere((key, value) => key.startsWith(path));
   }
