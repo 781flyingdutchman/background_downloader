@@ -891,8 +891,8 @@ object NotificationService {
             val androidNotification = builder.build()
             if (taskWorker.runInForeground) {
                 if (notificationType == NotificationType.running && taskWorker.isActive) {
-                    try {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        try {
                             taskWorker.setForeground(
                                 ForegroundInfo(
                                     taskWorker.notificationId,
@@ -900,17 +900,17 @@ object NotificationService {
                                     FOREGROUND_SERVICE_TYPE_DATA_SYNC
                                 )
                             )
-                        } else {
-                            taskWorker.setForeground(
-                                ForegroundInfo(
-                                    taskWorker.notificationId, androidNotification
-                                )
-                            )
+                        } catch (e: ForegroundServiceStartNotAllowedException) {
+                            Log.w(TAG, "Could not start foreground service: ${e.message}")
+                            taskWorker.runInForeground = false
+                            notify(taskWorker.notificationId, androidNotification)
                         }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Could not start foreground service: ${e.message}")
-                        taskWorker.runInForeground = false
-                        notify(taskWorker.notificationId, androidNotification)
+                    } else {
+                        taskWorker.setForeground(
+                            ForegroundInfo(
+                                taskWorker.notificationId, androidNotification
+                            )
+                        )
                     }
                 } else {
                     // to prevent the 'not running' notification getting killed as the foreground

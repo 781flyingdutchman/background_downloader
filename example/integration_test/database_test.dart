@@ -43,7 +43,7 @@ void main() {
   setUp(() async {
     Logger.root.level = Level.ALL;
     Logger.root.onRecord.listen((LogRecord rec) {
-      print('${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
+      debugPrint('${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
     });
     WidgetsFlutterBinding.ensureInitialized();
     await deleteAllTaskDataFromFileSystem();
