@@ -192,7 +192,8 @@ final class Utils implements UtilsImpl {
     final serialized = json.encode(data);
     final buffer = utf8.encode(serialized);
     final file = await _getFile(path);
-    try {
+
+    Future<void> writeOp() async {
       final randomAccessFile = await file!.open(mode: FileMode.append);
       try {
         await randomAccessFile.lock(FileLock.blockingExclusive);
@@ -206,8 +207,17 @@ final class Utils implements UtilsImpl {
       } finally {
         await randomAccessFile.close();
       }
+    }
+
+    try {
+      await writeOp();
     } on PathNotFoundException {
-      // ignore if path not found
+      try {
+        await file!.create(recursive: true);
+        await writeOp();
+      } catch (e) {
+        // ignore
+      }
     }
     final key = path.replaceAll(lastPathComponentRegEx, '');
     // ignore: close_sinks
@@ -232,7 +242,19 @@ final class Utils implements UtilsImpl {
     try {
       await dir.delete(recursive: true);
     } catch (e) {
-      _log.finest('Error deleting directory $path: $e');
+       // Retry if directory not empty (race with file creation or concurrent deletion)
+       if (e is FileSystemException && (e.osError?.errorCode == 39 || e.osError?.errorCode == 66)) {
+          try {
+             await Future.delayed(const Duration(milliseconds: 50));
+             if (await dir.exists()) {
+                await dir.delete(recursive: true);
+             }
+          } catch (e2) {
+             _log.finest('Error deleting directory $path (retry): $e2');
+          }
+       } else {
+          _log.finest('Error deleting directory $path: $e');
+       }
     }
     _fileCache.removeWhere((key, value) => key.startsWith(path));
   }
