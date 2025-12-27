@@ -262,6 +262,8 @@ sealed class Task extends Request implements Comparable {
 
   static bool useExternalStorage = false; // for Android configuration only
 
+  static final _baseDirectoryPathCache = <(BaseDirectory, bool), String>{};
+
   static const _androidBaseDirs = [
     BaseDirectory.temporary,
     BaseDirectory.applicationLibrary,
@@ -417,6 +419,10 @@ sealed class Task extends Request implements Comparable {
   /// because the drive letter is required to be included in the directory
   /// path
   static Future<String> baseDirectoryPath(BaseDirectory baseDirectory) async {
+    final cacheKey = (baseDirectory, Task.useExternalStorage);
+    if (_baseDirectoryPathCache.containsKey(cacheKey)) {
+      return _baseDirectoryPathCache[cacheKey]!;
+    }
     Directory? externalStorageDirectory;
     Directory? externalCacheDirectory;
     if (Task.useExternalStorage) {
@@ -448,10 +454,12 @@ sealed class Task extends Request implements Comparable {
       (BaseDirectory.applicationLibrary, true) =>
         Directory(p.join(externalStorageDirectory!.path, 'Library'))
     };
-    return (defaultTargetPlatform == TargetPlatform.windows &&
+    final path = (defaultTargetPlatform == TargetPlatform.windows &&
             baseDirectory == BaseDirectory.root)
         ? ''
         : baseDir.absolute.path;
+    _baseDirectoryPathCache[cacheKey] = path;
+    return path;
   }
 
   /// Extract the baseDirectory, directory and filename from
