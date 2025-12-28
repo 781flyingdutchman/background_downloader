@@ -1,3 +1,9 @@
+## 9.4.4
+
+* [Android] MinSDK is now 23 (was 21), required because the latest Android WorkManager is required to properly support Android 15+
+* [Android] Fixes bug fix related to foreground service in Android 15+
+* Performance improvements related to `Task.filePath`, `Task.split` and `ParallelDownloadTask` pause
+
 ## 9.4.3
 
 * Improve JSON processing to reduce UI jank
