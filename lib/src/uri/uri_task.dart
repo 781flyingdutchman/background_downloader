@@ -108,7 +108,7 @@ final class UriDownloadTask extends DownloadTask with _UriTaskMixin {
         ) {
     assert(Task.allowedUriSchemes.contains(directoryUri.scheme),
         'Directory URI scheme must be one of ${Task.allowedUriSchemes}');
-    if (_pathSeparator.hasMatch(filename ?? '')) {
+    if (_pathSeparatorRegExp.hasMatch(filename ?? '')) {
       throw ArgumentError('Filename cannot contain path separators');
     }
   }

@@ -127,7 +127,7 @@ base class Request {
       };
 
   /// The regex pattern to split the cookies in `Set-Cookie`.
-  static final _regexSplitSetCookies = RegExp(',(?=[^ ])');
+  static final _splitSetCookiesRegExp = RegExp(',(?=[^ ])');
 
   /// Returns the cookie header appropriate for this [Request],
   /// taken from the [cookies] list.
@@ -175,7 +175,7 @@ base class Request {
   static List<Cookie> cookiesFromSetCookie(String setCookie) {
     final cookies = <Cookie>[];
     if (setCookie.isNotEmpty) {
-      for (final cookie in setCookie.split(_regexSplitSetCookies)) {
+      for (final cookie in setCookie.split(_splitSetCookiesRegExp)) {
         cookies.add(Cookie.fromSetCookieValue(cookie));
       }
     }
@@ -205,9 +205,10 @@ base class Request {
   }
 }
 
-/// RegEx to match a path separator
-final _pathSeparator = RegExp(r'[/\\]');
-final _startsWithPathSeparator = RegExp(r'^[/\\]');
+/// RegExp to match a path separator and root directory
+final _pathSeparatorRegExp = RegExp(r'[/\\]');
+final _startsWithPathSeparatorRegExp = RegExp(r'^[/\\]');
+final _rootDirectoryRegExp = RegExp(r'^(/|\\|([a-zA-Z]:[\\/]))');
 
 /// Information related to a [Task]
 ///
@@ -339,7 +340,7 @@ sealed class Task extends Request implements Comparable {
       this.options})
       : taskId = taskId ?? _random.nextInt(1 << 32).toString(),
         filename = filename ?? _random.nextInt(1 << 32).toString(),
-        directory = _startsWithPathSeparator.hasMatch(directory)
+        directory = _startsWithPathSeparatorRegExp.hasMatch(directory)
             ? directory.substring(1)
             : directory {
     if (filename?.isEmpty == true) {
@@ -347,7 +348,7 @@ sealed class Task extends Request implements Comparable {
     }
     if (this is! UriTask &&
         this is! MultiUploadTask &&
-        _pathSeparator.hasMatch(this.filename)) {
+        _pathSeparatorRegExp.hasMatch(this.filename)) {
       throw ArgumentError('Filename cannot contain path separators');
     }
     if (allowPause && post != null) {
@@ -494,8 +495,7 @@ sealed class Task extends Request implements Comparable {
     }
     // if no match, return a BaseDirectory.root with the absoluteDirectory
     // minus the leading characters that designate the root (differs by platform)
-    final match =
-        RegExp(r'^(/|\\|([a-zA-Z]:[\\/]))').firstMatch(absoluteDirectoryPath);
+    final match = _rootDirectoryRegExp.firstMatch(absoluteDirectoryPath);
     return (
       BaseDirectory.root,
       absoluteDirectoryPath.substring(match?.end ?? 0),
