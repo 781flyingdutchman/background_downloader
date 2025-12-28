@@ -30,7 +30,7 @@ android {
     }
 
     defaultConfig {
-        minSdkVersion 21
+        minSdkVersion 23
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     if (project.android.hasProperty("namespace")) { namespace 'com.bbflight.background_downloader' }
