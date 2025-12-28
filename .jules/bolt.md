@@ -5,3 +5,7 @@
 ## 2025-02-20 - Object Allocation in Hot Paths
 **Learning:** Frequent instantiation of objects like `Random` or `List` (in `Task.split`) in constructors or frequent methods adds up.
 **Action:** Use `static final` or `const` for invariant data and shared instances.
+
+## 2025-02-21 - Parallelizing Task.split
+**Learning:** In `Task.split`, sequential `await` calls to `baseDirectoryPath` caused unnecessary latency (linear scaling with number of checked directories). Platform channel calls are relatively slow.
+**Action:** Used `Future.wait` to parallelize these calls. This reduces the total wait time to the slowest individual call rather than the sum of all calls.

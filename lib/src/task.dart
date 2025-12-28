@@ -485,11 +485,16 @@ sealed class Task extends Request implements Comparable {
             defaultTargetPlatform == TargetPlatform.windows
         ? _androidBaseDirs
         : _otherBaseDirs;
-    for (final baseDirectoryEnum in testSequence) {
-      final baseDirPath = await baseDirectoryPath(baseDirectoryEnum);
+
+    // Fetch all base directory paths in parallel to reduce latency
+    final baseDirPaths =
+        await Future.wait(testSequence.map((e) => baseDirectoryPath(e)));
+
+    for (var i = 0; i < testSequence.length; i++) {
+      final baseDirPath = baseDirPaths[i];
       final (match, directory) = _contains(baseDirPath, absoluteDirectoryPath);
       if (match) {
-        return (baseDirectoryEnum, directory, filename);
+        return (testSequence[i], directory, filename);
       }
     }
     // if no match, return a BaseDirectory.root with the absoluteDirectory
