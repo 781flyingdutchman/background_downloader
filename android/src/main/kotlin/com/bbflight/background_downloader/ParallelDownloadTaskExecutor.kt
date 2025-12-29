@@ -2,6 +2,7 @@ package com.bbflight.background_downloader
 
 import android.content.Context
 import android.util.Log
+import androidx.work.WorkerParameters
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -135,7 +136,7 @@ class ParallelDownloadTaskExecutor(
                         // resume: reconstruct [chunks] and wait for all chunk tasks to complete.
                         // The Dart side will resume each chunk task, so we just wait for the
                         // completer to complete
-                        chunks = Json.decodeFromString(chunksJsonString)
+                        chunks = Json.decodeFromString<List<Chunk>>(chunksJsonString)
                         parallelDownloadContentLength = chunks.fold(0L) { acc, chunk ->
                             acc + chunk.toByte - chunk.fromByte + 1
                         }
