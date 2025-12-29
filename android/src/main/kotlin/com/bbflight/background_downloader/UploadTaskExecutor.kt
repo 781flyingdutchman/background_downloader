@@ -12,6 +12,7 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
+import kotlin.math.min
 
 class UploadTaskExecutor(
     server: TaskServer,
@@ -572,5 +573,43 @@ class UploadTaskExecutor(
      */
     private fun browserEncode(value: String): String {
         return value.replace(newlineRegEx, "%0D%0A").replace("\"", "%22")
+    }
+}
+
+/**
+ * InputStream that limits the number of bytes read
+ */
+class LimitedInputStream(
+    private val inputStream: InputStream,
+    private val limit: Long
+) : InputStream() {
+
+    private var bytesRead: Long = 0
+
+    override fun read(): Int {
+        if (bytesRead >= limit) {
+            return -1 // End of stream
+        }
+        val result = inputStream.read()
+        if (result != -1) {
+            bytesRead++
+        }
+        return result
+    }
+
+    override fun read(b: ByteArray, off: Int, len: Int): Int {
+        if (bytesRead >= limit) {
+            return -1
+        }
+        // Adjust length to not exceed limit
+        val remainingBytes: Long = limit - bytesRead
+        val maxBytesToRead =
+            min(len.toLong(), remainingBytes).toInt()
+        val result = inputStream.read(b, off, maxBytesToRead)
+
+        if (result != -1) {
+            bytesRead += result
+        }
+        return result
     }
 }

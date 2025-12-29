@@ -18,6 +18,7 @@ import java.io.OutputStream
 import kotlin.concurrent.read
 import kotlin.concurrent.write
 import androidx.core.content.edit
+import java.lang.System.currentTimeMillis
 
 
 /***
@@ -27,8 +28,11 @@ import androidx.core.content.edit
  */
 @Suppress("ConstPropertyName")
 abstract class TaskWorker(
-    applicationContext: Context, workerParams: WorkerParameters
+    val applicationContext: Context, workerParams: WorkerParameters
 ) : CoroutineWorker(applicationContext, workerParams), TaskServer {
+
+    override val isStopped: Boolean
+        get() = isStopped()
 
     companion object {
         const val TAG = "TaskWorker"
@@ -372,21 +376,4 @@ abstract class TaskWorker(
     override suspend fun makeForeground(notificationId: Int, notification: Notification) {
         setForeground(ForegroundInfo(notificationId, notification))
     }
-
-    /**
-     * Implementation of TaskServer.updateNotification
-     */
-    override suspend fun updateNotification(
-        taskExecutor: TaskExecutor,
-        notificationType: NotificationType,
-        notification: TaskNotification?,
-        progress: Double,
-        timeRemaining: Long
-    ) {
-        // This is not used by TaskExecutor directly, it calls NotificationService.updateNotification
-        // which calls taskExecutor.server.makeForeground
-    }
-
-    // Methods that were previously in TaskWorker but are now in TaskExecutor
-    // are removed.
 }

@@ -115,16 +115,6 @@ class UidtJobService : JobService(), TaskServer {
             override suspend fun makeForeground(notificationId: Int, notification: Notification) {
                 this@UidtJobService.makeForeground(getJobIdForTask(task), notificationId, notification)
             }
-
-            override suspend fun updateNotification(
-                taskExecutor: TaskExecutor,
-                notificationType: NotificationType,
-                notification: TaskNotification?,
-                progress: Double,
-                timeRemaining: Long
-            ) {
-                 // Not used directly
-            }
         }
 
         return when (task.taskType) {
@@ -159,15 +149,6 @@ class UidtJobService : JobService(), TaskServer {
             }
         }
     }
-
-    // TaskServer implementation stub - used only if 'this' is passed directly, which we avoid by using wrapper
-    override suspend fun updateNotification(
-        taskExecutor: TaskExecutor,
-        notificationType: NotificationType,
-        notification: TaskNotification?,
-        progress: Double,
-        timeRemaining: Long
-    ) {}
 
     companion object {
         const val TAG = "UidtJobService"
