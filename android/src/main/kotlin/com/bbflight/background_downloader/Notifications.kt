@@ -900,10 +900,18 @@ object NotificationService {
                                     FOREGROUND_SERVICE_TYPE_DATA_SYNC
                                 )
                             )
-                        } catch (e: Exception) {
-                            // ForegroundServiceStartNotAllowedException (API 31+) or SecurityException (missing manifest type)
-                            // or other exceptions (e.g. IllegalArgumentException)
+                        } catch (e: ForegroundServiceStartNotAllowedException) {
                             Log.w(TAG, "Could not start foreground service: ${e.message}")
+                            taskWorker.runInForeground = false
+                            notify(taskWorker.notificationId, androidNotification)
+                        } catch (e: SecurityException) {
+                            Log.w(
+                                TAG,
+                                "Could not start foreground service due to SecurityException. " +
+                                        "This is likely because the 'android.permission.FOREGROUND_SERVICE_DATA_SYNC' permission " +
+                                        "or the 'dataSync' foregroundServiceType is missing from your AndroidManifest.xml. " +
+                                        "To fix this, add the permission and/or service declaration to your manifest."
+                            )
                             taskWorker.runInForeground = false
                             notify(taskWorker.notificationId, androidNotification)
                         }
