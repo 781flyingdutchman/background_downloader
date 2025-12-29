@@ -29,3 +29,15 @@ To run the tests for this plugin, use the following command:
 ```bash
 flutter test
 ```
+
+### Integration Tests
+
+To run integration tests (e.g., `uidt_test.dart`), use `flutter test` instead of trying to build the Android project directly with Gradle.
+
+> [!CAUTION]
+> **Do NOT use `./gradlew assembleDebug` directly** in the `android/` directory to build the app or run tests. The project configuration relies on Flutter's toolchain to manage dependencies and build artifacts correctly.
+
+Example command to run integration tests:
+```bash
+flutter test example/integration_test/uidt_test.dart
+```
