@@ -393,7 +393,7 @@ object NotificationService {
                     val iterator = pendingNotifications.iterator()
                     while (iterator.hasNext()) {
                         val next = iterator.next()
-                        if (next.taskWorker.notificationId == candidate.taskWorker.notificationId) {
+                        if (next.taskExecutor.notificationId == candidate.taskExecutor.notificationId) {
                             if (next.notificationType == NotificationType.running) {
                                 // Found a newer progress update, supersede the current candidate
                                 candidate = next
@@ -420,7 +420,7 @@ object NotificationService {
      * Creates an [UpdateNotificationWorker] to update the notification associated with
      * this task
      *
-     * This is used when we do not have access to the [TaskWorker] object, i.e.
+     * This is used when we do not have access to the [TaskExecutor] object, i.e.
      * when called from outside an actively running worker.
      */
     fun createUpdateNotificationWorker(
@@ -443,7 +443,7 @@ object NotificationService {
     }
 
     /**
-     * Create or update the notification for this [taskWorker], associated with this [taskStatus]
+     * Create or update the notification for this [taskExecutor], associated with this [taskStatus]
      * [progress] and [timeRemaining]
      *
      * [taskStatus] determines the type of notification, and whether absence of one will
@@ -462,17 +462,17 @@ object NotificationService {
      */
     @SuppressLint("MissingPermission")
     suspend fun updateNotification(
-        taskWorker: TaskWorker,
+        taskExecutor: TaskExecutor,
         taskStatus: TaskStatus,
         progress: Double = 2.0,
         timeRemaining: Long = -1000
     ) {
         val notificationType = notificationTypeForTaskStatus(taskStatus)
-        val groupNotificationId = taskWorker.notificationConfig?.groupNotificationId
+        val groupNotificationId = taskExecutor.notificationConfig?.groupNotificationId
         if (groupNotificationId?.isNotEmpty() == true) {
             if (progress == 2.0 && timeRemaining == -1000L) {
                 // filter out progress updates, as they are irrelevant for group notifications
-                updateGroupNotification(taskWorker, groupNotificationId, notificationType)
+                updateGroupNotification(taskExecutor, groupNotificationId, notificationType)
             }
             return
         }
@@ -482,41 +482,41 @@ object NotificationService {
         }
         // regular notification
         val notification = when (notificationType) {
-            NotificationType.running -> taskWorker.notificationConfig?.running
-            NotificationType.complete -> taskWorker.notificationConfig?.complete
-            NotificationType.error -> taskWorker.notificationConfig?.error
-            NotificationType.paused -> taskWorker.notificationConfig?.paused
-            NotificationType.canceled -> taskWorker.notificationConfig?.canceled
+            NotificationType.running -> taskExecutor.notificationConfig?.running
+            NotificationType.complete -> taskExecutor.notificationConfig?.complete
+            NotificationType.error -> taskExecutor.notificationConfig?.error
+            NotificationType.paused -> taskExecutor.notificationConfig?.paused
+            NotificationType.canceled -> taskExecutor.notificationConfig?.canceled
         }
         if (notification == null) {
-            addToNotificationQueue(taskWorker) // removes notification
+            addToNotificationQueue(taskExecutor) // removes notification
             return
         }
         // need to show a notification
-        taskWorker.notificationId = taskWorker.task.taskId.hashCode()
+        taskExecutor.notificationId = taskExecutor.task.taskId.hashCode()
         if (!createdNotificationChannel) {
-            createNotificationChannel(taskWorker.applicationContext)
+            createNotificationChannel(taskExecutor.applicationContext)
         }
         val iconDrawable = when (notificationType) {
-            NotificationType.running -> if (taskWorker.task.isDownloadTask()) R.drawable.outline_file_download_24 else R.drawable.outline_file_upload_24
+            NotificationType.running -> if (taskExecutor.task.isDownloadTask()) R.drawable.outline_file_download_24 else R.drawable.outline_file_upload_24
             NotificationType.complete -> R.drawable.outline_download_done_24
             NotificationType.error -> R.drawable.outline_error_outline_24
             NotificationType.paused -> R.drawable.outline_pause_24
             NotificationType.canceled -> R.drawable.outline_cancel_24
         }
         val builder = Builder(
-            taskWorker.applicationContext, notificationChannelId
+            taskExecutor.applicationContext, notificationChannelId
         ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
             .setShowWhen(notificationType != NotificationType.running)
         // use stored progress if notificationType is .paused
-        taskWorker.notificationProgress =
-            if (notificationType == NotificationType.paused) taskWorker.notificationProgress else progress
+        taskExecutor.notificationProgress =
+            if (notificationType == NotificationType.paused) taskExecutor.notificationProgress else progress
         // title and body interpolation of {filename}, {progress} and {metadata}
         val title = replaceTokens(
             notification.title,
-            taskWorker.task,
-            taskWorker.notificationProgress,
-            networkSpeed = taskWorker.networkSpeed,
+            taskExecutor.task,
+            taskExecutor.notificationProgress,
+            networkSpeed = taskExecutor.networkSpeed,
             timeRemaining = timeRemaining
         )
         if (title.isNotEmpty()) {
@@ -524,9 +524,9 @@ object NotificationService {
         }
         val body = replaceTokens(
             notification.body,
-            taskWorker.task,
-            taskWorker.notificationProgress,
-            networkSpeed = taskWorker.networkSpeed,
+            taskExecutor.task,
+            taskExecutor.notificationProgress,
+            networkSpeed = taskExecutor.networkSpeed,
             timeRemaining = timeRemaining
         )
         if (body.isNotEmpty()) {
@@ -534,18 +534,18 @@ object NotificationService {
         }
         // progress bar
         val progressBar =
-            taskWorker.notificationConfig?.progressBar == true && (notificationType == NotificationType.running || notificationType == NotificationType.paused)
-        if (progressBar && taskWorker.notificationProgress >= 0) {
-            if (taskWorker.notificationProgress <= 1) {
+            taskExecutor.notificationConfig?.progressBar == true && (notificationType == NotificationType.running || notificationType == NotificationType.paused)
+        if (progressBar && taskExecutor.notificationProgress >= 0) {
+            if (taskExecutor.notificationProgress <= 1) {
                 builder.setProgress(
-                    100, (taskWorker.notificationProgress * 100).roundToInt(), false
+                    100, (taskExecutor.notificationProgress * 100).roundToInt(), false
                 )
             } else { // > 1 means indeterminate
                 builder.setProgress(100, 0, true)
             }
         }
-        addNotificationActions(taskWorker, notificationType, builder)
-        addToNotificationQueue(taskWorker, notificationType, builder)
+        addNotificationActions(taskExecutor, notificationType, builder)
+        addToNotificationQueue(taskExecutor, notificationType, builder)
     }
 
     /**
@@ -573,54 +573,54 @@ object NotificationService {
     }
 
     /**
-     * Update notification for this [taskWorker] in group
+     * Update notification for this [taskExecutor] in group
      * [groupNotificationId] and type [notificationType].
      *
      * A group notification aggregates the state of all tasks in a group and
      * presents a notification based on that value
      */
     private suspend fun updateGroupNotification(
-        taskWorker: TaskWorker, groupNotificationId: String, notificationType: NotificationType
+        taskExecutor: TaskExecutor, groupNotificationId: String, notificationType: NotificationType
     ) {
         val stateChange: Boolean
         val groupNotification: GroupNotification
         mutex.withLock {
             groupNotification =
                 groupNotifications[groupNotificationId] ?: GroupNotification(
-                    groupNotificationId, taskWorker.notificationConfig!!
+                    groupNotificationId, taskExecutor.notificationConfig!!
                 )
-            stateChange = groupNotification.update(taskWorker.task, notificationType)
+            stateChange = groupNotification.update(taskExecutor.task, notificationType)
             groupNotifications[groupNotificationId] = groupNotification
         }
         if (stateChange) {
             // need to update the group notification
-            taskWorker.notificationId = groupNotification.notificationId
+            taskExecutor.notificationId = groupNotification.notificationId
             val hasError = groupNotification.hasError
             val isFinished = groupNotification.isFinished
             val notification = if (isFinished) {
                 if (hasError) groupNotification.notificationConfig.error else groupNotification.notificationConfig.complete
             } else groupNotification.notificationConfig.running
             if (notification == null) {
-                addToNotificationQueue(taskWorker) // removes notification
+                addToNotificationQueue(taskExecutor) // removes notification
             } else {
                 // need to show a notification
                 if (!createdNotificationChannel) {
-                    createNotificationChannel(taskWorker.applicationContext)
+                    createNotificationChannel(taskExecutor.applicationContext)
                 }
                 val iconDrawable = if (isFinished) {
                     if (hasError) R.drawable.outline_error_outline_24 else R.drawable.outline_download_done_24
                 } else {
-                    if (taskWorker.task.isDownloadTask()) R.drawable.outline_file_download_24 else R.drawable.outline_file_upload_24
+                    if (taskExecutor.task.isDownloadTask()) R.drawable.outline_file_download_24 else R.drawable.outline_file_upload_24
                 }
                 val builder = Builder(
-                    taskWorker.applicationContext, notificationChannelId
+                    taskExecutor.applicationContext, notificationChannelId
                 ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
                     .setShowWhen(isFinished)
                 // title and body interpolation of tokens
                 val progress = groupNotification.progress
                 val title = replaceTokens(
                     notification.title,
-                    taskWorker.task,
+                    taskExecutor.task,
                     progress,
                     groupNotification = groupNotification
                 )
@@ -629,7 +629,7 @@ object NotificationService {
                 }
                 val body = replaceTokens(
                     notification.body,
-                    taskWorker.task,
+                    taskExecutor.task,
                     progress,
                     groupNotification = groupNotification
                 )
@@ -647,13 +647,13 @@ object NotificationService {
                     }
                 }
                 addGroupNotificationActions(
-                    taskWorker,
+                    taskExecutor,
                     notificationType,
                     groupNotification,
                     builder
                 )
                 addToNotificationQueue(
-                    taskWorker,
+                    taskExecutor,
                     notificationType,
                     builder
                 ) // shows notification
@@ -676,29 +676,29 @@ object NotificationService {
      * Add action to notification via buttons or tap
      *
      * Which button(s) depends on the [notificationType], and the actions require
-     * access to [taskWorker] and the [builder]
+     * access to [taskExecutor] and the [builder]
      */
     private fun addNotificationActions(
-        taskWorker: TaskWorker, notificationType: NotificationType, builder: Builder
+        taskExecutor: TaskExecutor, notificationType: NotificationType, builder: Builder
     ) {
-        val taskJsonString = Json.encodeToString(taskWorker.task)
+        val taskJsonString = Json.encodeToString(taskExecutor.task)
         // add tap action for all notifications
-        addTapIntent(taskWorker, taskJsonString, notificationType, builder)
+        addTapIntent(taskExecutor, taskJsonString, notificationType, builder)
         // add buttons depending on notificationType
         when (notificationType) {
             NotificationType.running -> {
                 // cancel button when running
                 val cancelOrPauseBundle = Bundle().apply {
-                    putString(NotificationReceiver.keyTaskId, taskWorker.task.taskId)
+                    putString(NotificationReceiver.keyTaskId, taskExecutor.task.taskId)
                 }
                 val cancelIntent =
-                    Intent(taskWorker.applicationContext, NotificationReceiver::class.java).apply {
+                    Intent(taskExecutor.applicationContext, NotificationReceiver::class.java).apply {
                         action = NotificationReceiver.actionCancelActive
                         putExtra(NotificationReceiver.keyBundle, cancelOrPauseBundle)
                     }
                 val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
-                    taskWorker.applicationContext,
-                    taskWorker.notificationId,
+                    taskExecutor.applicationContext,
+                    taskExecutor.notificationId,
                     cancelIntent,
                     PendingIntent.FLAG_IMMUTABLE
                 )
@@ -707,17 +707,17 @@ object NotificationService {
                     BDPlugin.notificationButtonText["Cancel"],
                     cancelPendingIntent
                 )
-                if (taskWorker.taskCanResume && (taskWorker.notificationConfig?.paused != null)) {
+                if (taskExecutor.taskCanResume && (taskExecutor.notificationConfig?.paused != null)) {
                     // pause button when running and paused notification configured
                     val pauseIntent = Intent(
-                        taskWorker.applicationContext, NotificationReceiver::class.java
+                        taskExecutor.applicationContext, NotificationReceiver::class.java
                     ).apply {
                         action = NotificationReceiver.actionPause
                         putExtra(NotificationReceiver.keyBundle, cancelOrPauseBundle)
                     }
                     val pausePendingIntent: PendingIntent = PendingIntent.getBroadcast(
-                        taskWorker.applicationContext,
-                        taskWorker.notificationId,
+                        taskExecutor.applicationContext,
+                        taskExecutor.notificationId,
                         pauseIntent,
                         PendingIntent.FLAG_IMMUTABLE
                     )
@@ -732,20 +732,20 @@ object NotificationService {
             NotificationType.paused -> {
                 // cancel button
                 val cancelBundle = Bundle().apply {
-                    putString(NotificationReceiver.keyTaskId, taskWorker.task.taskId)
+                    putString(NotificationReceiver.keyTaskId, taskExecutor.task.taskId)
                     putString(
                         NotificationReceiver.keyTask, taskJsonString
                     )
                 }
                 val cancelIntent = Intent(
-                    taskWorker.applicationContext, NotificationReceiver::class.java
+                    taskExecutor.applicationContext, NotificationReceiver::class.java
                 ).apply {
                     action = NotificationReceiver.actionCancelInactive
                     putExtra(NotificationReceiver.keyBundle, cancelBundle)
                 }
                 val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
-                    taskWorker.applicationContext,
-                    taskWorker.notificationId,
+                    taskExecutor.applicationContext,
+                    taskExecutor.notificationId,
                     cancelIntent,
                     PendingIntent.FLAG_IMMUTABLE
                 )
@@ -756,24 +756,24 @@ object NotificationService {
                 )
                 // resume button
                 val resumeBundle = Bundle().apply {
-                    putString(NotificationReceiver.keyTaskId, taskWorker.task.taskId)
+                    putString(NotificationReceiver.keyTaskId, taskExecutor.task.taskId)
                     putString(
                         NotificationReceiver.keyTask, taskJsonString
                     )
                     putString(
                         NotificationReceiver.keyNotificationConfig,
-                        taskWorker.notificationConfigJsonString
+                        taskExecutor.notificationConfigJsonString
                     )
                 }
                 val resumeIntent = Intent(
-                    taskWorker.applicationContext, NotificationReceiver::class.java
+                    taskExecutor.applicationContext, NotificationReceiver::class.java
                 ).apply {
                     action = NotificationReceiver.actionResume
                     putExtra(NotificationReceiver.keyBundle, resumeBundle)
                 }
                 val resumePendingIntent: PendingIntent = PendingIntent.getBroadcast(
-                    taskWorker.applicationContext,
-                    taskWorker.notificationId,
+                    taskExecutor.applicationContext,
+                    taskExecutor.notificationId,
                     resumeIntent,
                     PendingIntent.FLAG_IMMUTABLE
                 )
@@ -797,13 +797,13 @@ object NotificationService {
      * the activity can send a "notificationTap" message to Flutter
      */
     private fun addTapIntent(
-        taskWorker: TaskWorker,
+        taskExecutor: TaskExecutor,
         taskJsonString: String,
         notificationType: NotificationType,
         builder: Builder
     ) {
-        val tapIntent = taskWorker.applicationContext.packageManager.getLaunchIntentForPackage(
-            taskWorker.applicationContext.packageName
+        val tapIntent = taskExecutor.applicationContext.packageManager.getLaunchIntentForPackage(
+            taskExecutor.applicationContext.packageName
         )
         if (tapIntent != null) {
             tapIntent.apply {
@@ -814,14 +814,14 @@ object NotificationService {
                 putExtra(NotificationReceiver.keyTask, taskJsonString)
                 putExtra(
                     NotificationReceiver.keyNotificationConfig,
-                    taskWorker.notificationConfigJsonString
+                    taskExecutor.notificationConfigJsonString
                 )
                 putExtra(NotificationReceiver.keyNotificationType, notificationType.ordinal)
-                putExtra(NotificationReceiver.keyNotificationId, taskWorker.notificationId)
+                putExtra(NotificationReceiver.keyNotificationId, taskExecutor.notificationId)
             }
             val tapPendingIntent: PendingIntent = PendingIntent.getActivity(
-                taskWorker.applicationContext,
-                taskWorker.notificationId,
+                taskExecutor.applicationContext,
+                taskExecutor.notificationId,
                 tapIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
@@ -833,25 +833,25 @@ object NotificationService {
      * Add Cancel action to groupNotification notification
      */
     private fun addGroupNotificationActions(
-        taskWorker: TaskWorker,
+        taskExecutor: TaskExecutor,
         notificationType: NotificationType,
         groupNotification: GroupNotification,
         builder: Builder
     ) {
         // add tap action for all notifications
-        addTapIntent(taskWorker, "", notificationType, builder)
+        addTapIntent(taskExecutor, "", notificationType, builder)
         // add cancel button for running notification
         if (notificationType == NotificationType.running) {
             val cancelBundle = Bundle().apply {
                 putString(NotificationReceiver.keyGroupNotificationName, groupNotification.name)
             }
             val cancelIntent =
-                Intent(taskWorker.applicationContext, NotificationReceiver::class.java).apply {
+                Intent(taskExecutor.applicationContext, NotificationReceiver::class.java).apply {
                     action = NotificationReceiver.actionCancelActive
                     putExtra(NotificationReceiver.keyBundle, cancelBundle)
                 }
             val cancelPendingIntent: PendingIntent = PendingIntent.getBroadcast(
-                taskWorker.applicationContext,
+                taskExecutor.applicationContext,
                 groupNotification.notificationId,
                 cancelIntent,
                 PendingIntent.FLAG_IMMUTABLE
@@ -872,13 +872,13 @@ object NotificationService {
      */
     @SuppressLint("MissingPermission")
     private suspend fun displayNotification(
-        taskWorker: TaskWorker, notificationType: NotificationType, builder: Builder
+        taskExecutor: TaskExecutor, notificationType: NotificationType, builder: Builder
     ) {
-        with(NotificationManagerCompat.from(taskWorker.applicationContext)) {
+        with(NotificationManagerCompat.from(taskExecutor.applicationContext)) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 // On Android 33+, check/ask for permission
                 val status = PermissionsService.getPermissionStatus(
-                    taskWorker.applicationContext,
+                    taskExecutor.applicationContext,
                     PermissionType.notifications
                 )
                 if (status != PermissionStatus.granted) {
@@ -886,38 +886,27 @@ object NotificationService {
                 }
             }
             val androidNotification = builder.build()
-            if (taskWorker.runInForeground) {
-                if (notificationType == NotificationType.running && taskWorker.isActive) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                        try {
-                            taskWorker.setForeground(
-                                ForegroundInfo(
-                                    taskWorker.notificationId,
-                                    androidNotification,
-                                    FOREGROUND_SERVICE_TYPE_DATA_SYNC
-                                )
-                            )
-                        } catch (e: ForegroundServiceStartNotAllowedException) {
-                            Log.w(TAG, "Could not start foreground service: ${e.message}")
-                            taskWorker.runInForeground = false
-                            notify(taskWorker.notificationId, androidNotification)
-                        }
-                    } else {
-                        taskWorker.setForeground(
-                            ForegroundInfo(
-                                taskWorker.notificationId, androidNotification
-                            )
-                        )
+            if (taskExecutor.runInForeground) {
+                if (notificationType == NotificationType.running && !taskExecutor.server.isStopped) {
+                    // We delegate to the server to handle foreground promotion
+                    // For TaskWorker, this calls setForeground
+                    // For UidtJobService, this calls setNotification
+                    try {
+                        taskExecutor.server.makeForeground(taskExecutor.notificationId, androidNotification)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Could not start foreground service: ${e.message}")
+                        taskExecutor.runInForeground = false
+                        notify(taskExecutor.notificationId, androidNotification)
                     }
                 } else {
                     // to prevent the 'not running' notification getting killed as the foreground
                     // process is terminated, this notification is shown regularly, but with
                     // a delay
                     delay(200)
-                    notify(taskWorker.notificationId, androidNotification)
+                    notify(taskExecutor.notificationId, androidNotification)
                 }
             } else {
-                notify(taskWorker.notificationId, androidNotification)
+                notify(taskExecutor.notificationId, androidNotification)
             }
         }
     }
@@ -1035,12 +1024,12 @@ object NotificationService {
      * queue if needed
      */
     private suspend fun addToNotificationQueue(
-        taskWorker: TaskWorker,
+        taskExecutor: TaskExecutor,
         notificationType: NotificationType? = null,
         builder: Builder? = null
     ) {
         mutex.withLock {
-            pendingNotifications.add(NotificationData(taskWorker, notificationType, builder))
+            pendingNotifications.add(NotificationData(taskExecutor, notificationType, builder))
         }
         queue.send(Unit)
     }
@@ -1051,14 +1040,14 @@ object NotificationService {
     private suspend fun processNotificationData(notificationData: NotificationData) {
         if (notificationData.notificationType != null && notificationData.builder != null) {
             displayNotification(
-                notificationData.taskWorker,
+                notificationData.taskExecutor,
                 notificationData.notificationType,
                 notificationData.builder
             )
         } else {
             // remove the notification
-            with(NotificationManagerCompat.from(notificationData.taskWorker.applicationContext)) {
-                cancel(notificationData.taskWorker.notificationId)
+            with(NotificationManagerCompat.from(notificationData.taskExecutor.applicationContext)) {
+                cancel(notificationData.taskExecutor.notificationId)
             }
         }
     }
@@ -1079,7 +1068,7 @@ object NotificationService {
 
 /** Holds data required to construct a notification */
 data class NotificationData(
-    val taskWorker: TaskWorker,
+    val taskExecutor: TaskExecutor,
     val notificationType: NotificationType?,
     val builder: Builder?
 )

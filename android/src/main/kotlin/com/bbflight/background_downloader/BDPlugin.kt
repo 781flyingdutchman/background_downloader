@@ -2,9 +2,13 @@ package com.bbflight.background_downloader
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.job.JobInfo
+import android.app.job.JobScheduler
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.PersistableBundle
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.edit
@@ -109,7 +113,9 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val canceledTaskIds =
             Collections.synchronizedSet(mutableSetOf<String>()) // <taskId>, acts as flag
         val parallelDownloadTaskWorkers =
-            Collections.synchronizedMap(HashMap<String, ParallelDownloadTaskWorker>()) //Was a HashMap
+            Collections.synchronizedMap(HashMap<String, ParallelDownloadTaskWorker>()) // Deprecated: keeping for compatibility during refactor transition if needed
+        val parallelDownloadTaskExecutors =
+            Collections.synchronizedMap(HashMap<String, ParallelDownloadTaskExecutor>())
         val tasksToReEnqueue =
             Collections.synchronizedSet(mutableSetOf<Task>()) // for when WiFi requirement changes
         val taskIdsRequiringWiFi =
@@ -148,13 +154,59 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             ) // store host if we have a HoldingQueue
             canceledTaskIds.remove(task.taskId) // reset flag
             cancelUpdateSentForTaskId.remove(task.taskId) // reset flag
+
+            val taskRequiresWifi = taskRequiresWifi(task)
+            if (taskRequiresWifi) {
+                taskIdsRequiringWiFi.add(task.taskId)
+            }
+            if (notificationConfigJsonString != null) {
+                notificationConfigJsonStrings[task.taskId] = notificationConfigJsonString
+            }
+
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            val runInForegroundFileSize = prefs.getInt(keyConfigForegroundFileSize, -1)
+            val canRunInForeground = runInForegroundFileSize >= 0 && notificationConfigJsonString != null
+            val runInForeground = canRunInForeground // For enqueue decision, we assume it might run in foreground
+
+            // Check for UIDT eligibility
+            if (runInForeground && Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                // Use UIDT JobService
+                Log.i(TAG, "Enqueuing taskId ${task.taskId} using UIDT JobService")
+                if (enqueueUidtJob(context, task, notificationConfigJsonString, resumeData, taskRequiresWifi)) {
+                    // Success logic
+                     try {
+                        if (initialDelayMillis != 0L) {
+                             delay(min(100L, initialDelayMillis))
+                        }
+                        if (holdingQueue?.enqueuedTaskIds?.contains(task.taskId) != true)
+                            processStatusUpdate(task, TaskStatus.enqueued, prefs, context = context)
+                    } catch (_: Throwable) {
+                         Log.w(TAG, "Error post-enqueue for taskId ${task.taskId}")
+                    }
+                    NotificationService.registerEnqueue(
+                        EnqueueItem(context, task, notificationConfigJsonString), success = true
+                    )
+                     prefsLock.write {
+                        val tasksMap = getTaskMap(prefs)
+                        tasksMap[task.taskId] = task
+                        prefs.edit {
+                            putString(keyTasksMap, Json.encodeToString(tasksMap))
+                        }
+                    }
+                    return true
+                } else {
+                     Log.w(TAG, "Failed to enqueue UIDT job for taskId ${task.taskId}, falling back to WorkManager")
+                     // Fallback to WorkManager below
+                }
+            }
+
+            // WorkManager Enqueue
             val dataBuilder = Data.Builder().putString(TaskWorker.keyTask, taskToJsonString(task))
             if (notificationConfigJsonString != null) {
                 dataBuilder.putString(
                     TaskWorker.keyNotificationConfig,
                     notificationConfigJsonString
                 )
-                notificationConfigJsonStrings[task.taskId] = notificationConfigJsonString
             }
             if (resumeData != null) {
                 dataBuilder.putString(TaskWorker.keyResumeDataData, resumeData.data)
@@ -162,10 +214,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     .putString(TaskWorker.keyETag, resumeData.eTag)
             }
             val data = dataBuilder.build()
-            val taskRequiresWifi = taskRequiresWifi(task)
-            if (taskRequiresWifi) {
-                taskIdsRequiringWiFi.add(task.taskId)
-            }
+
             val constraints = Constraints.Builder().setRequiredNetworkType(
                 if (taskRequiresWifi) NetworkType.UNMETERED else NetworkType.CONNECTED
             ).build()
@@ -200,7 +249,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             }
             try {
                 operation.result.get()
-                val prefs = PreferenceManager.getDefaultSharedPreferences(context)
                 if (initialDelayMillis != 0L) {
                     delay(min(100L, initialDelayMillis))
                 }
@@ -231,6 +279,44 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 }
             }
             return true
+        }
+
+        @androidx.annotation.RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        private fun enqueueUidtJob(
+            context: Context,
+            task: Task,
+            notificationConfigJsonString: String?,
+            resumeData: ResumeData?,
+            taskRequiresWifi: Boolean
+        ): Boolean {
+            val jobScheduler = context.getSystemService(JobScheduler::class.java)
+            val componentName = ComponentName(context, UidtJobService::class.java)
+
+            val extras = PersistableBundle().apply {
+                putString(TaskWorker.keyTask, taskToJsonString(task))
+                if (notificationConfigJsonString != null) {
+                    putString(TaskWorker.keyNotificationConfig, notificationConfigJsonString)
+                }
+                if (resumeData != null) {
+                    putString(TaskWorker.keyResumeDataData, resumeData.data)
+                    putLong(TaskWorker.keyStartByte, resumeData.requiredStartByte)
+                    putString(TaskWorker.keyETag, resumeData.eTag)
+                }
+            }
+
+            val jobInfoBuilder = JobInfo.Builder(task.taskId.hashCode(), componentName)
+                .setExtras(extras)
+                .setRequiredNetworkType(if (taskRequiresWifi) JobInfo.NETWORK_TYPE_UNMETERED else JobInfo.NETWORK_TYPE_ANY)
+                .setEstimatedNetworkBytes(1024 * 1024 * 10, 1024 * 1024 * 10) // estimate, required for UIDT? No, but good practice
+                .setUserInitiated(true) // The Magic Switch for UIDT
+
+            return try {
+                val result = jobScheduler.schedule(jobInfoBuilder.build())
+                result == JobScheduler.RESULT_SUCCESS
+            } catch (e: Exception) {
+                Log.e(TAG, "Error scheduling UIDT job: ${e.message}")
+                false
+            }
         }
 
         /** True if task requires WiFi, based on global and task-specific settings */
@@ -276,9 +362,25 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 holdingQueue?.cancelTasksWithIds(context, taskIds) ?: listOf()
             val taskIdsRemaining = taskIds.filter { !taskIdsRemovedFromHoldingQueue.contains(it) }
             var success = true
+
+            // Cancel WorkManager tasks
             for (taskId in taskIdsRemaining) {
                 success = success && cancelActiveTaskWithId(context, taskId, workManager)
             }
+
+            // Cancel JobScheduler tasks (UIDT)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val jobScheduler = context.getSystemService(JobScheduler::class.java)
+                for (taskId in taskIdsRemaining) {
+                     val jobId = taskId.hashCode()
+                     // We check if it exists or just try canceling
+                     // JobScheduler.cancel doesn't throw if not found
+                     jobScheduler.cancel(jobId)
+                     // If it was running in UidtJobService, onStopJob will be called
+                     // But we should also trigger status updates if it wasn't finished
+                }
+            }
+
             holdingQueue?.stateMutex?.unlock()
             return success
         }
@@ -292,63 +394,75 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             context: Context, taskId: String, workManager: WorkManager
         ): Boolean {
             // cancel chunk tasks if this is a ParallelDownloadTask
-            parallelDownloadTaskWorkers[taskId]?.cancelAllChunkTasks()
+            parallelDownloadTaskExecutors[taskId]?.cancelAllChunkTasks()
             // get the workInfos for the task (should be only one)
             val workInfos = withContext(Dispatchers.IO) {
                 workManager.getWorkInfosByTag("taskId=$taskId").get()
             }
-            if (workInfos.isEmpty()) {
-                Log.d(TAG, "Could not find tasks to cancel")
-                return false
-            }
-            // send cancel update and remove notification
+
+            // Handle cancellation logic for both WorkManager and JobScheduler tasks
+            // Even if workInfos is empty, it might be a JobScheduler task.
+            // However, this method signature implies WorkManager focus.
+            // We should split or update logic.
+            // But 'cancelTasksWithIds' above handles both now.
+            // This method handles the 'clean up and notify' part which is common, but relies on workInfos for status.
+
+            // If it is a UIDT Job, we don't have WorkInfo.
+            // We should check if we have a task record locally first?
             val prefs = PreferenceManager.getDefaultSharedPreferences(context)
             val tasksMap = getTaskMap(prefs)
-            for (workInfo in workInfos) {
-                if (workInfo.state != WorkInfo.State.SUCCEEDED) {
-                    // send cancellation update for tasks that have not yet succeeded
-                    // and remove associated notification
-                    val task = tasksMap[taskId]
-                    if (task != null) {
-                        canceledTaskIds.add(task.taskId)
-                        processStatusUpdate(
-                            task,
-                            TaskStatus.canceled,
-                            prefs,
-                            context = context
-                        )
-                        holdingQueue?.taskFinished(task)
-                        // remove outstanding notification for task or group
-                        val notificationGroup =
-                            NotificationService.groupNotificationWithTaskId(taskId)
-                        with(NotificationManagerCompat.from(context)) {
-                            if (notificationGroup == null) {
-                                cancel(task.taskId.hashCode())
-                            } else {
-                                // update notification for group
-                                NotificationService.createUpdateNotificationWorker(
-                                    context,
-                                    Json.encodeToString(task),
-                                    Json.encodeToString(notificationGroup.notificationConfig),
-                                    TaskStatus.canceled.ordinal
-                                )
-                            }
-                        }
+            val task = tasksMap[taskId]
+
+            if (task != null) {
+                canceledTaskIds.add(task.taskId)
+                processStatusUpdate(
+                    task,
+                    TaskStatus.canceled,
+                    prefs,
+                    context = context
+                )
+                holdingQueue?.taskFinished(task)
+                 // remove outstanding notification for task or group
+                val notificationGroup =
+                    NotificationService.groupNotificationWithTaskId(taskId)
+                with(NotificationManagerCompat.from(context)) {
+                    if (notificationGroup == null) {
+                        cancel(task.taskId.hashCode())
                     } else {
-                        Log.d(TAG, "Could not find task with taskId $taskId to cancel")
+                         // update notification for group
+                        NotificationService.createUpdateNotificationWorker(
+                            context,
+                            Json.encodeToString(task),
+                            Json.encodeToString(notificationGroup.notificationConfig),
+                            TaskStatus.canceled.ordinal
+                        )
                     }
-                }
-                val operation = workManager.cancelAllWorkByTag("taskId=$taskId")
-                try {
-                    withContext(Dispatchers.IO) {
-                        operation.result.get()
-                    }
-                } catch (_: Throwable) {
-                    Log.w(TAG, "Unable to cancel taskId $taskId in operation: $operation")
-                    return false
                 }
             }
-            return true
+
+            if (workInfos.isNotEmpty()) {
+                // WorkManager cancellation
+                for (workInfo in workInfos) {
+                    val operation = workManager.cancelAllWorkByTag("taskId=$taskId")
+                    try {
+                        withContext(Dispatchers.IO) {
+                            operation.result.get()
+                        }
+                    } catch (_: Throwable) {
+                        Log.w(TAG, "Unable to cancel taskId $taskId in operation: $operation")
+                        return false
+                    }
+                }
+                return true
+            } else {
+                 // Might be UIDT task, handled in cancelTasksWithIds by cancelling job
+                 // If task was null, we returned already? No.
+                 if (task == null) {
+                      Log.d(TAG, "Could not find task with taskId $taskId to cancel")
+                      return false
+                 }
+                 return true
+            }
         }
 
         /**
@@ -1052,7 +1166,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 Json.decodeFromString<TaskException>(exceptionJson)
             } else null
             val responseBody = args[4] as String?
-            parallelDownloadTaskWorkers[taskId]?.chunkStatusUpdate(
+            parallelDownloadTaskExecutors[taskId]?.chunkStatusUpdate(
                 chunkTaskId,
                 TaskStatus.entries[statusOrdinal],
                 exception,
@@ -1077,7 +1191,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val taskId = args[0] as String
         val chunkTaskId = args[1] as String
         val progress = args[2] as Double
-        parallelDownloadTaskWorkers[taskId]?.chunkProgressUpdate(
+        parallelDownloadTaskExecutors[taskId]?.chunkProgressUpdate(
             chunkTaskId,
             progress
         )
