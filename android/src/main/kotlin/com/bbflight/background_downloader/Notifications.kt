@@ -33,7 +33,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
@@ -368,9 +367,7 @@ object NotificationService {
      */
     init {
         scope.launch {
-            for (event in queue) {
-                processQueue()
-            }
+            for (event in queue) processQueue()
         }
     }
 
