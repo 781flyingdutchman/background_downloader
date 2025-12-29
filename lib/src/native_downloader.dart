@@ -569,13 +569,25 @@ final class AndroidDownloader extends NativeDownloader {
 
       case (Config.runInForeground, String whenTo):
         assert(
-            [Config.never, Config.always].contains(whenTo),
+            [Config.never, Config.always, Config.whenAble].contains(whenTo),
             '${Config.runInForeground} expects one of ${[
               Config.never,
-              Config.always
+              Config.always,
+              Config.whenAble
             ]}');
+        int arg;
+        if (whenTo == Config.whenAble) {
+          // On Android, Config.whenAble set to "always" (0) when Android
+          // version > 34 to use the User Initiated Data Transfer mode,
+          // and "never" (-1) otherwise
+          final versionString = await platformVersion();
+          final version = int.tryParse(versionString) ?? 0;
+          arg = version >= 34 ? 0 : Config.argToInt(Config.never);
+        } else {
+          arg = Config.argToInt(whenTo);
+        }
         await NativeDownloader.methodChannel
-            .invokeMethod('configForegroundFileSize', Config.argToInt(whenTo));
+            .invokeMethod('configForegroundFileSize', arg);
 
       case (Config.runInForegroundIfFileLargerThan, int fileSize):
         await NativeDownloader.methodChannel

@@ -1,10 +1,11 @@
+// ignore_for_file: avoid_print
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:integration_test/integration_test.dart';
 import 'package:path/path.dart' hide equals;
 import 'package:path_provider/path_provider.dart';
 
@@ -332,9 +333,9 @@ Future<void> uidtSetup() async {
   await defaultSetup();
   await FileDownloader().reset(group: 'uploadTest');
   await FileDownloader()
-      .configure(globalConfig: [(Config.runInForegroundIfFileLargerThan, 0)]);
+      .configure(globalConfig: [(Config.runInForeground, Config.whenAble)]);
 
-  await FileDownloader().configureNotification(
+  FileDownloader().configureNotification(
       running: const TaskNotification('Running', 'Task is downloading'),
       complete: const TaskNotification('Complete', 'Task is finished'),
       progressBar: true);
