@@ -354,11 +354,58 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         ): Boolean {
             // cancel chunk tasks if this is a ParallelDownloadTask
             parallelDownloadTaskWorkers[taskId]?.cancelAllChunkTasks()
+
+            var jobCanceled = false
+            if (Build.VERSION.SDK_INT >= 34) {
+                val jobScheduler =
+                    context.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
+                jobScheduler.getPendingJob(taskId.hashCode())?.let { jobInfo ->
+                    val taskJson = jobInfo.extras.getString(TaskWorker.keyTask)
+                    if (taskJson != null) {
+                        try {
+                            val task = Json.decodeFromString<Task>(taskJson)
+                            if (task.taskId == taskId) {
+                                canceledTaskIds.add(taskId)
+                                val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+                                processStatusUpdate(
+                                    task,
+                                    TaskStatus.canceled,
+                                    prefs,
+                                    context = context
+                                )
+                                holdingQueue?.taskFinished(task)
+                                // remove outstanding notification for task or group
+                                val notificationGroup =
+                                    NotificationService.groupNotificationWithTaskId(taskId)
+                                with(NotificationManagerCompat.from(context)) {
+                                    if (notificationGroup == null) {
+                                        cancel(task.taskId.hashCode())
+                                    } else {
+                                        // update notification for group
+                                        NotificationService.createUpdateNotificationWorker(
+                                            context,
+                                            Json.encodeToString(task),
+                                            Json.encodeToString(notificationGroup.notificationConfig),
+                                            TaskStatus.canceled.ordinal
+                                        )
+                                    }
+                                }
+                                jobScheduler.cancel(jobInfo.id)
+                                jobCanceled = true
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error decoding task from JobScheduler: $e")
+                        }
+                    }
+                }
+            }
+
             // get the workInfos for the task (should be only one)
             val workInfos = withContext(Dispatchers.IO) {
                 workManager.getWorkInfosByTag("taskId=$taskId").get()
             }
             if (workInfos.isEmpty()) {
+                if (jobCanceled) return true
                 Log.d(TAG, "Could not find tasks to cancel")
                 return false
             }
@@ -771,6 +818,49 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             workManager.cancelWorkById(workInfo.id)
             counter++
         }
+        if (Build.VERSION.SDK_INT >= 34) {
+            val jobScheduler =
+                applicationContext.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
+            val jobs = jobScheduler.allPendingJobs
+            for (jobInfo in jobs) {
+                val taskJson = jobInfo.extras.getString(TaskWorker.keyTask)
+                if (taskJson != null) {
+                    try {
+                        val task = Json.decodeFromString<Task>(taskJson)
+                        if (task.group == group) {
+                            canceledTaskIds.add(task.taskId)
+                            processStatusUpdate(
+                                task,
+                                TaskStatus.canceled,
+                                prefs,
+                                context = applicationContext
+                            )
+                            holdingQueue?.taskFinished(task)
+                            // remove outstanding notification for task or group
+                            val notificationGroup =
+                                NotificationService.groupNotificationWithTaskId(task.taskId)
+                            with(NotificationManagerCompat.from(applicationContext)) {
+                                if (notificationGroup == null) {
+                                    cancel(task.taskId.hashCode())
+                                } else {
+                                    // update notification for group
+                                    NotificationService.createUpdateNotificationWorker(
+                                        applicationContext,
+                                        Json.encodeToString(task),
+                                        Json.encodeToString(notificationGroup.notificationConfig),
+                                        TaskStatus.canceled.ordinal
+                                    )
+                                }
+                            }
+                            jobScheduler.cancel(jobInfo.id)
+                            counter++
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error decoding task from JobScheduler: $e")
+                    }
+                }
+            }
+        }
         holdingQueue?.stateMutex?.unlock()
         Log.v(TAG, "methodReset removed $counter unfinished tasks in group $group")
         counter
@@ -802,6 +892,24 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     val task = tasksMap[taskId]
                     if (task != null) {
                         tasksAsListOfJsonStrings.add(Json.encodeToString(task))
+                    }
+                }
+            }
+            if (Build.VERSION.SDK_INT >= 34) {
+                val jobScheduler =
+                    applicationContext.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
+                val jobs = jobScheduler.allPendingJobs
+                for (jobInfo in jobs) {
+                    val taskJson = jobInfo.extras.getString(TaskWorker.keyTask)
+                    if (taskJson != null) {
+                        try {
+                            val task = Json.decodeFromString<Task>(taskJson)
+                            if (group == null || task.group == group) {
+                                tasksAsListOfJsonStrings.add(taskJson)
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error decoding task from JobScheduler: $e")
+                        }
                     }
                 }
             }
