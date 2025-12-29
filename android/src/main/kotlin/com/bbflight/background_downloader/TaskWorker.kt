@@ -1,5 +1,6 @@
 package com.bbflight.background_downloader
 
+import android.app.job.JobParameters
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
@@ -18,7 +19,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.DataOutputStream
 import java.io.IOException
@@ -550,8 +550,7 @@ open class TaskWorker(
     open suspend fun connectAndProcess(connection: HttpURLConnection): TaskStatus {
         try {
             if ((task.isDownloadTask() || task.isDataTask()) && task.post != null) {
-                val bytes = task.post!!.toByteArray();
-
+                val bytes = task.post!!.toByteArray()
                 connection.doOutput = true
                 connection.setFixedLengthStreamingMode(bytes.size)
                 DataOutputStream(connection.outputStream).use {
@@ -682,21 +681,31 @@ open class TaskWorker(
                         if (isStopped) {
                             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                                 val stopReason = getStopReason()
-                                if (stopReason == androidx.work.ListenableWorker.STOP_REASON_TIMEOUT) {
-                                    Log.w(
-                                        TAG,
-                                        "Task ${task.taskId} stopped due to WorkManager timeout (10 minutes, or 6 hours for FGS)"
-                                    )
-                                } else if (stopReason == androidx.work.ListenableWorker.STOP_REASON_APP_STANDBY) {
-                                    Log.w(
-                                        TAG,
-                                        "Task ${task.taskId} stopped due to app standby bucket quota"
-                                    )
-                                } else if (stopReason == androidx.work.ListenableWorker.STOP_REASON_DEVICE_STATE) {
-                                    Log.w(
-                                        TAG,
-                                        "Task ${task.taskId} stopped due to device state (doze/battery saver)"
-                                    )
+                                when (stopReason) {
+                                    JobParameters.STOP_REASON_TIMEOUT -> {
+                                        Log.w(
+                                            TAG,
+                                            "Task ${task.taskId} stopped due to WorkManager timeout (10 minutes, or 6 hours for FGS)"
+                                        )
+                                    }
+                                    JobParameters.STOP_REASON_APP_STANDBY -> {
+                                        Log.w(
+                                            TAG,
+                                            "Task ${task.taskId} stopped due to app standby bucket quota"
+                                        )
+                                    }
+                                    JobParameters.STOP_REASON_DEVICE_STATE -> {
+                                        Log.w(
+                                            TAG,
+                                            "Task ${task.taskId} stopped due to device state (doze/battery saver)"
+                                        )
+                                    }
+                                    else -> {
+                                        Log.i(
+                                            TAG,
+                                            "Task ${task.taskId} stopped for unknown reason"
+                                        )
+                                    }
                                 }
                             }
                             doneCompleter.complete(TaskStatus.failed)

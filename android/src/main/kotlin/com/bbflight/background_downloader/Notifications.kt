@@ -33,7 +33,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
@@ -368,9 +367,7 @@ object NotificationService {
      */
     init {
         scope.launch {
-            for (event in queue) {
-                processQueue()
-            }
+            for (event in queue) processQueue()
         }
     }
 
@@ -902,16 +899,6 @@ object NotificationService {
                             )
                         } catch (e: ForegroundServiceStartNotAllowedException) {
                             Log.w(TAG, "Could not start foreground service: ${e.message}")
-                            taskWorker.runInForeground = false
-                            notify(taskWorker.notificationId, androidNotification)
-                        } catch (e: SecurityException) {
-                            Log.w(
-                                TAG,
-                                "Could not start foreground service due to SecurityException. " +
-                                        "This is likely because the 'android.permission.FOREGROUND_SERVICE_DATA_SYNC' permission " +
-                                        "or the 'dataSync' foregroundServiceType is missing from your AndroidManifest.xml. " +
-                                        "To fix this, add the permission and/or service declaration to your manifest."
-                            )
                             taskWorker.runInForeground = false
                             notify(taskWorker.notificationId, androidNotification)
                         }
