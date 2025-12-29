@@ -900,7 +900,9 @@ object NotificationService {
                                     FOREGROUND_SERVICE_TYPE_DATA_SYNC
                                 )
                             )
-                        } catch (e: ForegroundServiceStartNotAllowedException) {
+                        } catch (e: Exception) {
+                            // ForegroundServiceStartNotAllowedException (API 31+) or SecurityException (missing manifest type)
+                            // or other exceptions (e.g. IllegalArgumentException)
                             Log.w(TAG, "Could not start foreground service: ${e.message}")
                             taskWorker.runInForeground = false
                             notify(taskWorker.notificationId, androidNotification)

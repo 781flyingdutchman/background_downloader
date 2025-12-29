@@ -680,6 +680,25 @@ open class TaskWorker(
                     while (isActive) {
                         // check if task is stopped (canceled), paused or timed out
                         if (isStopped) {
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                                val stopReason = getStopReason()
+                                if (stopReason == androidx.work.ListenableWorker.STOP_REASON_TIMEOUT) {
+                                    Log.w(
+                                        TAG,
+                                        "Task ${task.taskId} stopped due to WorkManager timeout (10 minutes, or 6 hours for FGS)"
+                                    )
+                                } else if (stopReason == androidx.work.ListenableWorker.STOP_REASON_APP_STANDBY) {
+                                    Log.w(
+                                        TAG,
+                                        "Task ${task.taskId} stopped due to app standby bucket quota"
+                                    )
+                                } else if (stopReason == androidx.work.ListenableWorker.STOP_REASON_DEVICE_STATE) {
+                                    Log.w(
+                                        TAG,
+                                        "Task ${task.taskId} stopped due to device state (doze/battery saver)"
+                                    )
+                                }
+                            }
                             doneCompleter.complete(TaskStatus.failed)
                             break
                         }
