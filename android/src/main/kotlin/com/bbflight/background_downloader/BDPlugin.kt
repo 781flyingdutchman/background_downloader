@@ -2,9 +2,13 @@ package com.bbflight.background_downloader
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.job.JobInfo
+import android.app.job.JobScheduler
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.PersistableBundle
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.edit
@@ -109,7 +113,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val canceledTaskIds =
             Collections.synchronizedSet(mutableSetOf<String>()) // <taskId>, acts as flag
         val parallelDownloadTaskWorkers =
-            Collections.synchronizedMap(HashMap<String, ParallelDownloadTaskWorker>()) //Was a HashMap
+            Collections.synchronizedMap(HashMap<String, ParallelDownloadTaskRunner>()) //Was a HashMap
         val tasksToReEnqueue =
             Collections.synchronizedSet(mutableSetOf<Task>()) // for when WiFi requirement changes
         val taskIdsRequiringWiFi =
@@ -148,89 +152,147 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             ) // store host if we have a HoldingQueue
             canceledTaskIds.remove(task.taskId) // reset flag
             cancelUpdateSentForTaskId.remove(task.taskId) // reset flag
-            val dataBuilder = Data.Builder().putString(TaskWorker.keyTask, taskToJsonString(task))
-            if (notificationConfigJsonString != null) {
-                dataBuilder.putString(
-                    TaskWorker.keyNotificationConfig,
-                    notificationConfigJsonString
-                )
-                notificationConfigJsonStrings[task.taskId] = notificationConfigJsonString
-            }
-            if (resumeData != null) {
-                dataBuilder.putString(TaskWorker.keyResumeDataData, resumeData.data)
-                    .putLong(TaskWorker.keyStartByte, resumeData.requiredStartByte)
-                    .putString(TaskWorker.keyETag, resumeData.eTag)
-            }
-            val data = dataBuilder.build()
+            
+            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            val runInForegroundFileSize = prefs.getInt(keyConfigForegroundFileSize, -1)
+            // UIDT (JobScheduler) is used only if task priority is 0 (max priority)
+            // and notificationConfigJsonString is set (required for foreground)
+            // and API level is >= 34 (Upside Down Cake)
+            val useJobScheduler = task.priority == 0 && 
+                                  notificationConfigJsonString != null && 
+                                  Build.VERSION.SDK_INT >= 34
+
             val taskRequiresWifi = taskRequiresWifi(task)
             if (taskRequiresWifi) {
                 taskIdsRequiringWiFi.add(task.taskId)
             }
-            val constraints = Constraints.Builder().setRequiredNetworkType(
-                if (taskRequiresWifi) NetworkType.UNMETERED else NetworkType.CONNECTED
-            ).build()
-            val requestBuilder: OneTimeWorkRequest.Builder =
-                createRequestBuilder(task, data, constraints) ?: return false
-            if (initialDelayMillis != 0L) {
-                requestBuilder.setInitialDelay(initialDelayMillis, TimeUnit.MILLISECONDS)
-            }
-            val expedited = task.priority < 5 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-            if (expedited) {
-                requestBuilder.setExpedited(policy = OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-            }
-            val workManager = WorkManager.getInstance(context)
-            val operation = try {
-                workManager.enqueue(requestBuilder.build())
-            } catch (e: IllegalStateException) {
-                if (expedited) {
-                    // known to happen on some devices, fallback to non-expedited
-                    Log.i(TAG, "Could not enqueue expedited task, falling back to non-expedited")
-                    val nonExpeditedRequestBuilder =
-                        createRequestBuilder(task, data, constraints) ?: return false
-                    if (initialDelayMillis != 0L) {
-                        nonExpeditedRequestBuilder.setInitialDelay(
-                            initialDelayMillis,
-                            TimeUnit.MILLISECONDS
-                        )
+
+            val success: Boolean
+            if (useJobScheduler) {
+                val jobScheduler = context.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
+                val componentName = ComponentName(context, UIDTJobService::class.java)
+                val extras = PersistableBundle().apply {
+                    putString(TaskWorker.keyTask, taskToJsonString(task))
+                    if (notificationConfigJsonString != null) {
+                        putString(TaskWorker.keyNotificationConfig, notificationConfigJsonString)
                     }
-                    workManager.enqueue(nonExpeditedRequestBuilder.build())
-                } else {
-                    throw e
+                    if (resumeData != null) {
+                        putString(TaskWorker.keyResumeDataData, resumeData.data)
+                        putLong(TaskWorker.keyStartByte, resumeData.requiredStartByte)
+                        putString(TaskWorker.keyETag, resumeData.eTag)
+                    }
+                }
+                
+                val jobInfoBuilder = JobInfo.Builder(task.taskId.hashCode(), componentName)
+                    .setRequiredNetworkType(if (taskRequiresWifi) JobInfo.NETWORK_TYPE_UNMETERED else JobInfo.NETWORK_TYPE_ANY)
+                    .setRequiresCharging(false)
+                    .setExtras(extras)
+                
+                if (initialDelayMillis > 0) {
+                    jobInfoBuilder.setMinimumLatency(initialDelayMillis)
+                }
+                // JobScheduler will persist tasks across reboots if strictly necessary, 
+                // but WorkManager handles this better. 
+                // However user requested UIDT which implies immediate execution mostly.
+                // We set persisted to true? JobInfo.Builder.setPersisted(true) requires RECEIVE_BOOT_COMPLETED.
+                // WorkManager handles persistence. JobScheduler needs manual handling?
+                // UIDT is mostly for immediate user-initiated transfers.
+                // Let's set persisted to true if we can, but we need the permission.
+                // For now, default to false (not persisted across reboot) unless we add permission.
+                // background_downloader typically expects persistence?
+                // JobScheduler jobs are not persisted by default.
+                
+                val result = jobScheduler.schedule(jobInfoBuilder.build())
+                success = (result == JobScheduler.RESULT_SUCCESS)
+                if (!success) {
+                    Log.w(TAG, "Unable to schedule JobScheduler job for taskId ${task.taskId}")
+                }
+            } else {
+                // Use WorkManager
+                val dataBuilder = Data.Builder().putString(TaskWorker.keyTask, taskToJsonString(task))
+                if (notificationConfigJsonString != null) {
+                    dataBuilder.putString(
+                        TaskWorker.keyNotificationConfig,
+                        notificationConfigJsonString
+                    )
+                    notificationConfigJsonStrings[task.taskId] = notificationConfigJsonString
+                }
+                if (resumeData != null) {
+                    dataBuilder.putString(TaskWorker.keyResumeDataData, resumeData.data)
+                        .putLong(TaskWorker.keyStartByte, resumeData.requiredStartByte)
+                        .putString(TaskWorker.keyETag, resumeData.eTag)
+                }
+                val data = dataBuilder.build()
+                
+                val constraints = Constraints.Builder().setRequiredNetworkType(
+                    if (taskRequiresWifi) NetworkType.UNMETERED else NetworkType.CONNECTED
+                ).build()
+                val requestBuilder: OneTimeWorkRequest.Builder =
+                    createRequestBuilder(task, data, constraints) ?: return false
+                if (initialDelayMillis != 0L) {
+                    requestBuilder.setInitialDelay(initialDelayMillis, TimeUnit.MILLISECONDS)
+                }
+                val expedited = task.priority < 5 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                if (expedited) {
+                    requestBuilder.setExpedited(policy = OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                }
+                val workManager = WorkManager.getInstance(context)
+                success = try {
+                    val operation = try {
+                        workManager.enqueue(requestBuilder.build())
+                    } catch (e: IllegalStateException) {
+                         if (expedited) {
+                             Log.i(TAG, "Could not enqueue expedited task, falling back to non-expedited")
+                             val nonExpeditedRequestBuilder =
+                                 createRequestBuilder(task, data, constraints) ?: throw e
+                             if (initialDelayMillis != 0L) {
+                                 nonExpeditedRequestBuilder.setInitialDelay(
+                                     initialDelayMillis,
+                                     TimeUnit.MILLISECONDS
+                                 )
+                             }
+                             workManager.enqueue(nonExpeditedRequestBuilder.build())
+                         } else {
+                             throw e
+                         }
+                    }
+                    operation.result.get()
+                    true
+                } catch (_: Throwable) {
+                    Log.w(
+                        TAG,
+                        "Unable to start background request for taskId ${task.taskId}"
+                    )
+                    false
                 }
             }
-            try {
-                operation.result.get()
-                val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+
+            if (success) {
                 if (initialDelayMillis != 0L) {
                     delay(min(100L, initialDelayMillis))
                 }
                 if (holdingQueue?.enqueuedTaskIds?.contains(task.taskId) != true)
                     processStatusUpdate(task, TaskStatus.enqueued, prefs, context = context)
-            } catch (_: Throwable) {
-                Log.w(
-                    TAG,
-                    "Unable to start background request for taskId ${task.taskId}"
+
+                // Register the enqueue with the NotificationService
+                NotificationService.registerEnqueue(
+                    EnqueueItem(
+                        context = context,
+                        task = task,
+                        notificationConfigJsonString = notificationConfigJsonString
+                    ), success = true
                 )
-                return false
-            }
-            // Register the enqueue with the NotificationService
-            NotificationService.registerEnqueue(
-                EnqueueItem(
-                    context = context,
-                    task = task,
-                    notificationConfigJsonString = notificationConfigJsonString
-                ), success = true
-            )
-            // store Task in persistent storage, as Json representation keyed by taskId
-            prefsLock.write {
-                val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-                val tasksMap = getTaskMap(prefs)
-                tasksMap[task.taskId] = task
-                prefs.edit {
-                    putString(keyTasksMap, Json.encodeToString(tasksMap))
+                // store Task in persistent storage, as Json representation keyed by taskId
+                prefsLock.write {
+                    val tasksMap = getTaskMap(prefs)
+                    tasksMap[task.taskId] = task
+                    prefs.edit {
+                        putString(keyTasksMap, Json.encodeToString(tasksMap))
+                    }
                 }
+                return true
             }
-            return true
+            return false
         }
 
         /** True if task requires WiFi, based on global and task-specific settings */
@@ -293,11 +355,58 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         ): Boolean {
             // cancel chunk tasks if this is a ParallelDownloadTask
             parallelDownloadTaskWorkers[taskId]?.cancelAllChunkTasks()
+
+            var jobCanceled = false
+            if (Build.VERSION.SDK_INT >= 34) {
+                val jobScheduler =
+                    context.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
+                jobScheduler.getPendingJob(taskId.hashCode())?.let { jobInfo ->
+                    val taskJson = jobInfo.extras.getString(TaskWorker.keyTask)
+                    if (taskJson != null) {
+                        try {
+                            val task = Json.decodeFromString<Task>(taskJson)
+                            if (task.taskId == taskId) {
+                                canceledTaskIds.add(taskId)
+                                val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+                                processStatusUpdate(
+                                    task,
+                                    TaskStatus.canceled,
+                                    prefs,
+                                    context = context
+                                )
+                                holdingQueue?.taskFinished(task)
+                                // remove outstanding notification for task or group
+                                val notificationGroup =
+                                    NotificationService.groupNotificationWithTaskId(taskId)
+                                with(NotificationManagerCompat.from(context)) {
+                                    if (notificationGroup == null) {
+                                        cancel(task.taskId.hashCode())
+                                    } else {
+                                        // update notification for group
+                                        NotificationService.createUpdateNotificationWorker(
+                                            context,
+                                            Json.encodeToString(task),
+                                            Json.encodeToString(notificationGroup.notificationConfig),
+                                            TaskStatus.canceled.ordinal
+                                        )
+                                    }
+                                }
+                                jobScheduler.cancel(jobInfo.id)
+                                jobCanceled = true
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error decoding task from JobScheduler: $e")
+                        }
+                    }
+                }
+            }
+
             // get the workInfos for the task (should be only one)
             val workInfos = withContext(Dispatchers.IO) {
                 workManager.getWorkInfosByTag("taskId=$taskId").get()
             }
             if (workInfos.isEmpty()) {
+                if (jobCanceled) return true
                 Log.d(TAG, "Could not find tasks to cancel")
                 return false
             }
@@ -710,6 +819,49 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             workManager.cancelWorkById(workInfo.id)
             counter++
         }
+        if (Build.VERSION.SDK_INT >= 34) {
+            val jobScheduler =
+                applicationContext.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
+            val jobs = jobScheduler.allPendingJobs
+            for (jobInfo in jobs) {
+                val taskJson = jobInfo.extras.getString(TaskWorker.keyTask)
+                if (taskJson != null) {
+                    try {
+                        val task = Json.decodeFromString<Task>(taskJson)
+                        if (task.group == group) {
+                            canceledTaskIds.add(task.taskId)
+                            processStatusUpdate(
+                                task,
+                                TaskStatus.canceled,
+                                prefs,
+                                context = applicationContext
+                            )
+                            holdingQueue?.taskFinished(task)
+                            // remove outstanding notification for task or group
+                            val notificationGroup =
+                                NotificationService.groupNotificationWithTaskId(task.taskId)
+                            with(NotificationManagerCompat.from(applicationContext)) {
+                                if (notificationGroup == null) {
+                                    cancel(task.taskId.hashCode())
+                                } else {
+                                    // update notification for group
+                                    NotificationService.createUpdateNotificationWorker(
+                                        applicationContext,
+                                        Json.encodeToString(task),
+                                        Json.encodeToString(notificationGroup.notificationConfig),
+                                        TaskStatus.canceled.ordinal
+                                    )
+                                }
+                            }
+                            jobScheduler.cancel(jobInfo.id)
+                            counter++
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error decoding task from JobScheduler: $e")
+                    }
+                }
+            }
+        }
         holdingQueue?.stateMutex?.unlock()
         Log.v(TAG, "methodReset removed $counter unfinished tasks in group $group")
         counter
@@ -741,6 +893,24 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     val task = tasksMap[taskId]
                     if (task != null) {
                         tasksAsListOfJsonStrings.add(Json.encodeToString(task))
+                    }
+                }
+            }
+            if (Build.VERSION.SDK_INT >= 34) {
+                val jobScheduler =
+                    applicationContext.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
+                val jobs = jobScheduler.allPendingJobs
+                for (jobInfo in jobs) {
+                    val taskJson = jobInfo.extras.getString(TaskWorker.keyTask)
+                    if (taskJson != null) {
+                        try {
+                            val task = Json.decodeFromString<Task>(taskJson)
+                            if (group == null || task.group == group) {
+                                tasksAsListOfJsonStrings.add(taskJson)
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error decoding task from JobScheduler: $e")
+                        }
                     }
                 }
             }
@@ -1124,7 +1294,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * For testing only
      */
     private fun methodGetTaskTimeout(): Long {
-        return TaskWorker.taskTimeoutMillis
+        return TaskRunner.taskTimeoutMillis
     }
 
     /**

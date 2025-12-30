@@ -69,14 +69,14 @@ object QueueService {
                             )
                         } else {
                             Log.i(
-                                TaskWorker.TAG,
+                                TaskRunner.TAG,
                                 "Could not post ${bgPost.method} to background channel"
                             )
                             success.complete(false)
                         }
                     } catch (e: Exception) {
                         Log.w(
-                            TaskWorker.TAG,
+                            TaskRunner.TAG,
                             "Exception trying to post ${bgPost.method} to background channel: ${e.message}"
                         )
                         if (!success.isCompleted) {

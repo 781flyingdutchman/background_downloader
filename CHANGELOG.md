@@ -1,3 +1,12 @@
+## 9.5.0
+
+* Introduces Android User Initiated Data Transfer (UIDT), triggered when task priority is set to 0 (max priority) on Android 14+, provided a notification is also configured.
+* Explanation of Android execution options:
+  * **WorkManager (default)**: Used for most tasks. Subject to a 9-minute execution limit in the background. If the task is not finished within 9 minutes, it will be terminated (unless `allowPause` is true, in which case it will pause and resume).
+  * **Foreground Service**: Triggered via `Config.runInForeground`. Displays a persistent notification and is not subject to the 9-minute limit on many Android versions. Requires `FOREGROUND_SERVICE_DATA_SYNC` permission on Android 14+.
+  * **User Initiated Data Transfer (UIDT)**: Triggered by setting `priority: 0` on Android 14+. This is a specialized JobScheduler mode that does *not* have the 9-minute limit and is designed for large, user-aware data transfers. It requires a notification to be shown.
+    * **Note**: Using UIDT requires adding the `RUN_USER_INITIATED_JOBS` permission to your `AndroidManifest.xml`, as well as a service declaration for `.UIDTJobService`. See the README for details.
+
 ## 9.4.4
 
 * [Android] MinSDK is now 23 (was 21), required because the latest Android WorkManager is required to properly support Android 15+

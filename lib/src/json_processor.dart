@@ -48,7 +48,7 @@ class JsonProcessor {
   Timer? _shutdownTimer;
   int _nextId = 0;
   bool _isStarting = false;
-  final Completer<void> _startCompleter = Completer<void>();
+  Completer<void> _startCompleter = Completer<void>();
 
   /// Public API
 
@@ -99,7 +99,7 @@ class JsonProcessor {
   }
 
   Future<void> _ensureStarted() async {
-    if (_isolate != null) return;
+    if (_isolate != null && _sendPort != null) return;
 
     if (_isStarting) {
       await _startCompleter.future;
@@ -107,10 +107,7 @@ class JsonProcessor {
     }
 
     _isStarting = true;
-    // reset start completer if it was completed previously (though unlikely if isolate is null)
-    if (_startCompleter.isCompleted) {
-      // should not happen if logic is correct, but for safety
-    }
+    _startCompleter = Completer<void>();
 
     try {
       final receivePort = ReceivePort();
@@ -129,6 +126,9 @@ class JsonProcessor {
         _startCompleter.complete();
       }
     } catch (e) {
+      _isolate?.kill();
+      _isolate = null;
+      _sendPort = null;
       _isStarting = false;
       if (!_startCompleter.isCompleted) {
         _startCompleter.completeError(e);

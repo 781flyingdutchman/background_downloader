@@ -9,7 +9,7 @@ import android.os.StatFs
 import android.util.Log
 import androidx.core.content.FileProvider.getUriForFile
 import androidx.preference.PreferenceManager
-import com.bbflight.background_downloader.TaskWorker.Companion.TAG
+import com.bbflight.background_downloader.TaskRunner.Companion.TAG
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.CompletableDeferred
 import java.io.File

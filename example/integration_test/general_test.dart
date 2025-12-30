@@ -554,7 +554,7 @@ void main() {
       print('Starting allTasks with allGroups set to true');
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       task = DownloadTask(url: urlWithContentLength, filename: defaultFilename);
-      final task2 = task.copyWith(group: 'group2');
+      final task2 = task.copyWith(taskId: 'task2', group: 'group2');
       expect(await FileDownloader().enqueue(task), isTrue);
       expect(await FileDownloader().enqueue(task2), isTrue);
       expect(await FileDownloader().allTasks(group: 'non-default'), isEmpty);
