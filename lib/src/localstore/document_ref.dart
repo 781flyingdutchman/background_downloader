@@ -45,7 +45,7 @@ final class DocumentRef implements DocumentRefImpl {
     } else {
       _data[id] = data;
     }
-    _utils.set(_data[id], path);
+    return await _utils.set(_data[id], path);
   }
 
   @override
