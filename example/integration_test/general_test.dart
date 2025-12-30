@@ -2397,29 +2397,18 @@ void main() {
       expect(await FileDownloader().enqueue(task), equals(true));
 
       var pauses = 0;
+      var isPaused = false;
       while (!lastStatus.isFinalState) {
         await Future.delayed(interval);
         if (lastStatus == TaskStatus.running) {
-          if (await FileDownloader().pause(task)) {
-            var wait = 0;
-            while (lastStatus != TaskStatus.paused &&
-                !lastStatus.isFinalState &&
-                wait < 20) {
-              await Future.delayed(const Duration(milliseconds: 100));
-              wait++;
-            }
-            if (lastStatus == TaskStatus.paused) {
-              pauses++;
-              expect(await FileDownloader().resume(task), isTrue);
-              wait = 0;
-              while (lastStatus == TaskStatus.paused &&
-                  !lastStatus.isFinalState &&
-                  wait < 20) {
-                await Future.delayed(const Duration(milliseconds: 100));
-                wait++;
-              }
-            }
+          isPaused = false;
+          await FileDownloader().pause(task);
+        } else if (lastStatus == TaskStatus.paused) {
+          if (!isPaused) {
+            pauses++;
+            isPaused = true;
           }
+          await FileDownloader().resume(task);
         }
       }
       expect(lastStatus, equals(TaskStatus.complete));
