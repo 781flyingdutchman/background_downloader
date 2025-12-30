@@ -92,11 +92,13 @@ interface class Database {
   Future<void> deleteAllRecords({String? group}) async {
     if (group == null) {
       await _storage.removeTaskRecord(null);
+      _updateCount = 0;
       return;
     }
     final allRecordsInGroup = await allRecords(group: group);
     await deleteRecordsWithIds(
         allRecordsInGroup.map((record) => record.taskId));
+    _updateCount = 0;
   }
 
   /// Delete record with this [taskId]
@@ -176,7 +178,7 @@ interface class Database {
           }
         }
         _log.finest(
-            'Database cleanup: ${recordsToDelete.length} records to delete}');
+            'Database cleanup: ${recordsToDelete.length} out of ${allRecords.length} records to delete');
         if (recordsToDelete.isNotEmpty) {
           // Rate limit deletion to ~5 per second
           for (final record in recordsToDelete) {
