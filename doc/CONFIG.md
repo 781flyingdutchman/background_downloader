@@ -41,9 +41,8 @@ The following configurations are supported:
     android:foregroundServiceType="dataSync" />
   ```
   
-  - `(Config.runInForeground, bool activate)` or `(Config.runInForeground, Config.always)` or `(Config.runInForeground, Config.never)` activates or de-activates foreground mode for all tasks. On Android 14 (API 34) and above, `Config.always` will use the User Initiated Data Transfer (UIDT) service, which does not have a 9 minute timeout.
-  - `(Config.runInForeground, Config.whenAble)` is the recommended setting on Android. It will automatically use the UIDT service on Android 14 and above, and will fall back to `Config.never` (no foreground service) on older Android versions. 
-  - `(Config.runInForegroundIfFileLargerThan, int fileSize)` activates foreground mode for downloads/uploads that exceed this file size, expressed in MB. On Android 14 and above, this will also use the UIDT service if the threshold is met.
+  - `(Config.runInForeground, bool activate)` or `(Config.runInForeground, Config.always)` or `(Config.runInForeground, Config.never)` activates or de-activates foreground mode for all tasks.
+  - `(Config.runInForegroundIfFileLargerThan, int fileSize)` activates foreground mode for downloads/uploads that exceed this file size, expressed in MB.
 * [Android] Use external storage. 
 
   Either your app runs in default (internal storage) mode, or in external storage. You cannot switch between internal and external, as the directory structure that - for example - `BaseDirectory.applicationDocuments` refers to is different in each mode

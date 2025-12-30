@@ -1027,7 +1027,21 @@ On Android and iOS only: If the `requiresWiFi` field of a `Task` is set to true,
 
 #### Priority
 
-The `priority` field must be 0 <= priority <= 10 with 0 being the highest priority, and defaults to 5. On Desktop and iOS all priority levels are supported. On Android, priority levels <5 are handled as 'expedited', and >=5 is handled as a normal task.
+The `priority` field must be 0 <= priority <= 10 with 0 being the highest priority, and defaults to 5. On Desktop and iOS all priority levels are supported. On Android, priority levels <5 are handled as 'expedited', and >=5 is handled as a normal task. If priority is set to 0 and the task is on Android 14 (API 34) or above, the downloader will use the User Initiated Data Transfer (UIDT) service, which does not have a 9 minute timeout and is less likely to be killed by the OS.
+
+To use the UIDT service on Android 14+, you must add the following to your `AndroidManifest.xml`:
+* The `RUN_USER_INITIATED_JOBS` permission:
+  ```xml
+  <uses-permission android:name="android.permission.RUN_USER_INITIATED_JOBS" />
+  ```
+* The UIDT JobService declaration (within the `<application>` tag):
+  ```xml
+  <service
+      android:name="com.bbflight.background_downloader.UIDTJobService"
+      android:permission="android.permission.BIND_JOB_SERVICE"
+      android:exported="true"
+      android:foregroundServiceType="dataSync" />
+  ```
 
 #### Metadata and displayName
 
@@ -1109,7 +1123,7 @@ Please read the [configuration document](doc/CONFIG.md) for details on how to co
 ## Limitations
 
 * iOS 14.0 or greater; Android API 21 or greater
-* On Android, downloads are by default limited to 9 minutes, after which the download will end with `TaskStatus.failed`. To allow for longer downloads, set the `DownloadTask.allowPause` field to true: if the task times out, it will pause and automatically resume, eventually downloading the entire file. Alternatively, [configure](#configuration) the downloader to allow tasks to run in the foreground. On Android 14 (API 34) and above, this uses the User Initiated Data Transfer (UIDT) service which does not have this 9 minute timeout. Use `(Config.runInForeground, Config.whenAble)` to automatically use this new service when available. 
+* On Android, downloads are by default limited to 9 minutes, after which the download will end with `TaskStatus.failed`. To allow for longer downloads, set the `DownloadTask.allowPause` field to true: if the task times out, it will pause and automatically resume, eventually downloading the entire file. Alternatively, [configure](#configuration) the downloader to allow tasks to run in the foreground, or (on Android 14 and above) set the task's [priority](#priority) to 0 to use the User Initiated Data Transfer (UIDT) service.
 * On iOS, once enqueued (i.e. `TaskStatus.enqueued`), a background download must complete within 4 hours. [Configure](#configuration) 'resourceTimeout' to adjust.
 * Redirects will be followed
 * Background downloads and uploads are aggressively controlled by the native platform. You should therefore always assume that a task that was started may not complete, and may disappear without providing any status or progress update to indicate why. For example, if a user swipes your app up from the iOS App Switcher, all scheduled background downloads are terminated without notification    

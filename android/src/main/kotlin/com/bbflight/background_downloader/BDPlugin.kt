@@ -155,9 +155,10 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             
             val prefs = PreferenceManager.getDefaultSharedPreferences(context)
             val runInForegroundFileSize = prefs.getInt(keyConfigForegroundFileSize, -1)
-            // UIDT (JobScheduler) is used only if configured to run in foreground always (size == 0)
+            // UIDT (JobScheduler) is used only if task priority is 0 (max priority)
+            // and notificationConfigJsonString is set (required for foreground)
             // and API level is >= 34 (Upside Down Cake)
-            val useJobScheduler = runInForegroundFileSize == 0 && 
+            val useJobScheduler = task.priority == 0 && 
                                   notificationConfigJsonString != null && 
                                   Build.VERSION.SDK_INT >= 34
 

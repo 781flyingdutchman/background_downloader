@@ -21,7 +21,8 @@ void main() {
           url: urlWithLongContentLength,
           filename: 'uidt_pause_test.bin',
           updates: Updates.statusAndProgress,
-          allowPause: true);
+          allowPause: true,
+          priority: 0);
 
       Completer<void> runningCompleter = Completer();
       Completer<void> pausedCompleter = Completer();
@@ -60,7 +61,8 @@ void main() {
           url: urlWithLongContentLength,
           filename: 'uidt_cancel_test.bin',
           updates: Updates.statusAndProgress,
-          allowPause: true);
+          allowPause: true,
+          priority: 0);
 
       Completer<void> runningCompleter = Completer();
       Completer<void> canceledCompleter = Completer();
@@ -90,7 +92,8 @@ void main() {
           url: urlWithFailure,
           filename: 'uidt_retry_test.bin',
           updates: Updates.statusAndProgress,
-          retries: 2);
+          retries: 2,
+          priority: 0);
 
       Completer<void> waitingToRetryCompleter = Completer();
       Completer<void> failedCompleter = Completer();
@@ -114,7 +117,8 @@ void main() {
           url: uploadTestUrl,
           filename: uploadFilename,
           updates: Updates.statusAndProgress,
-          group: 'uploadTest');
+          group: 'uploadTest',
+          priority: 0);
 
       Completer<void> completeCompleter = Completer();
 
@@ -135,7 +139,8 @@ void main() {
           url: uploadTestUrl,
           filename: 'big_upload_file.bin',
           updates: Updates.statusAndProgress,
-          group: 'uploadTest');
+          group: 'uploadTest',
+          priority: 0);
 
       Completer<void> runningCompleter = Completer();
       Completer<void> canceledCompleter = Completer();
@@ -166,7 +171,8 @@ void main() {
           url: urlWithLongContentLength,
           filename: 'parallel_regular.bin',
           chunks: 3,
-          updates: Updates.statusAndProgress);
+          updates: Updates.statusAndProgress,
+          priority: 0);
 
       Completer<void> completeCompleter = Completer();
 
@@ -186,7 +192,8 @@ void main() {
           filename: 'parallel_pause.bin',
           chunks: 3,
           updates: Updates.statusAndProgress,
-          allowPause: true);
+          allowPause: true,
+          priority: 0);
 
       Completer<void> runningCompleter = Completer();
       Completer<void> pausedCompleter = Completer();
@@ -227,7 +234,8 @@ void main() {
           url: urlWithLongContentLength,
           filename: 'parallel_cancel.bin',
           chunks: 3,
-          updates: Updates.statusAndProgress);
+          updates: Updates.statusAndProgress,
+          priority: 0);
 
       Completer<void> runningCompleter = Completer();
       Completer<void> canceledCompleter = Completer();
@@ -254,7 +262,8 @@ void main() {
 
   group('UIDT DataTask Tests', () {
     testWidgets('DataTask execution', (tester) async {
-      var task = DataTask(url: dataTaskGetUrl, updates: Updates.status);
+      var task =
+          DataTask(url: dataTaskGetUrl, updates: Updates.status, priority: 0);
 
       Completer<void> completeCompleter = Completer();
       String? responseBody;
@@ -332,8 +341,6 @@ void listenToTasks(List<Task> tasks,
 Future<void> uidtSetup() async {
   await defaultSetup();
   await FileDownloader().reset(group: 'uploadTest');
-  await FileDownloader()
-      .configure(globalConfig: [(Config.runInForeground, Config.whenAble)]);
 
   FileDownloader().configureNotification(
       running: const TaskNotification('Running', 'Task is downloading'),

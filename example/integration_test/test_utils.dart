@@ -158,7 +158,14 @@ Future<void> defaultSetup() async {
   lastValidTimeRemaining = const Duration(seconds: -1);
   lastException = null;
   FileDownloader().destroy();
-  await FileDownloader().configure(globalConfig: (Config.holdingQueue, false));
+  FileDownloader().configureNotification(
+      running: const TaskNotification('Running', 'Task is running'),
+      complete: const TaskNotification('Complete', 'Task is complete'),
+      progressBar: true);
+  await FileDownloader().configure(globalConfig: [
+    (Config.holdingQueue, false),
+    (Config.runInForeground, false),
+  ]);
   final path =
       join((await getApplicationDocumentsDirectory()).path, task.filename);
   try {
