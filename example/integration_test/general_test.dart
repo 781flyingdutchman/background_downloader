@@ -2049,6 +2049,7 @@ void main() {
       expect(record?.progress, equals(lastProgress));
       expect(record?.exception, isNull);
       await statusCallbackCompleter.future;
+      await Future.delayed(const Duration(milliseconds: 100)); // allow db write
       // completed
       final record2 = await FileDownloader().database.recordForId(task.taskId);
       expect(record2, isNotNull);
@@ -2206,6 +2207,7 @@ void main() {
       expect(await FileDownloader().enqueue(task), equals(true));
       await statusCallbackCompleter.future;
       expect(lastStatus, equals(TaskStatus.failed));
+      await Future.delayed(const Duration(milliseconds: 100)); // allow db write
       // failed
       final record = await FileDownloader().database.recordForId(task.taskId);
       expect(record, isNotNull);
