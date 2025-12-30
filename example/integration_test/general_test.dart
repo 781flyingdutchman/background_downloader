@@ -2384,37 +2384,31 @@ void main() {
     });
 
     testWidgets('multiple pause and resume', (widgetTester) async {
-      // Note: this test is flaky as it depends on internet connection
-      // speed. If the test fails, it is likely because the task completed
-      // before the initial pause command, or did not have time for two
-      // pause/resume cycles -> shorten interval
-      var interval = const Duration(milliseconds: 250);
+      var interval = const Duration(milliseconds: 500);
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       task = DownloadTask(
-          url: urlWithLongContentLength,
+          url: urlWithContentLength,
           filename: defaultFilename,
           allowPause: true);
       expect(await FileDownloader().enqueue(task), equals(true));
-
       var pauses = 0;
-      var isPaused = false;
       while (!lastStatus.isFinalState) {
         await Future.delayed(interval);
-        if (lastStatus == TaskStatus.running) {
-          isPaused = false;
-          await FileDownloader().pause(task);
-        } else if (lastStatus == TaskStatus.paused) {
-          if (!isPaused) {
+        switch (lastStatus) {
+          case TaskStatus.running:
+            await FileDownloader().pause(task);
+          case TaskStatus.paused:
             pauses++;
-            isPaused = true;
-          }
-          await FileDownloader().resume(task);
+            await FileDownloader().resume(task);
+          default:
+            print('Status: $lastStatus');
         }
       }
       expect(lastStatus, equals(TaskStatus.complete));
-      expect(await (File(await task.filePath())).length(), equals(59768832));
-      expect(pauses, greaterThanOrEqualTo(2)); // min 2 pause
+      expect(await (File(await task.filePath())).length(), equals(6207471));
+      expect(pauses, greaterThanOrEqualTo(3));
     });
+
     testWidgets('Pause and resume a convenience download',
         (widgetTester) async {
       task = DownloadTask(
