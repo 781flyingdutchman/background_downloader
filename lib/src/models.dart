@@ -281,7 +281,8 @@ class TaskStatusUpdate extends TaskUpdate {
 /// [networkSpeed] is valid if positive, expressed in MB/second
 /// [timeRemaining] is valid if positive
 ///
-/// Use the [has...] getters to determine whether a field is valid
+/// Use the [hasExpectedFileSize], [hasNetworkSpeed] and [hasTimeRemaining]
+/// getters to determine whether a field is valid
 class TaskProgressUpdate extends TaskUpdate {
   final double progress;
   final int expectedFileSize;

@@ -33,12 +33,12 @@ final class Utils implements UtilsImpl {
     final controller = Completer<T>();
 
     final newFuture = previous.then((_) async {
-       try {
-         final result = await action();
-         controller.complete(result);
-       } catch (e, st) {
-         controller.completeError(e, st);
-       }
+      try {
+        final result = await action();
+        controller.complete(result);
+      } catch (e, st) {
+        controller.completeError(e, st);
+      }
     }).catchError((_) {});
 
     _locks[path] = newFuture;
@@ -81,16 +81,17 @@ final class Utils implements UtilsImpl {
           final file = await _getFile(path);
           final randomAccessFile = await file!.open(mode: FileMode.append);
           try {
-              final data = await _readFile(randomAccessFile);
-              if (data is Map<String, dynamic>) {
-                final key = path.replaceAll(lastPathComponentRegEx, '');
-                // ignore: close_sinks
-                final storage = _storageCache.putIfAbsent(key, () => _newStream(key));
-                storage.add(data);
-                return data;
-              }
+            final data = await _readFile(randomAccessFile);
+            if (data is Map<String, dynamic>) {
+              final key = path.replaceAll(lastPathComponentRegEx, '');
+              // ignore: close_sinks
+              final storage =
+                  _storageCache.putIfAbsent(key, () => _newStream(key));
+              storage.add(data);
+              return data;
+            }
           } finally {
-              await randomAccessFile.close();
+            await randomAccessFile.close();
           }
         } on PathNotFoundException {
           // return null if not found
@@ -131,23 +132,25 @@ final class Utils implements UtilsImpl {
     final dbDir = await Localstore.instance.databaseDirectory;
     await Future.wait(entries.map((e) async {
       final relativePath = p.relative(e.path, from: dbDir.path);
-      final path = Platform.isWindows ? relativePath.replaceAll(p.separator, '/') : relativePath;
+      final path = Platform.isWindows
+          ? relativePath.replaceAll(p.separator, '/')
+          : relativePath;
 
       await _synchronized(path, () async {
-          final file = await _getFile(path);
+        final file = await _getFile(path);
+        try {
+          final randomAccessFile = await file!.open(mode: FileMode.append);
           try {
-            final randomAccessFile = await file!.open(mode: FileMode.append);
-            try {
-                final data = await _readFile(randomAccessFile);
-                if (data is Map<String, dynamic>) {
-                  items[path] = data;
-                }
-            } finally {
-                await randomAccessFile.close();
+            final data = await _readFile(randomAccessFile);
+            if (data is Map<String, dynamic>) {
+              items[path] = data;
             }
-          } on PathNotFoundException {
-            // ignore if not found
+          } finally {
+            await randomAccessFile.close();
           }
+        } on PathNotFoundException {
+          // ignore if not found
+        }
       });
     }));
 
@@ -176,20 +179,22 @@ final class Utils implements UtilsImpl {
       for (var e in entries) {
         if (e is! File) continue;
         final relativePath = p.relative(e.path, from: dbDir.path);
-        final filePath = Platform.isWindows ? relativePath.replaceAll(p.separator, '/') : relativePath;
+        final filePath = Platform.isWindows
+            ? relativePath.replaceAll(p.separator, '/')
+            : relativePath;
 
         // We use synchronized reading
         await _synchronized(filePath, () async {
-            final file = await _getFile(filePath);
-            final randomAccessFile = await file!.open(mode: FileMode.append);
-            try {
-                final data = await _readFile(randomAccessFile);
-                if (data is Map<String, dynamic>) {
-                    storage.add(data);
-                }
-            } finally {
-                await randomAccessFile.close();
+          final file = await _getFile(filePath);
+          final randomAccessFile = await file!.open(mode: FileMode.append);
+          try {
+            final data = await _readFile(randomAccessFile);
+            if (data is Map<String, dynamic>) {
+              storage.add(data);
             }
+          } finally {
+            await randomAccessFile.close();
+          }
         });
       }
     } catch (e) {
@@ -225,27 +230,27 @@ final class Utils implements UtilsImpl {
 
   Future _writeFile(Map<String, dynamic> data, String path) {
     return _synchronized(path, () async {
-        final serialized = json.encode(data);
-        final buffer = utf8.encode(serialized);
-        final file = await _getFile(path);
+      final serialized = json.encode(data);
+      final buffer = utf8.encode(serialized);
+      final file = await _getFile(path);
+      try {
+        final randomAccessFile = await file!.open(mode: FileMode.append);
         try {
-          final randomAccessFile = await file!.open(mode: FileMode.append);
-          try {
-              await randomAccessFile.lock();
-              await randomAccessFile.setPosition(0);
-              await randomAccessFile.writeFrom(buffer);
-              await randomAccessFile.truncate(buffer.length);
-              await randomAccessFile.unlock();
-          } finally {
-              await randomAccessFile.close();
-          }
-        } on PathNotFoundException {
-          // ignore if path not found
+          await randomAccessFile.lock();
+          await randomAccessFile.setPosition(0);
+          await randomAccessFile.writeFrom(buffer);
+          await randomAccessFile.truncate(buffer.length);
+          await randomAccessFile.unlock();
+        } finally {
+          await randomAccessFile.close();
         }
-        final key = path.replaceAll(lastPathComponentRegEx, '');
-        // ignore: close_sinks
-        final storage = _storageCache.putIfAbsent(key, () => _newStream(key));
-        storage.add(data);
+      } on PathNotFoundException {
+        // ignore if path not found
+      }
+      final key = path.replaceAll(lastPathComponentRegEx, '');
+      // ignore: close_sinks
+      final storage = _storageCache.putIfAbsent(key, () => _newStream(key));
+      storage.add(data);
     });
   }
 

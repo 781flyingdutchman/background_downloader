@@ -919,7 +919,8 @@ interface class FileDownloader {
   ///    The first character of the [groupNotificationId] cannot be '*'.
   ///
   /// The [TaskNotification] is the actual notification shown for a [Task], and
-  /// [body] and [title] may contain special strings to substitute display values:
+  /// [TaskNotification.body] and [TaskNotification.title] may contain special
+  /// strings to substitute display values:
   /// {filename} to insert the [Task.filename]
   /// {metaData} to insert the [Task.metaData]
   /// {displayName} to insert the [Task.displayName]
