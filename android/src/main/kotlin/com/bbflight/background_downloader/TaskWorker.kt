@@ -112,6 +112,10 @@ open class TaskWorker(
         NotificationService.updateNotification(this, status, progress, timeRemaining)
     }
 
+    override fun updateEstimatedNetworkBytes(downloadBytes: Long, uploadBytes: Long) {
+        // No-op for TaskWorker
+    }
+
 
     override suspend fun doWork(): Result {
         try {

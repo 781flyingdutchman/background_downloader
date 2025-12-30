@@ -76,12 +76,17 @@ interface TaskJobContext {
      * Update the notification for this task. 
      * Implementations should call NotificationService.updateNotification(this, ...).
      */
-     suspend fun updateNotification(
+    suspend fun updateNotification(
         task: Task,
         status: TaskStatus,
         progress: Double = 2.0,
         timeRemaining: Long = -1000
     )
+
+    /**
+     * Update the estimated network bytes for this task (Android 14+ UIDT only)
+     */
+    fun updateEstimatedNetworkBytes(downloadBytes: Long, uploadBytes: Long)
 }
 
 /***

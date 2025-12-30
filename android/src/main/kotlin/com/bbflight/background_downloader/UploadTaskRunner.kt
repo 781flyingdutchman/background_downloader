@@ -226,6 +226,7 @@ class UploadTaskRunner(context: TaskJobContext) : TaskRunner(context) {
         }
         val contentLength = end - start + 1
         determineRunInForeground(task, contentLength)
+        context.updateEstimatedNetworkBytes(0L, contentLength)
         Log.d(TAG, "Binary upload for taskId ${task.taskId}")
         connection.setRequestProperty("Content-Type", resolvedMimeType)
         val taskContentDisposition =
@@ -440,6 +441,7 @@ class UploadTaskRunner(context: TaskJobContext) : TaskRunner(context) {
             val contentLength =
                 lengthInBytes(fieldsString) + "--$boundary$lineFeed".length + fileDataLength
             determineRunInForeground(task, contentLength)
+            context.updateEstimatedNetworkBytes(0L, contentLength)
             connection.setRequestProperty("Content-Length", contentLength.toString())
             connection.setFixedLengthStreamingMode(contentLength)
         } else {

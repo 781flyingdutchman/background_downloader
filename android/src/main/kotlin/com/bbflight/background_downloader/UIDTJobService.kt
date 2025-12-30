@@ -170,5 +170,11 @@ class UIDTJobService : JobService() {
         ) {
             NotificationService.updateNotification(this, status, progress, timeRemaining)
         }
+
+        override fun updateEstimatedNetworkBytes(downloadBytes: Long, uploadBytes: Long) {
+            if (Build.VERSION.SDK_INT >= 34) {
+                service.updateEstimatedNetworkBytes(params, downloadBytes, uploadBytes)
+            }
+        }
     }
 }

@@ -241,6 +241,7 @@ class DownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) {
             }
             BDPlugin.remainingBytesToDownload[task.taskId] = contentLength
             determineRunInForeground(task, contentLength) // sets 'runInForeground'
+            context.updateEstimatedNetworkBytes(contentLength, 0L)
             // transfer the bytes from the server to the output stream
             val transferBytesResult: TaskStatus
             BufferedInputStream(connection.inputStream).use { inputStream ->

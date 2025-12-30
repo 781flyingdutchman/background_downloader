@@ -404,6 +404,7 @@ class ParallelDownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) 
                 throw IllegalStateException("Server does not provide content length - cannot chunk download. If you know the length, set Range or Known-Content-Length header")
             }
             parallelDownloadContentLength = contentLength
+            context.updateEstimatedNetworkBytes(contentLength, 0L)
             try {
                 headers.entries
                     .first { (it.key == "accept-ranges" || it.key == "Accept-Ranges") && it.value.first() == "bytes" }
