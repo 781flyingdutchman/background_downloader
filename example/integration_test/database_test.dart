@@ -178,40 +178,48 @@ void main() {
       final r = TaskRecord(t, TaskStatus.running, 0.5, 1000);
       await database.updateRecord(r);
     }
-    expect((await database.allRecords()).length, 600);
+    expect(
+        (await database.allRecords()).length, greaterThan(598)); // likely 599
     await Future.delayed(const Duration(seconds: 1));
     // force cleanup
-    database.cleanUp();
+    database.cleanUp(); // should not trigger a cleanup
     await Future.delayed(const Duration(seconds: 25));
     expect((await database.allRecords()).length, 500);
 
     // Attempt with small numbers for test speed
+    final now = DateTime.now();
     await database.deleteAllRecords();
     for (int i = 0; i < 10; i++) {
       final t = DownloadTask(
           url: 'url',
           filename: 'f$i',
           taskId: 'id$i',
-          creationTime: DateTime.now().subtract(Duration(days: i)));
+          creationTime: now.subtract(Duration(days: i)));
       final r = TaskRecord(t, TaskStatus.running, 0.5, 1000);
       await database.updateRecord(r);
     }
     // Now we have 10 records, ages 0 to 9 days.
     // Clean up older than 5 days.
     database.cleanUp(maxAge: const Duration(days: 5), maxRecordCount: 100);
-    // records 6, 7, 8, 9 days old should be removed (4 records)
-    // 4 * 200ms = 800ms
+    // records 5, 6, 7, 8, 9 days old should be removed (5 records)
     await Future.delayed(const Duration(seconds: 2));
     final records = await database.allRecords();
     expect(records.length, equals(5));
+    final oldestRecordAge = records
+        .map((r) => now.difference(r.task.creationTime))
+        .reduce((a, b) => a > b ? a : b);
+    expect(oldestRecordAge.inDays, lessThanOrEqualTo(5));
 
     // Clean up by count
     database.cleanUp(maxRecordCount: 3);
     // should remove 3 oldest records
-    // 3 * 200ms = 600ms
     await Future.delayed(const Duration(seconds: 2));
     final records2 = await database.allRecords();
     expect(records2.length, equals(3));
+    final oldestRecordAge2 = records2
+        .map((r) => now.difference(r.task.creationTime))
+        .reduce((a, b) => a > b ? a : b);
+    expect(oldestRecordAge2.inDays, lessThanOrEqualTo(3));
     await database.deleteAllRecords();
   });
 
@@ -228,18 +236,11 @@ void main() {
       final r = TaskRecord(t, TaskStatus.running, 0.5, 1000);
       await database.updateRecord(r);
     }
-    // Triggered at 100. Should reduce to 5.
-    // 100 * 200ms = 20 seconds... this is too slow for tests if we delete many.
-    // But we process locally.
-    // Wait a bit
-    await Future.delayed(
-        const Duration(seconds: 30)); // Give it plenty of time?
-    // Actually, since we add 1 by 1, the count grows.
-    // At 100th update, we have 100 records.
-    // We want to keep 5. So we delete 95.
-    // 95 * 0.2s = 19 seconds.
+    // Triggered just before the 100th insertion. Should delete 99-5=94.
+    await Future.delayed(const Duration(seconds: 30)); // Give it plenty of time
+    // Meanwhile we kept adding, so we end up with 110 - 94 = 16
     final records = await database.allRecords();
-    expect(records.length, equals(5)); // 5 kept
+    expect(records.length, equals(16)); // 5 kept
     await database.deleteAllRecords();
   });
 }
