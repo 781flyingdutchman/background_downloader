@@ -16,6 +16,9 @@ import java.util.Date
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.PriorityBlockingQueue
 import java.util.concurrent.atomic.AtomicInteger
+import android.app.job.JobScheduler
+import android.os.Build
+import kotlinx.serialization.json.Json
 
 /**
  * Queue that holds [EnqueueItem] items before they are actually enqueued as a WorkManager job
@@ -31,7 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * [allTasks] for a list of [Task] matching a group
  * [taskForId] to get the task for a specific taskId
  */
-class HoldingQueue(private val workManager: WorkManager) {
+class HoldingQueue(private val context: Context, private val workManager: WorkManager) {
 
     var maxConcurrent: Int = 1 shl 20
     var maxConcurrentByHost: Int = 1 shl 20
@@ -99,6 +102,11 @@ class HoldingQueue(private val workManager: WorkManager) {
             for (task in taskFinishedQueue) {
                 executeTaskFinished(task)
             }
+        }
+
+        // initial state calculation
+        scope.launch {
+            calculateState()
         }
     }
 
@@ -209,7 +217,6 @@ class HoldingQueue(private val workManager: WorkManager) {
         job?.cancel()
         job = scope.launch {
             delay(10000)
-            calculateState()
             advanceQueue()
         }
     }
@@ -242,7 +249,7 @@ class HoldingQueue(private val workManager: WorkManager) {
         stateMutex.withLock {
             val workInfos = workManager.getWorkInfosByTag(BDPlugin.TAG).get()
                 .filter { !it.state.isFinished }
-            concurrent.set(workInfos.size)
+            var totalCount = workInfos.size
             concurrentByHost.clear()
             concurrentByGroup.clear()
             for (workInfo in workInfos) {
@@ -268,6 +275,38 @@ class HoldingQueue(private val workManager: WorkManager) {
                 } catch (_: NoSuchElementException) {
                 }
             }
+            // JobScheduler (UIDT)
+            if (Build.VERSION.SDK_INT >= 34) {
+                 val jobScheduler = context.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
+                 val jobs = jobScheduler.allPendingJobs
+                 for (job in jobs) {
+                      if (job.service.className == UIDTJobService::class.java.name) {
+                          val taskJson = job.extras.getString(TaskWorker.keyTask)
+                          if (taskJson != null) {
+                              try {
+                                  val task = Json.decodeFromString<Task>(taskJson)
+                                  totalCount++
+                                  
+                                  val host = task.host()
+                                  val group = task.group
+
+                                  if (!concurrentByHost.containsKey(host)) {
+                                      concurrentByHost[host] = AtomicInteger(0)
+                                  }
+                                  concurrentByHost[host]?.incrementAndGet()
+
+                                  if (!concurrentByGroup.containsKey(group)) {
+                                      concurrentByGroup[group] = AtomicInteger(0)
+                                  }
+                                  concurrentByGroup[group]?.incrementAndGet()
+                              } catch (e: Exception) {
+                                  Log.w(BDPlugin.TAG, "Could not decode task from job info: $e")
+                              }
+                          }
+                      }
+                 }
+            }
+            concurrent.set(totalCount)
         }
     }
 }

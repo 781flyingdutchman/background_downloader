@@ -1427,7 +1427,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         if (arguments.isEmpty()) { // deactivate the holding queue
             holdingQueue = null
         } else {
-            holdingQueue = holdingQueue ?: HoldingQueue(WorkManager.getInstance(applicationContext))
+            holdingQueue = holdingQueue ?: HoldingQueue(applicationContext, WorkManager.getInstance(applicationContext))
             holdingQueue?.maxConcurrent = arguments[0] as Int
             holdingQueue?.maxConcurrentByHost = arguments[1] as Int
             holdingQueue?.maxConcurrentByGroup = arguments[2] as Int
