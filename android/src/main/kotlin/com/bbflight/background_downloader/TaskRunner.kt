@@ -489,48 +489,62 @@ open class TaskRunner(
                     return@withContext // task interrupted
                 }
             }
-            task = getModifiedTask(
-                context = context.appContext,
-                task = task
-            )
-            notificationConfig = context.notificationConfig
-            notificationConfigJsonString = if (notificationConfig != null) Json.encodeToString<NotificationConfig>(notificationConfig!!) else null
 
-            canRunInForeground = runInForegroundFileSize >= 0 &&
-                    notificationConfig?.running != null // must have notification
-            isResume = determineIfResume()
-            Log.i(
-                TAG,
-                "${if (isResume) "Resuming" else "Starting"} task with taskId ${task.taskId}"
-            )
-            processStatusUpdate(task, TaskStatus.running, prefs, context = context.appContext)
-            if (!isResume) {
-                processProgressUpdate(task, 0.0, prefs)
-            }
-            context.updateNotification(task, TaskStatus.running)
-            val status = doTask()
-            withContext(NonCancellable) {
-                // NonCancellable to make sure we clean up even if job is being cancelled
-                processStatusUpdate(
-                    task,
-                    status,
-                    prefs,
-                    taskException,
-                    responseBody,
-                    responseHeaders,
-                    responseStatusCode,
-                    mimeType,
-                    charSet,
-                    context.appContext
+            var status = TaskStatus.failed
+            try {
+                task = getModifiedTask(
+                    context = context.appContext,
+                    task = task
                 )
-                if (status != TaskStatus.failed || task.retriesRemaining == 0) {
-                    // update only if not failed, or no retries remaining
-                   context.updateNotification(task, status)
+                notificationConfig = context.notificationConfig
+                notificationConfigJsonString = if (notificationConfig != null) Json.encodeToString<NotificationConfig>(notificationConfig!!) else null
+
+                canRunInForeground = runInForegroundFileSize >= 0 &&
+                        notificationConfig?.running != null // must have notification
+                isResume = determineIfResume()
+                Log.i(
+                    TAG,
+                    "${if (isResume) "Resuming" else "Starting"} task with taskId ${task.taskId}"
+                )
+                processStatusUpdate(task, TaskStatus.running, prefs, context = context.appContext)
+                if (!isResume) {
+                    processProgressUpdate(task, 0.0, prefs)
                 }
-                if (status != TaskStatus.canceled) {
-                    // let the holdingQueue know this task is no longer active
-                    // except TaskStatus.canceled is handled directly in cancellation and reset methods
-                    BDPlugin.holdingQueue?.taskFinished(task)
+                context.updateNotification(task, TaskStatus.running)
+                status = doTask()
+            } catch (e: Exception) {
+                Log.w(TAG, "TaskRunner.run execution failed for taskId ${task.taskId}: $e")
+                if (e is CancellationException) {
+                    if (BDPlugin.cancelUpdateSentForTaskId.contains(task.taskId)) {
+                        status = TaskStatus.canceled
+                    }
+                    // else status remains .failed (system cancellation)
+                }
+                setTaskException(e)
+            } finally {
+                withContext(NonCancellable) {
+                    // NonCancellable to make sure we clean up even if job is being cancelled
+                    processStatusUpdate(
+                        task,
+                        status,
+                        prefs,
+                        taskException,
+                        responseBody,
+                        responseHeaders,
+                        responseStatusCode,
+                        mimeType,
+                        charSet,
+                        context.appContext
+                    )
+                    if (status != TaskStatus.failed || task.retriesRemaining == 0) {
+                        // update only if not failed, or no retries remaining
+                        context.updateNotification(task, status)
+                    }
+                    if (status != TaskStatus.canceled) {
+                        // let the holdingQueue know this task is no longer active
+                        // except TaskStatus.canceled is handled directly in cancellation and reset methods
+                        BDPlugin.holdingQueue?.taskFinished(task)
+                    }
                 }
             }
         }
