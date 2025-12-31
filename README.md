@@ -137,19 +137,19 @@ No setup is required for Windows or Linux.
 
 ### Android
 
-This package needs Kotlin 1.9.20 or above to compile.
+This package needs Kotlin 2.1.0 or above to compile.
 For modern Flutter projects this should be added to the `/android/settings.gradle` file.
 ```gradle
 plugins {
     // ...
-    id "org.jetbrains.kotlin.android" version "1.9.20" apply false
+    id "org.jetbrains.kotlin.android" version "2.1.0" apply false
     // ...
 }
 ```
 For older flutter projects, the kotlin version is set in the `android/build.gradle` file as follows.
 ```gradle
 buildScript {
-    ext.kotlin_version = '1.9.20'
+    ext.kotlin_version = '2.1.0'
 }
 ```
 
