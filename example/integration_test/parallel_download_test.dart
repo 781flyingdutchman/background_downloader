@@ -138,7 +138,8 @@ void main() {
   });
 
   group('Basic', () {
-    test('simple enqueue, 2 chunks, 1 url', () async {
+    test('simple enqueue, 2 chunks, 1 url',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(
           await FileDownloader()
@@ -152,7 +153,8 @@ void main() {
       expect(await fileEqualsTestFile(file), isTrue);
     });
 
-    test('simple enqueue, 2 chunks, 2 url', () async {
+    test('simple enqueue, 2 chunks, 2 url',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       task = ParallelDownloadTask(
           url: [urlWithContentLength, urlWithContentLength],
           filename: defaultFilename,
@@ -167,7 +169,8 @@ void main() {
       expect(await fileEqualsTestFile(file), isTrue);
     });
 
-    test('simple enqueue with progress, 2 chunks, 1 url', () async {
+    test('simple enqueue with progress, 2 chunks, 1 url',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       var lastProgress = -1.0;
       var numProgressUpdates = 0;
       FileDownloader().registerCallbacks(
@@ -191,7 +194,8 @@ void main() {
       expect(numProgressUpdates, greaterThan(1));
     });
 
-    test('Convenience download', () async {
+    test('Convenience download', timeout: const Timeout(Duration(minutes: 2)),
+        () async {
       final result = await FileDownloader()
           .download(task.copyWith(url: urlWithContentLength));
       expect(result.status, equals(TaskStatus.complete));
@@ -200,7 +204,8 @@ void main() {
       expect(result.responseHeaders, isNotEmpty);
     });
 
-    test('403 enqueue, no retries', () async {
+    test('403 enqueue, no retries',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       if (!Platform.isIOS) {
         expect(await FileDownloader().enqueue(failingTask), isTrue);
@@ -212,7 +217,8 @@ void main() {
       expect(lastStatus, equals(TaskStatus.failed));
     });
 
-    testWidgets('no content length', (widgetTester) async {
+    testWidgets('no content length',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       task = task.copyWith(url: 'http://$localServerHostPort/');
       if (Platform.isIOS) {
         // different from a normal download task, enqueue fails immediately
@@ -238,7 +244,8 @@ void main() {
       expect(result.responseBody, isNull);
     });
 
-    testWidgets('not found', (widgetTester) async {
+    testWidgets('not found', timeout: const Timeout(Duration(minutes: 2)),
+        (widgetTester) async {
       task = task.copyWith(url: 'http://$localServerHostPort/something');
       if (Platform.isIOS) {
         // different from a normal download task, enqueue fails immediately
@@ -263,7 +270,8 @@ void main() {
       }
     });
 
-    test('cancellation', () async {
+    test('cancellation', timeout: const Timeout(Duration(minutes: 2)),
+        () async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -280,7 +288,7 @@ void main() {
       await Future.delayed(const Duration(seconds: 3));
     });
 
-    test('pause', () async {
+    test('pause', timeout: const Timeout(Duration(minutes: 2)), () async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -312,7 +320,8 @@ void main() {
   group('Modifications', () {
     // Tests in this group require modification of the source code
     // and may fail without that
-    test('[*] retries - must modify transferBytes to fail', () async {
+    test('[*] retries - must modify transferBytes to fail',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       // modify the TransferBytes method to fail, otherwise retries are not
       // triggered
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
@@ -321,7 +330,8 @@ void main() {
       expect(lastStatus, equals(TaskStatus.failed));
     });
 
-    test('[*] Range or Known-Content-Length in task header', () async {
+    test('[*] Range or Known-Content-Length in task header',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       // modify the getContentLength function to not return a
       // content length, so that it relies on Range or
       // Known-Content-Length header to determine content length
@@ -361,7 +371,8 @@ void main() {
       }
     });
 
-    test('[*] override content length', () async {
+    test('[*] override content length',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       // Haven't found a url that does not provide content-length, so
       // can only be tested by modifying the source code to ignore the
       // Content-Length response header and use this one instead

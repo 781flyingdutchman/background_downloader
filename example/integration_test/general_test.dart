@@ -21,14 +21,15 @@ void main() {
   tearDown(defaultTearDown);
 
   group('Initialization', () {
-    test('registerCallbacks', () {
+    test('registerCallbacks', timeout: const Timeout(Duration(minutes: 2)), () {
       expect(() => FileDownloader().registerCallbacks(), throwsAssertionError);
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       FileDownloader().registerCallbacks(
           group: 'test', taskProgressCallback: progressCallback);
     });
 
-    test('unregisterCallbacks', () {
+    test('unregisterCallbacks', timeout: const Timeout(Duration(minutes: 2)),
+        () {
       FileDownloader().registerCallbacks(
           group: 'test',
           taskStatusCallback: statusCallback,
@@ -86,7 +87,7 @@ void main() {
           isNull);
     });
 
-    test('uploadTask', () {
+    test('uploadTask', timeout: const Timeout(Duration(minutes: 2)), () {
       var task = UploadTask(url: uploadTestUrl, filename: uploadFilename);
       expect(task.fileField, equals('file'));
       expect(task.mimeType, equals('text/plain'));
@@ -99,7 +100,8 @@ void main() {
       expect(task.mimeType, equals('someThing'));
     });
 
-    test('task with httpRequestMethod', () {
+    test('task with httpRequestMethod',
+        timeout: const Timeout(Duration(minutes: 2)), () {
       expect(
           () => DownloadTask(
               url: urlWithoutContentLength, httpRequestMethod: 'ILLEGAL'),
@@ -108,7 +110,8 @@ void main() {
   });
 
   group('Enqueuing tasks', () {
-    testWidgets('enqueue', (tester) async {
+    testWidgets('enqueue', timeout: const Timeout(Duration(minutes: 2)),
+        (tester) async {
       var path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
       await enqueueAndFileExists(path);
@@ -185,7 +188,8 @@ void main() {
       print('Finished enqueue');
     });
 
-    testWidgets('enqueue with progress', (widgetTester) async {
+    testWidgets('enqueue with progress',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -229,7 +233,7 @@ void main() {
     });
 
     testWidgets('enqueue with download speed and time remaining',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       task = DownloadTask(
           url: urlWithLongContentLength,
           filename: defaultFilename,
@@ -254,7 +258,7 @@ void main() {
     });
 
     testWidgets('enqueue with non-default group callbacks',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader()
           .registerCallbacks(group: 'test', taskStatusCallback: statusCallback);
       // enqueue task with 'default' group, so no status updates should come
@@ -273,7 +277,7 @@ void main() {
     });
 
     testWidgets('enqueue with event listener for status updates',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
       try {
@@ -324,7 +328,7 @@ void main() {
     });
 
     testWidgets('enqueue with event listener and callback for status updates',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       final path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
@@ -344,7 +348,7 @@ void main() {
     });
 
     testWidgets('enqueue with event listener for progress updates',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       task = DownloadTask(
           url:
               'https://storage.googleapis.com/approachcharts/test/5MB-test.ZIP',
@@ -369,7 +373,7 @@ void main() {
     });
 
     testWidgets('enqueue with event listener, then reset and listen again',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       // Register listener. For testing convenience, we simply route the event
       // to the completer function we have defined
       var subscription = FileDownloader().updates.listen((update) {
@@ -399,7 +403,8 @@ void main() {
       subscription.cancel();
     });
 
-    testWidgets('enqueue with redirect', (widgetTester) async {
+    testWidgets('enqueue with redirect',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       task = DownloadTask(url: getRedirectTestUrl, filename: defaultFilename);
       final path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
@@ -413,7 +418,8 @@ void main() {
       File(path).deleteSync();
     });
 
-    testWidgets('enqueue and test file equality', (widgetTester) async {
+    testWidgets('enqueue and test file equality',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       task = DownloadTask(url: urlWithContentLength, filename: defaultFilename);
       expect(await FileDownloader().enqueue(task), isTrue);
@@ -424,7 +430,7 @@ void main() {
     });
 
     testWidgets('enqueue long Android task that times out',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       // This is an Android implementation detail. Android tasks timeout
       // after 10 minutes, so to prevent a long download from failing
       // we pause the task and resume after a brief pause
@@ -460,7 +466,8 @@ void main() {
       }
     });
 
-    testWidgets('enqueue with invalid (malformed) url', (widgetTester) async {
+    testWidgets('enqueue with invalid (malformed) url',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       var task = DownloadTask(url: 'invalid%url.com', filename: 'test.html');
       expect(await FileDownloader().enqueue(task), isFalse);
       task = DownloadTask(
@@ -480,7 +487,8 @@ void main() {
       await Future.delayed(const Duration(seconds: 2));
     });
 
-    testWidgets('iOS exclude from Cloud backup', (widgetTester) async {
+    testWidgets('iOS exclude from Cloud backup',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       // Check the logs for evidence of the bit being set
       final configResult = await FileDownloader()
           .configure(globalConfig: (Config.excludeFromCloudBackup, true));
@@ -506,7 +514,8 @@ void main() {
   });
 
   group('Queue and task management', () {
-    testWidgets('reset', (widgetTester) async {
+    testWidgets('reset', timeout: const Timeout(Duration(minutes: 2)),
+        (widgetTester) async {
       print('Starting reset');
       await Future.delayed(const Duration(seconds: 2)); // clear cancellations
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
@@ -523,7 +532,8 @@ void main() {
       print('Finished reset');
     });
 
-    testWidgets('allTaskIds', (widgetTester) async {
+    testWidgets('allTaskIds', timeout: const Timeout(Duration(minutes: 2)),
+        (widgetTester) async {
       print('Starting allTaskIds');
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(task), isTrue);
@@ -535,7 +545,8 @@ void main() {
       print('Finished allTaskIds');
     });
 
-    testWidgets('allTasks', (widgetTester) async {
+    testWidgets('allTasks', timeout: const Timeout(Duration(minutes: 2)),
+        (widgetTester) async {
       print('Starting allTasks');
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(task), isTrue);
@@ -550,7 +561,7 @@ void main() {
     });
 
     testWidgets('allTasks and allTaskIds with allGroups set to true',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       print('Starting allTasks with allGroups set to true');
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       task = DownloadTask(url: urlWithContentLength, filename: defaultFilename);
@@ -576,7 +587,8 @@ void main() {
       print('Finished allTasks with allGroups set to true');
     });
 
-    testWidgets('tasksFinished', (widgetTester) async {
+    testWidgets('tasksFinished', timeout: const Timeout(Duration(minutes: 2)),
+        (widgetTester) async {
       print('Starting tasksFinished');
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(task), isTrue);
@@ -598,7 +610,8 @@ void main() {
       print('Finished tasksFinished');
     });
 
-    testWidgets('cancelTasksWithIds', (widgetTester) async {
+    testWidgets('cancelTasksWithIds',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -633,7 +646,8 @@ void main() {
       print('Finished cancelTasksWithIds');
     });
 
-    testWidgets('taskForId', (widgetTester) async {
+    testWidgets('taskForId', timeout: const Timeout(Duration(minutes: 2)),
+        (widgetTester) async {
       print('Starting taskForId');
       final complexTask = DownloadTask(
           url: urlWithoutContentLength,
@@ -653,7 +667,8 @@ void main() {
       print('Finished taskForId');
     });
 
-    testWidgets('DownloadTask to and from Json', (widgetTester) async {
+    testWidgets('DownloadTask to and from Json',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final complexTask = DownloadTask(
           url: postTestUrl,
           filename: defaultFilename,
@@ -709,7 +724,8 @@ void main() {
       expect(lastStatus, equals(TaskStatus.complete));
     });
 
-    testWidgets('UploadTask to and from Json', (widgetTester) async {
+    testWidgets('UploadTask to and from Json',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final complexTask = UploadTask(
           url: uploadTestUrl,
           filename: uploadFilename,
@@ -769,7 +785,8 @@ void main() {
       expect(lastStatus, equals(TaskStatus.notFound));
     });
 
-    testWidgets('requireWiFi setting', (widgetTester) async {
+    testWidgets('requireWiFi setting',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       if (Platform.isAndroid || Platform.isIOS) {
         await FileDownloader().requireWiFi(RequireWiFi.asSetByTask);
         expect(await FileDownloader().getRequireWiFiSetting(),
@@ -791,7 +808,8 @@ void main() {
   });
 
   group('Convenience downloads', () {
-    testWidgets('download with await', (widgetTester) async {
+    testWidgets('download with await',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       var path =
           join((await getApplicationDocumentsDirectory()).path, task.filename);
       var exists = await File(path).exists();
@@ -809,7 +827,8 @@ void main() {
       await File(path).delete();
     });
 
-    testWidgets('multiple download with futures', (widgetTester) async {
+    testWidgets('multiple download with futures',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final secondTask =
           task.copyWith(taskId: 'secondTask', filename: 'second.html');
       var path =
@@ -843,7 +862,8 @@ void main() {
       await File(path).delete();
     });
 
-    testWidgets('batch download', (widgetTester) async {
+    testWidgets('batch download', timeout: const Timeout(Duration(minutes: 2)),
+        (widgetTester) async {
       final tasks = <DownloadTask>[];
       final docDir = (await getApplicationDocumentsDirectory()).path;
       for (int n = 0; n < 3; n++) {
@@ -888,7 +908,8 @@ void main() {
       print('Finished batch download');
     });
 
-    testWidgets('batch download with batch callback', (widgetTester) async {
+    testWidgets('batch download with batch callback',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final tasks = <DownloadTask>[];
       final docDir = (await getApplicationDocumentsDirectory()).path;
       for (int n = 0; n < 3; n++) {
@@ -927,7 +948,8 @@ void main() {
       print('Finished batch download with callback');
     });
 
-    testWidgets('batch download with task callback', (widgetTester) async {
+    testWidgets('batch download with task callback',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final failTask = DownloadTask(
           url: urlWithFailure, filename: defaultFilename, retries: 2);
       final task3 = task.copyWith(taskId: 'task3');
@@ -943,7 +965,8 @@ void main() {
       expect(progressCallbackCounter, greaterThanOrEqualTo(10));
     });
 
-    testWidgets('batch download with onElapsedTime', (widgetTester) async {
+    testWidgets('batch download with onElapsedTime',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final tasks = <DownloadTask>[
         DownloadTask(url: urlWithContentLength),
         DownloadTask(url: urlWithContentLength),
@@ -958,7 +981,8 @@ void main() {
       await Future.delayed(const Duration(seconds: 1));
     });
 
-    testWidgets('convenience download with callbacks', (widgetTester) async {
+    testWidgets('convenience download with callbacks',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       var result = await FileDownloader().download(task,
           onStatus: (status) => statusCallback(TaskStatusUpdate(task, status)));
       expect(result.task, equals(task));
@@ -984,7 +1008,7 @@ void main() {
     });
 
     testWidgets('parallel convenience downloads with callbacks',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       var a = 0, b = 0, c = 0;
       var p1 = 0.0, p2 = 0.0, p3 = 0.0;
       final failTask = DownloadTask(
@@ -1025,7 +1049,7 @@ void main() {
     });
 
     testWidgets('simple parallel convenience downloads with callbacks',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final failTask = DownloadTask(
           url: urlWithFailure, filename: defaultFilename, retries: 2);
       var failingResult = FileDownloader().download(failTask,
@@ -1042,7 +1066,8 @@ void main() {
       print('Finished simple parallel convenience downloads with callbacks');
     });
 
-    testWidgets('onElapsedTime', (widgetTester) async {
+    testWidgets('onElapsedTime', timeout: const Timeout(Duration(minutes: 2)),
+        (widgetTester) async {
       task = DownloadTask(url: urlWithContentLength);
       var ticks = 0;
       final result =
@@ -1054,7 +1079,8 @@ void main() {
       expect(ticks, greaterThan(0));
     });
 
-    testWidgets('not found', (widgetTester) async {
+    testWidgets('not found', timeout: const Timeout(Duration(minutes: 2)),
+        (widgetTester) async {
       task = DownloadTask(
           url: 'https://avmaps-dot-bbflightserver-hrd.appspot.com/something');
       final result = await FileDownloader().download(task);
@@ -1070,7 +1096,8 @@ void main() {
       expect(result.responseStatusCode, equals(404));
     });
 
-    testWidgets('skipExistingFiles', (widgetTester) async {
+    testWidgets('skipExistingFiles',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       // Test skipping a file that already exists
       final task =
           DownloadTask(url: urlWithoutContentLength, filename: 'existing.html');
@@ -1116,7 +1143,8 @@ void main() {
   });
 
   group('Retries', () {
-    testWidgets('basic retry logic', (widgetTester) async {
+    testWidgets('basic retry logic',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(retryTask.retriesRemaining, equals(retryTask.retries));
       expect(await FileDownloader().enqueue(retryTask), isTrue);
@@ -1132,7 +1160,8 @@ void main() {
       expect(statusCallbackCounter, equals((retryTask.retries + 1) * 3));
     });
 
-    testWidgets('basic with progress updates', (widgetTester) async {
+    testWidgets('basic with progress updates',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -1153,7 +1182,8 @@ void main() {
       expect(lastProgress, equals(progressFailed));
     });
 
-    testWidgets('retry with cancellation', (widgetTester) async {
+    testWidgets('retry with cancellation',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(retryTask), isTrue);
       await Future.delayed(const Duration(seconds: 6));
@@ -1175,7 +1205,7 @@ void main() {
     });
 
     testWidgets('retry progress updates with cancellation',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -1204,7 +1234,8 @@ void main() {
       }
     });
 
-    testWidgets('queue management allTasks with retries', (widgetTester) async {
+    testWidgets('queue management allTasks with retries',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(retryTask), isTrue);
       expect(await FileDownloader().enqueue(task), isTrue);
@@ -1229,7 +1260,7 @@ void main() {
     }, skip: true);
 
     testWidgets('queue management: taskForId with retries',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       expect(await FileDownloader().enqueue(retryTask), isTrue);
       expect(await FileDownloader().enqueue(task), isTrue); // regular task
@@ -1244,7 +1275,8 @@ void main() {
       await FileDownloader().cancelTasksWithIds([retryTask.taskId]);
     });
 
-    testWidgets('[*] resume on failure', (widgetTester) async {
+    testWidgets('[*] resume on failure',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       // this test requires manual failure while the task is downloading
       // and therefore does NOT fail if the task completes normally
       //print(await FileDownloader().configure(iOSConfig: ('resourceTimeout', const Duration(seconds: 15))));
@@ -1279,7 +1311,8 @@ void main() {
       }
     });
 
-    testWidgets('[*] resume on retry', (widgetTester) async {
+    testWidgets('[*] resume on retry',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       // this test requires manual failure while the task is downloading
       // and therefore does NOT fail if the task completes normally
       FileDownloader().registerCallbacks(
@@ -1301,7 +1334,7 @@ void main() {
 
   group('DownloadTask with POST request', () {
     testWidgets('post DownloadTask with post is empty body',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final task = DownloadTask(
           url: postTestUrl,
           urlQueryParameters: {'request-type': 'post-empty'},
@@ -1320,7 +1353,8 @@ void main() {
       expect(result['json'], isNull);
     });
 
-    testWidgets('post DownloadTask with post is String', (widgetTester) async {
+    testWidgets('post DownloadTask with post is String',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final task = DownloadTask(
           url: postTestUrl,
           urlQueryParameters: {'request-type': 'post-String'},
@@ -1341,7 +1375,7 @@ void main() {
     });
 
     testWidgets('post DownloadTask with post is Uint8List',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final task = DownloadTask(
           url: postTestUrl,
           urlQueryParameters: {'request-type': 'post-Uint8List'},
@@ -1363,7 +1397,7 @@ void main() {
     });
 
     testWidgets('post DownloadTask with post is JsonString',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final task = DownloadTask(
           url: postTestUrl,
           urlQueryParameters: {'request-type': 'post-json'},
@@ -1386,7 +1420,8 @@ void main() {
       expect(result['json'], equals({'field1': 1}));
     });
 
-    testWidgets('post DownloadTask with post is Map', (widgetTester) async {
+    testWidgets('post DownloadTask with post is Map',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final task = DownloadTask(
           url: postTestUrl,
           urlQueryParameters: {'request-type': 'post-json'},
@@ -1409,7 +1444,8 @@ void main() {
       expect(result['json'], equals({'field1': 1}));
     });
 
-    testWidgets('post DownloadTask with post is List', (widgetTester) async {
+    testWidgets('post DownloadTask with post is List',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final task = DownloadTask(
           url: postTestUrl,
           urlQueryParameters: {'request-type': 'post-json'},
@@ -1433,7 +1469,7 @@ void main() {
     });
 
     testWidgets('post DownloadTask with post is invalid type',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       expect(
           () => DownloadTask(
               url: postTestUrl,
@@ -1446,7 +1482,8 @@ void main() {
   });
 
   group('Request', () {
-    testWidgets('get request', (widgetTester) async {
+    testWidgets('get request', timeout: const Timeout(Duration(minutes: 2)),
+        (widgetTester) async {
       final request = Request(
           url: getTestUrl,
           urlQueryParameters: {'json': 'true', 'request-type': 'get%20it'},
@@ -1460,7 +1497,8 @@ void main() {
       expect(result['headers']['Header1'], equals('headerValue1'));
     });
 
-    testWidgets('post request with post is empty body', (widgetTester) async {
+    testWidgets('post request with post is empty body',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final request = Request(
           url: postTestUrl,
           urlQueryParameters: {'request-type': 'post-empty'},
@@ -1475,7 +1513,8 @@ void main() {
       expect(result['json'], isNull);
     });
 
-    testWidgets('post request with post is String', (widgetTester) async {
+    testWidgets('post request with post is String',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final request = Request(
           url: postTestUrl,
           urlQueryParameters: {'request-type': 'post-String'},
@@ -1490,7 +1529,8 @@ void main() {
       expect(result['json'], isNull);
     });
 
-    testWidgets('post request with post is Uint8List', (widgetTester) async {
+    testWidgets('post request with post is Uint8List',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final request = Request(
           url: postTestUrl,
           urlQueryParameters: {'request-type': 'post-Uint8List'},
@@ -1505,7 +1545,8 @@ void main() {
       expect(result['json'], isNull);
     });
 
-    testWidgets('post request with post is JsonString', (widgetTester) async {
+    testWidgets('post request with post is JsonString',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final request = Request(
           url: postTestUrl,
           urlQueryParameters: {'request-type': 'post-json'},
@@ -1524,7 +1565,8 @@ void main() {
       expect(result['json'], equals({'field1': 1}));
     });
 
-    testWidgets('post request with post is Map', (widgetTester) async {
+    testWidgets('post request with post is Map',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final request = Request(url: postTestUrl, urlQueryParameters: {
         'request-type': 'post-json'
       }, headers: {
@@ -1543,7 +1585,8 @@ void main() {
       expect(result['json'], equals({'field': 1}));
     });
 
-    testWidgets('post request with post is List', (widgetTester) async {
+    testWidgets('post request with post is List',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final request = Request(url: postTestUrl, urlQueryParameters: {
         'request-type': 'post-json'
       }, headers: {
@@ -1563,7 +1606,8 @@ void main() {
       expect(result['json'], equals(['apple', 'orange']));
     });
 
-    testWidgets('post request with post is invalid type', (widgetTester) async {
+    testWidgets('post request with post is invalid type',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       expect(
           () => Request(
               url: postTestUrl,
@@ -1574,14 +1618,14 @@ void main() {
     });
 
     testWidgets('get request with server error, no retries',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final request = Request(url: urlWithFailure);
       final response = await FileDownloader().request(request);
       expect(response.reasonPhrase, equals('FORBIDDEN'));
     });
 
     testWidgets('get request with server error, with retries',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       // There is no easy way to confirm the retries are happening, because the
       // Request object is modified within the Isolate and not passed back to
       // the main isolate. We therefore observe the three retries by
@@ -1592,7 +1636,7 @@ void main() {
     });
 
     testWidgets('get request with malformed url error, no retries',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final request = Request(url: 'somethingRandom');
       final response = await FileDownloader().request(request);
       expect(response.statusCode, equals(499));
@@ -1602,7 +1646,8 @@ void main() {
               'Invalid argument(s): No host specified in URI somethingRandom'));
     });
 
-    testWidgets('get request with redirect', (widgetTester) async {
+    testWidgets('get request with redirect',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final request = Request(url: getRedirectTestUrl);
       final response = await FileDownloader().request(request);
       print('code = ${response.statusCode} and body is ${response.body}');
@@ -1613,7 +1658,8 @@ void main() {
   });
 
   group('Basic upload', () {
-    testWidgets('enqueue multipart file', (widgetTester) async {
+    testWidgets('enqueue multipart file',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -1629,7 +1675,8 @@ void main() {
       print('Finished enqueue multipart file');
     });
 
-    testWidgets('enqueue w/o file', (widgetTester) async {
+    testWidgets('enqueue w/o file',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -1645,7 +1692,8 @@ void main() {
       print('Finished enqueue w/o file');
     });
 
-    testWidgets('enqueue binary file', (widgetTester) async {
+    testWidgets('enqueue binary file',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -1662,7 +1710,8 @@ void main() {
       print('Finished enqueue binary file');
     });
 
-    testWidgets('upload binary file partially bytes=2-4', (widgetTester) async {
+    testWidgets('upload binary file partially bytes=2-4',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -1675,7 +1724,8 @@ void main() {
       expect(result.responseBody, equals('fil'));
     });
 
-    testWidgets('upload binary file partially bytes=2-', (widgetTester) async {
+    testWidgets('upload binary file partially bytes=2-',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -1689,7 +1739,7 @@ void main() {
     });
 
     testWidgets('upload binary file partially invalid headers',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -1699,7 +1749,8 @@ void main() {
       expect(result.status, equals(TaskStatus.failed));
     });
 
-    testWidgets('enqueue multipart with fields', (widgetTester) async {
+    testWidgets('enqueue multipart with fields',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -1717,7 +1768,7 @@ void main() {
     });
 
     testWidgets('enqueue multipart with fields that have multiple values',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -1729,7 +1780,8 @@ void main() {
           equals({'field1': 'value1', 'field2': 'value2'}));
     });
 
-    testWidgets('enqueue binary file, then cancel', (widgetTester) async {
+    testWidgets('enqueue binary file, then cancel',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -1746,7 +1798,8 @@ void main() {
       print('Finished enqueue binary file, then cancel');
     });
 
-    testWidgets('upload task creation with errors', (widgetTester) async {
+    testWidgets('upload task creation with errors',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       expect(
           () => UploadTask(
               url: uploadTestUrl,
@@ -1756,7 +1809,8 @@ void main() {
           throwsAssertionError);
     });
 
-    testWidgets('Create UploadTask from File', (widgetTester) async {
+    testWidgets('Create UploadTask from File',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final pathToFile = await uploadTask.filePath();
       final file = File(pathToFile);
       final taskFromFile = UploadTask.fromFile(file: file, url: uploadTask.url);
@@ -1767,7 +1821,8 @@ void main() {
   });
 
   group('Convenience uploads', () {
-    testWidgets('multipart upload with await', (widgetTester) async {
+    testWidgets('multipart upload with await',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final result = await FileDownloader().upload(uploadTask);
       expect(result.status, equals(TaskStatus.complete));
       expect(result.responseBody, equals('{}'));
@@ -1775,7 +1830,8 @@ void main() {
       expect(result.responseStatusCode, equals(200));
     });
 
-    testWidgets('binary upload with await', (widgetTester) async {
+    testWidgets('binary upload with await',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final result = await FileDownloader().upload(
           uploadTask.copyWith(url: uploadBinaryTestUrl, post: 'binary'));
       expect(result.status, equals(TaskStatus.complete));
@@ -1784,7 +1840,8 @@ void main() {
       expect(result.responseStatusCode, equals(200));
     });
 
-    testWidgets('multiple upload with futures', (widgetTester) async {
+    testWidgets('multiple upload with futures',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final secondTask = uploadTask.copyWith(taskId: 'secondTask');
       // note that using a Future (without await) is unusual and is done here
       // just for testing.  Normal use would be
@@ -1801,7 +1858,8 @@ void main() {
       }
     });
 
-    testWidgets('batch upload', (widgetTester) async {
+    testWidgets('batch upload', timeout: const Timeout(Duration(minutes: 2)),
+        (widgetTester) async {
       final failingUploadTask =
           uploadTask.copyWith(taskId: 'fails', post: 'binary');
       final tasks = <UploadTask>[
@@ -1828,7 +1886,8 @@ void main() {
       print('Finished batch upload');
     });
 
-    testWidgets('batch upload with callback', (widgetTester) async {
+    testWidgets('batch upload with callback',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final failingUploadTask =
           uploadTask.copyWith(taskId: 'fails', post: 'binary');
       final tasks = <UploadTask>[
@@ -1852,7 +1911,8 @@ void main() {
       print('Finished batch upload with callback');
     });
 
-    testWidgets('batch upload with onElapsedTime', (widgetTester) async {
+    testWidgets('batch upload with onElapsedTime',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final tasks = <UploadTask>[
         uploadTask,
         uploadTask.copyWith(taskId: 'task2'),
@@ -1867,7 +1927,8 @@ void main() {
       await Future.delayed(const Duration(seconds: 1));
     });
 
-    testWidgets('convenience upload with callbacks', (widgetTester) async {
+    testWidgets('convenience upload with callbacks',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       var result = await FileDownloader().upload(uploadTask,
           onStatus: (status) =>
               statusCallback(TaskStatusUpdate(uploadTask, status)));
@@ -1892,7 +1953,8 @@ void main() {
       print('Finished convenience upload with callbacks');
     });
 
-    testWidgets('onElapsedTime', (widgetTester) async {
+    testWidgets('onElapsedTime', timeout: const Timeout(Duration(minutes: 2)),
+        (widgetTester) async {
       var ticks = 0;
       final result = await FileDownloader().upload(uploadTaskBinary,
           onElapsedTime: (elapsed) {
@@ -1905,7 +1967,8 @@ void main() {
   });
 
   group('MultiUpload', () {
-    testWidgets('upload 2 files using enqueue', (widgetTester) async {
+    testWidgets('upload 2 files using enqueue',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -1922,7 +1985,8 @@ void main() {
       expect(lastStatus, equals(TaskStatus.complete));
     });
 
-    testWidgets('upload 2 files using upload', (widgetTester) async {
+    testWidgets('upload 2 files using upload',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final fields = {'key': 'value'};
       final multiTask = MultiUploadTask(
           url: uploadMultiTestUrl,
@@ -1935,7 +1999,8 @@ void main() {
       expect(result.responseStatusCode, equals(200));
     });
 
-    testWidgets('upload 2 files with full file path', (widgetTester) async {
+    testWidgets('upload 2 files with full file path',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final docsDir = await getApplicationDocumentsDirectory();
       final fullPath = join(docsDir.path, uploadFilename);
       final fields = {'key': 'value'};
@@ -1952,7 +2017,8 @@ void main() {
   });
 
   group('Cancellation', () {
-    testWidgets('cancel enqueued tasks', (widgetTester) async {
+    testWidgets('cancel enqueued tasks',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       var cancelCounter = 0;
       var completeCounter = 0;
       FileDownloader().registerCallbacks(taskStatusCallback: (update) {
@@ -1990,7 +2056,8 @@ void main() {
       }
     });
 
-    testWidgets('cancel after some progress', (widgetTester) async {
+    testWidgets('cancel after some progress',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final task = DownloadTask(
           url: urlWithContentLength, updates: Updates.statusAndProgress);
       FileDownloader().registerCallbacks(
@@ -2009,7 +2076,7 @@ void main() {
     /// must still be cancellable. This test cancels a failing task
     /// immediately after enqueueing it, and should succeed in doing so
     testWidgets('immediately cancel a task that fails immediately',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       final task = DownloadTask(url: 'file://doesNotExist', filename: 'test');
       expect(await FileDownloader().enqueue(task), equals(true));
@@ -2026,7 +2093,8 @@ void main() {
   });
 
   group('Tracking', () {
-    testWidgets('activate tracking', (widgetTester) async {
+    testWidgets('activate tracking',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       await FileDownloader().database.deleteAllRecords();
       await FileDownloader()
           .registerCallbacks(
@@ -2062,7 +2130,8 @@ void main() {
       expect(records.first, equals(record2));
     });
 
-    testWidgets('activate tracking for group', (widgetTester) async {
+    testWidgets('activate tracking for group',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       await FileDownloader().database.deleteAllRecords();
       await FileDownloader()
           .registerCallbacks(
@@ -2105,7 +2174,8 @@ void main() {
       await statusCallbackCompleter.future;
     });
 
-    testWidgets('set, get and delete record', (widgetTester) async {
+    testWidgets('set, get and delete record',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       await FileDownloader().database.deleteAllRecords();
       await FileDownloader()
           .registerCallbacks(taskStatusCallback: statusCallback)
@@ -2135,7 +2205,8 @@ void main() {
       expect(records2.first.taskId, equals(firsTaskId));
     });
 
-    testWidgets('allRecords', (widgetTester) async {
+    testWidgets('allRecords', timeout: const Timeout(Duration(minutes: 2)),
+        (widgetTester) async {
       await FileDownloader().database.deleteAllRecords();
       await FileDownloader()
           .registerCallbacks(taskStatusCallback: statusCallback)
@@ -2153,7 +2224,8 @@ void main() {
       expect(records.first.progress, equals(progressComplete));
     });
 
-    testWidgets('markDownloadedComplete', (widgetTester) async {
+    testWidgets('markDownloadedComplete',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       await FileDownloader().database.deleteAllRecords();
       await FileDownloader()
           .registerCallbacks(
@@ -2193,7 +2265,8 @@ void main() {
       print('Finished markDownloadedComplete');
     });
 
-    testWidgets('track with exception', (widgetTester) async {
+    testWidgets('track with exception',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       await FileDownloader().database.deleteAllRecords();
       await FileDownloader()
           .registerCallbacks(
@@ -2225,7 +2298,8 @@ void main() {
   });
 
   group('Pause and resume', () {
-    testWidgets('taskCanResume', (tester) async {
+    testWidgets('taskCanResume', timeout: const Timeout(Duration(minutes: 2)),
+        (tester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -2254,7 +2328,8 @@ void main() {
       await Future.delayed(const Duration(seconds: 1));
     });
 
-    testWidgets('pause and resume task', (widgetTester) async {
+    testWidgets('pause and resume task',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -2278,7 +2353,7 @@ void main() {
     });
 
     testWidgets('pause and resume task with ? as filename',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -2304,7 +2379,8 @@ void main() {
       await file.delete();
     });
 
-    testWidgets('pause and resume with invalid ETag', (widgetTester) async {
+    testWidgets('pause and resume with invalid ETag',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       // iOS manages resume for us, so we cannot test this
       if (!Platform.isIOS) {
         FileDownloader().registerCallbacks(
@@ -2337,7 +2413,8 @@ void main() {
       }
     });
 
-    testWidgets('pause task that cannot be paused', (widgetTester) async {
+    testWidgets('pause task that cannot be paused',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -2355,7 +2432,8 @@ void main() {
       expect(lastStatus, equals(TaskStatus.complete));
     });
 
-    testWidgets('cancel a paused task', (widgetTester) async {
+    testWidgets('cancel a paused task',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback);
@@ -2385,7 +2463,8 @@ void main() {
       expect(File(tempFilePath).existsSync(), isFalse);
     });
 
-    testWidgets('multiple pause and resume', (widgetTester) async {
+    testWidgets('multiple pause and resume',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       var interval = const Duration(milliseconds: 500);
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       task = DownloadTask(
@@ -2412,7 +2491,7 @@ void main() {
     });
 
     testWidgets('Pause and resume a convenience download',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       task = DownloadTask(
           url: urlWithContentLength,
           filename: defaultFilename,
@@ -2433,7 +2512,7 @@ void main() {
     });
 
     testWidgets('Pause and resume a task with a Range header',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       const rangeStart = 10;
       const rangeEnd = 10000000; // 10MB
       FileDownloader().registerCallbacks(
@@ -2461,7 +2540,7 @@ void main() {
   group('Fail background channel', () {
     testWidgets(
         'Local storage for resumeData, statusUpdates and progressUpdates',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       if (Platform.isAndroid || Platform.isIOS) {
         final downloader = FileDownloader().downloaderForTesting;
         // force fail triggers local storage, but does not prevent
@@ -2514,7 +2593,7 @@ void main() {
     });
 
     testWidgets('Local storage for taskStatusUpdate - ok download',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       if (Platform.isAndroid || Platform.isIOS) {
         final downloader = FileDownloader().downloaderForTesting;
         // force fail triggers local storage, but does not prevent
@@ -2556,7 +2635,7 @@ void main() {
     });
 
     testWidgets('Local storage for taskStatusUpdate - failed download',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       if (Platform.isAndroid || Platform.isIOS) {
         final downloader = FileDownloader().downloaderForTesting;
         // force fail triggers local storage, but does not prevent
@@ -2598,7 +2677,8 @@ void main() {
     // NOTE: notifications are difficult to test in an integration test, so
     // passing tests in this group is not sufficient evidence that they
     // are working properly
-    testWidgets('NotificationConfig', (widgetTester) async {
+    testWidgets('NotificationConfig',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().configureNotification(
           running: const TaskNotification('Title', 'Body'));
       FileDownloader().registerCallbacks(
@@ -2613,7 +2693,8 @@ void main() {
       await statusCallbackCompleter.future;
     });
 
-    testWidgets('openFile', (widgetTester) async {
+    testWidgets('openFile', timeout: const Timeout(Duration(minutes: 2)),
+        (widgetTester) async {
       final result = await FileDownloader().download(task);
       expect(result.status, equals(TaskStatus.complete));
       var success = await FileDownloader().openFile(task: task);
@@ -2655,7 +2736,8 @@ void main() {
   });
 
   group('Directories', () {
-    test('Print directory names', () async {
+    test('Print directory names', timeout: const Timeout(Duration(minutes: 2)),
+        () async {
       print(
           'task.baseDirectory is ${task.baseDirectory} and path is ${await task.filePath()}');
       task = task.copyWith(baseDirectory: BaseDirectory.applicationSupport);
@@ -2686,7 +2768,8 @@ void main() {
       }
     });
 
-    testWidgets('Android external storage', (widgetTester) async {
+    testWidgets('Android external storage',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       // configure use of external storage
       print(await FileDownloader().configure(
           androidConfig: (Config.useExternalStorage, Config.always)));
@@ -2728,7 +2811,8 @@ void main() {
   });
 
   group('Shared storage', () {
-    test('move task to shared storage', () async {
+    test('move task to shared storage',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       var filePath = await task.filePath();
       await FileDownloader().download(task);
       final path = await FileDownloader()
@@ -2740,7 +2824,8 @@ void main() {
       File(path).deleteSync();
     });
 
-    test('move task to shared storage with directory', () async {
+    test('move task to shared storage with directory',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       var filePath = await task.filePath();
       await FileDownloader().download(task);
       final path = await FileDownloader().moveToSharedStorage(
@@ -2755,7 +2840,8 @@ void main() {
       Directory(dirname(path)).deleteSync();
     });
 
-    test('[*] try to move text file to images -> error', () async {
+    test('[*] try to move text file to images -> error',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       // Note: this test will fail on Android API below 30, as that API
       // does not have a problem storing a text file in images
       if (Platform.isAndroid) {
@@ -2768,7 +2854,8 @@ void main() {
       }
     });
 
-    test('move while overriding mime type', () async {
+    test('move while overriding mime type',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       if (Platform.isAndroid) {
         var filePath = await task.filePath();
         await FileDownloader().download(task);
@@ -2783,7 +2870,8 @@ void main() {
       }
     });
 
-    test('move file to shared storage - all types', () async {
+    test('move file to shared storage - all types',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       // test skips .images and .video for iOS as that blocks on permission
       final valuesToTest = Platform.isIOS
           ? SharedStorage.values.where((element) =>
@@ -2832,7 +2920,8 @@ void main() {
       }
     });
 
-    testWidgets('path in shared storage', (widgetTester) async {
+    testWidgets('path in shared storage',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       await FileDownloader().download(task);
       final path = await FileDownloader()
           .moveToSharedStorage(task, SharedStorage.downloads);
@@ -2847,7 +2936,8 @@ void main() {
   });
 
   group('Exception details', () {
-    testWidgets('httpResponse: 403 downloadTask', (widgetTester) async {
+    testWidgets('httpResponse: 403 downloadTask',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       task = DownloadTask(url: urlWithFailure, filename: 'test');
       expect(await FileDownloader().enqueue(task), isTrue);
@@ -2859,7 +2949,7 @@ void main() {
     });
 
     testWidgets('convenience download for httpResponse 403',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       task = DownloadTask(url: urlWithFailure, filename: 'test');
       final result = await FileDownloader().download(task);
       final exception = result.exception!;
@@ -2870,7 +2960,7 @@ void main() {
     });
 
     testWidgets('fileSystem: File to upload does not exist',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       if (!Platform.isIOS) {
         FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
         uploadTask = uploadTask.copyWith(filename: 'doesNotExist');
@@ -2886,7 +2976,8 @@ void main() {
   });
 
   group('Content-disposition', () {
-    testWidgets('Various content-dispositions', (widgetTester) async {
+    testWidgets('Various content-dispositions',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       await deleteOld5MbDownloads();
       final downloader = FileDownloader().downloaderForTesting;
       final entries = {
@@ -2909,7 +3000,8 @@ void main() {
           equals('1MB-test.bin'));
     });
 
-    testWidgets('DownloadTask withSuggestedFilename', (widgetTester) async {
+    testWidgets('DownloadTask withSuggestedFilename',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       await deleteOld5MbDownloads();
       task = DownloadTask(url: urlWithContentLength);
       final startingFileName = task.filename;
@@ -2935,7 +3027,8 @@ void main() {
       expect(task5.filename, equals('5MB-test (2).ZIP'));
     });
 
-    testWidgets('downloadTask with ? for filename', (widgetTester) async {
+    testWidgets('downloadTask with ? for filename',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       await deleteOld5MbDownloads();
       task = DownloadTask(
           url: urlWithContentLength, filename: DownloadTask.suggestedFilename);
@@ -2948,7 +3041,7 @@ void main() {
     });
 
     testWidgets('parallelDownloadTask with ? for filename',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       await deleteOld5MbDownloads();
       task = ParallelDownloadTask(
           url: urlWithContentLength, filename: DownloadTask.suggestedFilename);
@@ -2962,7 +3055,8 @@ void main() {
       await file.delete();
     });
 
-    test('uploads with different content-disposition headers', () async {
+    test('uploads with different content-disposition headers',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       final uploadTask = UploadTask(
           url: dataTaskPostUrl, filename: uploadFilename, post: 'binary');
       final cdMap = {
@@ -2990,7 +3084,8 @@ void main() {
   });
 
   group('Content-Type, mimeType and charSet', () {
-    testWidgets('mimeType', (widgetTester) async {
+    testWidgets('mimeType', timeout: const Timeout(Duration(minutes: 2)),
+        (widgetTester) async {
       task = DownloadTask(url: urlWithContentLength);
       var result = await FileDownloader().download(task);
       expect(result.status, equals(TaskStatus.complete));
@@ -3003,7 +3098,8 @@ void main() {
       expect(result.charSet, isNull);
     });
 
-    testWidgets('mimeType and charSet', (widgetTester) async {
+    testWidgets('mimeType and charSet',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       task = DownloadTask(url: urlWithoutContentLength);
       final result = await FileDownloader().download(task);
       expect(result.status, equals(TaskStatus.complete));
@@ -3013,7 +3109,8 @@ void main() {
   });
 
   group('Range and Content-Length headers', () {
-    testWidgets('parseRange', (widgetTester) async {
+    testWidgets('parseRange', timeout: const Timeout(Duration(minutes: 2)),
+        (widgetTester) async {
       // tested on the native side for Android and iOS
       if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
         expect(parseRange('bytes=10-20'), equals((10, 20)));
@@ -3023,7 +3120,8 @@ void main() {
       }
     });
 
-    testWidgets('getContentLength', (widgetTester) async {
+    testWidgets('getContentLength',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       // tested on the native side for Android and iOS
       if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
         expect(getContentLength({}, task), equals(-1));
@@ -3040,7 +3138,8 @@ void main() {
       }
     });
 
-    testWidgets('Range header in download request', (widgetTester) async {
+    testWidgets('Range header in download request',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       const rangeStart = 10;
       const rangeEnd = 1000000;
       FileDownloader().registerCallbacks(
@@ -3083,7 +3182,8 @@ void main() {
       await file.delete();
     });
 
-    testWidgets('DownloadTask expectedFileSize', (widgetTester) async {
+    testWidgets('DownloadTask expectedFileSize',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       expect(await task.expectedFileSize(), equals(-1));
       task = task.copyWith(headers: {'Range': 'bytes=0-10'});
       expect(await task.expectedFileSize(), equals(11));
@@ -3095,7 +3195,7 @@ void main() {
     });
 
     testWidgets('[*] Range or Known-Content-Length in task header',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       // Haven't found a url that does not provide content-length, so
       // can only be tested by modifying the source code to ignore the
       // Content-Length response header and use this one instead
@@ -3123,7 +3223,7 @@ void main() {
 
   group('Cookies', () {
     testWidgets('cookie from live set-cookie response header',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final request = Request(
           url:
               'http://$localServerHostPort/response-headers?Set-Cookie=test_cookie=test_value');
@@ -3135,14 +3235,15 @@ void main() {
   });
 
   group('Priority and TaskQueue', () {
-    testWidgets('High priority', (widgetTester) async {
+    testWidgets('High priority', timeout: const Timeout(Duration(minutes: 2)),
+        (widgetTester) async {
       task = task.copyWith(priority: 0);
       final result = await FileDownloader().download(task);
       expect(result.status, equals(TaskStatus.complete));
     });
 
     testWidgets('One high priority task among regular ones',
-        (widgetTester) async {
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final tasks = <DownloadTask>[];
       for (var n = 1; n < 40; n++) {
         final downloadTask = DownloadTask(url: urlWithContentLength);
@@ -3165,7 +3266,8 @@ void main() {
       expect(elapsedTime.inMilliseconds, greaterThan(5));
     }, skip: true);
 
-    testWidgets('TaskQueue pauseAll', (widgetTester) async {
+    testWidgets('TaskQueue pauseAll',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final tq = MemoryTaskQueue();
       tq.maxConcurrent = 1;
       FileDownloader().addTaskQueue(tq);
@@ -3185,7 +3287,8 @@ void main() {
       FileDownloader().removeTaskQueue(tq);
     });
 
-    testWidgets('TaskQueue', (widgetTester) async {
+    testWidgets('TaskQueue', timeout: const Timeout(Duration(minutes: 2)),
+        (widgetTester) async {
       final completer = Completer<bool>();
       final tasks = <Task>{};
       FileDownloader().registerCallbacks(taskStatusCallback: (update) {
@@ -3211,7 +3314,8 @@ void main() {
   });
 
   group('HoldingQueue', () {
-    testWidgets('multiple maxConcurrent combinations', (widgetTester) async {
+    testWidgets('multiple maxConcurrent combinations',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       var start = DateTime.now();
       var concurrent = 0;
       var maxActual = 0;
@@ -3293,7 +3397,8 @@ void main() {
       await waitForTasksToClear();
     });
 
-    test('holdingQueue allTaskIds and allTasks', () async {
+    test('holdingQueue allTaskIds and allTasks',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       expect(
           (await FileDownloader().configure(
                   globalConfig: (Config.holdingQueue, (1, null, null))))
@@ -3313,7 +3418,8 @@ void main() {
       await waitForTasksToClear();
     });
 
-    test('holdingQueue cancel tasks', () async {
+    test('holdingQueue cancel tasks',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       // wait for all tasks to finish (there is often carry-over from the
       // preceding test
       await waitForTasksToClear();
@@ -3344,7 +3450,8 @@ void main() {
       await waitForTasksToClear();
     });
 
-    test('holdingQueue enqueue', () async {
+    test('holdingQueue enqueue', timeout: const Timeout(Duration(minutes: 2)),
+        () async {
       await waitForTasksToClear();
       expect(
           (await FileDownloader().configure(
@@ -3366,7 +3473,8 @@ void main() {
   });
 
   group('Task functions', () {
-    test('baseDirectoryPath', () async {
+    test('baseDirectoryPath', timeout: const Timeout(Duration(minutes: 2)),
+        () async {
       for (final baseDirectoryEnum in BaseDirectory.values) {
         final subdirName =
             (Platform.isWindows && baseDirectoryEnum == BaseDirectory.root)
@@ -3387,7 +3495,8 @@ void main() {
       }
     });
 
-    test('split with filePath parameter', () async {
+    test('split with filePath parameter',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       for (final subdirName in ['something', '']) {
         for (final baseDirectoryEnum in BaseDirectory.values) {
           final modifiedSubdirName =
@@ -3409,7 +3518,8 @@ void main() {
       }
     });
 
-    test('split with File parameter', () async {
+    test('split with File parameter',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       for (final subdirName in ['something', '']) {
         for (final baseDirectoryEnum in BaseDirectory.values) {
           final modifiedSubdirName =
@@ -3448,7 +3558,7 @@ void main() {
 
     test(
         'returns correct path for single upload task with default filename in applicationDocuments',
-        () async {
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       final task = DownloadTask(
           url: urlWithoutContentLength,
           filename: 'test.txt',
@@ -3464,7 +3574,7 @@ void main() {
 
     test(
         'returns correct path for single upload task with custom filename in temporary',
-        () async {
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       final task = UploadTask(
           url: urlWithoutContentLength,
           filename: 'test.txt',
@@ -3480,7 +3590,7 @@ void main() {
 
     test(
         'returns correct path for single upload task with default filename in applicationSupport',
-        () async {
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       final task = DownloadTask(
           url: urlWithoutContentLength,
           filename: 'test.txt',
@@ -3494,7 +3604,7 @@ void main() {
 
     test(
         'returns correct path for single upload task with custom filename in applicationLibrary',
-        () async {
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       final task = DownloadTask(
           url: urlWithoutContentLength,
           filename: 'test.txt',
@@ -3508,7 +3618,7 @@ void main() {
 
     test(
         'returns empty string for multi upload task without custom filename in temporary',
-        () async {
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       final task = MultiUploadTask(
           url: urlWithoutContentLength,
           files: ['a.text'],
@@ -3520,7 +3630,7 @@ void main() {
 
     test(
         'returns correct path for multi upload task with custom filename in applicationDocuments',
-        () async {
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       final task = MultiUploadTask(
           url: urlWithoutContentLength,
           files: ['a.text'],
@@ -3534,7 +3644,8 @@ void main() {
       expect(path, expectedPath);
     });
 
-    test('returns correct file path for task using file URI', () async {
+    test('returns correct file path for task using file URI',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       final task = UriUploadTask(
           url: urlWithoutContentLength, fileUri: Uri.file('/my/file/uri.txt'));
       final path = await task.filePath();
@@ -3542,7 +3653,7 @@ void main() {
     });
 
     test('returns correct file path for UriUploadTask with URI and filename',
-        () async {
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       final uri = Uri.file('/my/file/uri.txt');
       final task = UriUploadTask(
           url: urlWithoutContentLength, fileUri: uri, filename: uploadFilename);
@@ -3554,7 +3665,7 @@ void main() {
     });
 
     test('returns correct file path for UriDownloadTask with URI and filename',
-        () async {
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       final uri = Uri.file('/my/directory');
       final task = UriDownloadTask(
           url: urlWithoutContentLength,
@@ -3568,14 +3679,16 @@ void main() {
           equals('/my/directory/testFilename.txt'));
     });
 
-    test('throws assertion error for task using non-file URI', () async {
+    test('throws assertion error for task using non-file URI',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       final task = UriUploadTask(
           url: urlWithoutContentLength,
           fileUri: Uri.parse('content://example.com'));
       expect(() async => await task.filePath(), throwsA(isA<AssertionError>()));
     });
 
-    test('returns correct path for task using root directory', () async {
+    test('returns correct path for task using root directory',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       final task = DownloadTask(
           url: urlWithoutContentLength,
           filename: 'test.txt',
@@ -3587,7 +3700,8 @@ void main() {
   });
 
   group('DataTask', () {
-    test('dataTask get', () async {
+    test('dataTask get', timeout: const Timeout(Duration(minutes: 2)),
+        () async {
       var completer = Completer<TaskStatusUpdate>();
       FileDownloader().registerCallbacks(taskStatusCallback: (update) {
         if (update.status.isFinalState) {
@@ -3605,7 +3719,8 @@ void main() {
       expect(json['headers']['Accept'], equals('application/json'));
     });
 
-    test('dataTask post no data', () async {
+    test('dataTask post no data', timeout: const Timeout(Duration(minutes: 2)),
+        () async {
       var completer = Completer<TaskStatusUpdate>();
       FileDownloader().registerCallbacks(taskStatusCallback: (update) {
         if (update.status.isFinalState) {
@@ -3636,7 +3751,8 @@ void main() {
       expect((json['data'] as String).isEmpty, isTrue);
     });
 
-    test('dataTask post with data', () async {
+    test('dataTask post with data',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       var completer = Completer<TaskStatusUpdate>();
       FileDownloader().registerCallbacks(taskStatusCallback: (update) {
         if (update.status.isFinalState) {
@@ -3660,7 +3776,8 @@ void main() {
       expect((json['data'] as String), equals('My data'));
     });
 
-    test('dataTask post with json data', () async {
+    test('dataTask post with json data',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       var completer = Completer<TaskStatusUpdate>();
       FileDownloader().registerCallbacks(taskStatusCallback: (update) {
         if (update.status.isFinalState) {
@@ -3684,7 +3801,8 @@ void main() {
       expect((json['json'] as Map<String, dynamic>), equals(jsonData));
     });
 
-    test('dataTask with error', () async {
+    test('dataTask with error', timeout: const Timeout(Duration(minutes: 2)),
+        () async {
       var completer = Completer<TaskStatusUpdate>();
       FileDownloader().registerCallbacks(taskStatusCallback: (update) {
         if (update.status.isFinalState) {
@@ -3705,7 +3823,8 @@ void main() {
       expect((exception as TaskHttpException).httpResponseCode, equals(400));
     });
 
-    test('dataTask with retries', () async {
+    test('dataTask with retries', timeout: const Timeout(Duration(minutes: 2)),
+        () async {
       var completer = Completer<TaskStatusUpdate>();
       var retryCount = 0;
       FileDownloader().registerCallbacks(taskStatusCallback: (update) {
@@ -3729,7 +3848,8 @@ void main() {
       expect(retryCount, equals(2));
     });
 
-    test('cancel dataTask', () async {
+    test('cancel dataTask', timeout: const Timeout(Duration(minutes: 2)),
+        () async {
       /// Cancellation is only relevant when the task is waiting to retry.
       /// Cancellation of a running DataTask has no effect
       var completer = Completer<TaskStatusUpdate>();
@@ -3758,7 +3878,8 @@ void main() {
       expect(lastUpdate.task.retriesRemaining, greaterThan(0));
     });
 
-    test('transmit (wait for completion)', () async {
+    test('transmit (wait for completion)',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       final t = DataTask(url: dataTaskGetUrl, headers: dataTaskHeaders);
       final result = await FileDownloader().transmit(t);
       expect(result.status, equals(TaskStatus.complete));

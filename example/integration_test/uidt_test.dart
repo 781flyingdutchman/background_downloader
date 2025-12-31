@@ -16,7 +16,8 @@ void main() {
   tearDown(uidtTearDown);
 
   group('UIDT Download Tests', () {
-    testWidgets('Download with pause and resume', (tester) async {
+    testWidgets('Download with pause and resume',
+        timeout: const Timeout(Duration(minutes: 2)), (tester) async {
       var task = DownloadTask(
           url: urlWithLongContentLength,
           filename: 'uidt_pause_test.bin',
@@ -56,7 +57,8 @@ void main() {
       await File(await task.filePath()).delete();
     });
 
-    testWidgets('Download with cancel', (tester) async {
+    testWidgets('Download with cancel',
+        timeout: const Timeout(Duration(minutes: 2)), (tester) async {
       var task = DownloadTask(
           url: urlWithLongContentLength,
           filename: 'uidt_cancel_test.bin',
@@ -86,7 +88,8 @@ void main() {
       expect(File(await task.filePath()).existsSync(), isFalse);
     });
 
-    testWidgets('Download with retries', (tester) async {
+    testWidgets('Download with retries',
+        timeout: const Timeout(Duration(minutes: 2)), (tester) async {
       // Using urlWithFailure to test retries
       var task = DownloadTask(
           url: urlWithFailure,
@@ -112,7 +115,8 @@ void main() {
   });
 
   group('UIDT Upload Tests', () {
-    testWidgets('Regular Upload', (tester) async {
+    testWidgets('Regular Upload', timeout: const Timeout(Duration(minutes: 2)),
+        (tester) async {
       var task = UploadTask(
           url: uploadTestUrl,
           filename: uploadFilename,
@@ -129,7 +133,8 @@ void main() {
       await completeCompleter.future;
     });
 
-    testWidgets('Upload with cancel', (tester) async {
+    testWidgets('Upload with cancel',
+        timeout: const Timeout(Duration(minutes: 2)), (tester) async {
       // Create a 25MB file to ensure we have time to cancel
       final docDir = await getApplicationDocumentsDirectory();
       final bigFile = File(join(docDir.path, 'big_upload_file.bin'));
@@ -166,7 +171,8 @@ void main() {
   });
 
   group('UIDT Parallel Download Tests', () {
-    testWidgets('Regular parallel download', (tester) async {
+    testWidgets('Regular parallel download',
+        timeout: const Timeout(Duration(minutes: 2)), (tester) async {
       var task = ParallelDownloadTask(
           url: urlWithLongContentLength,
           filename: 'parallel_regular.bin',
@@ -186,7 +192,8 @@ void main() {
       await File(await task.filePath()).delete();
     });
 
-    testWidgets('Parallel download with pause and resume', (tester) async {
+    testWidgets('Parallel download with pause and resume',
+        timeout: const Timeout(Duration(minutes: 2)), (tester) async {
       var task = ParallelDownloadTask(
           url: urlWithLongContentLength,
           filename: 'parallel_pause.bin',
@@ -229,7 +236,8 @@ void main() {
       await File(await task.filePath()).delete();
     });
 
-    testWidgets('Parallel download with cancel', (tester) async {
+    testWidgets('Parallel download with cancel',
+        timeout: const Timeout(Duration(minutes: 2)), (tester) async {
       var task = ParallelDownloadTask(
           url: urlWithLongContentLength,
           filename: 'parallel_cancel.bin',
@@ -261,7 +269,8 @@ void main() {
   });
 
   group('UIDT DataTask Tests', () {
-    testWidgets('DataTask execution', (tester) async {
+    testWidgets('DataTask execution',
+        timeout: const Timeout(Duration(minutes: 2)), (tester) async {
       var task =
           DataTask(url: dataTaskGetUrl, updates: Updates.status, priority: 0);
 

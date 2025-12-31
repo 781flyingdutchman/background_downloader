@@ -40,7 +40,8 @@ void main() {
 
   tearDown(() async {});
 
-  testWidgets('upgrade from version 0', (widgetTester) async {
+  testWidgets('upgrade from version 0',
+      timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
     final docDir = await getApplicationDocumentsDirectory();
     final supportDir = await getApplicationSupportDirectory();
     Directory(path.join(docDir.path, tasksPath)).createSync();

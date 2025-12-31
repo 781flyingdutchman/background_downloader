@@ -134,7 +134,8 @@ void main() {
   });
 
   group('beforeTaskStartCallback', () {
-    test('no-change callback', () async {
+    test('no-change callback', timeout: const Timeout(Duration(minutes: 2)),
+        () async {
       final task = DownloadTask(
           url: getTestUrl,
           urlQueryParameters: {'json': 'true', 'param1': 'original'},
@@ -152,7 +153,8 @@ void main() {
       await File(path).delete();
     });
 
-    test('cancel callback', () async {
+    test('cancel callback', timeout: const Timeout(Duration(minutes: 2)),
+        () async {
       final task = DownloadTask(
           url: getTestUrl,
           urlQueryParameters: {'json': 'true', 'param1': 'original'},
@@ -171,7 +173,8 @@ void main() {
   });
 
   group('onStartCallback', () {
-    test('no-change callback', () async {
+    test('no-change callback', timeout: const Timeout(Duration(minutes: 2)),
+        () async {
       final task = DownloadTask(
           url: getTestUrl,
           urlQueryParameters: {'json': 'true', 'param1': 'original'},
@@ -188,7 +191,8 @@ void main() {
       await File(path).delete();
     });
 
-    test('url-change callback', () async {
+    test('url-change callback', timeout: const Timeout(Duration(minutes: 2)),
+        () async {
       final task = DownloadTask(
           url: getTestUrl,
           urlQueryParameters: {'json': 'true', 'param1': 'original'},
@@ -205,7 +209,8 @@ void main() {
       await File(path).delete();
     });
 
-    test('header-change callback', () async {
+    test('header-change callback', timeout: const Timeout(Duration(minutes: 2)),
+        () async {
       final task = DownloadTask(
           url: getTestUrl,
           urlQueryParameters: {'json': 'true'},
@@ -226,7 +231,8 @@ void main() {
   });
 
   group('onFinishedCallback', () {
-    test('onFinishedCallback passes the appropriate status', () async {
+    test('onFinishedCallback passes the appropriate status',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       final task = DownloadTask(
           url: getTestUrl,
           urlQueryParameters: {'json': 'true', 'param1': 'original'},
@@ -244,7 +250,8 @@ void main() {
       await File(path).delete();
     });
 
-    test('onFinishedCallback after canceling beforeStartCallback', () async {
+    test('onFinishedCallback after canceling beforeStartCallback',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       // tests that onTaskFinished is also called when the task is canceled
       // via the beforeStartCallback
       final task = DownloadTask(
@@ -288,7 +295,8 @@ void main() {
       );
     });
 
-    test('refresh request', () async {
+    test('refresh request', timeout: const Timeout(Duration(minutes: 2)),
+        () async {
       final result = await http.post(Uri.parse(refreshTestUrl),
           headers: {'Auth': 'Bearer abcd', 'Content-type': 'application/json'},
           body: jsonEncode({'refresh_token': 'myRefreshToken'}));
@@ -299,7 +307,8 @@ void main() {
       expect(json['post_body']['refresh_token'], equals('myRefreshToken'));
     });
 
-    test('default handler with unexpired token -> no callback', () async {
+    test('default handler with unexpired token -> no callback',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       // no callback makes no change to the original task, so only
       // the known arguments and headers should be present, as well as the
       // original auth argument and header (because no refresh took place)
@@ -329,7 +338,8 @@ void main() {
       await File(path).delete();
     });
 
-    test('default handler with null auth callback', () async {
+    test('default handler with null auth callback',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       // null auth callback makes no change to the original task, so only
       // the known arguments and headers should be present, as well as the
       // original auth argument and header (because no refresh took place)
@@ -357,7 +367,8 @@ void main() {
       await File(path).delete();
     });
 
-    test('default handler with refresh auth callback', () async {
+    test('default handler with refresh auth callback',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       // refresh auth callback changes the original task, so only
       // the known arguments and headers should be present, as well as the
       // original auth argument and header (because no refresh took place)

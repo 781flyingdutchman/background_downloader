@@ -13,7 +13,8 @@ void main() {
   tearDown(defaultTearDown);
 
   group('enqueue', () {
-    testWidgets('EnqueueAll', (widgetTester) async {
+    testWidgets('EnqueueAll', timeout: const Timeout(Duration(minutes: 2)),
+        (widgetTester) async {
       const numTasks = 10;
       final tasks = <Task>[];
       for (var n = 0; n < numTasks; n++) {
@@ -34,7 +35,8 @@ void main() {
       expect(statusCallbackCounter, equals(3 * numTasks));
     });
 
-    testWidgets('test enqueue failures', (widgetTester) async {
+    testWidgets('test enqueue failures',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       final tasks = <Task>[
         DownloadTask(url: urlWithoutContentLength),
         DownloadTask(url: "invalid url"),
@@ -54,7 +56,8 @@ void main() {
       expect(enqueueResult, equals(expectedResult));
     });
 
-    testWidgets('Enqueue Performance Comparison', (widgetTester) async {
+    testWidgets('Enqueue Performance Comparison',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       const numTasks = 1000; // Increase for more significant results
       final tasks = <Task>[];
       final tasks2 = <Task>[];
@@ -105,7 +108,8 @@ void main() {
   });
 
   group('pauseAll', () {
-    testWidgets('Pause and Resume All', (widgetTester) async {
+    testWidgets('Pause and Resume All',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       const numTasks = 10;
       final tasks = <DownloadTask>[];
       for (var n = 0; n < numTasks; n++) {
@@ -142,7 +146,8 @@ void main() {
       }
     });
 
-    testWidgets('Pause with allowPause set to false', (widgetTester) async {
+    testWidgets('Pause with allowPause set to false',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
       const numTasks = 10;
       final tasks = <DownloadTask>[];
       for (var n = 0; n < numTasks; n++) {

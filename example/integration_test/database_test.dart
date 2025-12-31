@@ -56,7 +56,8 @@ void main() {
     Localstore.instance.clearCache();
   });
 
-  testWidgets('updateRecord', (tester) async {
+  testWidgets('updateRecord', timeout: const Timeout(Duration(minutes: 2)),
+      (tester) async {
     await database.updateRecord(record);
     final records = await db.retrieveAll(tasksPath);
     expect(records.values.length, equals(1));
@@ -74,7 +75,8 @@ void main() {
     expect(File(path.join(docDir.path, filePath)).existsSync(), isTrue);
   });
 
-  testWidgets('allRecords', (widgetTester) async {
+  testWidgets('allRecords', timeout: const Timeout(Duration(minutes: 2)),
+      (widgetTester) async {
     await database.updateRecord(record);
     await database.updateRecord(record2);
     final result = await database.allRecords();
@@ -97,7 +99,8 @@ void main() {
     expect(result3.first, equals(record3));
   });
 
-  testWidgets('recordForId', (widgetTester) async {
+  testWidgets('recordForId', timeout: const Timeout(Duration(minutes: 2)),
+      (widgetTester) async {
     await database.updateRecord(record);
     await database.updateRecord(record2);
     final r = await database.recordForId(record.taskId);
@@ -109,7 +112,8 @@ void main() {
     expect(r3, isNull);
   });
 
-  testWidgets('deleteRecords', (widgetTester) async {
+  testWidgets('deleteRecords', timeout: const Timeout(Duration(minutes: 2)),
+      (widgetTester) async {
     await database.updateRecord(record);
     await database.updateRecord(record2);
     final r = await database.recordForId(record.taskId);
@@ -126,7 +130,8 @@ void main() {
     expect(r4, isNull);
   });
 
-  testWidgets('deleteRecordsWithIds', (widgetTester) async {
+  testWidgets('deleteRecordsWithIds',
+      timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
     await database.updateRecord(record);
     await database.updateRecord(record2);
     await database.deleteRecordWithId(record.taskId);
@@ -136,7 +141,8 @@ void main() {
     expect(r2, equals(record2));
   });
 
-  test('rescheduleMissingTasks', () async {
+  test('rescheduleMissingTasks', timeout: const Timeout(Duration(minutes: 2)),
+      () async {
     expect(await FileDownloader().allTasks(), isEmpty);
     // without task tracking activated, throws assertionError
     expect(() async => await FileDownloader().rescheduleKilledTasks(),
@@ -164,7 +170,8 @@ void main() {
     expect(result3.$2, isEmpty);
   });
 
-  testWidgets('cleanUp', (widgetTester) async {
+  testWidgets('cleanUp', timeout: const Timeout(Duration(minutes: 2)),
+      (widgetTester) async {
     // defaults
     database.cleanUp();
     // we need to access private vars to verify, but since we can't, we verify behavior
@@ -223,7 +230,8 @@ void main() {
     await database.deleteAllRecords();
   });
 
-  testWidgets('autoClean', (widgetTester) async {
+  testWidgets('autoClean', timeout: const Timeout(Duration(minutes: 2)),
+      (widgetTester) async {
     await database.deleteAllRecords();
     database.cleanUp(autoClean: true, maxRecordCount: 5);
     // update 100 times

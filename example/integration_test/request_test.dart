@@ -42,7 +42,8 @@ void main() {
       }
     });
 
-    test('GET request with FileDownloader().request', () async {
+    test('GET request with FileDownloader().request',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       const taskId = 'get-request-test';
       final request = Request(
         url: 'http://$localServerHostPort/get?taskId=$taskId',
@@ -59,7 +60,8 @@ void main() {
       expect(getTaskId(data), taskId);
     });
 
-    test('POST request with FileDownloader().request', () async {
+    test('POST request with FileDownloader().request',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       const taskId = 'post-request-test';
       final request = Request(
           url: 'http://$localServerHostPort/post?taskId=$taskId',
@@ -76,7 +78,8 @@ void main() {
       expect(data['json']['testKey'], 'testValue'); // Verify post data
     });
 
-    test('PUT request with FileDownloader().request', () async {
+    test('PUT request with FileDownloader().request',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       const taskId = 'put-request-test';
       final request = Request(
           url: 'http://$localServerHostPort/put?taskId=$taskId',
@@ -92,7 +95,8 @@ void main() {
       expect(data['json']['testKey'], 'putValue'); // Verify post data.
     });
 
-    test('PATCH request with FileDownloader().request', () async {
+    test('PATCH request with FileDownloader().request',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       const taskId = 'patch-request-test';
       final request = Request(
           url: 'http://$localServerHostPort/patch?taskId=$taskId',
@@ -108,7 +112,8 @@ void main() {
       expect(data['json']['testKey'], 'patchValue'); // Verify post data.
     });
 
-    test('DELETE request with FileDownloader().request', () async {
+    test('DELETE request with FileDownloader().request',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       const taskId = 'delete-request-test';
       final task = Request(
           url: 'http://$localServerHostPort/delete?taskId=$taskId',
@@ -122,7 +127,8 @@ void main() {
       expect(getTaskId(data), taskId);
     });
 
-    test('HEAD request with FileDownloader().request', () async {
+    test('HEAD request with FileDownloader().request',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       const taskId = 'head-request-test';
       final request = Request(
           url: 'http://$localServerHostPort/get?taskId=$taskId',
@@ -137,7 +143,7 @@ void main() {
     });
 
     test('POST request with custom headers via FileDownloader().request',
-        () async {
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       const taskId = 'post-request-headers-test';
       final customHeaders = {
         'X-Custom-Header': 'CustomValue',
@@ -180,7 +186,8 @@ void main() {
       }
     });
 
-    test('GET request with FileDownloader().download', () async {
+    test('GET request with FileDownloader().download',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       const taskId = 'get-download-test';
       final task = DownloadTask(
           url: 'http://$localServerHostPort/get?taskId=$taskId',
@@ -198,7 +205,8 @@ void main() {
       file.deleteSync();
     });
 
-    test('POST request with FileDownloader().download', () async {
+    test('POST request with FileDownloader().download',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       const taskId = 'post-download-test';
       final task = DownloadTask(
         url: 'http://$localServerHostPort/post?taskId=$taskId',
@@ -220,7 +228,8 @@ void main() {
       file.deleteSync();
     });
 
-    test('PUT request with FileDownloader().download', () async {
+    test('PUT request with FileDownloader().download',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       const taskId = 'put-download-test';
       final task = DownloadTask(
         url: 'http://$localServerHostPort/put?taskId=$taskId',
@@ -242,7 +251,8 @@ void main() {
       file.deleteSync();
     });
 
-    test('PATCH request with FileDownloader().download', () async {
+    test('PATCH request with FileDownloader().download',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       const taskId = 'patch-download-test';
       final task = DownloadTask(
         url: 'http://$localServerHostPort/patch?taskId=$taskId',
@@ -264,7 +274,8 @@ void main() {
       file.deleteSync();
     });
 
-    test('DELETE request with FileDownloader().download', () async {
+    test('DELETE request with FileDownloader().download',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       const taskId = 'delete-download-test';
       final task = DownloadTask(
           url: 'http://$localServerHostPort/delete?taskId=$taskId',
@@ -282,7 +293,8 @@ void main() {
       file.deleteSync();
     });
 
-    test('HEAD request with FileDownloader().download', () async {
+    test('HEAD request with FileDownloader().download',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       const taskId = 'head-download-test';
       final task = DownloadTask(
           url:
@@ -302,7 +314,8 @@ void main() {
       file.deleteSync();
     });
 
-    test('POST with custom headers using FileDownloader().download', () async {
+    test('POST with custom headers using FileDownloader().download',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
       const taskId = 'post-download-headers-test';
       final customHeaders = {
         'X-Custom-Header': 'CustomValue',

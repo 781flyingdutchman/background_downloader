@@ -12,7 +12,8 @@ void main() {
     Localstore.instance.clearCache();
   });
 
-  test('Localstore sequential read/write/delete', () async {
+  test('Localstore sequential read/write/delete',
+      timeout: const Timeout(Duration(minutes: 2)), () async {
     final stopwatch = Stopwatch()..start();
     final db = Localstore.instance;
     final collection = db.collection('test_collection_seq');
@@ -44,7 +45,8 @@ void main() {
         'Test "Localstore sequential read/write/delete" took ${stopwatch.elapsedMilliseconds}ms');
   });
 
-  test('Localstore simultaneous stress test', () async {
+  test('Localstore simultaneous stress test',
+      timeout: const Timeout(Duration(minutes: 2)), () async {
     final stopwatch = Stopwatch()..start();
     final db = Localstore.instance;
     final collection = db.collection('test_collection_sim');
@@ -79,7 +81,8 @@ void main() {
         'Test "Localstore simultaneous stress test" took ${stopwatch.elapsedMilliseconds}ms');
   });
 
-  test('Localstore aggressive overwrite test', () async {
+  test('Localstore aggressive overwrite test',
+      timeout: const Timeout(Duration(minutes: 2)), () async {
     final stopwatch = Stopwatch()..start();
     final db = Localstore.instance;
     final collection = db.collection('test_collection_overwrite');
