@@ -260,24 +260,6 @@ open class TaskRunner(
             // remove task from persistent storage, clean up references to taskId
             // and invoke the onTaskFinishedCallback if necessary
             if (modifiedStatus.isFinalState()) {
-                if (modifiedStatus == TaskStatus.failed) {
-                    // Cancel the WorkManager job.
-                    // This is to avoid the WorkManager restarting a job that was
-                    // canceled because job constraints are violated (e.g. network unavailable)
-                    // We want to manage cancellation ourselves, so we cancel the job
-                    val workManager = WorkManager.getInstance(context)
-                    val operation = workManager.cancelAllWorkByTag("taskId=${task.taskId}")
-                    try {
-                        withContext(Dispatchers.IO) {
-                            operation.result.get()
-                        }
-                    } catch (_: Throwable) {
-                        Log.w(
-                            BDPlugin.TAG,
-                            "Could not kill task wih id ${task.taskId} in operation: $operation"
-                        )
-                    }
-                }
                 BDPlugin.prefsLock.write {
                     val tasksMap = getTaskMap(prefs)
                     tasksMap.remove(task.taskId)

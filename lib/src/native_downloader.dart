@@ -132,13 +132,8 @@ abstract base class NativeDownloader extends BaseDownloader {
               typeString, description, httpResponseCode);
         }
         if (task.group != BaseDownloader.chunkGroup) {
-          processStatusUpdate(TaskStatusUpdate(
-              task,
-              status,
-              exception,
-              responseBody,
-              null,
-              httpResponseCode > 0 ? httpResponseCode : null));
+          processStatusUpdate(
+              TaskStatusUpdate(task, status, exception, responseBody));
         } else {
           // this is a chunk task, so pass to native
           Future.delayed(const Duration(milliseconds: 100))
