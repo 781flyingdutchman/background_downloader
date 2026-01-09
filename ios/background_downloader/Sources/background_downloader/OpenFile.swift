@@ -30,7 +30,7 @@ func doOpenFile(filePath: String, mimeType: String?) -> Bool {
             }
         }
     }
-    guard let view = UIApplication.shared.delegate?.window??.rootViewController?.view
+    guard let view = getRootViewController()?.view
     else {
         return false
     }
@@ -44,6 +44,6 @@ func doOpenFile(filePath: String, mimeType: String?) -> Bool {
 class DocumentInteractionControllerDelegate: NSObject, UIDocumentInteractionControllerDelegate {
     
     func documentInteractionControllerViewControllerForPreview(_ controller: UIDocumentInteractionController) -> UIViewController {
-        return (UIApplication.shared.delegate?.window??.rootViewController)!
+        return getRootViewController()!
     }
 }

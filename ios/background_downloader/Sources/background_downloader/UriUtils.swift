@@ -86,7 +86,7 @@ public class UriUtilsMethodCallHelper: NSObject,
         }
         
         // Present the document picker
-        if let rootViewController = UIApplication.shared.keyWindow?.rootViewController {
+        if let rootViewController = getRootViewController() {
             rootViewController.present(documentPicker, animated: true, completion: nil)
         } else {
             completeFlutterResult(FlutterError(code: "NO_ROOT_VIEW_CONTROLLER", message: "Could not find root view controller", details: nil))
@@ -168,7 +168,7 @@ public class UriUtilsMethodCallHelper: NSObject,
         let pickerViewController = PHPickerViewController(configuration: configuration)
         pickerViewController.delegate = self
         
-        if let rootViewController = UIApplication.shared.keyWindow?.rootViewController {
+        if let rootViewController = getRootViewController() {
             rootViewController.present(pickerViewController, animated: true, completion: nil)
         } else {
             completeFlutterResult(FlutterError(code: "NO_ROOT_VIEW_CONTROLLER", message: "Could not find root view controller", details: nil))

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import UIKit
 import UniformTypeIdentifiers
 import os.log
 
@@ -124,3 +125,18 @@ func getMimeType(fromFilename filename: String) -> String {
     return "application/octet-stream"
 }
 
+/// Returns the root view controller of the app, or nil if it cannot be found
+/// Handles both the old AppDelegate (window) and the new SceneDelegate (connectedScenes) ways of getting the window
+func getRootViewController() -> UIViewController? {
+    if #available(iOS 13, *) {
+        let window = UIApplication.shared.connectedScenes
+            .filter { $0.activationState == .foregroundActive }
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first { $0.isKeyWindow }
+        if let root = window?.rootViewController {
+            return root
+        }
+    }
+    return UIApplication.shared.keyWindow?.rootViewController ?? UIApplication.shared.delegate?.window??.rootViewController
+}
