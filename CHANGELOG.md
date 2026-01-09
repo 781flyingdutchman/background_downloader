@@ -1,3 +1,6 @@
+## 9.5.1
+* [iOS] Support for UISceneDelegate in iOS 13.0 and above 
+
 ## 9.5.0
 
 * Introduces Android User Initiated Data Transfer (UIDT), triggered when task priority is set to 0 (max priority) on Android 14+, provided a notification is also configured. Explanation of Android execution options:
