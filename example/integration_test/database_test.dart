@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
-import 'package:background_downloader/src/localstore/localstore.dart';
 import 'test_utils.dart';
 
 const def = 'default';
@@ -48,12 +47,12 @@ void main() {
     });
     WidgetsFlutterBinding.ensureInitialized();
     await deleteAllTaskDataFromFileSystem();
-    Localstore.instance.clearCache();
+    await db.clearCache();
   });
 
   tearDown(() async {
     await deleteAllTaskDataFromFileSystem();
-    Localstore.instance.clearCache();
+    await db.clearCache();
   });
 
   testWidgets('updateRecord', timeout: const Timeout(Duration(minutes: 2)),

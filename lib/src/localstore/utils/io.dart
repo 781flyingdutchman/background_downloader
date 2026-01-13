@@ -128,9 +128,10 @@ final class Utils implements UtilsImpl {
   }
 
   Future<Map<String, dynamic>?> _getAll(List<FileSystemEntity> entries) async {
+    _log.finest('Getting all entries from ${entries.length} files');
     final items = <String, dynamic>{};
     final dbDir = await Localstore.instance.databaseDirectory;
-    await Future.wait(entries.map((e) async {
+    for (final e in entries) {
       final relativePath = p.relative(e.path, from: dbDir.path);
       final path = Platform.isWindows
           ? relativePath.replaceAll(p.separator, '/')
@@ -150,9 +151,11 @@ final class Utils implements UtilsImpl {
           }
         } on PathNotFoundException {
           // ignore if not found
+        } catch (e) {
+          _log.warning('Error reading file $path: $e');
         }
       });
-    }));
+    }
 
     if (items.isEmpty) return null;
     return items;
