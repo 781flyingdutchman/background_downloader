@@ -534,6 +534,7 @@ abstract base class BaseDownloader {
     trackedGroups.add(group);
     if (markDownloadedComplete) {
       final records = await database.allRecords(group: group);
+      var startTime = DateTime.now();
       for (var record in records.where((record) =>
           record.task is DownloadTask &&
           (!Platform.isAndroid || record.task is! UriDownloadTask) &&
@@ -545,6 +546,10 @@ abstract base class BaseDownloader {
           final updatedRecord = record.copyWith(
               status: TaskStatus.complete, progress: progressComplete);
           await database.updateRecord(updatedRecord);
+        }
+        if (DateTime.now().difference(startTime).inMilliseconds > 10) {
+          await Future.delayed(const Duration(milliseconds: 50));
+          startTime = DateTime.now();
         }
       }
     }

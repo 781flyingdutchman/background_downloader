@@ -656,12 +656,17 @@ interface class FileDownloader {
         .map((record) => record.task));
     final successfullyEnqueued = <Task>[];
     final failedToEnqueue = <Task>[];
+    var startTime = DateTime.now();
     for (final task in missingTasks) {
       await database.deleteRecordWithId(task.taskId);
       if (await FileDownloader().enqueue(task)) {
         successfullyEnqueued.add(task);
       } else {
         failedToEnqueue.add(task);
+      }
+      if (DateTime.now().difference(startTime).inMilliseconds > 10) {
+        await Future.delayed(const Duration(milliseconds: 50));
+        startTime = DateTime.now();
       }
     }
     return (successfullyEnqueued, failedToEnqueue);
