@@ -312,43 +312,38 @@ void _isolateEntry(SendPort mainSendPort) {
 }
 
 Future<dynamic> _dispatch(_LocalStorePersistentStorageExecutor executor,
-    _StorageCommand method, List<dynamic> args) {
-  switch (method) {
-    case _StorageCommand.getStoredDatabaseVersion:
-      return executor.storedDatabaseVersion
-          .then((r) => [r.$1, r.$2]); // tuple to list
-    case _StorageCommand.storeTaskRecord:
-      return executor.storeTaskRecord(args[0] as Map<String, dynamic>);
-    case _StorageCommand.retrieveTaskRecord:
-      return executor.retrieveTaskRecord(args[0] as String);
-    case _StorageCommand.retrieveAllTaskRecords:
-      return executor.retrieveAllTaskRecords();
-    case _StorageCommand.removeTaskRecord:
-      return executor.removeTaskRecord(args[0] as String?);
-    case _StorageCommand.storePausedTask:
-      return executor.storePausedTask(args[0] as Map<String, dynamic>);
-    case _StorageCommand.retrievePausedTask:
-      return executor.retrievePausedTask(args[0] as String);
-    case _StorageCommand.retrieveAllPausedTasks:
-      return executor.retrieveAllPausedTasks();
-    case _StorageCommand.removePausedTask:
-      return executor.removePausedTask(args[0] as String?);
-    case _StorageCommand.storeResumeData:
-      return executor.storeResumeData(args[0] as Map<String, dynamic>);
-    case _StorageCommand.retrieveResumeData:
-      return executor.retrieveResumeData(args[0] as String);
-    case _StorageCommand.retrieveAllResumeData:
-      return executor.retrieveAllResumeData();
-    case _StorageCommand.removeResumeData:
-      return executor.removeResumeData(args[0] as String?);
-    case _StorageCommand.retrieveAll:
-      return executor.retrieveAll(args[0] as String);
-    case _StorageCommand.clearCache:
-      return executor.clearCache();
-    case _StorageCommand.initialize:
-      throw StateError('Initialize should be handled in isolate entry');
-  }
-}
+        _StorageCommand method, List<dynamic> args) =>
+    switch (method) {
+      _StorageCommand.getStoredDatabaseVersion => executor.storedDatabaseVersion
+          .then((r) => [r.$1, r.$2]), // tuple to list
+      _StorageCommand.storeTaskRecord =>
+        executor.storeTaskRecord(args[0] as Map<String, dynamic>),
+      _StorageCommand.retrieveTaskRecord =>
+        executor.retrieveTaskRecord(args[0] as String),
+      _StorageCommand.retrieveAllTaskRecords =>
+        executor.retrieveAllTaskRecords(),
+      _StorageCommand.removeTaskRecord =>
+        executor.removeTaskRecord(args[0] as String?),
+      _StorageCommand.storePausedTask =>
+        executor.storePausedTask(args[0] as Map<String, dynamic>),
+      _StorageCommand.retrievePausedTask =>
+        executor.retrievePausedTask(args[0] as String),
+      _StorageCommand.retrieveAllPausedTasks =>
+        executor.retrieveAllPausedTasks(),
+      _StorageCommand.removePausedTask =>
+        executor.removePausedTask(args[0] as String?),
+      _StorageCommand.storeResumeData =>
+        executor.storeResumeData(args[0] as Map<String, dynamic>),
+      _StorageCommand.retrieveResumeData =>
+        executor.retrieveResumeData(args[0] as String),
+      _StorageCommand.retrieveAllResumeData => executor.retrieveAllResumeData(),
+      _StorageCommand.removeResumeData =>
+        executor.removeResumeData(args[0] as String?),
+      _StorageCommand.retrieveAll => executor.retrieveAll(args[0] as String),
+      _StorageCommand.clearCache => executor.clearCache(),
+      _StorageCommand.initialize =>
+        throw StateError('Initialize should be handled in isolate entry')
+    };
 
 /// The executor that runs in the isolate and does the actual work
 ///
