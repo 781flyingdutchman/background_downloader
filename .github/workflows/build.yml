@@ -67,7 +67,6 @@ jobs:
           flutter-version: ${{ matrix.sdk == 'min' && env.FLUTTER_MIN_SDK || '' }}
           channel: ${{ matrix.sdk == 'min' && 'stable' || matrix.sdk }}
       - run: flutter pub get
-      - run: dart run build_runner build --delete-conflicting-outputs
       - name: Build example APK
         working-directory: example
         run: flutter build apk
