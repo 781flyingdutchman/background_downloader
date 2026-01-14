@@ -1,3 +1,7 @@
+## 9.5.2
+
+* Moves LocalStorePersistentStorage to isolate model to off-load i/o operations, and unwinds Future.wait to loop
+
 ## 9.5.1
 * [iOS] Support for UISceneDelegate in iOS 13.0 and above 
 
