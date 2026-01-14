@@ -82,6 +82,25 @@ abstract interface class PersistentStorage {
   Future<void> initialize();
 }
 
+enum _StorageCommand {
+  getStoredDatabaseVersion,
+  initialize,
+  storeTaskRecord,
+  retrieveTaskRecord,
+  retrieveAllTaskRecords,
+  removeTaskRecord,
+  storePausedTask,
+  retrievePausedTask,
+  retrieveAllPausedTasks,
+  removePausedTask,
+  storeResumeData,
+  retrieveResumeData,
+  retrieveAllResumeData,
+  removeResumeData,
+  retrieveAll,
+  clearCache
+}
+
 /// Default implementation of [PersistentStorage] using Localstore package
 ///
 /// Runs the actual [Localstore] based storage on a background isolate to
@@ -104,8 +123,8 @@ class LocalStorePersistentStorage implements PersistentStorage {
 
   @override
   Future<(String, int)> get storedDatabaseVersion async {
-    final result =
-        await _sendRequest<List<dynamic>>('getStoredDatabaseVersion', []);
+    final result = await _sendRequest<List<dynamic>>(
+        _StorageCommand.getStoredDatabaseVersion, []);
     return (result[0] as String, result[1] as int);
   }
 
@@ -135,7 +154,8 @@ class LocalStorePersistentStorage implements PersistentStorage {
       // pass the RootIsolateToken to allow background isolate to use platform channels
       // for path_provider
       final rootIsolateToken = RootIsolateToken.instance;
-      await _sendRequest('initialize', [rootIsolateToken]);
+      await _sendRequest(
+          _StorageCommand.initialize, [rootIsolateToken]);
     } catch (e) {
       _initializationFuture = null; // allow retry
       rethrow;
@@ -159,7 +179,7 @@ class LocalStorePersistentStorage implements PersistentStorage {
     }
   }
 
-  Future<T> _sendRequest<T>(String method, List<dynamic> args) async {
+  Future<T> _sendRequest<T>(_StorageCommand method, List<dynamic> args) async {
     if (_sendPort == null) {
       await initialize();
     }
@@ -172,76 +192,77 @@ class LocalStorePersistentStorage implements PersistentStorage {
 
   @override
   Future<void> storeTaskRecord(TaskRecord record) =>
-      _sendRequest('storeTaskRecord', [record.toJson()]);
+      _sendRequest(_StorageCommand.storeTaskRecord, [record.toJson()]);
 
   @override
   Future<TaskRecord?> retrieveTaskRecord(String taskId) async {
-    final result =
-        await _sendRequest<TaskRecord?>('retrieveTaskRecord', [taskId]);
+    final result = await _sendRequest<TaskRecord?>(
+        _StorageCommand.retrieveTaskRecord, [taskId]);
     return result;
   }
 
   @override
   Future<List<TaskRecord>> retrieveAllTaskRecords() async {
-    final result =
-        await _sendRequest<List<dynamic>>('retrieveAllTaskRecords', []);
+    final result = await _sendRequest<List<dynamic>>(
+        _StorageCommand.retrieveAllTaskRecords, []);
     return result.cast<TaskRecord>();
   }
 
   @override
   Future<void> removeTaskRecord(String? taskId) =>
-      _sendRequest('removeTaskRecord', [taskId]);
+      _sendRequest(_StorageCommand.removeTaskRecord, [taskId]);
 
   @override
   Future<void> storePausedTask(Task task) =>
-      _sendRequest('storePausedTask', [task.toJson()]);
+      _sendRequest(_StorageCommand.storePausedTask, [task.toJson()]);
 
   @override
   Future<Task?> retrievePausedTask(String taskId) async {
-    final result = await _sendRequest<Task?>('retrievePausedTask', [taskId]);
+    final result = await _sendRequest<Task?>(
+        _StorageCommand.retrievePausedTask, [taskId]);
     return result;
   }
 
   @override
   Future<List<Task>> retrieveAllPausedTasks() async {
-    final result =
-        await _sendRequest<List<dynamic>>('retrieveAllPausedTasks', []);
+    final result = await _sendRequest<List<dynamic>>(
+        _StorageCommand.retrieveAllPausedTasks, []);
     return result.cast<Task>();
   }
 
   @override
   Future<void> removePausedTask(String? taskId) =>
-      _sendRequest('removePausedTask', [taskId]);
+      _sendRequest(_StorageCommand.removePausedTask, [taskId]);
 
   @override
   Future<void> storeResumeData(ResumeData resumeData) =>
-      _sendRequest('storeResumeData', [resumeData.toJson()]);
+      _sendRequest(_StorageCommand.storeResumeData, [resumeData.toJson()]);
 
   @override
   Future<ResumeData?> retrieveResumeData(String taskId) async {
-    final result =
-        await _sendRequest<ResumeData?>('retrieveResumeData', [taskId]);
+    final result = await _sendRequest<ResumeData?>(
+        _StorageCommand.retrieveResumeData, [taskId]);
     return result;
   }
 
   @override
   Future<List<ResumeData>> retrieveAllResumeData() async {
-    final result =
-        await _sendRequest<List<dynamic>>('retrieveAllResumeData', []);
+    final result = await _sendRequest<List<dynamic>>(
+        _StorageCommand.retrieveAllResumeData, []);
     return result.cast<ResumeData>();
   }
 
   @override
   Future<void> removeResumeData(String? taskId) =>
-      _sendRequest('removeResumeData', [taskId]);
+      _sendRequest(_StorageCommand.removeResumeData, [taskId]);
 
   Future<Map<String, dynamic>> retrieveAll(String collection) async {
-    final result =
-        await _sendRequest<Map<String, dynamic>>('retrieveAll', [collection]);
+    final result = await _sendRequest<Map<String, dynamic>>(
+        _StorageCommand.retrieveAll, [collection]);
     return result;
   }
 
-  Future<void> clearCache() => _sendRequest('clearCache', []);
+  Future<void> clearCache() => _sendRequest(_StorageCommand.clearCache, []);
 }
 
 // Entry point for the isolate
@@ -257,12 +278,12 @@ void _isolateEntry(SendPort mainSendPort) {
       responseSendPort = message;
     } else if (message is List) {
       final requestId = message[0] as int;
-      final method = message[1] as String;
+      final method = message[1] as _StorageCommand;
       final args = message[2] as List<dynamic>;
 
       try {
         dynamic result;
-        if (method == 'initialize') {
+        if (method == _StorageCommand.initialize) {
           final token = args[0] as RootIsolateToken?;
           if (token != null) {
             BackgroundIsolateBinaryMessenger.ensureInitialized(token);
@@ -291,41 +312,41 @@ void _isolateEntry(SendPort mainSendPort) {
 }
 
 Future<dynamic> _dispatch(_LocalStorePersistentStorageExecutor executor,
-    String method, List<dynamic> args) {
+    _StorageCommand method, List<dynamic> args) {
   switch (method) {
-    case 'getStoredDatabaseVersion':
+    case _StorageCommand.getStoredDatabaseVersion:
       return executor.storedDatabaseVersion
           .then((r) => [r.$1, r.$2]); // tuple to list
-    case 'storeTaskRecord':
+    case _StorageCommand.storeTaskRecord:
       return executor.storeTaskRecord(args[0] as Map<String, dynamic>);
-    case 'retrieveTaskRecord':
+    case _StorageCommand.retrieveTaskRecord:
       return executor.retrieveTaskRecord(args[0] as String);
-    case 'retrieveAllTaskRecords':
+    case _StorageCommand.retrieveAllTaskRecords:
       return executor.retrieveAllTaskRecords();
-    case 'removeTaskRecord':
+    case _StorageCommand.removeTaskRecord:
       return executor.removeTaskRecord(args[0] as String?);
-    case 'storePausedTask':
+    case _StorageCommand.storePausedTask:
       return executor.storePausedTask(args[0] as Map<String, dynamic>);
-    case 'retrievePausedTask':
+    case _StorageCommand.retrievePausedTask:
       return executor.retrievePausedTask(args[0] as String);
-    case 'retrieveAllPausedTasks':
+    case _StorageCommand.retrieveAllPausedTasks:
       return executor.retrieveAllPausedTasks();
-    case 'removePausedTask':
+    case _StorageCommand.removePausedTask:
       return executor.removePausedTask(args[0] as String?);
-    case 'storeResumeData':
+    case _StorageCommand.storeResumeData:
       return executor.storeResumeData(args[0] as Map<String, dynamic>);
-    case 'retrieveResumeData':
+    case _StorageCommand.retrieveResumeData:
       return executor.retrieveResumeData(args[0] as String);
-    case 'retrieveAllResumeData':
+    case _StorageCommand.retrieveAllResumeData:
       return executor.retrieveAllResumeData();
-    case 'removeResumeData':
+    case _StorageCommand.removeResumeData:
       return executor.removeResumeData(args[0] as String?);
-    case 'retrieveAll':
+    case _StorageCommand.retrieveAll:
       return executor.retrieveAll(args[0] as String);
-    case 'clearCache':
+    case _StorageCommand.clearCache:
       return executor.clearCache();
-    default:
-      throw ArgumentError('Unknown method: $method');
+    case _StorageCommand.initialize:
+      throw StateError('Initialize should be handled in isolate entry');
   }
 }
 
