@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 
+import 'package:flutter/services.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
@@ -80,9 +82,274 @@ abstract interface class PersistentStorage {
   Future<void> initialize();
 }
 
+enum _StorageCommand {
+  getStoredDatabaseVersion,
+  initialize,
+  storeTaskRecord,
+  retrieveTaskRecord,
+  retrieveAllTaskRecords,
+  removeTaskRecord,
+  storePausedTask,
+  retrievePausedTask,
+  retrieveAllPausedTasks,
+  removePausedTask,
+  storeResumeData,
+  retrieveResumeData,
+  retrieveAllResumeData,
+  removeResumeData,
+  retrieveAll,
+  clearCache
+}
+
 /// Default implementation of [PersistentStorage] using Localstore package
+///
+/// Runs the actual [Localstore] based storage on a background isolate to
+/// prevent jank on the main thread
 class LocalStorePersistentStorage implements PersistentStorage {
+  static const taskRecordsPath =
+      _LocalStorePersistentStorageExecutor.taskRecordsPath;
+  static const resumeDataPath =
+      _LocalStorePersistentStorageExecutor.resumeDataPath;
+  static const pausedTasksPath =
+      _LocalStorePersistentStorageExecutor.pausedTasksPath;
+
   final log = Logger('LocalStorePersistentStorage');
+  SendPort? _sendPort;
+  final _responseCompleters = <int, Completer<dynamic>>{};
+  int _nextRequestId = 0;
+
+  @override
+  (String, int) get currentDatabaseVersion => ('Localstore', 1);
+
+  @override
+  Future<(String, int)> get storedDatabaseVersion async {
+    final result = await _sendRequest<List<dynamic>>(
+        _StorageCommand.getStoredDatabaseVersion, []);
+    return (result[0] as String, result[1] as int);
+  }
+
+  Future<void>? _initializationFuture;
+
+  @override
+  Future<void> initialize() {
+    if (_sendPort != null) {
+      return Future.value();
+    }
+    _initializationFuture ??= _doInitialize();
+    return _initializationFuture!;
+  }
+
+  Future<void> _doInitialize() async {
+    try {
+      final receivePort = ReceivePort();
+      await Isolate.spawn(_isolateEntry, receivePort.sendPort);
+      _sendPort = await receivePort.first as SendPort;
+
+      // Listen for responses
+      final responsePort = ReceivePort();
+      _sendPort!.send(responsePort.sendPort); // Send response port to isolate
+      responsePort.listen(_handleResponse);
+
+      // Initialize the executor in the isolate
+      // pass the RootIsolateToken to allow background isolate to use platform channels
+      // for path_provider
+      final rootIsolateToken = RootIsolateToken.instance;
+      await _sendRequest(
+          _StorageCommand.initialize, [rootIsolateToken]);
+    } catch (e) {
+      _initializationFuture = null; // allow retry
+      rethrow;
+    }
+  }
+
+  void _handleResponse(dynamic message) {
+    if (message is List && message.length >= 2) {
+      final requestId = message[0] as int;
+      final response = message[1];
+      final error = message.length > 2 ? message[2] : null;
+
+      final completer = _responseCompleters.remove(requestId);
+      if (completer != null) {
+        if (error != null) {
+          completer.completeError(error);
+        } else {
+          completer.complete(response);
+        }
+      }
+    }
+  }
+
+  Future<T> _sendRequest<T>(_StorageCommand method, List<dynamic> args) async {
+    if (_sendPort == null) {
+      await initialize();
+    }
+    final completer = Completer<T>();
+    final requestId = _nextRequestId++;
+    _responseCompleters[requestId] = completer;
+    _sendPort!.send([requestId, method, args]);
+    return completer.future;
+  }
+
+  @override
+  Future<void> storeTaskRecord(TaskRecord record) =>
+      _sendRequest(_StorageCommand.storeTaskRecord, [record.toJson()]);
+
+  @override
+  Future<TaskRecord?> retrieveTaskRecord(String taskId) async {
+    final result = await _sendRequest<TaskRecord?>(
+        _StorageCommand.retrieveTaskRecord, [taskId]);
+    return result;
+  }
+
+  @override
+  Future<List<TaskRecord>> retrieveAllTaskRecords() async {
+    final result = await _sendRequest<List<dynamic>>(
+        _StorageCommand.retrieveAllTaskRecords, []);
+    return result.cast<TaskRecord>();
+  }
+
+  @override
+  Future<void> removeTaskRecord(String? taskId) =>
+      _sendRequest(_StorageCommand.removeTaskRecord, [taskId]);
+
+  @override
+  Future<void> storePausedTask(Task task) =>
+      _sendRequest(_StorageCommand.storePausedTask, [task.toJson()]);
+
+  @override
+  Future<Task?> retrievePausedTask(String taskId) async {
+    final result = await _sendRequest<Task?>(
+        _StorageCommand.retrievePausedTask, [taskId]);
+    return result;
+  }
+
+  @override
+  Future<List<Task>> retrieveAllPausedTasks() async {
+    final result = await _sendRequest<List<dynamic>>(
+        _StorageCommand.retrieveAllPausedTasks, []);
+    return result.cast<Task>();
+  }
+
+  @override
+  Future<void> removePausedTask(String? taskId) =>
+      _sendRequest(_StorageCommand.removePausedTask, [taskId]);
+
+  @override
+  Future<void> storeResumeData(ResumeData resumeData) =>
+      _sendRequest(_StorageCommand.storeResumeData, [resumeData.toJson()]);
+
+  @override
+  Future<ResumeData?> retrieveResumeData(String taskId) async {
+    final result = await _sendRequest<ResumeData?>(
+        _StorageCommand.retrieveResumeData, [taskId]);
+    return result;
+  }
+
+  @override
+  Future<List<ResumeData>> retrieveAllResumeData() async {
+    final result = await _sendRequest<List<dynamic>>(
+        _StorageCommand.retrieveAllResumeData, []);
+    return result.cast<ResumeData>();
+  }
+
+  @override
+  Future<void> removeResumeData(String? taskId) =>
+      _sendRequest(_StorageCommand.removeResumeData, [taskId]);
+
+  Future<Map<String, dynamic>> retrieveAll(String collection) async {
+    final result = await _sendRequest<Map<String, dynamic>>(
+        _StorageCommand.retrieveAll, [collection]);
+    return result;
+  }
+
+  Future<void> clearCache() => _sendRequest(_StorageCommand.clearCache, []);
+}
+
+// Entry point for the isolate
+void _isolateEntry(SendPort mainSendPort) {
+  final receivePort = ReceivePort();
+  mainSendPort.send(receivePort.sendPort);
+
+  SendPort? responseSendPort;
+  _LocalStorePersistentStorageExecutor? executor;
+
+  receivePort.listen((message) async {
+    if (message is SendPort) {
+      responseSendPort = message;
+    } else if (message is List) {
+      final requestId = message[0] as int;
+      final method = message[1] as _StorageCommand;
+      final args = message[2] as List<dynamic>;
+
+      try {
+        dynamic result;
+        if (method == _StorageCommand.initialize) {
+          final token = args[0] as RootIsolateToken?;
+          if (token != null) {
+            BackgroundIsolateBinaryMessenger.ensureInitialized(token);
+          }
+          if (token != null) {
+            BackgroundIsolateBinaryMessenger.ensureInitialized(token);
+          }
+          executor = _LocalStorePersistentStorageExecutor();
+          await executor!.initialize();
+          executor!.log.fine(
+              'Initialized isolate with dbDir ${await Localstore.instance.databaseDirectory}');
+          result = null;
+        } else {
+          // All other methods require executor to be initialized
+          if (executor == null) {
+            throw StateError('Executor not initialized');
+          }
+          result = await _dispatch(executor!, method, args);
+        }
+        responseSendPort?.send([requestId, result]);
+      } catch (e) {
+        responseSendPort?.send([requestId, null, e.toString()]);
+      }
+    }
+  });
+}
+
+Future<dynamic> _dispatch(_LocalStorePersistentStorageExecutor executor,
+        _StorageCommand method, List<dynamic> args) =>
+    switch (method) {
+      _StorageCommand.getStoredDatabaseVersion => executor.storedDatabaseVersion
+          .then((r) => [r.$1, r.$2]), // tuple to list
+      _StorageCommand.storeTaskRecord =>
+        executor.storeTaskRecord(args[0] as Map<String, dynamic>),
+      _StorageCommand.retrieveTaskRecord =>
+        executor.retrieveTaskRecord(args[0] as String),
+      _StorageCommand.retrieveAllTaskRecords =>
+        executor.retrieveAllTaskRecords(),
+      _StorageCommand.removeTaskRecord =>
+        executor.removeTaskRecord(args[0] as String?),
+      _StorageCommand.storePausedTask =>
+        executor.storePausedTask(args[0] as Map<String, dynamic>),
+      _StorageCommand.retrievePausedTask =>
+        executor.retrievePausedTask(args[0] as String),
+      _StorageCommand.retrieveAllPausedTasks =>
+        executor.retrieveAllPausedTasks(),
+      _StorageCommand.removePausedTask =>
+        executor.removePausedTask(args[0] as String?),
+      _StorageCommand.storeResumeData =>
+        executor.storeResumeData(args[0] as Map<String, dynamic>),
+      _StorageCommand.retrieveResumeData =>
+        executor.retrieveResumeData(args[0] as String),
+      _StorageCommand.retrieveAllResumeData => executor.retrieveAllResumeData(),
+      _StorageCommand.removeResumeData =>
+        executor.removeResumeData(args[0] as String?),
+      _StorageCommand.retrieveAll => executor.retrieveAll(args[0] as String),
+      _StorageCommand.clearCache => executor.clearCache(),
+      _StorageCommand.initialize =>
+        throw StateError('Initialize should be handled in isolate entry')
+    };
+
+/// The executor that runs in the isolate and does the actual work
+///
+/// This code is identical to the previous [LocalStorePersistentStorage]
+class _LocalStorePersistentStorageExecutor {
+  final log = Logger('LocalStorePersistentStorageExecutor');
   final _db = Localstore.instance;
   final _illegalPathCharacters = RegExp(r'[\\/:*?"<>|]');
 
@@ -90,6 +357,70 @@ class LocalStorePersistentStorage implements PersistentStorage {
   static const resumeDataPath = 'backgroundDownloaderResumeData';
   static const pausedTasksPath = 'backgroundDownloaderPausedTasks';
   static const metaDataCollection = 'backgroundDownloaderDatabase';
+
+  // Helper methods modified to take/return objects instead of maps where possible
+  // to perform json deserialization in the isolate
+
+  Future<void> storeTaskRecord(Map<String, dynamic> recordJson) async {
+    final taskId = recordJson['taskId'] as String;
+    await store(recordJson, taskRecordsPath, _safeId(taskId));
+  }
+
+  Future<TaskRecord?> retrieveTaskRecord(String taskId) async {
+    final json = await retrieve(taskRecordsPath, _safeId(taskId));
+    return json != null ? TaskRecord.fromJson(json) : null;
+  }
+
+  Future<List<TaskRecord>> retrieveAllTaskRecords() async {
+    final jsonMaps = await retrieveAll(taskRecordsPath);
+    return jsonMaps.values
+        .map((e) => TaskRecord.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> removeTaskRecord(String? taskId) =>
+      remove(taskRecordsPath, _safeIdOrNull(taskId));
+
+  Future<void> storePausedTask(Map<String, dynamic> taskJson) async {
+    final taskId = taskJson['taskId'] as String;
+    await store(taskJson, pausedTasksPath, _safeId(taskId));
+  }
+
+  Future<Task?> retrievePausedTask(String taskId) async {
+    final json = await retrieve(pausedTasksPath, _safeId(taskId));
+    return json != null ? Task.createFromJson(json) : null;
+  }
+
+  Future<List<Task>> retrieveAllPausedTasks() async {
+    final jsonMaps = await retrieveAll(pausedTasksPath);
+    return jsonMaps.values
+        .map((e) => Task.createFromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> removePausedTask(String? taskId) =>
+      remove(pausedTasksPath, _safeIdOrNull(taskId));
+
+  Future<void> storeResumeData(Map<String, dynamic> dataJson) async {
+    final taskMap = dataJson['task'] as Map<String, dynamic>;
+    final taskId = taskMap['taskId'] as String;
+    await store(dataJson, resumeDataPath, _safeId(taskId));
+  }
+
+  Future<ResumeData?> retrieveResumeData(String taskId) async {
+    final json = await retrieve(resumeDataPath, _safeId(taskId));
+    return json != null ? ResumeData.fromJson(json) : null;
+  }
+
+  Future<List<ResumeData>> retrieveAllResumeData() async {
+    final jsonMaps = await retrieveAll(resumeDataPath);
+    return jsonMaps.values
+        .map((e) => ResumeData.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> removeResumeData(String? taskId) =>
+      remove(resumeDataPath, _safeIdOrNull(taskId));
 
   /// Stores [Map<String, dynamic>] formatted [document] in [collection] keyed under [identifier]
   Future<void> store(Map<String, dynamic> document, String collection,
@@ -128,89 +459,14 @@ class LocalStorePersistentStorage implements PersistentStorage {
   String? _safeIdOrNull(String? id) =>
       id?.replaceAll(_illegalPathCharacters, '_');
 
-  @override
-  Future<void> removePausedTask(String? taskId) =>
-      remove(pausedTasksPath, _safeIdOrNull(taskId));
-
-  @override
-  Future<void> removeResumeData(String? taskId) =>
-      remove(resumeDataPath, _safeIdOrNull(taskId));
-
-  @override
-  Future<void> removeTaskRecord(String? taskId) =>
-      remove(taskRecordsPath, _safeIdOrNull(taskId));
-
-  @override
-  Future<List<Task>> retrieveAllPausedTasks() async {
-    final jsonMaps = await retrieveAll(pausedTasksPath);
-    return jsonMaps.values
-        .map((e) => Task.createFromJson(e))
-        .toList(growable: false);
-  }
-
-  @override
-  Future<List<ResumeData>> retrieveAllResumeData() async {
-    final jsonMaps = await retrieveAll(resumeDataPath);
-    return jsonMaps.values
-        .map((e) => ResumeData.fromJson(e))
-        .toList(growable: false);
-  }
-
-  @override
-  Future<List<TaskRecord>> retrieveAllTaskRecords() async {
-    final jsonMaps = await retrieveAll(taskRecordsPath);
-    return jsonMaps.values
-        .map((e) => TaskRecord.fromJson(e))
-        .toList(growable: false);
-  }
-
-  @override
-  Future<Task?> retrievePausedTask(String taskId) async {
-    return switch (await retrieve(pausedTasksPath, _safeId(taskId))) {
-      var json? => Task.createFromJson(json),
-      _ => null
-    };
-  }
-
-  @override
-  Future<ResumeData?> retrieveResumeData(String taskId) async {
-    return switch (await retrieve(resumeDataPath, _safeId(taskId))) {
-      var json? => ResumeData.fromJson(json),
-      _ => null
-    };
-  }
-
-  @override
-  Future<TaskRecord?> retrieveTaskRecord(String taskId) async {
-    return switch (await retrieve(taskRecordsPath, _safeId(taskId))) {
-      var json? => TaskRecord.fromJson(json),
-      _ => null
-    };
-  }
-
-  @override
-  Future<void> storePausedTask(Task task) =>
-      store(task.toJson(), pausedTasksPath, _safeId(task.taskId));
-
-  @override
-  Future<void> storeResumeData(ResumeData resumeData) =>
-      store(resumeData.toJson(), resumeDataPath, _safeId(resumeData.taskId));
-
-  @override
-  Future<void> storeTaskRecord(TaskRecord record) =>
-      store(record.toJson(), taskRecordsPath, _safeId(record.taskId));
-
-  @override
   Future<(String, int)> get storedDatabaseVersion async {
     final metaData =
         await _db.collection(metaDataCollection).doc('metaData').get();
     return ('Localstore', (metaData?['version'] as num?)?.toInt() ?? 0);
   }
 
-  @override
   (String, int) get currentDatabaseVersion => ('Localstore', 1);
 
-  @override
   Future<void> initialize() async {
     final (currentName, currentVersion) = currentDatabaseVersion;
     final (storedName, storedVersion) = await storedDatabaseVersion;
@@ -254,6 +510,10 @@ class LocalStorePersistentStorage implements PersistentStorage {
         .collection(metaDataCollection)
         .doc('metaData')
         .set({'version': currentVersion});
+  }
+
+  Future<void> clearCache() async {
+    Localstore.instance.clearCache();
   }
 }
 
@@ -369,10 +629,10 @@ class BasePersistentStorageMigrator implements PersistentStorageMigrator {
       // delete all paths related to LocalStore
       final supportDir = await getApplicationSupportDirectory();
       await Future.wait([
-        LocalStorePersistentStorage.resumeDataPath,
-        LocalStorePersistentStorage.pausedTasksPath,
-        LocalStorePersistentStorage.taskRecordsPath,
-        LocalStorePersistentStorage.metaDataCollection
+        _LocalStorePersistentStorageExecutor.resumeDataPath,
+        _LocalStorePersistentStorageExecutor.pausedTasksPath,
+        _LocalStorePersistentStorageExecutor.taskRecordsPath,
+        _LocalStorePersistentStorageExecutor.metaDataCollection
       ].map((collectionPath) async {
         try {
           final path = join(supportDir.path, collectionPath);
