@@ -86,8 +86,25 @@ final existingFileTask = UploadTask(
 await FileDownloader().upload(existingFileTask);
 ```
 
-### Batch Upload
-To upload multiple separate files in a batch (different from `MultiUploadTask` which uploads multiple files in a single request):
+### Multiple File Upload
+To upload multiple separate files in a single request (multipart/form-data), use `MultiUploadTask`. You can specify files as simple filenames, or as records to control the `fileField` and `mimeType`.
+```dart
+final multiTask = MultiUploadTask(
+    url: 'https://my.server.com/upload',
+    baseDirectory: BaseDirectory.applicationDocuments,
+    files: [
+        'file1.txt',                            // fileField: file1, mimeType: derived
+        ('doc', 'contract.pdf'),                // fileField: doc, mimeType: derived
+        ('img', 'vacation.jpg', 'image/jpeg')   // fileField: img, mimeType: image/jpeg
+    ],
+    fields: {'user': 'myUser'},
+    updates: Updates.statusAndProgress
+);
+
+await FileDownloader().upload(multiTask);
+```
+
+To upload multiple separate files in a batch (i.e. separate requests for each file), use `uploadBatch`:
 ```dart
 final tasks = [
     UploadTask(url: 'https://server.com/upload', filename: 'file1.txt'),
@@ -101,8 +118,3 @@ await FileDownloader().uploadBatch(
     batchProgressCallback: (status, progress) => print('Batch progress: $progress')
 );
 ```
-
-### iOS Background Setup
-To ensure background uploads work correctly on iOS:
-1.  **Capabilities**: Enable "Background Modes" -> "Background Fetch" in Xcode.
-2.  **Safe File Locations**: Ensure files are located in safe directories like `BaseDirectory.applicationDocuments` or `BaseDirectory.temporary`. Avoid using absolute paths (`BaseDirectory.root`) unless necessary, as these paths can change between app restarts. Using `Task.split` as shown above helps manage this automatically.
