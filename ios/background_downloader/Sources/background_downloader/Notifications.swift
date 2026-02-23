@@ -354,8 +354,12 @@ let numTotalRegEx = try! NSRegularExpression(pattern: "\\{numTotal\\}", options:
 func replaceTokens(input: String, task: Task, progress: Double? = nil, notificationGroup: GroupNotification? = nil) async -> String {
     let inputString = NSMutableString()
     inputString.append(input)
+
+    let unpacked = unpack(packedString: task.filename)
+    let safeFilename = unpacked.filename ?? task.filename
+
     displayNameRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: task.displayName)
-    fileNameRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: task.filename)
+    fileNameRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: safeFilename)
     metaDataRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: task.metaData)
     if (progress == nil) {
         progressRegEx.replaceMatches(in: inputString, range: NSMakeRange(0, inputString.length), withTemplate: "")}

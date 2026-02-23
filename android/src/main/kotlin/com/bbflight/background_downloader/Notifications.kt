@@ -981,13 +981,16 @@ object NotificationService {
         timeRemaining: Long? = null,
         groupNotification: GroupNotification? = null
     ): String {
+        val (unpackedFilename, _) = UriUtils.unpack(task.filename)
+        val safeFilename = unpackedFilename ?: task.filename
+
         // filename and metadata
         val output = displayNameRegEx.replace(
             fileNameRegEx.replace(
                 metaDataRegEx.replace(
                     input, escapeReplacement(task.metaData)
 
-                ), escapeReplacement(task.filename)
+                ), escapeReplacement(safeFilename)
             ), escapeReplacement(task.displayName)
         )
 
