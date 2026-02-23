@@ -758,10 +758,15 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             else {
                 return
             }
-            filePath = getFilePath(for: task)
+            let unpacked = unpack(packedString: task.filename)
+            if let uri = unpacked.uri {
+                filePath = decodeToFileUrl(uri: uri)?.path
+            } else {
+                filePath = getFilePath(for: task)
+            }
         }
-        if !FileManager.default.fileExists(atPath: filePath!) {
-            os_log("File does not exist: %@", log: log, type: .info, filePath!)
+        if filePath == nil || !FileManager.default.fileExists(atPath: filePath!) {
+            os_log("File does not exist: %@", log: log, type: .info, filePath ?? "nil")
             return
         }
         let mimeType = args[2] as? String
@@ -997,16 +1002,25 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                 if notificationType == NotificationType.complete.rawValue {
                     guard let notificationConfigString = userInfo["notificationConfig"] as? String,
                           let notificationConfigData = notificationConfigString.data(using: .utf8),
-                          let notificationConfig = try? JSONDecoder().decode(NotificationConfig.self, from: notificationConfigData),
-                          let filePath = getFilePath(for: task)
+                          let notificationConfig = try? JSONDecoder().decode(NotificationConfig.self, from: notificationConfigData)
                     else {
-                        os_log("Could not extract filePath for notification tap on .complete", log: log, type: .info)
+                        os_log("Could not extract notification config for notification tap on .complete", log: log, type: .info)
                         return
                     }
                     if notificationConfig.tapOpensFile {
-                        if !doOpenFile(filePath: filePath, mimeType: nil)
-                        {
-                            os_log("Failed to open file on notification tap", log: log, type: .info)
+                        let unpacked = unpack(packedString: task.filename)
+                        var filePath: String? = nil
+                        if let uri = unpacked.uri {
+                            filePath = decodeToFileUrl(uri: uri)?.path
+                        } else {
+                            filePath = getFilePath(for: task)
+                        }
+                        if let filePath = filePath {
+                            if !doOpenFile(filePath: filePath, mimeType: nil) {
+                                os_log("Failed to open file on notification tap", log: log, type: .info)
+                            }
+                        } else {
+                            os_log("Could not extract filePath for notification tap on .complete", log: log, type: .info)
                         }
                     }
                 }
