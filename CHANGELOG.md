@@ -1,3 +1,9 @@
+## 9.5.3
+
+* [Android] Fix race condition in `TaskWorker` where `setForeground` could crash for finished tasks
+* Add documentation
+* Add integration testing documentation and steps
+
 ## 9.5.2
 
 * Moves LocalStorePersistentStorage to isolate model to off-load i/o operations, and unwinds Future.wait to loop

@@ -154,8 +154,7 @@ class LocalStorePersistentStorage implements PersistentStorage {
       // pass the RootIsolateToken to allow background isolate to use platform channels
       // for path_provider
       final rootIsolateToken = RootIsolateToken.instance;
-      await _sendRequest(
-          _StorageCommand.initialize, [rootIsolateToken]);
+      await _sendRequest(_StorageCommand.initialize, [rootIsolateToken]);
     } catch (e) {
       _initializationFuture = null; // allow retry
       rethrow;
@@ -218,8 +217,8 @@ class LocalStorePersistentStorage implements PersistentStorage {
 
   @override
   Future<Task?> retrievePausedTask(String taskId) async {
-    final result = await _sendRequest<Task?>(
-        _StorageCommand.retrievePausedTask, [taskId]);
+    final result =
+        await _sendRequest<Task?>(_StorageCommand.retrievePausedTask, [taskId]);
     return result;
   }
 
