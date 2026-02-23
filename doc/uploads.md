@@ -36,3 +36,85 @@ Once the `MultiUpoadTask` is created, the fields `fileFields`, `filenames` and `
 Use the `MultiTaskUpload` object in the `upload` and `enqueue` methods as you would a regular `UploadTask`.
 
 For partial uploads, set the byte range by adding a "Range" header to your binary `UploadTask`, e.g. a value of "bytes=100-149" will upload 50 bytes starting at byte 100. You can omit the range end (but not the "-") to upload from the indicated start byte to the end of the file.  The "Range" header will not be passed on to the server. Note that on iOS an invalid range will cause enqueue to fail, whereas on Android and Desktop the task will fail when attempting to start.
+
+## Code Examples
+
+### Single File Upload (Binary)
+To upload a file as a binary stream (POST body), set `post: 'binary'`.
+```dart
+final binaryTask = UploadTask(
+    url: 'https://my.server.com/upload',
+    filename: 'my_data.bin',
+    baseDirectory: BaseDirectory.applicationDocuments,
+    post: 'binary',
+    updates: Updates.statusAndProgress
+);
+await FileDownloader().upload(binaryTask);
+```
+
+### Single File Upload (Multipart)
+To upload a file as a multipart/form-data request, add `fields` and optionally set `fileField`.
+```dart
+final multipartTask = UploadTask(
+    url: 'https://my.server.com/upload',
+    filename: 'my_image.jpg',
+    baseDirectory: BaseDirectory.applicationDocuments,
+    fileField: 'image',
+    fields: {'user_id': '12345', 'description': 'Vacation photo'},
+    updates: Updates.statusAndProgress
+);
+await FileDownloader().upload(multipartTask);
+```
+
+### Uploading an Existing File
+When uploading an existing file (e.g. from an image picker), use `Task.split` to ensure the file path is handled correctly across platform restarts (especially on iOS/Android).
+```dart
+// Assuming you have a filePath from a picker
+final String filePath = '/path/to/my/file.txt';
+
+// Split the path into baseDirectory, directory and filename
+final (baseDir, directory, filename) = await Task.split(filePath: filePath);
+
+final existingFileTask = UploadTask(
+    url: 'https://my.server.com/upload',
+    filename: filename,
+    baseDirectory: baseDir,
+    directory: directory,
+    updates: Updates.statusAndProgress
+);
+
+await FileDownloader().upload(existingFileTask);
+```
+
+### Multiple File Upload
+To upload multiple separate files in a single request (multipart/form-data), use `MultiUploadTask`. You can specify files as simple filenames, or as records to control the `fileField` and `mimeType`.
+```dart
+final multiTask = MultiUploadTask(
+    url: 'https://my.server.com/upload',
+    baseDirectory: BaseDirectory.applicationDocuments,
+    files: [
+        'file1.txt',                            // fileField: file1, mimeType: derived
+        ('doc', 'contract.pdf'),                // fileField: doc, mimeType: derived
+        ('img', 'vacation.jpg', 'image/jpeg')   // fileField: img, mimeType: image/jpeg
+    ],
+    fields: {'user': 'myUser'},
+    updates: Updates.statusAndProgress
+);
+
+await FileDownloader().upload(multiTask);
+```
+
+To upload multiple separate files in a batch (i.e. separate requests for each file), use `uploadBatch`:
+```dart
+final tasks = [
+    UploadTask(url: 'https://server.com/upload', filename: 'file1.txt'),
+    UploadTask(url: 'https://server.com/upload', filename: 'file2.txt'),
+    UploadTask(url: 'https://server.com/upload', filename: 'file3.txt')
+];
+
+// Monitor batch progress
+await FileDownloader().uploadBatch(
+    tasks,
+    batchProgressCallback: (status, progress) => print('Batch progress: $progress')
+);
+```
