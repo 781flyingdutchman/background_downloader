@@ -119,46 +119,12 @@ class UIDTJobService : JobService() {
             notification: Notification,
             notificationType: Int
         ) {
-            // JobService cannot startForeground like a Service (it IS a Service, but bound by JobScheduler lifecycle)
-            // However, starting from Android 14, we MUST call setNotification for User Initiated Data Transfer jobs.
-            if (Build.VERSION.SDK_INT >= 34) { // Android 14
-                 service.setNotification(params, notificationId, notification, notificationType)
+            if (Build.VERSION.SDK_INT >= 34) {
+                service.setNotification(params, notificationId, notification, notificationType)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                service.startForeground(notificationId, notification, notificationType)
             } else {
-                 // For older versions, we might standard NotificationManager to show it,
-                 // but we can't 'startForeground' a JobService in the traditional sense easily
-                 // without it being a Foreground Service type.
-                 // But UIDT is a type of header.
-                 // Actually, the refactoring document suggests we stick to current behavior?
-                 // The previous code had:
-                 /*
-                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    startForeground(notificationId, notification, notificationType)
-                 } else {
-                    startForeground(notificationId, notification)
-                 }
-                 */
-                 // JobService.startForeground ONLY works if it is also a started service
-                 // (Context.startService), which JobScheduler doesn't do.
-                 // BUT, for UIDT (User Initiated), the requirement is setNotification.
-                 // Wait, the previous code was:
-                 // class UIDTJobService : JobService(), TaskJobContext
-                 // ... startForeground(...)
-                 //
-                 // If the previous code actually worked, it implies `startForeground` was callable.
-                 // JobService inherits from Service.
-                 // IMPORTANT: If we are migrating to `setNotification` for Android 14+, we should do so.
-                 // BUT, if we are just fixing race condition, we should try to preserve behavior.
-                 // The issue is `this` in inner class is not the Service.
-                 // We need to call `service.startForeground`.
-
-                 if (Build.VERSION.SDK_INT >= 34) {
-                     service.setNotification(params, notificationId, notification, notificationType)
-                 }
-                 else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    service.startForeground(notificationId, notification, notificationType)
-                } else {
-                    service.startForeground(notificationId, notification)
-                }
+                service.startForeground(notificationId, notification)
             }
         }
 

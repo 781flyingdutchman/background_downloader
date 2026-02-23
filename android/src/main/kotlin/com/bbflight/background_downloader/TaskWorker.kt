@@ -8,6 +8,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import kotlinx.serialization.json.Json
+import android.util.Log
 
 /**
  * The worker to execute one task
@@ -100,7 +101,11 @@ open class TaskWorker(
         notification: Notification,
         notificationType: Int
     ) {
-        setForeground(ForegroundInfo(notificationId, notification, notificationType))
+        try {
+            setForeground(ForegroundInfo(notificationId, notification, notificationType))
+        } catch (e: IllegalStateException) {
+            Log.d("TaskWorker", "Ignoring setForeground: worker already completed. ${e.message}")
+        }
     }
 
     override suspend fun updateNotification(
