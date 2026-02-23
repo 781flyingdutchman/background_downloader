@@ -119,19 +119,12 @@ class UIDTJobService : JobService() {
             notification: Notification,
             notificationType: Int
         ) {
-            try {
-                if (Build.VERSION.SDK_INT >= 34) {
-                    service.setNotification(params, notificationId, notification, notificationType)
-                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    service.startForeground(notificationId, notification, notificationType)
-                } else {
-                    service.startForeground(notificationId, notification)
-                }
-            } catch (e: Exception) {
-                Log.w(
-                    TaskRunner.TAG,
-                    "Could not set foreground notification for JobService: ${e.message}"
-                )
+            if (Build.VERSION.SDK_INT >= 34) {
+                service.setNotification(params, notificationId, notification, notificationType)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                service.startForeground(notificationId, notification, notificationType)
+            } else {
+                service.startForeground(notificationId, notification)
             }
         }
 

@@ -3,7 +3,6 @@ package com.bbflight.background_downloader
 import android.app.Notification
 import android.content.Context
 import android.content.SharedPreferences
-import android.util.Log
 import androidx.preference.PreferenceManager
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
@@ -101,11 +100,7 @@ open class TaskWorker(
         notification: Notification,
         notificationType: Int
     ) {
-        try {
-            setForeground(ForegroundInfo(notificationId, notification, notificationType))
-        } catch (e: IllegalStateException) {
-            Log.w(TaskRunner.TAG, "Could not set foreground notification: ${e.message}")
-        }
+        setForeground(ForegroundInfo(notificationId, notification, notificationType))
     }
 
     override suspend fun updateNotification(
