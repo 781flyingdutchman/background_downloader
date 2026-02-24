@@ -1409,7 +1409,8 @@ final class DataTask extends Task {
       super.metaData,
       super.displayName,
       super.priority,
-      super.creationTime})
+      super.creationTime,
+      super.options})
       : assert(const [Updates.status, Updates.none].contains(updates),
             'DataTasks can only provide status updates'),
         super(
@@ -1455,7 +1456,8 @@ final class DataTask extends Task {
           int? priority,
           String? metaData,
           String? displayName,
-          DateTime? creationTime}) =>
+          DateTime? creationTime,
+          TaskOptions? options}) =>
       DataTask(
           taskId: taskId ?? this.taskId,
           url: url ?? this.url,
@@ -1469,7 +1471,8 @@ final class DataTask extends Task {
           priority: priority ?? this.priority,
           metaData: metaData ?? this.metaData,
           displayName: displayName ?? this.displayName,
-          creationTime: creationTime ?? this.creationTime)
+          creationTime: creationTime ?? this.creationTime,
+          options: options ?? this.options)
         ..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 
   /// Creates [DataTask] object from [json]
