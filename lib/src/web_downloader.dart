@@ -23,8 +23,11 @@ final class DesktopDownloader extends BaseDownloader {
   /// Sets the HTTP client used for requests
   ///
   /// This is a stub implementation
-  static void setHttpClient(Duration? requestTimeout,
-      Map<String, dynamic> proxy, bool bypassTLSCertificateValidation) {
+  static void setHttpClient(
+    Duration? requestTimeout,
+    Map<String, dynamic> proxy,
+    bool bypassTLSCertificateValidation,
+  ) {
     requestTimeout = requestTimeout;
     proxy = proxy;
     bypassTLSCertificateValidation = bypassTLSCertificateValidation;
@@ -36,8 +39,10 @@ final class DesktopDownloader extends BaseDownloader {
   }
 
   @override
-  Future<List<DownloadTask>> pauseAll(
-      {Iterable<DownloadTask>? tasks, String? group}) {
+  Future<List<DownloadTask>> pauseAll({
+    Iterable<DownloadTask>? tasks,
+    String? group,
+  }) {
     throw UnimplementedError();
   }
 
@@ -83,7 +88,9 @@ final class DesktopDownloader extends BaseDownloader {
 
   @override
   Future<String> testSuggestedFilename(
-      DownloadTask task, String contentDisposition) {
+    DownloadTask task,
+    String contentDisposition,
+  ) {
     throw UnimplementedError();
   }
 

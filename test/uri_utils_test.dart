@@ -15,29 +15,33 @@ void main() {
       expect(packedString, ':::$filename::::::${uri.toString()}:::');
     });
 
-    test('unpack should unpack a valid packed string into filename and uri',
-        () {
-      const filename = 'myFile.txt';
-      final uri = Uri.parse('content://com.example.app/document/123');
-      final packedString = ':::$filename::::::${uri.toString()}:::';
+    test(
+      'unpack should unpack a valid packed string into filename and uri',
+      () {
+        const filename = 'myFile.txt';
+        final uri = Uri.parse('content://com.example.app/document/123');
+        final packedString = ':::$filename::::::${uri.toString()}:::';
 
-      final (filename: unpackedFilename, uri: unpackedUri) =
-          unpack(packedString);
+        final (filename: unpackedFilename, uri: unpackedUri) = unpack(
+          packedString,
+        );
 
-      expect(unpackedFilename, filename);
-      expect(unpackedUri, uri);
-    });
+        expect(unpackedFilename, filename);
+        expect(unpackedUri, uri);
+      },
+    );
 
     test(
-        'unpack should return original string and null uri for simple filename string',
-        () {
-      const invalidPackedString = 'This is not a packed string';
+      'unpack should return original string and null uri for simple filename string',
+      () {
+        const invalidPackedString = 'This is not a packed string';
 
-      final (:filename, :uri) = unpack(invalidPackedString);
+        final (:filename, :uri) = unpack(invalidPackedString);
 
-      expect(filename, invalidPackedString);
-      expect(uri, isNull);
-    });
+        expect(filename, invalidPackedString);
+        expect(uri, isNull);
+      },
+    );
 
     test('unpack should return null and a uri for simple uri string', () {
       const uriString = 'https://www.example.com/path/to/resource';
@@ -76,15 +80,16 @@ void main() {
     });
 
     test(
-        'uriFromStringValue should return null for a packed string with invalid Uri',
-        () {
-      const filename = 'myFile.txt';
-      const invalidUri = 'invalid';
-      const packedString = ':::$filename::::::$invalidUri:::';
+      'uriFromStringValue should return null for a packed string with invalid Uri',
+      () {
+        const filename = 'myFile.txt';
+        const invalidUri = 'invalid';
+        const packedString = ':::$filename::::::$invalidUri:::';
 
-      final resultUri = uriFromStringValue(packedString);
+        final resultUri = uriFromStringValue(packedString);
 
-      expect(resultUri, isNull);
-    });
+        expect(resultUri, isNull);
+      },
+    );
   });
 }

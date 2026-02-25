@@ -20,10 +20,7 @@ abstract class CollectionRefImpl {
   /// specified [field]. [field] refers to a field in a document.
   ///
   /// `where` is not implemented
-  CollectionRef where(
-    dynamic field, {
-    dynamic isEqualTo,
-  });
+  CollectionRef where(dynamic field, {dynamic isEqualTo});
 
   /// Delete collection
   ///

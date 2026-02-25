@@ -16,8 +16,11 @@ class Utils implements UtilsImpl {
   }
 
   @override
-  Future<Map<String, dynamic>?> get(String path,
-      [bool? isCollection = false, List<List>? conditions]) async {
+  Future<Map<String, dynamic>?> get(
+    String path, [
+    bool? isCollection = false,
+    List<List>? conditions,
+  ]) async {
     throw UnimplementedError('Web is not supported');
   }
 

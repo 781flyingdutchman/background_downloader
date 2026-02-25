@@ -9,7 +9,7 @@ enum PermissionType {
   notifications,
   androidSharedStorage,
   iosAddToPhotoLibrary,
-  iosChangePhotoLibrary
+  iosChangePhotoLibrary,
 }
 
 enum PermissionStatus { undetermined, denied, granted, partial, requestError }
@@ -43,10 +43,10 @@ base class PermissionsService implements Permissions {
       TargetPlatform.iOS => IOSPermissionsService(),
       TargetPlatform.linux ||
       TargetPlatform.macOS ||
-      TargetPlatform.windows =>
-        PermissionsService(),
-      _ =>
-        throw ArgumentError('Platform $defaultTargetPlatform is not supported'),
+      TargetPlatform.windows => PermissionsService(),
+      _ => throw ArgumentError(
+        'Platform $defaultTargetPlatform is not supported',
+      ),
     };
   }
 
@@ -72,8 +72,10 @@ final class IOSPermissionsService extends PermissionsService {
 
   @override
   Future<PermissionStatus> request(PermissionType permissionType) async {
-    final result = await NativeDownloader.methodChannel
-        .invokeMethod<int>('requestPermission', permissionType.index);
+    final result = await NativeDownloader.methodChannel.invokeMethod<int>(
+      'requestPermission',
+      permissionType.index,
+    );
     return result != null
         ? PermissionStatus.values[result]
         : PermissionStatus.requestError;
@@ -81,8 +83,10 @@ final class IOSPermissionsService extends PermissionsService {
 
   @override
   Future<PermissionStatus> status(PermissionType permissionType) async {
-    final result = await NativeDownloader.methodChannel
-        .invokeMethod<int>('permissionStatus', permissionType.index);
+    final result = await NativeDownloader.methodChannel.invokeMethod<int>(
+      'permissionStatus',
+      permissionType.index,
+    );
     return result != null
         ? PermissionStatus.values[result]
         : PermissionStatus.requestError;
@@ -94,13 +98,16 @@ final class AndroidPermissionsService extends IOSPermissionsService {
 
   @override
   Future<PermissionStatus> request(PermissionType permissionType) async {
-    if (![PermissionType.notifications, PermissionType.androidSharedStorage]
-        .contains(permissionType)) {
+    if (![
+      PermissionType.notifications,
+      PermissionType.androidSharedStorage,
+    ].contains(permissionType)) {
       return PermissionStatus.granted;
     }
     if (permissionStatusCompleter != null) {
       log.warning(
-          'Permission request already in progress - failing this one immediately');
+        'Permission request already in progress - failing this one immediately',
+      );
       return PermissionStatus.requestError;
     }
     permissionStatusCompleter = Completer();
@@ -110,7 +117,8 @@ final class AndroidPermissionsService extends IOSPermissionsService {
       return permissionStatusCompleter!.future;
     } else {
       log.warning(
-          'Failure to request for permission - was it already granted?');
+        'Failure to request for permission - was it already granted?',
+      );
       permissionStatusCompleter = null;
       return PermissionStatus.requestError;
     }
@@ -119,7 +127,9 @@ final class AndroidPermissionsService extends IOSPermissionsService {
   @override
   Future<bool> shouldShowRationale(PermissionType permissionType) async {
     final result = await NativeDownloader.methodChannel.invokeMethod<bool>(
-        'shouldShowPermissionRationale', permissionType.index);
+      'shouldShowPermissionRationale',
+      permissionType.index,
+    );
     return result ?? false;
   }
 

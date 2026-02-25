@@ -6,8 +6,11 @@ import 'package:background_downloader/src/persistent_storage.dart';
 import 'package:background_downloader/src/models.dart';
 import 'package:background_downloader/src/task.dart';
 
-final defaultTask =
-    DownloadTask(taskId: 'task1', url: 'https://google.com', group: 'group');
+final defaultTask = DownloadTask(
+  taskId: 'task1',
+  url: 'https://google.com',
+  group: 'group',
+);
 
 late Database db;
 
@@ -77,8 +80,9 @@ class MockPersistentStorage implements PersistentStorage {
 
   @override
   Future<List<TaskRecord>> retrieveAllTaskRecords() {
-    return Future.value(
-        [TaskRecord(defaultTask, TaskStatus.running, 0.0, 100)]);
+    return Future.value([
+      TaskRecord(defaultTask, TaskStatus.running, 0.0, 100),
+    ]);
   }
 
   @override

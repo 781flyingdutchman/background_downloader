@@ -34,10 +34,11 @@ Future<void> doDataTask(DataTask task, SendPort sendPort) async {
           resultStatus = TaskStatus.notFound;
         } else {
           taskException = TaskHttpException(
-              responseBody?.isNotEmpty == true
-                  ? responseBody!
-                  : response.reasonPhrase ?? 'Invalid HTTP Request',
-              response.statusCode);
+            responseBody?.isNotEmpty == true
+                ? responseBody!
+                : response.reasonPhrase ?? 'Invalid HTTP Request',
+            response.statusCode,
+          );
         }
       }
     }
