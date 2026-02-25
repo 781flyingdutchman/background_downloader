@@ -1,17 +1,17 @@
+import 'dart:isolate';
 import 'dart:math';
 
 import 'package:background_downloader/background_downloader.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_isolate/flutter_isolate.dart';
+import 'package:flutter/services.dart';
 
 /// This is the entry point for the background isolate.
 /// It downloads a single file and then waits a bit.
 @pragma('vm:entry-point')
-Future<void> backgroundIsolateEntryPoint(Object? _) async {
-  WidgetsFlutterBinding.ensureInitialized();
-  // await download();
+Future<void> backgroundIsolateEntryPoint(RootIsolateToken rootIsolateToken) async {
+  BackgroundIsolateBinaryMessenger.ensureInitialized(rootIsolateToken);
+
+  await download();
   await Future<void>.delayed(const Duration(seconds: 2));
-  return;
 }
 
 /// Downloads a file
@@ -38,7 +38,12 @@ Future<String> testBackgroundUsage() async {
   }
 
   // Download a file in background
-  await flutterCompute(backgroundIsolateEntryPoint, 'dummy');
+  try {
+    final rootIsolateToken = RootIsolateToken.instance!;
+    await Isolate.run(() => backgroundIsolateEntryPoint(rootIsolateToken));
+  } catch (e) {
+    return 'failure background: $e';
+  }
 
   try {
     // Download another file in foreground

@@ -31,7 +31,6 @@ dependencies:
 
   # This is used to create a background isolate
   # with a separate entry point & Flutter engine for testing.
-  flutter_isolate: ^2.1.0
   logging: ^1.0.2
   provider: ^6.0.3
   path_provider: ^2.0.2
