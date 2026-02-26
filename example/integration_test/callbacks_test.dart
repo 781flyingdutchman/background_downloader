@@ -276,6 +276,51 @@ void main() {
     });
   });
 
+  group('DataTasks with callbacks', () {
+    test('beforeTaskStart callback cancel',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
+      final task = DataTask(
+          url: getTestUrl,
+          urlQueryParameters: {'json': 'true', 'param1': 'original'},
+          options: TaskOptions(beforeTaskStart: beforeTaskStartCallbackCancel));
+      final result = await FileDownloader().download(task);
+      expect(result.status, equals(TaskStatus.canceled));
+      expect(result.responseBody, equals('response'));
+      expect(result.responseHeaders, equals({'header': 'value'}));
+      expect(mainIsolateCallbackCounter,
+          equals(mainIsolateCallbackCounterAtStartOfTest + 1));
+    });
+
+    test('onTaskStart callback url change',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
+      final task = DataTask(
+          url: getTestUrl,
+          urlQueryParameters: {'json': 'true', 'param1': 'original'},
+          options: TaskOptions(onTaskStart: onTaskStartCallbackUrlChange));
+      final result = await FileDownloader().download(task);
+      expect(result.status, equals(TaskStatus.complete));
+      var resultJson = jsonDecode(result.responseBody!);
+      expect(resultJson['args']['param1'], equals('changed'));
+      expect(mainIsolateCallbackCounter,
+          equals(mainIsolateCallbackCounterAtStartOfTest + 1));
+    });
+
+    test('onTaskFinished callback',
+        timeout: const Timeout(Duration(minutes: 2)), () async {
+      final task = DataTask(
+          url: getTestUrl,
+          urlQueryParameters: {'json': 'true', 'param1': 'original'},
+          options: TaskOptions(onTaskFinished: onTaskFinishedCallback));
+      final result = await FileDownloader().download(task);
+      expect(result.status, equals(TaskStatus.complete));
+      var resultJson = jsonDecode(result.responseBody!);
+      expect(resultJson['args']['param1'], equals('original'));
+      await Future.delayed(const Duration(milliseconds: 100));
+      expect(mainIsolateCallbackCounter,
+          equals(mainIsolateCallbackCounterAtStartOfTest + 1));
+    });
+  });
+
   group('onAuth callbacks', () {
     late Auth auth;
 
