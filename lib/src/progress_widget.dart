@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'file_downloader.dart';
 import 'models.dart';
 import 'task.dart';
+import 'uri/uri_helpers.dart';
 
 /// Progress indicator for use with the [FileDownloader]
 ///
@@ -32,15 +33,17 @@ import 'task.dart';
 ///   single file), set [maxExpandable] to 0
 /// [backgroundColor] background color for the widget
 class DownloadProgressIndicator extends StatefulWidget {
-  const DownloadProgressIndicator(this.updates,
-      {this.message = '{filename}',
-      this.collapsedMessage = '{n}/{total}',
-      this.showPauseButton = false,
-      this.showCancelButton = false,
-      this.height = 50,
-      this.maxExpandable = 1,
-      this.backgroundColor = Colors.grey,
-      super.key});
+  const DownloadProgressIndicator(
+    this.updates, {
+    this.message = '{filename}',
+    this.collapsedMessage = '{n}/{total}',
+    this.showPauseButton = false,
+    this.showCancelButton = false,
+    this.height = 50,
+    this.maxExpandable = 1,
+    this.backgroundColor = Colors.grey,
+    super.key,
+  });
 
   final Stream<TaskUpdate> updates;
   final String message;
@@ -75,8 +78,10 @@ class _DownloadProgressIndicatorState extends State<DownloadProgressIndicator> {
           case TaskStatus.running:
             totalTasks.add(update.task);
             pausedTasks.remove(update.task);
-            inProgress[update.task] =
-                (0, DateTime.now().millisecondsSinceEpoch);
+            inProgress[update.task] = (
+              0,
+              DateTime.now().millisecondsSinceEpoch,
+            );
 
           case TaskStatus.waitingToRetry:
             break;
@@ -97,7 +102,7 @@ class _DownloadProgressIndicatorState extends State<DownloadProgressIndicator> {
             final previousInProgress = inProgress[update.task];
             inProgress[update.task] = (
               update.progress,
-              previousInProgress?.$2 ?? DateTime.now().millisecondsSinceEpoch
+              previousInProgress?.$2 ?? DateTime.now().millisecondsSinceEpoch,
             );
 
           case progressWaitingToRetry:
@@ -157,22 +162,22 @@ class _DownloadProgressIndicatorState extends State<DownloadProgressIndicator> {
     final itemsToShow = isExpanded
         ? min(numActive, widget.maxExpandable)
         : isCollapsed
-            ? min(1, numActive)
-            : numActive;
+        ? min(1, numActive)
+        : numActive;
     return AnimatedSize(
-        duration: const Duration(milliseconds: 200),
-        alignment: Alignment.bottomCenter,
-        child: switch (itemsToShow) {
-          0 => Container(
-              height: 0,
-            ),
-          1 => isCollapsed
+      duration: const Duration(milliseconds: 200),
+      alignment: Alignment.bottomCenter,
+      child: switch (itemsToShow) {
+        0 => Container(height: 0),
+        1 =>
+          isCollapsed
               ? _CollapsedDownloadProgress(
                   finishedTasks.length,
                   totalTasks.length,
                   widget.collapsedMessage,
                   widget.height,
-                  widget.backgroundColor)
+                  widget.backgroundColor,
+                )
               : _DownloadProgressItem(
                   activeTasks.first,
                   inProgress[activeTasks.first]!.$1,
@@ -181,14 +186,17 @@ class _DownloadProgressIndicatorState extends State<DownloadProgressIndicator> {
                   widget.showCancelButton,
                   widget.height,
                   widget.backgroundColor,
-                  pausedTasks),
-          _ => _ExpandedDownloadProgress(
-              activeTasks.take(widget.maxExpandable).toList(growable: false),
-              widget.message,
-              widget.height,
-              widget.backgroundColor,
-              inProgress)
-        });
+                  pausedTasks,
+                ),
+        _ => _ExpandedDownloadProgress(
+          activeTasks.take(widget.maxExpandable).toList(growable: false),
+          widget.message,
+          widget.height,
+          widget.backgroundColor,
+          inProgress,
+        ),
+      },
+    );
   }
 }
 
@@ -198,14 +206,15 @@ final _metadataRegEx = RegExp("""{metadata}""", caseSensitive: false);
 /// Single file download progress widget
 class _DownloadProgressItem extends StatelessWidget {
   const _DownloadProgressItem(
-      this.task,
-      this.progress,
-      this.message,
-      this.showPauseButton,
-      this.showCancelButton,
-      this.height,
-      this.backgroundColor,
-      this.pausedTasks);
+    this.task,
+    this.progress,
+    this.message,
+    this.showPauseButton,
+    this.showCancelButton,
+    this.height,
+    this.backgroundColor,
+    this.pausedTasks,
+  );
 
   final Task task;
   final double progress;
@@ -219,7 +228,8 @@ class _DownloadProgressItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final messageText = message
-        .replaceAll(_fileNameRegEx, task.filename)
+        .replaceAll(
+            _fileNameRegEx, unpack(task.filename).filename ?? task.filename)
         .replaceAll(_metadataRegEx, task.metaData);
     return Container(
       height: height,
@@ -258,10 +268,10 @@ class _DownloadProgressItem extends StatelessWidget {
               ),
             if (showCancelButton)
               IconButton(
-                  onPressed: () =>
-                      FileDownloader().cancelTaskWithId(task.taskId),
-                  icon: const Icon(Icons.cancel),
-                  color: Theme.of(context).primaryColor),
+                onPressed: () => FileDownloader().cancelTaskWithId(task.taskId),
+                icon: const Icon(Icons.cancel),
+                color: Theme.of(context).primaryColor,
+              ),
           ],
         ),
       ),
@@ -273,8 +283,13 @@ class _DownloadProgressItem extends StatelessWidget {
 /// downloaded out of the total number of files downloaded as a progress
 /// indicator
 class _CollapsedDownloadProgress extends StatelessWidget {
-  const _CollapsedDownloadProgress(this.numCompleted, this.numTotal,
-      this.collapsedMessage, this.height, this.backgroundColor);
+  const _CollapsedDownloadProgress(
+    this.numCompleted,
+    this.numTotal,
+    this.collapsedMessage,
+    this.height,
+    this.backgroundColor,
+  );
 
   final int numCompleted;
   final int numTotal;
@@ -290,35 +305,37 @@ class _CollapsedDownloadProgress extends StatelessWidget {
     final progress = numCompleted / numTotal;
 
     return Container(
-        height: height,
-        decoration: BoxDecoration(color: backgroundColor),
-        child: Padding(
-          padding: const EdgeInsets.only(left: 8, right: 8),
-          child: Row(
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Text(
-                  messageText,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
+      height: height,
+      decoration: BoxDecoration(color: backgroundColor),
+      child: Padding(
+        padding: const EdgeInsets.only(left: 8, right: 8),
+        child: Row(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Text(
+                messageText,
+                style: Theme.of(context).textTheme.bodyMedium,
               ),
-              Expanded(
-                child: LinearProgressIndicator(
-                  value: progress,
-                ),
-              )
-            ],
-          ),
-        ));
+            ),
+            Expanded(child: LinearProgressIndicator(value: progress)),
+          ],
+        ),
+      ),
+    );
   }
 }
 
 /// Expanded file download progress widget, showing multiple file download
 /// progress indicators (up to expandable as defined in the core widget
 class _ExpandedDownloadProgress extends StatelessWidget {
-  const _ExpandedDownloadProgress(this.tasks, this.message, this.height,
-      this.backgroundColor, this.inProgress);
+  const _ExpandedDownloadProgress(
+    this.tasks,
+    this.message,
+    this.height,
+    this.backgroundColor,
+    this.inProgress,
+  );
 
   final List<Task> tasks;
   final String message;
@@ -330,14 +347,14 @@ class _ExpandedDownloadProgress extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-          color: backgroundColor,
-          border:
-              Border(top: BorderSide(color: Theme.of(context).dividerColor))),
+        color: backgroundColor,
+        border: Border(top: BorderSide(color: Theme.of(context).dividerColor)),
+      ),
       child: Table(
         defaultVerticalAlignment: TableCellVerticalAlignment.middle,
         columnWidths: const <int, TableColumnWidth>{
           0: IntrinsicColumnWidth(),
-          1: FlexColumnWidth()
+          1: FlexColumnWidth(),
         },
         children: tasks.map((task) {
           return TableRow(
@@ -353,19 +370,22 @@ class _ExpandedDownloadProgress extends StatelessWidget {
                       padding: const EdgeInsets.only(left: 8, right: 8),
                       child: Text(
                           message
-                              .replaceAll(_fileNameRegEx, task.filename)
+                              .replaceAll(
+                                  _fileNameRegEx,
+                                  unpack(task.filename).filename ??
+                                      task.filename)
                               .replaceAll(_metadataRegEx, task.metaData),
                           style: Theme.of(context).textTheme.bodyMedium),
                     ),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: LinearProgressIndicator(
-                    value: inProgress[task]!.$1,
-                  ),
-                ),
-              ]);
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: LinearProgressIndicator(value: inProgress[task]!.$1),
+              ),
+            ],
+          );
         }).toList(),
       ),
     );

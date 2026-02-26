@@ -41,7 +41,9 @@ Future<void> doUploadTask(UploadTask task, SendPort sendPort) async {
 /// Sends updates via the [sendPort] and can be commanded to cancel via
 /// the [messagesToIsolate] queue
 Future<(Task, TaskStatus)> binaryUpload(
-    UploadTask task, SendPort sendPort) async {
+  UploadTask task,
+  SendPort sendPort,
+) async {
   final filePath = await task.filePath();
   final inFile = File(filePath);
   if (!inFile.existsSync()) {
@@ -78,22 +80,27 @@ Future<(Task, TaskStatus)> binaryUpload(
       }
       task.headers.remove('Range'); // not passed on to server
     }
-    if (task case UriUploadTask(fileUri: final fileUri)
-        when fileUri != null && task.filename.isEmpty) {
+    if (task case UriUploadTask(
+      fileUri: final fileUri,
+    ) when fileUri != null && task.filename.isEmpty) {
       // for UriTasks without a filename, derive it from the Uri
       task = task.copyWith(filename: fileUri.pathSegments.last);
     }
     final contentLength = end - start + 1;
     final client = DesktopDownloader.httpClient;
-    final request =
-        http.StreamedRequest(task.httpRequestMethod, Uri.parse(task.url));
+    final request = http.StreamedRequest(
+      task.httpRequestMethod,
+      Uri.parse(task.url),
+    );
     request.headers.addAll(task.headers);
     request.contentLength = contentLength;
     request.headers['Content-Type'] = task.mimeType;
-    final taskContentDisposition = task.headers['Content-Disposition'] ??
+    final taskContentDisposition =
+        task.headers['Content-Disposition'] ??
         task.headers['content-disposition'];
     if (taskContentDisposition != '') {
-      request.headers['Content-Disposition'] = taskContentDisposition ??
+      request.headers['Content-Disposition'] =
+          taskContentDisposition ??
           'attachment; filename="${Uri.encodeComponent(task.filename)}"';
     } else {
       request.headers.remove('Content-Disposition');
@@ -104,7 +111,8 @@ Future<(Task, TaskStatus)> binaryUpload(
     var transferBytesResult = TaskStatus.failed;
     client.send(request).then((response) async {
       // request completed, so send status update and finish
-      resultStatus = transferBytesResult == TaskStatus.complete &&
+      resultStatus =
+          transferBytesResult == TaskStatus.complete &&
               !okResponses.contains(response.statusCode)
           ? TaskStatus.failed
           : transferBytesResult;
@@ -112,10 +120,11 @@ Future<(Task, TaskStatus)> binaryUpload(
       responseHeaders = response.headers;
       responseStatusCode = response.statusCode;
       taskException ??= TaskHttpException(
-          responseBody?.isNotEmpty == true
-              ? responseBody!
-              : response.reasonPhrase ?? 'Invalid HTTP response',
-          response.statusCode);
+        responseBody?.isNotEmpty == true
+            ? responseBody!
+            : response.reasonPhrase ?? 'Invalid HTTP response',
+        response.statusCode,
+      );
       if (response.statusCode == 404) {
         resultStatus = TaskStatus.notFound;
       }
@@ -123,8 +132,13 @@ Future<(Task, TaskStatus)> binaryUpload(
     });
     // send the bytes to the request sink
     final inStream = inFile.openRead(start, end + 1);
-    transferBytesResult =
-        await transferBytes(inStream, request.sink, fileSize, task, sendPort);
+    transferBytesResult = await transferBytes(
+      inStream,
+      request.sink,
+      fileSize,
+      task,
+      sendPort,
+    );
     request.sink.close(); // triggers request completion, handled above
     if (isCanceled) {
       // cancellation overrides other results
@@ -144,7 +158,9 @@ Future<(Task, TaskStatus)> binaryUpload(
 /// Sends updates via the [sendPort] and can be commanded to cancel via
 /// the [messagesToIsolate] queue
 Future<(Task, TaskStatus)> multipartUpload(
-    UploadTask task, SendPort sendPort) async {
+  UploadTask task,
+  SendPort sendPort,
+) async {
   // field portion of the multipart, all in one string
   // multiple values should be encoded as '"value1", "value2", ...'
   final multiValueRegEx = RegExp(r'^(?:"[^"]+"\s*,\s*)+"[^"]+"$');
@@ -156,8 +172,10 @@ Future<(Task, TaskStatus)> multipartUpload(
         fieldsString += fieldEntry(entry.key, match.group(1) ?? 'error');
       }
     } else {
-      fieldsString +=
-          fieldEntry(entry.key, entry.value); // single value for key
+      fieldsString += fieldEntry(
+        entry.key,
+        entry.value,
+      ); // single value for key
     }
   }
   // File portion of the multi-part
@@ -167,9 +185,10 @@ Future<(Task, TaskStatus)> multipartUpload(
   const separator = '$lineFeed--$boundary$lineFeed'; // between files
   const terminator = '$lineFeed--$boundary--$lineFeed'; // after last file
   final filesData = (task is MultiUploadTask)
-      ? await task.extractFilesData() // MultiUpload case
+      ? await task
+            .extractFilesData() // MultiUpload case
       : [
-          (task.fileField, await task.filePath(), task.mimeType)
+          (task.fileField, await task.filePath(), task.mimeType),
         ]; // one file Upload case
   final contentDispositionStrings = <String>[];
   final contentTypeStrings = <String>[];
@@ -178,16 +197,18 @@ Future<(Task, TaskStatus)> multipartUpload(
     final file = File(path);
     if (!await file.exists()) {
       logError(task, 'File to upload does not exist: $path');
-      taskException =
-          TaskFileSystemException('File to upload does not exist: $path');
+      taskException = TaskFileSystemException(
+        'File to upload does not exist: $path',
+      );
       return (task, TaskStatus.failed);
     }
     final resolvedMimeType = mimeType.isEmpty ? lookupMimeType(path) : mimeType;
     var derivedFilename = p.basename(file.path);
     if (filesData.length == 1) {
       // only for single file uploads do we set the task's filename property
-      if (task case UriUploadTask(fileUri: final fileUri)
-          when fileUri != null) {
+      if (task case UriUploadTask(
+        fileUri: final fileUri,
+      ) when fileUri != null) {
         task = task.copyWith(filename: fileUri.pathSegments.last);
       } else {
         task = task.copyWith(filename: derivedFilename);
@@ -200,28 +221,34 @@ Future<(Task, TaskStatus)> multipartUpload(
     contentTypeStrings.add('Content-Type: $resolvedMimeType$lineFeed$lineFeed');
     fileLengths.add(file.lengthSync());
   }
-  final fileDataLength = contentDispositionStrings.fold<int>(
-          0, (sum, string) => sum + lengthInBytes(string)) +
+  final fileDataLength =
+      contentDispositionStrings.fold<int>(
+        0,
+        (sum, string) => sum + lengthInBytes(string),
+      ) +
       contentTypeStrings.fold<int>(0, (sum, string) => sum + string.length) +
       fileLengths.fold<int>(0, (sum, length) => sum + length) +
       separator.length * contentDispositionStrings.length +
       2;
-  final contentLength = lengthInBytes(fieldsString) +
+  final contentLength =
+      lengthInBytes(fieldsString) +
       '--$boundary$lineFeed'.length +
       fileDataLength;
   var resultStatus = TaskStatus.failed;
   try {
     // setup the connection
     final client = DesktopDownloader.httpClient;
-    final request =
-        http.StreamedRequest(task.httpRequestMethod, Uri.parse(task.url));
+    final request = http.StreamedRequest(
+      task.httpRequestMethod,
+      Uri.parse(task.url),
+    );
     request.contentLength = contentLength;
     request.headers.addAll(task.headers);
     request.headers.addAll({
       'Content-Type': 'multipart/form-data; boundary=$boundary',
       'Accept-Charset': 'UTF-8',
       'Connection': 'Keep-Alive',
-      'Cache-Control': 'no-cache'
+      'Cache-Control': 'no-cache',
     });
     request.persistentConnection = false;
     // initiate the request and handle completion async
@@ -229,7 +256,8 @@ Future<(Task, TaskStatus)> multipartUpload(
     var transferBytesResult = TaskStatus.failed;
     client.send(request).then((response) async {
       // request completed, so send status update and finish
-      resultStatus = transferBytesResult == TaskStatus.complete &&
+      resultStatus =
+          transferBytesResult == TaskStatus.complete &&
               !okResponses.contains(response.statusCode)
           ? TaskStatus.failed
           : transferBytesResult;
@@ -237,10 +265,11 @@ Future<(Task, TaskStatus)> multipartUpload(
       responseHeaders = response.headers;
       responseStatusCode = response.statusCode;
       taskException ??= TaskHttpException(
-          responseBody?.isNotEmpty == true
-              ? responseBody!
-              : response.reasonPhrase ?? 'Invalid HTTP response',
-          response.statusCode);
+        responseBody?.isNotEmpty == true
+            ? responseBody!
+            : response.reasonPhrase ?? 'Invalid HTTP response',
+        response.statusCode,
+      );
       if (response.statusCode == 404) {
         resultStatus = TaskStatus.notFound;
       }
@@ -256,12 +285,18 @@ Future<(Task, TaskStatus)> multipartUpload(
       // send the bytes to the request sink
       final inStream = File(fileData.$2).openRead();
       transferBytesResult = await transferBytes(
-          inStream, request.sink, contentLength, task, sendPort);
+        inStream,
+        request.sink,
+        contentLength,
+        task,
+        sendPort,
+      );
       if (transferBytesResult != TaskStatus.complete || isCanceled) {
         break;
       } else {
         request.sink.add(
-            utf8.encode(fileData == filesData.last ? terminator : separator));
+          utf8.encode(fileData == filesData.last ? terminator : separator),
+        );
       }
     }
     request.sink.close(); // triggers request completion, handled above

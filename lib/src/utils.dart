@@ -10,7 +10,9 @@ final _log = Logger('FileDownloader');
 /// Return url String composed of the [url] and the
 /// [urlQueryParameters], if given
 String urlWithQueryParameters(
-    String url, Map<String, String>? urlQueryParameters) {
+  String url,
+  Map<String, String>? urlQueryParameters,
+) {
   if (urlQueryParameters == null || urlQueryParameters.isEmpty) {
     return url;
   }
@@ -39,9 +41,11 @@ String urlWithQueryParameters(
 /// the [task] headers
 int getContentLength(Map<String, String> responseHeaders, Task task) {
   // if response provides contentLength, return it
-  final contentLength = int.tryParse(responseHeaders['Content-Length'] ??
-      responseHeaders['content-length'] ??
-      '-1');
+  final contentLength = int.tryParse(
+    responseHeaders['Content-Length'] ??
+        responseHeaders['content-length'] ??
+        '-1',
+  );
   if (contentLength != null && contentLength != -1) {
     return contentLength;
   }
@@ -51,17 +55,22 @@ int getContentLength(Map<String, String> responseHeaders, Task task) {
   if (taskRange.$2 != null) {
     var rangeLength = taskRange.$2! - taskRange.$1 + 1;
     _log.finest(
-        'TaskId ${task.taskId} contentLength set to $rangeLength based on Range header');
+      'TaskId ${task.taskId} contentLength set to $rangeLength based on Range header',
+    );
     return rangeLength;
   }
   // try extracting it from a special "Known-Content-Length" header
-  var knownLength = int.tryParse(task.headers['Known-Content-Length'] ??
-          task.headers['known-content-length'] ??
-          '-1') ??
+  var knownLength =
+      int.tryParse(
+        task.headers['Known-Content-Length'] ??
+            task.headers['known-content-length'] ??
+            '-1',
+      ) ??
       -1;
   if (knownLength != -1) {
     _log.finest(
-        'TaskId ${task.taskId} contentLength set to $knownLength based on Known-Content-Length header');
+      'TaskId ${task.taskId} contentLength set to $knownLength based on Known-Content-Length header',
+    );
   } else {
     _log.finest('TaskId ${task.taskId} contentLength undetermined');
   }
@@ -80,7 +89,10 @@ int getContentLength(Map<String, String> responseHeaders, Task task) {
 /// "Content-Disposition" according to RFC6266, or the last path segment of the
 /// URL, or leaves the filename unchanged
 Future<DownloadTask> taskWithSuggestedFilename(
-    DownloadTask task, Map<String, String> responseHeaders, bool unique) {
+  DownloadTask task,
+  Map<String, String> responseHeaders,
+  bool unique,
+) {
   /// Returns [DownloadTask] with a filename similar to the one
   /// supplied, but unused.
   ///
@@ -114,12 +126,14 @@ Future<DownloadTask> taskWithSuggestedFilename(
   try {
     final disposition = responseHeaders.entries
         .firstWhere(
-            (element) => element.key.toLowerCase() == 'content-disposition')
+          (element) => element.key.toLowerCase() == 'content-disposition',
+        )
         .value;
     // Try filename*=UTF-8'language'"encodedFilename"
     final encodedFilenameRegEx = RegExp(
-        'filename\\*=\\s*([^\']+)\'([^\']*)\'"?([^"]+)"?',
-        caseSensitive: false);
+      'filename\\*=\\s*([^\']+)\'([^\']*)\'"?([^"]+)"?',
+      caseSensitive: false,
+    );
     var match = encodedFilenameRegEx.firstMatch(disposition);
     if (match != null &&
         match.group(1)?.isNotEmpty == true &&
@@ -129,15 +143,20 @@ Future<DownloadTask> taskWithSuggestedFilename(
             ? Uri.decodeComponent(match.group(3)!)
             : match.group(3)!;
         return uniqueFilename(
-            task.copyWith(filename: suggestedFilename), unique);
+          task.copyWith(filename: suggestedFilename),
+          unique,
+        );
       } on ArgumentError {
         _log.finest(
-            'Could not interpret suggested filename (UTF-8 url encoded) ${match.group(3)}');
+          'Could not interpret suggested filename (UTF-8 url encoded) ${match.group(3)}',
+        );
       }
     }
     // Try filename="filename"
-    final plainFilenameRegEx =
-        RegExp(r'filename=\s*"?([^"]+)"?.*$', caseSensitive: false);
+    final plainFilenameRegEx = RegExp(
+      r'filename=\s*"?([^"]+)"?.*$',
+      caseSensitive: false,
+    );
     match = plainFilenameRegEx.firstMatch(disposition);
     if (match != null && match.group(1)?.isNotEmpty == true) {
       return uniqueFilename(task.copyWith(filename: match.group(1)), unique);

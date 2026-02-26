@@ -17,8 +17,8 @@ Future<Task?> defaultOnAuth(Task task) async {
   if (auth == null) {
     throw ArgumentError('Task has no auth object');
   }
-  final (updatedAccessToken, updatedRefreshToken) =
-      await auth.refreshAccessToken();
+  final (updatedAccessToken, updatedRefreshToken) = await auth
+      .refreshAccessToken();
   if (!updatedAccessToken) {
     throw const HttpException('Could not refresh access token');
   }

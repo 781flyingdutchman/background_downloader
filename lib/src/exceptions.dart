@@ -6,7 +6,7 @@ const _exceptions = {
   'TaskUrlException': TaskUrlException.new,
   'TaskConnectionException': TaskConnectionException.new,
   'TaskResumeException': TaskResumeException.new,
-  'TaskHttpException': TaskHttpException.new
+  'TaskHttpException': TaskHttpException.new,
 };
 
 /// Contains Exception information associated with a failed [Task]
@@ -41,8 +41,11 @@ base class TaskException implements Exception {
   }
 
   /// Create object from String description of the type, and parameters
-  factory TaskException.fromTypeString(String typeString, String description,
-      [int httpResponseCode = -1]) {
+  factory TaskException.fromTypeString(
+    String typeString,
+    String description, [
+    int httpResponseCode = -1,
+  ]) {
     final exceptionType = _exceptions[typeString] ?? TaskException.new;
     if (typeString != 'TaskHttpException') {
       return exceptionType(description);
@@ -52,8 +55,10 @@ base class TaskException implements Exception {
   }
 
   /// Return JSON Map representing object
-  Map<String, dynamic> toJson() =>
-      {'type': exceptionType, 'description': description};
+  Map<String, dynamic> toJson() => {
+    'type': exceptionType,
+    'description': description,
+  };
 
   /// Return JSON String representing object
   String toJsonString() => jsonEncode(toJson());
@@ -110,8 +115,10 @@ final class TaskHttpException extends TaskException {
   String get exceptionType => 'TaskHttpException';
 
   @override
-  Map<String, dynamic> toJson() =>
-      {...super.toJson(), 'httpResponseCode': httpResponseCode};
+  Map<String, dynamic> toJson() => {
+    ...super.toJson(),
+    'httpResponseCode': httpResponseCode,
+  };
 
   @override
   String toString() {
