@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'file_downloader.dart';
 import 'models.dart';
 import 'task.dart';
+import 'uri/uri_helpers.dart';
 
 /// Progress indicator for use with the [FileDownloader]
 ///
@@ -227,7 +228,8 @@ class _DownloadProgressItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final messageText = message
-        .replaceAll(_fileNameRegEx, task.filename)
+        .replaceAll(
+            _fileNameRegEx, unpack(task.filename).filename ?? task.filename)
         .replaceAll(_metadataRegEx, task.metaData);
     return Container(
       height: height,
@@ -356,23 +358,24 @@ class _ExpandedDownloadProgress extends StatelessWidget {
         },
         children: tasks.map((task) {
           return TableRow(
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(color: Theme.of(context).dividerColor),
-              ),
-            ),
-            children: [
-              SizedBox(
-                height: height,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 8, right: 8),
-                    child: Text(
-                      message
-                          .replaceAll(_fileNameRegEx, task.filename)
-                          .replaceAll(_metadataRegEx, task.metaData),
-                      style: Theme.of(context).textTheme.bodyMedium,
+              decoration: BoxDecoration(
+                  border: Border(
+                      top: BorderSide(color: Theme.of(context).dividerColor))),
+              children: [
+                SizedBox(
+                  height: height,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 8, right: 8),
+                      child: Text(
+                          message
+                              .replaceAll(
+                                  _fileNameRegEx,
+                                  unpack(task.filename).filename ??
+                                      task.filename)
+                              .replaceAll(_metadataRegEx, task.metaData),
+                          style: Theme.of(context).textTheme.bodyMedium),
                     ),
                   ),
                 ),
