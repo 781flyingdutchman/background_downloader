@@ -98,7 +98,7 @@ enum _StorageCommand {
   retrieveAllResumeData,
   removeResumeData,
   retrieveAll,
-  clearCache
+  clearCache,
 }
 
 /// Default implementation of [PersistentStorage] using Localstore package
@@ -124,7 +124,9 @@ class LocalStorePersistentStorage implements PersistentStorage {
   @override
   Future<(String, int)> get storedDatabaseVersion async {
     final result = await _sendRequest<List<dynamic>>(
-        _StorageCommand.getStoredDatabaseVersion, []);
+      _StorageCommand.getStoredDatabaseVersion,
+      [],
+    );
     return (result[0] as String, result[1] as int);
   }
 
@@ -196,14 +198,18 @@ class LocalStorePersistentStorage implements PersistentStorage {
   @override
   Future<TaskRecord?> retrieveTaskRecord(String taskId) async {
     final result = await _sendRequest<TaskRecord?>(
-        _StorageCommand.retrieveTaskRecord, [taskId]);
+      _StorageCommand.retrieveTaskRecord,
+      [taskId],
+    );
     return result;
   }
 
   @override
   Future<List<TaskRecord>> retrieveAllTaskRecords() async {
     final result = await _sendRequest<List<dynamic>>(
-        _StorageCommand.retrieveAllTaskRecords, []);
+      _StorageCommand.retrieveAllTaskRecords,
+      [],
+    );
     return result.cast<TaskRecord>();
   }
 
@@ -217,15 +223,19 @@ class LocalStorePersistentStorage implements PersistentStorage {
 
   @override
   Future<Task?> retrievePausedTask(String taskId) async {
-    final result =
-        await _sendRequest<Task?>(_StorageCommand.retrievePausedTask, [taskId]);
+    final result = await _sendRequest<Task?>(
+      _StorageCommand.retrievePausedTask,
+      [taskId],
+    );
     return result;
   }
 
   @override
   Future<List<Task>> retrieveAllPausedTasks() async {
     final result = await _sendRequest<List<dynamic>>(
-        _StorageCommand.retrieveAllPausedTasks, []);
+      _StorageCommand.retrieveAllPausedTasks,
+      [],
+    );
     return result.cast<Task>();
   }
 
@@ -240,14 +250,18 @@ class LocalStorePersistentStorage implements PersistentStorage {
   @override
   Future<ResumeData?> retrieveResumeData(String taskId) async {
     final result = await _sendRequest<ResumeData?>(
-        _StorageCommand.retrieveResumeData, [taskId]);
+      _StorageCommand.retrieveResumeData,
+      [taskId],
+    );
     return result;
   }
 
   @override
   Future<List<ResumeData>> retrieveAllResumeData() async {
     final result = await _sendRequest<List<dynamic>>(
-        _StorageCommand.retrieveAllResumeData, []);
+      _StorageCommand.retrieveAllResumeData,
+      [],
+    );
     return result.cast<ResumeData>();
   }
 
@@ -257,7 +271,9 @@ class LocalStorePersistentStorage implements PersistentStorage {
 
   Future<Map<String, dynamic>> retrieveAll(String collection) async {
     final result = await _sendRequest<Map<String, dynamic>>(
-        _StorageCommand.retrieveAll, [collection]);
+      _StorageCommand.retrieveAll,
+      [collection],
+    );
     return result;
   }
 
@@ -293,7 +309,8 @@ void _isolateEntry(SendPort mainSendPort) {
           executor = _LocalStorePersistentStorageExecutor();
           await executor!.initialize();
           executor!.log.fine(
-              'Initialized isolate with dbDir ${await Localstore.instance.databaseDirectory}');
+            'Initialized isolate with dbDir ${await Localstore.instance.databaseDirectory}',
+          );
           result = null;
         } else {
           // All other methods require executor to be initialized
@@ -310,39 +327,49 @@ void _isolateEntry(SendPort mainSendPort) {
   });
 }
 
-Future<dynamic> _dispatch(_LocalStorePersistentStorageExecutor executor,
-        _StorageCommand method, List<dynamic> args) =>
-    switch (method) {
-      _StorageCommand.getStoredDatabaseVersion => executor.storedDatabaseVersion
-          .then((r) => [r.$1, r.$2]), // tuple to list
-      _StorageCommand.storeTaskRecord =>
-        executor.storeTaskRecord(args[0] as Map<String, dynamic>),
-      _StorageCommand.retrieveTaskRecord =>
-        executor.retrieveTaskRecord(args[0] as String),
-      _StorageCommand.retrieveAllTaskRecords =>
-        executor.retrieveAllTaskRecords(),
-      _StorageCommand.removeTaskRecord =>
-        executor.removeTaskRecord(args[0] as String?),
-      _StorageCommand.storePausedTask =>
-        executor.storePausedTask(args[0] as Map<String, dynamic>),
-      _StorageCommand.retrievePausedTask =>
-        executor.retrievePausedTask(args[0] as String),
-      _StorageCommand.retrieveAllPausedTasks =>
-        executor.retrieveAllPausedTasks(),
-      _StorageCommand.removePausedTask =>
-        executor.removePausedTask(args[0] as String?),
-      _StorageCommand.storeResumeData =>
-        executor.storeResumeData(args[0] as Map<String, dynamic>),
-      _StorageCommand.retrieveResumeData =>
-        executor.retrieveResumeData(args[0] as String),
-      _StorageCommand.retrieveAllResumeData => executor.retrieveAllResumeData(),
-      _StorageCommand.removeResumeData =>
-        executor.removeResumeData(args[0] as String?),
-      _StorageCommand.retrieveAll => executor.retrieveAll(args[0] as String),
-      _StorageCommand.clearCache => executor.clearCache(),
-      _StorageCommand.initialize =>
-        throw StateError('Initialize should be handled in isolate entry')
-    };
+Future<dynamic> _dispatch(
+  _LocalStorePersistentStorageExecutor executor,
+  _StorageCommand method,
+  List<dynamic> args,
+) => switch (method) {
+  _StorageCommand.getStoredDatabaseVersion =>
+    executor.storedDatabaseVersion.then((r) => [r.$1, r.$2]), // tuple to list
+  _StorageCommand.storeTaskRecord => executor.storeTaskRecord(
+    args[0] as Map<String, dynamic>,
+  ),
+  _StorageCommand.retrieveTaskRecord => executor.retrieveTaskRecord(
+    args[0] as String,
+  ),
+  _StorageCommand.retrieveAllTaskRecords => executor.retrieveAllTaskRecords(),
+  _StorageCommand.removeTaskRecord => executor.removeTaskRecord(
+    args[0] as String?,
+  ),
+  _StorageCommand.storePausedTask => executor.storePausedTask(
+    args[0] as Map<String, dynamic>,
+  ),
+  _StorageCommand.retrievePausedTask => executor.retrievePausedTask(
+    args[0] as String,
+  ),
+  _StorageCommand.retrieveAllPausedTasks => executor.retrieveAllPausedTasks(),
+  _StorageCommand.removePausedTask => executor.removePausedTask(
+    args[0] as String?,
+  ),
+  _StorageCommand.storeResumeData => executor.storeResumeData(
+    args[0] as Map<String, dynamic>,
+  ),
+  _StorageCommand.retrieveResumeData => executor.retrieveResumeData(
+    args[0] as String,
+  ),
+  _StorageCommand.retrieveAllResumeData => executor.retrieveAllResumeData(),
+  _StorageCommand.removeResumeData => executor.removeResumeData(
+    args[0] as String?,
+  ),
+  _StorageCommand.retrieveAll => executor.retrieveAll(args[0] as String),
+  _StorageCommand.clearCache => executor.clearCache(),
+  _StorageCommand.initialize => throw StateError(
+    'Initialize should be handled in isolate entry',
+  ),
+};
 
 /// The executor that runs in the isolate and does the actual work
 ///
@@ -422,16 +449,20 @@ class _LocalStorePersistentStorageExecutor {
       remove(resumeDataPath, _safeIdOrNull(taskId));
 
   /// Stores [Map<String, dynamic>] formatted [document] in [collection] keyed under [identifier]
-  Future<void> store(Map<String, dynamic> document, String collection,
-      String identifier) async {
+  Future<void> store(
+    Map<String, dynamic> document,
+    String collection,
+    String identifier,
+  ) async {
     await _db.collection(collection).doc(identifier).set(document);
   }
 
   /// Returns [document] stored in [collection] under key [identifier]
   /// as a [Map<String, dynamic>], or null if not found
   Future<Map<String, dynamic>?> retrieve(
-          String collection, String identifier) =>
-      _db.collection(collection).doc(identifier).get();
+    String collection,
+    String identifier,
+  ) => _db.collection(collection).doc(identifier).get();
 
   /// Returns all documents in collection as a [Map<String, dynamic>] keyed by the
   /// document identifier, with the value a [Map<String, dynamic>] representing the document
@@ -459,8 +490,10 @@ class _LocalStorePersistentStorageExecutor {
       id?.replaceAll(_illegalPathCharacters, '_');
 
   Future<(String, int)> get storedDatabaseVersion async {
-    final metaData =
-        await _db.collection(metaDataCollection).doc('metaData').get();
+    final metaData = await _db
+        .collection(metaDataCollection)
+        .doc('metaData')
+        .get();
     return ('Localstore', (metaData?['version'] as num?)?.toInt() ?? 0);
   }
 
@@ -477,38 +510,41 @@ class _LocalStorePersistentStorageExecutor {
       return;
     }
     log.fine(
-        'Migrating $currentName database from version $storedVersion to $currentVersion');
+      'Migrating $currentName database from version $storedVersion to $currentVersion',
+    );
     switch (storedVersion) {
       case 0:
         // move files from docDir to supportDir
         final docDir = await getApplicationDocumentsDirectory();
         final supportDir = await getApplicationSupportDirectory();
-        await Future.wait([resumeDataPath, pausedTasksPath, taskRecordsPath]
-            .map((path) async {
-          try {
-            final fromPath = join(docDir.path, path);
-            if (await Directory(fromPath).exists()) {
-              log.finest('Moving $path to support directory');
-              final toPath = join(supportDir.path, path);
-              await Directory(toPath).create(recursive: true);
-              final entities = await Directory(fromPath).list().toList();
-              await Future.wait(entities
-                  .whereType<File>()
-                  .map((file) => file.copy(join(toPath, basename(file.path)))));
-              await Directory(fromPath).delete(recursive: true);
+        await Future.wait(
+          [resumeDataPath, pausedTasksPath, taskRecordsPath].map((path) async {
+            try {
+              final fromPath = join(docDir.path, path);
+              if (await Directory(fromPath).exists()) {
+                log.finest('Moving $path to support directory');
+                final toPath = join(supportDir.path, path);
+                await Directory(toPath).create(recursive: true);
+                final entities = await Directory(fromPath).list().toList();
+                await Future.wait(
+                  entities.whereType<File>().map(
+                    (file) => file.copy(join(toPath, basename(file.path))),
+                  ),
+                );
+                await Directory(fromPath).delete(recursive: true);
+              }
+            } catch (e) {
+              log.fine('Error migrating database for path $path: $e');
             }
-          } catch (e) {
-            log.fine('Error migrating database for path $path: $e');
-          }
-        }));
+          }),
+        );
 
       default:
         log.warning('Illegal starting version: $storedVersion');
     }
-    await _db
-        .collection(metaDataCollection)
-        .doc('metaData')
-        .set({'version': currentVersion});
+    await _db.collection(metaDataCollection).doc('metaData').set({
+      'version': currentVersion,
+    });
   }
 
   Future<void> clearCache() async {
@@ -523,7 +559,9 @@ abstract interface class PersistentStorageMigrator {
   /// If migration took place, returns the name of the migration option,
   /// otherwise returns null
   Future<String?> migrate(
-      List<String> migrationOptions, PersistentStorage toStorage);
+    List<String> migrationOptions,
+    PersistentStorage toStorage,
+  );
 }
 
 /// Migrates from [LocalStorePersistentStorage] to another [PersistentStorage]
@@ -554,7 +592,9 @@ class BasePersistentStorageMigrator implements PersistentStorageMigrator {
   /// solutions.
   @override
   Future<String?> migrate(
-      List<String> migrationOptions, PersistentStorage toStorage) async {
+    List<String> migrationOptions,
+    PersistentStorage toStorage,
+  ) async {
     for (var persistentStorageName in migrationOptions) {
       try {
         if (await migrateFrom(persistentStorageName, toStorage)) {
@@ -562,7 +602,8 @@ class BasePersistentStorageMigrator implements PersistentStorageMigrator {
         }
       } on Exception catch (e, stacktrace) {
         log.warning(
-            'Error attempting to migrate from $persistentStorageName: $e\n$stacktrace');
+          'Error attempting to migrate from $persistentStorageName: $e\n$stacktrace',
+        );
       }
     }
     return null; // no migration
@@ -576,11 +617,12 @@ class BasePersistentStorageMigrator implements PersistentStorageMigrator {
   /// If extending the class, add your mapping from a migration option String
   /// to a _migrateFrom... method that does your migration.
   Future<bool> migrateFrom(
-          String persistentStorageName, PersistentStorage toStorage) =>
-      switch (persistentStorageName.toLowerCase().replaceAll('_', '')) {
-        'localstore' => migrateFromLocalStore(toStorage),
-        _ => Future.value(false)
-      };
+    String persistentStorageName,
+    PersistentStorage toStorage,
+  ) => switch (persistentStorageName.toLowerCase().replaceAll('_', '')) {
+    'localstore' => migrateFromLocalStore(toStorage),
+    _ => Future.value(false),
+  };
 
   /// Migrate from a persistent storage to our database
   ///
@@ -589,7 +631,9 @@ class BasePersistentStorageMigrator implements PersistentStorageMigrator {
   /// This is a generic migrator that copies from one storage to another, and
   /// is used by the _migrateFrom... methods
   Future<bool> migrateFromPersistentStorage(
-      PersistentStorage fromStorage, PersistentStorage toStorage) async {
+    PersistentStorage fromStorage,
+    PersistentStorage toStorage,
+  ) async {
     bool migratedSomething = false;
     await fromStorage.initialize();
     final pausedTasks = await fromStorage.retrieveAllPausedTasks();
@@ -627,22 +671,24 @@ class BasePersistentStorageMigrator implements PersistentStorageMigrator {
     if (await migrateFromPersistentStorage(localStore, toStorage)) {
       // delete all paths related to LocalStore
       final supportDir = await getApplicationSupportDirectory();
-      await Future.wait([
-        _LocalStorePersistentStorageExecutor.resumeDataPath,
-        _LocalStorePersistentStorageExecutor.pausedTasksPath,
-        _LocalStorePersistentStorageExecutor.taskRecordsPath,
-        _LocalStorePersistentStorageExecutor.metaDataCollection
-      ].map((collectionPath) async {
-        try {
-          final path = join(supportDir.path, collectionPath);
-          if (await Directory(path).exists()) {
-            log.finest('Removing directory $path for LocalStore');
-            await Directory(path).delete(recursive: true);
+      await Future.wait(
+        [
+          _LocalStorePersistentStorageExecutor.resumeDataPath,
+          _LocalStorePersistentStorageExecutor.pausedTasksPath,
+          _LocalStorePersistentStorageExecutor.taskRecordsPath,
+          _LocalStorePersistentStorageExecutor.metaDataCollection,
+        ].map((collectionPath) async {
+          try {
+            final path = join(supportDir.path, collectionPath);
+            if (await Directory(path).exists()) {
+              log.finest('Removing directory $path for LocalStore');
+              await Directory(path).delete(recursive: true);
+            }
+          } catch (e) {
+            log.fine('Error deleting collection path $collectionPath: $e');
           }
-        } catch (e) {
-          log.fine('Error deleting collection path $collectionPath: $e');
-        }
-      }));
+        }),
+      );
       return true; // we migrated a database
     }
     return false; // we did not migrate a database

@@ -32,14 +32,16 @@ final class Utils implements UtilsImpl {
     final previous = _locks[path] ?? Future.value();
     final controller = Completer<T>();
 
-    final newFuture = previous.then((_) async {
-      try {
-        final result = await action();
-        controller.complete(result);
-      } catch (e, st) {
-        controller.completeError(e, st);
-      }
-    }).catchError((_) {});
+    final newFuture = previous
+        .then((_) async {
+          try {
+            final result = await action();
+            controller.complete(result);
+          } catch (e, st) {
+            controller.completeError(e, st);
+          }
+        })
+        .catchError((_) {});
 
     _locks[path] = newFuture;
 
@@ -62,8 +64,11 @@ final class Utils implements UtilsImpl {
   }
 
   @override
-  Future<Map<String, dynamic>?> get(String path,
-      [bool? isCollection = false, List<List>? conditions]) async {
+  Future<Map<String, dynamic>?> get(
+    String path, [
+    bool? isCollection = false,
+    List<List>? conditions,
+  ]) async {
     // Fetch the documents for this collection
     if (isCollection != null && isCollection == true) {
       final dbDir = await Localstore.instance.databaseDirectory;
@@ -85,8 +90,10 @@ final class Utils implements UtilsImpl {
             if (data is Map<String, dynamic>) {
               final key = path.replaceAll(lastPathComponentRegEx, '');
               // ignore: close_sinks
-              final storage =
-                  _storageCache.putIfAbsent(key, () => _newStream(key));
+              final storage = _storageCache.putIfAbsent(
+                key,
+                () => _newStream(key),
+              );
               storage.add(data);
               return data;
             }

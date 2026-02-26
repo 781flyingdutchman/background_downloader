@@ -30,7 +30,7 @@ sealed class UriUtils {
       switch (downloader) {
         AndroidDownloader() => _AndroidUriUtils(downloader),
         IOSDownloader() => _IOSUriUtils(downloader),
-        _ => _DesktopUriUtils(downloader)
+        _ => _DesktopUriUtils(downloader),
       };
 
   /// Opens a directory picker dialog and returns the selected directory's URI.
@@ -44,10 +44,11 @@ sealed class UriUtils {
   /// for the selected directory, if the platform supports it.
   ///
   /// Returns the selected directory's URI, or `null` if the user canceled the operation.
-  Future<Uri?> pickDirectory(
-      {SharedStorage? startLocation,
-      Uri? startLocationUri,
-      bool persistedUriPermission = false});
+  Future<Uri?> pickDirectory({
+    SharedStorage? startLocation,
+    Uri? startLocationUri,
+    bool persistedUriPermission = false,
+  });
 
   /// Opens a file picker dialog and returns the Uri of the selected file,
   /// or null if the user canceled the operation.
@@ -61,17 +62,19 @@ sealed class UriUtils {
   /// for the selected files, if the platform supports it.
   ///
   /// Returns the URI of the selected file, or `null` if the user canceled the operation.
-  Future<Uri?> pickFile(
-      {SharedStorage? startLocation,
-      Uri? startLocationUri,
-      List<String>? allowedExtensions,
-      bool persistedUriPermission = false}) async {
+  Future<Uri?> pickFile({
+    SharedStorage? startLocation,
+    Uri? startLocationUri,
+    List<String>? allowedExtensions,
+    bool persistedUriPermission = false,
+  }) async {
     final list = await pickFiles(
-        startLocation: startLocation,
-        startLocationUri: startLocationUri,
-        allowedExtensions: allowedExtensions,
-        persistedUriPermission: persistedUriPermission,
-        multipleAllowed: false);
+      startLocation: startLocation,
+      startLocationUri: startLocationUri,
+      allowedExtensions: allowedExtensions,
+      persistedUriPermission: persistedUriPermission,
+      multipleAllowed: false,
+    );
     return list?.isNotEmpty == true ? list!.first : null;
   }
 
@@ -88,12 +91,13 @@ sealed class UriUtils {
   /// for the selected files, if the platform supports it.
   ///
   /// Returns a list of the selected files' URIs, or `null` if the user canceled the operation.
-  Future<List<Uri>?> pickFiles(
-      {SharedStorage? startLocation,
-      Uri? startLocationUri,
-      List<String>? allowedExtensions,
-      bool multipleAllowed = false,
-      bool persistedUriPermission = false});
+  Future<List<Uri>?> pickFiles({
+    SharedStorage? startLocation,
+    Uri? startLocationUri,
+    List<String>? allowedExtensions,
+    bool multipleAllowed = false,
+    bool persistedUriPermission = false,
+  });
 
   /// Creates a new directory with the given name within the specified parent directory.
   ///
@@ -103,8 +107,11 @@ sealed class UriUtils {
   /// for the created directory, if the platform supports it.
   ///
   /// Returns the URI of the newly created directory.
-  Future<Uri> createDirectory(Uri parentDirectoryUri, String newDirectoryName,
-      {bool persistedUriPermission = false});
+  Future<Uri> createDirectory(
+    Uri parentDirectoryUri,
+    String newDirectoryName, {
+    bool persistedUriPermission = false,
+  });
 
   /// Activate a previously accessed directory or file (applies previously
   /// obtained permissions) and return the Uri, or null if this was not
@@ -181,15 +188,23 @@ sealed class UriUtils {
   /// of the photo or video in the Photos Library.
   ///
   /// Platform-dependent, not consistent across all platforms
-  Future<Uri?> moveToSharedStorage(DownloadTask task, SharedStorage destination,
-      {String directory = '', String? mimeType}) async {
+  Future<Uri?> moveToSharedStorage(
+    DownloadTask task,
+    SharedStorage destination, {
+    String directory = '',
+    String? mimeType,
+  }) async {
     final uri = switch (task) {
       UriTask t => t.fileUri,
-      _ => Uri.file(await task.filePath())
+      _ => Uri.file(await task.filePath()),
     };
     return uri != null
-        ? await moveFileToSharedStorage(uri, destination,
-            directory: directory, mimeType: mimeType)
+        ? await moveFileToSharedStorage(
+            uri,
+            destination,
+            directory: directory,
+            mimeType: mimeType,
+          )
         : null;
   }
 
@@ -213,13 +228,23 @@ sealed class UriUtils {
   /// of the photo or video in the Photos Library.
   ///
   /// Platform-dependent, not consistent across all platforms
-  Future<Uri?> moveFileToSharedStorage(Uri fileUri, SharedStorage destination,
-      {String directory = '', String? mimeType}) async {
-    assert(fileUri.scheme == 'file',
-        'uri.moveFileToSharedStorage requires a file scheme uri, got $fileUri');
+  Future<Uri?> moveFileToSharedStorage(
+    Uri fileUri,
+    SharedStorage destination, {
+    String directory = '',
+    String? mimeType,
+  }) async {
+    assert(
+      fileUri.scheme == 'file',
+      'uri.moveFileToSharedStorage requires a file scheme uri, got $fileUri',
+    );
     final uriString = await _downloader.moveToSharedStorage(
-        fileUri.toString(), destination, directory, mimeType,
-        asUriString: true);
+      fileUri.toString(),
+      destination,
+      directory,
+      mimeType,
+      asUriString: true,
+    );
     return uriString != null ? Uri.tryParse(uriString) : null;
   }
 
@@ -233,13 +258,21 @@ sealed class UriUtils {
   /// on iOS for .images and .video
   ///
   /// Platform-dependent, not consistent across all platforms
-  Future<Uri?> pathInSharedStorage(Uri fileUri, SharedStorage destination,
-      {String directory = ''}) async {
-    assert(fileUri.scheme == 'file',
-        'uri.pathInSharedStorage requires a file scheme uri, got $fileUri');
+  Future<Uri?> pathInSharedStorage(
+    Uri fileUri,
+    SharedStorage destination, {
+    String directory = '',
+  }) async {
+    assert(
+      fileUri.scheme == 'file',
+      'uri.pathInSharedStorage requires a file scheme uri, got $fileUri',
+    );
     final uriString = await _downloader.pathInSharedStorage(
-        fileUri.toString(), destination, directory,
-        asUriString: true);
+      fileUri.toString(),
+      destination,
+      directory,
+      asUriString: true,
+    );
     return uriString != null ? Uri.tryParse(uriString) : null;
   }
 
@@ -250,7 +283,8 @@ sealed class UriUtils {
       String() => Uri.file(destination),
       Uri() => destination,
       _ => throw ArgumentError(
-          'Invalid destination type. Must be File, String, or Uri.'),
+        'Invalid destination type. Must be File, String, or Uri.',
+      ),
     };
   }
 }
@@ -259,31 +293,38 @@ final class _DesktopUriUtils extends UriUtils {
   _DesktopUriUtils(super.downloader);
 
   @override
-  Future<Uri?> pickDirectory(
-          {SharedStorage? startLocation,
-          Uri? startLocationUri,
-          bool persistedUriPermission = false}) =>
-      throw UnimplementedError(
-          'pickDirectory not implemented for this platform. '
-          'Use the file_picker package and convert the resulting filePath '
-          'to a URI Uri.file(directoryPath, windows: Platform.isWindows)');
+  Future<Uri?> pickDirectory({
+    SharedStorage? startLocation,
+    Uri? startLocationUri,
+    bool persistedUriPermission = false,
+  }) => throw UnimplementedError(
+    'pickDirectory not implemented for this platform. '
+    'Use the file_picker package and convert the resulting filePath '
+    'to a URI Uri.file(directoryPath, windows: Platform.isWindows)',
+  );
 
   @override
-  Future<List<Uri>?> pickFiles(
-          {SharedStorage? startLocation,
-          Uri? startLocationUri,
-          List<String>? allowedExtensions,
-          bool multipleAllowed = false,
-          bool persistedUriPermission = false}) =>
-      throw UnimplementedError('pickFiles not implemented for this platform. '
-          'Use the file_picker package and convert the resulting filePath '
-          'to a URI using Uri.file(filepath, windows: Platform.isWindows)');
+  Future<List<Uri>?> pickFiles({
+    SharedStorage? startLocation,
+    Uri? startLocationUri,
+    List<String>? allowedExtensions,
+    bool multipleAllowed = false,
+    bool persistedUriPermission = false,
+  }) => throw UnimplementedError(
+    'pickFiles not implemented for this platform. '
+    'Use the file_picker package and convert the resulting filePath '
+    'to a URI using Uri.file(filepath, windows: Platform.isWindows)',
+  );
 
   @override
-  Future<Uri> createDirectory(Uri parentDirectoryUri, String newDirectoryName,
-      {bool persistedUriPermission = false}) async {
-    final parentPath =
-        parentDirectoryUri.toFilePath(windows: Platform.isWindows);
+  Future<Uri> createDirectory(
+    Uri parentDirectoryUri,
+    String newDirectoryName, {
+    bool persistedUriPermission = false,
+  }) async {
+    final parentPath = parentDirectoryUri.toFilePath(
+      windows: Platform.isWindows,
+    );
     final cleanedSegments = newDirectoryName
         .split(RegExp(r'[\\/]+'))
         .where((segment) => segment.isNotEmpty)
@@ -309,15 +350,19 @@ final class _DesktopUriUtils extends UriUtils {
   }
 
   /// Private helper method to perform the file operation (copy or move).
-  Future<Uri?> _performFileOperation(Uri source, Uri destination,
-      Future<File> Function(String) operation) async {
+  Future<Uri?> _performFileOperation(
+    Uri source,
+    Uri destination,
+    Future<File> Function(String) operation,
+  ) async {
     if (!source.isScheme('file')) {
       log.info('Source must be a file:// URI');
       return null;
     }
     if (!destination.isScheme('file')) {
       throw ArgumentError(
-          'Invalid destination type. Must be  file:// Uri, is $destination');
+        'Invalid destination type. Must be  file:// Uri, is $destination',
+      );
     }
     try {
       final destinationFile = File.fromUri(destination);
@@ -334,14 +379,20 @@ final class _DesktopUriUtils extends UriUtils {
   Future<Uri?> copyFile(Uri source, dynamic destination) async {
     final destinationUri = _determineDestinationUri(destination);
     return _performFileOperation(
-        source, destinationUri, File.fromUri(source).copy);
+      source,
+      destinationUri,
+      File.fromUri(source).copy,
+    );
   }
 
   @override
   Future<Uri?> moveFile(Uri source, dynamic destination) async {
     final destinationUri = _determineDestinationUri(destination);
     return _performFileOperation(
-        source, destinationUri, File.fromUri(source).rename);
+      source,
+      destinationUri,
+      File.fromUri(source).rename,
+    );
   }
 
   @override
@@ -373,60 +424,68 @@ final class _DesktopUriUtils extends UriUtils {
 }
 
 final class _NativeUriUtils extends UriUtils {
-  final _methodChannel =
-      MethodChannel('com.bbflight.background_downloader.uriutils');
+  final _methodChannel = MethodChannel(
+    'com.bbflight.background_downloader.uriutils',
+  );
 
   _NativeUriUtils(super.downloader);
 
   @override
-  Future<Uri?> pickDirectory(
-      {SharedStorage? startLocation,
-      Uri? startLocationUri,
-      bool persistedUriPermission = false}) async {
+  Future<Uri?> pickDirectory({
+    SharedStorage? startLocation,
+    Uri? startLocationUri,
+    bool persistedUriPermission = false,
+  }) async {
     final uriString = (await _methodChannel.invokeMethod<String>(
-        'pickDirectory', [
-      startLocation?.index,
-      startLocationUri?.toString(),
-      persistedUriPermission
-    ]));
+      'pickDirectory',
+      [
+        startLocation?.index,
+        startLocationUri?.toString(),
+        persistedUriPermission,
+      ],
+    ));
     return (uriString != null) ? Uri.parse(uriString) : null;
   }
 
   @override
-  Future<List<Uri>?> pickFiles(
-      {SharedStorage? startLocation,
-      Uri? startLocationUri,
-      List<String>? allowedExtensions,
-      bool multipleAllowed = false,
-      bool persistedUriPermission = false}) async {
+  Future<List<Uri>?> pickFiles({
+    SharedStorage? startLocation,
+    Uri? startLocationUri,
+    List<String>? allowedExtensions,
+    bool multipleAllowed = false,
+    bool persistedUriPermission = false,
+  }) async {
     final uriStrings = (await _methodChannel.invokeMethod('pickFiles', [
       startLocation?.index,
       startLocationUri?.toString(),
       allowedExtensions,
       multipleAllowed,
-      persistedUriPermission
+      persistedUriPermission,
     ]));
     // uriStrings can be a list of Strings or just one String, or null
     return switch (uriStrings) {
       String uri => [Uri.parse(uri)],
-      List<Object?>? uris => uris
-          ?.where((e) => e != null)
-          .map((e) => Uri.parse(e as String))
-          .toList(growable: false),
+      List<Object?>? uris =>
+        uris
+            ?.where((e) => e != null)
+            .map((e) => Uri.parse(e as String))
+            .toList(growable: false),
       _ => throw ArgumentError(
-          'pickFiles returned invalid value $uriStrings of type ${uriStrings.runtimeType}')
+        'pickFiles returned invalid value $uriStrings of type ${uriStrings.runtimeType}',
+      ),
     };
   }
 
   @override
-  Future<Uri> createDirectory(Uri parentDirectoryUri, String newDirectoryName,
-      {bool persistedUriPermission = false}) async {
+  Future<Uri> createDirectory(
+    Uri parentDirectoryUri,
+    String newDirectoryName, {
+    bool persistedUriPermission = false,
+  }) async {
     final uriString = (await _methodChannel.invokeMethod<String>(
-        'createDirectory', [
-      parentDirectoryUri.toString(),
-      newDirectoryName,
-      persistedUriPermission
-    ]));
+      'createDirectory',
+      [parentDirectoryUri.toString(), newDirectoryName, persistedUriPermission],
+    ));
     return Uri.parse(uriString!);
   }
 
@@ -439,7 +498,9 @@ final class _NativeUriUtils extends UriUtils {
   Future<Uint8List?> getFileBytes(Uri uri) async {
     try {
       final result = await _methodChannel.invokeMethod<Uint8List>(
-          'getFileBytes', uri.toString());
+        'getFileBytes',
+        uri.toString(),
+      );
       return result;
     } catch (e) {
       log.warning('Error reading file: $e');
@@ -451,10 +512,10 @@ final class _NativeUriUtils extends UriUtils {
   Future<Uri?> copyFile(Uri source, dynamic destination) async {
     final destinationUri = _determineDestinationUri(destination);
     try {
-      final result = await _methodChannel.invokeMethod<String>(
-        'copyFile',
-        [source.toString(), destinationUri.toString()],
-      );
+      final result = await _methodChannel.invokeMethod<String>('copyFile', [
+        source.toString(),
+        destinationUri.toString(),
+      ]);
       return result != null ? Uri.parse(result) : null;
     } catch (e) {
       log.warning('Error copying file from $source to $destinationUri', e);
@@ -466,10 +527,10 @@ final class _NativeUriUtils extends UriUtils {
   Future<Uri?> moveFile(Uri source, dynamic destination) async {
     final destinationUri = _determineDestinationUri(destination);
     try {
-      final result = await _methodChannel.invokeMethod<String>(
-        'moveFile',
-        [source.toString(), destinationUri.toString()],
-      );
+      final result = await _methodChannel.invokeMethod<String>('moveFile', [
+        source.toString(),
+        destinationUri.toString(),
+      ]);
       return result != null ? Uri.parse(result) : null;
     } catch (e) {
       log.warning('Error moving file from $source to $destinationUri', e);
@@ -511,7 +572,9 @@ final class _IOSUriUtils extends _NativeUriUtils {
   Future<Uri?> activate(Uri uri) async {
     try {
       final result = await _methodChannel.invokeMethod<String?>(
-          'activateUri', uri.toString());
+        'activateUri',
+        uri.toString(),
+      );
       return result != null ? Uri.parse(result) : uri;
     } catch (e) {
       log.fine('Error activating URI $uri: $e');
@@ -531,7 +594,8 @@ extension StringUriExtensions on String {
 extension UriExtensions on Uri {
   /// Returns the File represented by this [uri]
   File toFile() => File(
-      toFilePath(windows: defaultTargetPlatform == TargetPlatform.windows));
+    toFilePath(windows: defaultTargetPlatform == TargetPlatform.windows),
+  );
 
   /// True if Uri scheme is file
   bool get isFileUri => scheme == 'file';

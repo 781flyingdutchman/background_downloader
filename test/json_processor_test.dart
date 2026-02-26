@@ -10,9 +10,10 @@ void main() {
   group('JsonProcessor Functional Tests', () {
     test('processTaskFromJson decodes correctly', () async {
       final task = DownloadTask(
-          url: 'https://google.com',
-          filename: 'test.html',
-          headers: {'Cookie': 'foo=bar'});
+        url: 'https://google.com',
+        filename: 'test.html',
+        headers: {'Cookie': 'foo=bar'},
+      );
       final jsonString = jsonEncode(task.toJson());
 
       final result = await JsonProcessor().decodeTask(jsonString);
@@ -36,43 +37,48 @@ void main() {
       expect(result[1].url, equals(task2.url));
     });
 
-    test('processTaskListFromListStrings decodes list of strings correctly',
-        () async {
-      final task1 = DownloadTask(url: 'https://google.com/1', filename: '1');
-      final task2 = DownloadTask(url: 'https://google.com/2', filename: '2');
-      final listStrings = [
-        jsonEncode(task1.toJson()),
-        jsonEncode(task2.toJson())
-      ];
+    test(
+      'processTaskListFromListStrings decodes list of strings correctly',
+      () async {
+        final task1 = DownloadTask(url: 'https://google.com/1', filename: '1');
+        final task2 = DownloadTask(url: 'https://google.com/2', filename: '2');
+        final listStrings = [
+          jsonEncode(task1.toJson()),
+          jsonEncode(task2.toJson()),
+        ];
 
-      final result = await JsonProcessor().decodeTaskList(listStrings);
+        final result = await JsonProcessor().decodeTaskList(listStrings);
 
-      expect(result, hasLength(2));
-      expect(result[0].url, equals(task1.url));
-      expect(result[1].url, equals(task2.url));
-    });
+        expect(result, hasLength(2));
+        expect(result[0].url, equals(task1.url));
+        expect(result[1].url, equals(task2.url));
+      },
+    );
 
-    test('processTaskAndNotificationConfigJsonStrings encodes correctly',
-        () async {
-      final task = DownloadTask(url: 'https://google.com', filename: 'test');
-      final tasks = [task];
-      final configs = {
-        TaskNotificationConfig(
+    test(
+      'processTaskAndNotificationConfigJsonStrings encodes correctly',
+      () async {
+        final task = DownloadTask(url: 'https://google.com', filename: 'test');
+        final tasks = [task];
+        final configs = {
+          TaskNotificationConfig(
             taskOrGroup: task,
-            running: const TaskNotification('Running', 'body'))
-      };
+            running: const TaskNotification('Running', 'body'),
+          ),
+        };
 
-      final (tasksJson, configsJson) =
-          await JsonProcessor().encodeTaskAndNotificationConfig(tasks, configs);
+        final (tasksJson, configsJson) = await JsonProcessor()
+            .encodeTaskAndNotificationConfig(tasks, configs);
 
-      final decodedTasks = jsonDecode(tasksJson);
-      expect(decodedTasks, isA<List>());
-      expect(decodedTasks[0]['url'], equals(task.url));
+        final decodedTasks = jsonDecode(tasksJson);
+        expect(decodedTasks, isA<List>());
+        expect(decodedTasks[0]['url'], equals(task.url));
 
-      final decodedConfigs = jsonDecode(configsJson);
-      expect(decodedConfigs, isA<List>());
-      // Helper check logic might be complex, but basic existence is good
-    });
+        final decodedConfigs = jsonDecode(configsJson);
+        expect(decodedConfigs, isA<List>());
+        // Helper check logic might be complex, but basic existence is good
+      },
+    );
   });
 
   test('Benchmark: JsonProcessor vs Direct', () async {
@@ -82,10 +88,11 @@ void main() {
       headers['header_$i'] = 'value_$i' * 10; // 80 chars value
     }
     final task = DownloadTask(
-        url: 'https://example.com/very/long/path/' * 5,
-        filename: 'large_task_filename.txt',
-        headers: headers,
-        metaData: 'some metadata ' * 100);
+      url: 'https://example.com/very/long/path/' * 5,
+      filename: 'large_task_filename.txt',
+      headers: headers,
+      metaData: 'some metadata ' * 100,
+    );
     final taskJsonString = jsonEncode(task.toJson());
     print('taskJsonString is ${taskJsonString.length} characters');
     // 2. Benchmark
@@ -111,7 +118,8 @@ void main() {
     }
     stopwatchProcessor.stop();
     print(
-        'JsonProcessor (Isolate): ${stopwatchProcessor.elapsedMilliseconds} ms');
+      'JsonProcessor (Isolate): ${stopwatchProcessor.elapsedMilliseconds} ms',
+    );
 
     // Allow isolate to shutdown naturally or force it if test runner hangs (timer is 1 min)
     // We don't have public shutdown.

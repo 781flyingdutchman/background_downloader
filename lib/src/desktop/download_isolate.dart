@@ -22,8 +22,13 @@ late DownloadTask downloadTask; // global because filename may change
 ///
 /// Sends updates via the [sendPort] and can be commanded to cancel/pause via
 /// the [messagesToIsolate] queue
-Future<void> doDownloadTask(DownloadTask task, ResumeData? resumeData,
-    bool isResume, Duration requestTimeout, SendPort sendPort) async {
+Future<void> doDownloadTask(
+  DownloadTask task,
+  ResumeData? resumeData,
+  bool isResume,
+  Duration requestTimeout,
+  SendPort sendPort,
+) async {
   // use downloadTask from here on as a 'global' variable in this isolate,
   // as we may change the filename of the task
   downloadTask = task;
@@ -32,16 +37,21 @@ Future<void> doDownloadTask(DownloadTask task, ResumeData? resumeData,
   // Otherwise, it is a generated full path to the temp directory
   final tempFilePath = isResume && resumeData != null
       ? resumeData.tempFilepath
-      : p.join((await getTemporaryDirectory()).path,
-          'com.bbflight.background_downloader${Random().nextInt(1 << 32).toString()}');
+      : p.join(
+          (await getTemporaryDirectory()).path,
+          'com.bbflight.background_downloader${Random().nextInt(1 << 32).toString()}',
+        );
   final requiredStartByte =
       resumeData?.requiredStartByte ?? 0; // start for resume
   final eTag = resumeData?.eTag;
-  isResume = isResume &&
+  isResume =
+      isResume &&
       await determineIfResumeIsPossible(tempFilePath, requiredStartByte);
   final client = DesktopDownloader.httpClient;
-  var request =
-      http.Request(downloadTask.httpRequestMethod, Uri.parse(downloadTask.url));
+  var request = http.Request(
+    downloadTask.httpRequestMethod,
+    Uri.parse(downloadTask.url),
+  );
   request.headers.addAll(downloadTask.headers);
   request.persistentConnection = false;
   if (isResume) {
@@ -76,25 +86,30 @@ Future<void> doDownloadTask(DownloadTask task, ResumeData? resumeData,
       }
       if (!downloadTask.hasFilename) {
         downloadTask = await taskWithSuggestedFilename(
-            downloadTask, response.headers, true);
+          downloadTask,
+          response.headers,
+          true,
+        );
         // update the filePath by replacing the last segment with the new filename
         filePath = p.join(p.dirname(filePath), downloadTask.filename);
         log.finest(
-            'Suggested filename for taskId ${task.taskId}: ${task.filename}');
+          'Suggested filename for taskId ${task.taskId}: ${task.filename}',
+        );
       }
       responseHeaders = response.headers;
       responseStatusCode = response.statusCode;
       extractContentType(response.headers);
       if (okResponses.contains(response.statusCode)) {
         resultStatus = await processOkDownloadResponse(
-            filePath,
-            tempFilePath,
-            serverAcceptsRanges,
-            taskCanResume,
-            isResume,
-            requestTimeout,
-            response,
-            sendPort);
+          filePath,
+          tempFilePath,
+          serverAcceptsRanges,
+          taskCanResume,
+          isResume,
+          requestTimeout,
+          response,
+          sendPort,
+        );
       } else {
         // not an OK response
         responseBody = await responseContent(response);
@@ -102,10 +117,11 @@ Future<void> doDownloadTask(DownloadTask task, ResumeData? resumeData,
           resultStatus = TaskStatus.notFound;
         } else {
           taskException = TaskHttpException(
-              responseBody?.isNotEmpty == true
-                  ? responseBody!
-                  : response.reasonPhrase ?? 'Invalid HTTP Request',
-              response.statusCode);
+            responseBody?.isNotEmpty == true
+                ? responseBody!
+                : response.reasonPhrase ?? 'Invalid HTTP Request',
+            response.statusCode,
+          );
         }
       }
     }
@@ -125,7 +141,9 @@ Future<void> doDownloadTask(DownloadTask task, ResumeData? resumeData,
 /// Confirms that file at [tempFilePath] exists and its length equals
 /// [requiredStartByte]
 Future<bool> determineIfResumeIsPossible(
-    String tempFilePath, int requiredStartByte) async {
+  String tempFilePath,
+  int requiredStartByte,
+) async {
   if (File(tempFilePath).existsSync()) {
     if (await File(tempFilePath).length() == requiredStartByte) {
       return true;
@@ -146,14 +164,15 @@ Future<bool> determineIfResumeIsPossible(
 /// - .failed -> delete temp file
 /// - .paused -> post resume information
 Future<TaskStatus> processOkDownloadResponse(
-    String filePath,
-    String tempFilePath,
-    bool serverAcceptsRanges,
-    bool taskCanResume,
-    bool isResume,
-    Duration requestTimeout,
-    http.StreamedResponse response,
-    SendPort sendPort) async {
+  String filePath,
+  String tempFilePath,
+  bool serverAcceptsRanges,
+  bool taskCanResume,
+  bool isResume,
+  Duration requestTimeout,
+  http.StreamedResponse response,
+  SendPort sendPort,
+) async {
   // contentLength is extracted from response header, and if not available
   // we attempt to extract from [Task.headers], allowing developer to
   // set the content length if already known
@@ -167,10 +186,17 @@ Future<TaskStatus> processOkDownloadResponse(
   IOSink? outStream;
   try {
     // do the actual download
-    outStream = File(tempFilePath)
-        .openWrite(mode: isResume ? FileMode.append : FileMode.write);
-    final transferBytesResult = await transferBytes(response.stream, outStream,
-        contentLength, downloadTask, sendPort, requestTimeout);
+    outStream = File(
+      tempFilePath,
+    ).openWrite(mode: isResume ? FileMode.append : FileMode.write);
+    final transferBytesResult = await transferBytes(
+      response.stream,
+      outStream,
+      contentLength,
+      downloadTask,
+      sendPort,
+      requestTimeout,
+    );
     switch (transferBytesResult) {
       case TaskStatus.complete:
         // copy file to destination, creating dirs if needed
@@ -186,12 +212,17 @@ Future<TaskStatus> processOkDownloadResponse(
 
       case TaskStatus.paused:
         if (taskCanResume) {
-          sendPort.send(
-              ('resumeData', tempFilePath, bytesTotal + startByte, eTagHeader));
+          sendPort.send((
+            'resumeData',
+            tempFilePath,
+            bytesTotal + startByte,
+            eTagHeader,
+          ));
           resultStatus = TaskStatus.paused;
         } else {
-          taskException =
-              TaskResumeException('Task was paused but cannot resume');
+          taskException = TaskResumeException(
+            'Task was paused but cannot resume',
+          );
           resultStatus = TaskStatus.failed;
         }
 
@@ -213,8 +244,12 @@ Future<TaskStatus> processOkDownloadResponse(
           serverAcceptsRanges &&
           bytesTotal + startByte > 1 << 20) {
         // send ResumeData to allow resume after fail
-        sendPort.send(
-            ('resumeData', tempFilePath, bytesTotal + startByte, eTagHeader));
+        sendPort.send((
+          'resumeData',
+          tempFilePath,
+          bytesTotal + startByte,
+          eTagHeader,
+        ));
       } else if (resultStatus != TaskStatus.paused) {
         File(tempFilePath).deleteSync();
       }
@@ -230,20 +265,25 @@ Future<TaskStatus> processOkDownloadResponse(
 /// Returns true if task can continue, false if task failed.
 /// Extracts and parses Range headers, and truncates temp file
 Future<bool> prepareResume(
-    http.StreamedResponse response, String tempFilePath) async {
+  http.StreamedResponse response,
+  String tempFilePath,
+) async {
   final range = response.headers['content-range'];
   if (range == null) {
     log.fine('Could not process partial response Content-Range');
-    taskException =
-        TaskResumeException('Could not process partial response Content-Range');
+    taskException = TaskResumeException(
+      'Could not process partial response Content-Range',
+    );
     return false;
   }
   final contentRangeRegEx = RegExp(r"(\d+)-(\d+)/(\d+)");
   final matchResult = contentRangeRegEx.firstMatch(range);
   if (matchResult == null) {
     log.fine('Could not process partial response Content-Range $range');
-    taskException = TaskResumeException('Could not process '
-        'partial response Content-Range $range');
+    taskException = TaskResumeException(
+      'Could not process '
+      'partial response Content-Range $range',
+    );
     return false;
   }
   final start = int.parse(matchResult.group(1) ?? '0');
@@ -252,12 +292,14 @@ Future<bool> prepareResume(
   final tempFile = File(tempFilePath);
   final tempFileLength = await tempFile.length();
   log.finest(
-      'Resume start=$start, end=$end of total=$total bytes, tempFile = $tempFileLength bytes');
+    'Resume start=$start, end=$end of total=$total bytes, tempFile = $tempFileLength bytes',
+  );
   startByte = start - taskRangeStartByte; // relative to start of range
   if (startByte > tempFileLength) {
     log.fine('Offered range not feasible: $range with startByte $startByte');
     taskException = TaskResumeException(
-        'Offered range not feasible: $range with startByte $startByte');
+      'Offered range not feasible: $range with startByte $startByte',
+    );
     return false;
   }
   try {

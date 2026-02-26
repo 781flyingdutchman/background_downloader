@@ -31,7 +31,10 @@ class _TaskAndNotificationConfigJsonStrings extends JsonCommand {
   final List<Task> tasks;
   final Set<TaskNotificationConfig> notificationConfigs;
   const _TaskAndNotificationConfigJsonStrings(
-      super.id, this.tasks, this.notificationConfigs);
+    super.id,
+    this.tasks,
+    this.notificationConfigs,
+  );
 }
 
 /// Singleton object that manages a background isolate for JSON encoding/decoding
@@ -58,21 +61,29 @@ class JsonProcessor {
 
   Future<List<DownloadTask>> decodeDownloadTaskList(String jsonString) async {
     return await _process<List<DownloadTask>>(
-        (id) => _DownloadTaskListFromJson(id, jsonString));
+      (id) => _DownloadTaskListFromJson(id, jsonString),
+    );
   }
 
   Future<List<Task>> decodeTaskList(List<dynamic> jsonStrings) async {
     return await _process<List<Task>>(
-        (id) => _TaskListFromListStrings(id, jsonStrings));
+      (id) => _TaskListFromListStrings(id, jsonStrings),
+    );
   }
 
-  Future<(String, String)> encodeTaskAndNotificationConfig(Iterable<Task> tasks,
-      Set<TaskNotificationConfig> notificationConfigs) async {
+  Future<(String, String)> encodeTaskAndNotificationConfig(
+    Iterable<Task> tasks,
+    Set<TaskNotificationConfig> notificationConfigs,
+  ) async {
     // Convert Iterable to List to ensure it's sendable and fixed
     final taskList = tasks.toList();
-    return await _process<(String, String)>((id) =>
-        _TaskAndNotificationConfigJsonStrings(
-            id, taskList, notificationConfigs));
+    return await _process<(String, String)>(
+      (id) => _TaskAndNotificationConfigJsonStrings(
+        id,
+        taskList,
+        notificationConfigs,
+      ),
+    );
   }
 
   /// Internal processing logic
@@ -225,8 +236,12 @@ Future<dynamic> _executeCommand(JsonCommand command) async {
     case _TaskAndNotificationConfigJsonStrings c:
       final tasksJsonString = jsonEncode(c.tasks);
       final configs = c.tasks
-          .map((task) => BaseDownloader.notificationConfigForTaskUsingConfigSet(
-              task, c.notificationConfigs))
+          .map(
+            (task) => BaseDownloader.notificationConfigForTaskUsingConfigSet(
+              task,
+              c.notificationConfigs,
+            ),
+          )
           .toList();
       final notificationConfigsJsonString = jsonEncode(configs);
       return (tasksJsonString, notificationConfigsJsonString);

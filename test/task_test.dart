@@ -7,11 +7,14 @@ import 'package:flutter_test/flutter_test.dart';
 final testUriWithFileScheme = Uri.parse('file:///test_file.txt');
 
 const workingUrl = 'https://google.com';
-const failingUrl = 'https://avmaps-dot-bbflightserver-hrd.appspot'
+const failingUrl =
+    'https://avmaps-dot-bbflightserver-hrd.appspot'
     '.com/public/get_current_app_data?key=background_downloader_integration_test';
-const urlWithContentLength = 'https://storage.googleapis'
+const urlWithContentLength =
+    'https://storage.googleapis'
     '.com/approachcharts/test/5MB-test.ZIP';
-const urlWithLongContentLength = 'https://storage.googleapis'
+const urlWithLongContentLength =
+    'https://storage.googleapis'
     '.com/approachcharts/test/57MB-test.ZIP';
 const getTestUrl =
     'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_get_data';
@@ -35,8 +38,11 @@ const largeFilename = '5MB-test.ZIP';
 
 var task = DownloadTask(url: workingUrl, filename: defaultFilename);
 
-var retryTask =
-    DownloadTask(url: failingUrl, filename: defaultFilename, retries: 3);
+var retryTask = DownloadTask(
+  url: failingUrl,
+  filename: defaultFilename,
+  retries: 3,
+);
 
 var uploadTask = UploadTask(url: uploadTestUrl, filename: uploadFilename);
 var uploadTaskBinary = uploadTask.copyWith(post: 'binary');
@@ -50,8 +56,13 @@ void main() {
     expect(update.hasTimeRemaining, isFalse);
     expect(update.networkSpeedAsString, equals('-- MB/s'));
     expect(update.timeRemainingAsString, equals('--:--'));
-    update =
-        TaskProgressUpdate(task, 0.1, 123, 0.2, const Duration(seconds: 30));
+    update = TaskProgressUpdate(
+      task,
+      0.1,
+      123,
+      0.2,
+      const Duration(seconds: 30),
+    );
     expect(update.hasExpectedFileSize, isTrue);
     expect(update.hasNetworkSpeed, isTrue);
     expect(update.hasTimeRemaining, isTrue);
@@ -60,30 +71,38 @@ void main() {
     update = TaskProgressUpdate(task, 0.1, 123, 2, const Duration(seconds: 90));
     expect(update.networkSpeedAsString, equals('2 MB/s'));
     expect(update.timeRemainingAsString, equals('01:30'));
-    update =
-        TaskProgressUpdate(task, 0.1, 123, 1.1, const Duration(seconds: 3610));
+    update = TaskProgressUpdate(
+      task,
+      0.1,
+      123,
+      1.1,
+      const Duration(seconds: 3610),
+    );
     expect(update.networkSpeedAsString, equals('1 MB/s'));
     expect(update.timeRemainingAsString, equals('1:00:10'));
   });
 
   test('copyWith', () async {
     final complexTask = DownloadTask(
-        taskId: 'uniqueId',
-        url: postTestUrl,
-        filename: defaultFilename,
-        headers: {'Auth': 'Test'},
-        httpRequestMethod: 'PATCH',
-        post: 'TestPost',
-        directory: 'directory',
-        baseDirectory: BaseDirectory.temporary,
-        group: 'someGroup',
-        updates: Updates.statusAndProgress,
-        requiresWiFi: true,
-        retries: 5,
-        metaData: 'someMetaData');
+      taskId: 'uniqueId',
+      url: postTestUrl,
+      filename: defaultFilename,
+      headers: {'Auth': 'Test'},
+      httpRequestMethod: 'PATCH',
+      post: 'TestPost',
+      directory: 'directory',
+      baseDirectory: BaseDirectory.temporary,
+      group: 'someGroup',
+      updates: Updates.statusAndProgress,
+      requiresWiFi: true,
+      retries: 5,
+      metaData: 'someMetaData',
+    );
     final now = DateTime.now();
     expect(
-        now.difference(complexTask.creationTime).inMilliseconds, lessThan(100));
+      now.difference(complexTask.creationTime).inMilliseconds,
+      lessThan(100),
+    );
     final task = complexTask.copyWith(); // all the same
     expect(task.taskId, equals(complexTask.taskId));
     expect(task.url, equals(complexTask.url));
@@ -106,22 +125,27 @@ void main() {
   group('DownloadTask', () {
     test('downloadTask url and urlQueryParameters', () {
       final task0 = DownloadTask(
-          url: 'url with space',
-          filename: defaultFilename,
-          urlQueryParameters: {});
+        url: 'url with space',
+        filename: defaultFilename,
+        urlQueryParameters: {},
+      );
       expect(task0.url, equals('url with space'));
       final task1 = DownloadTask(
-          url: 'url',
-          filename: defaultFilename,
-          urlQueryParameters: {'param1': '1', 'param2': 'with space'});
+        url: 'url',
+        filename: defaultFilename,
+        urlQueryParameters: {'param1': '1', 'param2': 'with space'},
+      );
       expect(task1.url, equals('url?param1=1&param2=with space'));
       final task2 = DownloadTask(
-          url: 'url?param0=0',
-          filename: defaultFilename,
-          urlQueryParameters: {'param1': '1', 'param2': 'with space'});
+        url: 'url?param0=0',
+        filename: defaultFilename,
+        urlQueryParameters: {'param1': '1', 'param2': 'with space'},
+      );
       expect(task2.url, equals('url?param0=0&param1=1&param2=with space'));
-      final task4 =
-          DownloadTask(url: urlWithContentLength, filename: defaultFilename);
+      final task4 = DownloadTask(
+        url: urlWithContentLength,
+        filename: defaultFilename,
+      );
       expect(task4.url, equals(urlWithContentLength));
     });
 
@@ -131,9 +155,10 @@ void main() {
       final task1 = DownloadTask(url: workingUrl, filename: defaultFilename);
       expect(task1.filename, equals(defaultFilename));
       expect(
-          () => DownloadTask(
-              url: workingUrl, filename: 'somedir/$defaultFilename'),
-          throwsArgumentError);
+        () =>
+            DownloadTask(url: workingUrl, filename: 'somedir/$defaultFilename'),
+        throwsArgumentError,
+      );
     });
 
     test('downloadTask hasFilename and ?', () {
@@ -176,22 +201,27 @@ void main() {
     t = DataTask(url: workingUrl, post: 'Text');
     expect(t.headers['Content-Type'], equals('text/plain; charset=utf-8'));
     t = DataTask(
-        url: workingUrl, post: 'Text', headers: {'Content-Type': 'override'});
+      url: workingUrl,
+      post: 'Text',
+      headers: {'Content-Type': 'override'},
+    );
     expect(t.headers['Content-Type'], equals('override'));
     t = DataTask(url: workingUrl, json: {'key': 'value'});
     expect(t.post, equals('{"key":"value"}'));
     expect(t.headers['Content-Type'], equals('application/json'));
     t = DataTask(
-        url: workingUrl,
-        json: {'key': 'value'},
-        headers: {'Content-Type': 'override'});
+      url: workingUrl,
+      json: {'key': 'value'},
+      headers: {'Content-Type': 'override'},
+    );
     expect(t.post, equals('{"key":"value"}'));
     expect(t.headers['Content-Type'], equals('override'));
     // assertionError if setting both post and json
     expect(
-        () => DataTask(
-            url: workingUrl, post: 'something', json: {'key': 'value'}),
-        throwsAssertionError);
+      () =>
+          DataTask(url: workingUrl, post: 'something', json: {'key': 'value'}),
+      throwsAssertionError,
+    );
     // constant header means we skip the header override
     t = DataTask(url: workingUrl, post: 'Text', headers: const {});
     expect(t.headers['Content-Type'], isNull);
@@ -205,11 +235,15 @@ void main() {
       var c = Cookie('name', 'value');
       expect(Request.cookieHeader([c], url), equals({'Cookie': 'name=value'}));
       var c2 = Cookie('name2', 'value2');
-      expect(Request.cookieHeader([c, c2], url),
-          equals({'Cookie': 'name=value; name2=value2'}));
+      expect(
+        Request.cookieHeader([c, c2], url),
+        equals({'Cookie': 'name=value; name2=value2'}),
+      );
       var c3 = Cookie('', 'value3');
-      expect(Request.cookieHeader([c, c2, c3], url),
-          equals({'Cookie': 'name=value; name2=value2; value3'}));
+      expect(
+        Request.cookieHeader([c, c2, c3], url),
+        equals({'Cookie': 'name=value; name2=value2; value3'}),
+      );
       c.maxAge = 0;
       expect(Request.cookieHeader([c], url), equals({}));
       c.maxAge = 1;
@@ -223,8 +257,10 @@ void main() {
       c.path = '/test';
       expect(Request.cookieHeader([c], url), equals({'Cookie': 'name=value'}));
       c.path = '/';
-      expect(Request.cookieHeader([c], 'https://google.com'),
-          equals({'Cookie': 'name=value'}));
+      expect(
+        Request.cookieHeader([c], 'https://google.com'),
+        equals({'Cookie': 'name=value'}),
+      );
       c.expires = DateTime.now().subtract(const Duration(seconds: 1));
       expect(Request.cookieHeader([c], url), equals({}));
       c.expires = DateTime.now().add(const Duration(seconds: 1));
@@ -233,22 +269,29 @@ void main() {
       expect(Request.cookieHeader([c], url), equals({}));
       c.expires = null;
       c.secure = true;
-      expect(Request.cookieHeader([c], 'http://www.google.com/test/something'),
-          equals({}));
+      expect(
+        Request.cookieHeader([c], 'http://www.google.com/test/something'),
+        equals({}),
+      );
       expect(Request.cookieHeader([c], url), equals({'Cookie': 'name=value'}));
       // test creation of a task with this
-      final task = DownloadTask(url: url, headers: {
-        'Auth': 'Token',
-        ...Request.cookieHeader([c, c2, c3], url)
-      });
+      final task = DownloadTask(
+        url: url,
+        headers: {
+          'Auth': 'Token',
+          ...Request.cookieHeader([c, c2, c3], url),
+        },
+      );
       expect(
-          task.headers,
-          equals(
-              {'Auth': 'Token', 'Cookie': 'name=value; name2=value2; value3'}));
+        task.headers,
+        equals({'Auth': 'Token', 'Cookie': 'name=value; name2=value2; value3'}),
+      );
       // test with cookies as a String
       const setCookie = 'name=value,name2=value2';
-      expect(Request.cookieHeader(setCookie, url),
-          equals({'Cookie': 'name=value; name2=value2'}));
+      expect(
+        Request.cookieHeader(setCookie, url),
+        equals({'Cookie': 'name=value; name2=value2'}),
+      );
       // test with cookies as an illegal type
       expect(() => Request.cookieHeader(1, url), throwsArgumentError);
     });
@@ -260,25 +303,27 @@ void main() {
       final cookies = Request.cookiesFromSetCookie(setCookie);
       for (final cookie in cookies) {
         expect(
-            cookie.name,
-            anyOf([
-              'AWSALB',
-              'AWSALBCORS',
-              'jwt_token',
-              'csrf_token',
-              'wuuid',
-              'csrf_token'
-            ]));
+          cookie.name,
+          anyOf([
+            'AWSALB',
+            'AWSALBCORS',
+            'jwt_token',
+            'csrf_token',
+            'wuuid',
+            'csrf_token',
+          ]),
+        );
         expect(
-            cookie.value,
-            anyOf([
-              'AWSALB_TEST',
-              'AWSALBCORS_TEST',
-              'JWT_TEST',
-              'CSRF_TOKEN_TEST_1',
-              'CSRF_TOKEN_TEST_2',
-              'WUUID_TEST'
-            ]));
+          cookie.value,
+          anyOf([
+            'AWSALB_TEST',
+            'AWSALBCORS_TEST',
+            'JWT_TEST',
+            'CSRF_TOKEN_TEST_1',
+            'CSRF_TOKEN_TEST_2',
+            'WUUID_TEST',
+          ]),
+        );
       }
     });
 
@@ -290,7 +335,9 @@ void main() {
       expect(cookies.first.name, equals('1P_JAR'));
       expect(cookies.first.value, equals('2023-12-07-04'));
       expect(
-          cookies.first.expires, equals(DateTime.utc(2024, 1, 6, 4, 35, 39)));
+        cookies.first.expires,
+        equals(DateTime.utc(2024, 1, 6, 4, 35, 39)),
+      );
       expect(cookies.first.path, equals('/'));
       expect(cookies.first.domain, equals('.google.com'));
     });
@@ -298,75 +345,93 @@ void main() {
 
   group('UriDownloadTask', () {
     test(
-        'directoryUri should return the correct Uri for valid directory strings',
-        () {
-      final contentUri = Uri.parse('content://downloads');
-      final taskWithContentUri = UriDownloadTask(
-        url: 'https://example.com/file.txt',
-        directoryUri: contentUri,
-      );
-      expect(taskWithContentUri.directoryUri, contentUri);
+      'directoryUri should return the correct Uri for valid directory strings',
+      () {
+        final contentUri = Uri.parse('content://downloads');
+        final taskWithContentUri = UriDownloadTask(
+          url: 'https://example.com/file.txt',
+          directoryUri: contentUri,
+        );
+        expect(taskWithContentUri.directoryUri, contentUri);
 
-      final fileUri = Uri.parse('file:///path/to/directory');
-      final taskWithFileUri = UriDownloadTask(
-        url: 'https://example.com/file.txt',
-        directoryUri: fileUri,
-      );
-      expect(taskWithFileUri.directoryUri, fileUri);
-    });
+        final fileUri = Uri.parse('file:///path/to/directory');
+        final taskWithFileUri = UriDownloadTask(
+          url: 'https://example.com/file.txt',
+          directoryUri: fileUri,
+        );
+        expect(taskWithFileUri.directoryUri, fileUri);
+      },
+    );
 
     test(
-        'constructing UriDownloadTask with invalid scheme throws AssertionError',
-        () {
-      expect(
+      'constructing UriDownloadTask with invalid scheme throws AssertionError',
+      () {
+        expect(
           () => UriDownloadTask(
-                url: 'https://example.com/file.txt',
-                directoryUri: Uri.parse('ftp://invalid/scheme'),
-              ),
-          throwsA(isA<AssertionError>()));
-    });
+            url: 'https://example.com/file.txt',
+            directoryUri: Uri.parse('ftp://invalid/scheme'),
+          ),
+          throwsA(isA<AssertionError>()),
+        );
+      },
+    );
 
-    test('Constructing UriDownloadTask with file scheme should set fileUri',
-        () {
-      // with filename in constructor
-      final task = UriDownloadTask(
+    test(
+      'Constructing UriDownloadTask with file scheme should set fileUri',
+      () {
+        // with filename in constructor
+        final task = UriDownloadTask(
           directoryUri: testUriWithFileScheme,
           url: workingUrl,
-          filename: defaultFilename);
-      expect(task.fileUri!.path,
-          equals('${testUriWithFileScheme.path}/$defaultFilename'));
-      expect(task.filename, equals(defaultFilename));
-      // without a filename in the constructor
-      final task2 =
-          UriDownloadTask(directoryUri: testUriWithFileScheme, url: workingUrl);
-      expect(task2.fileUri!.path,
-          equals('${testUriWithFileScheme.path}/${task2.filename}'));
-      expect(task2.filename, isNotEmpty);
-      // with a suggestedFilename marker in the constructor
-      final task3 = UriDownloadTask(
+          filename: defaultFilename,
+        );
+        expect(
+          task.fileUri!.path,
+          equals('${testUriWithFileScheme.path}/$defaultFilename'),
+        );
+        expect(task.filename, equals(defaultFilename));
+        // without a filename in the constructor
+        final task2 = UriDownloadTask(
           directoryUri: testUriWithFileScheme,
           url: workingUrl,
-          filename: DownloadTask.suggestedFilename);
-      expect(task3.fileUri, isNull);
-      expect(task3.filename, equals(DownloadTask.suggestedFilename));
-    });
+        );
+        expect(
+          task2.fileUri!.path,
+          equals('${testUriWithFileScheme.path}/${task2.filename}'),
+        );
+        expect(task2.filename, isNotEmpty);
+        // with a suggestedFilename marker in the constructor
+        final task3 = UriDownloadTask(
+          directoryUri: testUriWithFileScheme,
+          url: workingUrl,
+          filename: DownloadTask.suggestedFilename,
+        );
+        expect(task3.fileUri, isNull);
+        expect(task3.filename, equals(DownloadTask.suggestedFilename));
+      },
+    );
 
     test('UriDownloadTask copyWith should handle filename correctly', () {
       // no filename
-      final task =
-          UriDownloadTask(directoryUri: testUriWithFileScheme, url: workingUrl);
+      final task = UriDownloadTask(
+        directoryUri: testUriWithFileScheme,
+        url: workingUrl,
+      );
       expect(task.filename, isNotEmpty);
-      expect(task.fileUri!.toFilePath(),
-          equals('${testUriWithFileScheme.path}/${task.filename}'));
+      expect(
+        task.fileUri!.toFilePath(),
+        equals('${testUriWithFileScheme.path}/${task.filename}'),
+      );
       expect(task.directoryUri, equals(testUriWithFileScheme));
       final updatedTask = task.copyWith(filename: 'new_filename.txt');
       expect(updatedTask.filename, 'new_filename.txt');
       expect(updatedTask.directoryUri, testUriWithFileScheme);
       // with filename
       final task2 = UriDownloadTask(
-          directoryUri: testUriWithFileScheme,
-          url: workingUrl,
-          filename: 'old_filename.txt');
+        directoryUri: testUriWithFileScheme,
+        url: workingUrl,
+        filename: 'old_filename.txt',
+      );
       final updatedTask2 = task2.copyWith(filename: 'new_filename.txt');
       expect(updatedTask2.filename, 'new_filename.txt');
       expect(updatedTask2.directoryUri, testUriWithFileScheme);
@@ -375,61 +440,70 @@ void main() {
 
   group('UriUploadTask', () {
     test(
-        'fileUri should return the correct Uri for valid packed strings with Uris',
-        () {
-      final contentUri = Uri.parse('content://uploads');
-      final taskWithContentUri = UriUploadTask(
-        url: 'https://example.com/upload',
-        fileUri: contentUri,
-        filename: 'test.txt',
-      );
-      expect(taskWithContentUri.fileUri, contentUri);
+      'fileUri should return the correct Uri for valid packed strings with Uris',
+      () {
+        final contentUri = Uri.parse('content://uploads');
+        final taskWithContentUri = UriUploadTask(
+          url: 'https://example.com/upload',
+          fileUri: contentUri,
+          filename: 'test.txt',
+        );
+        expect(taskWithContentUri.fileUri, contentUri);
 
-      final fileUri = Uri.parse('file:///path/to/file.txt');
-      final taskWithFileUri = UriUploadTask(
-        url: 'https://example.com/upload',
-        fileUri: fileUri,
-      );
+        final fileUri = Uri.parse('file:///path/to/file.txt');
+        final taskWithFileUri = UriUploadTask(
+          url: 'https://example.com/upload',
+          fileUri: fileUri,
+        );
 
-      expect(taskWithFileUri.fileUri, fileUri);
-    });
-
-    test('uploadFilename should return filename when set during construction',
-        () {
-      final task = UriUploadTask(
-        url: 'https://example.com/upload',
-        fileUri: Uri.parse('content://uploads'),
-        filename: 'myFile.txt',
-      );
-      expect(task.filename, 'myFile.txt');
-      expect(task.fileUri, Uri.parse('content://uploads'));
-    });
+        expect(taskWithFileUri.fileUri, fileUri);
+      },
+    );
 
     test(
-        'uploadFilename should return empty string when no filename was set during construction',
-        () {
-      final task = UriUploadTask(
-        url: 'https://example.com/upload',
-        fileUri: Uri.parse('content://uploads'),
-      );
-      expect(task.filename, isEmpty);
-      expect(task.fileUri, Uri.parse('content://uploads'));
-    });
+      'uploadFilename should return filename when set during construction',
+      () {
+        final task = UriUploadTask(
+          url: 'https://example.com/upload',
+          fileUri: Uri.parse('content://uploads'),
+          filename: 'myFile.txt',
+        );
+        expect(task.filename, 'myFile.txt');
+        expect(task.fileUri, Uri.parse('content://uploads'));
+      },
+    );
 
-    test('constructing UriUploadTask with invalid scheme throws AssertionError',
-        () {
-      expect(
+    test(
+      'uploadFilename should return empty string when no filename was set during construction',
+      () {
+        final task = UriUploadTask(
+          url: 'https://example.com/upload',
+          fileUri: Uri.parse('content://uploads'),
+        );
+        expect(task.filename, isEmpty);
+        expect(task.fileUri, Uri.parse('content://uploads'));
+      },
+    );
+
+    test(
+      'constructing UriUploadTask with invalid scheme throws AssertionError',
+      () {
+        expect(
           () => UriUploadTask(
-                url: 'https://example.com/upload',
-                fileUri: Uri.parse('ftp://invalid/scheme'),
-              ),
-          throwsA(isA<AssertionError>()));
-    });
+            url: 'https://example.com/upload',
+            fileUri: Uri.parse('ftp://invalid/scheme'),
+          ),
+          throwsA(isA<AssertionError>()),
+        );
+      },
+    );
 
     test('UriUploadTask copyWith should handle filename correctly', () {
       // no filename
-      final task =
-          UriUploadTask(fileUri: testUriWithFileScheme, url: workingUrl);
+      final task = UriUploadTask(
+        fileUri: testUriWithFileScheme,
+        url: workingUrl,
+      );
       expect(task.filename, isEmpty);
       expect(task.fileUri, equals(testUriWithFileScheme));
       expect(task.directoryUri, isNull);
@@ -438,9 +512,10 @@ void main() {
       expect(updatedTask.fileUri, testUriWithFileScheme);
       // with filename
       final task2 = UriUploadTask(
-          fileUri: testUriWithFileScheme,
-          url: workingUrl,
-          filename: 'old_filename.txt');
+        fileUri: testUriWithFileScheme,
+        url: workingUrl,
+        filename: 'old_filename.txt',
+      );
       final updatedTask2 = task2.copyWith(filename: 'new_filename.txt');
       expect(updatedTask2.filename, 'new_filename.txt');
       expect(updatedTask2.fileUri, testUriWithFileScheme);

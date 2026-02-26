@@ -28,8 +28,10 @@ abstract interface class TaskQueue {
   ///
   /// Default implementation is a no-op to ensure backwards compatibility
   /// with subclasses that don't override this method
-  Future<void> resumeAll(
-      {Iterable<DownloadTask>? tasks, String? group}) async {}
+  Future<void> resumeAll({
+    Iterable<DownloadTask>? tasks,
+    String? group,
+  }) async {}
 }
 
 /// TaskQueue that holds all information in memory
@@ -82,8 +84,9 @@ class MemoryTaskQueue implements TaskQueue {
     } else {
       // pause specific tasks/groups
       if (group != null) {
-        final tasksToPause = waiting.unorderedElements
-            .where((task) => task.group == group && task is DownloadTask);
+        final tasksToPause = waiting.unorderedElements.where(
+          (task) => task.group == group && task is DownloadTask,
+        );
         _pausedTaskIds.addAll(tasksToPause.map((e) => e.taskId));
       }
       if (tasks != null) {
@@ -100,8 +103,9 @@ class MemoryTaskQueue implements TaskQueue {
     } else {
       // resume specific tasks/groups
       if (group != null) {
-        final tasksToResume = waiting.unorderedElements
-            .where((task) => task.group == group && task is DownloadTask);
+        final tasksToResume = waiting.unorderedElements.where(
+          (task) => task.group == group && task is DownloadTask,
+        );
         for (final task in tasksToResume) {
           _pausedTaskIds.remove(task.taskId);
         }
@@ -135,8 +139,9 @@ class MemoryTaskQueue implements TaskQueue {
   /// with the [FileDownloader]
   void removeTasksWithIds(List<String> taskIds) {
     for (final taskId in taskIds) {
-      final match = waiting.unorderedElements
-          .firstWhereOrNull((task) => task.taskId == taskId);
+      final match = waiting.unorderedElements.firstWhereOrNull(
+        (task) => task.taskId == taskId,
+      );
       if (match != null) {
         waiting.remove(match);
       }
@@ -169,8 +174,9 @@ class MemoryTaskQueue implements TaskQueue {
       _activeByGroup.clear();
     } else {
       removeTasksWithGroup(group);
-      final tasksToRemove =
-          enqueued.where((task) => task.group != group).toList(growable: false);
+      final tasksToRemove = enqueued
+          .where((task) => task.group != group)
+          .toList(growable: false);
       for (final task in tasksToRemove) {
         if (enqueued.remove(task)) {
           _decrementCounts(task);
@@ -199,7 +205,8 @@ class MemoryTaskQueue implements TaskQueue {
       enqueue(task).then((success) async {
         if (!success) {
           _log.warning(
-              'TaskId ${task.taskId} did not enqueue successfully and will be ignored');
+            'TaskId ${task.taskId} did not enqueue successfully and will be ignored',
+          );
           if (_enqueueErrorsStreamController.hasListener) {
             _enqueueErrorsStreamController.add(task);
           }

@@ -632,14 +632,14 @@ open class TaskRunner(
         } catch (e: Exception) {
             setTaskException(e)
             when (e) {
-                is java.nio.file.FileSystemException -> Log.w(
-                    TAG,
-                    "Filesystem exception for taskId ${task.taskId}: ${e.message}"
-                )
-
                 is SocketException -> Log.i(
                     TAG,
                     "Socket exception for taskId ${task.taskId}: ${e.message}"
+                )
+
+                is IOException -> Log.w(
+                    TAG,
+                    "FileSystem/IO exception for taskId ${task.taskId}: ${e.message}"
                 )
 
                 is CancellationException -> {
@@ -878,7 +878,7 @@ open class TaskRunner(
      */
     private fun setTaskException(e: Any) {
         var exceptionType = ExceptionType.general
-        if (e is java.nio.file.FileSystemException || e is IOException) {
+        if (e is IOException) {
             exceptionType = ExceptionType.fileSystem
         }
         if (e is SocketException) {
