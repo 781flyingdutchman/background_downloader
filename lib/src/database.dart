@@ -53,8 +53,10 @@ interface class Database {
   /// Returns all [TaskRecord] older than [age]
   ///
   /// Optionally, specify a [group] to filter by
-  Future<List<TaskRecord>> allRecordsOlderThan(Duration age,
-      {String? group}) async {
+  Future<List<TaskRecord>> allRecordsOlderThan(
+    Duration age, {
+    String? group,
+  }) async {
     final allRecordsInGroup = await allRecords(group: group);
     final now = DateTime.now();
     return allRecordsInGroup
@@ -65,8 +67,10 @@ interface class Database {
   /// Returns all [TaskRecord] with [TaskStatus] [status]
   ///
   /// Optionally, specify a [group] to filter by
-  Future<List<TaskRecord>> allRecordsWithStatus(TaskStatus status,
-      {String? group}) async {
+  Future<List<TaskRecord>> allRecordsWithStatus(
+    TaskStatus status, {
+    String? group,
+  }) async {
     final allRecordsInGroup = await allRecords(group: group);
     return allRecordsInGroup
         .where((record) => record.status == status)
@@ -97,7 +101,8 @@ interface class Database {
     }
     final allRecordsInGroup = await allRecords(group: group);
     await deleteRecordsWithIds(
-        allRecordsInGroup.map((record) => record.taskId));
+      allRecordsInGroup.map((record) => record.taskId),
+    );
     _updateCount = 0;
   }
 
@@ -108,7 +113,8 @@ interface class Database {
   /// Delete records with these [taskIds]
   Future<void> deleteRecordsWithIds(Iterable<String> taskIds) async {
     await Future.wait(
-        taskIds.map((taskId) => _storage.removeTaskRecord(taskId)));
+      taskIds.map((taskId) => _storage.removeTaskRecord(taskId)),
+    );
   }
 
   int _updateCount = 0;
@@ -131,11 +137,7 @@ interface class Database {
   ///
   /// The function returns immediately, but the actual cleanup happens
   /// asynchronously and is rate-limited to deleting 5 records per second.
-  void cleanUp({
-    int? maxRecordCount,
-    Duration? maxAge,
-    bool autoClean = true,
-  }) {
+  void cleanUp({int? maxRecordCount, Duration? maxAge, bool autoClean = true}) {
     _autoClean = autoClean;
     if (maxRecordCount == null && maxAge == null) {
       _maxRecordCount = 500;
@@ -157,16 +159,20 @@ interface class Database {
       _waitingToClean = false;
       try {
         final allRecords = await this.allRecords();
-        allRecords.sort((a, b) =>
-            b.task.creationTime.compareTo(a.task.creationTime)); // Newest first
+        allRecords.sort(
+          (a, b) => b.task.creationTime.compareTo(a.task.creationTime),
+        ); // Newest first
 
         final recordsToDelete = <TaskRecord>{};
         final now = DateTime.now();
         // Check age
         if (_maxAge != null) {
           final maxAge = _maxAge!;
-          recordsToDelete.addAll(allRecords.where(
-              (record) => now.difference(record.task.creationTime) > maxAge));
+          recordsToDelete.addAll(
+            allRecords.where(
+              (record) => now.difference(record.task.creationTime) > maxAge,
+            ),
+          );
         }
         // Check count
         if (_maxRecordCount != null) {
@@ -178,7 +184,8 @@ interface class Database {
           }
         }
         _log.finest(
-            'Database cleanup: ${recordsToDelete.length} out of ${allRecords.length} records to delete');
+          'Database cleanup: ${recordsToDelete.length} out of ${allRecords.length} records to delete',
+        );
         if (recordsToDelete.isNotEmpty) {
           // Rate limit deletion to ~5 per second
           for (final record in recordsToDelete) {
@@ -186,7 +193,8 @@ interface class Database {
             await Future.delayed(const Duration(milliseconds: 200));
           }
           _log.finest(
-              'Database cleanup: ${recordsToDelete.length} records deleted}');
+            'Database cleanup: ${recordsToDelete.length} records deleted}',
+          );
         }
       } catch (e) {
         _log.warning('Error during database cleanup: $e');
@@ -231,8 +239,13 @@ final class TaskRecord {
   final int expectedFileSize;
   final TaskException? exception;
 
-  TaskRecord(this.task, this.status, this.progress, this.expectedFileSize,
-      [this.exception]);
+  TaskRecord(
+    this.task,
+    this.status,
+    this.progress,
+    this.expectedFileSize, [
+    this.exception,
+  ]);
 
   /// Returns the group collection this record is stored under, which is
   /// the [task]'s [Task.group]
@@ -243,14 +256,14 @@ final class TaskRecord {
 
   /// Create [TaskRecord] from [json]
   TaskRecord.fromJson(Map<String, dynamic> json)
-      : task = Task.createFromJson(json),
-        status = TaskStatus.values[
-            (json['status'] as num?)?.toInt() ?? TaskStatus.failed.index],
-        progress = (json['progress'] as num?)?.toDouble() ?? progressFailed,
-        expectedFileSize = (json['expectedFileSize'] as num?)?.toInt() ?? -1,
-        exception = json['exception'] == null
-            ? null
-            : TaskException.fromJson(json['exception']);
+    : task = Task.createFromJson(json),
+      status = TaskStatus
+          .values[(json['status'] as num?)?.toInt() ?? TaskStatus.failed.index],
+      progress = (json['progress'] as num?)?.toDouble() ?? progressFailed,
+      expectedFileSize = (json['expectedFileSize'] as num?)?.toInt() ?? -1,
+      exception = json['exception'] == null
+          ? null
+          : TaskException.fromJson(json['exception']);
 
   /// Returns JSON map representation of this [TaskRecord]
   ///
@@ -266,17 +279,18 @@ final class TaskRecord {
   }
 
   /// Copy with optional replacements. [exception] is always copied
-  TaskRecord copyWith(
-          {Task? task,
-          TaskStatus? status,
-          double? progress,
-          int? expectedFileSize}) =>
-      TaskRecord(
-          task ?? this.task,
-          status ?? this.status,
-          progress ?? this.progress,
-          expectedFileSize ?? this.expectedFileSize,
-          exception);
+  TaskRecord copyWith({
+    Task? task,
+    TaskStatus? status,
+    double? progress,
+    int? expectedFileSize,
+  }) => TaskRecord(
+    task ?? this.task,
+    status ?? this.status,
+    progress ?? this.progress,
+    expectedFileSize ?? this.expectedFileSize,
+    exception,
+  );
 
   @override
   String toString() {

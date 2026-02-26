@@ -349,7 +349,7 @@ class ParallelDownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) 
                     for (chunk in chunks.sortedBy { it.fromByte }) {
                         val inFile = File(chunk.task.filePath(context.appContext))
                         if (!inFile.exists()) {
-                            throw java.nio.file.FileSystemException(inFile.path, null, "Missing chunk file")
+                            throw java.io.FileNotFoundException("Missing chunk file: ${inFile.path}")
                         }
                         FileInputStream(inFile).use { inStream ->
                             while (inStream.read(
@@ -376,7 +376,7 @@ class ParallelDownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) 
                     try {
                         val file = File(chunk.task.filePath(context.appContext))
                         file.delete()
-                    } catch (_: java.nio.file.FileSystemException) {
+                    } catch (_: Exception) {
                         // ignore
                     }
                 }

@@ -62,10 +62,13 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
     bool isResume,
     Duration? requestTimeout,
     Map<String, dynamic> proxy,
-    bool bypassTLSCertificateValidation
+    bool bypassTLSCertificateValidation,
   ) = await messagesToIsolate.next;
   DesktopDownloader.setHttpClient(
-      requestTimeout, proxy, bypassTLSCertificateValidation);
+    requestTimeout,
+    proxy,
+    bypassTLSCertificateValidation,
+  );
   Logger.root.level = Level.ALL;
   Logger.root.onRecord.listen((LogRecord rec) {
     if (kDebugMode) {
@@ -73,11 +76,12 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
     }
   });
   // process native callbacks beforeTaskStart, onTaskStart and onAuth
-  final statusUpdate =
-      await originalTask.options?.beforeTaskStartCallBack?.call(originalTask);
+  final statusUpdate = await originalTask.options?.beforeTaskStartCallBack
+      ?.call(originalTask);
   if (statusUpdate != null) {
     log.fine(
-        'TaskId ${originalTask.taskId} interrupted by beforeTaskStart callback');
+      'TaskId ${originalTask.taskId} interrupted by beforeTaskStart callback',
+    );
     // set global vars for final TaskStatusUpdate
     taskException = statusUpdate.exception;
     responseBody = statusUpdate.responseBody;
@@ -86,8 +90,9 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
     processStatusUpdateInIsolate(originalTask, statusUpdate.status, sendPort);
     return;
   }
-  final task =
-      await getModifiedTask(originalTask); // processes onStart and onAuth
+  final task = await getModifiedTask(
+    originalTask,
+  ); // processes onStart and onAuth
   // start listener/processor for incoming messages
   unawaited(listenToIncomingMessages(task, messagesToIsolate, sendPort));
   processStatusUpdateInIsolate(task, TaskStatus.running, sendPort);
@@ -103,10 +108,20 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
     // allow immediate cancel message to come through
     await Future.delayed(const Duration(milliseconds: 0));
     await switch (task) {
-      ParallelDownloadTask() => doParallelDownloadTask(task, resumeData,
-          isResume, requestTimeout ?? const Duration(seconds: 60), sendPort),
-      DownloadTask() => doDownloadTask(task, resumeData, isResume,
-          requestTimeout ?? const Duration(seconds: 60), sendPort),
+      ParallelDownloadTask() => doParallelDownloadTask(
+        task,
+        resumeData,
+        isResume,
+        requestTimeout ?? const Duration(seconds: 60),
+        sendPort,
+      ),
+      DownloadTask() => doDownloadTask(
+        task,
+        resumeData,
+        isResume,
+        requestTimeout ?? const Duration(seconds: 60),
+        sendPort,
+      ),
       UploadTask() => doUploadTask(task, sendPort),
       DataTask() => doDataTask(task, sendPort),
       _ => throw UnimplementedError(),
@@ -123,7 +138,10 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
 /// Called as unawaited Future, which completes when the [messagesToIsolate]
 /// stream is closed
 Future<void> listenToIncomingMessages(
-    Task task, StreamQueue messagesToIsolate, SendPort sendPort) async {
+  Task task,
+  StreamQueue messagesToIsolate,
+  SendPort sendPort,
+) async {
   while (await messagesToIsolate.hasNext) {
     final message = await messagesToIsolate.next;
     switch (message) {
@@ -165,44 +183,58 @@ Future<void> listenToIncomingMessages(
 ///
 /// Note: does not flush or close any streams
 Future<TaskStatus> transferBytes(
-    Stream<List<int>> inStream,
-    StreamSink<List<int>> outStream,
-    int contentLength,
-    Task task,
-    SendPort sendPort,
-    [Duration requestTimeout = const Duration(seconds: 60)]) async {
+  Stream<List<int>> inStream,
+  StreamSink<List<int>> outStream,
+  int contentLength,
+  Task task,
+  SendPort sendPort, [
+  Duration requestTimeout = const Duration(seconds: 60),
+]) async {
   if (contentLength == 0) {
     contentLength = -1;
   }
   var resultStatus = TaskStatus.complete;
   try {
-    await outStream
-        .addStream(inStream.timeout(requestTimeout, onTimeout: (sink) {
-      taskException = TaskConnectionException('Connection timed out');
-      resultStatus = TaskStatus.failed;
-      sink.close(); // ends the stream
-    }).map((bytes) {
-      if (isCanceled) {
-        resultStatus = TaskStatus.canceled;
-        throw StateError('Canceled');
-      }
-      if (isPaused) {
-        resultStatus = TaskStatus.paused;
-        throw StateError('Paused');
-      }
-      bytesTotal += bytes.length;
-      final progress = min(
-          (bytesTotal + startByte).toDouble() / (contentLength + startByte),
-          0.999);
-      final now = DateTime.now();
-      if (contentLength > 0 && shouldSendProgressUpdate(progress, now)) {
-        processProgressUpdateInIsolate(
-            task, progress, sendPort, contentLength + startByte);
-        lastProgressUpdate = progress;
-        nextProgressUpdateTime = now.add(const Duration(milliseconds: 500));
-      }
-      return bytes;
-    }));
+    await outStream.addStream(
+      inStream
+          .timeout(
+            requestTimeout,
+            onTimeout: (sink) {
+              taskException = TaskConnectionException('Connection timed out');
+              resultStatus = TaskStatus.failed;
+              sink.close(); // ends the stream
+            },
+          )
+          .map((bytes) {
+            if (isCanceled) {
+              resultStatus = TaskStatus.canceled;
+              throw StateError('Canceled');
+            }
+            if (isPaused) {
+              resultStatus = TaskStatus.paused;
+              throw StateError('Paused');
+            }
+            bytesTotal += bytes.length;
+            final progress = min(
+              (bytesTotal + startByte).toDouble() / (contentLength + startByte),
+              0.999,
+            );
+            final now = DateTime.now();
+            if (contentLength > 0 && shouldSendProgressUpdate(progress, now)) {
+              processProgressUpdateInIsolate(
+                task,
+                progress,
+                sendPort,
+                contentLength + startByte,
+              );
+              lastProgressUpdate = progress;
+              nextProgressUpdateTime = now.add(
+                const Duration(milliseconds: 500),
+              );
+            }
+            return bytes;
+          }),
+    );
   } catch (e) {
     if (resultStatus == TaskStatus.complete) {
       // this was an unintentional error thrown within the stream processing
@@ -219,7 +251,10 @@ Future<TaskStatus> transferBytes(
 /// Sends status update via the [sendPort], if requested
 /// If the task is finished, processes a final progressUpdate update
 void processStatusUpdateInIsolate(
-    Task task, TaskStatus status, SendPort sendPort) {
+  Task task,
+  TaskStatus status,
+  SendPort sendPort,
+) {
   final retryNeeded = status == TaskStatus.failed && task.retriesRemaining > 0;
   // if task is in final state, process a final progressUpdate
   // A 'failed' progress update is only provided if
@@ -279,8 +314,11 @@ void processStatusUpdateInIsolate(
 ///
 /// Sends progress update via the [sendPort], if requested
 void processProgressUpdateInIsolate(
-    Task task, double progress, SendPort sendPort,
-    [int expectedFileSize = -1]) {
+  Task task,
+  double progress,
+  SendPort sendPort, [
+  int expectedFileSize = -1,
+]) {
   if (task.providesProgressUpdates) {
     if (progress > 0 && progress < 1) {
       // calculate download speed and time remaining
@@ -299,7 +337,7 @@ void processProgressUpdateInIsolate(
       networkSpeed = switch (currentNetworkSpeed) {
         -1.0 => -1.0,
         _ when networkSpeed == -1.0 => currentNetworkSpeed,
-        _ => (networkSpeed * 3 + currentNetworkSpeed) / 4.0
+        _ => (networkSpeed * 3 + currentNetworkSpeed) / 4.0,
       };
       final remainingBytes = (1 - progress) * expectedFileSize;
       final timeRemaining = networkSpeed == -1.0 || expectedFileSize < 0
@@ -311,7 +349,7 @@ void processProgressUpdateInIsolate(
         progress,
         expectedFileSize,
         networkSpeed,
-        timeRemaining
+        timeRemaining,
       ));
     } else {
       // no download speed or time remaining
@@ -321,7 +359,7 @@ void processProgressUpdateInIsolate(
         progress,
         expectedFileSize,
         -1.0,
-        const Duration(seconds: -1)
+        const Duration(seconds: -1),
       ));
     }
   }
@@ -348,13 +386,16 @@ Future<Task> getModifiedTask(Task task) async {
     }
     // insert query parameters and headers
     final uri = newAuth.addOrUpdateQueryParams(
-        url: authTask.url, queryParams: newAuth.getAccessQueryParams());
+      url: authTask.url,
+      queryParams: newAuth.getAccessQueryParams(),
+    );
     final headers = {...authTask.headers, ...newAuth.getAccessHeaders()};
     authTask = authTask.copyWith(url: uri.toString(), headers: headers);
   }
   authTask = authTask ??= task;
-  final modifiedTask =
-      await authTask.options?.onTaskStartCallBack?.call(authTask);
+  final modifiedTask = await authTask.options?.onTaskStartCallBack?.call(
+    authTask,
+  );
   return modifiedTask ?? authTask;
 }
 
@@ -372,10 +413,12 @@ String fieldEntry(String name, String value) =>
 String headerForField(String name, String value) {
   var header = 'content-disposition: form-data; name="${browserEncode(name)}"';
   if (isJsonString(value)) {
-    header = '$header\r\n'
+    header =
+        '$header\r\n'
         'content-type: application/json; charset=utf-8';
   } else if (!isPlainAscii(value)) {
-    header = '$header\r\n'
+    header =
+        '$header\r\n'
         'content-type: text/plain; charset=utf-8\r\n'
         'content-transfer-encoding: binary';
   }
@@ -404,10 +447,10 @@ bool isJsonString(String string) => _jsonString.hasMatch(string);
 /// Encode [value] in the same way browsers do.
 String browserEncode(String value) =>
     // http://tools.ietf.org/html/rfc2388 mandates some complex encodings for
-// field names and file names, but in practice user agents seem not to
-// follow this at all. Instead, they URL-encode `\r`, `\n`, and `\r\n` as
-// `\r\n`; URL-encode `"`; and do nothing else (even for `%` or non-ASCII
-// characters). We follow their behavior.
+    // field names and file names, but in practice user agents seem not to
+    // follow this at all. Instead, they URL-encode `\r`, `\n`, and `\r\n` as
+    // `\r\n`; URL-encode `"`; and do nothing else (even for `%` or non-ASCII
+    // characters). We follow their behavior.
     value.replaceAll(_newlineRegExp, '%0D%0A').replaceAll('"', '%22');
 
 /// Returns the length of the [string] in bytes when utf-8 encoded
@@ -442,7 +485,8 @@ Future<String?> responseContent(http.StreamedResponse response) {
     return response.stream.bytesToString();
   } catch (e) {
     log.fine(
-        'Could not read response content from httpResponseCode ${response.statusCode}: $e');
+      'Could not read response content from httpResponseCode ${response.statusCode}: $e',
+    );
     return Future.value(null);
   }
 }

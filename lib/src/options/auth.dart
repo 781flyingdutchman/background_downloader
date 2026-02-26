@@ -118,19 +118,19 @@ class Auth {
   /// [refreshHeaders] are headers to use for refresh requests
   /// [refreshQueryParams] are query parameters to use for refresh requests
   /// [onAuth] is a callback to be called when the access token expires
-  Auth(
-      {this.accessToken,
-      this.accessHeaders = const {},
-      this.accessQueryParams = const {},
-      this.accessTokenExpiryTime,
-      this.refreshToken,
-      this.refreshUrl,
-      this.refreshHeaders = const {},
-      this.refreshQueryParams = const {},
-      OnAuthCallback? onAuth})
-      : _onAuthRawHandle = onAuth != null
-            ? PluginUtilities.getCallbackHandle(onAuth)?.toRawHandle()
-            : null;
+  Auth({
+    this.accessToken,
+    this.accessHeaders = const {},
+    this.accessQueryParams = const {},
+    this.accessTokenExpiryTime,
+    this.refreshToken,
+    this.refreshUrl,
+    this.refreshHeaders = const {},
+    this.refreshQueryParams = const {},
+    OnAuthCallback? onAuth,
+  }) : _onAuthRawHandle = onAuth != null
+           ? PluginUtilities.getCallbackHandle(onAuth)?.toRawHandle()
+           : null;
 
   /// Convert the Auth instance to JSON
   Map<String, dynamic> toJson() {
@@ -143,44 +143,47 @@ class Auth {
       'refreshUrl': refreshUrl,
       'refreshHeaders': refreshHeaders,
       'refreshQueryParams': refreshQueryParams,
-      'onAuthRawHandle': _onAuthRawHandle
+      'onAuthRawHandle': _onAuthRawHandle,
     };
   }
 
   /// Create an Auth instance from JSON
   Auth.fromJson(Map<String, dynamic> json)
-      : accessToken = json['accessToken'],
-        accessHeaders = json['accessHeaders'] != null
-            ? Map<String, String>.from(json['accessHeaders'])
-            : const {},
-        accessQueryParams = json['accessQueryParams'] != null
-            ? Map<String, String>.from(json['accessQueryParams'])
-            : const {},
-        accessTokenExpiryTime = json['accessTokenExpiryTime'] != null
-            ? DateTime.fromMillisecondsSinceEpoch(
-                json['accessTokenExpiryTime'] as int)
-            : null,
-        refreshToken = json['refreshToken'],
-        refreshUrl = json['refreshUrl'],
-        refreshHeaders = json['refreshHeaders'] != null
-            ? Map<String, String>.from(json['refreshHeaders'])
-            : const {},
-        refreshQueryParams = json['refreshQueryParams'] != null
-            ? Map<String, String>.from(json['refreshQueryParams'])
-            : const {},
-        _onAuthRawHandle = json['onAuthRawHandle'] as int?;
+    : accessToken = json['accessToken'],
+      accessHeaders = json['accessHeaders'] != null
+          ? Map<String, String>.from(json['accessHeaders'])
+          : const {},
+      accessQueryParams = json['accessQueryParams'] != null
+          ? Map<String, String>.from(json['accessQueryParams'])
+          : const {},
+      accessTokenExpiryTime = json['accessTokenExpiryTime'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(
+              json['accessTokenExpiryTime'] as int,
+            )
+          : null,
+      refreshToken = json['refreshToken'],
+      refreshUrl = json['refreshUrl'],
+      refreshHeaders = json['refreshHeaders'] != null
+          ? Map<String, String>.from(json['refreshHeaders'])
+          : const {},
+      refreshQueryParams = json['refreshQueryParams'] != null
+          ? Map<String, String>.from(json['refreshQueryParams'])
+          : const {},
+      _onAuthRawHandle = json['onAuthRawHandle'] as int?;
 
   /// Returns the [OnAuthCallback] registered with this [Auth], or null
   OnAuthCallback? get onAuthCallback => _onAuthRawHandle != null
       ? PluginUtilities.getCallbackFromHandle(
-          CallbackHandle.fromRawHandle(_onAuthRawHandle!)) as OnAuthCallback
+              CallbackHandle.fromRawHandle(_onAuthRawHandle!),
+            )
+            as OnAuthCallback
       : null;
 
   /// Set the [OnAuthCallback]
   set onAuthCallback(OnAuthCallback? onAuth) =>
       _onAuthRawHandle = onAuth != null
-          ? PluginUtilities.getCallbackHandle(onAuth)?.toRawHandle()
-          : null;
+      ? PluginUtilities.getCallbackHandle(onAuth)?.toRawHandle()
+      : null;
 
   /// Returns the Uri for accessing the resource
   ///
@@ -188,12 +191,13 @@ class Auth {
   /// [url] or [uri] with access query parameters. If headers are used to
   /// authenticate, then call [getAccessHeaders] after this call, to make sure
   /// they contain updated access tokens.
-  Future<Uri> getAccessUri(
-      {String? url,
-      Uri? uri,
-      http.Client? httpClient,
-      String? refreshUrl,
-      Uri? refreshUri}) async {
+  Future<Uri> getAccessUri({
+    String? url,
+    Uri? uri,
+    http.Client? httpClient,
+    String? refreshUrl,
+    Uri? refreshUri,
+  }) async {
     if (uri == null && url == null) {
       throw ArgumentError('Either uri or url must be provided');
     }
@@ -201,15 +205,18 @@ class Auth {
     if (isTokenExpired()) {
       // make the refresh request
       final (updatedAccesstoken, _) = await refreshAccessToken(
-          httpClient: httpClient,
-          refreshUrl: refreshUrl,
-          refreshUri: refreshUri);
+        httpClient: httpClient,
+        refreshUrl: refreshUrl,
+        refreshUri: refreshUri,
+      );
       if (!updatedAccesstoken) {
         throw const HttpException('Could not refresh access token');
       }
     }
     return addOrUpdateQueryParams(
-        uri: accessUri, queryParams: getAccessQueryParams());
+      uri: accessUri,
+      queryParams: getAccessQueryParams(),
+    );
   }
 
   /// Returns the URL string for accessing the resource
@@ -218,18 +225,20 @@ class Auth {
   /// [url] or [uri] with access query parameters. If headers are used to
   /// authenticate, then call [getAccessHeaders] after this call, to make sure
   /// they contain updated access tokens.
-  Future<String> getAccessUrl(
-      {String? url,
-      Uri? uri,
-      http.Client? httpClient,
-      String? refreshUrl,
-      Uri? refreshUri}) async {
+  Future<String> getAccessUrl({
+    String? url,
+    Uri? uri,
+    http.Client? httpClient,
+    String? refreshUrl,
+    Uri? refreshUri,
+  }) async {
     final accessUri = await getAccessUri(
-        url: url,
-        uri: uri,
-        httpClient: httpClient,
-        refreshUrl: refreshUrl,
-        refreshUri: refreshUri);
+      url: url,
+      uri: uri,
+      httpClient: httpClient,
+      refreshUrl: refreshUrl,
+      refreshUri: refreshUri,
+    );
     return accessUri.toString();
   }
 
@@ -243,11 +252,15 @@ class Auth {
   ///
   /// If neither [refreshUrl] nor [refreshUri] are given, the Auth object's
   /// [Auth.refreshUrl] is used
-  Future<(bool, bool)> refreshAccessToken(
-      {http.Client? httpClient, String? refreshUrl, Uri? refreshUri}) async {
+  Future<(bool, bool)> refreshAccessToken({
+    http.Client? httpClient,
+    String? refreshUrl,
+    Uri? refreshUri,
+  }) async {
     if (refreshUrl == null && refreshUri == null && this.refreshUrl == null) {
       throw ArgumentError(
-          'refreshUrl, refreshUri or Auth object refreshUrl required');
+        'refreshUrl, refreshUri or Auth object refreshUrl required',
+      );
     }
     var updatedAccessToken = false;
     var updatedRefreshToken = false;
@@ -256,14 +269,18 @@ class Auth {
       final selectedRefreshUri =
           refreshUri ?? Uri.parse(refreshUrl ?? this.refreshUrl!);
       final uri = addOrUpdateQueryParams(
-          uri: selectedRefreshUri, queryParams: expandMap(refreshQueryParams));
+        uri: selectedRefreshUri,
+        queryParams: expandMap(refreshQueryParams),
+      );
       final headers = expandMap(refreshHeaders);
       headers['Content-type'] = 'application/json';
       final response = await client.post(
         uri,
         headers: headers,
-        body: jsonEncode(
-            {'grant_type': 'refresh_token', 'refresh_token': refreshToken}),
+        body: jsonEncode({
+          'grant_type': 'refresh_token',
+          'refresh_token': refreshToken,
+        }),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -273,13 +290,15 @@ class Auth {
           updatedAccessToken = true;
           var newExpiresIn = data['expires_in'];
           if (newExpiresIn != null) {
-            accessTokenExpiryTime =
-                DateTime.now().add(Duration(seconds: newExpiresIn));
+            accessTokenExpiryTime = DateTime.now().add(
+              Duration(seconds: newExpiresIn),
+            );
           }
         } else {
           log.fine(
-              'Failed to refresh access token: no access_token in response body.\n'
-              'Body is ${response.body}');
+            'Failed to refresh access token: no access_token in response body.\n'
+            'Body is ${response.body}',
+          );
         }
         final newRefreshToken = data['refresh_token'];
         if (newRefreshToken != null) {
@@ -305,8 +324,11 @@ class Auth {
 
   /// Add/update the query parameters in this [url] or [uri] with [queryParams]
   /// and return the new uri
-  Uri addOrUpdateQueryParams(
-      {String? url, Uri? uri, Map<String, String> queryParams = const {}}) {
+  Uri addOrUpdateQueryParams({
+    String? url,
+    Uri? uri,
+    Map<String, String> queryParams = const {},
+  }) {
     if (uri == null && url == null) {
       throw ArgumentError('Either uri or url must be provided');
     }
@@ -314,8 +336,9 @@ class Auth {
     if (queryParams.isEmpty) {
       return startUri;
     }
-    final updatedQueryParams =
-        Map<String, String>.from(startUri.queryParameters);
+    final updatedQueryParams = Map<String, String>.from(
+      startUri.queryParameters,
+    );
     queryParams.forEach((key, value) {
       updatedQueryParams[key] = value;
     });

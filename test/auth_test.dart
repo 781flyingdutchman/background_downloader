@@ -20,20 +20,26 @@ void main() {
         accessToken: 'initialAccessToken',
         refreshToken: 'initialRefreshToken',
         refreshUrl: 'https://example.com/refresh',
-        accessTokenExpiryTime: DateTime.now()
-            .subtract(const Duration(seconds: 10)), // expired token
+        accessTokenExpiryTime: DateTime.now().subtract(
+          const Duration(seconds: 10),
+        ), // expired token
       );
     });
 
     test('No change if token not expired', () async {
       // Set up mock response for refresh request
-      when(mockClient.post(
-        Uri.parse(auth.refreshUrl!),
-        headers: auth.refreshHeaders,
-        body: jsonEncode({'refresh_token': auth.refreshToken}),
-      )).thenAnswer((_) async => http.Response(
+      when(
+        mockClient.post(
+          Uri.parse(auth.refreshUrl!),
+          headers: auth.refreshHeaders,
+          body: jsonEncode({'refresh_token': auth.refreshToken}),
+        ),
+      ).thenAnswer(
+        (_) async => http.Response(
           jsonEncode({'access_token': 'newAccessToken', 'expires_in': 3600}),
-          200));
+          200,
+        ),
+      );
       auth.accessTokenExpiryTime = null; // never expires
       auth.accessQueryParams = {'accessToken': '{accessToken}'};
       Uri uri = await auth.getAccessUri(
@@ -47,61 +53,74 @@ void main() {
 
     test('HttpException if client returns error', () async {
       // Set up mock response for refresh request
-      when(mockClient.post(
-        Uri.parse(auth.refreshUrl!),
-        headers: auth.refreshHeaders,
-        body: jsonEncode({'refresh_token': auth.refreshToken}),
-      )).thenAnswer((_) async => http.Response('', 400));
+      when(
+        mockClient.post(
+          Uri.parse(auth.refreshUrl!),
+          headers: auth.refreshHeaders,
+          body: jsonEncode({'refresh_token': auth.refreshToken}),
+        ),
+      ).thenAnswer((_) async => http.Response('', 400));
       auth.accessQueryParams = {'accessToken': '{accessToken}'};
       expect(
-          () => auth.getAccessUri(
-                url: 'https://example.com/resource',
-                httpClient: mockClient,
-              ),
-          throwsA(const HttpException('Could not refresh access token')));
+        () => auth.getAccessUri(
+          url: 'https://example.com/resource',
+          httpClient: mockClient,
+        ),
+        throwsA(const HttpException('Could not refresh access token')),
+      );
     });
 
-    test('Token refresh updates accessToken and accessTokenExpiryTime',
-        () async {
-      // Set up mock response for refresh request
-      when(mockClient.post(
-        Uri.parse(auth.refreshUrl!),
-        headers: {'Content-type': 'application/json'},
-        body: jsonEncode({
-          'grant_type': 'refresh_token',
-          'refresh_token': auth.refreshToken
-        }),
-      )).thenAnswer((_) async => http.Response(
-          jsonEncode({
-            'access_token': 'newAccessToken',
-            'expires_in': 3600,
-            'refresh_token': 'newRefreshToken'
-          }),
-          200));
-      final (updatedAccessToken, updatedRefreshToken) =
-          await auth.refreshAccessToken(
-        httpClient: mockClient,
-      );
-      // Check if tokens and expiry time are updated
-      expect(updatedAccessToken, true);
-      expect(updatedRefreshToken, true);
-      expect(auth.accessToken, 'newAccessToken');
-      expect(auth.refreshToken, 'newRefreshToken');
-      expect(auth.accessTokenExpiryTime!.isAfter(DateTime.now()), true);
-    });
+    test(
+      'Token refresh updates accessToken and accessTokenExpiryTime',
+      () async {
+        // Set up mock response for refresh request
+        when(
+          mockClient.post(
+            Uri.parse(auth.refreshUrl!),
+            headers: {'Content-type': 'application/json'},
+            body: jsonEncode({
+              'grant_type': 'refresh_token',
+              'refresh_token': auth.refreshToken,
+            }),
+          ),
+        ).thenAnswer(
+          (_) async => http.Response(
+            jsonEncode({
+              'access_token': 'newAccessToken',
+              'expires_in': 3600,
+              'refresh_token': 'newRefreshToken',
+            }),
+            200,
+          ),
+        );
+        final (updatedAccessToken, updatedRefreshToken) = await auth
+            .refreshAccessToken(httpClient: mockClient);
+        // Check if tokens and expiry time are updated
+        expect(updatedAccessToken, true);
+        expect(updatedRefreshToken, true);
+        expect(auth.accessToken, 'newAccessToken');
+        expect(auth.refreshToken, 'newRefreshToken');
+        expect(auth.accessTokenExpiryTime!.isAfter(DateTime.now()), true);
+      },
+    );
 
     test('getAccessUri refreshes token if expired', () async {
       // Set up mock response for refresh request
-      when(mockClient.post(
-        Uri.parse(auth.refreshUrl!),
-        headers: {'Content-type': 'application/json'},
-        body: jsonEncode({
-          'grant_type': 'refresh_token',
-          'refresh_token': auth.refreshToken
-        }),
-      )).thenAnswer((_) async => http.Response(
+      when(
+        mockClient.post(
+          Uri.parse(auth.refreshUrl!),
+          headers: {'Content-type': 'application/json'},
+          body: jsonEncode({
+            'grant_type': 'refresh_token',
+            'refresh_token': auth.refreshToken,
+          }),
+        ),
+      ).thenAnswer(
+        (_) async => http.Response(
           jsonEncode({'access_token': 'newAccessToken', 'expires_in': 3600}),
-          200));
+          200,
+        ),
+      );
       auth.accessQueryParams = {'accessToken': '{accessToken}'};
       Uri uri = await auth.getAccessUri(
         url: 'https://example.com/resource',
@@ -121,14 +140,16 @@ void main() {
     });
 
     test('isTokenExpired returns true for expired token', () {
-      auth.accessTokenExpiryTime =
-          DateTime.now().subtract(const Duration(seconds: 1));
+      auth.accessTokenExpiryTime = DateTime.now().subtract(
+        const Duration(seconds: 1),
+      );
       expect(auth.isTokenExpired(), true);
     });
 
     test('isTokenExpired returns false for non-expired token', () {
-      auth.accessTokenExpiryTime =
-          DateTime.now().add(const Duration(seconds: 3600));
+      auth.accessTokenExpiryTime = DateTime.now().add(
+        const Duration(seconds: 3600),
+      );
       expect(auth.isTokenExpired(), false);
     });
 
@@ -147,8 +168,9 @@ void main() {
         accessToken: 'testAccessToken',
         accessHeaders: {'Authorization': 'Bearer {accessToken}'},
         accessQueryParams: {'token': '{accessToken}'},
-        accessTokenExpiryTime:
-            DateTime.fromMillisecondsSinceEpoch(1672531199000),
+        accessTokenExpiryTime: DateTime.fromMillisecondsSinceEpoch(
+          1672531199000,
+        ),
         refreshToken: 'testRefreshToken',
         refreshUrl: 'https://example.com/refresh',
         refreshHeaders: {'Content-Type': 'application/json'},
@@ -159,8 +181,10 @@ void main() {
       expect(json['accessToken'], 'testAccessToken');
       expect(json['accessHeaders'], {'Authorization': 'Bearer {accessToken}'});
       expect(json['accessQueryParams'], {'token': '{accessToken}'});
-      expect(json['accessTokenExpiryTime'],
-          1672531199000); // Milliseconds since epoch
+      expect(
+        json['accessTokenExpiryTime'],
+        1672531199000,
+      ); // Milliseconds since epoch
       expect(json['refreshToken'], 'testRefreshToken');
       expect(json['refreshUrl'], 'https://example.com/refresh');
       expect(json['refreshHeaders'], {'Content-Type': 'application/json'});
@@ -183,8 +207,10 @@ void main() {
       expect(auth.accessToken, 'testAccessToken');
       expect(auth.accessHeaders, {'Authorization': 'Bearer {accessToken}'});
       expect(auth.accessQueryParams, {'token': '{accessToken}'});
-      expect(auth.accessTokenExpiryTime,
-          DateTime.fromMillisecondsSinceEpoch(1672531199000));
+      expect(
+        auth.accessTokenExpiryTime,
+        DateTime.fromMillisecondsSinceEpoch(1672531199000),
+      );
       expect(auth.refreshToken, 'testRefreshToken');
       expect(auth.refreshUrl, 'https://example.com/refresh');
       expect(auth.refreshHeaders, {'Content-Type': 'application/json'});
@@ -196,8 +222,9 @@ void main() {
         accessToken: 'consistentAccessToken',
         accessHeaders: {'Authorization': 'Bearer {accessToken}'},
         accessQueryParams: {'token': '{accessToken}'},
-        accessTokenExpiryTime:
-            DateTime.fromMillisecondsSinceEpoch(1672531199000),
+        accessTokenExpiryTime: DateTime.fromMillisecondsSinceEpoch(
+          1672531199000,
+        ),
         refreshToken: 'consistentRefreshToken',
         refreshUrl: 'https://example.com/consistent_refresh',
         refreshHeaders: {'Content-Type': 'application/json'},
