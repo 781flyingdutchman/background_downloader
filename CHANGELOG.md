@@ -1,3 +1,8 @@
+## 9.5.4
+
+* Add `TaskOptions` to `DataTask` with similar functionality as in `DownloadTask`
+* Bug fixes
+
 ## 9.5.3
 
 * [Android] Fix race condition in `TaskWorker` where `setForeground` could crash for finished tasks
@@ -9,6 +14,7 @@
 * Moves LocalStorePersistentStorage to isolate model to off-load i/o operations, and unwinds Future.wait to loop
 
 ## 9.5.1
+
 * [iOS] Support for UISceneDelegate in iOS 13.0 and above 
 
 ## 9.5.0

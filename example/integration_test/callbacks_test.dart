@@ -283,7 +283,7 @@ void main() {
           url: getTestUrl,
           urlQueryParameters: {'json': 'true', 'param1': 'original'},
           options: TaskOptions(beforeTaskStart: beforeTaskStartCallbackCancel));
-      final result = await FileDownloader().download(task);
+      final result = await FileDownloader().transmit(task);
       expect(result.status, equals(TaskStatus.canceled));
       expect(result.responseBody, equals('response'));
       expect(result.responseHeaders, equals({'header': 'value'}));
@@ -297,7 +297,7 @@ void main() {
           url: getTestUrl,
           urlQueryParameters: {'json': 'true', 'param1': 'original'},
           options: TaskOptions(onTaskStart: onTaskStartCallbackUrlChange));
-      final result = await FileDownloader().download(task);
+      final result = await FileDownloader().transmit(task);
       expect(result.status, equals(TaskStatus.complete));
       var resultJson = jsonDecode(result.responseBody!);
       expect(resultJson['args']['param1'], equals('changed'));
@@ -311,7 +311,7 @@ void main() {
           url: getTestUrl,
           urlQueryParameters: {'json': 'true', 'param1': 'original'},
           options: TaskOptions(onTaskFinished: onTaskFinishedCallback));
-      final result = await FileDownloader().download(task);
+      final result = await FileDownloader().transmit(task);
       expect(result.status, equals(TaskStatus.complete));
       var resultJson = jsonDecode(result.responseBody!);
       expect(resultJson['args']['param1'], equals('original'));
