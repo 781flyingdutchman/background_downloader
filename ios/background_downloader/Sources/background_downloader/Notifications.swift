@@ -224,13 +224,13 @@ func updateNotification(task: Task, notificationType: NotificationType, notifica
  * A group notification aggregates the state of all tasks in a group and
  * presents a notification based on that value
  */
-private func updateGroupNotification(
+@MainActor private func updateGroupNotification(
     task: Task,
     notificationType: NotificationType,
     notificationConfig: NotificationConfig
 ) async {
     let groupNotificationId = notificationConfig.groupNotificationId
-    var groupNotification = GroupNotification.notifications[groupNotificationId] ?? GroupNotification(name: groupNotificationId, notificationConfig: notificationConfig)
+    let groupNotification = GroupNotification.notifications[groupNotificationId] ?? GroupNotification(name: groupNotificationId, notificationConfig: notificationConfig)
     let stateChange = await groupNotification.update(task: task, notificationType: notificationType)
     GroupNotification.notifications[groupNotificationId] = groupNotification
     if stateChange {
@@ -261,15 +261,16 @@ private func updateGroupNotification(
         // check if the notification title or body have changed relative to what may
         // already be delivered, to avoid flashing notifications without change
         let existingNotifications = await notificationCenter.deliveredNotifications()
+        let notificationIdForGroup = await groupNotification.notificationId
         let previousNotification = existingNotifications.filter { 
-            $0.request.identifier == groupNotificationId
+            $0.request.identifier == notificationIdForGroup
         }
         if previousNotification.isEmpty || previousNotification.first?.request.content.title != content.title || previousNotification.first?.request.content.body != content.body
         {
             if !isFinished {
                 addCancelActionToNotificationGroup(content: content)
             }
-            let request = UNNotificationRequest(identifier: await groupNotification.notificationId,
+            let request = UNNotificationRequest(identifier: notificationIdForGroup,
                                                 content: content, trigger: nil)
             do {
                 try await notificationCenter.add(request)
