@@ -261,8 +261,9 @@ private func updateGroupNotification(
         // check if the notification title or body have changed relative to what may
         // already be delivered, to avoid flashing notifications without change
         let existingNotifications = await notificationCenter.deliveredNotifications()
+        let notificationId = await groupNotification.notificationId
         let previousNotification = existingNotifications.filter { 
-            $0.request.identifier == groupNotificationId
+            $0.request.identifier == notificationId
         }
         if previousNotification.isEmpty || previousNotification.first?.request.content.title != content.title || previousNotification.first?.request.content.body != content.body
         {
