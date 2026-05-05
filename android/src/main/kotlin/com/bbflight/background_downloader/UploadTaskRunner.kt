@@ -247,7 +247,7 @@ class UploadTaskRunner(context: TaskJobContext) : TaskRunner(context) {
                     fis.skip(start)
                 }
                 LimitedInputStream(fis, contentLength).use { limitedInputStream ->
-                    DataOutputStream(connection.outputStream.buffered()).use { outputStream ->
+                    DataOutputStream(connection.outputStream).use { outputStream ->
                         return@withContext transferBytes(
                             limitedInputStream,
                             outputStream,
