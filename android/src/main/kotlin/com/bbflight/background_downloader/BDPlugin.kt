@@ -544,19 +544,27 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             "com.bbflight.background_downloader.uriutils"
         )
         uriUtilsChannel.setMethodCallHandler(UriUtilsMethodCallHelper(this))
-        // clear expired items
         val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
-        val workManager = WorkManager.getInstance(applicationContext)
-        val allWorkInfos = workManager.getWorkInfosByTag(TAG).get()
-        if (allWorkInfos.isEmpty()) {
-            prefsLock.write {
-                // remove persistent storage if no jobs found at all
-                prefs.edit {
-                    remove(keyTasksMap)
+        requireWifi = RequireWiFi.entries[prefs.getInt(keyRequireWiFi, 0)]
+        // clear expired items - moved off the main thread because
+        // WorkManager.getWorkInfosByTag(...).get() blocks until the WorkManager
+        // executor responds, which can stall the UI thread on cold start
+        // (especially after the Flutter Great Thread Merge where plugin
+        // callbacks run on Main).
+        defaultScope.launch {
+            val workManager = WorkManager.getInstance(applicationContext)
+            val allWorkInfos = withContext(Dispatchers.IO) {
+                workManager.getWorkInfosByTag(TAG).get()
+            }
+            if (allWorkInfos.isEmpty()) {
+                prefsLock.write {
+                    // remove persistent storage if no jobs found at all
+                    prefs.edit {
+                        remove(keyTasksMap)
+                    }
                 }
             }
         }
-        requireWifi = RequireWiFi.entries[prefs.getInt(keyRequireWiFi, 0)]
     }
 
 
