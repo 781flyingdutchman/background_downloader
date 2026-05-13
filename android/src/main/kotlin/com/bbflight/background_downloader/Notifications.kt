@@ -27,7 +27,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -192,115 +191,18 @@ class NotificationReceiver : BroadcastReceiver() {
         val bundle = intent.getBundleExtra(keyBundle)
         val taskId = bundle?.getString(keyTaskId)
         if (taskId != null) {
-            runBlocking {
-                when (intent.action) {
-                    actionCancelActive -> {
-                        BDPlugin.cancelActiveTaskWithId(
-                            context, taskId, WorkManager.getInstance(context)
-                        )
-                    }
-
-                    actionCancelInactive -> {
-                        val taskJsonString = bundle.getString(keyTask)
-                        if (taskJsonString != null) {
-                            val task = Json.decodeFromString<Task>(taskJsonString)
-                            BDPlugin.cancelInactiveTask(context, task)
-                            with(NotificationManagerCompat.from(context)) {
-                                cancel(task.taskId.hashCode())
-                            }
-                        } else {
-                            Log.d(TAG, "task was null")
-                        }
-                    }
-
-                    actionPause -> {
-                        BDPlugin.pauseTaskWithId(taskId)
-                    }
-
-                    actionResume -> {
-                        val resumeData = BDPlugin.localResumeData[taskId]
-                        if (resumeData != null) {
-                            val notificationConfigJsonString = bundle.getString(
-                                keyNotificationConfig
-                            )
-                            if (notificationConfigJsonString != null) {
-                                try {
-                                    attemptResume(
-                                        context,
-                                        taskId,
-                                        resumeData,
-                                        notificationConfigJsonString
-                                    )
-                                } catch (e: Exception) {
-                                    if (Build.VERSION.SDK_INT > Build.VERSION_CODES.S && e is ForegroundServiceStartNotAllowedException) {
-                                        // See issue #363: https://github.com/bbflight/background_downloader/issues/363
-                                        // ForegroundServiceStartNotAllowedException if resume button is clicked
-                                        // when app is in background -> Bring app to foreground first.
-                                        val launchIntent =
-                                            context.packageManager.getLaunchIntentForPackage(
-                                                context.packageName
-                                            )?.apply {
-                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                            }
-                                        if (launchIntent != null) {
-                                            CoroutineScope(Dispatchers.Main).launch {
-                                                try {
-                                                    // Start the activity, wait, then resume
-                                                    context.startActivity(launchIntent)
-                                                    delay(3000)
-                                                    attemptResume(
-                                                        context,
-                                                        taskId,
-                                                        resumeData,
-                                                        notificationConfigJsonString
-                                                    )
-                                                } catch (activityException: ActivityNotFoundException) {
-                                                    Log.e(
-                                                        TAG,
-                                                        "When resuming taskId $taskId, could not find activity to launch for package ${context.packageName}",
-                                                        activityException
-                                                    )
-                                                } catch (securityException: SecurityException) {
-                                                    Log.e(
-                                                        TAG,
-                                                        "When resuming taskId $taskId, SecurityException starting activity: ${securityException.message}",
-                                                        securityException
-                                                    )
-                                                } catch (e: Exception) {
-                                                    Log.e(
-                                                        TAG,
-                                                        "Exception resuming taskId $taskId: ${e.message}",
-                                                        e
-                                                    )
-                                                }
-                                            }
-                                        } else {
-                                            Log.e(
-                                                TAG,
-                                                "When resuming taskId $taskId, could not get launch intent for package ${context.packageName}"
-                                            )
-                                        }
-                                    } else {
-                                        Log.e(
-                                            TAG,
-                                            "Error resuming taskId $taskId: ${e.message}",
-                                            e
-                                        )
-                                    }
-                                }
-                            } else {
-                                BDPlugin.cancelActiveTaskWithId(
-                                    context, taskId, WorkManager.getInstance(context)
-                                )
-                            }
-                        } else {
-                            BDPlugin.cancelActiveTaskWithId(
-                                context, taskId, WorkManager.getInstance(context)
-                            )
-                        }
-                    }
-
-                    else -> {}
+            // BroadcastReceiver.onReceive runs on the main thread, so we cannot
+            // use runBlocking here - it would block the UI thread for the
+            // duration of WorkManager cancel / re-enqueue operations (which
+            // internally `.get()` on ListenableFutures). Use goAsync() instead
+            // and run the work on a background dispatcher. BroadcastReceiver
+            // is allowed up to ~10s of async work via goAsync().
+            val pendingResult = goAsync()
+            CoroutineScope(Dispatchers.Default).launch {
+                try {
+                    handleAction(context, intent, bundle, taskId)
+                } finally {
+                    pendingResult.finish()
                 }
             }
         } else {
@@ -312,13 +214,135 @@ class NotificationReceiver : BroadcastReceiver() {
                 val groupNotification =
                     NotificationService.groupNotifications[groupNotificationName]
                 if (groupNotification != null) {
-                    runBlocking {
-                        BDPlugin.cancelTasksWithIds(
-                            context,
-                            groupNotification.runningTasks.map { task -> task.taskId })
+                    val pendingResult = goAsync()
+                    CoroutineScope(Dispatchers.Default).launch {
+                        try {
+                            BDPlugin.cancelTasksWithIds(
+                                context,
+                                groupNotification.runningTasks.map { task -> task.taskId })
+                        } finally {
+                            pendingResult.finish()
+                        }
                     }
                 }
             }
+        }
+    }
+
+    private suspend fun handleAction(
+        context: Context,
+        intent: Intent,
+        bundle: Bundle,
+        taskId: String
+    ) {
+        when (intent.action) {
+            actionCancelActive -> {
+                BDPlugin.cancelActiveTaskWithId(
+                    context, taskId, WorkManager.getInstance(context)
+                )
+            }
+
+            actionCancelInactive -> {
+                val taskJsonString = bundle.getString(keyTask)
+                if (taskJsonString != null) {
+                    val task = Json.decodeFromString<Task>(taskJsonString)
+                    BDPlugin.cancelInactiveTask(context, task)
+                    with(NotificationManagerCompat.from(context)) {
+                        cancel(task.taskId.hashCode())
+                    }
+                } else {
+                    Log.d(TAG, "task was null")
+                }
+            }
+
+            actionPause -> {
+                BDPlugin.pauseTaskWithId(taskId)
+            }
+
+            actionResume -> {
+                val resumeData = BDPlugin.localResumeData[taskId]
+                if (resumeData != null) {
+                    val notificationConfigJsonString = bundle.getString(
+                        keyNotificationConfig
+                    )
+                    if (notificationConfigJsonString != null) {
+                        try {
+                            attemptResume(
+                                context,
+                                taskId,
+                                resumeData,
+                                notificationConfigJsonString
+                            )
+                        } catch (e: Exception) {
+                            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.S && e is ForegroundServiceStartNotAllowedException) {
+                                // See issue #363: https://github.com/bbflight/background_downloader/issues/363
+                                // ForegroundServiceStartNotAllowedException if resume button is clicked
+                                // when app is in background -> Bring app to foreground first.
+                                val launchIntent =
+                                    context.packageManager.getLaunchIntentForPackage(
+                                        context.packageName
+                                    )?.apply {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                if (launchIntent != null) {
+                                    CoroutineScope(Dispatchers.Main).launch {
+                                        try {
+                                            // Start the activity, wait, then resume
+                                            context.startActivity(launchIntent)
+                                            delay(3000)
+                                            attemptResume(
+                                                context,
+                                                taskId,
+                                                resumeData,
+                                                notificationConfigJsonString
+                                            )
+                                        } catch (activityException: ActivityNotFoundException) {
+                                            Log.e(
+                                                TAG,
+                                                "When resuming taskId $taskId, could not find activity to launch for package ${context.packageName}",
+                                                activityException
+                                            )
+                                        } catch (securityException: SecurityException) {
+                                            Log.e(
+                                                TAG,
+                                                "When resuming taskId $taskId, SecurityException starting activity: ${securityException.message}",
+                                                securityException
+                                            )
+                                        } catch (e: Exception) {
+                                            Log.e(
+                                                TAG,
+                                                "Exception resuming taskId $taskId: ${e.message}",
+                                                e
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Log.e(
+                                        TAG,
+                                        "When resuming taskId $taskId, could not get launch intent for package ${context.packageName}"
+                                    )
+                                }
+                            } else {
+                                Log.e(
+                                    TAG,
+                                    "Error resuming taskId $taskId: ${e.message}",
+                                    e
+                                )
+                            }
+                        }
+                    } else {
+                        BDPlugin.cancelActiveTaskWithId(
+                            context, taskId, WorkManager.getInstance(context)
+                        )
+                    }
+                } else {
+                    BDPlugin.cancelActiveTaskWithId(
+                        context, taskId, WorkManager.getInstance(context)
+                    )
+                }
+            }
+
+            else -> {}
         }
     }
 
