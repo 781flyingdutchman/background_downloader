@@ -17,6 +17,7 @@ class TaskOptions {
   final int? _beforeTaskStartRawHandle;
   final int? _onTaskStartRawHandle;
   final int? _onTaskFinishedRawHandle;
+  final String? tempFilepath;
 
   /// The [Auth] object associated with this task
   final Auth? auth;
@@ -33,6 +34,13 @@ class TaskOptions {
   ///    url or header. It is called after `onAuth` for token refresh, if that is set
   /// * `onTaskFinished`: a callback called when the task has finished.
   ///    The callback receives the final `TaskStatusUpdate`.
+  /// * `tempFilepath`: a temporary filepath to use for the task, instead of the default one.
+  ///    * Currently only used for desktop *
+  ///    This is useful for cases where the file needs the default temporary filepath
+  ///    does not work (e.g. large file with a small /tmp folder on Linux).
+  ///    Note that this is not the final filepath of the task, and the file will still
+  ///    be moved to the final location after the task is finished. This is only used
+  ///    for download tasks, and is ignored for upload tasks.
   /// * `auth`: an [Auth] object that facilitates management of authorization
   ///    tokens and refresh tokens, and includes an `onAuth` callback similar to
   ///    `onTaskStart`
@@ -40,6 +48,7 @@ class TaskOptions {
     BeforeTaskStartCallback? beforeTaskStart,
     OnTaskStartCallback? onTaskStart,
     OnTaskFinishedCallback? onTaskFinished,
+    this.tempFilepath,
     this.auth,
   }) : _beforeTaskStartRawHandle = beforeTaskStart != null
            ? PluginUtilities.getCallbackHandle(beforeTaskStart)?.toRawHandle()
@@ -73,6 +82,7 @@ class TaskOptions {
     : _beforeTaskStartRawHandle = json['beforeTaskStartRawHandle'] as int?,
       _onTaskStartRawHandle = json['onTaskStartRawHandle'] as int?,
       _onTaskFinishedRawHandle = json['onTaskFinishedRawHandle'] as int?,
+      tempFilepath = json['tempFilepath'] as String?,
       auth = json['auth'] != null ? Auth.fromJson(json['auth']) : null;
 
   /// Returns the [BeforeTaskStartCallback] registered with this [TaskOptions], or null
@@ -113,6 +123,7 @@ class TaskOptions {
     'beforeTaskStartRawHandle': _beforeTaskStartRawHandle,
     'onTaskStartRawHandle': _onTaskStartRawHandle,
     'onTaskFinishedRawHandle': _onTaskFinishedRawHandle,
+    'tempFilepath': tempFilepath,
     'auth': auth?.toJson(),
   };
 }

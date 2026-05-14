@@ -1,3 +1,6 @@
+## Unreleased
+* Add `tempFilepath` to `TaskOptions` to allow a custom temporary path in desktop downloads (to e.g. stay on the same filesystem)
+
 ## 9.5.4
 
 * Add `TaskOptions` to `DataTask` with similar functionality as in `DownloadTask`

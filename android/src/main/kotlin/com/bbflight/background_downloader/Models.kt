@@ -69,6 +69,7 @@ class TaskOptions(
     private val beforeTaskStartRawHandle: Long?,
     private val onTaskStartRawHandle: Long?,
     private val onTaskFinishedRawHandle: Long?,
+    private val tempFilepath: String?,
     var auth: Auth?
 ) {
 

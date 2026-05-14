@@ -1140,6 +1140,33 @@ void main() {
 
       await File(path).delete();
     });
+    
+    testWidgets('download with custom temp file path',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
+
+      FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: progressCallback);
+
+      var task = DownloadTask(
+        url: urlWithoutContentLength,
+        filename: defaultFilename,
+        updates: Updates.statusAndProgress,
+        options: TaskOptions(tempFilepath: '/tmp/testtest')
+      );
+
+      var path =
+          join((await getApplicationDocumentsDirectory()).path, task.filename);
+      var exists = await File(path).exists();
+      if (exists) {
+        await File(path).delete();
+      }
+      expect(await FileDownloader().enqueue(task), isTrue);
+      await someProgressCompleter.future;
+
+      expect(File('/tmp/testtest').existsSync(), isTrue);
+      await File('/tmp/testtest').delete();
+    });
   });
 
   group('Retries', () {
@@ -2534,6 +2561,28 @@ void main() {
       var file = File(await task.filePath());
       expect(file.lengthSync(), equals(lastValidExpectedFileSize));
       await file.delete();
+    });
+
+    testWidgets('Pause and resume a with custom temp file name',
+        timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
+      task = DownloadTask(
+          url: urlWithContentLength,
+          filename: defaultFilename,
+          options: TaskOptions(tempFilepath: '/tmp/testtest'),
+          allowPause: true);
+      // kick off convenience download but do not wait for the result
+      unawaited(FileDownloader().download(task,
+          onStatus: (status) => statusCallback(TaskStatusUpdate(task, status)),
+          onProgress: (progress) =>
+              progressCallback(TaskProgressUpdate(task, progress))));
+      await someProgressCompleter.future;
+      expect(await FileDownloader().pause(task), equals(true));
+      await Future.delayed(const Duration(milliseconds: 500));
+      expect(lastStatus, equals(TaskStatus.paused));
+      expect(await FileDownloader().resume(task), equals(true));
+      await statusCallbackCompleter.future;
+      expect(lastStatus, equals(TaskStatus.complete));
+      expect(lastProgress, equals(progressComplete));
     });
   });
 

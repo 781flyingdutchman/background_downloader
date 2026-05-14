@@ -179,6 +179,14 @@ void main() {
       expect(task3.directory, equals(''));
     });
 
+    test('downloadTask tempFilepath', () {
+      final task0 = DownloadTask(url: workingUrl, options: TaskOptions(tempFilepath: '/temp/file'));
+      expect(task0.options?.tempFilepath, isNotNull);
+      expect(task0.options!.tempFilepath!.isNotEmpty, isTrue);
+      final task1 = DownloadTask(url: workingUrl);
+      expect(task1.options?.tempFilepath, isNull);
+    });
+
     test('downloadTask POST options', () {
       var t = DownloadTask(url: workingUrl);
       expect(t.post, isNull);
