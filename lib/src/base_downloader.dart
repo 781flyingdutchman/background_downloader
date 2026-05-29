@@ -121,10 +121,11 @@ abstract base class BaseDownloader {
       TargetPlatform.iOS => IOSDownloader(),
       TargetPlatform.linux ||
       TargetPlatform.macOS ||
-      TargetPlatform.windows => DesktopDownloader(),
+      TargetPlatform.windows =>
+        DesktopDownloader(),
       _ => throw ArgumentError(
-        'Platform $defaultTargetPlatform is not supported',
-      ),
+          'Platform $defaultTargetPlatform is not supported',
+        ),
     };
     instance._storage = persistentStorage;
     instance.database = database;
@@ -140,17 +141,15 @@ abstract base class BaseDownloader {
   @mustCallSuper
   Future<void> initialize() async {
     await _storage.initialize();
-    _databaseUpdates.stream
-        .asyncMap((data) async {
-          await _consumeUpdateTaskInDatabase(
-            data.$1,
-            data.$2,
-            data.$3,
-            data.$4,
-            data.$5,
-          );
-        })
-        .listen((_) {});
+    _databaseUpdates.stream.asyncMap((data) async {
+      await _consumeUpdateTaskInDatabase(
+        data.$1,
+        data.$2,
+        data.$3,
+        data.$4,
+        data.$5,
+      );
+    }).listen((_) {});
     _readyCompleter.complete(true);
   }
 
@@ -180,9 +179,8 @@ abstract base class BaseDownloader {
       iOSConfig: iOSConfig,
       desktopConfig: desktopConfig,
     );
-    final platform = rawPlatformConfig is List
-        ? rawPlatformConfig
-        : [rawPlatformConfig];
+    final platform =
+        rawPlatformConfig is List ? rawPlatformConfig : [rawPlatformConfig];
     return await Future.wait(
       [
         ...global,
@@ -399,9 +397,8 @@ abstract base class BaseDownloader {
   ///  Returns the number of tasks canceled
   @mustCallSuper
   Future<int> reset(String group) async {
-    final retryCount = tasksWaitingToRetry
-        .where((task) => task.group == group)
-        .length;
+    final retryCount =
+        tasksWaitingToRetry.where((task) => task.group == group).length;
     tasksWaitingToRetry.removeWhere((task) => task.group == group);
     final pausedTasks = await getPausedTasks();
     var pausedCount = 0;
@@ -411,9 +408,8 @@ abstract base class BaseDownloader {
         pausedCount++;
       }
     }
-    final awaitTasksToRemove = awaitTasks.keys
-        .where((task) => task.group == group)
-        .toList();
+    final awaitTasksToRemove =
+        awaitTasks.keys.where((task) => task.group == group).toList();
     for (final task in awaitTasksToRemove) {
       awaitTasks.remove(task);
     }
@@ -495,8 +491,8 @@ abstract base class BaseDownloader {
       (null, String group) => await FileDownloader().allTasks(group: group),
       (null, null) => await FileDownloader().allTasks(),
       _ => throw AssertionError(
-        "Either 'tasks' or 'group' must be provided, or neither, but not both.",
-      ),
+          "Either 'tasks' or 'group' must be provided, or neither, but not both.",
+        ),
     };
     return cancelTasksWithIds(tasksToCancel.map((task) => task.taskId));
   }
@@ -525,7 +521,8 @@ abstract base class BaseDownloader {
             for (final chunk in chunks) {
               final tempFilePath = (await getResumeData(
                 chunk.task.taskId,
-              ))?.tempFilepath;
+              ))
+                  ?.tempFilepath;
               if (tempFilePath != null) {
                 try {
                   await File(tempFilePath).delete();
@@ -629,21 +626,18 @@ abstract base class BaseDownloader {
     Iterable<DownloadTask>? tasks,
     String? group,
   }) async {
-    final tasksToPause =
-        switch ((tasks, group)) {
-              (Iterable<DownloadTask> tasks, null) => tasks,
-              (null, String group) =>
-                (await FileDownloader().allTasks(group: group))
-                    as Iterable<Task>,
-              (null, null) =>
-                (await FileDownloader().allTasks()) as Iterable<Task>,
-              _ => throw AssertionError(
-                "Either 'tasks' or 'group' must be provided, or neither, but not both.",
-              ),
-            }
-            .whereType<DownloadTask>()
-            .where((task) => task.allowPause && task.post == null)
-            .toList(growable: false);
+    final tasksToPause = switch ((tasks, group)) {
+      (Iterable<DownloadTask> tasks, null) => tasks,
+      (null, String group) =>
+        (await FileDownloader().allTasks(group: group)) as Iterable<Task>,
+      (null, null) => (await FileDownloader().allTasks()) as Iterable<Task>,
+      _ => throw AssertionError(
+          "Either 'tasks' or 'group' must be provided, or neither, but not both.",
+        ),
+    }
+        .whereType<DownloadTask>()
+        .where((task) => task.allowPause && task.post == null)
+        .toList(growable: false);
     final results = await pauseTaskList(tasksToPause);
     return tasksToPause
         .asMap() // Convert to a Map (index -> Task)

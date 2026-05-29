@@ -331,45 +331,48 @@ Future<dynamic> _dispatch(
   _LocalStorePersistentStorageExecutor executor,
   _StorageCommand method,
   List<dynamic> args,
-) => switch (method) {
-  _StorageCommand.getStoredDatabaseVersion =>
-    executor.storedDatabaseVersion.then((r) => [r.$1, r.$2]), // tuple to list
-  _StorageCommand.storeTaskRecord => executor.storeTaskRecord(
-    args[0] as Map<String, dynamic>,
-  ),
-  _StorageCommand.retrieveTaskRecord => executor.retrieveTaskRecord(
-    args[0] as String,
-  ),
-  _StorageCommand.retrieveAllTaskRecords => executor.retrieveAllTaskRecords(),
-  _StorageCommand.removeTaskRecord => executor.removeTaskRecord(
-    args[0] as String?,
-  ),
-  _StorageCommand.storePausedTask => executor.storePausedTask(
-    args[0] as Map<String, dynamic>,
-  ),
-  _StorageCommand.retrievePausedTask => executor.retrievePausedTask(
-    args[0] as String,
-  ),
-  _StorageCommand.retrieveAllPausedTasks => executor.retrieveAllPausedTasks(),
-  _StorageCommand.removePausedTask => executor.removePausedTask(
-    args[0] as String?,
-  ),
-  _StorageCommand.storeResumeData => executor.storeResumeData(
-    args[0] as Map<String, dynamic>,
-  ),
-  _StorageCommand.retrieveResumeData => executor.retrieveResumeData(
-    args[0] as String,
-  ),
-  _StorageCommand.retrieveAllResumeData => executor.retrieveAllResumeData(),
-  _StorageCommand.removeResumeData => executor.removeResumeData(
-    args[0] as String?,
-  ),
-  _StorageCommand.retrieveAll => executor.retrieveAll(args[0] as String),
-  _StorageCommand.clearCache => executor.clearCache(),
-  _StorageCommand.initialize => throw StateError(
-    'Initialize should be handled in isolate entry',
-  ),
-};
+) =>
+    switch (method) {
+      _StorageCommand.getStoredDatabaseVersion => executor.storedDatabaseVersion
+          .then((r) => [r.$1, r.$2]), // tuple to list
+      _StorageCommand.storeTaskRecord => executor.storeTaskRecord(
+          args[0] as Map<String, dynamic>,
+        ),
+      _StorageCommand.retrieveTaskRecord => executor.retrieveTaskRecord(
+          args[0] as String,
+        ),
+      _StorageCommand.retrieveAllTaskRecords =>
+        executor.retrieveAllTaskRecords(),
+      _StorageCommand.removeTaskRecord => executor.removeTaskRecord(
+          args[0] as String?,
+        ),
+      _StorageCommand.storePausedTask => executor.storePausedTask(
+          args[0] as Map<String, dynamic>,
+        ),
+      _StorageCommand.retrievePausedTask => executor.retrievePausedTask(
+          args[0] as String,
+        ),
+      _StorageCommand.retrieveAllPausedTasks =>
+        executor.retrieveAllPausedTasks(),
+      _StorageCommand.removePausedTask => executor.removePausedTask(
+          args[0] as String?,
+        ),
+      _StorageCommand.storeResumeData => executor.storeResumeData(
+          args[0] as Map<String, dynamic>,
+        ),
+      _StorageCommand.retrieveResumeData => executor.retrieveResumeData(
+          args[0] as String,
+        ),
+      _StorageCommand.retrieveAllResumeData => executor.retrieveAllResumeData(),
+      _StorageCommand.removeResumeData => executor.removeResumeData(
+          args[0] as String?,
+        ),
+      _StorageCommand.retrieveAll => executor.retrieveAll(args[0] as String),
+      _StorageCommand.clearCache => executor.clearCache(),
+      _StorageCommand.initialize => throw StateError(
+          'Initialize should be handled in isolate entry',
+        ),
+    };
 
 /// The executor that runs in the isolate and does the actual work
 ///
@@ -462,7 +465,8 @@ class _LocalStorePersistentStorageExecutor {
   Future<Map<String, dynamic>?> retrieve(
     String collection,
     String identifier,
-  ) => _db.collection(collection).doc(identifier).get();
+  ) =>
+      _db.collection(collection).doc(identifier).get();
 
   /// Returns all documents in collection as a [Map<String, dynamic>] keyed by the
   /// document identifier, with the value a [Map<String, dynamic>] representing the document
@@ -490,10 +494,8 @@ class _LocalStorePersistentStorageExecutor {
       id?.replaceAll(_illegalPathCharacters, '_');
 
   Future<(String, int)> get storedDatabaseVersion async {
-    final metaData = await _db
-        .collection(metaDataCollection)
-        .doc('metaData')
-        .get();
+    final metaData =
+        await _db.collection(metaDataCollection).doc('metaData').get();
     return ('Localstore', (metaData?['version'] as num?)?.toInt() ?? 0);
   }
 
@@ -528,8 +530,8 @@ class _LocalStorePersistentStorageExecutor {
                 final entities = await Directory(fromPath).list().toList();
                 await Future.wait(
                   entities.whereType<File>().map(
-                    (file) => file.copy(join(toPath, basename(file.path))),
-                  ),
+                        (file) => file.copy(join(toPath, basename(file.path))),
+                      ),
                 );
                 await Directory(fromPath).delete(recursive: true);
               }
@@ -619,10 +621,11 @@ class BasePersistentStorageMigrator implements PersistentStorageMigrator {
   Future<bool> migrateFrom(
     String persistentStorageName,
     PersistentStorage toStorage,
-  ) => switch (persistentStorageName.toLowerCase().replaceAll('_', '')) {
-    'localstore' => migrateFromLocalStore(toStorage),
-    _ => Future.value(false),
-  };
+  ) =>
+      switch (persistentStorageName.toLowerCase().replaceAll('_', '')) {
+        'localstore' => migrateFromLocalStore(toStorage),
+        _ => Future.value(false),
+      };
 
   /// Migrate from a persistent storage to our database
   ///

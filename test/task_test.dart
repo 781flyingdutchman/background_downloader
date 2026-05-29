@@ -7,14 +7,11 @@ import 'package:flutter_test/flutter_test.dart';
 final testUriWithFileScheme = Uri.parse('file:///test_file.txt');
 
 const workingUrl = 'https://google.com';
-const failingUrl =
-    'https://avmaps-dot-bbflightserver-hrd.appspot'
+const failingUrl = 'https://avmaps-dot-bbflightserver-hrd.appspot'
     '.com/public/get_current_app_data?key=background_downloader_integration_test';
-const urlWithContentLength =
-    'https://storage.googleapis'
+const urlWithContentLength = 'https://storage.googleapis'
     '.com/approachcharts/test/5MB-test.ZIP';
-const urlWithLongContentLength =
-    'https://storage.googleapis'
+const urlWithLongContentLength = 'https://storage.googleapis'
     '.com/approachcharts/test/57MB-test.ZIP';
 const getTestUrl =
     'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/test_get_data';

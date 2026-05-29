@@ -93,8 +93,8 @@ void main() {
             200,
           ),
         );
-        final (updatedAccessToken, updatedRefreshToken) = await auth
-            .refreshAccessToken(httpClient: mockClient);
+        final (updatedAccessToken, updatedRefreshToken) =
+            await auth.refreshAccessToken(httpClient: mockClient);
         // Check if tokens and expiry time are updated
         expect(updatedAccessToken, true);
         expect(updatedRefreshToken, true);

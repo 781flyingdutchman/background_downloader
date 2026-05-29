@@ -174,9 +174,8 @@ class MemoryTaskQueue implements TaskQueue {
       _activeByGroup.clear();
     } else {
       removeTasksWithGroup(group);
-      final tasksToRemove = enqueued
-          .where((task) => task.group != group)
-          .toList(growable: false);
+      final tasksToRemove =
+          enqueued.where((task) => task.group != group).toList(growable: false);
       for (final task in tasksToRemove) {
         if (enqueued.remove(task)) {
           _decrementCounts(task);

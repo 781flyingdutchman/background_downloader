@@ -5,11 +5,9 @@ import 'dart:convert';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const urlWithContentLength =
-    'https://storage.googleapis'
+const urlWithContentLength = 'https://storage.googleapis'
     '.com/approachcharts/test/5MB-test.ZIP';
-const urlWithLongContentLength =
-    'https://storage.googleapis'
+const urlWithLongContentLength = 'https://storage.googleapis'
     '.com/approachcharts/test/57MB-test.ZIP';
 
 final task = DownloadTask(

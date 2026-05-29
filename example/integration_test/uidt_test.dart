@@ -135,14 +135,20 @@ void main() {
 
     testWidgets('Upload with cancel',
         timeout: const Timeout(Duration(minutes: 2)), (tester) async {
-      // Create a 25MB file to ensure we have time to cancel
+      final isDesktop =
+          Platform.isMacOS || Platform.isWindows || Platform.isLinux;
+      // On desktop, local loopback is extremely fast, so multipart uploads complete instantly
+      // without triggering enough progress updates. We use a 1MB binary upload to the
+      // throttled '/upload_binary' endpoint to ensure the upload is slow enough to cancel.
       final docDir = await getApplicationDocumentsDirectory();
       final bigFile = File(join(docDir.path, 'big_upload_file.bin'));
-      await bigFile.writeAsBytes(Uint8List(25 * 1024 * 1024));
+      final fileSize = isDesktop ? 1 * 1024 * 1024 : 25 * 1024 * 1024;
+      await bigFile.writeAsBytes(Uint8List(fileSize));
 
       var task = UploadTask(
-          url: uploadTestUrl,
+          url: isDesktop ? uploadBinaryTestUrl : uploadTestUrl,
           filename: 'big_upload_file.bin',
+          post: isDesktop ? 'binary' : null,
           updates: Updates.statusAndProgress,
           group: 'uploadTest',
           priority: 0);

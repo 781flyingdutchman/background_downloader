@@ -850,10 +850,16 @@ open class TaskRunner(
      * Based on [canRunInForeground] and [contentLength] > [runInForegroundFileSize]
      */
     fun determineRunInForeground(task: Task, contentLength: Long) {
+        val wasRunInForeground = runInForeground
         runInForeground =
             canRunInForeground && contentLength > (runInForegroundFileSize.toLong() shl 20)
         if (runInForeground) {
             Log.i(TAG, "TaskId ${task.taskId} will run in foreground")
+            if (!wasRunInForeground) {
+                CoroutineScope(Dispatchers.Default).launch {
+                    context.updateNotification(task, TaskStatus.running)
+                }
+            }
         }
     }
 

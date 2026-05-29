@@ -283,8 +283,8 @@ sealed class UriUtils {
       String() => Uri.file(destination),
       Uri() => destination,
       _ => throw ArgumentError(
-        'Invalid destination type. Must be File, String, or Uri.',
-      ),
+          'Invalid destination type. Must be File, String, or Uri.',
+        ),
     };
   }
 }
@@ -297,11 +297,12 @@ final class _DesktopUriUtils extends UriUtils {
     SharedStorage? startLocation,
     Uri? startLocationUri,
     bool persistedUriPermission = false,
-  }) => throw UnimplementedError(
-    'pickDirectory not implemented for this platform. '
-    'Use the file_picker package and convert the resulting filePath '
-    'to a URI Uri.file(directoryPath, windows: Platform.isWindows)',
-  );
+  }) =>
+      throw UnimplementedError(
+        'pickDirectory not implemented for this platform. '
+        'Use the file_picker package and convert the resulting filePath '
+        'to a URI Uri.file(directoryPath, windows: Platform.isWindows)',
+      );
 
   @override
   Future<List<Uri>?> pickFiles({
@@ -310,11 +311,12 @@ final class _DesktopUriUtils extends UriUtils {
     List<String>? allowedExtensions,
     bool multipleAllowed = false,
     bool persistedUriPermission = false,
-  }) => throw UnimplementedError(
-    'pickFiles not implemented for this platform. '
-    'Use the file_picker package and convert the resulting filePath '
-    'to a URI using Uri.file(filepath, windows: Platform.isWindows)',
-  );
+  }) =>
+      throw UnimplementedError(
+        'pickFiles not implemented for this platform. '
+        'Use the file_picker package and convert the resulting filePath '
+        'to a URI using Uri.file(filepath, windows: Platform.isWindows)',
+      );
 
   @override
   Future<Uri> createDirectory(
@@ -465,14 +467,13 @@ final class _NativeUriUtils extends UriUtils {
     // uriStrings can be a list of Strings or just one String, or null
     return switch (uriStrings) {
       String uri => [Uri.parse(uri)],
-      List<Object?>? uris =>
-        uris
-            ?.where((e) => e != null)
-            .map((e) => Uri.parse(e as String))
-            .toList(growable: false),
+      List<Object?>? uris => uris
+          ?.where((e) => e != null)
+          .map((e) => Uri.parse(e as String))
+          .toList(growable: false),
       _ => throw ArgumentError(
-        'pickFiles returned invalid value $uriStrings of type ${uriStrings.runtimeType}',
-      ),
+          'pickFiles returned invalid value $uriStrings of type ${uriStrings.runtimeType}',
+        ),
     };
   }
 
@@ -594,8 +595,8 @@ extension StringUriExtensions on String {
 extension UriExtensions on Uri {
   /// Returns the File represented by this [uri]
   File toFile() => File(
-    toFilePath(windows: defaultTargetPlatform == TargetPlatform.windows),
-  );
+        toFilePath(windows: defaultTargetPlatform == TargetPlatform.windows),
+      );
 
   /// True if Uri scheme is file
   bool get isFileUri => scheme == 'file';

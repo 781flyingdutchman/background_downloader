@@ -50,7 +50,7 @@ void main() {
     expect(
         File(path.join(docDir.path, tasksPath, 'test')).existsSync(), isTrue);
     final _ = FileDownloader(); // triggers the initialization and migration
-    await Future.delayed(const Duration(milliseconds: 100));
+    await Future.delayed(const Duration(milliseconds: 500));
     // file 'test' in docDir should have been moved to supportDir
     expect(
         File(path.join(docDir.path, tasksPath, 'test')).existsSync(), isFalse);

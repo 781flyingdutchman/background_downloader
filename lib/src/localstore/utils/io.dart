@@ -32,16 +32,14 @@ final class Utils implements UtilsImpl {
     final previous = _locks[path] ?? Future.value();
     final controller = Completer<T>();
 
-    final newFuture = previous
-        .then((_) async {
-          try {
-            final result = await action();
-            controller.complete(result);
-          } catch (e, st) {
-            controller.completeError(e, st);
-          }
-        })
-        .catchError((_) {});
+    final newFuture = previous.then((_) async {
+      try {
+        final result = await action();
+        controller.complete(result);
+      } catch (e, st) {
+        controller.completeError(e, st);
+      }
+    }).catchError((_) {});
 
     _locks[path] = newFuture;
 

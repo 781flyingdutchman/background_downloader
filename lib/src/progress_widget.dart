@@ -162,39 +162,38 @@ class _DownloadProgressIndicatorState extends State<DownloadProgressIndicator> {
     final itemsToShow = isExpanded
         ? min(numActive, widget.maxExpandable)
         : isCollapsed
-        ? min(1, numActive)
-        : numActive;
+            ? min(1, numActive)
+            : numActive;
     return AnimatedSize(
       duration: const Duration(milliseconds: 200),
       alignment: Alignment.bottomCenter,
       child: switch (itemsToShow) {
         0 => Container(height: 0),
-        1 =>
-          isCollapsed
-              ? _CollapsedDownloadProgress(
-                  finishedTasks.length,
-                  totalTasks.length,
-                  widget.collapsedMessage,
-                  widget.height,
-                  widget.backgroundColor,
-                )
-              : _DownloadProgressItem(
-                  activeTasks.first,
-                  inProgress[activeTasks.first]!.$1,
-                  widget.message,
-                  widget.showPauseButton,
-                  widget.showCancelButton,
-                  widget.height,
-                  widget.backgroundColor,
-                  pausedTasks,
-                ),
+        1 => isCollapsed
+            ? _CollapsedDownloadProgress(
+                finishedTasks.length,
+                totalTasks.length,
+                widget.collapsedMessage,
+                widget.height,
+                widget.backgroundColor,
+              )
+            : _DownloadProgressItem(
+                activeTasks.first,
+                inProgress[activeTasks.first]!.$1,
+                widget.message,
+                widget.showPauseButton,
+                widget.showCancelButton,
+                widget.height,
+                widget.backgroundColor,
+                pausedTasks,
+              ),
         _ => _ExpandedDownloadProgress(
-          activeTasks.take(widget.maxExpandable).toList(growable: false),
-          widget.message,
-          widget.height,
-          widget.backgroundColor,
-          inProgress,
-        ),
+            activeTasks.take(widget.maxExpandable).toList(growable: false),
+            widget.message,
+            widget.height,
+            widget.backgroundColor,
+            inProgress,
+          ),
       },
     );
   }

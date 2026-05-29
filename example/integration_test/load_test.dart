@@ -25,7 +25,12 @@ void main() {
       for (final result in enqueueResult) {
         expect(result, isTrue);
       }
-      await Future.delayed(const Duration(seconds: 2));
+      // Wait for all tasks to complete (each task has 3 status updates: enqueued, running, completed)
+      var attempts = 0;
+      while (statusCallbackCounter < 3 * numTasks && attempts < 300) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        attempts++;
+      }
       for (final task in tasks) {
         final file = File(await task.filePath());
         try {

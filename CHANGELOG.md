@@ -1,6 +1,21 @@
 ## Unreleased
 * Add `tempFilepath` to `TaskOptions` to allow a custom temporary path in desktop downloads (to e.g. stay on the same filesystem)
 
+## 9.5.5
+
+* [Android] Bug fixes and performance improvements:
+  - Fixes a potential UI freeze during application startup
+  - Prevents App Not Responding (ANR) crashes when tapping notification actions (Cancel/Pause/Resume) under heavy system load
+  - Fixes group notifications running in the foreground (issue #648)
+  - Migrated build configuration to Flutter's built-in Kotlin Gradle plugin configuration and upgraded Gradle to 8.14
+* [iOS] Group notification and permission improvements:
+  - Fixes redundant updates and visual "flashing" of group notifications (fixes #656)
+  - Migrated the example app to native Swift Package Manager (SPM) and added environment-variable-based compile-time permission bypass flags for SPM users
+  - Removed 'Background Fetch' requirement from documentation and example plist files, preventing unexpected wake-ups when the device is locked and resolving potential keychain access issues (fixes #668)
+* [Desktop] Temp directory fallback:
+  - Added fallback to the target download directory on desktop platforms when the system temporary directory is inaccessible (e.g., in macOS app sandbox mode, fixes #649)
+* [Chore / Maintenance] Code formatting updated to match the latest Dart formatter
+
 ## 9.5.4
 
 * Add `TaskOptions` to `DataTask` with similar functionality as in `DownloadTask`

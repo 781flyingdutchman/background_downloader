@@ -41,10 +41,10 @@ base mixin _UriTaskMixin on Task implements UriTask {
   /// Creates JSON map of this object
   @override
   Map<String, dynamic> toJson() => {
-    ...super.toJson(),
-    'filename': super.filename, // replace with raw string
-    'directory': super.directory, // replace with raw string
-  };
+        ...super.toJson(),
+        'filename': super.filename, // replace with raw string
+        'directory': super.directory, // replace with raw string
+      };
 }
 
 final class UriDownloadTask extends DownloadTask with _UriTaskMixin {
@@ -87,31 +87,31 @@ final class UriDownloadTask extends DownloadTask with _UriTaskMixin {
     super.creationTime,
     super.options,
   }) : super(
-         baseDirectory: BaseDirectory.root,
-         directory: directoryUri.toString(),
-         filename: switch ((filename, directoryUri)) {
-           (DownloadTask.suggestedFilename, _) =>
-             DownloadTask.suggestedFilename,
-           (null, Uri(scheme: 'file')) => () {
-             final randomFilename = Random().nextInt(1 << 32).toString();
-             return pack(
-               randomFilename,
-               Uri.file(
-                 '${directoryUri.path}/$randomFilename',
-                 windows: Platform.isWindows,
-               ),
-             );
-           }(),
-           (String filename, Uri(scheme: 'file')) => pack(
-             filename,
-             Uri.file(
-               '${directoryUri.path}/$filename',
-               windows: Platform.isWindows,
-             ),
-           ),
-           _ => filename,
-         },
-       ) {
+          baseDirectory: BaseDirectory.root,
+          directory: directoryUri.toString(),
+          filename: switch ((filename, directoryUri)) {
+            (DownloadTask.suggestedFilename, _) =>
+              DownloadTask.suggestedFilename,
+            (null, Uri(scheme: 'file')) => () {
+                final randomFilename = Random().nextInt(1 << 32).toString();
+                return pack(
+                  randomFilename,
+                  Uri.file(
+                    '${directoryUri.path}/$randomFilename',
+                    windows: Platform.isWindows,
+                  ),
+                );
+              }(),
+            (String filename, Uri(scheme: 'file')) => pack(
+                filename,
+                Uri.file(
+                  '${directoryUri.path}/$filename',
+                  windows: Platform.isWindows,
+                ),
+              ),
+            _ => filename,
+          },
+        ) {
     assert(
       Task.allowedUriSchemes.contains(directoryUri.scheme),
       'Directory URI scheme must be one of ${Task.allowedUriSchemes}',
@@ -149,25 +149,26 @@ final class UriDownloadTask extends DownloadTask with _UriTaskMixin {
     String? displayName,
     DateTime? creationTime,
     TaskOptions? options,
-  }) => UriDownloadTask(
-    taskId: taskId ?? this.taskId,
-    url: url ?? this.url,
-    filename: filename ?? this.filename,
-    headers: headers ?? this.headers,
-    httpRequestMethod: httpRequestMethod ?? this.httpRequestMethod,
-    post: post ?? this.post,
-    directoryUri: directoryUri ?? this.directoryUri ?? Uri.base,
-    group: group ?? this.group,
-    updates: updates ?? this.updates,
-    requiresWiFi: requiresWiFi ?? this.requiresWiFi,
-    retries: retries ?? this.retries,
-    allowPause: allowPause ?? this.allowPause,
-    priority: priority ?? this.priority,
-    metaData: metaData ?? this.metaData,
-    displayName: displayName ?? this.displayName,
-    creationTime: creationTime ?? this.creationTime,
-    options: options ?? this.options,
-  )..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
+  }) =>
+      UriDownloadTask(
+        taskId: taskId ?? this.taskId,
+        url: url ?? this.url,
+        filename: filename ?? this.filename,
+        headers: headers ?? this.headers,
+        httpRequestMethod: httpRequestMethod ?? this.httpRequestMethod,
+        post: post ?? this.post,
+        directoryUri: directoryUri ?? this.directoryUri ?? Uri.base,
+        group: group ?? this.group,
+        updates: updates ?? this.updates,
+        requiresWiFi: requiresWiFi ?? this.requiresWiFi,
+        retries: retries ?? this.retries,
+        allowPause: allowPause ?? this.allowPause,
+        priority: priority ?? this.priority,
+        metaData: metaData ?? this.metaData,
+        displayName: displayName ?? this.displayName,
+        creationTime: creationTime ?? this.creationTime,
+        options: options ?? this.options,
+      )..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 
   @override
   String get taskType => 'UriDownloadTask';
@@ -202,14 +203,13 @@ final class UriUploadTask extends UploadTask with _UriTaskMixin {
     super.creationTime,
     super.options,
   }) : super(
-         baseDirectory: BaseDirectory.root,
-         filename: filename != null
-             ? pack(filename, fileUri)
-             : fileUri.toString(),
-         httpRequestMethod: httpRequestMethod ?? 'POST',
-         mimeType: mimeType ?? 'application/octet-stream',
-         fields: fields ?? {},
-       ) {
+          baseDirectory: BaseDirectory.root,
+          filename:
+              filename != null ? pack(filename, fileUri) : fileUri.toString(),
+          httpRequestMethod: httpRequestMethod ?? 'POST',
+          mimeType: mimeType ?? 'application/octet-stream',
+          fields: fields ?? {},
+        ) {
     assert(
       Task.allowedUriSchemes.contains(fileUri.scheme),
       'URI scheme must be one of ${Task.allowedUriSchemes}',
@@ -247,27 +247,28 @@ final class UriUploadTask extends UploadTask with _UriTaskMixin {
     String? displayName,
     DateTime? creationTime,
     TaskOptions? options,
-  }) => UriUploadTask(
-    fileUri: fileUri ?? this.fileUri ?? Uri.base,
-    taskId: taskId ?? this.taskId,
-    url: url ?? this.url,
-    filename: filename ?? this.filename,
-    headers: headers ?? this.headers,
-    httpRequestMethod: httpRequestMethod ?? this.httpRequestMethod,
-    post: post as String? ?? this.post,
-    fileField: fileField ?? this.fileField,
-    mimeType: mimeType ?? this.mimeType,
-    fields: fields ?? this.fields,
-    group: group ?? this.group,
-    updates: updates ?? this.updates,
-    requiresWiFi: requiresWiFi ?? this.requiresWiFi,
-    priority: priority ?? this.priority,
-    retries: retries ?? this.retries,
-    metaData: metaData ?? this.metaData,
-    displayName: displayName ?? this.displayName,
-    creationTime: creationTime ?? this.creationTime,
-    options: options ?? this.options,
-  )..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
+  }) =>
+      UriUploadTask(
+        fileUri: fileUri ?? this.fileUri ?? Uri.base,
+        taskId: taskId ?? this.taskId,
+        url: url ?? this.url,
+        filename: filename ?? this.filename,
+        headers: headers ?? this.headers,
+        httpRequestMethod: httpRequestMethod ?? this.httpRequestMethod,
+        post: post as String? ?? this.post,
+        fileField: fileField ?? this.fileField,
+        mimeType: mimeType ?? this.mimeType,
+        fields: fields ?? this.fields,
+        group: group ?? this.group,
+        updates: updates ?? this.updates,
+        requiresWiFi: requiresWiFi ?? this.requiresWiFi,
+        priority: priority ?? this.priority,
+        retries: retries ?? this.retries,
+        metaData: metaData ?? this.metaData,
+        displayName: displayName ?? this.displayName,
+        creationTime: creationTime ?? this.creationTime,
+        options: options ?? this.options,
+      )..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 
   @override
   String get taskType => 'UriUploadTask';

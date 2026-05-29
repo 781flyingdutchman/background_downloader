@@ -30,38 +30,38 @@ class Chunk {
     required this.filename,
     required this.fromByte,
     required this.toByte,
-  }) : parentTaskId = parentTask.taskId,
-       task = DownloadTask(
-         url: url,
-         filename: filename,
-         headers: {...parentTask.headers, 'Range': 'bytes=$fromByte-$toByte'},
-         baseDirectory: BaseDirectory.temporary,
-         group: BaseDownloader.chunkGroup,
-         updates: updatesBasedOnParent(parentTask),
-         retries: parentTask.retries,
-         allowPause: parentTask.allowPause,
-         priority: parentTask.priority,
-         requiresWiFi: parentTask.requiresWiFi,
-         metaData: jsonEncode({
-           'parentTaskId': parentTask.taskId,
-           'from': fromByte,
-           'to': toByte,
-         }),
-       ) {
+  })  : parentTaskId = parentTask.taskId,
+        task = DownloadTask(
+          url: url,
+          filename: filename,
+          headers: {...parentTask.headers, 'Range': 'bytes=$fromByte-$toByte'},
+          baseDirectory: BaseDirectory.temporary,
+          group: BaseDownloader.chunkGroup,
+          updates: updatesBasedOnParent(parentTask),
+          retries: parentTask.retries,
+          allowPause: parentTask.allowPause,
+          priority: parentTask.priority,
+          requiresWiFi: parentTask.requiresWiFi,
+          metaData: jsonEncode({
+            'parentTaskId': parentTask.taskId,
+            'from': fromByte,
+            'to': toByte,
+          }),
+        ) {
     status = TaskStatus.enqueued;
     progress = 0;
   }
 
   /// Creates object from [json]
   Chunk.fromJson(Map<String, dynamic> json)
-    : parentTaskId = json['parentTaskId'],
-      url = json['url'],
-      filename = json['filename'],
-      fromByte = (json['fromByte'] as num).toInt(),
-      toByte = (json['toByte'] as num).toInt(),
-      task = Task.createFromJson(json['task']) as DownloadTask,
-      status = TaskStatus.values[(json['status'] as num? ?? 0).toInt()],
-      progress = (json['progress'] as num? ?? 0.0).toDouble();
+      : parentTaskId = json['parentTaskId'],
+        url = json['url'],
+        filename = json['filename'],
+        fromByte = (json['fromByte'] as num).toInt(),
+        toByte = (json['toByte'] as num).toInt(),
+        task = Task.createFromJson(json['task']) as DownloadTask,
+        status = TaskStatus.values[(json['status'] as num? ?? 0).toInt()],
+        progress = (json['progress'] as num? ?? 0.0).toDouble();
 
   /// Revive `List<Chunk>` from a JSON map in a jsonDecode operation,
   /// where each element is a map representing the [Chunk]
@@ -70,15 +70,15 @@ class Chunk {
 
   /// Creates JSON map of this object
   Map<String, dynamic> toJson() => {
-    'parentTaskId': parentTaskId,
-    'url': url,
-    'filename': filename,
-    'fromByte': fromByte,
-    'toByte': toByte,
-    'task': task.toJson(),
-    'status': status.index,
-    'progress': progress,
-  };
+        'parentTaskId': parentTaskId,
+        'url': url,
+        'filename': filename,
+        'fromByte': fromByte,
+        'toByte': toByte,
+        'task': task.toJson(),
+        'status': status.index,
+        'progress': progress,
+      };
 
   /// Return the parentTaskId embedded in the metaData of a chunkTask
   static String getParentTaskId(Task task) =>
@@ -89,7 +89,8 @@ class Chunk {
       switch (parentTask.updates) {
         Updates.none || Updates.status => Updates.status,
         Updates.progress ||
-        Updates.statusAndProgress => Updates.statusAndProgress,
+        Updates.statusAndProgress =>
+          Updates.statusAndProgress,
       };
 }
 

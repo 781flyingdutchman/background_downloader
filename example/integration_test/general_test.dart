@@ -2492,7 +2492,7 @@ void main() {
 
     testWidgets('multiple pause and resume',
         timeout: const Timeout(Duration(minutes: 2)), (widgetTester) async {
-      var interval = const Duration(milliseconds: 500);
+      var interval = const Duration(milliseconds: 700);
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       task = DownloadTask(
           url: urlWithContentLength,

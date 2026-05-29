@@ -12,7 +12,7 @@ The plugin supports headers, retries, priority, requiring WiFi before starting t
 
 Pickers for files, photos/videos and directories are included for iOS and Android, and the downloader supports `Uri` based file locations and operations that are consistent across all platforms, including Android's `content://` URIs (used for the Storage Access Framework) and iOSs URL Bookmarks for persistent file locators (see [working with URIs](doc/URI.md)).
 
-No setup is required for Android (except when using notifications), Windows and Linux, and only minimal set up for iOS and MacOS.
+No setup is required for iOS, Android (except when using notifications), Windows and Linux, and only minimal set up for MacOS.
 
 ## File locations
 
@@ -155,14 +155,8 @@ buildScript {
 
 ### iOS
 
-On iOS, ensure that you have the Background Fetch capability enabled:
-* Select the Runner target in XCode
-* Select the Signing & Capabilities tab
-* Click the + icon to add capabilities
-* Select 'Background Modes'
-* Tick the 'Background Fetch' mode
+No setup is required for iOS, except that iOS by default requires all URLs to be https (and not http). See [here](https://developer.apple.com/documentation/security/preventing_insecure_network_connections) for more details and how to address issues.
 
-Note that iOS by default requires all URLs to be https (and not http). See [here](https://developer.apple.com/documentation/security/preventing_insecure_network_connections) for more details and how to address issues.
 
 ### MacOS
 

@@ -1,7 +1,7 @@
 name: background_downloader_example
 description: Demonstrates how to use the background_downloader plugin.
 
-version: 2.0.0
+version: 2.0.1
 
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -29,9 +29,7 @@ dependencies:
     # the parent directory to use the current plugin's version.
     path: ../
 
-  # This is used to create a background isolate
-  # with a separate entry point & Flutter engine for testing.
-  flutter_isolate: ^2.1.0
+
   logging: ^1.0.2
   provider: ^6.0.3
   path_provider: ^2.0.2

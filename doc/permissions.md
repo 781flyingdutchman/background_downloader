@@ -34,8 +34,31 @@ Note that permissions are very platform and version dependent, e.g. notification
 
 By default, the downloader allows any of the permissions to be requested, but that also means that Apple requires you to add things like Photo Library Usage Description to your Info.plist, even if you never move files to the Photo Library.
 
-On iOS, to bypass the permission code altogether at compile time (and therefore remove the need to provide the Info.plist entry) modify your app's Podfile as follows:
-```agsl
+On iOS, you can bypass the permission code altogether at compile time (and therefore remove the need to provide the Info.plist entry) using either Swift Package Manager or CocoaPods.
+
+### Using Swift Package Manager (SPM)
+
+When using Swift Package Manager, you can bypass the permission code by setting environment variables in your environment or build script before running the build:
+
+* `BYPASS_PERMISSION_NOTIFICATIONS=1`
+* `BYPASS_PERMISSION_IOSADDTOPHOTOLIBRARY=1`
+* `BYPASS_PERMISSION_IOSCHANGEPHOTOLIBRARY=1`
+
+For example, to build your app while bypassing all Photo Library permissions:
+
+```bash
+export BYPASS_PERMISSION_IOSADDTOPHOTOLIBRARY=1
+export BYPASS_PERMISSION_IOSCHANGEPHOTOLIBRARY=1
+flutter build ios
+```
+
+If you are building your iOS app using Xcode directly or using a CI/CD platform, make sure to add these environment variables to your build phase script or environment configuration.
+
+### Using CocoaPods
+
+To bypass the permission code when using CocoaPods, modify your app's Podfile as follows:
+
+```ruby
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
@@ -55,8 +78,9 @@ post_install do |installer|
       #config.build_settings['OTHER_SWIFT_FLAGS'] << '-D BYPASS_PERMISSION_NOTIFICATIONS'
       #config.build_settings['OTHER_SWIFT_FLAGS'] << '-D BYPASS_PERMISSION_IOSADDTOPHOTOLIBRARY'
       #config.build_settings['OTHER_SWIFT_FLAGS'] << '-D BYPASS_PERMISSION_IOSCHANGEPHOTOLIBRARY'
-      end
+    end
   end
 end
 ```
-and uncomment the line items that you want to bypass by deleting the `#` mark at the start of the line.
+
+And uncomment the line items that you want to bypass by deleting the `#` mark at the start of the line.

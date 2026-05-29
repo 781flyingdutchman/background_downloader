@@ -76,8 +76,8 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
     }
   });
   // process native callbacks beforeTaskStart, onTaskStart and onAuth
-  final statusUpdate = await originalTask.options?.beforeTaskStartCallBack
-      ?.call(originalTask);
+  final statusUpdate =
+      await originalTask.options?.beforeTaskStartCallBack?.call(originalTask);
   if (statusUpdate != null) {
     log.fine(
       'TaskId ${originalTask.taskId} interrupted by beforeTaskStart callback',
@@ -109,19 +109,19 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
     await Future.delayed(const Duration(milliseconds: 0));
     await switch (task) {
       ParallelDownloadTask() => doParallelDownloadTask(
-        task,
-        resumeData,
-        isResume,
-        requestTimeout ?? const Duration(seconds: 60),
-        sendPort,
-      ),
+          task,
+          resumeData,
+          isResume,
+          requestTimeout ?? const Duration(seconds: 60),
+          sendPort,
+        ),
       DownloadTask() => doDownloadTask(
-        task,
-        resumeData,
-        isResume,
-        requestTimeout ?? const Duration(seconds: 60),
-        sendPort,
-      ),
+          task,
+          resumeData,
+          isResume,
+          requestTimeout ?? const Duration(seconds: 60),
+          sendPort,
+        ),
       UploadTask() => doUploadTask(task, sendPort),
       DataTask() => doDataTask(task, sendPort),
       _ => throw UnimplementedError(),
@@ -196,44 +196,42 @@ Future<TaskStatus> transferBytes(
   var resultStatus = TaskStatus.complete;
   try {
     await outStream.addStream(
-      inStream
-          .timeout(
-            requestTimeout,
-            onTimeout: (sink) {
-              taskException = TaskConnectionException('Connection timed out');
-              resultStatus = TaskStatus.failed;
-              sink.close(); // ends the stream
-            },
-          )
-          .map((bytes) {
-            if (isCanceled) {
-              resultStatus = TaskStatus.canceled;
-              throw StateError('Canceled');
-            }
-            if (isPaused) {
-              resultStatus = TaskStatus.paused;
-              throw StateError('Paused');
-            }
-            bytesTotal += bytes.length;
-            final progress = min(
-              (bytesTotal + startByte).toDouble() / (contentLength + startByte),
-              0.999,
-            );
-            final now = DateTime.now();
-            if (contentLength > 0 && shouldSendProgressUpdate(progress, now)) {
-              processProgressUpdateInIsolate(
-                task,
-                progress,
-                sendPort,
-                contentLength + startByte,
-              );
-              lastProgressUpdate = progress;
-              nextProgressUpdateTime = now.add(
-                const Duration(milliseconds: 500),
-              );
-            }
-            return bytes;
-          }),
+      inStream.timeout(
+        requestTimeout,
+        onTimeout: (sink) {
+          taskException = TaskConnectionException('Connection timed out');
+          resultStatus = TaskStatus.failed;
+          sink.close(); // ends the stream
+        },
+      ).map((bytes) {
+        if (isCanceled) {
+          resultStatus = TaskStatus.canceled;
+          throw StateError('Canceled');
+        }
+        if (isPaused) {
+          resultStatus = TaskStatus.paused;
+          throw StateError('Paused');
+        }
+        bytesTotal += bytes.length;
+        final progress = min(
+          (bytesTotal + startByte).toDouble() / (contentLength + startByte),
+          0.999,
+        );
+        final now = DateTime.now();
+        if (contentLength > 0 && shouldSendProgressUpdate(progress, now)) {
+          processProgressUpdateInIsolate(
+            task,
+            progress,
+            sendPort,
+            contentLength + startByte,
+          );
+          lastProgressUpdate = progress;
+          nextProgressUpdateTime = now.add(
+            const Duration(milliseconds: 500),
+          );
+        }
+        return bytes;
+      }),
     );
   } catch (e) {
     if (resultStatus == TaskStatus.complete) {
@@ -413,12 +411,10 @@ String fieldEntry(String name, String value) =>
 String headerForField(String name, String value) {
   var header = 'content-disposition: form-data; name="${browserEncode(name)}"';
   if (isJsonString(value)) {
-    header =
-        '$header\r\n'
+    header = '$header\r\n'
         'content-type: application/json; charset=utf-8';
   } else if (!isPlainAscii(value)) {
-    header =
-        '$header\r\n'
+    header = '$header\r\n'
         'content-type: text/plain; charset=utf-8\r\n'
         'content-transfer-encoding: binary';
   }

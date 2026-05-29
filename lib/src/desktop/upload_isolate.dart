@@ -80,9 +80,10 @@ Future<(Task, TaskStatus)> binaryUpload(
       }
       task.headers.remove('Range'); // not passed on to server
     }
-    if (task case UriUploadTask(
-      fileUri: final fileUri,
-    ) when fileUri != null && task.filename.isEmpty) {
+    if (task
+        case UriUploadTask(
+          fileUri: final fileUri,
+        ) when fileUri != null && task.filename.isEmpty) {
       // for UriTasks without a filename, derive it from the Uri
       task = task.copyWith(filename: fileUri.pathSegments.last);
     }
@@ -95,12 +96,10 @@ Future<(Task, TaskStatus)> binaryUpload(
     request.headers.addAll(task.headers);
     request.contentLength = contentLength;
     request.headers['Content-Type'] = task.mimeType;
-    final taskContentDisposition =
-        task.headers['Content-Disposition'] ??
+    final taskContentDisposition = task.headers['Content-Disposition'] ??
         task.headers['content-disposition'];
     if (taskContentDisposition != '') {
-      request.headers['Content-Disposition'] =
-          taskContentDisposition ??
+      request.headers['Content-Disposition'] = taskContentDisposition ??
           'attachment; filename="${Uri.encodeComponent(task.filename)}"';
     } else {
       request.headers.remove('Content-Disposition');
@@ -111,8 +110,7 @@ Future<(Task, TaskStatus)> binaryUpload(
     var transferBytesResult = TaskStatus.failed;
     client.send(request).then((response) async {
       // request completed, so send status update and finish
-      resultStatus =
-          transferBytesResult == TaskStatus.complete &&
+      resultStatus = transferBytesResult == TaskStatus.complete &&
               !okResponses.contains(response.statusCode)
           ? TaskStatus.failed
           : transferBytesResult;
@@ -185,8 +183,7 @@ Future<(Task, TaskStatus)> multipartUpload(
   const separator = '$lineFeed--$boundary$lineFeed'; // between files
   const terminator = '$lineFeed--$boundary--$lineFeed'; // after last file
   final filesData = (task is MultiUploadTask)
-      ? await task
-            .extractFilesData() // MultiUpload case
+      ? await task.extractFilesData() // MultiUpload case
       : [
           (task.fileField, await task.filePath(), task.mimeType),
         ]; // one file Upload case
@@ -206,9 +203,10 @@ Future<(Task, TaskStatus)> multipartUpload(
     var derivedFilename = p.basename(file.path);
     if (filesData.length == 1) {
       // only for single file uploads do we set the task's filename property
-      if (task case UriUploadTask(
-        fileUri: final fileUri,
-      ) when fileUri != null) {
+      if (task
+          case UriUploadTask(
+            fileUri: final fileUri,
+          ) when fileUri != null) {
         task = task.copyWith(filename: fileUri.pathSegments.last);
       } else {
         task = task.copyWith(filename: derivedFilename);
@@ -221,8 +219,7 @@ Future<(Task, TaskStatus)> multipartUpload(
     contentTypeStrings.add('Content-Type: $resolvedMimeType$lineFeed$lineFeed');
     fileLengths.add(file.lengthSync());
   }
-  final fileDataLength =
-      contentDispositionStrings.fold<int>(
+  final fileDataLength = contentDispositionStrings.fold<int>(
         0,
         (sum, string) => sum + lengthInBytes(string),
       ) +
@@ -230,8 +227,7 @@ Future<(Task, TaskStatus)> multipartUpload(
       fileLengths.fold<int>(0, (sum, length) => sum + length) +
       separator.length * contentDispositionStrings.length +
       2;
-  final contentLength =
-      lengthInBytes(fieldsString) +
+  final contentLength = lengthInBytes(fieldsString) +
       '--$boundary$lineFeed'.length +
       fileDataLength;
   var resultStatus = TaskStatus.failed;
@@ -256,8 +252,7 @@ Future<(Task, TaskStatus)> multipartUpload(
     var transferBytesResult = TaskStatus.failed;
     client.send(request).then((response) async {
       // request completed, so send status update and finish
-      resultStatus =
-          transferBytesResult == TaskStatus.complete &&
+      resultStatus = transferBytesResult == TaskStatus.complete &&
               !okResponses.contains(response.statusCode)
           ? TaskStatus.failed
           : transferBytesResult;

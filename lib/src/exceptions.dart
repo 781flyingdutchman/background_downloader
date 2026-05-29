@@ -56,9 +56,9 @@ base class TaskException implements Exception {
 
   /// Return JSON Map representing object
   Map<String, dynamic> toJson() => {
-    'type': exceptionType,
-    'description': description,
-  };
+        'type': exceptionType,
+        'description': description,
+      };
 
   /// Return JSON String representing object
   String toJsonString() => jsonEncode(toJson());
@@ -116,9 +116,9 @@ final class TaskHttpException extends TaskException {
 
   @override
   Map<String, dynamic> toJson() => {
-    ...super.toJson(),
-    'httpResponseCode': httpResponseCode,
-  };
+        ...super.toJson(),
+        'httpResponseCode': httpResponseCode,
+      };
 
   @override
   String toString() {

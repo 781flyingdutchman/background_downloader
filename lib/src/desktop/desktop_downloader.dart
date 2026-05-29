@@ -109,17 +109,17 @@ final class DesktopDownloader extends BaseDownloader {
 
   /// Returns number of tasks active with this [hostname]
   int _numActiveWithHostname(String hostname) => _running.fold(
-    0,
-    (previousValue, task) =>
-        task.hostName == hostname ? previousValue + 1 : previousValue,
-  );
+        0,
+        (previousValue, task) =>
+            task.hostName == hostname ? previousValue + 1 : previousValue,
+      );
 
   /// Returns number of tasks active with this [group]
   int _numActiveWithGroup(String group) => _running.fold(
-    0,
-    (previousValue, task) =>
-        task.group == group ? previousValue + 1 : previousValue,
-  );
+        0,
+        (previousValue, task) =>
+            task.group == group ? previousValue + 1 : previousValue,
+      );
 
   /// Execute this task
   ///
@@ -177,10 +177,13 @@ final class DesktopDownloader extends BaseDownloader {
       return;
     }
     log.finer('${isResume ? "Resuming" : "Starting"} taskId ${task.taskId}');
-    await Isolate.spawn(doTask, (
-      rootIsolateToken,
-      receivePort.sendPort,
-    ), onError: errorPort.sendPort);
+    await Isolate.spawn(
+        doTask,
+        (
+          rootIsolateToken,
+          receivePort.sendPort,
+        ),
+        onError: errorPort.sendPort);
     final messagesFromIsolate = StreamQueue<dynamic>(receivePort);
     final sendPort = await messagesFromIsolate.next as SendPort;
     sendPort.send((
@@ -208,16 +211,16 @@ final class DesktopDownloader extends BaseDownloader {
           receivePort.close();
 
         case (
-          'statusUpdate',
-          Task updatedTask,
-          TaskStatus status,
-          TaskException? exception,
-          String? responseBody,
-          Map<String, String>? responseHeaders,
-          int? responseCode,
-          String? mimeType,
-          String? charSet,
-        ):
+            'statusUpdate',
+            Task updatedTask,
+            TaskStatus status,
+            TaskException? exception,
+            String? responseBody,
+            Map<String, String>? responseHeaders,
+            int? responseCode,
+            String? mimeType,
+            String? charSet,
+          ):
           final taskStatusUpdate = TaskStatusUpdate(
             updatedTask,
             status,
@@ -240,13 +243,13 @@ final class DesktopDownloader extends BaseDownloader {
           }
 
         case (
-          'progressUpdate',
-          Task updatedTask,
-          double progress,
-          int expectedFileSize,
-          double downloadSpeed,
-          Duration timeRemaining,
-        ):
+            'progressUpdate',
+            Task updatedTask,
+            double progress,
+            int expectedFileSize,
+            double downloadSpeed,
+            Duration timeRemaining,
+          ):
           final taskProgressUpdate = TaskProgressUpdate(
             updatedTask,
             progress,
@@ -542,8 +545,8 @@ final class DesktopDownloader extends BaseDownloader {
     final executable = defaultTargetPlatform == TargetPlatform.linux
         ? 'xdg-open'
         : defaultTargetPlatform == TargetPlatform.macOS
-        ? 'open'
-        : 'start';
+            ? 'open'
+            : 'start';
     filePath ??= await task!.filePath();
     if (!await File(filePath).exists()) {
       _log.fine('File to open does not exist: $filePath');
@@ -584,7 +587,8 @@ final class DesktopDownloader extends BaseDownloader {
     dynamic androidConfig,
     dynamic iOSConfig,
     dynamic desktopConfig,
-  }) => desktopConfig;
+  }) =>
+      desktopConfig;
 
   @override
   Future<(String, String)> configureItem((String, dynamic) configItem) async {
@@ -602,13 +606,13 @@ final class DesktopDownloader extends BaseDownloader {
         bypassTLSCertificateValidation = bypass;
 
       case (
-        Config.holdingQueue,
-        (
-          int? maxConcurrentParam,
-          int? maxConcurrentByHostParam,
-          int? maxConcurrentByGroupParam,
-        ),
-      ):
+          Config.holdingQueue,
+          (
+            int? maxConcurrentParam,
+            int? maxConcurrentByHostParam,
+            int? maxConcurrentByGroupParam,
+          ),
+        ):
         maxConcurrent = maxConcurrentParam ?? 10;
         maxConcurrentByHost = maxConcurrentByHostParam ?? unlimited;
         maxConcurrentByGroup = maxConcurrentByGroupParam ?? unlimited;
@@ -691,8 +695,8 @@ final class DesktopDownloader extends BaseDownloader {
         : null;
     client.badCertificateCallback =
         bypassTLSCertificateValidation && !kReleaseMode
-        ? (X509Certificate cert, String host, int port) => true
-        : null;
+            ? (X509Certificate cert, String host, int port) => true
+            : null;
     httpClient = IOClient(client);
     if (bypassTLSCertificateValidation) {
       if (kReleaseMode) {

@@ -60,8 +60,7 @@ int getContentLength(Map<String, String> responseHeaders, Task task) {
     return rangeLength;
   }
   // try extracting it from a special "Known-Content-Length" header
-  var knownLength =
-      int.tryParse(
+  var knownLength = int.tryParse(
         task.headers['Known-Content-Length'] ??
             task.headers['known-content-length'] ??
             '-1',

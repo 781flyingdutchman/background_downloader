@@ -256,14 +256,14 @@ final class TaskRecord {
 
   /// Create [TaskRecord] from [json]
   TaskRecord.fromJson(Map<String, dynamic> json)
-    : task = Task.createFromJson(json),
-      status = TaskStatus
-          .values[(json['status'] as num?)?.toInt() ?? TaskStatus.failed.index],
-      progress = (json['progress'] as num?)?.toDouble() ?? progressFailed,
-      expectedFileSize = (json['expectedFileSize'] as num?)?.toInt() ?? -1,
-      exception = json['exception'] == null
-          ? null
-          : TaskException.fromJson(json['exception']);
+      : task = Task.createFromJson(json),
+        status = TaskStatus.values[
+            (json['status'] as num?)?.toInt() ?? TaskStatus.failed.index],
+        progress = (json['progress'] as num?)?.toDouble() ?? progressFailed,
+        expectedFileSize = (json['expectedFileSize'] as num?)?.toInt() ?? -1,
+        exception = json['exception'] == null
+            ? null
+            : TaskException.fromJson(json['exception']);
 
   /// Returns JSON map representation of this [TaskRecord]
   ///
@@ -284,13 +284,14 @@ final class TaskRecord {
     TaskStatus? status,
     double? progress,
     int? expectedFileSize,
-  }) => TaskRecord(
-    task ?? this.task,
-    status ?? this.status,
-    progress ?? this.progress,
-    expectedFileSize ?? this.expectedFileSize,
-    exception,
-  );
+  }) =>
+      TaskRecord(
+        task ?? this.task,
+        status ?? this.status,
+        progress ?? this.progress,
+        expectedFileSize ?? this.expectedFileSize,
+        exception,
+      );
 
   @override
   String toString() {

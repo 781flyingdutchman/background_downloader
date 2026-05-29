@@ -134,8 +134,8 @@ typedef TaskProgressCallback = void Function(TaskProgressUpdate update);
 
 /// Signature for function you can register to be called when a notification
 /// is tapped by the user
-typedef TaskNotificationTapCallback =
-    void Function(Task task, NotificationType notificationType);
+typedef TaskNotificationTapCallback = void Function(
+    Task task, NotificationType notificationType);
 
 /// Signature for a function you can provide to the [FileDownloader.downloadBatch] or
 /// [FileDownloader.uploadBatch] that will be called upon completion of each task
@@ -184,7 +184,7 @@ sealed class TaskUpdate {
 
   /// Create object from [json]
   TaskUpdate.fromJson(Map<String, dynamic> json)
-    : task = Task.createFromJson(json['task'] ?? json);
+      : task = Task.createFromJson(json['task'] ?? json);
 
   /// Return JSON Map representing object
   Map<String, dynamic> toJson() => {'task': task.toJson()};
@@ -218,18 +218,18 @@ class TaskStatusUpdate extends TaskUpdate {
 
   /// Create object from [json]
   TaskStatusUpdate.fromJson(super.json)
-    : status = TaskStatus.values[(json['taskStatus'] as num?)?.toInt() ?? 0],
-      exception = json['exception'] != null
-          ? TaskException.fromJson(json['exception'])
-          : null,
-      responseBody = json['responseBody'],
-      responseHeaders = json['responseHeaders'] != null
-          ? Map.from(json['responseHeaders'])
-          : null,
-      responseStatusCode = (json['responseStatusCode'] as num?)?.toInt(),
-      mimeType = json['mimeType'],
-      charSet = json['charSet'],
-      super.fromJson();
+      : status = TaskStatus.values[(json['taskStatus'] as num?)?.toInt() ?? 0],
+        exception = json['exception'] != null
+            ? TaskException.fromJson(json['exception'])
+            : null,
+        responseBody = json['responseBody'],
+        responseHeaders = json['responseHeaders'] != null
+            ? Map.from(json['responseHeaders'])
+            : null,
+        responseStatusCode = (json['responseStatusCode'] as num?)?.toInt(),
+        mimeType = json['mimeType'],
+        charSet = json['charSet'],
+        super.fromJson();
 
   /// Create object from [jsonString]
   factory TaskStatusUpdate.fromJsonString(String jsonString) =>
@@ -238,15 +238,15 @@ class TaskStatusUpdate extends TaskUpdate {
   /// Return JSON Map representing object
   @override
   Map<String, dynamic> toJson() => {
-    ...super.toJson(),
-    'taskStatus': status.index,
-    'exception': exception?.toJson(),
-    'responseBody': responseBody,
-    'responseHeaders': responseHeaders,
-    'responseStatusCode': responseStatusCode,
-    'mimeType': mimeType,
-    'charSet': charSet,
-  };
+        ...super.toJson(),
+        'taskStatus': status.index,
+        'exception': exception?.toJson(),
+        'responseBody': responseBody,
+        'responseHeaders': responseHeaders,
+        'responseStatusCode': responseStatusCode,
+        'mimeType': mimeType,
+        'charSet': charSet,
+      };
 
   TaskStatusUpdate copyWith({
     Task? task,
@@ -257,16 +257,17 @@ class TaskStatusUpdate extends TaskUpdate {
     int? responseStatusCode,
     String? mimeType,
     String? charSet,
-  }) => TaskStatusUpdate(
-    task ?? this.task,
-    status ?? this.status,
-    exception ?? this.exception,
-    responseBody ?? this.responseBody,
-    responseHeaders ?? this.responseHeaders,
-    responseStatusCode ?? this.responseStatusCode,
-    mimeType ?? this.mimeType,
-    charSet ?? this.charSet,
-  );
+  }) =>
+      TaskStatusUpdate(
+        task ?? this.task,
+        status ?? this.status,
+        exception ?? this.exception,
+        responseBody ?? this.responseBody,
+        responseHeaders ?? this.responseHeaders,
+        responseStatusCode ?? this.responseStatusCode,
+        mimeType ?? this.mimeType,
+        charSet ?? this.charSet,
+      );
 }
 
 /// A progress update
@@ -303,13 +304,13 @@ class TaskProgressUpdate extends TaskUpdate {
 
   /// Create object from [json]
   TaskProgressUpdate.fromJson(super.json)
-    : progress = (json['progress'] as num?)?.toDouble() ?? progressFailed,
-      expectedFileSize = (json['expectedFileSize'] as num?)?.toInt() ?? -1,
-      networkSpeed = (json['networkSpeed'] as num?)?.toDouble() ?? -1,
-      timeRemaining = Duration(
-        seconds: (json['timeRemaining'] as num?)?.toInt() ?? -1,
-      ),
-      super.fromJson();
+      : progress = (json['progress'] as num?)?.toDouble() ?? progressFailed,
+        expectedFileSize = (json['expectedFileSize'] as num?)?.toInt() ?? -1,
+        networkSpeed = (json['networkSpeed'] as num?)?.toDouble() ?? -1,
+        timeRemaining = Duration(
+          seconds: (json['timeRemaining'] as num?)?.toInt() ?? -1,
+        ),
+        super.fromJson();
 
   /// Create object from [jsonString]
   factory TaskProgressUpdate.fromJsonString(String jsonString) =>
@@ -318,12 +319,12 @@ class TaskProgressUpdate extends TaskUpdate {
   /// Return JSON Map representing object
   @override
   Map<String, dynamic> toJson() => {
-    ...super.toJson(),
-    'progress': progress,
-    'expectedFileSize': expectedFileSize,
-    'networkSpeed': networkSpeed,
-    'timeRemaining': timeRemaining.inSeconds,
-  };
+        ...super.toJson(),
+        'progress': progress,
+        'expectedFileSize': expectedFileSize,
+        'networkSpeed': networkSpeed,
+        'timeRemaining': timeRemaining.inSeconds,
+      };
 
   /// If true, [expectedFileSize] contains a valid value
   bool get hasExpectedFileSize => expectedFileSize >= 0;
@@ -339,22 +340,20 @@ class TaskProgressUpdate extends TaskUpdate {
   ///
   /// String is '-- MB/s' if N/A, otherwise in MB/s or kB/s
   String get networkSpeedAsString => switch (networkSpeed) {
-    <= 0 => '-- MB/s',
-    >= 1 => '${networkSpeed.round()} MB/s',
-    _ => '${(networkSpeed * 1000).round()} kB/s',
-  };
+        <= 0 => '-- MB/s',
+        >= 1 => '${networkSpeed.round()} MB/s',
+        _ => '${(networkSpeed * 1000).round()} kB/s',
+      };
 
   /// String is '--:--' if N/A, otherwise HH:MM:SS or MM:SS
   String get timeRemainingAsString => switch (timeRemaining.inSeconds) {
-    <= 0 => '--:--',
-    < 3600 =>
-      '${timeRemaining.inMinutes.toString().padLeft(2, "0")}'
-          ':${timeRemaining.inSeconds.remainder(60).toString().padLeft(2, "0")}',
-    _ =>
-      '${timeRemaining.inHours}'
-          ':${timeRemaining.inMinutes.remainder(60).toString().padLeft(2, "0")}'
-          ':${timeRemaining.inSeconds.remainder(60).toString().padLeft(2, "0")}',
-  };
+        <= 0 => '--:--',
+        < 3600 => '${timeRemaining.inMinutes.toString().padLeft(2, "0")}'
+            ':${timeRemaining.inSeconds.remainder(60).toString().padLeft(2, "0")}',
+        _ => '${timeRemaining.inHours}'
+            ':${timeRemaining.inMinutes.remainder(60).toString().padLeft(2, "0")}'
+            ':${timeRemaining.inSeconds.remainder(60).toString().padLeft(2, "0")}',
+      };
 
   @override
   String toString() {
@@ -387,10 +386,10 @@ class ResumeData {
 
   /// Create object from [json]
   ResumeData.fromJson(Map<String, dynamic> json)
-    : task = Task.createFromJson(json['task']),
-      data = json['data'] as String,
-      requiredStartByte = (json['requiredStartByte'] as num?)?.toInt() ?? 0,
-      eTag = json['eTag'] as String?;
+      : task = Task.createFromJson(json['task']),
+        data = json['data'] as String,
+        requiredStartByte = (json['requiredStartByte'] as num?)?.toInt() ?? 0,
+        eTag = json['eTag'] as String?;
 
   /// Create object from [jsonString]
   factory ResumeData.fromJsonString(String jsonString) =>
@@ -398,11 +397,11 @@ class ResumeData {
 
   /// Return JSON Map representing object
   Map<String, dynamic> toJson() => {
-    'task': task.toJson(),
-    'data': data,
-    'requiredStartByte': requiredStartByte,
-    'eTag': eTag,
-  };
+        'task': task.toJson(),
+        'data': data,
+        'requiredStartByte': requiredStartByte,
+        'eTag': eTag,
+      };
 
   String get taskId => task.taskId;
 
@@ -561,15 +560,15 @@ final class TaskNotificationConfig {
   /// Return JSON Map representing object, excluding the [taskOrGroup] field,
   /// as the JSON map is only required to pass along the config with a task
   Map<String, dynamic> toJson() => {
-    'running': running?.toJson(),
-    'complete': complete?.toJson(),
-    'error': error?.toJson(),
-    'paused': paused?.toJson(),
-    'canceled': canceled?.toJson(),
-    'progressBar': progressBar,
-    'tapOpensFile': tapOpensFile,
-    'groupNotificationId': groupNotificationId,
-  };
+        'running': running?.toJson(),
+        'complete': complete?.toJson(),
+        'error': error?.toJson(),
+        'paused': paused?.toJson(),
+        'canceled': canceled?.toJson(),
+        'progressBar': progressBar,
+        'tapOpensFile': tapOpensFile,
+        'groupNotificationId': groupNotificationId,
+      };
 
   @override
   bool operator ==(Object other) =>

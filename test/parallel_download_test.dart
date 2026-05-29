@@ -8,8 +8,7 @@ import 'package:background_downloader/src/chunk.dart';
 import 'package:background_downloader/src/desktop/parallel_download_isolate.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const urlWithContentLength =
-    'https://storage.googleapis'
+const urlWithContentLength = 'https://storage.googleapis'
     '.com/approachcharts/test/5MB-test.ZIP';
 const urlWithContentLengthFileSize = 6207471;
 

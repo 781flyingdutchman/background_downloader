@@ -45,8 +45,7 @@ Future<void> doDownloadTask(
   final requiredStartByte =
       resumeData?.requiredStartByte ?? 0; // start for resume
   final eTag = resumeData?.eTag;
-  isResume =
-      isResume &&
+  isResume = isResume &&
       await determineIfResumeIsPossible(tempFilePath, requiredStartByte);
   final client = DesktopDownloader.httpClient;
   var request = http.Request(
@@ -184,12 +183,35 @@ Future<TaskStatus> processOkDownloadResponse(
     return TaskStatus.failed;
   }
   var resultStatus = TaskStatus.failed;
+  var actualTempFilePath = tempFilePath;
   IOSink? outStream;
   try {
     // do the actual download
-    outStream = File(
-      tempFilePath,
-    ).openWrite(mode: isResume ? FileMode.append : FileMode.write);
+    try {
+      Directory(p.dirname(actualTempFilePath)).createSync(recursive: true);
+      outStream = File(
+        actualTempFilePath,
+      ).openWrite(mode: isResume ? FileMode.append : FileMode.write);
+    } catch (e) {
+      if (!isResume) {
+        // Fallback to the target download directory as a hidden file
+        final targetDir = p.dirname(filePath);
+        Directory(targetDir).createSync(recursive: true);
+        actualTempFilePath = p.join(
+          targetDir,
+          '.${p.basename(tempFilePath)}',
+        );
+        log.info(
+          'Standard temporary directory not writeable ($e). '
+          'Falling back to target directory temp file: $actualTempFilePath',
+        );
+        outStream = File(
+          actualTempFilePath,
+        ).openWrite(mode: FileMode.write);
+      } else {
+        rethrow;
+      }
+    }
     final transferBytesResult = await transferBytes(
       response.stream,
       outStream,
@@ -204,18 +226,18 @@ Future<TaskStatus> processOkDownloadResponse(
         await outStream.flush();
         final dirPath = p.dirname(filePath);
         Directory(dirPath).createSync(recursive: true);
-        File(tempFilePath).copySync(filePath);
+        File(actualTempFilePath).copySync(filePath);
         resultStatus = TaskStatus.complete;
 
       case TaskStatus.canceled:
-        deleteTempFile(tempFilePath);
+        deleteTempFile(actualTempFilePath);
         resultStatus = TaskStatus.canceled;
 
       case TaskStatus.paused:
         if (taskCanResume) {
           sendPort.send((
             'resumeData',
-            tempFilePath,
+            actualTempFilePath,
             bytesTotal + startByte,
             eTagHeader,
           ));
@@ -247,15 +269,16 @@ Future<TaskStatus> processOkDownloadResponse(
         // send ResumeData to allow resume after fail
         sendPort.send((
           'resumeData',
-          tempFilePath,
+          actualTempFilePath,
           bytesTotal + startByte,
           eTagHeader,
         ));
       } else if (resultStatus != TaskStatus.paused) {
-        File(tempFilePath).deleteSync();
+        File(actualTempFilePath).deleteSync();
       }
     } catch (e) {
-      logError(downloadTask, 'Could not delete temp file $tempFilePath: $e');
+      logError(
+          downloadTask, 'Could not delete temp file $actualTempFilePath: $e');
     }
   }
   return resultStatus;
