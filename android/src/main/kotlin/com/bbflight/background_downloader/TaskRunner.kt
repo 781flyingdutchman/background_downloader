@@ -435,6 +435,9 @@ open class TaskRunner(
         get() = context.notificationProgress
         set(value) { context.notificationProgress = value }
 
+    @Volatile
+    var activeConnection: HttpURLConnection? = null
+
     // additional parameters for final TaskStatusUpdate
     var taskException: TaskException? = null
     var responseBody: String? = null
@@ -588,19 +591,24 @@ open class TaskRunner(
             with(withContext(Dispatchers.IO) {
                 url.openConnection(proxy ?: Proxy.NO_PROXY)
             } as HttpURLConnection) {
-                requestMethod = task.httpRequestMethod
-                connectTimeout = requestTimeoutSeconds * 1000
-                for (header in task.headers) {
-                    // For UploadTask, copy headers unless it's "Range" or "Content-Disposition".
-                    // For other task types, copy all headers.
-                    if (!task.isUploadTask() ||
-                        (!header.key.equals("Range", ignoreCase = true) &&
-                                !header.key.equals("Content-Disposition", ignoreCase = true))
-                    ) {
-                        setRequestProperty(header.key, header.value)
+                activeConnection = this
+                try {
+                    requestMethod = task.httpRequestMethod
+                    connectTimeout = requestTimeoutSeconds * 1000
+                    for (header in task.headers) {
+                        // For UploadTask, copy headers unless it's "Range" or "Content-Disposition".
+                        // For other task types, copy all headers.
+                        if (!task.isUploadTask() ||
+                            (!header.key.equals("Range", ignoreCase = true) &&
+                                    !header.key.equals("Content-Disposition", ignoreCase = true))
+                        ) {
+                            setRequestProperty(header.key, header.value)
+                        }
                     }
+                    return connectAndProcess(this)
+                } finally {
+                    activeConnection = null
                 }
-                return connectAndProcess(this)
             }
         } catch (e: Exception) {
             Log.w(
@@ -630,6 +638,19 @@ open class TaskRunner(
             }
             return process(connection)
         } catch (e: Exception) {
+            if (context.isTaskStopped || BDPlugin.canceledTaskIds.contains(task.taskId)) {
+                Log.i(TAG, "Task ${task.taskId} was canceled, ignoring exception: ${e.message}")
+                return TaskStatus.canceled
+            }
+            if (BDPlugin.pausedTaskIds.contains(task.taskId)) {
+                Log.i(TAG, "Task ${task.taskId} was paused, ignoring exception: ${e.message}")
+                return TaskStatus.paused
+            }
+            if (isTimedOut && !runInForeground) {
+                Log.i(TAG, "Task ${task.taskId} timed out, ignoring exception: ${e.message}")
+                return TaskStatus.enqueued
+            }
+
             setTaskException(e)
             when (e) {
                 is SocketException -> Log.i(
@@ -710,45 +731,52 @@ open class TaskRunner(
             val doneCompleter = CompletableDeferred<TaskStatus>()
             try {
                 readerJob = launch(Dispatchers.IO) {
-                    while (inputStream.read(
-                            dataBuffer, 0,
-                            bufferSize
-                        )
-                            .also { numBytes = it } != -1
-                    ) {
-                        if (!isActive) {
-                            doneCompleter.complete(TaskStatus.failed)
-                            break
-                        }
-                        if (numBytes > 0) {
-                            outputStream.write(dataBuffer, 0, numBytes)
-                            bytesTotal += numBytes
-                            val remainingBytes =
-                                BDPlugin.remainingBytesToDownload[task.taskId]
-                            if (remainingBytes != null) {
-                                BDPlugin.remainingBytesToDownload[task.taskId] =
-                                    remainingBytes - numBytes
+                    try {
+                        while (inputStream.read(
+                                dataBuffer, 0,
+                                bufferSize
+                            )
+                                .also { numBytes = it } != -1
+                        ) {
+                            if (!isActive) {
+                                doneCompleter.complete(TaskStatus.failed)
+                                break
+                            }
+                            if (numBytes > 0) {
+                                outputStream.write(dataBuffer, 0, numBytes)
+                                bytesTotal += numBytes
+                                val remainingBytes =
+                                    BDPlugin.remainingBytesToDownload[task.taskId]
+                                if (remainingBytes != null) {
+                                    BDPlugin.remainingBytesToDownload[task.taskId] =
+                                        remainingBytes - numBytes
+                                }
+                            }
+                            val expectedFileSize = contentLength + startByte
+                            val progress = doubleMin(
+                                (bytesTotal + startByte).toDouble() / expectedFileSize,
+                                0.999
+                            )
+                            if (contentLength > 0 && shouldSendProgressUpdate(
+                                    progress,
+                                    currentTimeMillis()
+                                )
+                            ) {
+                                updateProgressAndNotify(progress, expectedFileSize, task)
                             }
                         }
-                        val expectedFileSize = contentLength + startByte
-                        val progress = doubleMin(
-                            (bytesTotal + startByte).toDouble() / expectedFileSize,
-                            0.999
-                        )
-                        if (contentLength > 0 && shouldSendProgressUpdate(
-                                progress,
-                                currentTimeMillis()
-                            )
-                        ) {
-                            updateProgressAndNotify(progress, expectedFileSize, task)
+                        doneCompleter.complete(TaskStatus.complete)
+                    } catch (e: Exception) {
+                        if (!doneCompleter.isCompleted) {
+                            doneCompleter.completeExceptionally(e)
                         }
                     }
-                    doneCompleter.complete(TaskStatus.complete)
                 }
                 testerJob = launch {
                     while (isActive) {
                         // check if task is stopped (canceled), paused or timed out
                         if (context.isTaskStopped) {
+                            activeConnection?.disconnect()
                             var stopReasonStr = "Unknown"
                             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                                 // We cannot easily get StopReason inside TaskRunner without passing more context
@@ -763,10 +791,12 @@ open class TaskRunner(
                         }
                         // 'pause' is signalled by adding the taskId to a static list
                         if (BDPlugin.pausedTaskIds.contains(task.taskId)) {
+                            activeConnection?.disconnect()
                             doneCompleter.complete(TaskStatus.paused)
                             break
                         }
                         if (isTimedOut && !runInForeground) {
+                            activeConnection?.disconnect()
                             // special use of .enqueued status, see [processDownload]
                             doneCompleter.complete(TaskStatus.enqueued)
                             break
