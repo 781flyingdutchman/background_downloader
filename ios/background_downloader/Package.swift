@@ -24,13 +24,11 @@ let package = Package(
         .library(name: "background-downloader", targets: ["background_downloader"])
     ],
     dependencies: [
-        .package(name: "FlutterFramework", path: "../FlutterFramework")
     ],
     targets: [
         .target(
             name: "background_downloader",
             dependencies: [
-                .product(name: "FlutterFramework", package: "FlutterFramework")
             ],
             resources: [
                 .process("PrivacyInfo.xcprivacy"),
