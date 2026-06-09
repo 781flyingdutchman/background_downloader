@@ -8,9 +8,6 @@ permissions:
   issues: write
   pull-requests: read
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     name: issue metrics
@@ -32,13 +29,13 @@ jobs:
           echo "last_month=$first_day..$last_day" >> "$GITHUB_ENV"  
 
       - name: Run issue-metrics tool for issues and prs opened last month
-        uses: github/issue-metrics@v2
+        uses: github/issue-metrics@v4
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SEARCH_QUERY: 'repo:781flyingdutchman/background_downloader created:${{ env.last_month }} -reason:"not planned"'
 
       - name: Create issue for opened issues and prs
-        uses: peter-evans/create-issue-from-file@v4
+        uses: peter-evans/create-issue-from-file@v6
         with:
           title: Monthly issue metrics report for opened issues and prs
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -46,13 +43,13 @@ jobs:
           assignees: 781flyingdutchman
 
       - name: Run issue-metrics tool for issues and prs closed last month
-        uses: github/issue-metrics@v2
+        uses: github/issue-metrics@v4
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SEARCH_QUERY: 'repo:781flyingdutchman/background_downloader closed:${{ env.last_month }} -reason:"not planned"'
 
       - name: Create issue for closed issues and prs
-        uses: peter-evans/create-issue-from-file@v4
+        uses: peter-evans/create-issue-from-file@v6
         with:
           title: Monthly issue metrics report for closed issues and prs
           content-filepath: ./issue_metrics.md
