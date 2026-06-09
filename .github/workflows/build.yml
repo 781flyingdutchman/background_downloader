@@ -18,6 +18,7 @@ concurrency:
 env:
   # This is Dart 3.7.0
   FLUTTER_MIN_SDK: '3.29.0'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   format:
