@@ -101,7 +101,7 @@ class DownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) {
                 deleteTempFile()
                 return TaskStatus.failed
             }
-            if (isResume && (eTagHeader != eTag || eTag?.subSequence(0, 1) == "W/")) {
+            if (isResume && (eTagHeader != eTag || eTag?.startsWith("W/") == true)) {
                 deleteTempFile()
                 Log.i(TAG, "Cannot resume: ETag is not identical, or is weak")
                 taskException = TaskException(
@@ -343,7 +343,7 @@ class DownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) {
                             context.appContext,
                             task,
                             notificationConfigJsonString,
-                            ResumeData(task, tempFilePath, start, eTag),
+                            ResumeData(task, tempFilePath, start, eTagHeader),
                             1000
                         )
                         return TaskStatus.paused
