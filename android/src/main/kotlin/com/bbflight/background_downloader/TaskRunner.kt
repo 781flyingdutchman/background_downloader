@@ -303,8 +303,12 @@ open class TaskRunner(
          */
         private fun canSendCancellation(task: Task): Boolean {
             val now = currentTimeMillis()
-            BDPlugin.cancelUpdateSentForTaskId =
-                BDPlugin.cancelUpdateSentForTaskId.filter { now - it.value < 3000 } as MutableMap
+            // Prune stale entries in place. cancelUpdateSentForTaskId is a
+            // ConcurrentHashMap, so removing while iterating is safe even when other
+            // workers are processing status updates concurrently (the previous
+            // reassignment via .filter{} iterated a synchronizedMap without holding
+            // its monitor and threw ConcurrentModificationException).
+            BDPlugin.cancelUpdateSentForTaskId.entries.removeAll { now - it.value >= 3000 }
             return BDPlugin.cancelUpdateSentForTaskId[task.taskId] == null
         }
 

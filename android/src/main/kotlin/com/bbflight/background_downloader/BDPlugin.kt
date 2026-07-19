@@ -48,6 +48,7 @@ import java.net.MalformedURLException
 import java.net.URL
 import java.net.URLDecoder
 import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
@@ -106,8 +107,13 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         var requireWifi = RequireWiFi.asSetByTask // global setting
         val localResumeData =
             Collections.synchronizedMap(mutableMapOf<String, ResumeData>()) // by taskId, for pause notifications
-        var cancelUpdateSentForTaskId =
-            Collections.synchronizedMap(mutableMapOf<String, Long>()) // <taskId, timeMillis>
+        // ConcurrentHashMap (not synchronizedMap): canSendCancellation prunes stale
+        // entries by iterating this map, and synchronizedMap does not synchronize
+        // iteration, which raced with concurrent status-update processing and threw
+        // ConcurrentModificationException. ConcurrentHashMap's iterators are
+        // weakly-consistent and never throw CME.
+        val cancelUpdateSentForTaskId =
+            ConcurrentHashMap<String, Long>() // <taskId, timeMillis>
         val pausedTaskIds =
             Collections.synchronizedSet(mutableSetOf<String>()) // <taskId>, acts as flag
         val canceledTaskIds =
