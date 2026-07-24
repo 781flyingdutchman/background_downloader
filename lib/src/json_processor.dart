@@ -169,19 +169,21 @@ class JsonProcessor {
   }
 
   void _shutdown() {
+    if (_pendingCompleters.isNotEmpty) {
+      // Requests are still in flight (the isolate may be starved of CPU under
+      // heavy load, e.g. during a large download on a memory-pressured
+      // device). Killing it now would fail those requests with a StateError
+      // that surfaces as an unhandled 'Background isolate shut down' error in
+      // the app. Defer the shutdown instead; the timer is reset again when a
+      // request completes.
+      _resetShutdownTimer();
+      return;
+    }
     _isolate?.kill();
     _isolate = null;
     _sendPort = null;
     _shutdownTimer?.cancel();
     _shutdownTimer = null;
-
-    // Fail any pending requests
-    for (final completer in _pendingCompleters.values) {
-      if (!completer.isCompleted) {
-        completer.completeError(StateError('Background isolate shut down'));
-      }
-    }
-    _pendingCompleters.clear();
   }
 }
 
