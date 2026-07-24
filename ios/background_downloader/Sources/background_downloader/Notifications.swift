@@ -42,7 +42,31 @@ enum NotificationType : Int {
 
 /// Data and methods related to a notification for a group of tasks
 actor GroupNotification {
-    static var notifications: [String : GroupNotification] = [:]
+    private static var registry: [String : GroupNotification] = [:]
+    private static let registryLock = NSLock()
+
+    /// Atomically gets (or creates and registers) the notification for this
+    /// group. Serialised via a lock: this is called concurrently from
+    /// [updateGroupNotification] for every task status update, and
+    /// unsynchronised access to the shared dictionary corrupts it
+    /// (EXC_BAD_ACCESS).
+    static func groupNotification(named name: String, notificationConfig: NotificationConfig) -> GroupNotification {
+        registryLock.lock()
+        defer { registryLock.unlock() }
+        if let existing = registry[name] {
+            return existing
+        }
+        let created = GroupNotification(name: name, notificationConfig: notificationConfig)
+        registry[name] = created
+        return created
+    }
+
+    /// Removes the notification for this group from the registry
+    static func remove(named name: String) {
+        registryLock.lock()
+        defer { registryLock.unlock() }
+        registry.removeValue(forKey: name)
+    }
 
     let name: String
     let notificationConfig: NotificationConfig
@@ -230,9 +254,8 @@ private func updateGroupNotification(
     notificationConfig: NotificationConfig
 ) async {
     let groupNotificationId = notificationConfig.groupNotificationId
-    var groupNotification = GroupNotification.notifications[groupNotificationId] ?? GroupNotification(name: groupNotificationId, notificationConfig: notificationConfig)
+    let groupNotification = GroupNotification.groupNotification(named: groupNotificationId, notificationConfig: notificationConfig)
     let stateChange = await groupNotification.update(task: task, notificationType: notificationType)
-    GroupNotification.notifications[groupNotificationId] = groupNotification
     if stateChange {
         // need to update the group notification
         let notificationCenter = UNUserNotificationCenter.current()
@@ -282,7 +305,7 @@ private func updateGroupNotification(
             // remove only if not re-activated within 5 seconds
             try? await _Concurrency.Task.sleep(nanoseconds: 5_000_000_000)
             if await groupNotification.isFinished {
-                GroupNotification.notifications.removeValue(forKey: groupNotificationId)
+                GroupNotification.remove(named: groupNotificationId)
             }
         }
     }
