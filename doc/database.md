@@ -34,6 +34,8 @@ void main() async {
 
 You can monitor tasks centrally using **event listeners** or **callbacks**. In both cases, you will use `enqueue` instead of `download` or `upload` to start your tasks. `enqueue` returns almost immediately with a `bool` to indicate if the `Task` was successfully enqueued.
 
+See [Status & Progress Updates](status_updates.md) for full details on what information is provided in these updates.
+
 ### Option 1: Using an event listener
 
 Listen to updates from the downloader by listening to the `updates` stream.

@@ -19,7 +19,7 @@ A `DataTask` is similar to a `DownloadTask` except it:
 * Accepts `post` data as a String, or
 * Accepts `json` data, which will be converted to a String and posted as content type `application/json`
 * Accepts `contentType` which will set the `Content-Type` header value
-* Returns the server `responseBody`, `responseHeaders` and possible `taskException` in the final `TaskStatusUpdate` fields
+* Returns the server `responseBody`, `responseHeaders` and possible `taskException` in the final `TaskStatusUpdate` fields (see [Status & Progress Updates](status_updates.md))
 
 Typically you would use `enqueue` to enqueue a `DataTask` and monitor the result using a listener or callback, but you can also use `transmit` to enqueue and wait for the final result of the `DataTask`.
 

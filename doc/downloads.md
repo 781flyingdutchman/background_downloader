@@ -24,7 +24,7 @@ The simplest way to execute a task is to call `.download` which returns a `Futur
 final result = await FileDownloader().download(task);
 ```
 
-For more complex scenarios, or when you have many tasks, use `.enqueue` (or `.enqueueAll`) and an event listener or callbacks - see [Database & Monitoring](database.md).
+For more complex scenarios, or when you have many tasks, use `.enqueue` (or `.enqueueAll`) and an event listener or callbacks - see [Database & Monitoring](database.md) and [Status & Progress Updates](status_updates.md) for details on how updates are provided.
 
 ## Parallel downloads
 

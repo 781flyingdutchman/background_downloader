@@ -32,6 +32,7 @@ For more specific details, please check the **[Topic Index](doc/topic_index.md)*
 
 *   **[Notifications](doc/notifications.md)**: Usage, configuration, grouping, tapping, and setup.
 *   **[Database & Central Monitoring](doc/database.md)**: Using event listeners, callbacks, and the persistent database to track tasks.
+*   **[Status & Progress Updates](doc/status_updates.md)**: How task status and progress is communicated.
 *   **[Downloads](doc/downloads.md)**: Normal and parallel downloads (chunked).
 *   **[Uploads](doc/uploads.md)**: Single and multi-part uploads.
 

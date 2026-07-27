@@ -5,6 +5,8 @@ Uploads are very similar to downloads, except:
 * the file location now refers to the file you want to upload
 * call `upload` instead of `download`, or `uploadBatch` instead of `downloadBatch`
 
+Like downloads, you can track progress and status of uploads - see [Status & Progress Updates](status_updates.md) for details.
+
 There are two ways to upload a file to a server: binary upload (where the file is included in the POST body) and form/multi-part upload. Which type of upload is appropriate depends on the server you are uploading to. The upload will be done using the binary upload method only if you have set the `post` field of the `UploadTask` to 'binary'.
 
 For binary uploads, the `Content-Disposition` header sent to the server will be:

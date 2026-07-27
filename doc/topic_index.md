@@ -74,7 +74,7 @@ Use this index to find documentation for specific topics and keywords.
 *   **Pickers**: [URIs](URI.md) - file and directory pickers
 *   **Post**: [Parameters](parameters.md#post-requests) - sending data with requests
 *   **Priority**: [Parameters](parameters.md#priority) - task priority and UIDT
-*   **Progress**: [Database & Monitoring](database.md) - tracking progress
+*   **Progress updates**: [Status & Progress Updates](status_updates.md) - how task status and progress is communicated
 *   **Proxy**: [Configuration](CONFIG.md#http-proxy) - setting a network proxy
 
 ## Q
@@ -89,6 +89,7 @@ Use this index to find documentation for specific topics and keywords.
 *   **Shared storage**: [File Storage & Locations](storage.md#shared-and-scoped-storage) - Photos, Downloads, etc.
 *   **Server suggested filename**: [Downloads](downloads.md#server-suggested-filenames) - using names from headers
 *   **Start**: [Database & Monitoring](database.md#annotated-example-with-database) - initializing the downloader
+*   **Status updates**: [Status & Progress Updates](status_updates.md) - how task status and progress is communicated
 *   **Storage**: [File Storage & Locations](storage.md) - where files go
 
 ## T
@@ -99,6 +100,7 @@ Use this index to find documentation for specific topics and keywords.
 
 ## U
 *   **UIDT**: [Parameters](parameters.md#priority) - User Initiated Data Transfer (Android 14+)
+*   **Updates**: [Status & Progress Updates](status_updates.md) - how task status and progress is communicated
 *   **UploadTask**: [Uploads](uploads.md) - creating an upload task
 *   **URI**: [URIs](URI.md) - working with URIs instead of files
 
