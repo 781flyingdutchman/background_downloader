@@ -378,6 +378,26 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
 
     // Normal status update
 
+    // Let native observers know, before any of the Dart-facing work below and
+    // regardless of the task's `updates` setting. This is the only moment the
+    // app's own code is reachable when the status arrived while the app was
+    // woken in the background: the Dart callbacks run in an isolate with no
+    // access to plugins, so anything needing a platform framework — ActivityKit,
+    // WidgetKit — can only be driven from here.
+    var statusChangeInfo: [String: Any] = [
+        "taskId": task.taskId,
+        "group": task.group,
+        "status": status.rawValue
+    ]
+    if let responseStatusCode = responseStatusCode {
+        statusChangeInfo["responseStatusCode"] = responseStatusCode
+    }
+    NotificationCenter.default.post(
+        name: BDPlugin.taskStatusDidChange,
+        object: nil,
+        userInfo: statusChangeInfo
+    )
+
     // Post update if task expects one, or if failed and retry is needed
     let retryNeeded = status == TaskStatus.failed && task.retriesRemaining > 0
     // if task is in final state, process a final progressUpdate

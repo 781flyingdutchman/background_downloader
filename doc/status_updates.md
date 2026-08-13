@@ -91,3 +91,42 @@ In addition to normal percentage values (0.0 to 1.0), the `progress` field can a
 *   `progressPaused` (-5.0): Task is `paused`
 
 For example, if you receive a `TaskProgressUpdate` with a `progress` of `-1.0` (`progressFailed`), you know the task has failed, and the UI can reflect an error state on the progress bar.
+
+## Observing status changes from native iOS code
+
+Task callbacks run in a background isolate that has no access to plugins, so
+code reacting to a status change cannot reach a platform framework from Dart.
+That matters when the app is not running: iOS wakes the app to deliver
+`URLSession` events, the package processes them, but the only thing that can
+show progress in that window — a Live Activity, a widget timeline reload — lives
+behind ActivityKit or WidgetKit and is therefore out of reach.
+
+For those cases the plugin posts `BDPlugin.taskStatusDidChange` on
+`NotificationCenter` for every status change, whatever the task's `updates`
+setting:
+
+```swift
+import background_downloader
+
+NotificationCenter.default.addObserver(
+    forName: BDPlugin.taskStatusDidChange,
+    object: nil,
+    queue: .main
+) { notification in
+    guard let info = notification.userInfo,
+          let taskId = info["taskId"] as? String,
+          let rawStatus = info["status"] as? Int else { return }
+    // 2 == complete, see TaskStatus
+    if rawStatus == 2 {
+        // e.g. advance a Live Activity, reload a widget timeline
+    }
+}
+```
+
+`userInfo` carries `taskId`, `group` and `status` (the `TaskStatus` raw value),
+plus `responseStatusCode` when the server provided one.
+
+This is iOS only, and deliberately minimal: it reports that something happened,
+and leaves what to do about it entirely to the app. On Android the equivalent
+need is usually covered by the foreground-service notification the package
+already posts.

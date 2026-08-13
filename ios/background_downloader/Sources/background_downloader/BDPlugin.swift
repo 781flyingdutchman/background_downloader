@@ -56,6 +56,22 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     public static var backgroundChannel: FlutterMethodChannel? // for native <-> plugin comms
     public static var callbackChannel: FlutterMethodChannel? // for native to trigger task callbacks
     public static var flutterPluginRegistrantCallback: FlutterPluginRegistrantCallback?
+
+    /// Posted on every task status change, including those that arrive while the
+    /// app was woken in the background to service a URLSession event.
+    ///
+    /// Exists for native code that must react at a moment when Dart cannot: task
+    /// callbacks run in a background isolate without access to plugins, so a
+    /// Live Activity update, a `WidgetCenter.reloadTimelines` call or anything
+    /// else going through a platform framework has no way to be triggered from
+    /// there. Observing this on the main app's side does.
+    ///
+    /// `userInfo` carries `taskId`, `group` and `status` (the `TaskStatus` raw
+    /// value), plus `responseStatusCode` when the server provided one.
+    ///
+    /// Posted regardless of the task's `updates` setting: a native observer is
+    /// independent of whether Dart asked to be told.
+    public static let taskStatusDidChange = Notification.Name("com.bbflight.background_downloader.taskStatusDidChange")
     
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "com.bbflight.background_downloader", binaryMessenger: registrar.messenger())
