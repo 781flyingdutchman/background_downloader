@@ -74,10 +74,45 @@ class NotificationConfig(
     val canceled: TaskNotification?,
     val progressBar: Boolean,
     val tapOpensFile: Boolean,
-    val groupNotificationId: String
+    val groupNotificationId: String,
+    val promoteToLiveUpdate: Boolean = false
 ) {
     override fun toString(): String {
-        return "NotificationConfig(running=$running, complete=$complete, error=$error, paused=$paused, progressBar=$progressBar, tapOpensFile=$tapOpensFile, groupNotificationId=$groupNotificationId)"
+        return "NotificationConfig(running=$running, complete=$complete, error=$error, paused=$paused, progressBar=$progressBar, tapOpensFile=$tapOpensFile, groupNotificationId=$groupNotificationId, promoteToLiveUpdate=$promoteToLiveUpdate)"
+    }
+}
+
+/**
+ * Sets the progress indicator on [builder], for a [progress] value where
+ * 0..1 is determinate and > 1 means indeterminate.
+ *
+ * With [promote] and on Android 16+, uses [NotificationCompat.ProgressStyle] and asks
+ * for the notification to be promoted, which keeps it on the lock screen and in the
+ * status bar chip for as long as the task runs — the platform's Live Update. The
+ * progress is expressed as one segment of length 100 so the value is simply a
+ * percentage.
+ *
+ * Falls back to the classic progress bar below Android 16, when promotion was not
+ * requested, and when progress is indeterminate: a Live Update whose tracker cannot
+ * move is worse than an ordinary notification.
+ */
+private fun setNotificationProgress(builder: Builder, progress: Double, promote: Boolean) {
+    val indeterminate = progress > 1
+    if (promote && !indeterminate && Build.VERSION.SDK_INT >= 36) {
+        builder.setStyle(
+            NotificationCompat.ProgressStyle()
+                .setProgressSegments(listOf(NotificationCompat.ProgressStyle.Segment(100)))
+                .setProgress((progress * 100).roundToInt())
+        )
+        // Promotion requires the notification to be ongoing. It already is whenever
+        // the task runs in a foreground service, but the flag has to be explicit for
+        // the notification to qualify on its own.
+        builder.setOngoing(true)
+        builder.setRequestPromotedOngoing(true)
+    } else if (indeterminate) {
+        builder.setProgress(100, 0, true)
+    } else {
+        builder.setProgress(100, (progress * 100).roundToInt(), false)
     }
 }
 
@@ -561,13 +596,11 @@ object NotificationService {
         val progressBar =
             taskWorker.notificationConfig?.progressBar == true && (notificationType == NotificationType.running || notificationType == NotificationType.paused)
         if (progressBar && taskWorker.notificationProgress >= 0) {
-            if (taskWorker.notificationProgress <= 1) {
-                builder.setProgress(
-                    100, (taskWorker.notificationProgress * 100).roundToInt(), false
-                )
-            } else { // > 1 means indeterminate
-                builder.setProgress(100, 0, true)
-            }
+            setNotificationProgress(
+                builder,
+                taskWorker.notificationProgress,
+                taskWorker.notificationConfig?.promoteToLiveUpdate == true && notificationType == NotificationType.running
+            )
         }
         addNotificationActions(taskWorker, notificationType, builder)
         addToNotificationQueue(taskWorker, notificationType, builder)
@@ -665,11 +698,11 @@ object NotificationService {
                 val progressBar =
                     groupNotification.notificationConfig.progressBar && (notification == groupNotification.notificationConfig.running)
                 if (progressBar && progress >= 0) {
-                    if (progress <= 1) {
-                        builder.setProgress(100, (progress * 100).roundToInt(), false)
-                    } else { // > 1 means indeterminate
-                        builder.setProgress(100, 0, true)
-                    }
+                    setNotificationProgress(
+                        builder,
+                        progress,
+                        groupNotification.notificationConfig.promoteToLiveUpdate && !isFinished
+                    )
                 }
                 addGroupNotificationActions(
                     taskWorker,

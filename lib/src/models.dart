@@ -513,6 +513,7 @@ final class TaskNotificationConfig {
   final bool progressBar;
   final bool tapOpensFile;
   final String groupNotificationId;
+  final bool promoteToLiveUpdate;
 
   /// Create notification configuration that determines what notifications are shown,
   /// whether a progress bar is shown (Android only), and whether tapping
@@ -539,6 +540,12 @@ final class TaskNotificationConfig {
   ///    [complete] notification is shown (if configured). If any task in the
   ///    groupNotification fails, the [error] notification is shown.
   ///    The first character of the [groupNotificationId] cannot be '*'.
+  /// [promoteToLiveUpdate] if set asks Android 16+ to promote the running
+  ///    notification to a Live Update, keeping it on the lock screen and in the
+  ///    status bar chip for as long as the task runs (Android only, requires the
+  ///    app to declare the POST_PROMOTED_NOTIFICATIONS permission). Ignored
+  ///    below Android 16 and while progress is indeterminate, which fall back to
+  ///    the ordinary progress bar.
   TaskNotificationConfig({
     this.taskOrGroup,
     this.running,
@@ -549,6 +556,7 @@ final class TaskNotificationConfig {
     this.progressBar = false,
     this.tapOpensFile = false,
     this.groupNotificationId = '',
+    this.promoteToLiveUpdate = false,
   }) {
     assert(
       running != null ||
@@ -571,6 +579,7 @@ final class TaskNotificationConfig {
     'progressBar': progressBar,
     'tapOpensFile': tapOpensFile,
     'groupNotificationId': groupNotificationId,
+    'promoteToLiveUpdate': promoteToLiveUpdate,
   };
 
   @override

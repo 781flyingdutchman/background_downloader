@@ -85,6 +85,37 @@ adding `tapOpensFile: true` to your call to `configureNotifications`, and you do
 register a `taskNotificationTapCallback`.
 
 
+## Live Updates (Android 16+)
+
+Android 16 can promote an ongoing notification to a _Live Update_, keeping it on
+the lock screen and in the status bar chip for as long as the task runs. Set
+`promoteToLiveUpdate` to ask for that:
+
+```dart
+FileDownloader().configureNotification(
+    running: const TaskNotification('Downloading', 'file: {filename}'),
+    progressBar: true, // required: promotion applies to the progress indicator
+    promoteToLiveUpdate: true);
+```
+
+It works the same way on `configureNotificationForGroup` and
+`configureNotificationForTask`.
+
+`progressBar: true` is required, since this changes how the progress indicator
+is rendered. Only the `running` notification is promoted, and only while
+progress is determinate — a Live Update whose tracker cannot move is worse than
+an ordinary notification. Below Android 16, and on iOS, the setting is ignored
+and you get the usual progress bar, so it is safe to set unconditionally.
+
+Promotion requires the app to declare an extra permission in its
+`AndroidManifest.xml`, alongside `POST_NOTIFICATIONS`:
+
+```xml
+<uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
+```
+
+Without it the notification still shows, simply not promoted.
+
 ## Setup for notifications
 
 __On iOS__: Add the following to your `AppDelegate.swift`:

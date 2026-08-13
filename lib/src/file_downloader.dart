@@ -876,6 +876,7 @@ interface class FileDownloader {
     bool progressBar = false,
     bool tapOpensFile = false,
     String groupNotificationId = '',
+    bool promoteToLiveUpdate = false,
   }) {
     _addOrUpdateTaskNotificationConfig(
       TaskNotificationConfig(
@@ -888,6 +889,7 @@ interface class FileDownloader {
         progressBar: progressBar,
         tapOpensFile: tapOpensFile,
         groupNotificationId: groupNotificationId,
+        promoteToLiveUpdate: promoteToLiveUpdate,
       ),
     );
     return this;
@@ -948,6 +950,7 @@ interface class FileDownloader {
     bool progressBar = false,
     bool tapOpensFile = false,
     String groupNotificationId = '',
+    bool promoteToLiveUpdate = false,
   }) {
     _addOrUpdateTaskNotificationConfig(
       TaskNotificationConfig(
@@ -960,6 +963,7 @@ interface class FileDownloader {
         progressBar: progressBar,
         tapOpensFile: tapOpensFile,
         groupNotificationId: groupNotificationId,
+        promoteToLiveUpdate: promoteToLiveUpdate,
       ),
     );
     return this;
@@ -1020,6 +1024,7 @@ interface class FileDownloader {
     bool progressBar = false,
     bool tapOpensFile = false,
     String groupNotificationId = '',
+    bool promoteToLiveUpdate = false,
   }) {
     _addOrUpdateTaskNotificationConfig(
       TaskNotificationConfig(
@@ -1032,6 +1037,7 @@ interface class FileDownloader {
         progressBar: progressBar,
         tapOpensFile: tapOpensFile,
         groupNotificationId: groupNotificationId,
+        promoteToLiveUpdate: promoteToLiveUpdate,
       ),
     );
     return this;
