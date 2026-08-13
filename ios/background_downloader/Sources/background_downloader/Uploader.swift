@@ -40,8 +40,22 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
     
     /// Creates the multipart file so it can be uploaded
     ///
-    /// Returns true if successful, false otherwise
+    /// Returns true if successful, false otherwise. On failure the partially
+    /// written file is removed: no urlSessionTask is created for it, so
+    /// `didCompleteWithError` - the only other place that deletes it - never
+    /// runs, and the file would remain in the temporary directory forever.
+    /// That matters most when the failure was caused by running out of space,
+    /// as the partial file then holds on to the very space a retry needs.
     public func createMultipartFile() -> Bool {
+        if writeMultipartFile() {
+            return true
+        }
+        try? FileManager.default.removeItem(at: outputFileUrl())
+        return false
+    }
+
+    /// Writes the multipart file, returning true if successful
+    private func writeMultipartFile() -> Bool {
         // create the output file
         FileManager.default.createFile(atPath: outputFileUrl().path,  contents:Data(" ".utf8), attributes: nil)
         guard let fileHandle = try? FileHandle(forWritingTo: outputFileUrl()) else {
@@ -124,7 +138,8 @@ public class Uploader : NSObject, URLSessionTaskDelegate, StreamDelegate {
     
     /// Return the URL of the generated outputfile with multipart data
     ///
-    /// Should only be called after calling createMultipartFile, and only when that returns true
+    /// Callers outside this class should only use this after calling
+    /// createMultipartFile, and only when that returns true
     func outputFileUrl() -> URL {
         return FileManager.default.temporaryDirectory.appendingPath(outputFilename)
     }
