@@ -322,7 +322,9 @@ sealed class Task extends Request implements Comparable {
   /// when some but not all bytes have transferred, provided the server supports
   /// partial transfers. Such failures are typically temporary, eg due to
   /// connectivity issues, and may be resumed when connectivity returns
-  /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5
+  /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5.
+  /// On Android 14+, setting priority to 0 requires the
+  /// `android.permission.RUN_USER_INITIATED_JOBS` permission in AndroidManifest.xml.
   /// [metaData] user data
   /// [displayName] human readable name for this task
   /// [creationTime] time of task creation, 'now' by default.
@@ -688,7 +690,9 @@ final class DownloadTask extends Task {
   /// If not set may start download over cellular network
   /// [retries] if >0 will retry a failed download this many times
   /// [allowPause] if true, allows pause command
-  /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5
+  /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5.
+  /// On Android 14+, setting priority to 0 requires the
+  /// `android.permission.RUN_USER_INITIATED_JOBS` permission in AndroidManifest.xml.
   /// [metaData] user data
   /// [displayName] human readable name for this task
   /// [creationTime] time of task creation, 'now' by default.
@@ -881,7 +885,9 @@ final class UploadTask extends Task {
   /// [updates] the kind of progress updates requested
   /// [requiresWiFi] if set, will not start upload until WiFi is available.
   /// If not set may start upload over cellular network
-  /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5
+  /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5.
+  /// On Android 14+, setting priority to 0 requires the
+  /// `android.permission.RUN_USER_INITIATED_JOBS` permission in AndroidManifest.xml.
   /// [retries] if >0 will retry a failed upload this many times
   /// [metaData] user data
   /// [displayName] human readable name for this task
@@ -1136,7 +1142,9 @@ final class MultiUploadTask extends UploadTask {
   /// [updates] the kind of progress updates requested
   /// [requiresWiFi] if set, will not start upload until WiFi is available.
   /// If not set may start upload over cellular network
-  /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5
+  /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5.
+  /// On Android 14+, setting priority to 0 requires the
+  /// `android.permission.RUN_USER_INITIATED_JOBS` permission in AndroidManifest.xml.
   /// [retries] if >0 will retry a failed upload this many times
   /// [metaData] user data
   /// [displayName] human readable name for this task
@@ -1315,7 +1323,9 @@ final class ParallelDownloadTask extends DownloadTask {
   /// If not set may start download over cellular network
   /// [retries] if >0 will retry a failed download this many times
   /// [allowPause] if true, allows pause command
-  /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5
+  /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5.
+  /// On Android 14+, setting priority to 0 requires the
+  /// `android.permission.RUN_USER_INITIATED_JOBS` permission in AndroidManifest.xml.
   /// [metaData] user data
   /// [displayName] human readable name for this task
   /// [creationTime] time of task creation, 'now' by default.
@@ -1448,7 +1458,9 @@ final class DataTask extends Task {
   /// [requiresWiFi] if set, will not start download until WiFi is available.
   /// If not set may start download over cellular network
   /// [retries] if >0 will retry a failed download this many times
-  /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5
+  /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5.
+  /// On Android 14+, setting priority to 0 requires the
+  /// `android.permission.RUN_USER_INITIATED_JOBS` permission in AndroidManifest.xml.
   /// [metaData] user data
   /// [displayName] human readable name for this task
   /// [creationTime] time of task creation, 'now' by default.

@@ -8,6 +8,9 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import android.os.PersistableBundle
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
@@ -164,9 +167,17 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             // UIDT (JobScheduler) is used only if task priority is 0 (max priority)
             // and notificationConfigJsonString is set (required for foreground)
             // and API level is >= 34 (Upside Down Cake)
-            val useJobScheduler = task.priority == 0 && 
+            var useJobScheduler = task.priority == 0 &&
                                   notificationConfigJsonString != null && 
                                   Build.VERSION.SDK_INT >= 34
+            if (useJobScheduler) {
+                // UIDT requires the RUN_USER_INITIATED_JOBS permission. If not granted, fallback to WorkManager.
+                val permissionStatus = ContextCompat.checkSelfPermission(context, Manifest.permission.RUN_USER_INITIATED_JOBS)
+                if (permissionStatus != PackageManager.PERMISSION_GRANTED) {
+                    Log.w(TAG, "RUN_USER_INITIATED_JOBS permission not granted, falling back to WorkManager for task ${task.taskId}")
+                    useJobScheduler = false
+                }
+            }
 
             val taskRequiresWifi = taskRequiresWifi(task)
             if (taskRequiresWifi) {
@@ -194,6 +205,12 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     .setRequiresCharging(false)
                     .setExtras(extras)
                 
+                if (Build.VERSION.SDK_INT >= 34) {
+                    jobInfoBuilder.setUserInitiated(true)
+                    // Provide a default estimate if actual size is unknown to help OS scheduling
+                    jobInfoBuilder.setEstimatedNetworkBytes(1024L * 1024L * 10L, JobInfo.NETWORK_BYTES_UNKNOWN.toLong())
+                }
+
                 if (initialDelayMillis > 0) {
                     jobInfoBuilder.setMinimumLatency(initialDelayMillis)
                 }
