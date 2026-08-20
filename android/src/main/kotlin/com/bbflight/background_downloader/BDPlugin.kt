@@ -144,6 +144,14 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             initialDelayMillis: Long = 0,
             plugin: BDPlugin? = null
         ): Boolean {
+            val expedited = task.priority < 5 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+            val actualDelayMillis = if (initialDelayMillis > 0 && expedited) {
+                kotlinx.coroutines.delay(initialDelayMillis)
+                0L
+            } else {
+                initialDelayMillis
+            }
+
             Log.i(TAG, "Enqueuing task with id ${task.taskId}")
             // store backgroundChannel to be used by this task
             val bgChannel = backgroundChannel(plugin)
@@ -194,8 +202,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     .setRequiresCharging(false)
                     .setExtras(extras)
                 
-                if (initialDelayMillis > 0) {
-                    jobInfoBuilder.setMinimumLatency(initialDelayMillis)
+                if (actualDelayMillis > 0L) {
+                    jobInfoBuilder.setMinimumLatency(actualDelayMillis)
                 }
                 // JobScheduler will persist tasks across reboots if strictly necessary, 
                 // but WorkManager handles this better. 
@@ -235,10 +243,10 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 ).build()
                 val requestBuilder: OneTimeWorkRequest.Builder =
                     createRequestBuilder(task, data, constraints) ?: return false
-                if (initialDelayMillis != 0L) {
-                    requestBuilder.setInitialDelay(initialDelayMillis, TimeUnit.MILLISECONDS)
+                if (actualDelayMillis != 0L) {
+                    requestBuilder.setInitialDelay(actualDelayMillis, TimeUnit.MILLISECONDS)
                 }
-                val expedited = task.priority < 5 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
                 if (expedited) {
                     requestBuilder.setExpedited(policy = OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 }
@@ -251,9 +259,9 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                              Log.i(TAG, "Could not enqueue expedited task, falling back to non-expedited")
                              val nonExpeditedRequestBuilder =
                                  createRequestBuilder(task, data, constraints) ?: throw e
-                             if (initialDelayMillis != 0L) {
+                             if (actualDelayMillis != 0L) {
                                  nonExpeditedRequestBuilder.setInitialDelay(
-                                     initialDelayMillis,
+                                     actualDelayMillis,
                                      TimeUnit.MILLISECONDS
                                  )
                              }
