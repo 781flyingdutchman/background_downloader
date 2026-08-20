@@ -74,7 +74,13 @@ interface class FileDownloader {
   Future<bool> get ready => _downloader.ready;
 
   /// Stream of [TaskUpdate] updates for downloads that do
-  /// not have a registered callback
+  /// not have a registered callback.
+  ///
+  /// **Important**: This is a single-subscription stream. It can only be listened to
+  /// once. If you are developing a package or plugin, you should **not** listen
+  /// to this stream, as doing so will prevent the main application from listening to it.
+  /// Instead, use [registerCallbacks] with a custom group to monitor tasks specific
+  /// to your package.
   Stream<TaskUpdate> get updates => _downloader.updates.stream;
 
   /// Accesses utilities for working with URIs. URIs make working with file pickers and
@@ -135,6 +141,12 @@ interface class FileDownloader {
   /// appropriate callbacks are called for that group.
   /// For the `taskNotificationTapCallback` callback, the `defaultGroup` callback
   /// is used when calling 'convenience' functions like `FileDownloader().download`
+  ///
+  /// **Important for package developers**: Tasks belonging to a group that has
+  /// registered callbacks will **not** emit updates to the [updates] stream.
+  /// This makes [registerCallbacks] the preferred way for packages to monitor
+  /// their own tasks, as it avoids interfering with the main application's
+  /// single-subscription listener on the [updates] stream.
   ///
   /// The call returns the [FileDownloader] to make chaining easier
   FileDownloader registerCallbacks({
