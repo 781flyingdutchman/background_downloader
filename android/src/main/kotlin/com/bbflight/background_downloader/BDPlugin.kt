@@ -95,6 +95,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             "com.bbflight.background_downloader.config.useExternalStorage"
         const val keyConfigSkipExistingFiles =
             "com.bbflight.background_downloader.config.skipExistingFiles"
+        const val keyConfigTempFilePath =
+            "com.bbflight.background_downloader.config.tempFilePath"
 
 
         @SuppressLint("StaticFieldLeak")
@@ -638,6 +640,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     "configUseExternalStorage" -> methodConfigUseExternalStorage(call)
                     "configHoldingQueue" -> methodConfigHoldingQueue(call)
                     "configSkipExistingFiles" -> methodConfigSkipExistingFiles(call)
+                    "configTempFilePath" -> methodConfigTempFilePath(call)
                     "platformVersion" -> methodPlatformVersion()
                     "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
                         call
@@ -973,6 +976,33 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             }
         }
         return null
+    }
+
+    /**
+     * Store the tempFilePath config in shared preferences
+     */
+    private suspend fun methodConfigTempFilePath(call: MethodCall): Any? {
+        withContext(defaultScope.coroutineContext) {
+            updateSharedPreferences(keyConfigTempFilePath, call.arguments as String?)
+        }
+        return null
+    }
+
+    /**
+     * Helper function to update or delete the [value] String in shared preferences under [key]
+     *
+     * If [value] is null, the [key] is deleted
+     */
+    private fun updateSharedPreferences(key: String, value: String?) {
+        PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
+            if (value != null) {
+                putString(key, value)
+            } else {
+                remove(key)
+            }
+            apply()
+        }
+        Log.d(TAG, "Setting preference key $key to $value")
     }
 
     /** Returns Task for this taskId, or nil */

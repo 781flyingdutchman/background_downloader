@@ -649,6 +649,9 @@ final class Config {
   /// Config string for skip existing files
   static const skipExistingFiles = 'skipExistingFiles';
 
+  /// Config string for temp file path
+  static const tempFilePath = 'tempFilePath';
+
   // Config arguments
 
   /// Config argument for always

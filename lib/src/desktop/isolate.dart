@@ -63,6 +63,7 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
     Duration? requestTimeout,
     Map<String, dynamic> proxy,
     bool bypassTLSCertificateValidation,
+    String? tempFilePathConfig,
   ) = await messagesToIsolate.next;
   DesktopDownloader.setHttpClient(
     requestTimeout,
@@ -121,6 +122,7 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
         isResume,
         requestTimeout ?? const Duration(seconds: 60),
         sendPort,
+        tempFilePathConfig,
       ),
       UploadTask() => doUploadTask(task, sendPort),
       DataTask() => doDataTask(task, sendPort),

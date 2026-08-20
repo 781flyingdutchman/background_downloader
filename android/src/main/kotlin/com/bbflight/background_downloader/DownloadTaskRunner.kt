@@ -142,9 +142,12 @@ class DownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) {
                 if (applicationSupportPath == null || cachePath == null) {
                     throw IllegalStateException("External storage is requested but not available")
                 }
-                val tempDir =
-                    when (PreferenceManager.getDefaultSharedPreferences(context.appContext)
-                        .getInt(BDPlugin.keyConfigUseCacheDir, -2)) {
+                val sharedPrefs = PreferenceManager.getDefaultSharedPreferences(context.appContext)
+                val tempFilePathConfig = sharedPrefs.getString(BDPlugin.keyConfigTempFilePath, null)
+                val tempDir = if (!tempFilePathConfig.isNullOrEmpty()) {
+                    File(tempFilePathConfig)
+                } else {
+                    when (sharedPrefs.getInt(BDPlugin.keyConfigUseCacheDir, -2)) {
                         0 -> File(cachePath) // 'always'
                         -1 -> File(applicationSupportPath) // 'never'
                         else -> {
@@ -165,6 +168,7 @@ class DownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) {
                             )
                         }
                     }
+                }
                 if (!tempDir.exists()) {
                     tempDir.mkdirs()
                 }
