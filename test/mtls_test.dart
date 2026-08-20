@@ -89,9 +89,16 @@ void main() {
     });
   });
 
-  group('MTLSConfig JSON serialization & equality', () {
-    test('toJson and fromJson round-trip', () {
-      const config = MTLSConfig(
+  group('MTLSConfig equality', () {
+    test('equality and hashCode', () {
+      const config1 = MTLSConfig(
+        host: 'api.example.com',
+        certificatePath: '/path/to/cert.pem',
+        privateKeyPath: '/path/to/key.pem',
+        password: 'password123',
+        serverCertificateBytes: [10, 20, 30],
+      );
+      const config2 = MTLSConfig(
         host: 'api.example.com',
         certificatePath: '/path/to/cert.pem',
         privateKeyPath: '/path/to/key.pem',
@@ -99,11 +106,8 @@ void main() {
         serverCertificateBytes: [10, 20, 30],
       );
 
-      final json = config.toJson();
-      final restoredConfig = MTLSConfig.fromJson(json);
-
-      expect(restoredConfig, equals(config));
-      expect(restoredConfig.hashCode, equals(config.hashCode));
+      expect(config1, equals(config2));
+      expect(config1.hashCode, equals(config2.hashCode));
     });
   });
 

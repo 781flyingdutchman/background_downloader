@@ -107,31 +107,6 @@ final class MTLSConfig {
     }
   }
 
-  /// Converts this [MTLSConfig] to a JSON Map for isolate transmission or serialization.
-  Map<String, dynamic> toJson() => {
-        'host': host,
-        'certificatePath': certificatePath,
-        'certificateBytes': certificateBytes,
-        'privateKeyPath': privateKeyPath,
-        'privateKeyBytes': privateKeyBytes,
-        'password': password,
-        'serverCertificatePath': serverCertificatePath,
-        'serverCertificateBytes': serverCertificateBytes,
-      };
-
-  /// Constructs an [MTLSConfig] from a JSON Map.
-  factory MTLSConfig.fromJson(Map<String, dynamic> json) => MTLSConfig(
-        host: json['host'] as String?,
-        certificatePath: json['certificatePath'] as String?,
-        certificateBytes: (json['certificateBytes'] as List?)?.cast<int>(),
-        privateKeyPath: json['privateKeyPath'] as String?,
-        privateKeyBytes: (json['privateKeyBytes'] as List?)?.cast<int>(),
-        password: json['password'] as String?,
-        serverCertificatePath: json['serverCertificatePath'] as String?,
-        serverCertificateBytes:
-            (json['serverCertificateBytes'] as List?)?.cast<int>(),
-      );
-
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
