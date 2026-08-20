@@ -325,6 +325,7 @@ sealed class Task extends Request implements Comparable {
   /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5.
   /// On Android 14+, setting priority to 0 requires the
   /// `android.permission.RUN_USER_INITIATED_JOBS` permission in AndroidManifest.xml.
+  /// If the permission is missing, the downloader will automatically fall back to normal operation (which may include a foreground service if configured).
   /// [metaData] user data
   /// [displayName] human readable name for this task
   /// [creationTime] time of task creation, 'now' by default.
@@ -693,6 +694,7 @@ final class DownloadTask extends Task {
   /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5.
   /// On Android 14+, setting priority to 0 requires the
   /// `android.permission.RUN_USER_INITIATED_JOBS` permission in AndroidManifest.xml.
+  /// If the permission is missing, the downloader will automatically fall back to normal operation (which may include a foreground service if configured).
   /// [metaData] user data
   /// [displayName] human readable name for this task
   /// [creationTime] time of task creation, 'now' by default.
@@ -888,6 +890,7 @@ final class UploadTask extends Task {
   /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5.
   /// On Android 14+, setting priority to 0 requires the
   /// `android.permission.RUN_USER_INITIATED_JOBS` permission in AndroidManifest.xml.
+  /// If the permission is missing, the downloader will automatically fall back to normal operation (which may include a foreground service if configured).
   /// [retries] if >0 will retry a failed upload this many times
   /// [metaData] user data
   /// [displayName] human readable name for this task
@@ -1145,6 +1148,7 @@ final class MultiUploadTask extends UploadTask {
   /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5.
   /// On Android 14+, setting priority to 0 requires the
   /// `android.permission.RUN_USER_INITIATED_JOBS` permission in AndroidManifest.xml.
+  /// If the permission is missing, the downloader will automatically fall back to normal operation (which may include a foreground service if configured).
   /// [retries] if >0 will retry a failed upload this many times
   /// [metaData] user data
   /// [displayName] human readable name for this task
@@ -1326,6 +1330,7 @@ final class ParallelDownloadTask extends DownloadTask {
   /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5.
   /// On Android 14+, setting priority to 0 requires the
   /// `android.permission.RUN_USER_INITIATED_JOBS` permission in AndroidManifest.xml.
+  /// If the permission is missing, the downloader will automatically fall back to normal operation (which may include a foreground service if configured).
   /// [metaData] user data
   /// [displayName] human readable name for this task
   /// [creationTime] time of task creation, 'now' by default.
@@ -1461,6 +1466,7 @@ final class DataTask extends Task {
   /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5.
   /// On Android 14+, setting priority to 0 requires the
   /// `android.permission.RUN_USER_INITIATED_JOBS` permission in AndroidManifest.xml.
+  /// If the permission is missing, the downloader will automatically fall back to normal operation (which may include a foreground service if configured).
   /// [metaData] user data
   /// [displayName] human readable name for this task
   /// [creationTime] time of task creation, 'now' by default.
