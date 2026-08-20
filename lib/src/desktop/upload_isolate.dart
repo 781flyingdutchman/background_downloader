@@ -88,7 +88,7 @@ Future<(Task, TaskStatus)> binaryUpload(
       task = task.copyWith(filename: fileUri.pathSegments.last);
     }
     final contentLength = end - start + 1;
-    final client = DesktopDownloader.httpClient;
+    final client = DesktopDownloader.httpClientForUrl(task.url);
     final request = http.StreamedRequest(
       task.httpRequestMethod,
       Uri.parse(task.url),
@@ -239,7 +239,7 @@ Future<(Task, TaskStatus)> multipartUpload(
   var resultStatus = TaskStatus.failed;
   try {
     // setup the connection
-    final client = DesktopDownloader.httpClient;
+    final client = DesktopDownloader.httpClientForUrl(task.url);
     final request = http.StreamedRequest(
       task.httpRequestMethod,
       Uri.parse(task.url),

@@ -13,7 +13,7 @@ import 'isolate.dart';
 /// Sends updates via the [sendPort] and can be commanded to cancel via
 /// the [messagesToIsolate] queue
 Future<void> doDataTask(DataTask task, SendPort sendPort) async {
-  final client = DesktopDownloader.httpClient;
+  final client = DesktopDownloader.httpClientForUrl(task.url);
   var request = http.Request(task.httpRequestMethod, Uri.parse(task.url));
   request.headers.addAll(task.headers);
   if (task.post is String) {

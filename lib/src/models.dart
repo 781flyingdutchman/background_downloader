@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'exceptions.dart';
 import 'task.dart';
 
+export 'options/mtls.dart';
+
 /// Defines a set of possible states which a [Task] can be in.
 enum TaskStatus {
   /// Task is enqueued on the native platform and waiting to start
@@ -623,6 +625,9 @@ final class Config {
   /// Config string for bypass TLS certificate validation
   static const bypassTLSCertificateValidation =
       'bypassTLSCertificateValidation';
+
+  /// Config string for mutual TLS (mTLS)
+  static const mTLS = 'mTLS';
 
   /// Config string for run in foreground
   static const runInForeground = 'runInForeground';

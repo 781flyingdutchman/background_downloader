@@ -48,7 +48,7 @@ Future<void> doDownloadTask(
   isResume =
       isResume &&
       await determineIfResumeIsPossible(tempFilePath, requiredStartByte);
-  final client = DesktopDownloader.httpClient;
+  final client = DesktopDownloader.httpClientForUrl(downloadTask.url);
   var request = http.Request(
     downloadTask.httpRequestMethod,
     Uri.parse(downloadTask.url),

@@ -41,10 +41,12 @@ final class DesktopDownloader extends BaseDownloader {
   final _resume = <Task>{};
   final _isolateSendPorts =
       <Task, SendPort?>{}; // isolate SendPort for running task
-  static var httpClient = http.Client();
+  static final Map<String, http.Client> _clientsCache = {};
+  static http.Client? _defaultClient;
   static Duration? _requestTimeout;
   static var _proxy = <String, dynamic>{}; // 'address' and 'port'
   static var _bypassTLSCertificateValidation = false;
+  static var _mtlsConfigs = <MTLSConfig>[];
   static int _skipExistingFiles = -1;
 
   factory DesktopDownloader() => _singleton;
@@ -190,6 +192,7 @@ final class DesktopDownloader extends BaseDownloader {
       requestTimeout,
       proxy,
       bypassTLSCertificateValidation,
+      _mtlsConfigs,
     ));
     if (_isolateSendPorts.keys.contains(task)) {
       // if already registered with null value, cancel immediately
@@ -605,6 +608,13 @@ final class DesktopDownloader extends BaseDownloader {
       case (Config.bypassTLSCertificateValidation, bool bypass):
         bypassTLSCertificateValidation = bypass;
 
+      case (Config.mTLS, MTLSConfig config):
+        mtlsConfig = config;
+
+      case (Config.mTLS, false):
+      case (Config.mTLS, null):
+        resetMtlsConfig();
+
       case (
         Config.holdingQueue,
         (
@@ -671,24 +681,98 @@ final class DesktopDownloader extends BaseDownloader {
   static bool get bypassTLSCertificateValidation =>
       _bypassTLSCertificateValidation;
 
-  /// Set the HTTP Client to use, with the given parameters
-  ///
-  /// This is a convenience method, bundling the [requestTimeout],
-  /// [proxy] and [bypassTLSCertificateValidation]
-  static void setHttpClient(
-    Duration? requestTimeout,
-    Map<String, dynamic> proxy,
-    bool bypassTLSCertificateValidation,
-  ) {
-    _requestTimeout = requestTimeout;
-    _proxy = proxy;
-    _bypassTLSCertificateValidation = bypassTLSCertificateValidation;
+  /// Set or reset an [MTLSConfig]
+  static set mtlsConfig(MTLSConfig? config) {
+    if (config == null || config.isReset) {
+      resetMtlsConfig(config?.host);
+    } else {
+      _mtlsConfigs.removeWhere((c) => c.host == config.host);
+      _mtlsConfigs.add(config);
+      _recreateClient();
+    }
+  }
+
+  /// Resets mTLS configuration for [host] or all hosts if [host] is null
+  static void resetMtlsConfig([String? host]) {
+    if (host == null) {
+      _mtlsConfigs.clear();
+    } else {
+      _mtlsConfigs.removeWhere((c) => c.host == host);
+    }
     _recreateClient();
   }
 
-  /// Recreates the [httpClient] used for Requests and isolate downloads/uploads
-  static void _recreateClient() {
-    final client = HttpClient();
+  /// Returns active mTLS configurations
+  static List<MTLSConfig> get mtlsConfigs => List.unmodifiable(_mtlsConfigs);
+
+  /// Sets all mTLS configurations
+  static set mtlsConfigs(List<MTLSConfig> configs) {
+    _mtlsConfigs = List.from(configs);
+    _recreateClient();
+  }
+
+  /// Set the HTTP Client to use, with the given parameters
+  ///
+  /// This is a convenience method, bundling the [requestTimeout],
+  /// [proxy], [bypassTLSCertificateValidation] and [mtlsConfigs]
+  static void setHttpClient(
+    Duration? requestTimeout,
+    Map<String, dynamic> proxy,
+    bool bypassTLSCertificateValidation, [
+    List<MTLSConfig>? mtlsConfigs,
+  ]) {
+    _requestTimeout = requestTimeout;
+    _proxy = proxy;
+    _bypassTLSCertificateValidation = bypassTLSCertificateValidation;
+    if (mtlsConfigs != null) {
+      _mtlsConfigs = List.from(mtlsConfigs);
+    }
+    _recreateClient();
+  }
+
+  /// Returns an [http.Client] configured for the given [url].
+  static http.Client httpClientForUrl(String? url) {
+    final host = url != null ? Uri.tryParse(url)?.host : null;
+    return httpClientForHost(host);
+  }
+
+  /// Returns an [http.Client] configured for the given [host].
+  static http.Client httpClientForHost(String? host) {
+    if (_mtlsConfigs.isEmpty) {
+      return _defaultClient ??= _createRawClient(null);
+    }
+
+    final matchedConfig = (host != null
+            ? _mtlsConfigs.firstWhereOrNull((c) => c.host == host && c.hasCredentials)
+            : null) ??
+        _mtlsConfigs.firstWhereOrNull((c) => c.host == null && c.hasCredentials);
+
+    if (matchedConfig == null) {
+      return _defaultClient ??= _createRawClient(null);
+    }
+
+    final cacheKey = matchedConfig.host ?? '*';
+    return _clientsCache.putIfAbsent(
+      cacheKey,
+      () => _createRawClient(matchedConfig),
+    );
+  }
+
+  /// Default HTTP client getter for backward compatibility
+  static http.Client get httpClient => httpClientForHost(null);
+
+  /// Sets the default HTTP client (primarily for testing)
+  static set httpClient(http.Client client) {
+    _defaultClient = client;
+  }
+
+  static http.Client _createRawClient(MTLSConfig? mtlsConfig) {
+    SecurityContext? securityContext;
+    if (mtlsConfig != null && mtlsConfig.hasCredentials) {
+      securityContext = SecurityContext(withTrustedRoots: true);
+      mtlsConfig.applyToSecurityContext(securityContext);
+    }
+    final client = HttpClient(context: securityContext);
     client.connectionTimeout = requestTimeout;
     client.findProxy =
         proxy.isNotEmpty
@@ -698,7 +782,17 @@ final class DesktopDownloader extends BaseDownloader {
         bypassTLSCertificateValidation && !kReleaseMode
             ? (X509Certificate cert, String host, int port) => true
             : null;
-    httpClient = IOClient(client);
+    return IOClient(client);
+  }
+
+  /// Recreates the HTTP client instances used for Requests and isolate downloads/uploads
+  static void _recreateClient() {
+    for (final client in _clientsCache.values) {
+      client.close();
+    }
+    _clientsCache.clear();
+    _defaultClient?.close();
+    _defaultClient = null;
     if (bypassTLSCertificateValidation) {
       if (kReleaseMode) {
         throw ArgumentError(

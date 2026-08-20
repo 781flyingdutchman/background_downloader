@@ -9,6 +9,7 @@ export 'src/file_downloader.dart';
 export 'src/models.dart';
 export 'src/options/auth.dart';
 export 'src/options/auth_callback.dart';
+export 'src/options/mtls.dart';
 export 'src/options/task_options.dart';
 export 'src/permissions.dart' show PermissionType, PermissionStatus;
 export 'src/persistent_storage.dart';
