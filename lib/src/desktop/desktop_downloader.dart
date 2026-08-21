@@ -778,6 +778,9 @@ final class DesktopDownloader extends BaseDownloader {
   static http.Client _createRawClient(MTLSConfig? mtlsConfig) {
     SecurityContext? securityContext;
     if (mtlsConfig != null && mtlsConfig.hasCredentials) {
+      _log.finest(
+        'Creating HTTP client with mTLS configuration for host: ${mtlsConfig.host ?? "all hosts"}',
+      );
       securityContext = SecurityContext(withTrustedRoots: true);
       mtlsConfig.applyToSecurityContext(securityContext);
     }
@@ -815,7 +818,7 @@ final class DesktopDownloader extends BaseDownloader {
       }
     }
     _log.finest(
-      'Using HTTP client with requestTimeout $_requestTimeout, proxy $_proxy and TLSCertificateBypass = $bypassTLSCertificateValidation',
+      'Using HTTP client with requestTimeout $_requestTimeout, proxy $_proxy, TLSCertificateBypass = $bypassTLSCertificateValidation, mTLS configs = ${_mtlsConfigs.length}',
     );
   }
 

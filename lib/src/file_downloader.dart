@@ -1079,6 +1079,7 @@ interface class FileDownloader {
     DesktopDownloader.requestTimeout,
     DesktopDownloader.proxy,
     DesktopDownloader.bypassTLSCertificateValidation,
+    DesktopDownloader.mtlsConfigs,
   ));
 
   /// Move the file represented by the [task] to a shared storage
@@ -1200,10 +1201,15 @@ interface class FileDownloader {
 /// This function is run on an Isolate to ensure performance on the main
 /// Isolate is not affected
 Future<http.Response> _doRequest(
-  (Request, Duration?, Map<String, dynamic>, bool) params,
+  (Request, Duration?, Map<String, dynamic>, bool, List<MTLSConfig>) params,
 ) async {
-  final (request, requestTimeout, proxy, bypassTLSCertificateValidation) =
-      params;
+  final (
+    request,
+    requestTimeout,
+    proxy,
+    bypassTLSCertificateValidation,
+    mtlsConfigs,
+  ) = params;
   Logger.root.level = Level.ALL;
   Logger.root.onRecord.listen((LogRecord rec) {
     if (kDebugMode) {
@@ -1215,8 +1221,9 @@ Future<http.Response> _doRequest(
     requestTimeout,
     proxy,
     bypassTLSCertificateValidation,
+    mtlsConfigs,
   );
-  final client = DesktopDownloader.httpClient;
+  final client = DesktopDownloader.httpClientForUrl(request.url);
   var response = http.Response(
     '',
     499,
