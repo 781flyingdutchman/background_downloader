@@ -133,7 +133,10 @@ void main() {
         final result = await FileDownloader().download(task);
         expect(result.status, equals(TaskStatus.complete));
         expect(destinationFile.existsSync(), isTrue);
-        expect(destinationFile.lengthSync(), equals(urlWithContentLengthFileSize));
+        expect(
+          destinationFile.lengthSync(),
+          equals(urlWithContentLengthFileSize),
+        );
 
         // Clean up
         if (destinationFile.existsSync()) {
@@ -202,7 +205,10 @@ void main() {
         expect(lastStatus, equals(TaskStatus.complete));
 
         expect(destinationFile.existsSync(), isTrue);
-        expect(destinationFile.lengthSync(), equals(urlWithContentLengthFileSize));
+        expect(
+          destinationFile.lengthSync(),
+          equals(urlWithContentLengthFileSize),
+        );
         expect(File(tempFilePath).existsSync(), isFalse);
 
         // Clean up

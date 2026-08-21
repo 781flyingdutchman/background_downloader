@@ -637,8 +637,7 @@ final class DesktopDownloader extends BaseDownloader {
         _skipExistingFiles = 0;
 
       case (Config.tempFilePath, String path):
-        tempFilePath =
-            (path.isNotEmpty && path != Config.never) ? path : null;
+        tempFilePath = (path.isNotEmpty && path != Config.never) ? path : null;
 
       case (Config.tempFilePath, null):
       case (Config.tempFilePath, false):
