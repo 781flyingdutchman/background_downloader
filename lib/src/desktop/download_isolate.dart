@@ -27,6 +27,7 @@ Future<void> doDownloadTask(
   ResumeData? resumeData,
   bool isResume,
   Duration requestTimeout,
+  String? tempFilePathConfig,
   SendPort sendPort,
 ) async {
   // use downloadTask from here on as a 'global' variable in this isolate,
@@ -39,7 +40,7 @@ Future<void> doDownloadTask(
       isResume && resumeData != null
           ? resumeData.tempFilepath
           : p.join(
-            (await getTemporaryDirectory()).path,
+            tempFilePathConfig ?? (await getTemporaryDirectory()).path,
             'com.bbflight.background_downloader${Random().nextInt(1 << 32).toString()}',
           );
   final requiredStartByte =

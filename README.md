@@ -94,7 +94,10 @@ switch (result.status) {
 // enqueue, and can enqueue hundreds of tasks simultaneously.
 
 // First define an event listener to process `TaskUpdate` events sent to you by the downloader, 
-// typically in your app's `initState()`:
+// typically in your app's `initState()`.
+// Note that the `updates` stream is a single-subscription stream.
+// If you are developing a package or plugin, you should instead use `FileDownloader().registerCallbacks`
+// with a custom group to monitor tasks without preventing the main application from listening to the stream.
 FileDownloader().updates.listen((update) {
       switch (update) {
         case TaskStatusUpdate():

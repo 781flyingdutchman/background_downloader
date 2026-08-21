@@ -40,6 +40,8 @@ See [Status & Progress Updates](status_updates.md) for full details on what info
 
 Listen to updates from the downloader by listening to the `updates` stream.
 
+**Important**: The `updates` stream is a single-subscription stream. It can only be listened to once. Attempting to listen to it multiple times will result in a "Bad state: Stream has already been listened to" error. If you are developing a package or plugin, you should **not** listen to this stream, as doing so will prevent the main application from listening to it. Instead, use [callbacks](#option-2-using-callbacks) with a custom group to monitor tasks specific to your package.
+
 ```dart
     final subscription = FileDownloader().updates.listen((update) {
       switch(update) {
@@ -64,6 +66,8 @@ Note that `successFullyEnqueued` only refers to the enqueueing of the download t
 ### Option 2: Using callbacks
 
 Instead of listening to the `updates` stream you can register a callback for status updates, and/or a callback for progress updates. This may be the easiest way if you want different callbacks for different [groups](lifecycle.md#grouping-tasks).
+
+**Important for package developers**: Tasks belonging to a group that has registered callbacks will **not** emit updates to the `updates` stream. This makes `registerCallbacks` the preferred way for packages to monitor their own tasks, as it avoids interfering with the main application's single-subscription listener on the `updates` stream.
 
 ```dart
 // define callbacks

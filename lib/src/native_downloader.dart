@@ -737,6 +737,21 @@ final class AndroidDownloader extends NativeDownloader {
         );
         Task.useExternalStorage = whenTo == Config.always;
 
+      case (Config.tempFilePath, String path):
+        final cleanPath =
+            (path.isNotEmpty && path != Config.never) ? path : null;
+        await NativeDownloader.methodChannel.invokeMethod(
+          'configTempFilePath',
+          cleanPath,
+        );
+
+      case (Config.tempFilePath, null):
+      case (Config.tempFilePath, false):
+        await NativeDownloader.methodChannel.invokeMethod(
+          'configTempFilePath',
+          null,
+        );
+
       default:
         return (
           configItem.$1,
