@@ -988,6 +988,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         return null
     }
 
+
     /**
      * Helper function to update or delete the [value] String in shared preferences under [key]
      *

@@ -27,9 +27,9 @@ Future<void> doDownloadTask(
   ResumeData? resumeData,
   bool isResume,
   Duration requestTimeout,
-  SendPort sendPort, [
   String? tempFilePathConfig,
-]) async {
+  SendPort sendPort,
+) async {
   // use downloadTask from here on as a 'global' variable in this isolate,
   // as we may change the filename of the task
   downloadTask = task;

@@ -1,6 +1,7 @@
+import 'dart:io';
+
 import 'package:background_downloader/background_downloader.dart';
 import 'package:background_downloader/src/desktop/desktop_downloader.dart';
-import 'package:background_downloader/src/native_downloader.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -69,10 +70,10 @@ void main() {
 
   test('Config.tempFilePath on iOS returns not implemented', () async {
     const customPath = '/ios/temp/dir';
-    final result = await IOSDownloader().configureItem(
-      (Config.tempFilePath, customPath),
+    final result = await FileDownloader().configure(
+      iOSConfig: (Config.tempFilePath, customPath),
     );
-    expect(result.$1, equals(Config.tempFilePath));
-    expect(result.$2, equals('not implemented'));
-  });
+    expect(result.first.$1, equals(Config.tempFilePath));
+    expect(result.first.$2, equals('not implemented'));
+  }, skip: !Platform.isIOS);
 }
