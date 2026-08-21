@@ -19,6 +19,7 @@ final class DesktopDownloader extends BaseDownloader {
   static Duration? requestTimeout;
   static var proxy = <String, dynamic>{}; // 'address' and 'port'
   static var bypassTLSCertificateValidation = false;
+  static var mtlsConfigs = <MTLSConfig>[];
 
   /// Sets the HTTP client used for requests
   ///
@@ -26,12 +27,19 @@ final class DesktopDownloader extends BaseDownloader {
   static void setHttpClient(
     Duration? requestTimeout,
     Map<String, dynamic> proxy,
-    bool bypassTLSCertificateValidation,
-  ) {
+    bool bypassTLSCertificateValidation, [
+    List<MTLSConfig>? mtlsConfigs,
+  ]) {
     requestTimeout = requestTimeout;
     proxy = proxy;
     bypassTLSCertificateValidation = bypassTLSCertificateValidation;
   }
+
+  /// Returns an [http.Client] configured for the given [url].
+  static http.Client httpClientForUrl(String? url) => httpClient;
+
+  /// Returns an [http.Client] configured for the given [host].
+  static http.Client httpClientForHost(String? host) => httpClient;
 
   @override
   Future<bool> cancelPlatformTasksWithIds(List<String> taskIds) {
