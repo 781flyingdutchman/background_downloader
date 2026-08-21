@@ -751,10 +751,15 @@ final class DesktopDownloader extends BaseDownloader {
       return _defaultClient ??= _createRawClient(null);
     }
 
-    final matchedConfig = (host != null
-            ? _mtlsConfigs.firstWhereOrNull((c) => c.host == host && c.hasCredentials)
+    final matchedConfig =
+        (host != null
+            ? _mtlsConfigs.firstWhereOrNull(
+              (c) => c.host == host && c.hasCredentials,
+            )
             : null) ??
-        _mtlsConfigs.firstWhereOrNull((c) => c.host == null && c.hasCredentials);
+        _mtlsConfigs.firstWhereOrNull(
+          (c) => c.host == null && c.hasCredentials,
+        );
 
     if (matchedConfig == null) {
       return _defaultClient ??= _createRawClient(null);

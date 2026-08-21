@@ -140,10 +140,7 @@ void main() {
       );
 
       await FileDownloader().configure(
-        desktopConfig: [
-          (Config.mTLS, configA),
-          (Config.mTLS, configB),
-        ],
+        desktopConfig: [(Config.mTLS, configA), (Config.mTLS, configB)],
       );
 
       expect(DesktopDownloader.mtlsConfigs.length, equals(2));
@@ -166,10 +163,7 @@ void main() {
       );
 
       await FileDownloader().configure(
-        desktopConfig: [
-          (Config.mTLS, configA),
-          (Config.mTLS, configB),
-        ],
+        desktopConfig: [(Config.mTLS, configA), (Config.mTLS, configB)],
       );
 
       // Reset hostA
@@ -196,15 +190,18 @@ void main() {
   });
 
   group('SecurityContext application and httpClient selection', () {
-    test('applyToSecurityContext executes without throwing invalid methods', () {
-      final context = SecurityContext(withTrustedRoots: true);
-      const config = MTLSConfig(
-        certificateBytes: [1, 2, 3],
-        privateKeyBytes: [4, 5, 6],
-      );
+    test(
+      'applyToSecurityContext executes without throwing invalid methods',
+      () {
+        final context = SecurityContext(withTrustedRoots: true);
+        const config = MTLSConfig(
+          certificateBytes: [1, 2, 3],
+          privateKeyBytes: [4, 5, 6],
+        );
 
-      expect(() => config.applyToSecurityContext(context), returnsNormally);
-    });
+        expect(() => config.applyToSecurityContext(context), returnsNormally);
+      },
+    );
 
     test('httpClientForUrl returns cached or dedicated client per host', () {
       const configHostA = MTLSConfig(
@@ -221,10 +218,18 @@ void main() {
       DesktopDownloader.mtlsConfig = configHostA;
       DesktopDownloader.mtlsConfig = configHostB;
 
-      final clientA1 = DesktopDownloader.httpClientForUrl('https://hostA.com/file');
-      final clientA2 = DesktopDownloader.httpClientForUrl('https://hostA.com/other');
-      final clientB = DesktopDownloader.httpClientForUrl('https://hostB.com/file');
-      final clientDefault = DesktopDownloader.httpClientForUrl('https://unmatched.com/file');
+      final clientA1 = DesktopDownloader.httpClientForUrl(
+        'https://hostA.com/file',
+      );
+      final clientA2 = DesktopDownloader.httpClientForUrl(
+        'https://hostA.com/other',
+      );
+      final clientB = DesktopDownloader.httpClientForUrl(
+        'https://hostB.com/file',
+      );
+      final clientDefault = DesktopDownloader.httpClientForUrl(
+        'https://unmatched.com/file',
+      );
 
       expect(identical(clientA1, clientA2), isTrue);
       expect(identical(clientA1, clientB), isFalse);

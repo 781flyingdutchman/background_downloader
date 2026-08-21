@@ -26,9 +26,7 @@ void main() {
     await FileDownloader().configure(
       globalConfig: (Config.tempFilePath, Config.never),
     );
-    await FileDownloader().configure(
-      globalConfig: (Config.mTLS, false),
-    );
+    await FileDownloader().configure(globalConfig: (Config.mTLS, false));
     await defaultTearDown();
   });
 
@@ -484,10 +482,7 @@ void main() {
         );
 
         final result = await FileDownloader().configure(
-          desktopConfig: [
-            (Config.mTLS, configA),
-            (Config.mTLS, configB),
-          ],
+          desktopConfig: [(Config.mTLS, configA), (Config.mTLS, configB)],
         );
 
         expect(result.length, equals(2));
@@ -512,9 +507,7 @@ void main() {
         );
 
         // Reset all with false
-        await FileDownloader().configure(
-          desktopConfig: (Config.mTLS, false),
-        );
+        await FileDownloader().configure(desktopConfig: (Config.mTLS, false));
         expect(DesktopDownloader.mtlsConfigs, isEmpty);
       },
       skip: !(Platform.isMacOS || Platform.isLinux || Platform.isWindows),
@@ -601,12 +594,8 @@ void main() {
           privateKeyBytes: [4, 5, 6],
         );
 
-        await FileDownloader().configure(
-          desktopConfig: (Config.mTLS, config),
-        );
-        await FileDownloader().configure(
-          desktopConfig: (Config.mTLS, false),
-        );
+        await FileDownloader().configure(desktopConfig: (Config.mTLS, config));
+        await FileDownloader().configure(desktopConfig: (Config.mTLS, false));
 
         FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
         task = DownloadTask(

@@ -55,25 +55,25 @@ final class MTLSConfig {
     this.password,
     this.serverCertificatePath,
     this.serverCertificateBytes,
-  })  : assert(
-          !(certificatePath != null && certificateBytes != null),
-          'Cannot provide both certificatePath and certificateBytes',
-        ),
-        assert(
-          !(privateKeyPath != null && privateKeyBytes != null),
-          'Cannot provide both privateKeyPath and privateKeyBytes',
-        ),
-        assert(
-          !(serverCertificatePath != null && serverCertificateBytes != null),
-          'Cannot provide both serverCertificatePath and serverCertificateBytes',
-        ),
-        assert(
-          ((certificatePath != null || certificateBytes != null) &&
-                  (privateKeyPath != null || privateKeyBytes != null)) ||
-              ((certificatePath == null && certificateBytes == null) &&
-                  (privateKeyPath == null && privateKeyBytes == null)),
-          'Both certificate and privateKey must be provided together, or both omitted for reset',
-        );
+  }) : assert(
+         !(certificatePath != null && certificateBytes != null),
+         'Cannot provide both certificatePath and certificateBytes',
+       ),
+       assert(
+         !(privateKeyPath != null && privateKeyBytes != null),
+         'Cannot provide both privateKeyPath and privateKeyBytes',
+       ),
+       assert(
+         !(serverCertificatePath != null && serverCertificateBytes != null),
+         'Cannot provide both serverCertificatePath and serverCertificateBytes',
+       ),
+       assert(
+         ((certificatePath != null || certificateBytes != null) &&
+                 (privateKeyPath != null || privateKeyBytes != null)) ||
+             ((certificatePath == null && certificateBytes == null) &&
+                 (privateKeyPath == null && privateKeyBytes == null)),
+         'Both certificate and privateKey must be provided together, or both omitted for reset',
+       );
 
   /// Returns true if client certificate and key credentials are specified.
   bool get hasCredentials =>
@@ -98,7 +98,10 @@ final class MTLSConfig {
     }
 
     if (serverCertificatePath != null) {
-      context.setTrustedCertificates(serverCertificatePath!, password: password);
+      context.setTrustedCertificates(
+        serverCertificatePath!,
+        password: password,
+      );
     } else if (serverCertificateBytes != null) {
       context.setTrustedCertificatesBytes(
         serverCertificateBytes!,

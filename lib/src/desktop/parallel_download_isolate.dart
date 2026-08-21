@@ -66,10 +66,9 @@ Future<void> doParallelDownloadTask(
   parentTask = task;
   if (!isResume) {
     // start the download by creating [Chunk]s and enqueuing chunk tasks
-    final response = await DesktopDownloader.httpClientForUrl(task.url).head(
-      Uri.parse(task.url),
-      headers: task.headers,
-    );
+    final response = await DesktopDownloader.httpClientForUrl(
+      task.url,
+    ).head(Uri.parse(task.url), headers: task.headers);
     responseHeaders = response.headers;
     responseStatusCode = response.statusCode;
     if ([200, 201, 202, 203, 204, 205, 206].contains(response.statusCode)) {

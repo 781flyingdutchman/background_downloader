@@ -103,9 +103,7 @@ void main() {
       expect(DesktopDownloader.mtlsConfigs, isEmpty);
 
       // Reset using null
-      await FileDownloader().configure(
-        globalConfig: (Config.mTLS, config),
-      );
+      await FileDownloader().configure(globalConfig: (Config.mTLS, config));
       result = await FileDownloader().configure(
         globalConfig: (Config.mTLS, null),
       );
@@ -126,9 +124,7 @@ void main() {
       expect(DesktopDownloader.mtlsConfigs.length, equals(1));
 
       // Reset
-      await FileDownloader().configure(
-        desktopConfig: (Config.mTLS, false),
-      );
+      await FileDownloader().configure(desktopConfig: (Config.mTLS, false));
       expect(DesktopDownloader.mtlsConfigs, isEmpty);
     });
 
