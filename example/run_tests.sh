@@ -64,9 +64,15 @@ LOGFILE="integration_test/logs/$(($(date +%s))).log"
 # Clear the log file before running tests.
 > "$LOGFILE"
 
+# Find the first connected/booted iOS device from flutter devices
+IOS_DEVICE_ID=$(flutter devices | awk -F '•' '/•[[:space:]]*ios/ {gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); if (!found) found=$2} END {print found}')
+if [ -z "$IOS_DEVICE_ID" ]; then
+  IOS_DEVICE_ID="1FDD0187-F9F7-49C6-8AA6-BF7AFE934E5F"
+fi
+
 # List of device IDs to run tests on.
 DEVICE_IDS=(
-  "1FDD0187-F9F7-49C6-8AA6-BF7AFE934E5F"     # iOS emulator
+  "$IOS_DEVICE_ID"                         # iOS emulator
   "emulator-5554"                          # Android Emulator
   "macos"                                  # macOS target
 )

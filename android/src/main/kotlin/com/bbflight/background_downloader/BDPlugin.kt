@@ -988,24 +988,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         return null
     }
 
-
-    /**
-     * Helper function to update or delete the [value] String in shared preferences under [key]
-     *
-     * If [value] is null, the [key] is deleted
-     */
-    private fun updateSharedPreferences(key: String, value: String?) {
-        PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
-            if (value != null) {
-                putString(key, value)
-            } else {
-                remove(key)
-            }
-            apply()
-        }
-        Log.d(TAG, "Setting preference key $key to $value")
-    }
-
     /** Returns Task for this taskId, or nil */
     private suspend fun methodTaskForId(call: MethodCall): String? =
         withContext(defaultScope.coroutineContext) {
@@ -1542,6 +1524,25 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         }
         Log.d(TAG, "Setting preference key $key to $value")
     }
+
+
+    /**
+     * Helper function to update or delete the [value] String in shared preferences under [key]
+     *
+     * If [value] is null, the [key] is deleted
+     */
+    private fun updateSharedPreferences(key: String, value: String?) {
+        PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
+            if (value != null) {
+                putString(key, value)
+            } else {
+                remove(key)
+            }
+            apply()
+        }
+        Log.d(TAG, "Setting preference key $key to $value")
+    }
+
 
     /**
      * Store the skipExistingFiles config in shared preferences

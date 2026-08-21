@@ -807,7 +807,7 @@ final class DownloadTask extends Task {
         headers: headers,
       );
       if ([200, 201, 202, 203, 204, 205, 206].contains(response.statusCode)) {
-        return taskWithFilenameBuilder(this, response.headers, unique);
+        return await taskWithFilenameBuilder(this, response.headers, unique);
       }
     } catch (e) {
       _log.finer('Error connecting to server');
