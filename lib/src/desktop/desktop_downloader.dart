@@ -48,6 +48,7 @@ final class DesktopDownloader extends BaseDownloader {
   static var _bypassTLSCertificateValidation = false;
   static var _mtlsConfigs = <MTLSConfig>[];
   static int _skipExistingFiles = -1;
+  static String? tempFilePath;
 
   factory DesktopDownloader() => _singleton;
 
@@ -193,6 +194,7 @@ final class DesktopDownloader extends BaseDownloader {
       proxy,
       bypassTLSCertificateValidation,
       _mtlsConfigs,
+      tempFilePath,
     ));
     if (_isolateSendPorts.keys.contains(task)) {
       // if already registered with null value, cancel immediately
@@ -643,6 +645,13 @@ final class DesktopDownloader extends BaseDownloader {
       case (Config.skipExistingFiles, Config.always):
       case (Config.skipExistingFiles, true):
         _skipExistingFiles = 0;
+
+      case (Config.tempFilePath, String path):
+        tempFilePath = (path.isNotEmpty && path != Config.never) ? path : null;
+
+      case (Config.tempFilePath, null):
+      case (Config.tempFilePath, false):
+        tempFilePath = null;
 
       default:
         return (

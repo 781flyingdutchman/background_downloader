@@ -94,7 +94,10 @@ switch (result.status) {
 // enqueue, and can enqueue hundreds of tasks simultaneously.
 
 // First define an event listener to process `TaskUpdate` events sent to you by the downloader, 
-// typically in your app's `initState()`:
+// typically in your app's `initState()`.
+// Note that the `updates` stream is a single-subscription stream.
+// If you are developing a package or plugin, you should instead use `FileDownloader().registerCallbacks`
+// with a custom group to monitor tasks without preventing the main application from listening to the stream.
 FileDownloader().updates.listen((update) {
       switch (update) {
         case TaskStatusUpdate():
@@ -172,7 +175,7 @@ Then do the same thing in macos/Runner/Release.entitlements.
 ## Limitations
 
 * iOS 14.0 or greater; Android API 21 or greater
-* On Android, downloads are by default limited to 9 minutes, after which the download will end with `TaskStatus.failed`. To allow for longer downloads, set the `DownloadTask.allowPause` field to true: if the task times out, it will pause and automatically resume, eventually downloading the entire file. Alternatively, [configure](doc/CONFIG.md) the downloader to allow tasks to run in the foreground, or (on Android 14 and above) set the task's [priority](doc/PARAMETERS.md#priority) to 0 to use the User Initiated Data Transfer (UIDT) service.
+* On Android, downloads are by default limited to 9 minutes, after which the download will end with `TaskStatus.failed`. To allow for longer downloads, set the `DownloadTask.allowPause` field to true: if the task times out, it will pause and automatically resume, eventually downloading the entire file. Alternatively, [configure](doc/CONFIG.md) the downloader to allow tasks to run in the foreground, or (on Android 14 and above) set the task's [priority](doc/parameters.md#priority) to 0 to use the User Initiated Data Transfer (UIDT) service (requires `android.permission.RUN_USER_INITIATED_JOBS` in `AndroidManifest.xml`).
 * On iOS, once enqueued (i.e. `TaskStatus.enqueued`), a background download must complete within 4 hours. [Configure](doc/CONFIG.md) 'resourceTimeout' to adjust.
 * Redirects will be followed
 * Background downloads and uploads are aggressively controlled by the native platform. You should therefore always assume that a task that was started may not complete, and may disappear without providing any status or progress update to indicate why. For example, if a user swipes your app up from the iOS App Switcher, all scheduled background downloads are terminated without notification

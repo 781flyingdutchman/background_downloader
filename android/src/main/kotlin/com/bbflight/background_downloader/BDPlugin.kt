@@ -8,6 +8,9 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import android.os.PersistableBundle
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
@@ -95,6 +98,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             "com.bbflight.background_downloader.config.useExternalStorage"
         const val keyConfigSkipExistingFiles =
             "com.bbflight.background_downloader.config.skipExistingFiles"
+        const val keyConfigTempFilePath =
+            "com.bbflight.background_downloader.config.tempFilePath"
 
 
         @SuppressLint("StaticFieldLeak")
@@ -144,6 +149,14 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             initialDelayMillis: Long = 0,
             plugin: BDPlugin? = null
         ): Boolean {
+            val expedited = task.priority < 5 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+            val actualDelayMillis = if (initialDelayMillis > 0 && expedited) {
+                kotlinx.coroutines.delay(initialDelayMillis)
+                0L
+            } else {
+                initialDelayMillis
+            }
+
             Log.i(TAG, "Enqueuing task with id ${task.taskId}")
             // store backgroundChannel to be used by this task
             val bgChannel = backgroundChannel(plugin)
@@ -164,9 +177,17 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             // UIDT (JobScheduler) is used only if task priority is 0 (max priority)
             // and notificationConfigJsonString is set (required for foreground)
             // and API level is >= 34 (Upside Down Cake)
-            val useJobScheduler = task.priority == 0 && 
+            var useJobScheduler = task.priority == 0 &&
                                   notificationConfigJsonString != null && 
                                   Build.VERSION.SDK_INT >= 34
+            if (useJobScheduler) {
+                // UIDT requires the RUN_USER_INITIATED_JOBS permission. If not granted, fallback to WorkManager.
+                val permissionStatus = ContextCompat.checkSelfPermission(context, Manifest.permission.RUN_USER_INITIATED_JOBS)
+                if (permissionStatus != PackageManager.PERMISSION_GRANTED) {
+                    Log.w(TAG, "RUN_USER_INITIATED_JOBS permission not granted, falling back to WorkManager for task ${task.taskId}")
+                    useJobScheduler = false
+                }
+            }
 
             val taskRequiresWifi = taskRequiresWifi(task)
             if (taskRequiresWifi) {
@@ -194,8 +215,14 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     .setRequiresCharging(false)
                     .setExtras(extras)
                 
-                if (initialDelayMillis > 0) {
-                    jobInfoBuilder.setMinimumLatency(initialDelayMillis)
+                if (Build.VERSION.SDK_INT >= 34) {
+                    jobInfoBuilder.setUserInitiated(true)
+                    // Provide a default estimate if actual size is unknown to help OS scheduling
+                    jobInfoBuilder.setEstimatedNetworkBytes(1024L * 1024L * 10L, JobInfo.NETWORK_BYTES_UNKNOWN.toLong())
+                }
+
+                if (actualDelayMillis > 0L) {
+                    jobInfoBuilder.setMinimumLatency(actualDelayMillis)
                 }
                 // JobScheduler will persist tasks across reboots if strictly necessary, 
                 // but WorkManager handles this better. 
@@ -235,10 +262,10 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 ).build()
                 val requestBuilder: OneTimeWorkRequest.Builder =
                     createRequestBuilder(task, data, constraints) ?: return false
-                if (initialDelayMillis != 0L) {
-                    requestBuilder.setInitialDelay(initialDelayMillis, TimeUnit.MILLISECONDS)
+                if (actualDelayMillis != 0L) {
+                    requestBuilder.setInitialDelay(actualDelayMillis, TimeUnit.MILLISECONDS)
                 }
-                val expedited = task.priority < 5 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
                 if (expedited) {
                     requestBuilder.setExpedited(policy = OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 }
@@ -251,9 +278,9 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                              Log.i(TAG, "Could not enqueue expedited task, falling back to non-expedited")
                              val nonExpeditedRequestBuilder =
                                  createRequestBuilder(task, data, constraints) ?: throw e
-                             if (initialDelayMillis != 0L) {
+                             if (actualDelayMillis != 0L) {
                                  nonExpeditedRequestBuilder.setInitialDelay(
-                                     initialDelayMillis,
+                                     actualDelayMillis,
                                      TimeUnit.MILLISECONDS
                                  )
                              }
@@ -638,6 +665,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     "configUseExternalStorage" -> methodConfigUseExternalStorage(call)
                     "configHoldingQueue" -> methodConfigHoldingQueue(call)
                     "configSkipExistingFiles" -> methodConfigSkipExistingFiles(call)
+                    "configTempFilePath" -> methodConfigTempFilePath(call)
                     "platformVersion" -> methodPlatformVersion()
                     "forceFailPostOnBackgroundChannel" -> methodForceFailPostOnBackgroundChannel(
                         call
@@ -971,6 +999,16 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     "Could not kill task wih id $taskId in operation: $operation"
                 )
             }
+        }
+        return null
+    }
+
+    /**
+     * Store the tempFilePath config in shared preferences
+     */
+    private suspend fun methodConfigTempFilePath(call: MethodCall): Any? {
+        withContext(defaultScope.coroutineContext) {
+            updateSharedPreferences(keyConfigTempFilePath, call.arguments as String?)
         }
         return null
     }
@@ -1511,6 +1549,25 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         }
         Log.d(TAG, "Setting preference key $key to $value")
     }
+
+
+    /**
+     * Helper function to update or delete the [value] String in shared preferences under [key]
+     *
+     * If [value] is null, the [key] is deleted
+     */
+    private fun updateSharedPreferences(key: String, value: String?) {
+        PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
+            if (value != null) {
+                putString(key, value)
+            } else {
+                remove(key)
+            }
+            apply()
+        }
+        Log.d(TAG, "Setting preference key $key to $value")
+    }
+
 
     /**
      * Store the skipExistingFiles config in shared preferences
