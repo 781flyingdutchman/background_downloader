@@ -115,7 +115,7 @@ open class TaskRunner(
 
         /** Converts [Task] to JSON string representation */
         fun taskToJsonString(task: Task): String {
-            return Json.encodeToString(task)
+            return bdJson.encodeToString(task)
         }
 
         /**
@@ -252,7 +252,7 @@ open class TaskRunner(
                     storeLocally(
                         BDPlugin.keyStatusUpdateMap,
                         task.taskId,
-                        Json.encodeToString<TaskStatusUpdate>(taskStatusUpdate),
+                        bdJson.encodeToString<TaskStatusUpdate>(taskStatusUpdate),
                         prefs
                     )
                 })
@@ -285,7 +285,7 @@ open class TaskRunner(
                     prefs.edit {
                         putString(
                             BDPlugin.keyTasksMap,
-                            Json.encodeToString<MutableMap<String, Task>>(tasksMap)
+                            bdJson.encodeToString<MutableMap<String, Task>>(tasksMap)
                         )
                     }
                 }
@@ -333,7 +333,7 @@ open class TaskRunner(
                             storeLocally(
                                 BDPlugin.keyProgressUpdateMap,
                                 task.taskId,
-                                    Json.encodeToString<TaskProgressUpdate>(
+                                    bdJson.encodeToString<TaskProgressUpdate>(
                                     TaskProgressUpdate(
                                         task,
                                         progress,
@@ -376,7 +376,7 @@ open class TaskRunner(
                         storeLocally(
                             BDPlugin.keyResumeDataMap,
                             resumeData.task.taskId,
-                            Json.encodeToString<ResumeData>(resumeData),
+                            bdJson.encodeToString<ResumeData>(resumeData),
                             prefs
                         )
                     })
@@ -394,11 +394,11 @@ open class TaskRunner(
             BDPlugin.prefsLock.write {
                 // add the data to a map keyed by taskId
                 val jsonString = prefs.getString(prefsKey, "{}") as String
-                val mapByTaskId = Json.decodeFromString<MutableMap<String, String>>(jsonString)
+                val mapByTaskId = bdJson.decodeFromString<MutableMap<String, String>>(jsonString)
                 mapByTaskId[taskId] = item
                 prefs.edit {
                     putString(
-                        prefsKey, Json.encodeToString<MutableMap<String, String>>(mapByTaskId)
+                        prefsKey, bdJson.encodeToString<MutableMap<String, String>>(mapByTaskId)
                     )
                 }
             }
@@ -507,7 +507,7 @@ open class TaskRunner(
                     task = task
                 )
                 notificationConfig = context.notificationConfig
-                notificationConfigJsonString = if (notificationConfig != null) Json.encodeToString<NotificationConfig>(notificationConfig!!) else null
+                notificationConfigJsonString = if (notificationConfig != null) bdJson.encodeToString<NotificationConfig>(notificationConfig!!) else null
 
                 canRunInForeground = runInForegroundFileSize >= 0 &&
                         notificationConfig?.running != null // must have notification
@@ -966,7 +966,7 @@ open class TaskRunner(
 fun getTaskMap(prefs: SharedPreferences): MutableMap<String, Task> {
     BDPlugin.prefsLock.read {
         val tasksMapJson = prefs.getString(BDPlugin.keyTasksMap, "{}") ?: "{}"
-        return Json.decodeFromString(tasksMapJson)
+        return bdJson.decodeFromString(tasksMapJson)
     }
 }
 

@@ -26,10 +26,10 @@ class UpdateNotificationWorker(applicationContext: Context, workerParams: Worker
     }
 
     override suspend fun doWork(): Result {
-        task = Json.decodeFromString(inputData.getString(keyTask)!!)
+        task = bdJson.decodeFromString(inputData.getString(keyTask)!!)
         notificationConfigJsonString = inputData.getString(keyNotificationConfig)
         notificationConfig =
-            if (notificationConfigJsonString != null) Json.decodeFromString(notificationConfigJsonString!!) else null
+            if (notificationConfigJsonString != null) bdJson.decodeFromString(notificationConfigJsonString!!) else null
         val taskStatusOrdinal = inputData.getInt(keyTaskStatusOrdinal, -1)
         notificationId = task.taskId.hashCode()
         if (taskStatusOrdinal == -1) {

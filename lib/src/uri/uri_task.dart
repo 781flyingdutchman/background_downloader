@@ -86,6 +86,9 @@ final class UriDownloadTask extends DownloadTask with _UriTaskMixin {
     super.displayName,
     super.creationTime,
     super.options,
+    super.transferHints,
+    super.notificationConfig,
+    super.stallTimeout,
   }) : super(
          baseDirectory: BaseDirectory.root,
          directory: directoryUri.toString(),
@@ -149,6 +152,9 @@ final class UriDownloadTask extends DownloadTask with _UriTaskMixin {
     String? displayName,
     DateTime? creationTime,
     TaskOptions? options,
+    Set<TransferHint>? transferHints,
+    TaskNotificationConfig? notificationConfig,
+    Duration? stallTimeout,
   }) => UriDownloadTask(
     taskId: taskId ?? this.taskId,
     url: url ?? this.url,
@@ -167,6 +173,9 @@ final class UriDownloadTask extends DownloadTask with _UriTaskMixin {
     displayName: displayName ?? this.displayName,
     creationTime: creationTime ?? this.creationTime,
     options: options ?? this.options,
+    transferHints: transferHints ?? this.transferHints,
+    notificationConfig: notificationConfig ?? this.notificationConfig,
+    stallTimeout: stallTimeout ?? this.stallTimeout,
   )..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 
   @override
@@ -201,6 +210,9 @@ final class UriUploadTask extends UploadTask with _UriTaskMixin {
     super.displayName,
     super.creationTime,
     super.options,
+    super.transferHints,
+    super.notificationConfig,
+    super.stallTimeout,
   }) : super(
          baseDirectory: BaseDirectory.root,
          filename:
@@ -238,14 +250,17 @@ final class UriUploadTask extends UploadTask with _UriTaskMixin {
     String? group,
     Updates? updates,
     bool? requiresWiFi,
+    int? priority,
     int? retries,
     int? retriesRemaining,
     bool? allowPause,
-    int? priority,
     String? metaData,
     String? displayName,
     DateTime? creationTime,
     TaskOptions? options,
+    Set<TransferHint>? transferHints,
+    TaskNotificationConfig? notificationConfig,
+    Duration? stallTimeout,
   }) => UriUploadTask(
     fileUri: fileUri ?? this.fileUri ?? Uri.base,
     taskId: taskId ?? this.taskId,
@@ -266,6 +281,9 @@ final class UriUploadTask extends UploadTask with _UriTaskMixin {
     displayName: displayName ?? this.displayName,
     creationTime: creationTime ?? this.creationTime,
     options: options ?? this.options,
+    transferHints: transferHints ?? this.transferHints,
+    notificationConfig: notificationConfig ?? this.notificationConfig,
+    stallTimeout: stallTimeout ?? this.stallTimeout,
   )..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 
   @override

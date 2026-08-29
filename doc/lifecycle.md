@@ -4,9 +4,15 @@
 
 ## Canceling, pausing and resuming tasks
 
-To enable pausing, set the `allowPause` field of the `Task` to `true`. This may also cause the task to `pause` un-commanded. For example, the OS may choose to pause the task if someone walks out of WiFi coverage.
+To enable pausing, set the `allowPause` field of the `Task` to `true` (or use `TransferHint.largeFile` / `TransferHint.userInitiated`).
 
-To cancel, pause or resume a task, call:
+When using the [Transfer API](transfers.md), you can control the transfer directly via its handle:
+* `await transfer.pause()` to pause
+* `await transfer.resume()` to resume
+* `await transfer.cancel()` to cancel
+* `await transfer.allowCellular()` to override a WiFi restriction if held
+
+At the `FileDownloader` level, call:
 * `cancel` to cancel a task
 * `cancelAll` to cancel all tasks currently running, a specific list of tasks, or all tasks in a `group`.
 * `cancelTaskWithId` to cancel the tasks with that taskId
@@ -38,12 +44,21 @@ void downloadStatusCallback(TaskStatusUpdate update) async {
   }
 ```
 
-## Grouping tasks
+## Grouping & Scoped Isolation
 
+### Scoped Namespaces (`FileDownloader.scoped`)
+If you are writing a package, plugin, or separate app subsystem, use `FileDownloader.scoped('my_namespace')` instead of managing custom group names manually:
+```dart
+final downloader = FileDownloader.scoped('media_module');
+final transfer = await downloader.startTransfer(task);
+```
+Scoped downloaders automatically prefix groups under the hood, ensuring your callbacks, queries, and `reset` calls are isolated from other modules without conflicting.
+
+### Grouping Tasks
 Because an app may require different types of downloads, and handle those differently, you can specify a `group` with your task, and register callbacks specific to each `group`. If no group is specified the default group `FileDownloader.defaultGroup` is used. For example, to create and handle downloads for group 'bigFiles':
 ```dart
 FileDownloader().registerCallbacks(
-    group: 'bigFiles'
+    group: 'bigFiles',
     taskStatusCallback: bigFilesDownloadStatusCallback,
     taskProgressCallback: bigFilesDownloadProgressCallback);
 final task = DownloadTask(

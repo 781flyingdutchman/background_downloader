@@ -118,7 +118,7 @@ class Callbacks {
                 val resultingObjectAsJsonStringCompleter = CompletableDeferred<String?>()
                 Handler(Looper.getMainLooper()).post {
                     // Run on UI thread
-                    val arg = if (task != null) Json.encodeToString(task) else Json.encodeToString(
+                    val arg = if (task != null) bdJson.encodeToString(task) else bdJson.encodeToString(
                         statusUpdate
                     )
                     Log.i(
@@ -133,9 +133,9 @@ class Callbacks {
                 }
                 val objectAsJsonString = resultingObjectAsJsonStringCompleter.await()
                 return if (objectAsJsonString == null) null else
-                    if (methodName == "beforeTaskStartCallback") Json.decodeFromString<TaskStatusUpdate>(
+                    if (methodName == "beforeTaskStartCallback") bdJson.decodeFromString<TaskStatusUpdate>(
                         objectAsJsonString
-                    ) else Json.decodeFromString<Task>(
+                    ) else bdJson.decodeFromString<Task>(
                         objectAsJsonString
                     )
             }

@@ -317,7 +317,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     val tasksMap = getTaskMap(prefs)
                     tasksMap[task.taskId] = task
                     prefs.edit {
-                        putString(keyTasksMap, Json.encodeToString(tasksMap))
+                        putString(keyTasksMap, bdJson.encodeToString(tasksMap))
                     }
                 }
                 return true
@@ -394,7 +394,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     val taskJson = jobInfo.extras.getString(TaskWorker.keyTask)
                     if (taskJson != null) {
                         try {
-                            val task = Json.decodeFromString<Task>(taskJson)
+                            val task = bdJson.decodeFromString<Task>(taskJson)
                             if (task.taskId == taskId) {
                                 canceledTaskIds.add(taskId)
                                 val prefs = PreferenceManager.getDefaultSharedPreferences(context)
@@ -415,8 +415,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                                         // update notification for group
                                         NotificationService.createUpdateNotificationWorker(
                                             context,
-                                            Json.encodeToString(task),
-                                            Json.encodeToString(notificationGroup.notificationConfig),
+                                            bdJson.encodeToString(task),
+                                            bdJson.encodeToString(notificationGroup.notificationConfig),
                                             TaskStatus.canceled.ordinal
                                         )
                                     }
@@ -467,8 +467,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                                 // update notification for group
                                 NotificationService.createUpdateNotificationWorker(
                                     context,
-                                    Json.encodeToString(task),
-                                    Json.encodeToString(notificationGroup.notificationConfig),
+                                    bdJson.encodeToString(task),
+                                    bdJson.encodeToString(notificationGroup.notificationConfig),
                                     TaskStatus.canceled.ordinal
                                 )
                             }
@@ -506,7 +506,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 // update the notification via an UpdateNotificationWorker
                 NotificationService.createUpdateNotificationWorker(
                     context,
-                    Json.encodeToString(task),
+                    bdJson.encodeToString(task),
                     notificationConfigJsonString,
                     TaskStatus.canceled.ordinal
                 )
@@ -695,7 +695,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             // by tempFilePath, startByte and eTag if this enqueue is a resume from pause
             val args = call.arguments as List<*>
             val taskJsonMapString = args[0] as String
-            val task = Json.decodeFromString<Task>(taskJsonMapString)
+            val task = bdJson.decodeFromString<Task>(taskJsonMapString)
             val notificationConfigJsonString = args[1] as String?
             val isResume = args.size == 5
             val resumeData: ResumeData? = if (isResume) {
@@ -758,16 +758,16 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             val taskListJsonString = args[0] as String
             val notificationConfigListJsonString = args[1] as String
             try {
-                val tasks = Json.decodeFromString<List<Task>>(taskListJsonString)
+                val tasks = bdJson.decodeFromString<List<Task>>(taskListJsonString)
                 val notificationConfigs =
-                    Json.decodeFromString<List<NotificationConfig?>>(
+                    bdJson.decodeFromString<List<NotificationConfig?>>(
                         notificationConfigListJsonString
                     )
                 val results = mutableListOf<Boolean>()
                 for ((index, task) in tasks.withIndex()) {
                     val notificationConfig = notificationConfigs.getOrNull(index)
                     val notificationConfigJsonString =
-                        notificationConfig?.let { Json.encodeToString(it) }
+                        notificationConfig?.let { bdJson.encodeToString(it) }
                     var success = false
                     try {
                         try {
@@ -866,7 +866,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 val taskJson = jobInfo.extras.getString(TaskWorker.keyTask)
                 if (taskJson != null) {
                     try {
-                        val task = Json.decodeFromString<Task>(taskJson)
+                        val task = bdJson.decodeFromString<Task>(taskJson)
                         if (task.group == group) {
                             canceledTaskIds.add(task.taskId)
                             processStatusUpdate(
@@ -886,8 +886,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                                     // update notification for group
                                     NotificationService.createUpdateNotificationWorker(
                                         applicationContext,
-                                        Json.encodeToString(task),
-                                        Json.encodeToString(notificationGroup.notificationConfig),
+                                        bdJson.encodeToString(task),
+                                        bdJson.encodeToString(notificationGroup.notificationConfig),
                                         TaskStatus.canceled.ordinal
                                     )
                                 }
@@ -916,7 +916,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             val tasksAsListOfJsonStrings = mutableListOf<String>()
             holdingQueue?.stateMutex?.lock()
             holdingQueue?.allTasks(group)
-                ?.forEach { tasksAsListOfJsonStrings.add(Json.encodeToString(it)) }
+                ?.forEach { tasksAsListOfJsonStrings.add(bdJson.encodeToString(it)) }
             val workManager = WorkManager.getInstance(applicationContext)
             val workInfos = workManager.getWorkInfosByTag(TAG).get()
                 .filter { !it.state.isFinished && (group == null || it.tags.contains("group=$group")) }
@@ -931,7 +931,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     val taskId = tags.first().substring(7)
                     val task = tasksMap[taskId]
                     if (task != null) {
-                        tasksAsListOfJsonStrings.add(Json.encodeToString(task))
+                        tasksAsListOfJsonStrings.add(bdJson.encodeToString(task))
                     }
                 }
             }
@@ -943,7 +943,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     val taskJson = jobInfo.extras.getString(TaskWorker.keyTask)
                     if (taskJson != null) {
                         try {
-                            val task = Json.decodeFromString<Task>(taskJson)
+                            val task = bdJson.decodeFromString<Task>(taskJson)
                             if (group == null || task.group == group) {
                                 tasksAsListOfJsonStrings.add(taskJson)
                             }
@@ -1025,7 +1025,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 }
             }
             holdingQueue?.stateMutex?.unlock()
-            foundTask?.let { Json.encodeToString(it) }
+            foundTask?.let { bdJson.encodeToString(it) }
         }
 
     /**
@@ -1209,7 +1209,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val args = call.arguments as List<*>
         val taskJsonMapString = args[0] as String?
         val task =
-            if (taskJsonMapString != null) Json.decodeFromString<Task>(taskJsonMapString) else null
+            if (taskJsonMapString != null) bdJson.decodeFromString<Task>(taskJsonMapString) else null
         val filePath = args[1] as String? ?: run {
             val (_, uri) = UriUtils.unpack(task!!.filename)
             uri?.toString() ?: task.filePath(applicationContext)
@@ -1273,7 +1273,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val exceptionJson = args[3] as String?
         try {
             val exception = if (exceptionJson != null) {
-                Json.decodeFromString<TaskException>(exceptionJson)
+                bdJson.decodeFromString<TaskException>(exceptionJson)
             } else null
             val responseBody = args[4] as String?
             parallelDownloadTaskWorkers[taskId]?.chunkStatusUpdate(
@@ -1522,7 +1522,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val args = call.arguments as List<*>
         val taskJsonMapString = args[0] as String
         val contentDisposition = args[1] as String
-        val task = Json.decodeFromString<Task>(taskJsonMapString)
+        val task = bdJson.decodeFromString<Task>(taskJsonMapString)
         val h = if (contentDisposition.isNotEmpty()) mutableMapOf(
             "Content-Disposition" to mutableListOf(contentDisposition)
         ) else mutableMapOf("" to mutableListOf())
@@ -1621,11 +1621,11 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 }
                 // check for 'tapOpensFile'
                 if (notificationTypeOrdinal == NotificationType.complete.ordinal) {
-                    val task = Json.decodeFromString<Task>(taskJsonMapString)
+                    val task = bdJson.decodeFromString<Task>(taskJsonMapString)
                     val notificationConfigJsonString =
                         intent.extras?.getString(NotificationReceiver.keyNotificationConfig)
                     val notificationConfig =
-                        if (notificationConfigJsonString != null) Json.decodeFromString<NotificationConfig>(
+                        if (notificationConfigJsonString != null) bdJson.decodeFromString<NotificationConfig>(
                             notificationConfigJsonString
                         )
                         else null

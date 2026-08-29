@@ -2,68 +2,128 @@
 
 ## DownloadTask
 
-The `DownloadTask` is the workhorse of this package. It defines what to download, from where, and where to store it.
+The `DownloadTask` defines what to download, where to store it, and how to configure execution.
 
 ```dart
 final task = DownloadTask(
-    url: 'https://google.com/search',
-    urlQueryParameters: {'q': 'pizza'},
-    filename: 'results.html',
-    headers: {'myHeader': 'value'},
-    directory: 'my_sub_directory',
-    updates: Updates.statusAndProgress, // request status and progress updates
-    requiresWiFi: true,
-    retries: 5,
-    allowPause: true,
-    metaData: 'data for me');
+  url: 'https://example.com/file.zip',
+  filename: 'my_file.zip',
+  directory: 'downloads',
+  baseDirectory: BaseDirectory.applicationDocuments,
+  transferHints: {TransferHint.userInitiated, TransferHint.largeFile},
+  requiresWiFi: false,
+  retries: 3,
+  metaData: 'custom_id_123',
+);
 ```
 
-The simplest way to execute a task is to call `.download` which returns a `Future` that completes when the task finishes (or fails).
+---
+
+## 1. High-Level Transfer API (Recommended)
+
+The recommended way to execute a download is via `FileDownloader().startTransfer`, which returns a [`Transfer`](transfers.md) handle.
 
 ```dart
-final result = await FileDownloader().download(task);
+final transfer = await FileDownloader().startTransfer(task);
+
+// Await the downloaded File directly:
+final file = await transfer.file;
+print('File ready at: ${file.path}');
+
+// Or bind reactive notifiers to Flutter widgets:
+// transfer.progressNotifier, transfer.statusNotifier, etc.
 ```
 
-For more complex scenarios, or when you have many tasks, use `.enqueue` (or `.enqueueAll`) and an event listener or callbacks - see [Database & Monitoring](database.md) and [Status & Progress Updates](status_updates.md) for details on how updates are provided.
+For batch downloads across multiple files, use `startTransfers`:
+```dart
+final transfers = await FileDownloader().startTransfers(
+  [task1, task2, task3],
+  onProgress: (succeeded, failed) => print('Progress: $succeeded done, $failed failed'),
+);
+```
 
-## Parallel downloads
+👉 **[See the Transfers Guide for full details on UI widgets, controls, and notifiers](transfers.md)**
 
-Some servers may offer an option to download part of the same file from multiple URLs or have multiple parallel downloads of part of a large file using a single URL. This can speed up the download of large files.  To do this, create a `ParallelDownloadTask` instead of a regular `DownloadTask` and specify `chunks` (the number of pieces you want to break the file into, i.e. the number of downloads that will happen in parallel) and `urls` (as a list of URLs, or just one). For example, if you specify 4 chunks and 2 URLs, then the download will be broken into 8 pieces, four each for each URL.
+---
+
+## 2. Direct Awaitable Download (`download`)
+
+If you want a simple synchronous-style `Future` without using a `Transfer` object, call `.download`:
+
+```dart
+final result = await FileDownloader().download(
+  task,
+  onProgress: (progress) => print('Progress: ${progress * 100}%'),
+  onStatus: (status) => print('Status: $status'),
+);
+
+if (result.status == TaskStatus.complete) {
+  print('Download succeeded!');
+}
+```
+
+---
+
+## 3. Central Queueing (`enqueue` / `enqueueAll`)
+
+For pipeline architectures where tasks are enqueued asynchronously and monitored centrally via callbacks or the global `FileDownloader().updates` stream:
+
+```dart
+FileDownloader().start(); // activates database tracking
+
+final enqueued = await FileDownloader().enqueue(task);
+// Or enqueue hundreds of tasks at once:
+final results = await FileDownloader().enqueueAll(taskList);
+```
+
+See [Database & Monitoring](database.md) and [Status & Progress Updates](status_updates.md) for details on central event handling.
+
+---
+
+## 4. Parallel Downloads
+
+Some servers offer higher speeds when downloading chunks of a large file in parallel from multiple connections or mirrors. To use parallel chunked downloading, create a `ParallelDownloadTask`:
 
 ```dart
 final task = ParallelDownloadTask(
-    urls: [
-        'https://example.com/large_file.zip',
-        'https://mirror.com/large_file.zip'
-    ],
-    chunks: 4,
-    filename: 'large_file.zip');
+  urls: [
+    'https://example.com/large_file.zip',
+    'https://mirror.com/large_file.zip',
+  ],
+  chunks: 4,
+  filename: 'large_file.zip',
+);
 
-final result = await FileDownloader().download(task);
+final transfer = await FileDownloader().startTransfer(task);
+final file = await transfer.file;
 ```
 
-Note that the implementation of this feature creates a regular `DownloadTask` for each chunk, with the group name 'chunk' which is now a reserved group. You will not get updates for this group, but you will get normal updates (status and/or progress) for the `ParallelDownloadTask`.
+* Parallel downloads create internal chunk tasks in a reserved group named `'chunk'`.
+* Status and progress updates are aggregated seamlessly onto the parent `ParallelDownloadTask`.
+* Parallel downloads do not support URIs or Android UIDT.
 
-Parallel downloads do not support the use of URIs, and on Android the chunk downloads do not support the User Initiated Download Transfer service (so you must keep the chunks small enough that they do not exceed the 9 minute limit).
+---
 
-## Server suggested filenames
+## 5. Server-Suggested Filenames
 
-If you want the filename to be provided by the server (via the `Content-Disposition` header), you can use `DownloadTask.suggestedFilename`.
+If you want the downloaded filename to be determined by the server's `Content-Disposition` header:
 
 ```dart
 final task = DownloadTask(
-    url: 'https://google.com',
-    filename: DownloadTask.suggestedFilename);
+  url: 'https://example.com/download',
+  filename: DownloadTask.suggestedFilename, // or '?'
+);
 ```
-
-In this case, the `Task` that is returned by the `download` method (or matches the status update) will have the correct filename, but the original task object you created will still have `DownloadTask.suggestedFilename` (which is `?`) as the filename.
-
-Alternatively, you can call `withSuggestedFilename` on the task before downloading:
-
+Or use `TransferHint.useSuggestedFilename`:
 ```dart
-final task = await DownloadTask(url: 'https://google.com')
-        .withSuggestedFilename(unique: true);
+final task = DownloadTask(
+  url: 'https://example.com/download',
+  transferHints: {TransferHint.useSuggestedFilename},
+);
 ```
 
-This will check the headers and return a new task with the filename set. If `unique` is true, it will append a counter to the filename if the file already exists.
-
+Alternatively, resolve the suggested filename before starting:
+```dart
+final task = await DownloadTask(url: 'https://example.com/download')
+    .withSuggestedFilename(unique: true); // triggers a HEAD call
+```

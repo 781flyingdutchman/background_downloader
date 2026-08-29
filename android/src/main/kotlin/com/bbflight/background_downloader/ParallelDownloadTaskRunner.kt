@@ -86,7 +86,7 @@ class ParallelDownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) 
                                 postOnBackgroundChannel(
                                     "enqueueChild",
                                     task,
-                                    Json.encodeToString<Task>(chunk.task),
+                                    bdJson.encodeToString<Task>(chunk.task),
                                     onFail =
                                     {
                                         // failed to enqueue child
@@ -125,7 +125,7 @@ class ParallelDownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) 
                         // resume: reconstruct [chunks] and wait for all chunk tasks to complete.
                         // The Dart side will resume each chunk task, so we just wait for the
                         // completer to complete
-                        chunks = Json.decodeFromString(chunksJsonString)
+                        chunks = bdJson.decodeFromString(chunksJsonString)
                         parallelDownloadContentLength = chunks.fold(0L) { acc, chunk ->
                             acc + chunk.toByte - chunk.fromByte + 1
                         }
@@ -147,7 +147,7 @@ class ParallelDownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) 
                             postOnBackgroundChannel(
                                 "resumeData",
                                 task,
-                                Json.encodeToString<List<Chunk>>(chunks)
+                                bdJson.encodeToString<List<Chunk>>(chunks)
                             )
                             parallelTaskStatusUpdateCompleter.complete(TaskStatus.paused)
                             break
@@ -198,7 +198,7 @@ class ParallelDownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) 
             postOnBackgroundChannel(
                 "enqueueChild",
                 task,
-                Json.encodeToString<Task>(chunk.task),
+                bdJson.encodeToString<Task>(chunk.task),
                 onFail = {
                     chunkStatusUpdate(chunkTaskId, TaskStatus.failed, taskException, responseBody)
                 })
@@ -319,7 +319,7 @@ class ParallelDownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) 
         postOnBackgroundChannel(
             "cancelTasksWithId",
             task,
-            Json.encodeToString<List<String>>(chunks.map { it.task.taskId })
+            bdJson.encodeToString<List<String>>(chunks.map { it.task.taskId })
         )
     }
 
@@ -330,7 +330,7 @@ class ParallelDownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) 
      * to the NativeDownloader
      */
     private suspend fun pauseAllChunkTasks() {
-        postOnBackgroundChannel("pauseTasks", task, Json.encodeToString<List<Task>>(chunks.map { it.task }))
+        postOnBackgroundChannel("pauseTasks", task, bdJson.encodeToString<List<Task>>(chunks.map { it.task }))
     }
 
     /**
@@ -476,7 +476,7 @@ class Chunk private constructor(
             requiresWiFi = parentTask.requiresWiFi,
             allowPause = parentTask.allowPause,
             priority = parentTask.priority,
-            metaData = Json.encodeToString<ChunkTaskMetaData>(ChunkTaskMetaData(parentTask.taskId, from, to)),
+            metaData = bdJson.encodeToString<ChunkTaskMetaData>(ChunkTaskMetaData(parentTask.taskId, from, to)),
             taskType = "DownloadTask"
         ),
         from,

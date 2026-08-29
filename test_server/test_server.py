@@ -21,17 +21,28 @@ FILES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'files')
 
 def ensure_test_files():
     """Ensures test files directory and test files exist."""
+    import shutil
     os.makedirs(FILES_DIR, exist_ok=True)
+    assets_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'example', 'assets')
     test_files = {
         '1MB-test.bin': 1024 * 1024,
         '5MB-test.ZIP': 6207471,
-        '57MB-test.ZIP': 57 * 1024 * 1024
+        '57MB-test.ZIP': 59673498
     }
     for filename, size in test_files.items():
         filepath = os.path.join(FILES_DIR, filename)
-        if not os.path.exists(filepath) or os.path.getsize(filepath) != size:
+        assetpath = os.path.join(assets_dir, filename)
+        if os.path.exists(assetpath) and os.path.getsize(assetpath) == size:
+            if not os.path.exists(filepath) or os.path.getsize(filepath) != size:
+                shutil.copyfile(assetpath, filepath)
+        elif not os.path.exists(filepath) or os.path.getsize(filepath) != size:
             with open(filepath, 'wb') as f:
-                f.write(b'\0' * size)
+                remaining = size
+                chunk_size = 1024 * 1024
+                while remaining > 0:
+                    write_size = min(remaining, chunk_size)
+                    f.write(os.urandom(write_size))
+                    remaining -= write_size
 
 ensure_test_files()
 

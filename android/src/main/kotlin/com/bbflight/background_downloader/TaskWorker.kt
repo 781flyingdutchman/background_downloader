@@ -127,14 +127,14 @@ open class TaskWorker(
             // Initialize task and notificationConfig from inputData
             val taskJson = inputData.getString(keyTask)
             if (taskJson != null) {
-                task = Json.decodeFromString(taskJson)
+                task = bdJson.decodeFromString(taskJson)
             } else {
                 return Result.failure()
             }
 
             notificationConfigJsonString = inputData.getString(keyNotificationConfig)
             if (notificationConfigJsonString != null) {
-                notificationConfig = Json.decodeFromString(notificationConfigJsonString!!)
+                notificationConfig = bdJson.decodeFromString(notificationConfigJsonString!!)
             }
             
             // Check runInForeground pre-requisite (shared pref check done in Runner mostly, 

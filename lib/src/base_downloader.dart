@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:collection/collection.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 
@@ -131,6 +132,15 @@ abstract base class BaseDownloader {
     return instance;
   }
 
+  final Connectivity _connectivity = Connectivity();
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+
+  /// Whether the device currently has an active network connection
+  bool isConnected = true;
+
+  /// Whether the active network connection is Wi-Fi or Ethernet
+  bool isWiFi = false;
+
   /// Initialize
   ///
   /// Initializes the PersistentStorage instance and if necessary perform database
@@ -150,7 +160,53 @@ abstract base class BaseDownloader {
           );
         })
         .listen((_) {});
+    _initConnectivity();
     _readyCompleter.complete(true);
+  }
+
+  void _initConnectivity() {
+    try {
+      _connectivitySubscription = _connectivity.onConnectivityChanged.listen((
+        results,
+      ) {
+        final connected = results.any((r) => r != ConnectivityResult.none);
+        final wifi = results.any(
+          (r) =>
+              r == ConnectivityResult.wifi || r == ConnectivityResult.ethernet,
+        );
+        _onConnectivityChanged(connected, wifi);
+      });
+      _connectivity.checkConnectivity().then((results) {
+        final connected = results.any((r) => r != ConnectivityResult.none);
+        final wifi = results.any(
+          (r) =>
+              r == ConnectivityResult.wifi || r == ConnectivityResult.ethernet,
+        );
+        _onConnectivityChanged(connected, wifi);
+      });
+    } catch (e) {
+      log.finer('Connectivity initialization error: $e');
+    }
+  }
+
+  void _onConnectivityChanged(bool connected, bool wifi) {
+    final wasConnected = isConnected;
+    final wasWiFi = isWiFi;
+    isConnected = connected;
+    isWiFi = wifi;
+
+    if (connected && (!wasConnected || (!wasWiFi && wifi))) {
+      final tasksToRetry = List<Task>.from(tasksWaitingToRetry);
+      for (final task in tasksToRetry) {
+        if (!task.requiresWiFi || isWiFi) {
+          tasksWaitingToRetry.remove(task);
+          log.info('Network available, resuming held task ${task.taskId}');
+          resume(task).then((resumed) {
+            if (!resumed) enqueue(task);
+          });
+        }
+      }
+    }
   }
 
   /// Configures the downloader
@@ -837,9 +893,30 @@ abstract base class BaseDownloader {
     // has retriesRemaining > 0: those are always sent here, and are
     // intercepted to hold the task and reschedule in the near future
     final task = update.task;
-    if (update.status == TaskStatus.failed && task.retriesRemaining > 0) {
+    final isConnectionError =
+        update.exception is TaskConnectionException ||
+        (update.exception?.description.toLowerCase().contains('socket') ==
+            true) ||
+        (update.exception?.description.toLowerCase().contains('timeout') ==
+            true) ||
+        (update.exception?.description.toLowerCase().contains('network') ==
+            true) ||
+        !isConnected;
+
+    if (update.status == TaskStatus.failed &&
+        (task.retriesRemaining > 0 || (!isConnected && isConnectionError))) {
       _emitStatusUpdate(TaskStatusUpdate(task, TaskStatus.waitingToRetry));
       _emitProgressUpdate(TaskProgressUpdate(task, progressWaitingToRetry));
+
+      // If device is offline, hold without decrementing retry budget
+      if (!isConnected) {
+        tasksWaitingToRetry.add(task);
+        log.info(
+          'TaskId ${task.taskId} failed while offline, holding until network restored',
+        );
+        return;
+      }
+
       task.decreaseRetriesRemaining();
       tasksWaitingToRetry.add(task);
       final waitTime = Duration(
@@ -1137,6 +1214,7 @@ abstract base class BaseDownloader {
   /// messages or status updates
   @mustCallSuper
   void destroy() {
+    _connectivitySubscription?.cancel();
     tasksWaitingToRetry.clear();
     _batches.clear();
     awaitTasks.clear();

@@ -129,7 +129,10 @@ A SQLite implementation is available in the [background_downloader_sql](https://
 
 ### Automated database cleanup
 
-If you use the `start()` method, you can pass `autoCleanDatabase: true` to automatically clean up the database (remove old records) and prevent it from growing indefinitely. The default is `false` to prevent breaking changes for existing users, but it is recommended for new users.
+When starting the downloader with `FileDownloader().start(autoCleanDatabase: true)`, the database is automatically cleaned up on launch (removing old completed/failed task records based on retention limits) to prevent the database from growing indefinitely. 
+
+> [!TIP]
+> **Always use `autoCleanDatabase: true`**: While `autoCleanDatabase` defaults to `false` solely to preserve backward compatibility for legacy workflows, calling `FileDownloader().start(autoCleanDatabase: true)` is typically recommended for all apps.
 
 You can also manually call `FileDownloader().database.cleanUp()`. The `cleanUp()` method takes optional parameters `maxAge` (defaults to 10 days) and `maxRecordCount` (defaults to 500 records). If the database exceeds these limits, the oldest records are removed.
 
@@ -140,6 +143,6 @@ The `FileDownloader().start()` method is a convenience method that calls several
 1.  **Tracks tasks**: Calls `FileDownloader().trackTasks()` to enable database tracking (if `doTrackTasks` is true, which is the default).
 2.  **Resumes from background**: Calls `FileDownloader().resumeFromBackground()` to process any events that happened while the app was suspended.
 3.  **Reschedules killed tasks**: Calls `FileDownloader().rescheduleKilledTasks()` to retry tasks that may have been lost if the app was killed by the OS (if `doRescheduleKilledTasks` is true, which is the default).
-4.  **Database cleanup**: Calls `FileDownloader().database.cleanUp()` to remove old records (if `autoCleanDatabase` is true, which is the default is `false`).
+4.  **Database cleanup**: Calls `FileDownloader().database.cleanUp()` to remove old records (if `autoCleanDatabase` is true, which is recommended; default is `false` for backwards compatibility).
 
 If you want more control, you can call these methods individually instead of calling `start()`.

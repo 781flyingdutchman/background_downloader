@@ -245,7 +245,7 @@ class NotificationReceiver : BroadcastReceiver() {
             actionCancelInactive -> {
                 val taskJsonString = bundle.getString(keyTask)
                 if (taskJsonString != null) {
-                    val task = Json.decodeFromString<Task>(taskJsonString)
+                    val task = bdJson.decodeFromString<Task>(taskJsonString)
                     BDPlugin.cancelInactiveTask(context, task)
                     with(NotificationManagerCompat.from(context)) {
                         cancel(task.taskId.hashCode())
@@ -583,14 +583,14 @@ object NotificationService {
     fun registerEnqueue(item: EnqueueItem, success: Boolean) {
         val notificationConfigJsonString = item.notificationConfigJsonString ?: return
         val notificationConfig =
-            Json.decodeFromString<NotificationConfig>(notificationConfigJsonString)
+            bdJson.decodeFromString<NotificationConfig>(notificationConfigJsonString)
         val groupNotificationId = notificationConfig.groupNotificationId
         if (groupNotificationId.isNotEmpty()) {
             // update the notification status for this task (requires a worker because we are
             // not within a worker when this function is called)
             createUpdateNotificationWorker(
                 context = item.context,
-                taskJson = Json.encodeToString(item.task),
+                taskJson = bdJson.encodeToString(item.task),
                 notificationConfigJson = notificationConfigJsonString,
                 taskStatusOrdinal = if (success) TaskStatus.enqueued.ordinal else TaskStatus.failed.ordinal
             )
@@ -706,7 +706,7 @@ object NotificationService {
     private fun addNotificationActions(
         taskWorker: TaskJobContext, notificationType: NotificationType, builder: Builder
     ) {
-        val taskJsonString = Json.encodeToString<Task>(taskWorker.task)
+        val taskJsonString = bdJson.encodeToString<Task>(taskWorker.task)
         // add tap action for all notifications
         addTapIntent(taskWorker, taskJsonString, notificationType, builder)
         // add buttons depending on notificationType

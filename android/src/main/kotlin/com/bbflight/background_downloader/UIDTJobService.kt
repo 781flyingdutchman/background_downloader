@@ -31,10 +31,10 @@ class UIDTJobService : JobService() {
 
         val jobContext = UIDTJobContext(this, params)
         try {
-            jobContext.task = Json.decodeFromString(taskJson)
+            jobContext.task = bdJson.decodeFromString(taskJson)
             jobContext.notificationConfigJsonString = extras.getString(TaskWorker.keyNotificationConfig)
             if (jobContext.notificationConfigJsonString != null) {
-                jobContext.notificationConfig = Json.decodeFromString(jobContext.notificationConfigJsonString!!)
+                jobContext.notificationConfig = bdJson.decodeFromString(jobContext.notificationConfigJsonString!!)
             }
         } catch (e: Exception) {
             Log.e(TaskRunner.TAG, "Failed to decode task or notification config: $e")

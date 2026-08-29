@@ -142,7 +142,7 @@ class HoldingQueue(private val context: Context, private val workManager: WorkMa
             if (it.notificationConfigJsonString != null) {
                 NotificationService.createUpdateNotificationWorker(
                     context,
-                    Json.encodeToString(it.task),
+                    bdJson.encodeToString(it.task),
                     it.notificationConfigJsonString,
                     TaskStatus.canceled.ordinal
                 )
@@ -283,7 +283,7 @@ class HoldingQueue(private val context: Context, private val workManager: WorkMa
                           val taskJson = job.extras.getString(TaskWorker.keyTask)
                           if (taskJson != null) {
                               try {
-                                  val task = Json.decodeFromString<Task>(taskJson)
+                                  val task = bdJson.decodeFromString<Task>(taskJson)
                                   totalCount++
                                   
                                   val host = task.host()

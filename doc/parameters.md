@@ -1,76 +1,100 @@
 # Optional Parameters
 
-The `DownloadTask`, `UploadTask` and `Request` objects all take several optional parameters that define how the task will be executed.  Note that a `Task` is a subclass of `Request`, and both `DownloadTask` and `UploadTask` are subclasses of `Task`, so what applies to a `Request` or `Task` will also apply to a `DownloadTask` and `UploadTask`.
+The `DownloadTask`, `UploadTask` and `Request` objects all take several optional parameters that define how the task will be executed. Note that a `Task` is a subclass of `Request`, and both `DownloadTask` and `UploadTask` are subclasses of `Task`, so what applies to a `Request` or `Task` will also apply to a `DownloadTask` and `UploadTask`.
 
-## Request, DownloadTask & UploadTask
+---
 
-### urlQueryParameters
+## 1. Smart Hints & Transfer Configuration
 
-If provided, these parameters (presented as a `Map<String, String>`) will be appended to the url as query parameters. Note that both the `url` and `urlQueryParameters` must be urlEncoded (e.g. a space must be encoded as %20).
+### `transferHints`
+Pass a `Set<TransferHint>` to auto-tune task properties based on intent:
+- `TransferHint.userInitiated`: Sets `priority: 0` (activates Android 14+ UIDT & iOS max priority) and enables `allowPause: true`.
+- `TransferHint.largeFile`: Enables `allowPause: true` to survive Android 9-minute execution timeouts via automatic pause/resume cycles.
+- `TransferHint.smallFile`: Sets `updates: Updates.status` to minimize MethodChannel message traffic.
+- `TransferHint.lowPriority`: Sets `priority: 10` for non-urgent background syncs.
+- `TransferHint.useSuggestedFilename`: Sets `filename: DownloadTask.suggestedFilename` (`'?'`) to extract the filename from the server `Content-Disposition` header.
+- `TransferHint.binaryUpload`: For `UploadTask`, sends raw file bytes directly in the HTTP body (sets `post: 'binary'`).
 
-### Headers
+### `notificationConfig`
+Associate a [`TaskNotificationConfig`](notifications.md) directly with an individual task:
+```dart
+final task = DownloadTask(
+  url: 'https://example.com/asset.zip',
+  notificationConfig: TaskNotificationConfig(
+    running: TaskNotification('Downloading', '{displayName}'),
+    complete: TaskNotification('Complete', '{displayName} ready!'),
+    progressBar: true,
+  ),
+);
+```
 
-Optionally, `headers` can be added to a `Request` or `Task`, which will be added to the HTTP request. This may be needed for authentication or session [cookies](requests.md#cookies).
+### `stallTimeout`
+Set a `Duration` timeout for network activity. If an active transfer makes no progress for this duration while the app is in the foreground, the stall watchdog will kick or resume the transfer:
+```dart
+final task = DownloadTask(
+  url: 'https://example.com/stream.bin',
+  stallTimeout: Duration(seconds: 30),
+);
+```
 
-### HTTP request method
+---
 
-If provided, this request method will be used to make the request. By default, the request method is GET unless `post` is not null, or the `Task` is a `DownloadTask`, in which case it will be POST. Valid HTTP request methods are those listed in `Request.validHttpMethods`.
+## 2. General Request & Task Parameters
 
-### POST requests
+### `urlQueryParameters`
+If provided, these parameters (`Map<String, String>`) will be appended to the URL as query parameters. Both `url` and `urlQueryParameters` must be properly URL-encoded.
 
-For downloads, if the required server request is a HTTP POST request (instead of the default GET request) then set the `post` field of a `DownloadTask` to a `String` or `UInt8List` representing the data to be posted (for example, a JSON representation of an object). To make a POST request with no data, set `post` to an empty `String`.
+### `headers`
+Optionally, `headers` can be added to a `Request` or `Task` to pass authentication tokens, cookies, or custom HTTP headers.
 
-For an `UploadTask` the POST field is used to request a binary upload, by setting it to 'binary'. By default, uploads are done using the form/multi-part format.
+### `httpRequestMethod`
+The HTTP request method used (e.g. GET, POST, PUT, DELETE, PATCH). Defaults to GET for downloads and POST for uploads and data tasks with bodies.
 
-### Retries
+### `post`
+For downloads, if the server requires a POST request, set `post` to a `String` or `Uint8List` representing the POST body.
+For uploads, setting `post: 'binary'` initiates a raw binary body upload instead of multipart.
 
-To schedule automatic retries of failed requests/tasks (with exponential backoff), set the `retries` field to an
-integer between 1 and 10. A normal `Task` (without the need for retries) will follow status
-updates from `enqueued` -> `running` -> `complete` (or `notFound`). If `retries` has been set and
-the task fails, the sequence will be `enqueued` -> `running` ->
-`waitingToRetry` -> `enqueued` -> `running` -> `complete` (if the second try succeeds, or more
-retries if needed).  A `Request` will behave similarly, except it does not provide intermediate status updates.
+### `retries`
+To schedule automatic retries with exponential backoff on network failures, set `retries` (integer from 1 to 10). Failed tasks that can resume will attempt to resume rather than restart from scratch.
 
-Note that certain failures can be resumed, and retries will therefore attempt to resume from a failure instead of retrying the task from scratch.
+---
 
-## DownloadTask & UploadTask
+## 3. Background Execution Parameters
 
-### Requiring WiFi
+### `requiresWiFi`
+When `true`, the task will only run over WiFi or unmetered connections. If WiFi is lost or unavailable, the transfer will be automatically held until WiFi returns.
 
-On Android and iOS only: If the `requiresWiFi` field of a `Task` is set to true, the task won't start unless a WiFi network is available. By default `requiresWiFi` is false, and downloads/uploads will use the cellular (or metered) network if WiFi is not available, which may incur cost. Note that every task requires a working internet connection: local server connections that do not reach the internet may not work.
+### `priority`
+Ranges from 0 (highest) to 10 (lowest), default 5.
+- On iOS and Desktop, all priority levels are supported natively.
+- On Android, priority < 5 is treated as expedited. If priority is 0, has an associated notification, and runs on Android 14+, the downloader uses the User Initiated Data Transfer (UIDT) service, removing the 9-minute background limit.
 
-### Priority
+To use UIDT on Android 14+, declare the following in `android/app/src/main/AndroidManifest.xml`:
+```xml
+<uses-permission android:name="android.permission.RUN_USER_INITIATED_JOBS" />
 
-The `priority` field must be 0 <= priority <= 10 with 0 being the highest priority, and defaults to 5. On Desktop and iOS all priority levels are supported. On Android, priority levels <5 are handled as 'expedited', and >=5 is handled as a normal task. If priority is set to 0, has an associated notification, and the task is on Android 14 (API 34) or above, the downloader will use the User Initiated Data Transfer (UIDT) service, which does not have a 9 minute timeout and is less likely to be killed by the OS. Note that using UIDT requires the `android.permission.RUN_USER_INITIATED_JOBS` permission in your app's `AndroidManifest.xml`. If the permission is missing, the downloader will automatically fall back to normal operation (which may include a foreground service if configured).
+<service
+    android:name="com.bbflight.background_downloader.UIDTJobService"
+    android:permission="android.permission.BIND_JOB_SERVICE"
+    android:exported="true"
+    android:foregroundServiceType="dataSync" />
+```
 
-To use the UIDT service on Android 14+, you must add the following to your `AndroidManifest.xml`:
-* The `RUN_USER_INITIATED_JOBS` permission:
-  ```xml
-  <uses-permission android:name="android.permission.RUN_USER_INITIATED_JOBS" />
-  ```
-* The UIDT JobService declaration (within the `<application>` tag):
-  ```xml
-  <service
-      android:name="com.bbflight.background_downloader.UIDTJobService"
-      android:permission="android.permission.BIND_JOB_SERVICE"
-      android:exported="true"
-      android:foregroundServiceType="dataSync" />
-  ```
+### `allowPause`
+When `true`, enables manual pausing via `transfer.pause()` or `FileDownloader().pause(task)`, and allows the downloader to recover and resume interrupted downloads when connectivity changes.
 
-### Metadata and displayName
+### `metaData` and `displayName`
+Arbitrary strings attached to the task for application tracking, accessible in callbacks and expandable in notifications using `{metaData}` and `{displayName}`.
 
-`metaData` and `displayName` can be added to a `Task`. They are ignored by the downloader but may be helpful when receiving an update about the task, and can be shown in notifications using `{metaData}` or `{displayName}`.
+---
 
-## UploadTask
+## 4. UploadTask Specifics
 
-### File field
+### `fileField`
+The form field name for the uploaded file in multipart uploads (defaults to `"file"`).
 
-Set `fileField` to the field name the server expects for the file portion of a multi-part upload. Defaults to "file".
+### `mimeType`
+The MIME type of the uploaded file. If omitted, derived from the file extension.
 
-### Mime type
-
-Set `mimeType` to the MIME type of the file to be uploaded. By default the MIME type is derived from the filename extension, e.g. a .txt file has MIME type `text/plain`.
-
-### Form fields
-
-Set `fields` to a `Map<String, String>` of name/value pairs to upload as "form fields" along with the file.
+### `fields`
+Form fields (`Map<String, String>`) sent alongside the file in multipart requests.

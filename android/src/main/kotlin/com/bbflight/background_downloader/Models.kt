@@ -24,6 +24,11 @@ import java.net.URL
 import kotlin.math.absoluteValue
 import kotlin.random.Random
 
+val bdJson = Json {
+    ignoreUnknownKeys = true
+    isLenient = true
+}
+
 
 /// Base directory in which files will be stored, based on their relative
 /// path.
@@ -113,6 +118,8 @@ class Task(
     val displayName: String = "",
     val creationTime: Long = System.currentTimeMillis(), // untouched, so kept as integer on Android side
     val options: TaskOptions? = null,
+    val transferHints: List<Int>? = null,
+    val stallTimeout: Long? = null,
     val taskType: String
 ) {
 
@@ -144,6 +151,8 @@ class Task(
         displayName: String? = null,
         creationTime: Long? = null,
         options: TaskOptions? = null,
+        transferHints: List<Int>? = null,
+        stallTimeout: Long? = null,
         taskType: String? = null
     ): Task {
         return Task(
@@ -171,6 +180,8 @@ class Task(
             displayName = displayName ?: this.displayName,
             creationTime = creationTime ?: this.creationTime,
             options = options ?: this.options,
+            transferHints = transferHints ?: this.transferHints,
+            stallTimeout = stallTimeout ?: this.stallTimeout,
             taskType = taskType ?: this.taskType
         )
     }
@@ -303,9 +314,9 @@ class Task(
      * that string is used
      */
     fun extractFilesData(context: Context): List<Triple<String, String, String>> {
-        val fileFields = Json.decodeFromString<List<String>>(fileField)
-        val filenames = Json.decodeFromString<List<String>>(filename)
-        val mimeTypes = Json.decodeFromString<List<String>>(mimeType)
+        val fileFields = bdJson.decodeFromString<List<String>>(fileField)
+        val filenames = bdJson.decodeFromString<List<String>>(filename)
+        val mimeTypes = bdJson.decodeFromString<List<String>>(mimeType)
         val result = ArrayList<Triple<String, String, String>>()
         for (i in fileFields.indices) {
             val filenameOrPathOrUriString = filenames[i]
@@ -350,7 +361,7 @@ class Task(
 
 
     override fun toString(): String {
-        return "Task(taskId='$taskId', url='$url', filename='$filename', headers=$headers, httpRequestMethod=$httpRequestMethod, post=$post, fileField='$fileField', mimeType='$mimeType', fields=$fields, directory='$directory', baseDirectory=$baseDirectory, group='$group', updates=$updates, requiresWiFi=$requiresWiFi, retries=$retries, retriesRemaining=$retriesRemaining, allowPause=$allowPause, metaData='$metaData', creationTime=$creationTime, taskType='$taskType')"
+        return "Task(taskId='$taskId', url='$url', filename='$filename', headers=$headers, httpRequestMethod=$httpRequestMethod, post=$post, fileField='$fileField', mimeType='$mimeType', fields=$fields, directory='$directory', baseDirectory=$baseDirectory, group='$group', updates=$updates, requiresWiFi=$requiresWiFi, retries=$retries, retriesRemaining=$retriesRemaining, allowPause=$allowPause, priority=$priority, metaData='$metaData', displayName='$displayName', creationTime=$creationTime, options=$options, transferHints=$transferHints, stallTimeout=$stallTimeout, taskType='$taskType')"
     }
 
     /**

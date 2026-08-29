@@ -124,6 +124,9 @@ interface class Database {
   bool _isCleaning = false;
   bool _waitingToClean = false;
 
+  /// Whether automatic database cleanup is enabled
+  bool get autoClean => _autoClean;
+
   /// Clean up the database by removing old records and/or keeping the number
   /// of records below a maximum.
   ///

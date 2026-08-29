@@ -461,7 +461,10 @@ void main() {
 /// Returns true if the supplied file equals the test file
 Future<bool> fileEqualsTestFile(File file) async {
   ByteData data = await rootBundle.load("assets/$defaultFilename");
-  final targetData = data.buffer.asUint8List();
+  final targetData = data.buffer.asUint8List(
+    data.offsetInBytes,
+    data.lengthInBytes,
+  );
   final fileData = file.readAsBytesSync();
   print('target= ${targetData.length} and file= ${fileData.length}');
   return listEquals(targetData, fileData);

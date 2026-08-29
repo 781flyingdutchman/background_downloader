@@ -14,12 +14,19 @@ class SerializationTest {
 
     @Test
     fun encodeEnum() {
-        var enc = Json.encodeToString(Holder(BaseDirectory.applicationDocuments))
+        var enc = bdJson.encodeToString(Holder(BaseDirectory.applicationDocuments))
         assertEquals("{\"dir\":0}", enc)
-        enc = Json.encodeToString(Holder(BaseDirectory.applicationLibrary))
+        enc = bdJson.encodeToString(Holder(BaseDirectory.applicationLibrary))
         assertEquals("{\"dir\":3}", enc)
-        val dec = Json.decodeFromString<Holder>(enc)
+        val dec = bdJson.decodeFromString<Holder>(enc)
         assertEquals(BaseDirectory.applicationLibrary, dec.dir)
+    }
+
+    @Test
+    fun ignoreUnknownKeysTest() {
+        val jsonWithUnknownKeys = "{\"dir\":0,\"unknownField\":123,\"anotherUnknown\":\"xyz\"}"
+        val dec = bdJson.decodeFromString<Holder>(jsonWithUnknownKeys)
+        assertEquals(BaseDirectory.applicationDocuments, dec.dir)
     }
 
 }

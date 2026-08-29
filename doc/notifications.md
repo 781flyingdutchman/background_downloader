@@ -34,6 +34,9 @@ No notifications will be generated:
 
 The `configureNotification` call configures notification behavior for all tasks. You can specify a separate configuration for a `group` of tasks by calling `configureNotificationForGroup` and for a single task by calling `configureNotificationForTask`. A `Task` configuration overrides a `group` configuration, which overrides the default configuration.
 
+### ⚠️ Android 14+ User-Initiated Data Transfer (UIDT) Requirement
+On Android 14+ (API 34+), tasks configured with `TransferHint.userInitiated` or `priority: 0` run as User-Initiated Data Transfer jobs. The Android OS **requires** an active user-visible notification for all UIDT jobs. If a UIDT task is enqueued without a notification configuration, Android may fail to schedule it as UIDT or cancel the job. Therefore, whenever using `TransferHint.userInitiated` or `priority: 0`, ensure that a notification is configured (either globally via `configureNotification`, per group, or on `task.notificationConfig`).
+
 Make sure to check for, and if necessary request, permission to display notifications - see [permissions](permissions.md). For Android, starting with API 33, you need to add `<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />` to your app's `AndroidManifest.xml`. Also on Android you can localize the button text by overriding string resources `bg_downloader_cancel`, `bg_downloader_pause`, `bg_downloader_resume` and descriptions `bg_downloader_notification_channel_name`, `bg_downloader_notification_channel_description`. Localization on iOS can be done through [configuration](CONFIG.md).
 
 ## Grouping notifications
@@ -62,7 +65,23 @@ All tasks in group `bunchOfFiles` will now use the notification group configurat
 __On iOS__: If your `running` group notification contains a dynamic item (such as `{numFinished}` in the example above) then a new notification will be issued every time the notification message changes (different from Android, where the existing notification is updated so does not trigger a new one).
 
 ## Tapping a notification
-To respond to the user tapping a notification, register a callback that takes `Task` and `NotificationType` as parameters:
+
+### 1. Using the Modern `Transfer` API
+When using the [Transfer API](transfers.md), each `Transfer` object exposes a reactive `notificationTapNotifier` and `notificationTap` getter:
+
+```dart
+final transfer = await FileDownloader().startTransfer(task);
+
+transfer.notificationTapNotifier.addListener(() {
+  final tappedType = transfer.notificationTap;
+  if (tappedType == NotificationType.complete) {
+    print('User tapped complete notification for ${transfer.task.filename}');
+  }
+});
+```
+
+### 2. Using Centralized Callbacks
+To respond centrally to notification taps across the entire app or per group, register a `taskNotificationTapCallback`:
 
 ```dart
 FileDownloader().registerCallbacks(
@@ -80,9 +99,7 @@ The file opening behavior is platform dependent, and while you should check the 
 
 Note that on Android, files stored in the `BaseDirectory.applicationDocuments` cannot be opened. You need to download to a different base directory (e.g. `.applicationSupport`) or move the file to shared storage before attempting to open it.
 
-If all you want to do on notification tap is to open the file, you can simplify the process by
-adding `tapOpensFile: true` to your call to `configureNotifications`, and you don't need to
-register a `taskNotificationTapCallback`.
+If all you want to do on notification tap is to open the file, you can simplify the process by adding `tapOpensFile: true` to your call to `configureNotification`, and you don't need to register a `taskNotificationTapCallback` or listen to `notificationTapNotifier`.
 
 
 ## Setup for notifications

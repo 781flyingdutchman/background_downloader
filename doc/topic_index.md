@@ -4,17 +4,19 @@ Use this index to find documentation for specific topics and keywords.
 
 ## A
 *   **Absolute path**: [File Storage & Locations](storage.md#specifying-the-location-of-the-file) - why to avoid them on mobile
+*   **Active transfers**: [Transfers](transfers.md#4-transfer-collections--queries) - querying active transfers
 *   **Authentication**: [Callbacks & Auth](lifecycle.md#authentication-and-pre--and-post-execution-callbacks) - managing tokens and auth headers
 
 ## B
 *   **Background execution**: [README](../README.md#a-background-file-downloader-and-uploader-for-ios-android-macos-windows-and-linux) - general introduction
 *   **BaseDirectory**: [File Storage & Locations](storage.md#specifying-the-location-of-the-file) - choosing where to store files
-*   **Batch**: [Downloads](downloads.md) - enqueueing multiple files (see `enqueueAll` in [Database & Monitoring](database.md))
+*   **Batch**: [Transfers](transfers.md#batch-transfers-starttransfers) - starting batch transfers with `startTransfers` (or `enqueueAll` in [Database & Monitoring](database.md))
+*   **Binary upload**: [Uploads](uploads.md#binary-uploads) - raw binary body upload (`TransferHint.binaryUpload`)
 *   **Bypassing permissions**: [Permissions](permissions.md#bypassing-permissions-on-ios) - for iOS compile time
 
 ## C
 *   **Cache directory**: [Configuration](CONFIG.md#android-when-to-use-the-cache-directory) - correct usage on Android
-*   **Cancel**: [Lifecycle](lifecycle.md#canceling-pausing-and-resuming-tasks) - canceling tasks
+*   **Cancel**: [Transfers](transfers.md#action-methods) and [Lifecycle](lifecycle.md#canceling-pausing-and-resuming-tasks) - canceling transfers and tasks
 *   **Callbacks**: [Database & Monitoring](database.md#using-callbacks) - using callbacks for status updates
 *   **Central monitoring**: [Database & Monitoring](database.md) - monitoring all tasks in one place
 *   **Cleanup**: [Database & Monitoring](database.md#automated-database-cleanup) - managing database size
@@ -41,6 +43,7 @@ Use this index to find documentation for specific topics and keywords.
 *   **Form fields**: [Uploads](uploads.md#form-fields) - uploading data with files
 
 ## G
+*   **getOrStartTransfer**: [Transfers](transfers.md#resume--reconnection-getorstarttransfer) - finding or starting transfers
 *   **Group**: [Lifecycle](lifecycle.md#grouping-tasks) - managing bunches of tasks together
 
 ## H
@@ -64,12 +67,13 @@ Use this index to find documentation for specific topics and keywords.
 *   **Notifications**: [Notifications](notifications.md) - showing status to users
 
 ## O
+*   **Offline resilience**: [Transfers](transfers.md#8-network-aware-offline-resilience--stall-watchdog) - automatic holding and retry on reconnect
 *   **Open file**: [Notifications](notifications.md#opening-a-downloaded-file) - opening files on tap
 
 ## P
 *   **Parallel downloads**: [Downloads](downloads.md#parallel-downloads) - chunked downloads
 *   **Parameters**: [Parameters](parameters.md) - optional task settings
-*   **Pause**: [Lifecycle](lifecycle.md#canceling-pausing-and-resuming-tasks) - pausing downloads
+*   **Pause**: [Transfers](transfers.md#action-methods) and [Lifecycle](lifecycle.md#canceling-pausing-and-resuming-tasks) - pausing downloads
 *   **Permissions**: [Permissions](permissions.md) - handling user permissions
 *   **Pickers**: [URIs](URI.md) - file and directory pickers
 *   **Post**: [Parameters](parameters.md#post-requests) - sending data with requests
@@ -82,13 +86,17 @@ Use this index to find documentation for specific topics and keywords.
 
 ## R
 *   **Request**: [Requests](requests.md#server-requests) - simple HTTP requests
-*   **Resume**: [Lifecycle](lifecycle.md#canceling-pausing-and-resuming-tasks) - resuming downloads
+*   **Resume**: [Transfers](transfers.md#action-methods) and [Lifecycle](lifecycle.md#canceling-pausing-and-resuming-tasks) - resuming downloads
 *   **Retries**: [Parameters](parameters.md#retries) - automatic retries
 
 ## S
+*   **Scoping / FileDownloader.scoped**: [Transfers](transfers.md#6-scoping-with-filedownloaderscoped) - isolated namespaces for packages and modules
 *   **Shared storage**: [File Storage & Locations](storage.md#shared-and-scoped-storage) - Photos, Downloads, etc.
 *   **Server suggested filename**: [Downloads](downloads.md#server-suggested-filenames) - using names from headers
+*   **Stall timeout**: [Transfers](transfers.md#8-network-aware-offline-resilience--stall-watchdog) - watchdog timeout for inactive transfers
 *   **Start**: [Database & Monitoring](database.md#annotated-example-with-database) - initializing the downloader
+*   **startTransfer**: [Transfers](transfers.md#single-transfer-starttransfer) - starting a managed transfer
+*   **startTransfers**: [Transfers](transfers.md#batch-transfers-starttransfers) - starting batch transfers
 *   **Status updates**: [Status & Progress Updates](status_updates.md) - how task status and progress is communicated
 *   **Storage**: [File Storage & Locations](storage.md) - where files go
 
@@ -96,6 +104,11 @@ Use this index to find documentation for specific topics and keywords.
 *   **Task**: [Downloads](downloads.md) - base object for all operations
 *   **Timeout**: [Configuration](CONFIG.md#timeouts) - setting timeouts
 *   **Tracking**: [Database & Monitoring](database.md) - tracking tasks
+*   **Transfer**: [Transfers](transfers.md) - first-class transfer handle and API
+*   **TransferButton**: [Transfers](transfers.md#transferbutton) - reactive UI action button
+*   **TransferHint**: [Transfers](transfers.md#5-smart-tuning-with-transferhint) - composable task tuning hints
+*   **TransferListTile**: [Transfers](transfers.md#transferlisttile) - reactive UI list tile widget
+*   **TransferProgressBar**: [Transfers](transfers.md#transferprogressbar) - reactive UI progress bar widget
 *   **TLS**: [Configuration](CONFIG.md#android-desktop-bypassing-https-tls-certificate-validation) - certificate validation
 
 ## U

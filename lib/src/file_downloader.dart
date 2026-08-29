@@ -8,12 +8,15 @@ import 'package:logging/logging.dart';
 
 import 'base_downloader.dart';
 import 'database.dart';
+import 'exceptions.dart';
 import 'localstore/localstore.dart';
 import 'models.dart';
 import 'permissions.dart';
 import 'persistent_storage.dart';
 import 'queue/task_queue.dart';
 import 'task.dart';
+import 'transfer.dart';
+import 'transfer_hint.dart';
 import 'uri/uri_utils.dart';
 import 'web_downloader.dart'
     if (dart.library.io) 'desktop/desktop_downloader.dart';
@@ -21,6 +24,7 @@ import 'web_downloader.dart'
 /// Provides access to all functions of the plugin in a single place.
 interface class FileDownloader {
   static FileDownloader? _singleton;
+  static final Map<String, FileDownloader> _scopedInstances = {};
 
   /// If no group is specified the default group name will be used
   static const defaultGroup = 'default';
@@ -28,6 +32,12 @@ interface class FileDownloader {
   /// Special group name for tasks that download a chunk, as part of a
   /// [ParallelDownloadTask]
   static String get chunkGroup => BaseDownloader.chunkGroup;
+
+  /// The namespace for this scoped downloader instance, or null for the root default instance
+  final String? namespace;
+
+  /// Whether this downloader instance is scoped to a specific namespace
+  bool get hasNamespace => namespace != null && namespace!.isNotEmpty;
 
   /// Database where tracked tasks are stored.
   ///
@@ -53,7 +63,16 @@ interface class FileDownloader {
   @visibleForTesting
   BaseDownloader get downloaderForTesting => _downloader;
 
-  factory FileDownloader({PersistentStorage? persistentStorage}) {
+  factory FileDownloader({
+    PersistentStorage? persistentStorage,
+    String? namespace,
+  }) {
+    if (namespace != null && namespace.isNotEmpty) {
+      return FileDownloader.scoped(
+        namespace,
+        persistentStorage: persistentStorage,
+      );
+    }
     assert(
       _singleton == null || persistentStorage == null,
       'You can only supply a persistentStorage on the very first call to '
@@ -61,14 +80,38 @@ interface class FileDownloader {
     );
     _singleton ??= FileDownloader._internal(
       persistentStorage ?? LocalStorePersistentStorage(),
+      null,
     );
     return _singleton!;
   }
 
-  FileDownloader._internal(PersistentStorage persistentStorage) {
+  /// Returns a cached, scoped [FileDownloader] instance for [namespace].
+  ///
+  /// Scoped instances share the underlying downloader engine and database,
+  /// but isolate group naming, callback dispatch, task queries, and cancellation
+  /// to the given namespace.
+  factory FileDownloader.scoped(
+    String namespace, {
+    PersistentStorage? persistentStorage,
+  }) {
+    if (namespace.isEmpty) {
+      return FileDownloader(persistentStorage: persistentStorage);
+    }
+    return _scopedInstances.putIfAbsent(namespace, () {
+      final root = FileDownloader(persistentStorage: persistentStorage);
+      return FileDownloader._scoped(root.database, root._downloader, namespace);
+    });
+  }
+
+  FileDownloader._internal(
+    PersistentStorage persistentStorage,
+    this.namespace,
+  ) {
     database = Database(persistentStorage);
     _downloader = BaseDownloader.instance(persistentStorage, database);
   }
+
+  FileDownloader._scoped(this.database, this._downloader, this.namespace);
 
   /// True when initialization is complete and downloader ready for use
   Future<bool> get ready => _downloader.ready;
@@ -120,6 +163,38 @@ interface class FileDownloader {
     desktopConfig: desktopConfig,
   );
 
+  /// Converts a group name to its namespaced equivalent.
+  String namespacedGroup(String? group) {
+    final cleanGroup =
+        (group == null || group.isEmpty) ? FileDownloader.defaultGroup : group;
+    if (!hasNamespace) return cleanGroup;
+    if (cleanGroup == FileDownloader.defaultGroup) return '$namespace.default';
+    if (cleanGroup.startsWith('$namespace.')) return cleanGroup;
+    return '$namespace.$cleanGroup';
+  }
+
+  /// Converts a namespaced group name back to the original un-namespaced group name.
+  String originalGroup(String group) {
+    if (!hasNamespace) return group;
+    if (group == '$namespace.default') return FileDownloader.defaultGroup;
+    if (group.startsWith('$namespace.')) {
+      return group.substring(namespace!.length + 1);
+    }
+    return group;
+  }
+
+  /// Returns a copy of [task] with its group scoped to this namespace.
+  Task withNamespacedGroup(Task task) {
+    if (!hasNamespace) return task;
+    return task.copyWith(group: namespacedGroup(task.group));
+  }
+
+  /// Returns a copy of [task] with the namespace prefix removed from its group.
+  Task withoutNamespacedGroup(Task task) {
+    if (!hasNamespace) return task;
+    return task.copyWith(group: originalGroup(task.group));
+  }
+
   /// Register status or progress callbacks to monitor download progress, and
   /// [TaskNotificationTapCallback] to respond to user tapping a notification.
   ///
@@ -147,6 +222,11 @@ interface class FileDownloader {
   /// This makes [registerCallbacks] the preferred way for packages to monitor
   /// their own tasks, as it avoids interfering with the main application's
   /// single-subscription listener on the [updates] stream.
+  static final _registeredStatusCallbacks = <String, TaskStatusCallback>{};
+  static final _registeredProgressCallbacks = <String, TaskProgressCallback>{};
+  static final _registeredNotificationTapCallbacks =
+      <String, TaskNotificationTapCallback>{};
+
   ///
   /// The call returns the [FileDownloader] to make chaining easier
   FileDownloader registerCallbacks({
@@ -161,15 +241,63 @@ interface class FileDownloader {
           taskNotificationTapCallback != null,
       'Must provide at least one callback',
     );
+    final nGroup = namespacedGroup(group);
     if (taskStatusCallback != null) {
-      _downloader.groupStatusCallbacks[group] = taskStatusCallback;
+      if (hasNamespace) {
+        _registeredStatusCallbacks[nGroup] = taskStatusCallback;
+        _downloader.groupStatusCallbacks[nGroup] = (update) {
+          taskStatusCallback(
+            TaskStatusUpdate(
+              withoutNamespacedGroup(update.task),
+              update.status,
+              update.exception,
+              update.responseBody,
+              update.responseHeaders,
+              update.responseStatusCode,
+              update.mimeType,
+              update.charSet,
+            ),
+          );
+        };
+      } else {
+        _downloader.groupStatusCallbacks[nGroup] = taskStatusCallback;
+      }
     }
     if (taskProgressCallback != null) {
-      _downloader.groupProgressCallbacks[group] = taskProgressCallback;
+      if (hasNamespace) {
+        _registeredProgressCallbacks[nGroup] = taskProgressCallback;
+        _downloader.groupProgressCallbacks[nGroup] = (update) {
+          taskProgressCallback(
+            TaskProgressUpdate(
+              withoutNamespacedGroup(update.task),
+              update.progress,
+              update.expectedFileSize,
+              update.networkSpeed,
+              update.timeRemaining,
+            ),
+          );
+        };
+      } else {
+        _downloader.groupProgressCallbacks[nGroup] = taskProgressCallback;
+      }
     }
     if (taskNotificationTapCallback != null) {
-      _downloader.groupNotificationTapCallbacks[group] =
-          taskNotificationTapCallback;
+      if (hasNamespace) {
+        _registeredNotificationTapCallbacks[nGroup] =
+            taskNotificationTapCallback;
+        _downloader.groupNotificationTapCallbacks[nGroup] = (
+          task,
+          notificationType,
+        ) {
+          taskNotificationTapCallback(
+            withoutNamespacedGroup(task),
+            notificationType,
+          );
+        };
+      } else {
+        _downloader.groupNotificationTapCallbacks[nGroup] =
+            taskNotificationTapCallback;
+      }
     }
     return this;
   }
@@ -183,22 +311,32 @@ interface class FileDownloader {
     String group = defaultGroup,
     Function? callback,
   }) {
+    final nGroup = namespacedGroup(group);
     if (callback != null) {
       // remove specific callback
-      if (_downloader.groupStatusCallbacks[group] == callback) {
-        _downloader.groupStatusCallbacks.remove(group);
+      if (_downloader.groupStatusCallbacks[nGroup] == callback ||
+          _registeredStatusCallbacks[nGroup] == callback) {
+        _downloader.groupStatusCallbacks.remove(nGroup);
+        _registeredStatusCallbacks.remove(nGroup);
       }
-      if (_downloader.groupProgressCallbacks[group] == callback) {
-        _downloader.groupProgressCallbacks.remove(group);
+      if (_downloader.groupProgressCallbacks[nGroup] == callback ||
+          _registeredProgressCallbacks[nGroup] == callback) {
+        _downloader.groupProgressCallbacks.remove(nGroup);
+        _registeredProgressCallbacks.remove(nGroup);
       }
-      if (_downloader.groupNotificationTapCallbacks[group] == callback) {
-        _downloader.groupNotificationTapCallbacks.remove(group);
+      if (_downloader.groupNotificationTapCallbacks[nGroup] == callback ||
+          _registeredNotificationTapCallbacks[nGroup] == callback) {
+        _downloader.groupNotificationTapCallbacks.remove(nGroup);
+        _registeredNotificationTapCallbacks.remove(nGroup);
       }
     } else {
       // remove all callbacks related to group
-      _downloader.groupStatusCallbacks.remove(group);
-      _downloader.groupProgressCallbacks.remove(group);
-      _downloader.groupNotificationTapCallbacks.remove(group);
+      _downloader.groupStatusCallbacks.remove(nGroup);
+      _downloader.groupProgressCallbacks.remove(nGroup);
+      _downloader.groupNotificationTapCallbacks.remove(nGroup);
+      _registeredStatusCallbacks.remove(nGroup);
+      _registeredProgressCallbacks.remove(nGroup);
+      _registeredNotificationTapCallbacks.remove(nGroup);
     }
     return this;
   }
@@ -230,14 +368,15 @@ interface class FileDownloader {
   /// - you want to monitor tasks centrally, via a listener
   /// - you want more detailed progress information
   ///   (e.g. file size, network speed, time remaining)
-  Future<bool> enqueue(Task task) => _downloader.enqueue(task);
+  Future<bool> enqueue(Task task) =>
+      _downloader.enqueue(withNamespacedGroup(task));
 
   /// Enqueues a list of tasks and returns a list of booleans indicating whether
   /// each task was successfully enqueued
   ///
   /// See [enqueue] for details
   Future<List<bool>> enqueueAll(Iterable<Task> tasks) =>
-      _downloader.enqueueAll(tasks);
+      _downloader.enqueueAll(tasks.map(withNamespacedGroup));
 
   /// Download a file and return the final [TaskStatusUpdate]
   ///
@@ -278,7 +417,7 @@ interface class FileDownloader {
     void Function(Duration)? onElapsedTime,
     Duration? elapsedTimeInterval,
   }) => _downloader.enqueueAndAwait(
-    task,
+    withNamespacedGroup(task) as DownloadTask,
     onStatus: onStatus,
     onProgress: onProgress,
     onElapsedTime: onElapsedTime,
@@ -327,7 +466,7 @@ interface class FileDownloader {
     void Function(Duration)? onElapsedTime,
     Duration? elapsedTimeInterval,
   }) => _downloader.enqueueAndAwait(
-    task,
+    withNamespacedGroup(task) as UploadTask,
     onStatus: onStatus,
     onProgress: onProgress,
     onElapsedTime: onElapsedTime,
@@ -357,7 +496,7 @@ interface class FileDownloader {
     void Function(Duration)? onElapsedTime,
     Duration? elapsedTimeInterval,
   }) => _downloader.enqueueAndAwait(
-    task,
+    withNamespacedGroup(task) as DataTask,
     onStatus: onStatus,
     onElapsedTime: onElapsedTime,
     elapsedTimeInterval: elapsedTimeInterval,
@@ -397,10 +536,35 @@ interface class FileDownloader {
     void Function(Duration)? onElapsedTime,
     Duration? elapsedTimeInterval,
   }) => _downloader.enqueueAndAwaitBatch(
-    tasks,
+    tasks.map((t) => withNamespacedGroup(t) as DownloadTask).toList(),
     batchProgressCallback: batchProgressCallback,
-    taskStatusCallback: taskStatusCallback,
-    taskProgressCallback: taskProgressCallback,
+    taskStatusCallback:
+        taskStatusCallback != null
+            ? (update) => taskStatusCallback(
+              TaskStatusUpdate(
+                withoutNamespacedGroup(update.task),
+                update.status,
+                update.exception,
+                update.responseBody,
+                update.responseHeaders,
+                update.responseStatusCode,
+                update.mimeType,
+                update.charSet,
+              ),
+            )
+            : null,
+    taskProgressCallback:
+        taskProgressCallback != null
+            ? (update) => taskProgressCallback(
+              TaskProgressUpdate(
+                withoutNamespacedGroup(update.task),
+                update.progress,
+                update.expectedFileSize,
+                update.networkSpeed,
+                update.timeRemaining,
+              ),
+            )
+            : null,
     onElapsedTime: onElapsedTime,
     elapsedTimeInterval: elapsedTimeInterval,
   );
@@ -439,34 +603,63 @@ interface class FileDownloader {
     void Function(Duration)? onElapsedTime,
     Duration? elapsedTimeInterval,
   }) => _downloader.enqueueAndAwaitBatch(
-    tasks,
+    tasks.map((t) => withNamespacedGroup(t) as UploadTask).toList(),
     batchProgressCallback: batchProgressCallback,
-    taskStatusCallback: taskStatusCallback,
-    taskProgressCallback: taskProgressCallback,
+    taskStatusCallback:
+        taskStatusCallback != null
+            ? (update) => taskStatusCallback(
+              TaskStatusUpdate(
+                withoutNamespacedGroup(update.task),
+                update.status,
+                update.exception,
+                update.responseBody,
+                update.responseHeaders,
+                update.responseStatusCode,
+                update.mimeType,
+                update.charSet,
+              ),
+            )
+            : null,
+    taskProgressCallback:
+        taskProgressCallback != null
+            ? (update) => taskProgressCallback(
+              TaskProgressUpdate(
+                withoutNamespacedGroup(update.task),
+                update.progress,
+                update.expectedFileSize,
+                update.networkSpeed,
+                update.timeRemaining,
+              ),
+            )
+            : null,
     onElapsedTime: onElapsedTime,
     elapsedTimeInterval: elapsedTimeInterval,
   );
 
   /// Resets the downloader by cancelling all ongoing tasks within
-  /// the provided [group]
+  /// the provided [group] (or within this namespace).
   ///
-  /// Returns the number of tasks cancelled. Every canceled task wil emit a
-  /// [TaskStatus.canceled] update to the registered callback, if
-  /// requested
+  /// Returns the number of tasks cancelled. Every canceled task will emit a
+  /// [TaskStatus.canceled] update to the registered callback, if requested.
   ///
   /// This method acts on a [group] of tasks. If omitted, the [defaultGroup]
-  /// is used, which is the group used when you [enqueue] a task
-  Future<int> reset({String group = defaultGroup}) => _downloader.reset(group);
+  /// is used, which is the group used when you [enqueue] a task.
+  Future<int> reset({String group = defaultGroup}) async {
+    if (hasNamespace) {
+      return _downloader.reset(namespacedGroup(group));
+    }
+    return _downloader.reset(group);
+  }
 
   /// Returns a list of taskIds of all tasks currently active in this [group]
   ///
   /// Active means enqueued or running, and if [includeTasksWaitingToRetry] is
-  /// true also tasks that are waiting to be retried
+  /// true also tasks that are waiting to be retried.
   ///
   /// This method acts on a [group] of tasks. If omitted, the [defaultGroup]
-  /// is used, which is the group used when you [enqueue] a task
+  /// is used, which is the group used when you [enqueue] a task.
   /// To get all tasks regardless of group, set [allGroups] to true as the
-  /// only parameter
+  /// only parameter.
   Future<List<String>> allTaskIds({
     String group = defaultGroup,
     bool includeTasksWaitingToRetry = true,
@@ -481,17 +674,38 @@ interface class FileDownloader {
   /// Returns a list of all tasks currently active in this [group]
   ///
   /// Active means enqueued or running, and if [includeTasksWaitingToRetry] is
-  /// true also tasks that are waiting to be retried
+  /// true also tasks that are waiting to be retried.
   ///
   /// This method acts on a [group] of tasks. If omitted, the [defaultGroup]
   /// is used, which is the group used when you [enqueue] a task.
   /// To get all tasks regardless of group, set [allGroups] to true as the
-  /// only parameter
+  /// only parameter.
   Future<List<Task>> allTasks({
     String group = defaultGroup,
     bool includeTasksWaitingToRetry = true,
     bool allGroups = false,
-  }) => _downloader.allTasks(group, includeTasksWaitingToRetry, allGroups);
+  }) async {
+    if (hasNamespace) {
+      if (allGroups) {
+        final rawTasks = await _downloader.allTasks(
+          defaultGroup,
+          includeTasksWaitingToRetry,
+          true,
+        );
+        return rawTasks
+            .where((t) => t.group.startsWith('$namespace.'))
+            .map(withoutNamespacedGroup)
+            .toList();
+      }
+      final rawTasks = await _downloader.allTasks(
+        namespacedGroup(group),
+        includeTasksWaitingToRetry,
+        false,
+      );
+      return rawTasks.map(withoutNamespacedGroup).toList();
+    }
+    return _downloader.allTasks(group, includeTasksWaitingToRetry, allGroups);
+  }
 
   /// Returns true if tasks in this [group] are finished
   ///
@@ -546,8 +760,19 @@ interface class FileDownloader {
   /// Cancels all tasks, or those in [tasks], or all tasks in group [group]
   ///
   /// Returns true if all cancellations were successful
-  Future<bool> cancelAll({Iterable<Task>? tasks, String? group}) =>
-      _downloader.cancelAll(tasks: tasks, group: group);
+  Future<bool> cancelAll({Iterable<Task>? tasks, String? group}) async {
+    if (hasNamespace) {
+      if (tasks != null) {
+        return _downloader.cancelAll(tasks: tasks.map(withNamespacedGroup));
+      }
+      final nTasks = await allTasks(
+        group: group ?? defaultGroup,
+        allGroups: group == null,
+      );
+      return _downloader.cancelAll(tasks: nTasks.map(withNamespacedGroup));
+    }
+    return _downloader.cancelAll(tasks: tasks, group: group);
+  }
 
   /// Return [Task] for the given [taskId], or null
   /// if not found.
@@ -572,8 +797,10 @@ interface class FileDownloader {
   /// that step.  [resumeFromBackground] is always called.
   ///
   /// If [autoCleanDatabase] is true, [Database.cleanUp] is called after
-  /// initialization to clean up old or excess records in the database.
-  /// defaults to false.
+  /// initialization to purge old or excess records and prevent the database
+  /// from growing indefinitely. While [autoCleanDatabase] defaults to `false`
+  /// to maintain backwards compatibility for existing code, calling
+  /// `FileDownloader().start(autoCleanDatabase: true)` is typically recommended.
   Future<void> start({
     bool doTrackTasks = true,
     bool markDownloadedComplete = true,
@@ -581,19 +808,14 @@ interface class FileDownloader {
     bool autoCleanDatabase = false,
   }) async {
     if (doTrackTasks) {
-      await FileDownloader().trackTasks(
-        markDownloadedComplete: markDownloadedComplete,
-      );
+      await trackTasks(markDownloadedComplete: markDownloadedComplete);
       if (doRescheduleKilledTasks) {
-        Timer(
-          const Duration(seconds: 5),
-          () => FileDownloader().rescheduleKilledTasks(),
-        );
+        Timer(const Duration(seconds: 5), () => rescheduleKilledTasks());
       }
     }
-    await FileDownloader().resumeFromBackground();
+    await resumeFromBackground();
     if (autoCleanDatabase) {
-      FileDownloader().database.cleanUp();
+      database.cleanUp();
     }
   }
 
@@ -617,7 +839,10 @@ interface class FileDownloader {
     String group, {
     bool markDownloadedComplete = true,
   }) async {
-    await _downloader.trackTasks(group, markDownloadedComplete);
+    await _downloader.trackTasks(
+      namespacedGroup(group),
+      markDownloadedComplete,
+    );
     return this;
   }
 
@@ -640,7 +865,14 @@ interface class FileDownloader {
   Future<FileDownloader> trackTasks({
     bool markDownloadedComplete = true,
   }) async {
-    await _downloader.trackTasks(null, markDownloadedComplete);
+    if (hasNamespace) {
+      await _downloader.trackTasks(
+        namespacedGroup(null),
+        markDownloadedComplete,
+      );
+    } else {
+      await _downloader.trackTasks(null, markDownloadedComplete);
+    }
     return this;
   }
 
@@ -693,9 +925,7 @@ interface class FileDownloader {
             )
             .map((record) => record.task)
             .toSet();
-    final nativeTasks = Set<Task>.from(
-      await FileDownloader().allTasks(allGroups: true),
-    );
+    final nativeTasks = Set<Task>.from(await allTasks(allGroups: true));
     missingTasks.addAll(enqueuedOrRunningDatabaseTasks.difference(nativeTasks));
     // find missing tasks waiting to retry
     missingTasks.addAll(
@@ -712,7 +942,7 @@ interface class FileDownloader {
     var startTime = DateTime.now();
     for (final task in missingTasks) {
       await database.deleteRecordWithId(task.taskId);
-      if (await FileDownloader().enqueue(task)) {
+      if (await enqueue(task)) {
         successfullyEnqueued.add(task);
       } else {
         failedToEnqueue.add(task);
@@ -730,7 +960,8 @@ interface class FileDownloader {
   /// This future only completes once the task is running and has received
   /// information from the server to determine whether resume is possible, or
   /// if the task fails and resume is possible
-  Future<bool> taskCanResume(Task task) => _downloader.taskCanResume(task);
+  Future<bool> taskCanResume(Task task) =>
+      _downloader.taskCanResume(withNamespacedGroup(task));
 
   /// Pause the task
   ///
@@ -742,7 +973,7 @@ interface class FileDownloader {
   /// a POST request, this method returns false immediately.
   Future<bool> pause(DownloadTask task) async {
     if (task.allowPause && task.post == null) {
-      return _downloader.pause(task);
+      return _downloader.pause(withNamespacedGroup(task) as DownloadTask);
     }
     return false;
   }
@@ -754,10 +985,15 @@ interface class FileDownloader {
     Iterable<DownloadTask>? tasks,
     String? group,
   }) {
+    final nGroup =
+        group != null
+            ? namespacedGroup(group)
+            : (hasNamespace ? namespacedGroup(null) : null);
+    final nTasks = tasks?.map((t) => withNamespacedGroup(t) as DownloadTask);
     for (final taskQueue in _downloader.taskQueues) {
-      taskQueue.pauseAll(tasks: tasks, group: group);
+      taskQueue.pauseAll(tasks: nTasks, group: nGroup);
     }
-    return _downloader.pauseAll(tasks: tasks, group: group);
+    return _downloader.pauseAll(tasks: nTasks, group: nGroup);
   }
 
   /// Resume the task
@@ -769,7 +1005,8 @@ interface class FileDownloader {
   /// the task is now enqueued for resume.
   /// If the task is able to resume, it will, otherwise it will restart the
   /// task from scratch, or fail.
-  Future<bool> resume(DownloadTask task) => _downloader.resume(task);
+  Future<bool> resume(DownloadTask task) =>
+      _downloader.resume(withNamespacedGroup(task) as DownloadTask);
 
   /// Resume all paused tasks, or those in [tasks], or paused tasks in
   /// group [group]
@@ -780,8 +1017,13 @@ interface class FileDownloader {
     String? group,
     Duration interval = const Duration(milliseconds: 50),
   }) async {
+    final nGroup =
+        group != null
+            ? namespacedGroup(group)
+            : (hasNamespace ? namespacedGroup(null) : null);
+    final nTasks = tasks?.map((t) => withNamespacedGroup(t) as DownloadTask);
     final results = <Task>[];
-    final tasksToResume = switch ((tasks, group)) {
+    final tasksToResume = switch ((nTasks, nGroup)) {
       (Iterable<DownloadTask> tasks, null) => tasks,
       (null, String group) => (await _downloader.getPausedTasks())
           .whereType<DownloadTask>()
@@ -795,12 +1037,12 @@ interface class FileDownloader {
     };
     for (final task in tasksToResume) {
       if (await resume(task)) {
-        results.add(task);
+        results.add(withoutNamespacedGroup(task));
       }
       await Future.delayed(interval);
     }
     for (final taskQueue in _downloader.taskQueues) {
-      taskQueue.resumeAll(tasks: tasks, group: group);
+      taskQueue.resumeAll(tasks: nTasks, group: nGroup);
     }
     return results;
   }
@@ -891,7 +1133,7 @@ interface class FileDownloader {
   }) {
     _addOrUpdateTaskNotificationConfig(
       TaskNotificationConfig(
-        taskOrGroup: task,
+        taskOrGroup: withNamespacedGroup(task),
         running: running,
         complete: complete,
         error: error,
@@ -963,7 +1205,7 @@ interface class FileDownloader {
   }) {
     _addOrUpdateTaskNotificationConfig(
       TaskNotificationConfig(
-        taskOrGroup: group,
+        taskOrGroup: namespacedGroup(group),
         running: running,
         complete: complete,
         error: error,
@@ -1056,6 +1298,10 @@ interface class FileDownloader {
     _downloader.notificationConfigs.remove(taskNotificationConfig);
     _downloader.notificationConfigs.add(taskNotificationConfig);
   }
+
+  /// Returns the [TaskNotificationConfig] configured for [task], if any
+  TaskNotificationConfig? notificationConfigForTask(Task task) =>
+      _downloader.notificationConfigForTask(task);
 
   /// Perform a server request for this [request]
   ///
@@ -1189,10 +1435,363 @@ interface class FileDownloader {
   /// such that the stream can be listened to again
   Future<void> resetUpdates() => _downloader.resetUpdatesStreamController();
 
+  // ==========================================
+  // Transfer API (Unified & Scoped)
+  // ==========================================
+
+  final Map<String, Transfer> _transfers = {};
+  final Set<String> _registeredTransferGroups = {};
+
+  /// ValueNotifier containing the list of all currently tracked [Transfer] objects
+  final ValueNotifier<List<Transfer>> transfersNotifier =
+      ValueNotifier<List<Transfer>>([]);
+
+  static bool _transferAutoCleanTriggered = false;
+
+  void _ensureTransferAutoClean() {
+    if (!_transferAutoCleanTriggered &&
+        _downloader.isTrackingTasks &&
+        !database.autoClean) {
+      _transferAutoCleanTriggered = true;
+      database.cleanUp(autoClean: true);
+    }
+  }
+
+  /// Enqueues a task and returns a [Transfer] object to manage and observe its progress.
+  ///
+  /// If the task includes a [Task.notificationConfig] or [TransferHint.userInitiated],
+  /// notification behavior is configured automatically.
+  Future<Transfer> startTransfer(Task task) async {
+    _ensureTransferAutoClean();
+    final namespacedTask = withNamespacedGroup(task);
+    _ensureTransferGroupRegistered(namespacedTask.group);
+
+    if (task.notificationConfig != null) {
+      configureNotificationForTask(
+        namespacedTask,
+        running: task.notificationConfig!.running,
+        complete: task.notificationConfig!.complete,
+        error: task.notificationConfig!.error,
+        paused: task.notificationConfig!.paused,
+        canceled: task.notificationConfig!.canceled,
+        progressBar: task.notificationConfig!.progressBar,
+        tapOpensFile: task.notificationConfig!.tapOpensFile,
+        groupNotificationId: task.notificationConfig!.groupNotificationId,
+      );
+    } else if (task.transferHints?.contains(TransferHint.userInitiated) ==
+        true) {
+      final existingConfig = notificationConfigForTask(namespacedTask);
+      if (existingConfig == null || existingConfig.running == null) {
+        final isUpload = task is UploadTask;
+        final action = isUpload ? 'Uploading' : 'Downloading';
+        configureNotificationForTask(
+          namespacedTask,
+          running: TaskNotification(action, '{progress}'),
+          complete: TaskNotification('$action complete', ''),
+          error: TaskNotification('$action failed', ''),
+          progressBar: true,
+        );
+      }
+    }
+
+    final cleanTask = withoutNamespacedGroup(namespacedTask);
+    final transfer = _getOrCreateTransfer(cleanTask);
+
+    final isOnline = _downloader.isConnected;
+    final isWiFi = _downloader.isWiFi;
+    final needsWiFi = task.requiresWiFi;
+
+    if (!isOnline) {
+      transfer.holdReasonNotifier.value = TransferHoldReason.offline;
+      transfer.updateStatus(
+        TaskStatusUpdate(cleanTask, TaskStatus.waitingToRetry),
+      );
+      _notifyTransfersChanged();
+      return transfer;
+    } else if (needsWiFi && !isWiFi) {
+      transfer.holdReasonNotifier.value = TransferHoldReason.waitingForWiFi;
+      transfer.updateStatus(
+        TaskStatusUpdate(cleanTask, TaskStatus.waitingToRetry),
+      );
+      _notifyTransfersChanged();
+      return transfer;
+    }
+
+    final success = await enqueue(namespacedTask);
+    if (!success) {
+      transfer.updateStatus(
+        TaskStatusUpdate(
+          cleanTask,
+          TaskStatus.failed,
+          TaskException('Failed to enqueue task on native platform'),
+        ),
+      );
+    }
+    _notifyTransfersChanged();
+    return transfer;
+  }
+
+  /// Starts transfers for multiple tasks, returning a list of [Transfer] objects.
+  ///
+  /// If provided, [onProgress] is called whenever an individual transfer completes.
+  Future<List<Transfer>> startTransfers(
+    List<Task> tasks, {
+    BatchProgressCallback? onProgress,
+  }) async {
+    _ensureTransferAutoClean();
+    final transfers = <Transfer>[];
+    final tasksToEnqueue = <Task>[];
+
+    for (final task in tasks) {
+      final namespacedTask = withNamespacedGroup(task);
+      _ensureTransferGroupRegistered(namespacedTask.group);
+
+      if (task.notificationConfig != null) {
+        configureNotificationForTask(
+          namespacedTask,
+          running: task.notificationConfig!.running,
+          complete: task.notificationConfig!.complete,
+          error: task.notificationConfig!.error,
+          paused: task.notificationConfig!.paused,
+          canceled: task.notificationConfig!.canceled,
+          progressBar: task.notificationConfig!.progressBar,
+          tapOpensFile: task.notificationConfig!.tapOpensFile,
+          groupNotificationId: task.notificationConfig!.groupNotificationId,
+        );
+      }
+
+      final cleanTask = withoutNamespacedGroup(namespacedTask);
+      final transfer = _getOrCreateTransfer(cleanTask);
+      transfers.add(transfer);
+
+      final isOnline = _downloader.isConnected;
+      final isWiFi = _downloader.isWiFi;
+      final needsWiFi = task.requiresWiFi;
+
+      if (!isOnline) {
+        transfer.holdReasonNotifier.value = TransferHoldReason.offline;
+        transfer.updateStatus(
+          TaskStatusUpdate(cleanTask, TaskStatus.waitingToRetry),
+        );
+      } else if (needsWiFi && !isWiFi) {
+        transfer.holdReasonNotifier.value = TransferHoldReason.waitingForWiFi;
+        transfer.updateStatus(
+          TaskStatusUpdate(cleanTask, TaskStatus.waitingToRetry),
+        );
+      } else {
+        tasksToEnqueue.add(namespacedTask);
+      }
+    }
+
+    if (tasksToEnqueue.isNotEmpty) {
+      final results = await enqueueAll(tasksToEnqueue);
+      for (var i = 0; i < tasksToEnqueue.length; i++) {
+        final success = results.length > i ? results[i] : false;
+        if (!success) {
+          final cleanTask = withoutNamespacedGroup(tasksToEnqueue[i]);
+          final transfer = _transfers[cleanTask.taskId];
+          transfer?.updateStatus(
+            TaskStatusUpdate(
+              cleanTask,
+              TaskStatus.failed,
+              TaskException('Failed to batch enqueue task on native platform'),
+            ),
+          );
+        }
+      }
+    }
+
+    if (onProgress != null && transfers.isNotEmpty) {
+      var succeeded = 0;
+      var failed = 0;
+      for (final transfer in transfers) {
+        transfer.result.then((update) {
+          if (update.status == TaskStatus.complete) {
+            succeeded++;
+          } else {
+            failed++;
+          }
+          onProgress(succeeded, failed);
+        });
+      }
+    }
+
+    _notifyTransfersChanged();
+    return transfers;
+  }
+
+  /// Returns an existing [Transfer] matching [task], or starts a new transfer.
+  Future<Transfer> getOrStartTransfer(
+    Task task, {
+    bool Function(Task existingTask)? matchBy,
+    bool reEnqueueIfFailed = true,
+  }) async {
+    _ensureTransferAutoClean();
+    final existing = transferForTask(task, matchBy: matchBy);
+    if (existing != null) {
+      if (existing.status == TaskStatus.complete ||
+          existing.status.isNotFinalState) {
+        return existing;
+      }
+      if (!reEnqueueIfFailed) {
+        return existing;
+      }
+    }
+    return startTransfer(task);
+  }
+
+  /// Finds an existing active or tracked [Transfer] matching [task].
+  Transfer? transferForTask(
+    Task task, {
+    bool Function(Task existingTask)? matchBy,
+  }) {
+    final cleanGroup = originalGroup(namespacedGroup(task.group));
+    for (final transfer in _transfers.values) {
+      if (transfer.task.group != cleanGroup) continue;
+      if (matchBy != null) {
+        if (matchBy(transfer.task)) return transfer;
+        continue;
+      }
+      if (transfer.task.taskId == task.taskId) return transfer;
+      if (transfer.task.url == task.url &&
+          transfer.task.filename == task.filename &&
+          transfer.task.directory == task.directory &&
+          transfer.task.baseDirectory == task.baseDirectory) {
+        return transfer;
+      }
+    }
+    return null;
+  }
+
+  /// Returns the [Transfer] for [taskId], or null if not found.
+  Transfer? transferForId(String taskId) => _transfers[taskId];
+
+  /// Returns the first [Transfer] matching [url], or null.
+  Transfer? transferForUrl(String url) {
+    for (final transfer in _transfers.values) {
+      if (transfer.task.url == url) return transfer;
+    }
+    return null;
+  }
+
+  /// Returns all tracked [Transfer] objects, optionally filtered by [group].
+  List<Transfer> allTransfers({String? group}) {
+    if (group == null) {
+      return _transfers.values.toList();
+    }
+    final cleanGroup = originalGroup(namespacedGroup(group));
+    return _transfers.values.where((t) => t.task.group == cleanGroup).toList();
+  }
+
+  /// Returns all active (non-final state) [Transfer] objects.
+  List<Transfer> activeTransfers({String? group}) {
+    return allTransfers(
+      group: group,
+    ).where((t) => t.status.isNotFinalState).toList();
+  }
+
+  /// Returns all completed [Transfer] objects.
+  List<Transfer> completedTransfers({String? group}) {
+    return allTransfers(
+      group: group,
+    ).where((t) => t.status == TaskStatus.complete).toList();
+  }
+
+  void _ensureTransferGroupRegistered(String namespacedGroup) {
+    if (_registeredTransferGroups.contains(namespacedGroup)) return;
+    _registeredTransferGroups.add(namespacedGroup);
+
+    _downloader.trackTasks(namespacedGroup, true);
+
+    _downloader.groupStatusCallbacks[namespacedGroup] = (rawUpdate) {
+      final cleanUpdate = TaskStatusUpdate(
+        withoutNamespacedGroup(rawUpdate.task),
+        rawUpdate.status,
+        rawUpdate.exception,
+        rawUpdate.responseBody,
+        rawUpdate.responseHeaders,
+        rawUpdate.responseStatusCode,
+        rawUpdate.mimeType,
+        rawUpdate.charSet,
+      );
+      _onTransferStatusUpdate(cleanUpdate);
+    };
+
+    _downloader.groupProgressCallbacks[namespacedGroup] = (rawUpdate) {
+      final cleanUpdate = TaskProgressUpdate(
+        withoutNamespacedGroup(rawUpdate.task),
+        rawUpdate.progress,
+        rawUpdate.expectedFileSize,
+        rawUpdate.networkSpeed,
+        rawUpdate.timeRemaining,
+      );
+      _onTransferProgressUpdate(cleanUpdate);
+    };
+
+    _downloader.groupNotificationTapCallbacks[namespacedGroup] = (
+      rawTask,
+      notificationType,
+    ) {
+      _onTransferNotificationTap(
+        withoutNamespacedGroup(rawTask),
+        notificationType,
+      );
+    };
+  }
+
+  void _onTransferStatusUpdate(TaskStatusUpdate update) {
+    final transfer = _transfers[update.task.taskId];
+    if (transfer != null) {
+      transfer.updateStatus(update);
+    }
+    _notifyTransfersChanged();
+  }
+
+  void _onTransferProgressUpdate(TaskProgressUpdate update) {
+    final transfer = _transfers[update.task.taskId];
+    if (transfer != null) {
+      transfer.updateProgress(update);
+    }
+    _notifyTransfersChanged();
+  }
+
+  void _onTransferNotificationTap(
+    Task task,
+    NotificationType notificationType,
+  ) {
+    final transfer = _transfers[task.taskId];
+    if (transfer != null) {
+      transfer.onNotificationTap(notificationType);
+    }
+  }
+
+  Transfer _getOrCreateTransfer(Task cleanTask) {
+    var transfer = _transfers[cleanTask.taskId];
+    if (transfer == null) {
+      transfer = Transfer(cleanTask, this);
+      _transfers[cleanTask.taskId] = transfer;
+      _notifyTransfersChanged();
+    }
+    return transfer;
+  }
+
+  void _notifyTransfersChanged() {
+    transfersNotifier.value = List.unmodifiable(_transfers.values);
+  }
+
   /// Destroy the [FileDownloader]. Subsequent use requires initialization
   void destroy() {
+    _transferAutoCleanTriggered = false;
+    _transfers.clear();
+    _registeredTransferGroups.clear();
+    _registeredStatusCallbacks.clear();
+    _registeredProgressCallbacks.clear();
+    _registeredNotificationTapCallbacks.clear();
+    _scopedInstances.clear();
     _downloader.destroy();
-    Localstore.instance.clearCache();
+    try {
+      Localstore.instance.clearCache();
+    } catch (_) {}
   }
 }
 

@@ -13,6 +13,7 @@ import 'package:path_provider/path_provider.dart';
 import 'file_downloader.dart';
 import 'models.dart';
 import 'options/task_options.dart';
+import 'transfer_hint.dart';
 import 'uri/uri_helpers.dart';
 import 'utils.dart';
 import 'web_downloader.dart'
@@ -270,6 +271,16 @@ sealed class Task extends Request implements Comparable {
   /// Optional task-specific configuration using [TaskOptions]
   final TaskOptions? options;
 
+  /// Optional hints provided to tune the task's properties
+  final Set<TransferHint>? transferHints;
+
+  /// Optional notification configuration associated with this task
+  final TaskNotificationConfig? notificationConfig;
+
+  /// Optional stall timeout. If running and no progress is observed within this duration,
+  /// the transfer is restarted/resumed.
+  final Duration? stallTimeout;
+
   static bool useExternalStorage = false; // for Android configuration only
 
   static final _baseDirectoryPathCache = <(BaseDirectory, bool), String>{};
@@ -330,6 +341,9 @@ sealed class Task extends Request implements Comparable {
   /// [displayName] human readable name for this task
   /// [creationTime] time of task creation, 'now' by default.
   /// [options] optional task-specific configuration using [TaskOptions]
+  /// [transferHints] optional hints to auto-tune task priority, updates, and pause behavior
+  /// [notificationConfig] optional system notification configuration
+  /// [stallTimeout] optional duration after which an inactive running transfer is kicked/resumed
   Task({
     String? taskId,
     required super.url,
@@ -346,16 +360,35 @@ sealed class Task extends Request implements Comparable {
     super.retries,
     this.metaData = '',
     this.displayName = '',
-    this.allowPause = false,
-    this.priority = 5,
+    bool allowPause = false,
+    int priority = 5,
     super.creationTime,
     this.options,
+    this.transferHints,
+    this.notificationConfig,
+    this.stallTimeout,
   }) : taskId = taskId ?? _random.nextInt(1 << 32).toString(),
-       filename = filename ?? _random.nextInt(1 << 32).toString(),
+       filename =
+           filename ??
+           ((transferHints?.contains(TransferHint.useSuggestedFilename) == true)
+               ? DownloadTask.suggestedFilename
+               : _random.nextInt(1 << 32).toString()),
        directory =
            _startsWithPathSeparatorRegExp.hasMatch(directory)
                ? directory.substring(1)
-               : directory {
+               : directory,
+       allowPause =
+           allowPause ||
+           (transferHints?.contains(TransferHint.userInitiated) == true) ||
+           (transferHints?.contains(TransferHint.largeFile) == true),
+       priority =
+           (transferHints?.contains(TransferHint.userInitiated) == true &&
+                   priority == 5)
+               ? 0
+               : (transferHints?.contains(TransferHint.lowPriority) == true &&
+                   priority == 5)
+               ? 10
+               : priority {
     if (filename?.isEmpty == true) {
       throw ArgumentError('Filename cannot be empty');
     }
@@ -570,6 +603,10 @@ sealed class Task extends Request implements Comparable {
     String? metaData,
     String? displayName,
     DateTime? creationTime,
+    TaskOptions? options,
+    Set<TransferHint>? transferHints,
+    TaskNotificationConfig? notificationConfig,
+    Duration? stallTimeout,
   });
 
   /// Creates [Task] object from JsonMap
@@ -593,6 +630,17 @@ sealed class Task extends Request implements Comparable {
           json['options'] != null
               ? TaskOptions.fromJson(json['options'])
               : null,
+      transferHints =
+          json['transferHints'] != null
+              ? (json['transferHints'] as List)
+                  .map((e) => TransferHint.values[(e as num).toInt()])
+                  .toSet()
+              : null,
+      notificationConfig = null,
+      stallTimeout =
+          json['stallTimeout'] != null
+              ? Duration(milliseconds: (json['stallTimeout'] as num).toInt())
+              : null,
       super.fromJson();
 
   /// Creates JSON map of this object
@@ -611,6 +659,9 @@ sealed class Task extends Request implements Comparable {
     'metaData': metaData,
     'displayName': displayName,
     'options': options?.toJson(),
+    if (transferHints != null)
+      'transferHints': transferHints!.map((h) => h.index).toList(),
+    if (stallTimeout != null) 'stallTimeout': stallTimeout!.inMilliseconds,
     'taskType': taskType,
   };
 
@@ -699,6 +750,9 @@ final class DownloadTask extends Task {
   /// [displayName] human readable name for this task
   /// [creationTime] time of task creation, 'now' by default.
   /// [options] optional task-specific configuration using [TaskOptions]
+  /// [transferHints] optional hints to auto-tune task priority, updates, and pause behavior
+  /// [notificationConfig] optional system notification configuration
+  /// [stallTimeout] optional duration after which an inactive running transfer is kicked/resumed
   DownloadTask({
     super.taskId,
     required super.url,
@@ -719,6 +773,9 @@ final class DownloadTask extends Task {
     super.displayName,
     super.creationTime,
     super.options,
+    super.transferHints,
+    super.notificationConfig,
+    super.stallTimeout,
   });
 
   /// List of task types supported by [DownloadTask.fromJson]
@@ -761,6 +818,9 @@ final class DownloadTask extends Task {
     String? displayName,
     DateTime? creationTime,
     TaskOptions? options,
+    Set<TransferHint>? transferHints,
+    TaskNotificationConfig? notificationConfig,
+    Duration? stallTimeout,
   }) => DownloadTask(
     taskId: taskId ?? this.taskId,
     url: url ?? this.url,
@@ -780,6 +840,9 @@ final class DownloadTask extends Task {
     displayName: displayName ?? this.displayName,
     creationTime: creationTime ?? this.creationTime,
     options: options ?? this.options,
+    transferHints: transferHints ?? this.transferHints,
+    notificationConfig: notificationConfig ?? this.notificationConfig,
+    stallTimeout: stallTimeout ?? this.stallTimeout,
   )..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 
   /// Returns a copy of the task with the [Task.filename] property changed
@@ -903,7 +966,7 @@ final class UploadTask extends Task {
     required String super.filename,
     super.headers,
     String? httpRequestMethod,
-    String? super.post,
+    String? post,
     this.fileField = 'file',
     String? mimeType,
     Map<String, String>? fields,
@@ -918,19 +981,45 @@ final class UploadTask extends Task {
     super.displayName,
     super.creationTime,
     super.options,
+    super.transferHints,
+    super.notificationConfig,
+    super.stallTimeout,
   }) : assert(filename.isNotEmpty, 'A filename is required'),
        assert(
-         post == null || post == 'binary',
+         (post ??
+                     (transferHints?.contains(TransferHint.binaryUpload) == true
+                         ? 'binary'
+                         : null)) ==
+                 null ||
+             (post ??
+                     (transferHints?.contains(TransferHint.binaryUpload) == true
+                         ? 'binary'
+                         : null)) ==
+                 'binary',
          'post field must be null, or "binary" for binary file upload',
        ),
        assert(
-         fields == null || fields.isEmpty || post != 'binary',
+         fields == null ||
+             fields.isEmpty ||
+             (post ??
+                     (transferHints?.contains(TransferHint.binaryUpload) == true
+                         ? 'binary'
+                         : null)) !=
+                 'binary',
          'fields only allowed for multi-part uploads',
        ),
        fields = fields ?? {},
        mimeType =
            mimeType ?? lookupMimeType(filename) ?? 'application/octet-stream',
-       super(httpRequestMethod: httpRequestMethod ?? 'POST', allowPause: false);
+       super(
+         post:
+             post ??
+             (transferHints?.contains(TransferHint.binaryUpload) == true
+                 ? 'binary'
+                 : null),
+         httpRequestMethod: httpRequestMethod ?? 'POST',
+         allowPause: false,
+       );
 
   /// Creates [UploadTask] from a [File] object, using the [file] absolute path.
   ///
@@ -945,7 +1034,7 @@ final class UploadTask extends Task {
     super.urlQueryParameters,
     super.headers,
     String? httpRequestMethod,
-    String? super.post,
+    String? post,
     this.fileField = 'file',
     String? mimeType,
     Map<String, String>? fields,
@@ -958,6 +1047,9 @@ final class UploadTask extends Task {
     super.displayName,
     super.creationTime,
     super.options,
+    super.transferHints,
+    super.notificationConfig,
+    super.stallTimeout,
   }) : fields = fields ?? {},
        mimeType =
            mimeType ?? lookupMimeType(file.path) ?? 'application/octet-stream',
@@ -965,6 +1057,11 @@ final class UploadTask extends Task {
          baseDirectory: BaseDirectory.root,
          directory: p.dirname(file.absolute.path),
          filename: p.basename(file.absolute.path),
+         post:
+             post ??
+             (transferHints?.contains(TransferHint.binaryUpload) == true
+                 ? 'binary'
+                 : null),
          httpRequestMethod: httpRequestMethod ?? 'POST',
          allowPause: false,
        );
@@ -1057,6 +1154,9 @@ final class UploadTask extends Task {
     String? displayName,
     DateTime? creationTime,
     TaskOptions? options,
+    Set<TransferHint>? transferHints,
+    TaskNotificationConfig? notificationConfig,
+    Duration? stallTimeout,
   }) => UploadTask(
     taskId: taskId ?? this.taskId,
     url: url ?? this.url,
@@ -1078,6 +1178,9 @@ final class UploadTask extends Task {
     displayName: displayName ?? this.displayName,
     creationTime: creationTime ?? this.creationTime,
     options: options ?? this.options,
+    transferHints: transferHints ?? this.transferHints,
+    notificationConfig: notificationConfig ?? this.notificationConfig,
+    stallTimeout: stallTimeout ?? this.stallTimeout,
   )..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 
   @override
@@ -1173,6 +1276,9 @@ final class MultiUploadTask extends UploadTask {
     super.displayName,
     super.creationTime,
     super.options,
+    super.transferHints,
+    super.notificationConfig,
+    super.stallTimeout,
   }) : fileFields = files
            .map(
              (e) => switch (e) {
@@ -1261,6 +1367,9 @@ final class MultiUploadTask extends UploadTask {
     String? displayName,
     DateTime? creationTime,
     TaskOptions? options,
+    Set<TransferHint>? transferHints,
+    TaskNotificationConfig? notificationConfig,
+    Duration? stallTimeout,
   }) => MultiUploadTask(
     taskId: taskId ?? this.taskId,
     url: url ?? this.url,
@@ -1279,6 +1388,9 @@ final class MultiUploadTask extends UploadTask {
     displayName: displayName ?? this.displayName,
     creationTime: creationTime ?? this.creationTime,
     options: options ?? this.options,
+    transferHints: transferHints ?? this.transferHints,
+    notificationConfig: notificationConfig ?? this.notificationConfig,
+    stallTimeout: stallTimeout ?? this.stallTimeout,
   )..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 
   /// Zips the fileField, filename and mimeType at an index to
@@ -1335,6 +1447,9 @@ final class ParallelDownloadTask extends DownloadTask {
   /// [displayName] human readable name for this task
   /// [creationTime] time of task creation, 'now' by default.
   /// [options] optional task-specific configuration using [TaskOptions]
+  /// [transferHints] optional hints to auto-tune task priority, updates, and pause behavior
+  /// [notificationConfig] optional system notification configuration
+  /// [stallTimeout] optional duration after which an inactive running transfer is kicked/resumed
   ///
   /// A [ParallelDownloadTask] cannot be paused or resumed on failure
   ParallelDownloadTask({
@@ -1357,6 +1472,9 @@ final class ParallelDownloadTask extends DownloadTask {
     super.displayName,
     super.creationTime,
     super.options,
+    super.transferHints,
+    super.notificationConfig,
+    super.stallTimeout,
   }) : assert(
          url is String || url is List<String>,
          'The `url` parameter must be a string or a list of strings',
@@ -1417,6 +1535,9 @@ final class ParallelDownloadTask extends DownloadTask {
     String? displayName,
     DateTime? creationTime,
     TaskOptions? options,
+    Set<TransferHint>? transferHints,
+    TaskNotificationConfig? notificationConfig,
+    Duration? stallTimeout,
   }) => ParallelDownloadTask(
     taskId: taskId ?? this.taskId,
     url: url ?? urls,
@@ -1436,6 +1557,9 @@ final class ParallelDownloadTask extends DownloadTask {
     displayName: displayName ?? this.displayName,
     creationTime: creationTime ?? this.creationTime,
     options: options ?? this.options,
+    transferHints: transferHints ?? this.transferHints,
+    notificationConfig: notificationConfig ?? this.notificationConfig,
+    stallTimeout: stallTimeout ?? this.stallTimeout,
   )..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 }
 
@@ -1470,6 +1594,10 @@ final class DataTask extends Task {
   /// [metaData] user data
   /// [displayName] human readable name for this task
   /// [creationTime] time of task creation, 'now' by default.
+  /// [options] optional task-specific configuration using [TaskOptions]
+  /// [transferHints] optional hints to auto-tune task priority, updates, and pause behavior
+  /// [notificationConfig] optional system notification configuration
+  /// [stallTimeout] optional duration after which an inactive running transfer is kicked/resumed
   DataTask({
     super.taskId,
     required super.url,
@@ -1480,7 +1608,7 @@ final class DataTask extends Task {
     Map<String, dynamic>? json,
     String? contentType,
     super.group,
-    super.updates,
+    super.updates = Updates.status,
     super.requiresWiFi,
     super.retries,
     super.metaData,
@@ -1488,6 +1616,9 @@ final class DataTask extends Task {
     super.priority,
     super.creationTime,
     super.options,
+    super.transferHints,
+    super.notificationConfig,
+    super.stallTimeout,
   }) : assert(
          const [Updates.status, Updates.none].contains(updates),
          'DataTasks can only provide status updates',
@@ -1541,6 +1672,9 @@ final class DataTask extends Task {
     String? displayName,
     DateTime? creationTime,
     TaskOptions? options,
+    Set<TransferHint>? transferHints,
+    TaskNotificationConfig? notificationConfig,
+    Duration? stallTimeout,
   }) => DataTask(
     taskId: taskId ?? this.taskId,
     url: url ?? this.url,
@@ -1556,6 +1690,9 @@ final class DataTask extends Task {
     displayName: displayName ?? this.displayName,
     creationTime: creationTime ?? this.creationTime,
     options: options ?? this.options,
+    transferHints: transferHints ?? this.transferHints,
+    notificationConfig: notificationConfig ?? this.notificationConfig,
+    stallTimeout: stallTimeout ?? this.stallTimeout,
   )..retriesRemaining = retriesRemaining ?? this.retriesRemaining;
 
   /// Creates [DataTask] object from [json]

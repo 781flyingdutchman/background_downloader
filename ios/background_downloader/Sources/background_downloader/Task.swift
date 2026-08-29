@@ -34,6 +34,8 @@ struct Task : Codable, Hashable {
     var displayName: String = ""
     var creationTime: Int64 = Int64((Date().timeIntervalSince1970 * 1000.0).rounded())
     var options: TaskOptions?
+    var transferHints: [Int]?
+    var stallTimeout: Int64?
     var taskType: String
 }
 
@@ -62,6 +64,8 @@ extension Task {
                   displayName: String? = nil,
                   creationTime: Int64? = nil,
                   options: TaskOptions? = nil,
+                  transferHints: [Int]? = nil,
+                  stallTimeout: Int64? = nil,
                   taskType: String? = nil) -> Task {
         
         var copiedTask = self
@@ -160,6 +164,14 @@ extension Task {
         
         if let options = options {
             copiedTask.options = options
+        }
+        
+        if let transferHints = transferHints {
+            copiedTask.transferHints = transferHints
+        }
+        
+        if let stallTimeout = stallTimeout {
+            copiedTask.stallTimeout = stallTimeout
         }
         
         if let taskType = taskType {
