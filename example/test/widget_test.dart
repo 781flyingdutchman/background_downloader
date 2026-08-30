@@ -16,7 +16,7 @@ void main() {
     expect(find.text('Additional Transfer Workflows'), findsOneWidget);
 
     // Verify buttons
-    expect(find.text('Start (getOrStartTransfer)'), findsOneWidget);
-    expect(find.text('startTransfer'), findsOneWidget);
+    expect(find.text('Start (getOrStart)'), findsOneWidget);
+    expect(find.text('start'), findsOneWidget);
   });
 }

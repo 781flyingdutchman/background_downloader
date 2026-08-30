@@ -10,7 +10,7 @@ Use this index to find documentation for specific topics and keywords.
 ## B
 *   **Background execution**: [README](../README.md#a-background-file-downloader-and-uploader-for-ios-android-macos-windows-and-linux) - general introduction
 *   **BaseDirectory**: [File Storage & Locations](storage.md#specifying-the-location-of-the-file) - choosing where to store files
-*   **Batch**: [Transfers](transfers.md#batch-transfers-starttransfers) - starting batch transfers with `startTransfers` (or `enqueueAll` in [Database & Monitoring](database.md))
+*   **Batch**: [Transfers](transfers.md#batch-transfers-transfersstartall) - starting batch transfers with `transfers.startAll` (or `enqueueAll` in [Database & Monitoring](database.md))
 *   **Binary upload**: [Uploads](uploads.md#binary-uploads) - raw binary body upload (`TransferHint.binaryUpload`)
 *   **Bypassing permissions**: [Permissions](permissions.md#bypassing-permissions-on-ios) - for iOS compile time
 
@@ -43,7 +43,7 @@ Use this index to find documentation for specific topics and keywords.
 *   **Form fields**: [Uploads](uploads.md#form-fields) - uploading data with files
 
 ## G
-*   **getOrStartTransfer**: [Transfers](transfers.md#resume--reconnection-getorstarttransfer) - finding or starting transfers
+*   **getOrStart**: [Transfers](transfers.md#resume--reconnection-transfersgetorstart-and-startorgetall) - finding or starting transfers
 *   **Group**: [Lifecycle](lifecycle.md#grouping-tasks) - managing bunches of tasks together
 
 ## H
@@ -96,8 +96,8 @@ Use this index to find documentation for specific topics and keywords.
 *   **Server suggested filename**: [Downloads](downloads.md#server-suggested-filenames) - using names from headers
 *   **Stall timeout**: [Transfers](transfers.md#8-network-aware-offline-resilience--stall-watchdog) - watchdog timeout for inactive transfers
 *   **Start**: [Database & Monitoring](database.md#annotated-example-with-database) - initializing the downloader
-*   **startTransfer**: [Transfers](transfers.md#single-transfer-starttransfer) - starting a managed transfer
-*   **startTransfers**: [Transfers](transfers.md#batch-transfers-starttransfers) - starting batch transfers
+*   **transfers.start**: [Transfers](transfers.md#single-transfer-transfersstart) - starting a managed transfer
+*   **transfers.startAll**: [Transfers](transfers.md#batch-transfers-transfersstartall) - starting batch transfers
 *   **Status updates**: [Status & Progress Updates](status_updates.md) - how task status and progress is communicated
 *   **Storage**: [File Storage & Locations](storage.md) - where files go
 

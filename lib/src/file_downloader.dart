@@ -8,15 +8,13 @@ import 'package:logging/logging.dart';
 
 import 'base_downloader.dart';
 import 'database.dart';
-import 'exceptions.dart';
 import 'localstore/localstore.dart';
 import 'models.dart';
 import 'permissions.dart';
 import 'persistent_storage.dart';
 import 'queue/task_queue.dart';
 import 'task.dart';
-import 'transfer.dart';
-import 'transfer_hint.dart';
+import 'transfers.dart';
 import 'uri/uri_utils.dart';
 import 'web_downloader.dart'
     if (dart.library.io) 'desktop/desktop_downloader.dart';
@@ -44,6 +42,9 @@ interface class FileDownloader {
   /// Activate tracking by calling [trackTasks], and access the records in the
   /// database via this [database] object.
   late final Database database;
+
+  /// Transfer management and reactive collections service
+  late final Transfers transfers;
 
   /// Permissions authorization interface
   ///
@@ -109,9 +110,12 @@ interface class FileDownloader {
   ) {
     database = Database(persistentStorage);
     _downloader = BaseDownloader.instance(persistentStorage, database);
+    transfers = Transfers(this, _downloader);
   }
 
-  FileDownloader._scoped(this.database, this._downloader, this.namespace);
+  FileDownloader._scoped(this.database, this._downloader, this.namespace) {
+    transfers = Transfers(this, _downloader);
+  }
 
   /// True when initialization is complete and downloader ready for use
   Future<bool> get ready => _downloader.ready;
@@ -1435,351 +1439,9 @@ interface class FileDownloader {
   /// such that the stream can be listened to again
   Future<void> resetUpdates() => _downloader.resetUpdatesStreamController();
 
-  // ==========================================
-  // Transfer API (Unified & Scoped)
-  // ==========================================
-
-  final Map<String, Transfer> _transfers = {};
-  final Set<String> _registeredTransferGroups = {};
-
-  /// ValueNotifier containing the list of all currently tracked [Transfer] objects
-  final ValueNotifier<List<Transfer>> transfersNotifier =
-      ValueNotifier<List<Transfer>>([]);
-
-  static bool _transferAutoCleanTriggered = false;
-
-  void _ensureTransferAutoClean() {
-    if (!_transferAutoCleanTriggered &&
-        _downloader.isTrackingTasks &&
-        !database.autoClean) {
-      _transferAutoCleanTriggered = true;
-      database.cleanUp(autoClean: true);
-    }
-  }
-
-  /// Enqueues a task and returns a [Transfer] object to manage and observe its progress.
-  ///
-  /// If the task includes a [Task.notificationConfig] or [TransferHint.userInitiated],
-  /// notification behavior is configured automatically.
-  Future<Transfer> startTransfer(Task task) async {
-    _ensureTransferAutoClean();
-    final namespacedTask = withNamespacedGroup(task);
-    _ensureTransferGroupRegistered(namespacedTask.group);
-
-    if (task.notificationConfig != null) {
-      configureNotificationForTask(
-        namespacedTask,
-        running: task.notificationConfig!.running,
-        complete: task.notificationConfig!.complete,
-        error: task.notificationConfig!.error,
-        paused: task.notificationConfig!.paused,
-        canceled: task.notificationConfig!.canceled,
-        progressBar: task.notificationConfig!.progressBar,
-        tapOpensFile: task.notificationConfig!.tapOpensFile,
-        groupNotificationId: task.notificationConfig!.groupNotificationId,
-      );
-    } else if (task.transferHints?.contains(TransferHint.userInitiated) ==
-        true) {
-      final existingConfig = notificationConfigForTask(namespacedTask);
-      if (existingConfig == null || existingConfig.running == null) {
-        final isUpload = task is UploadTask;
-        final action = isUpload ? 'Uploading' : 'Downloading';
-        configureNotificationForTask(
-          namespacedTask,
-          running: TaskNotification(action, '{progress}'),
-          complete: TaskNotification('$action complete', ''),
-          error: TaskNotification('$action failed', ''),
-          progressBar: true,
-        );
-      }
-    }
-
-    final cleanTask = withoutNamespacedGroup(namespacedTask);
-    final transfer = _getOrCreateTransfer(cleanTask);
-
-    final isOnline = _downloader.isConnected;
-    final isWiFi = _downloader.isWiFi;
-    final needsWiFi = task.requiresWiFi;
-
-    if (!isOnline) {
-      transfer.holdReasonNotifier.value = TransferHoldReason.offline;
-      transfer.updateStatus(
-        TaskStatusUpdate(cleanTask, TaskStatus.waitingToRetry),
-      );
-      _notifyTransfersChanged();
-      return transfer;
-    } else if (needsWiFi && !isWiFi) {
-      transfer.holdReasonNotifier.value = TransferHoldReason.waitingForWiFi;
-      transfer.updateStatus(
-        TaskStatusUpdate(cleanTask, TaskStatus.waitingToRetry),
-      );
-      _notifyTransfersChanged();
-      return transfer;
-    }
-
-    final success = await enqueue(namespacedTask);
-    if (!success) {
-      transfer.updateStatus(
-        TaskStatusUpdate(
-          cleanTask,
-          TaskStatus.failed,
-          TaskException('Failed to enqueue task on native platform'),
-        ),
-      );
-    }
-    _notifyTransfersChanged();
-    return transfer;
-  }
-
-  /// Starts transfers for multiple tasks, returning a list of [Transfer] objects.
-  ///
-  /// If provided, [onProgress] is called whenever an individual transfer completes.
-  Future<List<Transfer>> startTransfers(
-    List<Task> tasks, {
-    BatchProgressCallback? onProgress,
-  }) async {
-    _ensureTransferAutoClean();
-    final transfers = <Transfer>[];
-    final tasksToEnqueue = <Task>[];
-
-    for (final task in tasks) {
-      final namespacedTask = withNamespacedGroup(task);
-      _ensureTransferGroupRegistered(namespacedTask.group);
-
-      if (task.notificationConfig != null) {
-        configureNotificationForTask(
-          namespacedTask,
-          running: task.notificationConfig!.running,
-          complete: task.notificationConfig!.complete,
-          error: task.notificationConfig!.error,
-          paused: task.notificationConfig!.paused,
-          canceled: task.notificationConfig!.canceled,
-          progressBar: task.notificationConfig!.progressBar,
-          tapOpensFile: task.notificationConfig!.tapOpensFile,
-          groupNotificationId: task.notificationConfig!.groupNotificationId,
-        );
-      }
-
-      final cleanTask = withoutNamespacedGroup(namespacedTask);
-      final transfer = _getOrCreateTransfer(cleanTask);
-      transfers.add(transfer);
-
-      final isOnline = _downloader.isConnected;
-      final isWiFi = _downloader.isWiFi;
-      final needsWiFi = task.requiresWiFi;
-
-      if (!isOnline) {
-        transfer.holdReasonNotifier.value = TransferHoldReason.offline;
-        transfer.updateStatus(
-          TaskStatusUpdate(cleanTask, TaskStatus.waitingToRetry),
-        );
-      } else if (needsWiFi && !isWiFi) {
-        transfer.holdReasonNotifier.value = TransferHoldReason.waitingForWiFi;
-        transfer.updateStatus(
-          TaskStatusUpdate(cleanTask, TaskStatus.waitingToRetry),
-        );
-      } else {
-        tasksToEnqueue.add(namespacedTask);
-      }
-    }
-
-    if (tasksToEnqueue.isNotEmpty) {
-      final results = await enqueueAll(tasksToEnqueue);
-      for (var i = 0; i < tasksToEnqueue.length; i++) {
-        final success = results.length > i ? results[i] : false;
-        if (!success) {
-          final cleanTask = withoutNamespacedGroup(tasksToEnqueue[i]);
-          final transfer = _transfers[cleanTask.taskId];
-          transfer?.updateStatus(
-            TaskStatusUpdate(
-              cleanTask,
-              TaskStatus.failed,
-              TaskException('Failed to batch enqueue task on native platform'),
-            ),
-          );
-        }
-      }
-    }
-
-    if (onProgress != null && transfers.isNotEmpty) {
-      var succeeded = 0;
-      var failed = 0;
-      for (final transfer in transfers) {
-        transfer.result.then((update) {
-          if (update.status == TaskStatus.complete) {
-            succeeded++;
-          } else {
-            failed++;
-          }
-          onProgress(succeeded, failed);
-        });
-      }
-    }
-
-    _notifyTransfersChanged();
-    return transfers;
-  }
-
-  /// Returns an existing [Transfer] matching [task], or starts a new transfer.
-  Future<Transfer> getOrStartTransfer(
-    Task task, {
-    bool Function(Task existingTask)? matchBy,
-    bool reEnqueueIfFailed = true,
-  }) async {
-    _ensureTransferAutoClean();
-    final existing = transferForTask(task, matchBy: matchBy);
-    if (existing != null) {
-      if (existing.status == TaskStatus.complete ||
-          existing.status.isNotFinalState) {
-        return existing;
-      }
-      if (!reEnqueueIfFailed) {
-        return existing;
-      }
-    }
-    return startTransfer(task);
-  }
-
-  /// Finds an existing active or tracked [Transfer] matching [task].
-  Transfer? transferForTask(
-    Task task, {
-    bool Function(Task existingTask)? matchBy,
-  }) {
-    final cleanGroup = originalGroup(namespacedGroup(task.group));
-    for (final transfer in _transfers.values) {
-      if (transfer.task.group != cleanGroup) continue;
-      if (matchBy != null) {
-        if (matchBy(transfer.task)) return transfer;
-        continue;
-      }
-      if (transfer.task.taskId == task.taskId) return transfer;
-      if (transfer.task.url == task.url &&
-          transfer.task.filename == task.filename &&
-          transfer.task.directory == task.directory &&
-          transfer.task.baseDirectory == task.baseDirectory) {
-        return transfer;
-      }
-    }
-    return null;
-  }
-
-  /// Returns the [Transfer] for [taskId], or null if not found.
-  Transfer? transferForId(String taskId) => _transfers[taskId];
-
-  /// Returns the first [Transfer] matching [url], or null.
-  Transfer? transferForUrl(String url) {
-    for (final transfer in _transfers.values) {
-      if (transfer.task.url == url) return transfer;
-    }
-    return null;
-  }
-
-  /// Returns all tracked [Transfer] objects, optionally filtered by [group].
-  List<Transfer> allTransfers({String? group}) {
-    if (group == null) {
-      return _transfers.values.toList();
-    }
-    final cleanGroup = originalGroup(namespacedGroup(group));
-    return _transfers.values.where((t) => t.task.group == cleanGroup).toList();
-  }
-
-  /// Returns all active (non-final state) [Transfer] objects.
-  List<Transfer> activeTransfers({String? group}) => allTransfers(
-      group: group,
-    ).where((t) => t.status.isNotFinalState).toList();
-
-  /// Returns all completed [Transfer] objects.
-  List<Transfer> completedTransfers({String? group}) => allTransfers(
-      group: group,
-    ).where((t) => t.status == TaskStatus.complete).toList();
-
-  void _ensureTransferGroupRegistered(String namespacedGroup) {
-    if (_registeredTransferGroups.contains(namespacedGroup)) return;
-    _registeredTransferGroups.add(namespacedGroup);
-
-    _downloader.trackTasks(namespacedGroup, true);
-
-    _downloader.groupStatusCallbacks[namespacedGroup] = (rawUpdate) {
-      final cleanUpdate = TaskStatusUpdate(
-        withoutNamespacedGroup(rawUpdate.task),
-        rawUpdate.status,
-        rawUpdate.exception,
-        rawUpdate.responseBody,
-        rawUpdate.responseHeaders,
-        rawUpdate.responseStatusCode,
-        rawUpdate.mimeType,
-        rawUpdate.charSet,
-      );
-      _onTransferStatusUpdate(cleanUpdate);
-    };
-
-    _downloader.groupProgressCallbacks[namespacedGroup] = (rawUpdate) {
-      final cleanUpdate = TaskProgressUpdate(
-        withoutNamespacedGroup(rawUpdate.task),
-        rawUpdate.progress,
-        rawUpdate.expectedFileSize,
-        rawUpdate.networkSpeed,
-        rawUpdate.timeRemaining,
-      );
-      _onTransferProgressUpdate(cleanUpdate);
-    };
-
-    _downloader.groupNotificationTapCallbacks[namespacedGroup] = (
-      rawTask,
-      notificationType,
-    ) {
-      _onTransferNotificationTap(
-        withoutNamespacedGroup(rawTask),
-        notificationType,
-      );
-    };
-  }
-
-  void _onTransferStatusUpdate(TaskStatusUpdate update) {
-    final transfer = _transfers[update.task.taskId];
-    if (transfer != null) {
-      transfer.updateStatus(update);
-    }
-    _notifyTransfersChanged();
-  }
-
-  void _onTransferProgressUpdate(TaskProgressUpdate update) {
-    final transfer = _transfers[update.task.taskId];
-    if (transfer != null) {
-      transfer.updateProgress(update);
-    }
-    _notifyTransfersChanged();
-  }
-
-  void _onTransferNotificationTap(
-    Task task,
-    NotificationType notificationType,
-  ) {
-    final transfer = _transfers[task.taskId];
-    if (transfer != null) {
-      transfer.onNotificationTap(notificationType);
-    }
-  }
-
-  Transfer _getOrCreateTransfer(Task cleanTask) {
-    var transfer = _transfers[cleanTask.taskId];
-    if (transfer == null) {
-      transfer = Transfer(cleanTask, this);
-      _transfers[cleanTask.taskId] = transfer;
-      _notifyTransfersChanged();
-    }
-    return transfer;
-  }
-
-  void _notifyTransfersChanged() {
-    transfersNotifier.value = List.unmodifiable(_transfers.values);
-  }
-
   /// Destroy the [FileDownloader]. Subsequent use requires initialization
   void destroy() {
-    _transferAutoCleanTriggered = false;
-    _transfers.clear();
-    _registeredTransferGroups.clear();
+    transfers.clear();
     _registeredStatusCallbacks.clear();
     _registeredProgressCallbacks.clear();
     _registeredNotificationTapCallbacks.clear();

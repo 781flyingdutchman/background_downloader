@@ -21,10 +21,10 @@ final task = DownloadTask(
 
 ## 1. High-Level Transfer API (Recommended)
 
-The recommended way to execute a download is via `FileDownloader().startTransfer`, which returns a [`Transfer`](transfers.md) handle.
+The recommended way to execute a download is via `FileDownloader().transfers.start`, which returns a [`Transfer`](transfers.md) handle.
 
 ```dart
-final transfer = await FileDownloader().startTransfer(task);
+final transfer = await FileDownloader().transfers.start(task);
 
 // Await the downloaded File directly:
 final file = await transfer.file;
@@ -34,9 +34,9 @@ print('File ready at: ${file.path}');
 // transfer.progressNotifier, transfer.statusNotifier, etc.
 ```
 
-For batch downloads across multiple files, use `startTransfers`:
+For batch downloads across multiple files, use `startAll`:
 ```dart
-final transfers = await FileDownloader().startTransfers(
+final transfers = await FileDownloader().transfers.startAll(
   [task1, task2, task3],
   onProgress: (succeeded, failed) => print('Progress: $succeeded done, $failed failed'),
 );
@@ -94,7 +94,7 @@ final task = ParallelDownloadTask(
   filename: 'large_file.zip',
 );
 
-final transfer = await FileDownloader().startTransfer(task);
+final transfer = await FileDownloader().transfers.start(task);
 final file = await transfer.file;
 ```
 

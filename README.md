@@ -10,7 +10,7 @@ Uses native `URLSession` on iOS and MacOS, and `DownloadWorker` (WorkManager) / 
 
 The easiest and most powerful way to use `background_downloader` is via the **Transfer API**.
 
-On app startup (e.g. in `main()` or your top-level `initState()`), call `FileDownloader().start(autoCleanDatabase: true)` to activate persistent database tracking, automatically purge old task records, and reconcile transfers that completed or were interrupted while the app was suspended or closed. Then simply define a [`DownloadTask`](doc/downloads.md) or [`UploadTask`](doc/uploads.md), start it using `FileDownloader().startTransfer`, and receive a reactive [`Transfer`](doc/transfers.md) handle:
+On app startup (e.g. in `main()` or your top-level `initState()`), call `FileDownloader().start(autoCleanDatabase: true)` to activate persistent database tracking, automatically purge old task records, and reconcile transfers that completed or were interrupted while the app was suspended or closed. Then simply define a [`DownloadTask`](doc/downloads.md) or [`UploadTask`](doc/uploads.md), start it using `FileDownloader().transfers.start`, and receive a reactive [`Transfer`](doc/transfers.md) handle:
 
 ```dart
 // 1. Activate database tracking & auto-cleanup on app launch (recommended)
@@ -32,7 +32,7 @@ final task = DownloadTask(
 );
 
 // 4. Start the transfer
-final transfer = await FileDownloader().startTransfer(task);
+final transfer = await FileDownloader().transfers.start(task);
 
 // 5. Directly await the completed File:
 final file = await transfer.file;
@@ -45,7 +45,7 @@ print('Downloaded to: ${file.path}');
 - **Reactive UI Notifiers**: Direct `ValueNotifier` bindings for Flutter widgets: `transfer.progressNotifier` (clean `0.0`–`1.0`), `transfer.statusNotifier`, `transfer.networkSpeedNotifier`, `transfer.timeRemainingNotifier`, and `transfer.notificationTapNotifier`.
 - **Plug-and-Play Widgets**: Pre-built UI components including [`TransferProgressBar`](doc/transfers.md#transferprogressbar), [`TransferButton`](doc/transfers.md#transferbutton), and [`TransferListTile`](doc/transfers.md#transferlisttile).
 - **Direct Controls**: Pause, resume, cancel, or allow cellular without managing task IDs: `await transfer.pause()`, `await transfer.resume()`, `await transfer.cancel()`.
-- **Batch Processing**: Enqueue hundreds of transfers with aggregate progress using `FileDownloader().startTransfers(tasks, onProgress: ...)`.
+- **Batch Processing**: Enqueue hundreds of transfers with aggregate progress using `FileDownloader().transfers.startAll(tasks, onProgress: ...)`.
 - **Smart Auto-Tuning & Android 14+ UIDT**: Use [`TransferHint`](doc/transfers.md#6-smart-tuning-with-transferhint--android-14-uidt) (`userInitiated`, `largeFile`, `smallFile`, `lowPriority`, `useSuggestedFilename`, `binaryUpload`) to configure optimal priority, Android 14+ UIDT, and pause resilience automatically.
 - **Notification Tap Integration**: React directly to user notification taps per transfer via `transfer.notificationTapNotifier` or open downloaded files automatically with `tapOpensFile: true`.
 - **Scoping & Isolation**: Modularize downloads in plugins or sub-features with isolated namespaces using [`FileDownloader.scoped('my_feature')`](doc/transfers.md#7-scoping-with-filedownloaderscoped).

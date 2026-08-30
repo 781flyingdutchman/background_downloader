@@ -121,9 +121,9 @@ class _MyAppState extends State<MyApp> {
   /// When your app starts up, there might be downloads or uploads that are still running
   /// in the background (or tasks that were paused/waiting).
   /// Calling `FileDownloader().start(autoCleanDatabase: true)` activates database tracking.
-  /// Then, querying `database.allRecords()` allows you to call `getOrStartTransfer(record.task)`
+  /// Then, querying `database.allRecords()` allows you to call `transfers.getOrStart(record.task)`
   /// for any non-final tasks. This re-attaches a `Transfer` handle and automatically populates
-  /// `FileDownloader().transfersNotifier` so your UI instantly reflects running transfers.
+  /// `FileDownloader().transfers.notifier` so your UI instantly reflects running transfers.
   Future<void> _initDownloaderAndResumeTransfers() async {
     // 1. Start downloader with autoCleanDatabase: true
     await FileDownloader().start(autoCleanDatabase: true);
@@ -133,8 +133,8 @@ class _MyAppState extends State<MyApp> {
     for (final record in records) {
       if (record.status.isNotFinalState) {
         log.info('Found in-progress task on startup: ${record.taskId}');
-        // getOrStartTransfer reconnects to the existing active task without duplicating it
-        final transfer = await FileDownloader().getOrStartTransfer(record.task);
+        // getOrStart reconnects to the existing active task without duplicating it
+        final transfer = await FileDownloader().transfers.getOrStart(record.task);
 
         // If this matches our primary sample download, bind it to mainTransfer
         if (record.task.filename == 'zipfile.zip') {
@@ -179,11 +179,11 @@ class _MyAppState extends State<MyApp> {
 
   /// Starts or reconnects to the main download transfer.
   ///
-  /// EXPLANATION OF `getOrStartTransfer` vs `startTransfer`:
-  /// - `getOrStartTransfer`: Recommended best practice for persistent or screen-bound transfers.
+  /// EXPLANATION OF `getOrStart` vs `start`:
+  /// - `getOrStart`: Recommended best practice for persistent or screen-bound transfers.
   ///   If a transfer for this task is already running or completed, it returns the existing
   ///   `Transfer` handle instead of scheduling a duplicate download.
-  /// - `startTransfer`: Creates and enqueues a new transfer every time it is called.
+  /// - `start`: Creates and enqueues a new transfer every time it is called.
   ///   Ideal for simple, short, or one-off transfers (like downloading a thumbnail or photo).
   Future<void> processMainTransfer({bool useGetOrStart = true}) async {
     await getPermission(PermissionType.notifications);
@@ -191,8 +191,8 @@ class _MyAppState extends State<MyApp> {
 
     final transfer =
         useGetOrStart
-            ? await FileDownloader().getOrStartTransfer(task)
-            : await FileDownloader().startTransfer(task);
+            ? await FileDownloader().transfers.getOrStart(task)
+            : await FileDownloader().transfers.start(task);
 
     if (mounted) {
       setState(() {
@@ -201,14 +201,14 @@ class _MyAppState extends State<MyApp> {
     }
 
     log.info(
-      'Main transfer initialized (${useGetOrStart ? "getOrStartTransfer" : "startTransfer"}): ${transfer.taskId}',
+      'Main transfer initialized (${useGetOrStart ? "getOrStart" : "start"}): ${transfer.taskId}',
     );
   }
 
   /// Process 'Load & Open' button.
   ///
   /// Demonstrates:
-  /// 1. For simple, short, one-off downloads, calling `startTransfer` is completely fine and concise.
+  /// 1. For simple, short, one-off downloads, calling `transfers.start` is completely fine and concise.
   /// 2. The `await transfer.file` getter provides a clean `Future<File>` that completes when the
   ///    download is finished, eliminating the need for manual status polling or stream subscriptions.
   Future<void> processLoadAndOpen() async {
@@ -228,8 +228,8 @@ class _MyAppState extends State<MyApp> {
         transferHints: {TransferHint.userInitiated},
       );
 
-      // For simple one-off downloads, startTransfer is ideal:
-      final transfer = await FileDownloader().startTransfer(task);
+      // For simple one-off downloads, start is ideal:
+      final transfer = await FileDownloader().transfers.start(task);
 
       // Cleanly await the downloaded File handle upon completion:
       final file = await transfer.file;
@@ -297,12 +297,12 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  /// Starts a batch of multiple transfers concurrently using `FileDownloader().startTransfers`.
+  /// Starts a batch of multiple transfers concurrently using `FileDownloader().transfers.startAll`.
   ///
   /// Demonstrates:
-  /// - Starting multiple transfers in a single call with batch enqueuing (`startTransfers`).
+  /// - Starting multiple transfers in a single call with batch enqueuing (`startAll`).
   /// - Monitoring aggregate progress via `onProgress: (succeeded, failed)`.
-  /// - Automatic registration of each transfer in `FileDownloader().transfersNotifier`.
+  /// - Automatic registration of each transfer in `FileDownloader().transfers.notifier`.
   Future<void> processLoadABunch() async {
     if (loadABunchInProgress) return;
     setState(() {
@@ -324,7 +324,7 @@ class _MyAppState extends State<MyApp> {
       ),
     );
 
-    final transfers = await FileDownloader().startTransfers(
+    final transfers = await FileDownloader().transfers.startAll(
       tasks,
       onProgress: (succeeded, failed) {
         if (mounted) {
@@ -345,7 +345,7 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  /// Process destination directory picker on mobile using UriDownloadTask and startTransfer.
+  /// Process destination directory picker on mobile using UriDownloadTask and transfers.start.
   Future<void> processPickDirectory() async {
     final uri = await FileDownloader().uri.pickDirectory();
     if (uri == null) {
@@ -360,7 +360,7 @@ class _MyAppState extends State<MyApp> {
       filename: '?',
       displayName: 'URI Downloaded Dog',
     );
-    final transfer = await FileDownloader().startTransfer(task);
+    final transfer = await FileDownloader().transfers.start(task);
     final result = await transfer.result;
     final resultTask = result.task as UriDownloadTask;
     log.info('Download to URI completed with taskStatus ${result.status}');
@@ -495,7 +495,7 @@ class _MyAppState extends State<MyApp> {
                       const SizedBox(height: 8),
                       Text(
                         'Demonstrates reactive widgets (TransferListTile, TransferProgressBar, '
-                        'TransferButton) and the getOrStartTransfer best practice.',
+                        'TransferButton) and the transfers.getOrStart best practice.',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -574,7 +574,7 @@ class _MyAppState extends State<MyApp> {
                           children: [
                             TextButton.icon(
                               icon: const Icon(Icons.refresh, size: 16),
-                              label: const Text('New Transfer (startTransfer)'),
+                              label: const Text('New Transfer (start)'),
                               onPressed:
                                   () => processMainTransfer(
                                     useGetOrStart: false,
@@ -589,7 +589,7 @@ class _MyAppState extends State<MyApp> {
                               child: ElevatedButton.icon(
                                 icon: const Icon(Icons.download),
                                 label: const Text(
-                                  'Start (getOrStartTransfer)',
+                                  'Start (getOrStart)',
                                 ),
                                 onPressed:
                                   () => processMainTransfer(
@@ -603,7 +603,7 @@ class _MyAppState extends State<MyApp> {
                                   () => processMainTransfer(
                                     useGetOrStart: false,
                                   ),
-                              child: const Text('startTransfer'),
+                              child: const Text('start'),
                             ),
                           ],
                         ),
@@ -653,7 +653,7 @@ class _MyAppState extends State<MyApp> {
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                         subtitle: const Text(
-                          'Uses startTransfer and clean await transfer.file',
+                          'Uses transfers.start and clean await transfer.file',
                         ),
                         trailing: ElevatedButton(
                           onPressed:
@@ -672,7 +672,7 @@ class _MyAppState extends State<MyApp> {
                       ),
                       const Divider(),
 
-                      // Workflow 2: Batch Transfers (startTransfers)
+                      // Workflow 2: Batch Transfers (startAll)
                       ListTile(
                         contentPadding: EdgeInsets.zero,
                         title: const Text(
@@ -682,7 +682,7 @@ class _MyAppState extends State<MyApp> {
                         subtitle: Text(
                           batchProgressMessage.isNotEmpty
                               ? batchProgressMessage
-                              : 'Uses startTransfers with aggregate progress',
+                              : 'Uses transfers.startAll with aggregate progress',
                         ),
                         trailing: ElevatedButton(
                           onPressed:
@@ -710,7 +710,7 @@ class _MyAppState extends State<MyApp> {
                             style: TextStyle(fontWeight: FontWeight.w600),
                           ),
                           subtitle: const Text(
-                            'Uses UriDownloadTask and startTransfer',
+                            'Uses UriDownloadTask and transfers.start',
                           ),
                           trailing: ElevatedButton(
                             onPressed: processPickDirectory,
@@ -725,7 +725,7 @@ class _MyAppState extends State<MyApp> {
               const SizedBox(height: 16),
 
               // ---------------------------------------------------------------
-              // SECTION 4: Live Tracked Transfers (FileDownloader.transfersNotifier)
+              // SECTION 4: Live Tracked Transfers (FileDownloader.transfers.notifier)
               // ---------------------------------------------------------------
               Card(
                 elevation: 1,
@@ -735,7 +735,7 @@ class _MyAppState extends State<MyApp> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       ValueListenableBuilder<List<Transfer>>(
-                        valueListenable: FileDownloader().transfersNotifier,
+                        valueListenable: FileDownloader().transfers.notifier,
                         builder:
                             (context, transfers, _) => Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -782,7 +782,7 @@ class _MyAppState extends State<MyApp> {
 
                       // Reactive list of all transfers
                       ValueListenableBuilder<List<Transfer>>(
-                        valueListenable: FileDownloader().transfersNotifier,
+                        valueListenable: FileDownloader().transfers.notifier,
                         builder: (context, transfers, _) {
                           if (transfers.isEmpty) {
                             return Container(

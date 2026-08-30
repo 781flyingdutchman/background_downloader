@@ -13,7 +13,7 @@ On app startup (e.g. in `main()` or your top-level `initState()`), call `FileDow
 > [!TIP]
 > **Always use `autoCleanDatabase: true`**: While `autoCleanDatabase` defaults to `false` solely to preserve backward compatibility for legacy implementations, calling `FileDownloader().start(autoCleanDatabase: true)` is typically recommended. It automatically removes old, finished task records from the database and prevents it from growing indefinitely over time.
 
-Then simply create a `DownloadTask` (or `UploadTask` / `DataTask`) and call `FileDownloader().startTransfer`:
+Then simply create a `DownloadTask` (or `UploadTask` / `DataTask`) and call `FileDownloader().transfers.start`:
 
 ```dart
 // 1. Activate database tracking on app launch (recommended)
@@ -36,7 +36,7 @@ final task = DownloadTask(
 );
 
 // 4. Start the transfer
-final transfer = await FileDownloader().startTransfer(task);
+final transfer = await FileDownloader().transfers.start(task);
 
 // 5. Await the final completed File:
 final file = await transfer.file;
@@ -53,7 +53,7 @@ if (result.status == TaskStatus.complete) {
 
 ## 2. The `Transfer` Handle
 
-When you call `startTransfer`, `startTransfers`, or `getOrStartTransfer`, you receive a `Transfer` object.
+When you call `transfers.start`, `transfers.startAll`, or `transfers.getOrStart`, you receive a `Transfer` object.
 
 ### Awaitable Futures
 - **`transfer.result`**: `Future<TaskStatusUpdate>` completing when the transfer reaches any final state (`complete`, `failed`, `canceled`, `notFound`).
@@ -111,14 +111,14 @@ FileDownloader().configureNotification(
 
 ## 4. Starting Transfers
 
-### Single Transfer (`startTransfer`)
+### Single Transfer (`transfers.start`)
 ```dart
-final transfer = await FileDownloader().startTransfer(task);
+final transfer = await FileDownloader().transfers.start(task);
 ```
 Auto-enqueues the task, initializes monitoring, and applies any `notificationConfig` or `transferHints`.
 
-### Batch Transfers (`startTransfers`)
-Use `startTransfers` to launch multiple transfers concurrently using `enqueueAll` with aggregate progress tracking:
+### Batch Transfers (`transfers.startAll`)
+Use `startAll` to launch multiple transfers concurrently using `enqueueAll` with aggregate progress tracking:
 ```dart
 final tasks = [
   DownloadTask(url: 'https://example.com/item1.zip', filename: 'item1.zip'),
@@ -126,7 +126,7 @@ final tasks = [
   DownloadTask(url: 'https://example.com/item3.zip', filename: 'item3.zip'),
 ];
 
-final transfers = await FileDownloader().startTransfers(
+final transfers = await FileDownloader().transfers.startAll(
   tasks,
   onProgress: (succeeded, failed) {
     print('Batch progress: $succeeded succeeded, $failed failed out of ${tasks.length}');
@@ -137,39 +137,42 @@ final transfers = await FileDownloader().startTransfers(
 final results = await Future.wait(transfers.map((t) => t.result));
 ```
 
-### Resume / Reconnection (`getOrStartTransfer`)
-If your app restarts or a screen reloads, `getOrStartTransfer` finds an existing active or completed transfer (by task ID, target destination, or custom matcher) so you don't duplicate transfers:
+### Resume / Reconnection (`transfers.getOrStart` and `startOrGetAll`)
+If your app restarts or a screen reloads, `getOrStart` finds an existing active or completed transfer (by task ID, target destination, or custom matcher) so you don't duplicate transfers:
 
 ```dart
 // Returns existing Transfer if active or already completed; otherwise enqueues fresh
-final transfer = await FileDownloader().getOrStartTransfer(task);
+final transfer = await FileDownloader().transfers.getOrStart(task);
 
 // Or match by custom metadata / predicate:
-final transfer = await FileDownloader().getOrStartTransfer(
+final transfer = await FileDownloader().transfers.getOrStart(
   task,
   matchBy: (existingTask) => existingTask.metaData == 'my_unique_id',
 );
+
+// Batch resume / get-or-start for multiple tasks:
+final transfers = await FileDownloader().transfers.startOrGetAll(tasks);
 ```
 
 ---
 
 ## 5. Transfer Collections & Queries
 
-`FileDownloader` provides reactive collections of managed transfers:
+`FileDownloader().transfers` provides reactive collections of managed transfers:
 
 ```dart
 // Reactive list of all transfers (re-emits on state changes)
-ValueListenable<List<Transfer>> notifier = FileDownloader().transfersNotifier;
+ValueListenable<List<Transfer>> notifier = FileDownloader().transfers.notifier;
 
 // Query current transfers
-List<Transfer> all = FileDownloader().allTransfers();
-List<Transfer> active = FileDownloader().activeTransfers();
-List<Transfer> completed = FileDownloader().completedTransfers();
+List<Transfer> all = FileDownloader().transfers.all();
+List<Transfer> active = FileDownloader().transfers.active();
+List<Transfer> completed = FileDownloader().transfers.completed();
 
 // Look up specific transfer
-Transfer? transfer = FileDownloader().transferForId('task123');
-Transfer? transfer = FileDownloader().transferForTask(task);
-Transfer? transfer = FileDownloader().transferForUrl('https://example.com/file.zip');
+Transfer? transfer = FileDownloader().transfers.forId('task123'); // or: FileDownloader().transfers['task123']
+Transfer? transfer = FileDownloader().transfers.forTask(task);
+Transfer? transfer = FileDownloader().transfers.forUrl('https://example.com/file.zip');
 ```
 
 ---
@@ -227,9 +230,9 @@ If you are developing a package, plugin, or modular feature, you can isolate all
 // Isolated downloader instance for your module
 final downloader = FileDownloader.scoped('my_audio_player');
 
-final transfer = await downloader.startTransfer(task);
+final transfer = await downloader.transfers.start(task);
 
-// downloader.allTransfers(), downloader.reset(), and callbacks only affect 'my_audio_player'
+// downloader.transfers.all(), downloader.reset(), and callbacks only affect 'my_audio_player'
 ```
 
 - Each call to `FileDownloader.scoped('namespace')` returns the same cached instance for that namespace.

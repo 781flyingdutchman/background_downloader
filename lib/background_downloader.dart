@@ -17,6 +17,7 @@ export 'src/progress_widget.dart';
 export 'src/queue/task_queue.dart';
 export 'src/task.dart';
 export 'src/transfer.dart';
+export 'src/transfers.dart';
 export 'src/transfer_hint.dart';
 export 'src/uri/uri_utils.dart';
 export 'src/widgets/transfer_button.dart';

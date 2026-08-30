@@ -50,7 +50,7 @@ void downloadStatusCallback(TaskStatusUpdate update) async {
 If you are writing a package, plugin, or separate app subsystem, use `FileDownloader.scoped('my_namespace')` instead of managing custom group names manually:
 ```dart
 final downloader = FileDownloader.scoped('media_module');
-final transfer = await downloader.startTransfer(task);
+final transfer = await downloader.transfers.start(task);
 ```
 Scoped downloaders automatically prefix groups under the hood, ensuring your callbacks, queries, and `reset` calls are isolated from other modules without conflicting.
 

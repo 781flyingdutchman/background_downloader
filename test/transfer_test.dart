@@ -171,7 +171,7 @@ void main() {
     test(
       'Full lifecycle: enqueued -> running -> progress -> complete',
       () async {
-        final transfer = await downloader.startTransfer(task);
+        final transfer = await downloader.transfers.start(task);
         expect(transfer.status, equals(TaskStatus.enqueued));
         expect(transfer.progress, isNull);
 
@@ -243,7 +243,7 @@ void main() {
     test(
       'Simulated fatal error completes transfer with failure status',
       () async {
-        final transfer = await downloader.startTransfer(task);
+        final transfer = await downloader.transfers.start(task);
         transfer.updateStatus(
           TaskStatusUpdate(transfer.task, TaskStatus.running),
         );
@@ -263,7 +263,7 @@ void main() {
     );
 
     test('Simulated pause and resume lifecycle', () async {
-      final transfer = await downloader.startTransfer(task);
+      final transfer = await downloader.transfers.start(task);
       transfer.updateStatus(
         TaskStatusUpdate(transfer.task, TaskStatus.running),
       );
@@ -290,7 +290,7 @@ void main() {
     });
   });
 
-  group('getOrStartTransfer & Transfer Lookups', () {
+  group('getOrStart & Transfer Lookups', () {
     late FileDownloader downloader;
 
     setUp(() {
@@ -306,7 +306,7 @@ void main() {
           filename: 'gemma-2b.bin',
         );
 
-        final transfer = await downloader.startTransfer(originalTask);
+        final transfer = await downloader.transfers.start(originalTask);
         transfer.updateStatus(
           TaskStatusUpdate(transfer.task, TaskStatus.complete),
         );
@@ -318,7 +318,7 @@ void main() {
           filename: 'gemma-2b.bin',
         );
 
-        final matchedTransfer = await downloader.getOrStartTransfer(
+        final matchedTransfer = await downloader.transfers.getOrStart(
           newTaskWithRandomId,
         );
         expect(matchedTransfer.taskId, equals(originalTask.taskId));
@@ -335,12 +335,12 @@ void main() {
         metaData: 'model_v2_quantized',
       );
 
-      final transfer = await downloader.startTransfer(task);
+      final transfer = await downloader.transfers.start(task);
       transfer.updateStatus(
         TaskStatusUpdate(transfer.task, TaskStatus.running),
       );
 
-      final matched = downloader.transferForTask(
+      final matched = downloader.transfers.forTask(
         DownloadTask(url: 'https://other.com/temp.bin', filename: 'temp.bin'),
         matchBy: (existing) => existing.metaData == 'model_v2_quantized',
       );
@@ -349,25 +349,26 @@ void main() {
       expect(matched!.taskId, equals('model_abc'));
     });
 
-    test('Lookups by URL and ID', () async {
+    test('Lookups by URL, ID, and indexing operator', () async {
       final task = DownloadTask(
         taskId: 'lookup_id_1',
         url: 'https://example.com/video.mp4',
         filename: 'video.mp4',
       );
 
-      final transfer = await downloader.startTransfer(task);
+      final transfer = await downloader.transfers.start(task);
 
       expect(
-        downloader.transferForUrl('https://example.com/video.mp4'),
+        downloader.transfers.forUrl('https://example.com/video.mp4'),
         equals(transfer),
       );
-      expect(downloader.transferForId('lookup_id_1'), equals(transfer));
-      expect(downloader.transferForUrl('https://nonexistent.com'), isNull);
+      expect(downloader.transfers.forId('lookup_id_1'), equals(transfer));
+      expect(downloader.transfers['lookup_id_1'], equals(transfer));
+      expect(downloader.transfers.forUrl('https://nonexistent.com'), isNull);
     });
   });
 
-  group('startTransfers (Batch)', () {
+  group('startAll & startOrGetAll (Batch)', () {
     late FileDownloader downloader;
 
     setUp(() {
@@ -375,7 +376,7 @@ void main() {
     });
 
     test(
-      'startTransfers tracks aggregate progress across multiple transfers',
+      'startAll tracks aggregate progress across multiple transfers',
       () async {
         final tasks = List.generate(
           3,
@@ -387,7 +388,7 @@ void main() {
         );
 
         final progressEvents = <(int, int)>[];
-        final transfers = await downloader.startTransfers(
+        final transfers = await downloader.transfers.startAll(
           tasks,
           onProgress: (succeeded, failed) {
             progressEvents.add((succeeded, failed));
@@ -418,9 +419,33 @@ void main() {
         expect(progressEvents.last, equals((2, 1)));
       },
     );
+
+    test('startOrGetAll reuses existing and starts remaining', () async {
+      final task1 = DownloadTask(
+        taskId: 'part_1',
+        url: 'https://example.com/p1.bin',
+        filename: 'p1.bin',
+      );
+      final task2 = DownloadTask(
+        taskId: 'part_2',
+        url: 'https://example.com/p2.bin',
+        filename: 'p2.bin',
+      );
+
+      // Start and complete task1 first
+      final t1 = await downloader.transfers.start(task1);
+      t1.updateStatus(TaskStatusUpdate(task1, TaskStatus.complete));
+
+      // Now call startOrGetAll with task1 (completed) and task2 (new)
+      final allResults = await downloader.transfers.startOrGetAll([task1, task2]);
+      expect(allResults.length, equals(2));
+      expect(allResults[0], equals(t1));
+      expect(allResults[0].status, equals(TaskStatus.complete));
+      expect(allResults[1].taskId, equals('part_2'));
+    });
   });
 
-  group('Transfer Collections & transfersNotifier', () {
+  group('Transfer Collections & transfers.notifier', () {
     late FileDownloader downloader;
 
     setUp(() {
@@ -428,10 +453,10 @@ void main() {
     });
 
     test(
-      'activeTransfers, completedTransfers, and transfersNotifier react to state transitions',
+      'active, completed, and notifier react to state transitions',
       () async {
         var notifyCount = 0;
-        downloader.transfersNotifier.addListener(() {
+        downloader.transfers.notifier.addListener(() {
           notifyCount++;
         });
 
@@ -446,27 +471,27 @@ void main() {
           filename: '2.bin',
         );
 
-        final transfer1 = await downloader.startTransfer(task1);
-        final transfer2 = await downloader.startTransfer(task2);
+        final transfer1 = await downloader.transfers.start(task1);
+        final transfer2 = await downloader.transfers.start(task2);
 
-        expect(downloader.allTransfers().length, equals(2));
-        expect(downloader.activeTransfers().length, equals(2));
-        expect(downloader.completedTransfers().length, equals(0));
+        expect(downloader.transfers.all().length, equals(2));
+        expect(downloader.transfers.active().length, equals(2));
+        expect(downloader.transfers.completed().length, equals(0));
 
         // Transition transfer 1 to complete
         transfer1.updateStatus(
           TaskStatusUpdate(transfer1.task, TaskStatus.complete),
         );
-        expect(downloader.activeTransfers().length, equals(1));
-        expect(downloader.completedTransfers().length, equals(1));
-        expect(downloader.completedTransfers().first.taskId, equals('q_1'));
+        expect(downloader.transfers.active().length, equals(1));
+        expect(downloader.transfers.completed().length, equals(1));
+        expect(downloader.transfers.completed().first.taskId, equals('q_1'));
 
         // Transition transfer 2 to failed
         transfer2.updateStatus(
           TaskStatusUpdate(transfer2.task, TaskStatus.failed),
         );
-        expect(downloader.activeTransfers().length, equals(0));
-        expect(downloader.completedTransfers().length, equals(1));
+        expect(downloader.transfers.active().length, equals(0));
+        expect(downloader.transfers.completed().length, equals(1));
 
         expect(notifyCount, greaterThan(0));
       },

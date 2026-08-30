@@ -70,7 +70,7 @@ __On iOS__: If your `running` group notification contains a dynamic item (such a
 When using the [Transfer API](transfers.md), each `Transfer` object exposes a reactive `notificationTapNotifier` and `notificationTap` getter:
 
 ```dart
-final transfer = await FileDownloader().startTransfer(task);
+final transfer = await FileDownloader().transfers.start(task);
 
 transfer.notificationTapNotifier.addListener(() {
   final tappedType = transfer.notificationTap;

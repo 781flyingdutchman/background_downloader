@@ -21,8 +21,8 @@ enum TransferHoldReason {
 
 /// Represents a single managed background file transfer (download, upload, or data task).
 ///
-/// Returned by [FileDownloader.startTransfer], [FileDownloader.getOrStartTransfer],
-/// and [FileDownloader.startTransfers].
+/// Returned by [Transfers.start], [Transfers.getOrStart],
+/// and [Transfers.startAll].
 ///
 /// Provides reactive [ValueNotifier] handles for Flutter UI data-binding,
 /// broadcast streams for events, and awaitable [result] and [file] Futures.

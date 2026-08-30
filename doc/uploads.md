@@ -12,7 +12,7 @@ There are two ways to upload a file to a server:
 
 ## 1. High-Level Transfer API (Recommended)
 
-The easiest way to execute an upload is using `FileDownloader().startTransfer`:
+The easiest way to execute an upload is using `FileDownloader().transfers.start`:
 
 ```dart
 final task = UploadTask(
@@ -22,7 +22,7 @@ final task = UploadTask(
   fields: {'userId': '12345'},
 );
 
-final transfer = await FileDownloader().startTransfer(task);
+final transfer = await FileDownloader().transfers.start(task);
 
 // Await the server response body:
 final response = await transfer.responseBody;
@@ -43,7 +43,7 @@ final binaryTask = UploadTask(
   transferHints: {TransferHint.binaryUpload}, // sets post: 'binary'
 );
 
-final transfer = await FileDownloader().startTransfer(binaryTask);
+final transfer = await FileDownloader().transfers.start(binaryTask);
 await transfer.result;
 ```
 
@@ -67,7 +67,7 @@ final multipartTask = UploadTask(
   fields: {'username': 'johndoe', 'role': 'user'},
 );
 
-final transfer = await FileDownloader().startTransfer(multipartTask);
+final transfer = await FileDownloader().transfers.start(multipartTask);
 final result = await transfer.result;
 ```
 
@@ -89,13 +89,13 @@ final multiTask = MultiUploadTask(
   fields: {'user': 'myUser'},
 );
 
-final transfer = await FileDownloader().startTransfer(multiTask);
+final transfer = await FileDownloader().transfers.start(multiTask);
 await transfer.result;
 ```
 
 ---
 
-## 5. Batch Uploads (`startTransfers` / `uploadBatch`)
+## 5. Batch Uploads (`startAll` / `uploadBatch`)
 
 To upload multiple files as separate requests in a batch:
 
@@ -106,7 +106,7 @@ final tasks = [
   UploadTask(url: 'https://example.com/upload', filename: 'file3.txt'),
 ];
 
-final transfers = await FileDownloader().startTransfers(
+final transfers = await FileDownloader().transfers.startAll(
   tasks,
   onProgress: (succeeded, failed) => print('Progress: $succeeded succeeded, $failed failed'),
 );

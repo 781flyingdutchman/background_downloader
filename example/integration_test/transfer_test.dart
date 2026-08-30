@@ -29,7 +29,7 @@ void main() {
           updates: Updates.statusAndProgress,
         );
 
-        final transfer = await FileDownloader().startTransfer(downloadTask);
+        final transfer = await FileDownloader().transfers.start(downloadTask);
         expect(transfer.taskId, equals(downloadTask.taskId));
         expect(transfer.status, isNot(equals(TaskStatus.complete)));
 
@@ -58,7 +58,7 @@ void main() {
           updates: Updates.statusAndProgress,
         );
 
-        final transfer = await FileDownloader().startTransfer(uploadTaskToRun);
+        final transfer = await FileDownloader().transfers.start(uploadTaskToRun);
         final result = await transfer.result;
 
         expect(result.status, equals(TaskStatus.complete));
@@ -82,7 +82,7 @@ void main() {
 
         expect(binUploadTask.post, equals('binary'));
 
-        final transfer = await FileDownloader().startTransfer(binUploadTask);
+        final transfer = await FileDownloader().transfers.start(binUploadTask);
         final result = await transfer.result;
 
         expect(result.status, equals(TaskStatus.complete));
@@ -99,7 +99,7 @@ void main() {
           headers: dataTaskHeaders,
         );
 
-        final transfer = await FileDownloader().startTransfer(dataTask);
+        final transfer = await FileDownloader().transfers.start(dataTask);
         final result = await transfer.result;
 
         expect(result.status, equals(TaskStatus.complete));
@@ -120,7 +120,7 @@ void main() {
           retries: 0,
         );
 
-        final transfer = await FileDownloader().startTransfer(failTask);
+        final transfer = await FileDownloader().transfers.start(failTask);
         final result = await transfer.result;
 
         expect(
@@ -148,7 +148,7 @@ void main() {
           allowPause: true,
         );
 
-        final transfer = await FileDownloader().startTransfer(pauseResumeTask);
+        final transfer = await FileDownloader().transfers.start(pauseResumeTask);
 
         // Wait for some progress
         final progressCompleter = Completer<void>();
@@ -219,7 +219,7 @@ void main() {
           allowPause: true,
         );
 
-        final transfer = await FileDownloader().startTransfer(cancelTask);
+        final transfer = await FileDownloader().transfers.start(cancelTask);
 
         // Wait for initial progress
         final progressCompleter = Completer<void>();
@@ -252,9 +252,9 @@ void main() {
     );
   });
 
-  group('Batch Transfers (startTransfers)', () {
+  group('Batch Transfers (startAll)', () {
     testWidgets(
-      'startTransfers with multiple tasks and aggregate progress tracking',
+      'startAll with multiple tasks and aggregate progress tracking',
       timeout: const Timeout(Duration(minutes: 3)),
       (tester) async {
         final tasks = [
@@ -273,7 +273,7 @@ void main() {
         ];
 
         final progressEvents = <(int, int)>[];
-        final transfers = await FileDownloader().startTransfers(
+        final transfers = await FileDownloader().transfers.startAll(
           tasks,
           onProgress: (succeeded, failed) {
             progressEvents.add((succeeded, failed));
@@ -302,7 +302,7 @@ void main() {
     );
 
     testWidgets(
-      'startTransfers with mixed success and failure',
+      'startAll with mixed success and failure',
       timeout: const Timeout(Duration(minutes: 3)),
       (tester) async {
         final tasks = [
@@ -322,7 +322,7 @@ void main() {
         ];
 
         final progressEvents = <(int, int)>[];
-        final transfers = await FileDownloader().startTransfers(
+        final transfers = await FileDownloader().transfers.startAll(
           tasks,
           onProgress: (succeeded, failed) {
             progressEvents.add((succeeded, failed));
@@ -352,9 +352,9 @@ void main() {
     );
   });
 
-  group('Matching & getOrStartTransfer', () {
+  group('Matching & getOrStart', () {
     testWidgets(
-      'getOrStartTransfer reuses completed transfer without re-downloading',
+      'getOrStart reuses completed transfer without re-downloading',
       timeout: const Timeout(Duration(minutes: 2)),
       (tester) async {
         final task1 = DownloadTask(
@@ -363,7 +363,7 @@ void main() {
           filename: 'match_test.bin',
         );
 
-        final transfer1 = await FileDownloader().startTransfer(task1);
+        final transfer1 = await FileDownloader().transfers.start(task1);
         final result1 = await transfer1.result;
         expect(result1.status, equals(TaskStatus.complete));
 
@@ -374,7 +374,7 @@ void main() {
           filename: 'match_test.bin',
         );
 
-        final transfer2 = await FileDownloader().getOrStartTransfer(task2);
+        final transfer2 = await FileDownloader().transfers.getOrStart(task2);
 
         // Should return the cached transfer1 rather than starting a new download
         expect(transfer2.taskId, equals(task1.taskId));
@@ -387,7 +387,7 @@ void main() {
     );
 
     testWidgets(
-      'getOrStartTransfer with custom matchBy predicate',
+      'getOrStart with custom matchBy predicate',
       timeout: const Timeout(Duration(minutes: 2)),
       (tester) async {
         final task = DownloadTask(
@@ -397,7 +397,7 @@ void main() {
           metaData: 'unique_model_checkpoint_v1',
         );
 
-        final transfer = await FileDownloader().startTransfer(task);
+        final transfer = await FileDownloader().transfers.start(task);
         await transfer.result;
 
         final queryTask = DownloadTask(
@@ -405,7 +405,7 @@ void main() {
           filename: 'different_filename.bin',
         );
 
-        final matched = await FileDownloader().getOrStartTransfer(
+        final matched = await FileDownloader().transfers.getOrStart(
           queryTask,
           matchBy:
               (existing) => existing.metaData == 'unique_model_checkpoint_v1',
@@ -433,23 +433,23 @@ void main() {
           filename: 'lookup_b.bin',
         );
 
-        final transferA = await FileDownloader().startTransfer(taskA);
-        final transferB = await FileDownloader().startTransfer(taskB);
+        final transferA = await FileDownloader().transfers.start(taskA);
+        final transferB = await FileDownloader().transfers.start(taskB);
 
-        expect(FileDownloader().transferForId('lookup_a'), equals(transferA));
-        expect(FileDownloader().transferForId('lookup_b'), equals(transferB));
-        expect(FileDownloader().transferForTask(taskA), equals(transferA));
+        expect(FileDownloader().transfers.forId('lookup_a'), equals(transferA));
+        expect(FileDownloader().transfers.forId('lookup_b'), equals(transferB));
+        expect(FileDownloader().transfers.forTask(taskA), equals(transferA));
 
-        expect(FileDownloader().allTransfers().length, greaterThanOrEqualTo(2));
+        expect(FileDownloader().transfers.all().length, greaterThanOrEqualTo(2));
         expect(
-          FileDownloader().activeTransfers().length,
+          FileDownloader().transfers.active().length,
           greaterThanOrEqualTo(2),
         );
 
         await Future.wait([transferA.result, transferB.result]);
 
         expect(
-          FileDownloader().completedTransfers().length,
+          FileDownloader().transfers.completed().length,
           greaterThanOrEqualTo(2),
         );
 
@@ -485,28 +485,28 @@ void main() {
           group: 'work',
         );
 
-        final transferA = await downloaderA.startTransfer(taskA);
-        final transferB = await downloaderB.startTransfer(taskB);
+        final transferA = await downloaderA.transfers.start(taskA);
+        final transferB = await downloaderB.transfers.start(taskB);
 
         // Verify task isolation within scopes
-        expect(downloaderA.allTransfers().contains(transferA), isTrue);
-        expect(downloaderA.allTransfers().contains(transferB), isFalse);
+        expect(downloaderA.transfers.all().contains(transferA), isTrue);
+        expect(downloaderA.transfers.all().contains(transferB), isFalse);
 
-        expect(downloaderB.allTransfers().contains(transferB), isTrue);
-        expect(downloaderB.allTransfers().contains(transferA), isFalse);
+        expect(downloaderB.transfers.all().contains(transferB), isTrue);
+        expect(downloaderB.transfers.all().contains(transferA), isFalse);
 
         // Await results
         await Future.wait([transferA.result, transferB.result]);
 
-        expect(downloaderA.completedTransfers().contains(transferA), isTrue);
-        expect(downloaderB.completedTransfers().contains(transferB), isTrue);
+        expect(downloaderA.transfers.completed().contains(transferA), isTrue);
+        expect(downloaderB.transfers.completed().contains(transferB), isTrue);
 
         // Reset scope A only
         final resetCount = await downloaderA.reset(group: 'work');
         expect(resetCount, greaterThanOrEqualTo(0));
 
         // Scope B should not be affected
-        expect(downloaderB.allTransfers().contains(transferB), isTrue);
+        expect(downloaderB.transfers.all().contains(transferB), isTrue);
 
         final fileA = File(await taskA.filePath());
         final fileB = File(await taskB.filePath());
@@ -527,7 +527,7 @@ void main() {
           updates: Updates.statusAndProgress,
         );
 
-        final transfer = await FileDownloader().startTransfer(downloadTask);
+        final transfer = await FileDownloader().transfers.start(downloadTask);
 
         await tester.pumpWidget(
           MaterialApp(
@@ -568,7 +568,7 @@ void main() {
           updates: Updates.statusAndProgress,
         );
 
-        final transfer = await FileDownloader().startTransfer(task);
+        final transfer = await FileDownloader().transfers.start(task);
 
         await tester.pumpWidget(
           MaterialApp(
@@ -613,7 +613,7 @@ void main() {
         expect(task.priority, equals(0));
         expect(task.allowPause, isTrue);
 
-        final transfer = await FileDownloader().startTransfer(task);
+        final transfer = await FileDownloader().transfers.start(task);
         final result = await transfer.result;
 
         expect(result.status, equals(TaskStatus.complete));
@@ -624,7 +624,7 @@ void main() {
     );
 
     testWidgets(
-      'Task with custom notificationConfig is respected on startTransfer',
+      'Task with custom notificationConfig is respected on transfers.start',
       timeout: const Timeout(Duration(minutes: 2)),
       (tester) async {
         final notifConfig = TaskNotificationConfig(
@@ -642,7 +642,7 @@ void main() {
           notificationConfig: notifConfig,
         );
 
-        final transfer = await FileDownloader().startTransfer(task);
+        final transfer = await FileDownloader().transfers.start(task);
         final result = await transfer.result;
 
         expect(result.status, equals(TaskStatus.complete));
