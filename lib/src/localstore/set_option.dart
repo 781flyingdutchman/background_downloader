@@ -10,5 +10,5 @@ final class SetOptions {
   bool get merge => _merge;
 
   /// Creates a [SetOptions] instance.
-  SetOptions({bool merge = false}) : _merge = merge;
+  SetOptions({this._merge = false});
 }

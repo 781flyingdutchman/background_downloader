@@ -166,7 +166,7 @@ Future<(Task, TaskStatus)> multipartUpload(
   // multiple values should be encoded as '"value1", "value2", ...'
   final multiValueRegEx = RegExp(r'^(?:"[^"]+"\s*,\s*)+"[^"]+"$');
   var fieldsString = '';
-  for (var entry in task.fields.entries) {
+  for (final entry in task.fields.entries) {
     if (multiValueRegEx.hasMatch(entry.value)) {
       // extract multiple values from entry.value
       for (final match in RegExp(r'"([^"]+)"').allMatches(entry.value)) {
@@ -205,7 +205,7 @@ Future<(Task, TaskStatus)> multipartUpload(
       return (task, TaskStatus.failed);
     }
     final resolvedMimeType = mimeType.isEmpty ? lookupMimeType(path) : mimeType;
-    var derivedFilename = p.basename(file.path);
+    final derivedFilename = p.basename(file.path);
     if (filesData.length == 1) {
       // only for single file uploads do we set the task's filename property
       if (task case UriUploadTask(
@@ -281,7 +281,7 @@ Future<(Task, TaskStatus)> multipartUpload(
     // write fields
     request.sink.add(utf8.encode('$fieldsString--$boundary$lineFeed'));
     // write each file
-    for (var (index, fileData) in filesData.indexed) {
+    for (final (index, fileData) in filesData.indexed) {
       request.sink.add(utf8.encode(contentDispositionStrings[index]));
       request.sink.add(utf8.encode(contentTypeStrings[index]));
       // send the bytes to the request sink

@@ -37,7 +37,7 @@ final class DocumentRef implements DocumentRefImpl {
     options ??= SetOptions();
     if (options.merge) {
       final output = Map<String, dynamic>.from(data);
-      Map<String, dynamic>? input = _data[id] ?? {};
+      final Map<String, dynamic>? input = _data[id] ?? {};
       output.updateAll((key, value) {
         input![key] = value;
       });
@@ -49,9 +49,7 @@ final class DocumentRef implements DocumentRefImpl {
   }
 
   @override
-  Future<Map<String, dynamic>?> get() async {
-    return _data[id] ?? await _utils.get(path);
-  }
+  Future<Map<String, dynamic>?> get() async => _data[id] ?? await _utils.get(path);
 
   @override
   Future delete() async {
@@ -60,12 +58,8 @@ final class DocumentRef implements DocumentRefImpl {
   }
 
   @override
-  CollectionRef collection(String id) {
-    return CollectionRef(id, _delegate, this);
-  }
+  CollectionRef collection(String id) => CollectionRef(id, _delegate, this);
 
   @override
-  String toString() {
-    return _utils.toString();
-  }
+  String toString() => _utils.toString();
 }

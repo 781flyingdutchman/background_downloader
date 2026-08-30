@@ -160,7 +160,7 @@ void main() {
           (await FileDownloader().download(task)).status,
           equals(TaskStatus.complete),
         );
-        var result = jsonDecode(await File(path).readAsString());
+        final result = jsonDecode(await File(path).readAsString());
         expect(result['args']['param1'], equals('original'));
         expect(
           mainIsolateCallbackCounter,
@@ -216,7 +216,7 @@ void main() {
           (await FileDownloader().download(task)).status,
           equals(TaskStatus.complete),
         );
-        var result = jsonDecode(await File(path).readAsString());
+        final result = jsonDecode(await File(path).readAsString());
         expect(result['args']['param1'], equals('original'));
         expect(
           mainIsolateCallbackCounter,
@@ -244,7 +244,7 @@ void main() {
           (await FileDownloader().download(task)).status,
           equals(TaskStatus.complete),
         );
-        var result = jsonDecode(await File(path).readAsString());
+        final result = jsonDecode(await File(path).readAsString());
         expect(result['args']['param1'], equals('changed'));
         expect(
           mainIsolateCallbackCounter,
@@ -273,7 +273,7 @@ void main() {
           (await FileDownloader().download(task)).status,
           equals(TaskStatus.complete),
         );
-        var result = jsonDecode(await File(path).readAsString());
+        final result = jsonDecode(await File(path).readAsString());
         expect(result['headers']['Auth'], equals('newBearer'));
         expect(
           mainIsolateCallbackCounter,
@@ -304,7 +304,7 @@ void main() {
           (await FileDownloader().download(task)).status,
           equals(TaskStatus.complete),
         );
-        var result = jsonDecode(await File(path).readAsString());
+        final result = jsonDecode(await File(path).readAsString());
         expect(result['args']['param1'], equals('original'));
         await Future.delayed(const Duration(milliseconds: 100));
         expect(
@@ -384,7 +384,7 @@ void main() {
         );
         final result = await FileDownloader().transmit(task);
         expect(result.status, equals(TaskStatus.complete));
-        var resultJson = jsonDecode(result.responseBody!);
+        final resultJson = jsonDecode(result.responseBody!);
         expect(resultJson['args']['param1'], equals('changed'));
         expect(
           mainIsolateCallbackCounter,
@@ -404,7 +404,7 @@ void main() {
         );
         final result = await FileDownloader().transmit(task);
         expect(result.status, equals(TaskStatus.complete));
-        var resultJson = jsonDecode(result.responseBody!);
+        final resultJson = jsonDecode(result.responseBody!);
         expect(resultJson['args']['param1'], equals('original'));
         await Future.delayed(const Duration(milliseconds: 100));
         expect(
@@ -478,9 +478,9 @@ void main() {
           (await FileDownloader().download(task)).status,
           equals(TaskStatus.complete),
         );
-        var resultAsString = await File(path).readAsString();
+        final resultAsString = await File(path).readAsString();
         print(resultAsString);
-        var result = jsonDecode(resultAsString);
+        final result = jsonDecode(resultAsString);
         expect(result['args']['json'], equals('true'));
         expect(result['args']['auth'], equals('initialAccessToken'));
         expect(result['headers']['H1'], equals('value1'));
@@ -519,9 +519,9 @@ void main() {
           (await FileDownloader().download(task)).status,
           equals(TaskStatus.complete),
         );
-        var resultAsString = await File(path).readAsString();
+        final resultAsString = await File(path).readAsString();
         print(resultAsString);
-        var result = jsonDecode(resultAsString);
+        final result = jsonDecode(resultAsString);
         expect(result['args']['json'], equals('true'));
         expect(
           result['args']['auth'],
@@ -563,9 +563,9 @@ void main() {
           (await FileDownloader().download(task)).status,
           equals(TaskStatus.complete),
         );
-        var resultAsString = await File(path).readAsString();
+        final resultAsString = await File(path).readAsString();
         print(resultAsString);
-        var result = jsonDecode(resultAsString);
+        final result = jsonDecode(resultAsString);
         expect(result['args']['json'], equals('true'));
         expect(result['args']['auth'], equals('new_access_token')); // not added
         expect(result['headers']['H1'], equals('value1'));

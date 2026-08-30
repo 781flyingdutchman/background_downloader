@@ -20,7 +20,7 @@ void main() {
       'Download with pause and resume',
       timeout: const Timeout(Duration(minutes: 2)),
       (tester) async {
-        var task = DownloadTask(
+        final task = DownloadTask(
           url: urlWithLongContentLength,
           filename: 'uidt_pause_test.bin',
           updates: Updates.statusAndProgress,
@@ -28,10 +28,10 @@ void main() {
           priority: 0,
         );
 
-        Completer<void> runningCompleter = Completer();
-        Completer<void> pausedCompleter = Completer();
-        Completer<void> completeCompleter = Completer();
-        Completer<void> progressCompleter = Completer();
+        final Completer<void> runningCompleter = Completer();
+        final Completer<void> pausedCompleter = Completer();
+        final Completer<void> completeCompleter = Completer();
+        final Completer<void> progressCompleter = Completer();
 
         listenToTask(
           task,
@@ -67,7 +67,7 @@ void main() {
       'Download with cancel',
       timeout: const Timeout(Duration(minutes: 2)),
       (tester) async {
-        var task = DownloadTask(
+        final task = DownloadTask(
           url: urlWithLongContentLength,
           filename: 'uidt_cancel_test.bin',
           updates: Updates.statusAndProgress,
@@ -75,9 +75,9 @@ void main() {
           priority: 0,
         );
 
-        Completer<void> runningCompleter = Completer();
-        Completer<void> canceledCompleter = Completer();
-        Completer<void> progressCompleter = Completer();
+        final Completer<void> runningCompleter = Completer();
+        final Completer<void> canceledCompleter = Completer();
+        final Completer<void> progressCompleter = Completer();
 
         listenToTask(
           task,
@@ -105,7 +105,7 @@ void main() {
       timeout: const Timeout(Duration(minutes: 2)),
       (tester) async {
         // Using urlWithFailure to test retries
-        var task = DownloadTask(
+        final task = DownloadTask(
           url: urlWithFailure,
           filename: 'uidt_retry_test.bin',
           updates: Updates.statusAndProgress,
@@ -113,8 +113,8 @@ void main() {
           priority: 0,
         );
 
-        Completer<void> waitingToRetryCompleter = Completer();
-        Completer<void> failedCompleter = Completer();
+        final Completer<void> waitingToRetryCompleter = Completer();
+        final Completer<void> failedCompleter = Completer();
 
         listenToTask(
           task,
@@ -140,7 +140,7 @@ void main() {
       'Regular Upload',
       timeout: const Timeout(Duration(minutes: 2)),
       (tester) async {
-        var task = UploadTask(
+        final task = UploadTask(
           url: uploadTestUrl,
           filename: uploadFilename,
           updates: Updates.statusAndProgress,
@@ -148,7 +148,7 @@ void main() {
           priority: 0,
         );
 
-        Completer<void> completeCompleter = Completer();
+        final Completer<void> completeCompleter = Completer();
 
         listenToTask(
           task,
@@ -173,7 +173,7 @@ void main() {
       final fileSize = isDesktop ? 1 * 1024 * 1024 : 25 * 1024 * 1024;
       await bigFile.writeAsBytes(Uint8List(fileSize));
 
-      var task = UploadTask(
+      final task = UploadTask(
         url: isDesktop ? uploadBinaryTestUrl : uploadTestUrl,
         filename: 'big_upload_file.bin',
         post: isDesktop ? 'binary' : null,
@@ -182,9 +182,9 @@ void main() {
         priority: 0,
       );
 
-      Completer<void> runningCompleter = Completer();
-      Completer<void> canceledCompleter = Completer();
-      Completer<void> progressCompleter = Completer();
+      final Completer<void> runningCompleter = Completer();
+      final Completer<void> canceledCompleter = Completer();
+      final Completer<void> progressCompleter = Completer();
 
       listenToTask(
         task,
@@ -212,7 +212,7 @@ void main() {
       'Regular parallel download',
       timeout: const Timeout(Duration(minutes: 2)),
       (tester) async {
-        var task = ParallelDownloadTask(
+        final task = ParallelDownloadTask(
           url: urlWithLongContentLength,
           filename: 'parallel_regular.bin',
           chunks: 3,
@@ -220,7 +220,7 @@ void main() {
           priority: 0,
         );
 
-        Completer<void> completeCompleter = Completer();
+        final Completer<void> completeCompleter = Completer();
 
         listenToTask(
           task,
@@ -239,7 +239,7 @@ void main() {
       'Parallel download with pause and resume',
       timeout: const Timeout(Duration(minutes: 2)),
       (tester) async {
-        var task = ParallelDownloadTask(
+        final task = ParallelDownloadTask(
           url: urlWithLongContentLength,
           filename: 'parallel_pause.bin',
           chunks: 3,
@@ -248,10 +248,10 @@ void main() {
           priority: 0,
         );
 
-        Completer<void> runningCompleter = Completer();
-        Completer<void> pausedCompleter = Completer();
-        Completer<void> completeCompleter = Completer();
-        Completer<void> progressCompleter = Completer();
+        final Completer<void> runningCompleter = Completer();
+        final Completer<void> pausedCompleter = Completer();
+        final Completer<void> completeCompleter = Completer();
+        final Completer<void> progressCompleter = Completer();
 
         listenToTask(
           task,
@@ -289,7 +289,7 @@ void main() {
       'Parallel download with cancel',
       timeout: const Timeout(Duration(minutes: 2)),
       (tester) async {
-        var task = ParallelDownloadTask(
+        final task = ParallelDownloadTask(
           url: urlWithLongContentLength,
           filename: 'parallel_cancel.bin',
           chunks: 3,
@@ -297,9 +297,9 @@ void main() {
           priority: 0,
         );
 
-        Completer<void> runningCompleter = Completer();
-        Completer<void> canceledCompleter = Completer();
-        Completer<void> progressCompleter = Completer();
+        final Completer<void> runningCompleter = Completer();
+        final Completer<void> canceledCompleter = Completer();
+        final Completer<void> progressCompleter = Completer();
 
         listenToTask(
           task,
@@ -331,13 +331,13 @@ void main() {
       'DataTask execution',
       timeout: const Timeout(Duration(minutes: 2)),
       (tester) async {
-        var task = DataTask(
+        final task = DataTask(
           url: dataTaskGetUrl,
           updates: Updates.status,
           priority: 0,
         );
 
-        Completer<void> completeCompleter = Completer();
+        final Completer<void> completeCompleter = Completer();
         String? responseBody;
 
         listenToTask(

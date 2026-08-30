@@ -69,26 +69,18 @@ void main() {
 
 class MockPersistentStorage implements PersistentStorage {
   @override
-  Future<void> storeTaskRecord(TaskRecord record) {
-    return Future.value();
-  }
+  Future<void> storeTaskRecord(TaskRecord record) => Future.value();
 
   @override
-  Future<TaskRecord?> retrieveTaskRecord(String taskId) {
-    return Future.value(TaskRecord(defaultTask, TaskStatus.running, 0.0, 100));
-  }
+  Future<TaskRecord?> retrieveTaskRecord(String taskId) => Future.value(TaskRecord(defaultTask, TaskStatus.running, 0.0, 100));
 
   @override
-  Future<List<TaskRecord>> retrieveAllTaskRecords() {
-    return Future.value([
+  Future<List<TaskRecord>> retrieveAllTaskRecords() => Future.value([
       TaskRecord(defaultTask, TaskStatus.running, 0.0, 100),
     ]);
-  }
 
   @override
-  Future<void> removeTaskRecord(String? taskId) {
-    return Future.value();
-  }
+  Future<void> removeTaskRecord(String? taskId) => Future.value();
 
   @override
   // TODO: implement currentDatabaseVersion

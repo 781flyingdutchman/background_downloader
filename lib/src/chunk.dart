@@ -87,8 +87,8 @@ class Chunk {
   /// Return [Updates] that is based on the [parentTask]
   static Updates updatesBasedOnParent(Task parentTask) => switch (parentTask
       .updates) {
-    Updates.none || Updates.status => Updates.status,
-    Updates.progress || Updates.statusAndProgress => Updates.statusAndProgress,
+    .none || .status => Updates.status,
+    .progress || .statusAndProgress => Updates.statusAndProgress,
   };
 }
 

@@ -84,7 +84,7 @@ Future<void> doParallelDownloadTask(
       }
       extractContentType(response.headers);
       chunks = createChunks(task, response.headers);
-      for (var chunk in chunks) {
+      for (final chunk in chunks) {
         // Ask main isolate to enqueue the child task. Updates related to the child
         // will be sent to this isolate (the child's metaData contains the parent taskId).
         sendPort.send(('enqueueChild', chunk.task));
@@ -164,7 +164,6 @@ Future<void> chunkStatusUpdate(
             responseStatusCode,
           ),
         );
-        break;
 
       case TaskStatus.failed:
         taskException = update.exception;
@@ -180,7 +179,6 @@ Future<void> chunkStatusUpdate(
             responseStatusCode,
           ),
         );
-        break;
 
       case TaskStatus.notFound:
         responseBody = update.responseBody;
@@ -195,7 +193,6 @@ Future<void> chunkStatusUpdate(
             responseStatusCode,
           ),
         );
-        break;
 
       default:
         // ignore all other status updates, including null

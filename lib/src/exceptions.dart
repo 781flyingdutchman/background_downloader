@@ -16,11 +16,7 @@ const _exceptions = {
 /// exception message, or from the plugin. The localization is undefined
 /// For the [TaskHttpException], the [httpResponseCode] is only valid if >0
 /// and may offer details about the nature of the error
-base class TaskException implements Exception {
-  final String description;
-
-  TaskException(this.description);
-
+base class TaskException(final String description) implements Exception {
   String get exceptionType => 'TaskException';
 
   /// Create object from [json]
@@ -29,13 +25,11 @@ base class TaskException implements Exception {
     final exceptionType = _exceptions[typeString];
     final description = json['description'] as String? ?? '';
     if (exceptionType != null) {
-      if (typeString != 'TaskHttpException') {
-        return exceptionType(description);
-      } else {
-        final httpResponseCode =
-            (json['httpResponseCode'] as num?)?.toInt() ?? -1;
-        return exceptionType(description, httpResponseCode);
-      }
+      final httpResponseCode =
+          (json['httpResponseCode'] as num?)?.toInt() ?? -1;
+      return typeString != 'TaskHttpException'
+          ? exceptionType(description)
+          : exceptionType(description, httpResponseCode);
     }
     return TaskException('Unknown');
   }
@@ -47,11 +41,9 @@ base class TaskException implements Exception {
     int httpResponseCode = -1,
   ]) {
     final exceptionType = _exceptions[typeString] ?? TaskException.new;
-    if (typeString != 'TaskHttpException') {
-      return exceptionType(description);
-    } else {
-      return exceptionType(description, httpResponseCode);
-    }
+    return typeString != 'TaskHttpException'
+        ? exceptionType(description)
+        : exceptionType(description, httpResponseCode);
   }
 
   /// Return JSON Map representing object
@@ -64,53 +56,40 @@ base class TaskException implements Exception {
   String toJsonString() => jsonEncode(toJson());
 
   @override
-  String toString() {
-    return '$exceptionType: $description';
-  }
+  String toString() => '$exceptionType: $description';
 }
 
 /// Exception related to the filesystem, e.g. insufficient space
 /// or file not found
-final class TaskFileSystemException extends TaskException {
-  TaskFileSystemException(super.description);
-
+final class TaskFileSystemException(super.description) extends TaskException {
   @override
   String get exceptionType => 'TaskFileSystemException';
 }
 
 /// Exception related to the url, eg malformed
-final class TaskUrlException extends TaskException {
-  TaskUrlException(super.description);
-
+final class TaskUrlException(super.description) extends TaskException {
   @override
   String get exceptionType => 'TaskUrlException';
 }
 
 /// Exception related to the connection, e.g. socket exception
 /// or request timeout
-final class TaskConnectionException extends TaskException {
-  TaskConnectionException(super.description);
-
+final class TaskConnectionException(super.description) extends TaskException {
   @override
   String get exceptionType => 'TaskConnectionException';
 }
 
 /// Exception related to an attempt to resume a task, e.g.
 /// the temp filename no longer exists, or eTag has changed
-final class TaskResumeException extends TaskException {
-  TaskResumeException(super.description);
-
+final class TaskResumeException(super.description) extends TaskException {
   @override
   String get exceptionType => 'TaskResumeException';
 }
 
 /// Exception related to the HTTP response, e.g. a 403
 /// response code
-final class TaskHttpException extends TaskException {
-  final int httpResponseCode;
-
-  TaskHttpException(super.description, this.httpResponseCode);
-
+final class TaskHttpException(super.description, final int httpResponseCode)
+    extends TaskException {
   @override
   String get exceptionType => 'TaskHttpException';
 
@@ -121,7 +100,6 @@ final class TaskHttpException extends TaskException {
   };
 
   @override
-  String toString() {
-    return '$exceptionType, response code $httpResponseCode: $description';
-  }
+  String toString() =>
+      '$exceptionType, response code $httpResponseCode: $description';
 }

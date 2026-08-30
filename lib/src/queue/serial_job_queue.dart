@@ -5,12 +5,9 @@ import 'dart:collection';
 ///
 /// [J] is the type of the job data.
 /// [R] is the type of the result returned by the processor.
-class SerialJobQueue<J, R> {
-  final Future<R> Function(J) _processor;
+class SerialJobQueue<J, R>(final Future<R> Function(J) _processor) {
   final Queue<_Job<J, R>> _queue = Queue();
   bool _isProcessing = false;
-
-  SerialJobQueue(this._processor);
 
   /// Adds data to the queue and returns a Future that completes
   /// when this specific item has been processed.
@@ -46,9 +43,4 @@ class SerialJobQueue<J, R> {
 }
 
 // Simple container for the data and the completer
-class _Job<J, R> {
-  final J data;
-  final Completer<R> completer;
-
-  _Job(this.data, this.completer);
-}
+class _Job<J, R>(final J data, final Completer<R> completer);

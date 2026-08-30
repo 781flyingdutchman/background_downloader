@@ -9,7 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets('permission status', (widgetTester) async {
-    for (var permissionType in PermissionType.values) {
+    for (final permissionType in PermissionType.values) {
       final status = await FileDownloader().permissions.status(permissionType);
       print('Permission $permissionType was $status');
       switch (permissionType) {
@@ -63,7 +63,7 @@ void main() {
     // Requires manual approval of permission request, therefore
     // are are expected to be granted.
     // Make test fail by denying certain permissions
-    for (var permissionType in PermissionType.values) {
+    for (final permissionType in PermissionType.values) {
       final status = await FileDownloader().permissions.request(permissionType);
       print('Permission $permissionType was $status');
       switch (permissionType) {

@@ -55,21 +55,16 @@ enum TaskStatus {
 
   /// True if this state is one of the 'final' states, meaning no more
   /// state changes are possible
-  bool get isFinalState {
-    switch (this) {
-      case TaskStatus.complete:
-      case TaskStatus.notFound:
-      case TaskStatus.failed:
-      case TaskStatus.canceled:
-        return true;
-
-      case TaskStatus.enqueued:
-      case TaskStatus.running:
-      case TaskStatus.waitingToRetry:
-      case TaskStatus.paused:
-        return false;
-    }
-  }
+  bool get isFinalState => switch (this) {
+    .complete ||
+    .notFound ||
+    .failed ||
+    .canceled => true,
+    .enqueued ||
+    .running ||
+    .waitingToRetry ||
+    .paused => false,
+  };
 
   /// True if this state is not a 'final' state, meaning more
   /// state changes are possible
@@ -148,12 +143,8 @@ typedef TaskNotificationTapCallback =
 typedef BatchProgressCallback = void Function(int succeeded, int failed);
 
 /// Contains tasks and results related to a batch of tasks
-class Batch {
-  final List<Task> tasks;
-  final BatchProgressCallback? batchProgressCallback;
+class Batch(final List<Task> tasks, final BatchProgressCallback? batchProgressCallback) {
   final results = <Task, TaskStatus>{};
-
-  Batch(this.tasks, this.batchProgressCallback);
 
   /// Returns an Iterable with successful tasks in this batch
   Iterable<Task> get succeeded => results.entries
@@ -361,9 +352,7 @@ class TaskProgressUpdate extends TaskUpdate {
   };
 
   @override
-  String toString() {
-    return 'TaskProgressUpdate{progress: $progress, expectedFileSize: $expectedFileSize, networkSpeed: $networkSpeed, timeRemaining: $timeRemaining}';
-  }
+  String toString() => 'TaskProgressUpdate{progress: $progress, expectedFileSize: $expectedFileSize, networkSpeed: $networkSpeed, timeRemaining: $timeRemaining}';
 }
 
 // Progress values representing a status
@@ -473,12 +462,7 @@ enum NotificationType {
 ///
 /// Actual appearance of notification is dependent on the platform, e.g.
 /// on iOS {progress} is not available and ignored
-final class TaskNotification {
-  final String title;
-  final String body;
-
-  const TaskNotification(this.title, this.body);
-
+final class const TaskNotification(final String title, final String body) {
   /// Return JSON Map representing object
   Map<String, dynamic> toJson() => {"title": title, "body": body};
 }
@@ -671,14 +655,12 @@ final class Config {
   /// Returns the int equivalent of commonly used String arguments
   ///
   /// The int equivalent is used in communication with the native downloader
-  static int argToInt(String argument) {
-    final value =
-        {Config.always: 0, Config.whenAble: -2, Config.never: -1}[argument];
-    if (value == null) {
-      throw ArgumentError('Argument $argument cannot be converted to int');
-    }
-    return value;
-  }
+  static int argToInt(String argument) => switch (argument) {
+    Config.always => 0,
+    Config.whenAble => -2,
+    Config.never => -1,
+    _ => throw ArgumentError('Argument $argument cannot be converted to int'),
+  };
 }
 
 /// Wifi requirement modes at the application level

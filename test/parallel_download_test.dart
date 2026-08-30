@@ -107,7 +107,7 @@ void main() {
   });
 
   test('updates', () {
-    var task = ParallelDownloadTask(url: urlWithContentLength, chunks: 3);
+    final task = ParallelDownloadTask(url: urlWithContentLength, chunks: 3);
     parentTask = task;
     chunks = createChunks(task, {
       'content-length': urlWithContentLengthFileSize.toString(),
@@ -153,7 +153,7 @@ void main() {
   });
 
   test('json chunks', () {
-    var task = ParallelDownloadTask(url: urlWithContentLength, chunks: 3);
+    final task = ParallelDownloadTask(url: urlWithContentLength, chunks: 3);
     chunks = createChunks(task, {
       'content-length': urlWithContentLengthFileSize.toString(),
       'accept-ranges': 'bytes',

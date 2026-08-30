@@ -460,7 +460,7 @@ void main() {
 
 /// Returns true if the supplied file equals the test file
 Future<bool> fileEqualsTestFile(File file) async {
-  ByteData data = await rootBundle.load("assets/$defaultFilename");
+  final ByteData data = await rootBundle.load("assets/$defaultFilename");
   final targetData = data.buffer.asUint8List(
     data.offsetInBytes,
     data.lengthInBytes,

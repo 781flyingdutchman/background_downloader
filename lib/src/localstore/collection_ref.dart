@@ -56,9 +56,7 @@ final class CollectionRef implements CollectionRefImpl {
   Stream<Map<String, dynamic>> get stream => _utils.stream(path, _conditions);
 
   @override
-  Future<Map<String, dynamic>?> get() async {
-    return await _utils.get(path, true, _conditions);
-  }
+  Future<Map<String, dynamic>?> get() async => await _utils.get(path, true, _conditions);
 
   @override
   DocumentRef doc([String? id]) {
@@ -89,7 +87,7 @@ final class CollectionRef implements CollectionRefImpl {
   Future<void> delete() async {
     final docs = await _utils.get(path, true, _conditions);
     if (docs != null) {
-      for (var key in docs.keys) {
+      for (final key in docs.keys) {
         final id = key.split(pathSeparatorRegEx).last;
         DocumentRef(id, this)._data.clear();
       }

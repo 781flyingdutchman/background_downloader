@@ -465,9 +465,7 @@ class _LocalStorePersistentStorageExecutor {
 
   /// Returns all documents in collection as a [Map<String, dynamic>] keyed by the
   /// document identifier, with the value a [Map<String, dynamic>] representing the document
-  Future<Map<String, dynamic>> retrieveAll(String collection) async {
-    return await _db.collection(collection).get() ?? {};
-  }
+  Future<Map<String, dynamic>> retrieveAll(String collection) async => await _db.collection(collection).get() ?? {};
 
   /// Removes document with [identifier] from [collection]
   ///
@@ -592,7 +590,7 @@ class BasePersistentStorageMigrator implements PersistentStorageMigrator {
     List<String> migrationOptions,
     PersistentStorage toStorage,
   ) async {
-    for (var persistentStorageName in migrationOptions) {
+    for (final persistentStorageName in migrationOptions) {
       try {
         if (await migrateFrom(persistentStorageName, toStorage)) {
           return persistentStorageName;

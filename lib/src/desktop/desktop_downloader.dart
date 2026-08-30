@@ -50,9 +50,9 @@ final class DesktopDownloader extends BaseDownloader {
   static int _skipExistingFiles = -1;
   static String? tempFilePath;
 
-  factory DesktopDownloader() => _singleton;
+  factory() => _singleton;
 
-  DesktopDownloader._internal();
+  new _internal();
 
   @override
   Future<bool> enqueue(Task task) async {
@@ -168,7 +168,7 @@ final class DesktopDownloader extends BaseDownloader {
       );
       receivePort.close(); // also ends listener at the end
     });
-    RootIsolateToken? rootIsolateToken = RootIsolateToken.instance;
+    final RootIsolateToken? rootIsolateToken = RootIsolateToken.instance;
     if (rootIsolateToken == null) {
       processStatusUpdate(
         TaskStatusUpdate(
@@ -214,14 +214,14 @@ final class DesktopDownloader extends BaseDownloader {
 
         case (
           'statusUpdate',
-          Task updatedTask,
-          TaskStatus status,
-          TaskException? exception,
-          String? responseBody,
-          Map<String, String>? responseHeaders,
-          int? responseCode,
-          String? mimeType,
-          String? charSet,
+          final Task updatedTask,
+          final TaskStatus status,
+          final TaskException? exception,
+          final String? responseBody,
+          final Map<String, String>? responseHeaders,
+          final int? responseCode,
+          final String? mimeType,
+          final String? charSet,
         ):
           final taskStatusUpdate = TaskStatusUpdate(
             updatedTask,
@@ -246,11 +246,11 @@ final class DesktopDownloader extends BaseDownloader {
 
         case (
           'progressUpdate',
-          Task updatedTask,
-          double progress,
-          int expectedFileSize,
-          double downloadSpeed,
-          Duration timeRemaining,
+          final Task updatedTask,
+          final double progress,
+          final int expectedFileSize,
+          final double downloadSpeed,
+          final Duration timeRemaining,
         ):
           final taskProgressUpdate = TaskProgressUpdate(
             updatedTask,
@@ -267,27 +267,27 @@ final class DesktopDownloader extends BaseDownloader {
             )?.send(taskProgressUpdate);
           }
 
-        case ('taskCanResume', bool taskCanResume):
+        case ('taskCanResume', final bool taskCanResume):
           setCanResume(task, taskCanResume);
 
-        case ('resumeData', String data, int requiredStartByte, String? eTag):
+        case ('resumeData', final String data, final int requiredStartByte, final String? eTag):
           setResumeData(ResumeData(task, data, requiredStartByte, eTag));
 
         // from [ParallelDownloadTask]
-        case ('enqueueChild', DownloadTask childTask):
+        case ('enqueueChild', final DownloadTask childTask):
           await FileDownloader().enqueue(childTask);
 
         // from [ParallelDownloadTask]
-        case ('cancelTasksWithId', List<String> taskIds):
+        case ('cancelTasksWithId', final List<String> taskIds):
           await FileDownloader().cancelTasksWithIds(taskIds);
 
         // from [ParallelDownloadTask]
-        case ('pauseTasks', List<DownloadTask> tasks):
+        case ('pauseTasks', final List<DownloadTask> tasks):
           for (final chunkTask in tasks) {
             await FileDownloader().pause(chunkTask);
           }
 
-        case ('log', String logMessage):
+        case ('log', final String logMessage):
           _log.finest(logMessage);
 
         default:
@@ -403,7 +403,7 @@ final class DesktopDownloader extends BaseDownloader {
 
   @override
   Future<Task?> taskForId(String taskId) async {
-    var task = await super.taskForId(taskId);
+    final task = await super.taskForId(taskId);
     if (task != null) {
       return task;
     }
@@ -514,7 +514,7 @@ final class DesktopDownloader extends BaseDownloader {
       return null;
     }
     final fileName = path.basename(filePath);
-    var destFilePath = path.join(destDirectoryPath, fileName);
+    final destFilePath = path.join(destDirectoryPath, fileName);
     return asUriString ? Uri.file(destFilePath).toString() : destFilePath;
   }
 
@@ -598,19 +598,19 @@ final class DesktopDownloader extends BaseDownloader {
   @override
   Future<(String, String)> configureItem((String, dynamic) configItem) async {
     switch (configItem) {
-      case (Config.requestTimeout, Duration? duration):
+      case (Config.requestTimeout, final Duration? duration):
         requestTimeout = duration;
 
-      case (Config.proxy, (String address, int port)):
+      case (Config.proxy, (final String address, final int port)):
         proxy = {'address': address, 'port': port};
 
       case (Config.proxy, false):
         proxy = {};
 
-      case (Config.bypassTLSCertificateValidation, bool bypass):
+      case (Config.bypassTLSCertificateValidation, final bool bypass):
         bypassTLSCertificateValidation = bypass;
 
-      case (Config.mTLS, MTLSConfig config):
+      case (Config.mTLS, final MTLSConfig config):
         mtlsConfig = config;
 
       case (Config.mTLS, false):
@@ -620,9 +620,9 @@ final class DesktopDownloader extends BaseDownloader {
       case (
         Config.holdingQueue,
         (
-          int? maxConcurrentParam,
-          int? maxConcurrentByHostParam,
-          int? maxConcurrentByGroupParam,
+          final int? maxConcurrentParam,
+          final int? maxConcurrentByHostParam,
+          final int? maxConcurrentByGroupParam,
         ),
       ):
         maxConcurrent = maxConcurrentParam ?? 10;
@@ -635,7 +635,7 @@ final class DesktopDownloader extends BaseDownloader {
         maxConcurrentByHost = unlimited;
         maxConcurrentByGroup = unlimited;
 
-      case (Config.skipExistingFiles, int value):
+      case (Config.skipExistingFiles, final int value):
         _skipExistingFiles = value;
 
       case (Config.skipExistingFiles, Config.never):
@@ -646,7 +646,7 @@ final class DesktopDownloader extends BaseDownloader {
       case (Config.skipExistingFiles, true):
         _skipExistingFiles = 0;
 
-      case (Config.tempFilePath, String path):
+      case (Config.tempFilePath, final String path):
         tempFilePath = (path.isNotEmpty && path != Config.never) ? path : null;
 
       case (Config.tempFilePath, null):

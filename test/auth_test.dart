@@ -21,15 +21,13 @@ void main() {
     });
 
     test('No change if token not expired', () async {
-      final mockClient = MockClient((request) async {
-        return http.Response(
+      final mockClient = MockClient((request) async => http.Response(
           jsonEncode({'access_token': 'newAccessToken', 'expires_in': 3600}),
           200,
-        );
-      });
+        ));
       auth.accessTokenExpiryTime = null; // never expires
       auth.accessQueryParams = {'accessToken': '{accessToken}'};
-      Uri uri = await auth.getAccessUri(
+      final Uri uri = await auth.getAccessUri(
         url: 'https://example.com/resource',
         httpClient: mockClient,
       );
@@ -39,9 +37,7 @@ void main() {
     });
 
     test('HttpException if client returns error', () async {
-      final mockClient = MockClient((request) async {
-        return http.Response('', 400);
-      });
+      final mockClient = MockClient((request) async => http.Response('', 400));
       auth.accessQueryParams = {'accessToken': '{accessToken}'};
       expect(
         () => auth.getAccessUri(
@@ -55,16 +51,14 @@ void main() {
     test(
       'Token refresh updates accessToken and accessTokenExpiryTime',
       () async {
-        final mockClient = MockClient((request) async {
-          return http.Response(
+        final mockClient = MockClient((request) async => http.Response(
             jsonEncode({
               'access_token': 'newAccessToken',
               'expires_in': 3600,
               'refresh_token': 'newRefreshToken',
             }),
             200,
-          );
-        });
+          ));
         final (updatedAccessToken, updatedRefreshToken) = await auth
             .refreshAccessToken(httpClient: mockClient);
         // Check if tokens and expiry time are updated
@@ -77,14 +71,12 @@ void main() {
     );
 
     test('getAccessUri refreshes token if expired', () async {
-      final mockClient = MockClient((request) async {
-        return http.Response(
+      final mockClient = MockClient((request) async => http.Response(
           jsonEncode({'access_token': 'newAccessToken', 'expires_in': 3600}),
           200,
-        );
-      });
+        ));
       auth.accessQueryParams = {'accessToken': '{accessToken}'};
-      Uri uri = await auth.getAccessUri(
+      final Uri uri = await auth.getAccessUri(
         url: 'https://example.com/resource',
         httpClient: mockClient,
       );

@@ -80,7 +80,7 @@ void main() {
           taskStatusCallback: statusCallback,
           taskProgressCallback: progressCallback,
         );
-        Directory directory = await getApplicationDocumentsDirectory();
+        final Directory directory = await getApplicationDocumentsDirectory();
         final uploadPath = p.join(directory.path, uploadFilename);
         final task = UriUploadTask(
           fileUri: Uri.file(uploadPath),
@@ -161,7 +161,7 @@ void main() {
         expect(task.fileUri, equals(fileUri));
         final result = await FileDownloader().upload(task);
         expect(result.status, equals(TaskStatus.complete));
-        var resultTask = result.task as UriUploadTask;
+        final resultTask = result.task as UriUploadTask;
         expect((resultTask).fileUri, equals(fileUri));
         expect(resultTask.filename, equals(uploadTask.filename));
         expect((resultTask).directoryUri, isNull);
@@ -256,7 +256,7 @@ void main() {
         expect(result.status, equals(TaskStatus.complete));
         final resultTask = result.task as UriDownloadTask;
         print('filename=${resultTask.filename}');
-        var fileUri = resultTask.fileUri!;
+        final fileUri = resultTask.fileUri!;
         print('uri=$fileUri');
         expect(resultTask.filename, equals(task.filename));
         expect(fileUri.scheme, equals('file'));
@@ -328,7 +328,7 @@ void main() {
           await statusCallbackCompleter.future;
           expect(lastStatus, equals(TaskStatus.complete));
           expect(lastTaskWithStatus, isNotNull);
-          var file = File(await lastTaskWithStatus!.filePath());
+          final file = File(await lastTaskWithStatus!.filePath());
           print('File path: ${file.path}');
           expect(await fileEqualsLargeTestFile(file), isTrue);
           await file.delete();
@@ -372,7 +372,7 @@ void main() {
       timeout: const Timeout(Duration(minutes: 2)),
       () async {
         // note: moved file is not deleted in this test
-        var filePath = await task.filePath();
+        final filePath = await task.filePath();
         await FileDownloader().download(task);
         expect(File(filePath).existsSync(), isTrue);
         final fileUri = Uri.file(filePath);

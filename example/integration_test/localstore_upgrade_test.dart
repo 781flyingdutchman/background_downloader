@@ -20,7 +20,7 @@ void main() {
       );
     });
     WidgetsFlutterBinding.ensureInitialized();
-    for (var dir in [
+    for (final dir in [
       await getApplicationDocumentsDirectory(),
       await getApplicationSupportDirectory(),
     ]) {

@@ -14,7 +14,7 @@ import 'isolate.dart';
 /// the [messagesToIsolate] queue
 Future<void> doDataTask(DataTask task, SendPort sendPort) async {
   final client = DesktopDownloader.httpClientForUrl(task.url);
-  var request = http.Request(task.httpRequestMethod, Uri.parse(task.url));
+  final request = http.Request(task.httpRequestMethod, Uri.parse(task.url));
   request.headers.addAll(task.headers);
   if (task.post is String) {
     request.body = task.post!;

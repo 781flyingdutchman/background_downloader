@@ -122,8 +122,8 @@ class _MyAppState extends State<MyApp> {
         case TaskStatusUpdate():
           if (update.task == backgroundDownloadTask) {
             buttonState = switch (update.status) {
-              TaskStatus.running || TaskStatus.enqueued => ButtonState.pause,
-              TaskStatus.paused => ButtonState.resume,
+              .running || .enqueued => ButtonState.pause,
+              .paused => ButtonState.resume,
               _ => ButtonState.reset,
             };
             setState(() {
@@ -273,7 +273,7 @@ class _MyAppState extends State<MyApp> {
   /// based on state)
   Future<void> processButtonPress() async {
     switch (buttonState) {
-      case ButtonState.download:
+      case .download:
         // start download
         await getPermission(PermissionType.notifications);
         backgroundDownloadTask = DownloadTask(
@@ -291,29 +291,24 @@ class _MyAppState extends State<MyApp> {
           displayName: 'My display name',
         );
         await FileDownloader().enqueue(backgroundDownloadTask!);
-        break;
-      case ButtonState.cancel:
+      case .cancel:
         // cancel download
         if (backgroundDownloadTask != null) {
           await FileDownloader().cancelTasksWithIds([
             backgroundDownloadTask!.taskId,
           ]);
         }
-        break;
-      case ButtonState.reset:
+      case .reset:
         downloadTaskStatus = null;
         buttonState = ButtonState.download;
-        break;
-      case ButtonState.pause:
+      case .pause:
         if (backgroundDownloadTask != null) {
           await FileDownloader().pause(backgroundDownloadTask!);
         }
-        break;
-      case ButtonState.resume:
+      case .resume:
         if (backgroundDownloadTask != null) {
           await FileDownloader().resume(backgroundDownloadTask!);
         }
-        break;
     }
     if (mounted) {
       setState(() {});
@@ -326,7 +321,7 @@ class _MyAppState extends State<MyApp> {
   Future<void> processLoadAndOpen() async {
     if (!loadAndOpenInProgress) {
       await getPermission(PermissionType.notifications);
-      var task = DownloadTask(
+      final task = DownloadTask(
         url:
             'https://i2.wp.com/www.skiptomylou.org/wp-content/uploads/2019/06/dog-drawing.jpg',
         baseDirectory: BaseDirectory.applicationSupport,
@@ -481,18 +476,17 @@ class _RequireWiFiChoiceState extends State<RequireWiFiChoice> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return SegmentedButton<RequireWiFi>(
-      segments: const <ButtonSegment<RequireWiFi>>[
-        ButtonSegment<RequireWiFi>(
+  Widget build(BuildContext context) => SegmentedButton<RequireWiFi>(
+      segments: const [
+        ButtonSegment(
           value: RequireWiFi.asSetByTask,
           label: Text('Task'),
         ),
-        ButtonSegment<RequireWiFi>(
+        ButtonSegment(
           value: RequireWiFi.forAllTasks,
           label: Text('All'),
         ),
-        ButtonSegment<RequireWiFi>(
+        ButtonSegment(
           value: RequireWiFi.forNoTasks,
           label: Text('None'),
         ),
@@ -513,7 +507,6 @@ class _RequireWiFiChoiceState extends State<RequireWiFiChoice> {
         });
       },
     );
-  }
 }
 
 enum ButtonState { download, cancel, pause, resume, reset }

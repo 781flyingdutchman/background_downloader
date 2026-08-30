@@ -117,7 +117,7 @@ void progressCallback(TaskProgressUpdate update) {
 
 /// Returns true if the supplied file equals the large test file
 Future<bool> fileEqualsLargeTestFile(File file) async {
-  ByteData data = await rootBundle.load("assets/$largeFilename");
+  final ByteData data = await rootBundle.load("assets/$largeFilename");
   final targetData = data.buffer.asUint8List(
     data.offsetInBytes,
     data.lengthInBytes,
@@ -148,13 +148,13 @@ Future<void> defaultSetup() async {
   );
 
   // copy the test files to upload from assets to documents directory
-  Directory directory = await getApplicationDocumentsDirectory();
+  final Directory directory = await getApplicationDocumentsDirectory();
   if (!directory.existsSync()) {
     directory.createSync(recursive: true);
   }
   for (final filename in [uploadFilename, uploadFilename2, largeFilename]) {
-    var uploadFilePath = join(directory.path, filename);
-    ByteData data = await rootBundle.load("assets/$filename");
+    final uploadFilePath = join(directory.path, filename);
+    final ByteData data = await rootBundle.load("assets/$filename");
     final buffer = data.buffer;
     File(uploadFilePath).writeAsBytesSync(
       buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),

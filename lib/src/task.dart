@@ -150,10 +150,10 @@ base class Request {
       return {};
     }
     final List<Cookie> cookieList = switch (cookies) {
-      http.Response response => cookiesFromSetCookie(
+      final http.Response response => cookiesFromSetCookie(
         response.headers['set-cookie'] ?? '',
       ),
-      List<Cookie> list => list,
+      final List<Cookie> list => list,
       String _ => cookiesFromSetCookie(cookies),
       _ =>
         throw ArgumentError(
@@ -208,11 +208,9 @@ base class Request {
   int get hashCode => url.hashCode;
 
   @override
-  String toString() {
-    return 'Request{url: $url, headers: $headers, httpRequestMethod: '
+  String toString() => 'Request{url: $url, headers: $headers, httpRequestMethod: '
         '$httpRequestMethod, post: ${post == null ? "null" : "not null"}, '
         'retries: $retries, retriesRemaining: $retriesRemaining}';
-  }
 }
 
 /// RegExp to match a path separator and root directory
@@ -425,9 +423,7 @@ sealed class Task extends Request implements Comparable {
   };
 
   /// Create a new [Task] subclass from provided [jsonString]
-  factory Task.createFromJsonString(String jsonString) {
-    return Task.createFromJson(jsonDecode(jsonString));
-  }
+  factory Task.createFromJsonString(String jsonString) => Task.createFromJson(jsonDecode(jsonString));
 
   /// Returns the absolute path to the file represented by this task
   /// based on the [Task.filename] (default) or [withFilename]
@@ -446,7 +442,7 @@ sealed class Task extends Request implements Comparable {
       return '';
     }
     switch (this) {
-      case UriTask t:
+      case final UriTask t:
         if (t.fileUri != null) {
           assert(
             t.fileUri?.scheme == 'file',
@@ -493,26 +489,26 @@ sealed class Task extends Request implements Comparable {
       }
     }
     final baseDir = switch ((baseDirectory, Task.useExternalStorage)) {
-      (BaseDirectory.applicationDocuments, false) =>
+      (.applicationDocuments, false) =>
         await getApplicationDocumentsDirectory(),
-      (BaseDirectory.temporary, false) => await getTemporaryDirectory(),
-      (BaseDirectory.applicationSupport, false) =>
+      (.temporary, false) => await getTemporaryDirectory(),
+      (.applicationSupport, false) =>
         await getApplicationSupportDirectory(),
-      (BaseDirectory.applicationLibrary, false)
+      (.applicationLibrary, false)
           when defaultTargetPlatform == TargetPlatform.macOS ||
               defaultTargetPlatform == TargetPlatform.iOS =>
         await getLibraryDirectory(),
-      (BaseDirectory.applicationLibrary, false) => Directory(
+      (.applicationLibrary, false) => Directory(
         p.join((await getApplicationSupportDirectory()).path, 'Library'),
       ),
-      (BaseDirectory.root, _) => Directory('/'),
+      (.root, _) => Directory('/'),
       // Android only: external storage variants
-      (BaseDirectory.applicationDocuments, true) => externalStorageDirectory!,
-      (BaseDirectory.temporary, true) => externalCacheDirectory!,
-      (BaseDirectory.applicationSupport, true) => Directory(
+      (.applicationDocuments, true) => externalStorageDirectory!,
+      (.temporary, true) => externalCacheDirectory!,
+      (.applicationSupport, true) => Directory(
         p.join(externalStorageDirectory!.path, 'Support'),
       ),
-      (BaseDirectory.applicationLibrary, true) => Directory(
+      (.applicationLibrary, true) => Directory(
         p.join(externalStorageDirectory!.path, 'Library'),
       ),
     };
@@ -704,10 +700,8 @@ sealed class Task extends Request implements Comparable {
   }
 
   @override
-  String toString() {
-    return '$taskType{taskId: $taskId, url: $url, filename: $filename, headers: '
+  String toString() => '$taskType{taskId: $taskId, url: $url, filename: $filename, headers: '
         '$headers, httpRequestMethod: $httpRequestMethod, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, updates: $updates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, allowPause: $allowPause, priority: $priority, metaData: $metaData, displayName: $displayName}';
-  }
 }
 
 /// Information related to a download task
@@ -1282,11 +1276,11 @@ final class MultiUploadTask extends UploadTask {
   }) : fileFields = files
            .map(
              (e) => switch (e) {
-               String filename => p.basenameWithoutExtension(filename),
-               (String fileField, String _) ||
-               (String fileField, String _, String _) ||
-               (String fileField, Uri _) ||
-               (String fileField, Uri _, String _) => fileField,
+               final String filename => p.basenameWithoutExtension(filename),
+               (final String fileField, String _) ||
+               (final String fileField, String _, String _) ||
+               (final String fileField, Uri _) ||
+               (final String fileField, Uri _, String _) => fileField,
                Uri _ => 'file${files.indexOf(e) + 1}',
                _ => throw ArgumentError(_filesArgumentError),
              },
@@ -1295,12 +1289,12 @@ final class MultiUploadTask extends UploadTask {
        filenames = files
            .map(
              (e) => switch (e) {
-               String filename ||
-               (String _, String filename) ||
-               (String _, String filename, String _) => filename,
-               Uri uri ||
-               (String _, Uri uri) ||
-               (String _, Uri uri, String _) => uri.toString(),
+               final String filename ||
+               (String _, final String filename) ||
+               (String _, final String filename, String _) => filename,
+               final Uri uri ||
+               (String _, final Uri uri) ||
+               (String _, final Uri uri, String _) => uri.toString(),
                _ => throw ArgumentError(_filesArgumentError),
              },
            )
@@ -1308,10 +1302,10 @@ final class MultiUploadTask extends UploadTask {
        mimeTypes = files
            .map(
              (e) => switch (e) {
-               String filename || (String _, String filename) =>
+               final String filename || (String _, final String filename) =>
                  lookupMimeType(filename) ?? 'application/octet-stream',
-               (String _, String _, String mimeType) ||
-               (String _, Uri _, String mimeType) => mimeType,
+               (String _, String _, final String mimeType) ||
+               (String _, Uri _, final String mimeType) => mimeType,
                Uri _ || (String _, Uri _) => '',
                _ => throw ArgumentError(_filesArgumentError),
              },

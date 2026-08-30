@@ -529,7 +529,7 @@ interface class FileDownloader {
   ///
   /// [tasks] cannot be an empty list
   Future<Batch> downloadBatch(
-    final List<DownloadTask> tasks, {
+    List<DownloadTask> tasks, {
     BatchProgressCallback? batchProgressCallback,
     TaskStatusCallback? taskStatusCallback,
     TaskProgressCallback? taskProgressCallback,
@@ -596,7 +596,7 @@ interface class FileDownloader {
   ///
   /// [tasks] cannot be an empty list
   Future<Batch> uploadBatch(
-    final List<UploadTask> tasks, {
+    List<UploadTask> tasks, {
     BatchProgressCallback? batchProgressCallback,
     TaskStatusCallback? taskStatusCallback,
     TaskProgressCallback? taskProgressCallback,
@@ -1024,8 +1024,8 @@ interface class FileDownloader {
     final nTasks = tasks?.map((t) => withNamespacedGroup(t) as DownloadTask);
     final results = <Task>[];
     final tasksToResume = switch ((nTasks, nGroup)) {
-      (Iterable<DownloadTask> tasks, null) => tasks,
-      (null, String group) => (await _downloader.getPausedTasks())
+      (final Iterable<DownloadTask> tasks, null) => tasks,
+      (null, final String group) => (await _downloader.getPausedTasks())
           .whereType<DownloadTask>()
           .where((task) => task.group == group),
       (null, null) =>
@@ -1057,8 +1057,8 @@ interface class FileDownloader {
   /// requires [rescheduleRunningTasks] to be true as well).
   Future<bool> requireWiFi(
     RequireWiFi requirement, {
-    final rescheduleRunningTasks = true,
-    final alsoRestartUploads = false,
+    rescheduleRunningTasks = true,
+    alsoRestartUploads = false,
   }) {
     assert(
       !(alsoRestartUploads && !rescheduleRunningTasks),
@@ -1684,18 +1684,14 @@ interface class FileDownloader {
   }
 
   /// Returns all active (non-final state) [Transfer] objects.
-  List<Transfer> activeTransfers({String? group}) {
-    return allTransfers(
+  List<Transfer> activeTransfers({String? group}) => allTransfers(
       group: group,
     ).where((t) => t.status.isNotFinalState).toList();
-  }
 
   /// Returns all completed [Transfer] objects.
-  List<Transfer> completedTransfers({String? group}) {
-    return allTransfers(
+  List<Transfer> completedTransfers({String? group}) => allTransfers(
       group: group,
     ).where((t) => t.status == TaskStatus.complete).toList();
-  }
 
   void _ensureTransferGroupRegistered(String namespacedGroup) {
     if (_registeredTransferGroups.contains(namespacedGroup)) return;

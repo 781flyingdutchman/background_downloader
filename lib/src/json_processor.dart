@@ -55,21 +55,15 @@ class JsonProcessor {
 
   /// Public API
 
-  Future<Task> decodeTask(String jsonString) async {
-    return await _process<Task>((id) => _TaskFromJson(id, jsonString));
-  }
+  Future<Task> decodeTask(String jsonString) async => await _process<Task>((id) => _TaskFromJson(id, jsonString));
 
-  Future<List<DownloadTask>> decodeDownloadTaskList(String jsonString) async {
-    return await _process<List<DownloadTask>>(
+  Future<List<DownloadTask>> decodeDownloadTaskList(String jsonString) async => await _process<List<DownloadTask>>(
       (id) => _DownloadTaskListFromJson(id, jsonString),
     );
-  }
 
-  Future<List<Task>> decodeTaskList(List<dynamic> jsonStrings) async {
-    return await _process<List<Task>>(
+  Future<List<Task>> decodeTaskList(List<dynamic> jsonStrings) async => await _process<List<Task>>(
       (id) => _TaskListFromListStrings(id, jsonStrings),
     );
-  }
 
   Future<(String, String)> encodeTaskAndNotificationConfig(
     Iterable<Task> tasks,
@@ -221,21 +215,21 @@ void _isolateMain(SendPort mainSendPort) {
 
 Future<dynamic> _executeCommand(JsonCommand command) async {
   switch (command) {
-    case _TaskFromJson c:
+    case final _TaskFromJson c:
       return Task.createFromJson(jsonDecode(c.jsonString));
 
-    case _DownloadTaskListFromJson c:
+    case final _DownloadTaskListFromJson c:
       return (jsonDecode(c.jsonString) as List)
           .map((e) => Task.createFromJson(e as Map<String, dynamic>))
           .cast<DownloadTask>()
           .toList();
 
-    case _TaskListFromListStrings c:
+    case final _TaskListFromListStrings c:
       return c.jsonStrings
           .map((e) => Task.createFromJson(jsonDecode(e as String)))
           .toList();
 
-    case _TaskAndNotificationConfigJsonStrings c:
+    case final _TaskAndNotificationConfigJsonStrings c:
       final tasksJsonString = jsonEncode(c.tasks);
       final configs =
           c.tasks

@@ -53,14 +53,14 @@ int getContentLength(Map<String, String> responseHeaders, Task task) {
   final taskRangeHeader = task.headers['Range'] ?? task.headers['range'] ?? '';
   final taskRange = parseRange(taskRangeHeader);
   if (taskRange.$2 != null) {
-    var rangeLength = taskRange.$2! - taskRange.$1 + 1;
+    final rangeLength = taskRange.$2! - taskRange.$1 + 1;
     _log.finest(
       'TaskId ${task.taskId} contentLength set to $rangeLength based on Range header',
     );
     return rangeLength;
   }
   // try extracting it from a special "Known-Content-Length" header
-  var knownLength =
+  final knownLength =
       int.tryParse(
         task.headers['Known-Content-Length'] ??
             task.headers['known-content-length'] ??

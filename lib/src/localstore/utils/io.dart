@@ -109,9 +109,7 @@ final class Utils implements UtilsImpl {
   }
 
   @override
-  Future<dynamic>? set(Map<String, dynamic> data, String path) {
-    return _writeFile(data, path);
-  }
+  Future<dynamic>? set(Map<String, dynamic> data, String path) => _writeFile(data, path);
 
   @override
   Future delete(String path) async {
@@ -187,7 +185,7 @@ final class Utils implements UtilsImpl {
     try {
       if (!await dir.exists()) return;
       final entries = await dir.list(recursive: false).toList();
-      for (var e in entries) {
+      for (final e in entries) {
         if (e is! File) continue;
         final relativePath = p.relative(e.path, from: dbDir.path);
         final filePath =
@@ -240,8 +238,7 @@ final class Utils implements UtilsImpl {
     return file;
   }
 
-  Future _writeFile(Map<String, dynamic> data, String path) {
-    return _synchronized(path, () async {
+  Future _writeFile(Map<String, dynamic> data, String path) => _synchronized(path, () async {
       final serialized = json.encode(data);
       final buffer = utf8.encode(serialized);
       final file = await _getFile(path);
@@ -264,7 +261,6 @@ final class Utils implements UtilsImpl {
       final storage = _storageCache.putIfAbsent(key, () => _newStream(key));
       storage.add(data);
     });
-  }
 
   Future _deleteFile(String path) async {
     final dbDir = await Localstore.instance.databaseDirectory;

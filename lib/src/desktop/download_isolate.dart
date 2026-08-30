@@ -50,7 +50,7 @@ Future<void> doDownloadTask(
       isResume &&
       await determineIfResumeIsPossible(tempFilePath, requiredStartByte);
   final client = DesktopDownloader.httpClientForUrl(downloadTask.url);
-  var request = http.Request(
+  final request = http.Request(
     downloadTask.httpRequestMethod,
     Uri.parse(downloadTask.url),
   );
@@ -64,7 +64,7 @@ Future<void> doDownloadTask(
     final newRangeString = 'bytes=${resumeRange.$1}-${resumeRange.$2 ?? ""}';
     request.headers['Range'] = newRangeString;
   }
-  if (downloadTask.post case String post) {
+  if (downloadTask.post case final String post) {
     request.body = post;
   }
   var resultStatus = TaskStatus.failed;
@@ -218,7 +218,7 @@ Future<TaskStatus> processOkDownloadResponse(
       requestTimeout,
     );
     switch (transferBytesResult) {
-      case TaskStatus.complete:
+      case .complete:
         // copy file to destination, creating dirs if needed
         await outStream.flush();
         final dirPath = p.dirname(filePath);
@@ -226,11 +226,11 @@ Future<TaskStatus> processOkDownloadResponse(
         File(actualTempFilePath).copySync(filePath);
         resultStatus = TaskStatus.complete;
 
-      case TaskStatus.canceled:
+      case .canceled:
         deleteTempFile(actualTempFilePath);
         resultStatus = TaskStatus.canceled;
 
-      case TaskStatus.paused:
+      case .paused:
         if (taskCanResume) {
           sendPort.send((
             'resumeData',
@@ -246,7 +246,7 @@ Future<TaskStatus> processOkDownloadResponse(
           resultStatus = TaskStatus.failed;
         }
 
-      case TaskStatus.failed:
+      case .failed:
         break;
 
       default:

@@ -298,10 +298,8 @@ final class TaskRecord {
   );
 
   @override
-  String toString() {
-    return 'DatabaseRecord{task: $task, status: $status, progress: $progress,'
+  String toString() => 'DatabaseRecord{task: $task, status: $status, progress: $progress,'
         ' expectedFileSize: $expectedFileSize, exception: $exception}';
-  }
 
   @override
   bool operator ==(Object other) =>

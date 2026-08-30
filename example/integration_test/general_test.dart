@@ -331,7 +331,7 @@ void main() {
           taskStatusCallback: statusCallback,
         );
         // enqueue task with 'default' group, so no status updates should come
-        var path = join(
+        final path = join(
           (await getApplicationDocumentsDirectory()).path,
           task.filename,
         );
@@ -441,8 +441,7 @@ void main() {
       timeout: const Timeout(Duration(minutes: 2)),
       (widgetTester) async {
         task = DownloadTask(
-          url:
-              'https://storage.googleapis.com/approachcharts/test/5MB-test.ZIP',
+          url: urlWithContentLength,
           filename: defaultFilename,
           updates: Updates.progress,
         );
@@ -644,7 +643,7 @@ void main() {
         // Cache directory will not set bit, but cannot see that in logs
         task = task.copyWith(baseDirectory: BaseDirectory.temporary);
         await FileDownloader().download(task);
-        var configResult2 = await FileDownloader().configure(
+        final configResult2 = await FileDownloader().configure(
           iOSConfig: (Config.excludeFromCloudBackup, Config.never),
         );
         expect(configResult2.first.$1, equals(Config.excludeFromCloudBackup));
@@ -660,7 +659,7 @@ void main() {
       await Future.delayed(const Duration(seconds: 2)); // clear cancellations
       FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
       // use a larger file to ensure the task does not complete before reset is called
-      var resetTask = DownloadTask(
+      final resetTask = DownloadTask(
         url: urlWithContentLength,
         filename: defaultFilename,
       );
@@ -1013,7 +1012,7 @@ void main() {
       'download with await',
       timeout: const Timeout(Duration(minutes: 2)),
       (widgetTester) async {
-        var path = join(
+        final path = join(
           (await getApplicationDocumentsDirectory()).path,
           task.filename,
         );
@@ -1065,8 +1064,8 @@ void main() {
         // var result = await FileDownloader().download(task);
         final taskFuture = FileDownloader().download(task);
         final secondTaskFuture = FileDownloader().download(secondTask);
-        var results = await Future.wait([taskFuture, secondTaskFuture]);
-        for (var result in results) {
+        final results = await Future.wait([taskFuture, secondTaskFuture]);
+        for (final result in results) {
           expect(result.status, equals(TaskStatus.complete));
         }
         exists = await File(path).exists();
@@ -1275,17 +1274,17 @@ void main() {
           filename: defaultFilename,
           retries: 2,
         );
-        var failingResult = FileDownloader().download(
+        final failingResult = FileDownloader().download(
           failTask,
           onStatus: (status) => a++,
           onProgress: (progress) => p1 += progress,
         );
-        var successResult = FileDownloader().download(
+        final successResult = FileDownloader().download(
           task,
           onStatus: (status) => b++,
           onProgress: (progress) => p2 += progress,
         );
-        var successResult2 = FileDownloader().download(
+        final successResult2 = FileDownloader().download(
           task.copyWith(taskId: 'second'),
           onStatus: (status) => c++,
           onProgress: (progress) => p3 += progress,
@@ -1330,12 +1329,12 @@ void main() {
           filename: defaultFilename,
           retries: 2,
         );
-        var failingResult = FileDownloader().download(
+        final failingResult = FileDownloader().download(
           failTask,
           onStatus:
               (status) => statusCallback(TaskStatusUpdate(failTask, status)),
         );
-        var successResult = FileDownloader().download(
+        final successResult = FileDownloader().download(
           task,
           onStatus: (status) => statusCallback(TaskStatusUpdate(task, status)),
         );
@@ -1372,7 +1371,7 @@ void main() {
       widgetTester,
     ) async {
       task = DownloadTask(
-        url: 'https://avmaps-dot-bbflightserver-hrd.appspot.com/something',
+        url: 'http://$localServerHostPort/something',
       );
       final result = await FileDownloader().download(task);
       expect(result.status, equals(TaskStatus.notFound));
@@ -1403,7 +1402,7 @@ void main() {
           (await getApplicationDocumentsDirectory()).path,
           task.filename,
         );
-        var dummyContent = 'dummy content';
+        final dummyContent = 'dummy content';
         await File(path).writeAsString(dummyContent);
 
         await FileDownloader().configure(
@@ -2387,8 +2386,8 @@ void main() {
         // var result = await FileDownloader().upload(task);
         final taskFuture = FileDownloader().upload(uploadTask);
         final secondTaskFuture = FileDownloader().upload(secondTask);
-        var results = await Future.wait([taskFuture, secondTaskFuture]);
-        for (var result in results) {
+        final results = await Future.wait([taskFuture, secondTaskFuture]);
+        for (final result in results) {
           expect(result.status, equals(TaskStatus.complete));
           expect(result.responseBody, equals('{}'));
           expect(
@@ -2625,7 +2624,7 @@ void main() {
         for (var n = 1; n < 20; n++) {
           tasks.add(DownloadTask(url: urlWithContentLength));
         }
-        for (var task in tasks) {
+        for (final task in tasks) {
           expect(await FileDownloader().enqueue(task), equals(true));
           if (task == tasks.first) {
             await Future.delayed(const Duration(seconds: 1));
@@ -2642,7 +2641,7 @@ void main() {
         print('Completed: $completeCounter, cancelled: $cancelCounter');
         expect(cancelCounter + completeCounter, equals(tasks.length));
         final docsDir = await getApplicationDocumentsDirectory();
-        for (var task in tasks) {
+        for (final task in tasks) {
           final file = File(join(docsDir.path, task.filename));
           if (file.existsSync()) {
             file.deleteSync();
@@ -3041,7 +3040,7 @@ void main() {
         await statusCallbackCompleter.future;
         expect(lastStatus, equals(TaskStatus.complete));
         expect(lastTaskWithStatus, isNotNull);
-        var file = File(await lastTaskWithStatus!.filePath());
+        final file = File(await lastTaskWithStatus!.filePath());
         expect(await fileEqualsLargeTestFile(file), isTrue);
         await file.delete();
       },
@@ -3161,7 +3160,7 @@ void main() {
       'multiple pause and resume',
       timeout: const Timeout(Duration(minutes: 2)),
       (widgetTester) async {
-        var interval = const Duration(milliseconds: 700);
+        final interval = const Duration(milliseconds: 700);
         FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
         task = DownloadTask(
           url: urlWithContentLength,
@@ -3243,7 +3242,7 @@ void main() {
         await statusCallbackCompleter.future;
         expect(lastStatus, equals(TaskStatus.complete));
         expect(lastValidExpectedFileSize, equals(rangeEnd - rangeStart + 1));
-        var file = File(await task.filePath());
+        final file = File(await task.filePath());
         expect(file.lengthSync(), equals(lastValidExpectedFileSize));
         await file.delete();
       },
@@ -3588,7 +3587,7 @@ void main() {
       'move task to shared storage',
       timeout: const Timeout(Duration(minutes: 2)),
       () async {
-        var filePath = await task.filePath();
+        final filePath = await task.filePath();
         await FileDownloader().download(task);
         final path = await FileDownloader().moveToSharedStorage(
           task,
@@ -3606,7 +3605,7 @@ void main() {
       'move task to shared storage with directory',
       timeout: const Timeout(Duration(minutes: 2)),
       () async {
-        var filePath = await task.filePath();
+        final filePath = await task.filePath();
         await FileDownloader().download(task);
         final path = await FileDownloader().moveToSharedStorage(
           task,
@@ -3630,7 +3629,7 @@ void main() {
         // Note: this test will fail on Android API below 30, as that API
         // does not have a problem storing a text file in images
         if (Platform.isAndroid) {
-          var filePath = await task.filePath();
+          final filePath = await task.filePath();
           await FileDownloader().download(task);
           final path = await FileDownloader().moveToSharedStorage(
             task,
@@ -3647,7 +3646,7 @@ void main() {
       timeout: const Timeout(Duration(minutes: 2)),
       () async {
         if (Platform.isAndroid) {
-          var filePath = await task.filePath();
+          final filePath = await task.filePath();
           await FileDownloader().download(task);
           final path = await FileDownloader().moveToSharedStorage(
             task,
@@ -3676,7 +3675,7 @@ void main() {
                       element != SharedStorage.images,
                 )
                 : SharedStorage.values;
-        for (var destination in valuesToTest) {
+        for (final destination in valuesToTest) {
           await FileDownloader().download(task);
           var filePath = await task.filePath();
           expect(File(filePath).existsSync(), isTrue);
@@ -3687,17 +3686,14 @@ void main() {
               final newFilePath = filePath.replaceFirst('.bin', '.jpg');
               await File(filePath).rename(newFilePath);
               filePath = newFilePath;
-              break;
             case SharedStorage.video:
               final newFilePath = filePath.replaceFirst('.bin', '.mp4');
               await File(filePath).rename(newFilePath);
               filePath = newFilePath;
-              break;
             case SharedStorage.audio:
               final newFilePath = filePath.replaceFirst('.bin', '.mp3');
               await File(filePath).rename(newFilePath);
               filePath = newFilePath;
-              break;
             default:
               break;
           }
@@ -4143,7 +4139,7 @@ void main() {
         final batchFuture = FileDownloader().downloadBatch(tasks);
         print('Wait a second after enqueuing all non-priority tasks');
         await Future.delayed(const Duration(milliseconds: 1000));
-        var priorityTask = DownloadTask(url: urlWithContentLength, priority: 0);
+        final priorityTask = DownloadTask(url: urlWithContentLength, priority: 0);
         print('PriorityTask taskId = ${priorityTask.taskId}');
         final result = await FileDownloader().download(priorityTask);
         expect(result.status, equals(TaskStatus.complete));
@@ -4205,7 +4201,7 @@ void main() {
       tq.maxConcurrent = 2;
       FileDownloader().addTaskQueue(tq);
       for (var n = 0; n < 10; n++) {
-        var downloadTask = DownloadTask(url: urlWithContentLength);
+        final downloadTask = DownloadTask(url: urlWithContentLength);
         tasks.add(downloadTask);
         tq.add(downloadTask);
       }
@@ -4218,7 +4214,7 @@ void main() {
       'multiple maxConcurrent combinations',
       timeout: const Timeout(Duration(minutes: 2)),
       (widgetTester) async {
-        var start = DateTime.now();
+        final start = DateTime.now();
         var concurrent = 0;
         var maxActual = 0;
         var finished = 0;
@@ -4253,7 +4249,7 @@ void main() {
         // count and then waits for all downloads to complete
         Future<void> runTest() async {
           for (var n = 0; n < 10; n++) {
-            var downloadTask = DownloadTask(
+            final downloadTask = DownloadTask(
               url: urlWithContentLength,
               group: 'group ${n % 2}',
               priority: Random().nextInt(9),
@@ -4323,7 +4319,7 @@ void main() {
         );
         final taskIds = <String>[];
         for (var n = 0; n < 10; n++) {
-          var downloadTask = DownloadTask(url: urlWithContentLength);
+          final downloadTask = DownloadTask(url: urlWithContentLength);
           taskIds.add(downloadTask.taskId);
           print('Enqueuing ${downloadTask.taskId}');
           FileDownloader().enqueue(downloadTask);
@@ -4362,7 +4358,7 @@ void main() {
         );
         final taskIds = <String>[];
         for (var n = 0; n < 10; n++) {
-          var downloadTask = DownloadTask(url: urlWithContentLength);
+          final downloadTask = DownloadTask(url: urlWithContentLength);
           taskIds.add(downloadTask.taskId);
           print('Enqueuing ${downloadTask.taskId}');
           FileDownloader().enqueue(downloadTask);
@@ -4395,7 +4391,7 @@ void main() {
           },
         );
         for (var n = 0; n < 10; n++) {
-          var downloadTask = DownloadTask(url: urlWithContentLength);
+          final downloadTask = DownloadTask(url: urlWithContentLength);
           await FileDownloader().enqueue(downloadTask);
         }
         await Future.delayed(const Duration(seconds: 2));
@@ -4705,7 +4701,7 @@ void main() {
       'dataTask get',
       timeout: const Timeout(Duration(minutes: 2)),
       () async {
-        var completer = Completer<TaskStatusUpdate>();
+        final completer = Completer<TaskStatusUpdate>();
         FileDownloader().registerCallbacks(
           taskStatusCallback: (update) {
             if (update.status.isFinalState) {
@@ -4772,7 +4768,7 @@ void main() {
       'dataTask post with data',
       timeout: const Timeout(Duration(minutes: 2)),
       () async {
-        var completer = Completer<TaskStatusUpdate>();
+        final completer = Completer<TaskStatusUpdate>();
         FileDownloader().registerCallbacks(
           taskStatusCallback: (update) {
             if (update.status.isFinalState) {
@@ -4804,7 +4800,7 @@ void main() {
       'dataTask post with json data',
       timeout: const Timeout(Duration(minutes: 2)),
       () async {
-        var completer = Completer<TaskStatusUpdate>();
+        final completer = Completer<TaskStatusUpdate>();
         FileDownloader().registerCallbacks(
           taskStatusCallback: (update) {
             if (update.status.isFinalState) {
@@ -4812,7 +4808,7 @@ void main() {
             }
           },
         );
-        var jsonData = {'key': 'value'};
+        final jsonData = {'key': 'value'};
         final t = DataTask(
           url: dataTaskPostUrl,
           headers: dataTaskHeaders,
@@ -4838,7 +4834,7 @@ void main() {
       'dataTask with error',
       timeout: const Timeout(Duration(minutes: 2)),
       () async {
-        var completer = Completer<TaskStatusUpdate>();
+        final completer = Completer<TaskStatusUpdate>();
         FileDownloader().registerCallbacks(
           taskStatusCallback: (update) {
             if (update.status.isFinalState) {
@@ -4867,7 +4863,7 @@ void main() {
       'dataTask with retries',
       timeout: const Timeout(Duration(minutes: 2)),
       () async {
-        var completer = Completer<TaskStatusUpdate>();
+        final completer = Completer<TaskStatusUpdate>();
         var retryCount = 0;
         FileDownloader().registerCallbacks(
           taskStatusCallback: (update) {
@@ -4901,7 +4897,7 @@ void main() {
       () async {
         /// Cancellation is only relevant when the task is waiting to retry.
         /// Cancellation of a running DataTask has no effect
-        var completer = Completer<TaskStatusUpdate>();
+        final completer = Completer<TaskStatusUpdate>();
         FileDownloader().registerCallbacks(
           taskStatusCallback: (update) {
             if (update.status == TaskStatus.waitingToRetry) {

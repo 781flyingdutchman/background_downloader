@@ -53,14 +53,11 @@ class TransferProgressBar extends StatelessWidget {
 
     return ValueListenableBuilder<TaskStatus>(
       valueListenable: transfer.statusNotifier,
-      builder: (context, status, _) {
-        return ValueListenableBuilder<TransferHoldReason>(
+      builder: (context, status, _) => ValueListenableBuilder<TransferHoldReason>(
           valueListenable: transfer.holdReasonNotifier,
-          builder: (context, holdReason, _) {
-            return ValueListenableBuilder<double?>(
+          builder: (context, holdReason, _) => ValueListenableBuilder<double?>(
               valueListenable: transfer.progressNotifier,
-              builder: (context, progress, _) {
-                return ValueListenableBuilder<double>(
+              builder: (context, progress, _) => ValueListenableBuilder<double>(
                   valueListenable: transfer.networkSpeedNotifier,
                   builder: (context, speed, _) {
                     final effectiveColor = _colorForStatus(
@@ -137,12 +134,9 @@ class TransferProgressBar extends StatelessWidget {
                       ],
                     );
                   },
-                );
-              },
-            );
-          },
-        );
-      },
+                ),
+            ),
+        ),
     );
   }
 
@@ -155,59 +149,36 @@ class TransferProgressBar extends StatelessWidget {
     if (holdReason != TransferHoldReason.none) {
       return Colors.orange;
     }
-    switch (status) {
-      case TaskStatus.complete:
-        return Colors.green;
-      case TaskStatus.failed:
-      case TaskStatus.notFound:
-        return theme.colorScheme.error;
-      case TaskStatus.paused:
-      case TaskStatus.waitingToRetry:
-        return Colors.orange;
-      case TaskStatus.running:
-      case TaskStatus.enqueued:
-        return theme.colorScheme.primary;
-      case TaskStatus.canceled:
-        return theme.colorScheme.outline;
-    }
+    return switch (status) {
+      .complete => Colors.green,
+      .failed || .notFound => theme.colorScheme.error,
+      .paused || .waitingToRetry => Colors.orange,
+      .running || .enqueued => theme.colorScheme.primary,
+      .canceled => theme.colorScheme.outline,
+    };
   }
 
-  String _statusLabel(TaskStatus status, TransferHoldReason holdReason) {
-    if (holdReason == TransferHoldReason.waitingForWiFi) {
-      return 'Waiting for Wi-Fi';
-    }
-    if (holdReason == TransferHoldReason.offline) {
-      return 'Waiting for network';
-    }
-    switch (status) {
-      case TaskStatus.enqueued:
-        return 'Enqueued';
-      case TaskStatus.running:
-        return 'Transferring';
-      case TaskStatus.complete:
-        return 'Complete';
-      case TaskStatus.paused:
-        return 'Paused';
-      case TaskStatus.waitingToRetry:
-        return 'Waiting to retry';
-      case TaskStatus.failed:
-        return 'Failed';
-      case TaskStatus.notFound:
-        return 'Not found';
-      case TaskStatus.canceled:
-        return 'Canceled';
-    }
-  }
+  String _statusLabel(TaskStatus status, TransferHoldReason holdReason) =>
+      switch (holdReason) {
+        .waitingForWiFi => 'Waiting for Wi-Fi',
+        .offline => 'Waiting for network',
+        .none => switch (status) {
+          .enqueued => 'Enqueued',
+          .running => 'Transferring',
+          .complete => 'Complete',
+          .paused => 'Paused',
+          .waitingToRetry => 'Waiting to retry',
+          .failed => 'Failed',
+          .notFound => 'Not found',
+          .canceled => 'Canceled',
+        },
+      };
 
-  String _formatSpeed(double mbPerSec) {
-    if (mbPerSec <= 0) {
-      return '';
-    } else if (mbPerSec >= 1.0) {
-      return '${mbPerSec.toStringAsFixed(1)} MB/s';
-    } else {
-      return '${(mbPerSec * 1000).round()} kB/s';
-    }
-  }
+  String _formatSpeed(double mbPerSec) => switch (mbPerSec) {
+    <= 0 => '',
+    >= 1.0 => '${mbPerSec.toStringAsFixed(1)} MB/s',
+    _ => '${(mbPerSec * 1000).round()} kB/s',
+  };
 }
 
 /// Alias for [TransferProgressBar] for backward compatibility

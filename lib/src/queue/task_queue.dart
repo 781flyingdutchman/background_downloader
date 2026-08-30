@@ -225,7 +225,7 @@ class MemoryTaskQueue implements TaskQueue {
     }
     final tasksThatHaveToWait = <Task>[];
     while (waiting.isNotEmpty) {
-      var task = waiting.removeFirst();
+      final task = waiting.removeFirst();
       if (_pausedTaskIds.contains(task.taskId)) {
         tasksThatHaveToWait.add(task);
         continue;

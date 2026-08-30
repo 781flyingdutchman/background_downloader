@@ -168,10 +168,10 @@ Future<void> listenToIncomingMessages(
       // [DownloadTask].
       // Note that [task] refers to the parent task, whereas [update.task] refers
       // to the chunk (child) task
-      case TaskStatusUpdate update:
+      case final TaskStatusUpdate update:
         await chunkStatusUpdate(task, update, sendPort);
 
-      case TaskProgressUpdate update:
+      case final TaskProgressUpdate update:
         chunkProgressUpdate(task, update, sendPort);
     }
   }
@@ -265,19 +265,19 @@ void processStatusUpdateInIsolate(
   // a retry is not needed: if it is needed, a `waitingToRetry` progress update
   // will be generated in the FileDownloader
   switch (status) {
-    case TaskStatus.complete:
+    case .complete:
       processProgressUpdateInIsolate(task, progressComplete, sendPort);
 
-    case TaskStatus.failed when !retryNeeded:
+    case .failed when !retryNeeded:
       processProgressUpdateInIsolate(task, progressFailed, sendPort);
 
-    case TaskStatus.canceled:
+    case .canceled:
       processProgressUpdateInIsolate(task, progressCanceled, sendPort);
 
-    case TaskStatus.notFound:
+    case .notFound:
       processProgressUpdateInIsolate(task, progressNotFound, sendPort);
 
-    case TaskStatus.paused:
+    case .paused:
       processProgressUpdateInIsolate(task, progressPaused, sendPort);
 
     default:
@@ -469,20 +469,12 @@ void logError(Task task, String error) {
 
 /// Set the [taskException] variable based on error e
 void setTaskError(dynamic e) {
-  switch (e) {
-    case HttpException():
-    case TimeoutException():
-      taskException = TaskConnectionException(e.toString());
-
-    case IOException():
-      taskException = TaskFileSystemException(e.toString());
-
-    case TaskException():
-      taskException = e;
-
-    default:
-      taskException = TaskException(e.toString());
-  }
+  taskException = switch (e) {
+    HttpException() || TimeoutException() => TaskConnectionException(e.toString()),
+    IOException() => TaskFileSystemException(e.toString()),
+    TaskException() => e,
+    _ => TaskException(e.toString()),
+  };
 }
 
 /// Return the response's content as a String, or null if unable

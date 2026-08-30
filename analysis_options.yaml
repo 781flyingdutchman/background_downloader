@@ -1,4 +1,49 @@
+include: package:flutter_lints/flutter.yaml
+
 analyzer:
+  errors:
+    prefer_relative_imports: warning
+    use_enums: warning
+    use_super_parameters: warning
+    prefer_initializing_formals: warning
+    empty_constructor_bodies: warning
+    unnecessary_this: warning
+    unnecessary_new: warning
+    unnecessary_const: warning
+    unnecessary_constructor_name: warning
+    prefer_expression_function_bodies: warning
+    prefer_null_aware_operators: warning
+    use_null_aware_elements: warning
+    prefer_spread_collections: warning
+    prefer_for_elements_to_map_fromIterable: warning
+    prefer_collection_literals: warning
+    prefer_if_elements_to_conditional_expressions: warning
+    prefer_if_null_operators: warning
+    prefer_conditional_assignment: warning
+    unnecessary_breaks: warning
+    simplify_variable_pattern: warning
+    avoid_init_to_null: warning
+    annotate_overrides: warning
+    prefer_final_fields: warning
+    prefer_final_locals: warning
+    prefer_final_in_for_each: warning
+    unnecessary_string_interpolations: warning
+    unnecessary_brace_in_string_interps: warning
+    unnecessary_string_escapes: warning
+    unnecessary_nullable_for_final_variable_declarations: warning
+    unnecessary_late: warning
+    use_rethrow_when_possible: warning
+    prefer_is_empty: warning
+    prefer_is_not_empty: warning
+    prefer_is_not_operator: warning
+    prefer_iterable_whereType: warning
+    unnecessary_to_list_in_spreads: warning
+    exhaustive_cases: warning
+    avoid_unnecessary_containers: warning
+    use_colored_box: warning
+    use_decorated_box: warning
+    sized_box_for_whitespace: warning
+    sized_box_shrink_expand: warning
   exclude:
     - build/**
     - android/**
@@ -7,11 +52,50 @@ analyzer:
     - windows/**
     - macos/**
     - linux/**
-include: package:flutter_lints/flutter.yaml
-
-# Additional information about this file can be found at
-# https://dart.dev/guides/language/analysis-options
+    - "**/*.g.dart"
+    - "**/*.mocks.dart"
 
 linter:
   rules:
     - prefer_relative_imports
+    - use_enums
+    - use_super_parameters
+    - prefer_initializing_formals
+    - empty_constructor_bodies
+    - unnecessary_this
+    - unnecessary_new
+    - unnecessary_const
+    - unnecessary_constructor_name
+    - prefer_expression_function_bodies
+    - prefer_null_aware_operators
+    - use_null_aware_elements
+    - prefer_spread_collections
+    - prefer_for_elements_to_map_fromIterable
+    - prefer_collection_literals
+    - prefer_if_elements_to_conditional_expressions
+    - prefer_if_null_operators
+    - prefer_conditional_assignment
+    - unnecessary_breaks
+    - simplify_variable_pattern
+    - avoid_init_to_null
+    - annotate_overrides
+    - prefer_final_fields
+    - prefer_final_locals
+    - prefer_final_in_for_each
+    - unnecessary_string_interpolations
+    - unnecessary_brace_in_string_interps
+    - unnecessary_string_escapes
+    - unnecessary_nullable_for_final_variable_declarations
+    - unnecessary_late
+    - use_rethrow_when_possible
+    - prefer_is_empty
+    - prefer_is_not_empty
+    - prefer_is_not_operator
+    - prefer_iterable_whereType
+    - unnecessary_to_list_in_spreads
+    - exhaustive_cases
+    - avoid_unnecessary_containers
+    - use_colored_box
+    - use_decorated_box
+    - sized_box_for_whitespace
+    - sized_box_shrink_expand

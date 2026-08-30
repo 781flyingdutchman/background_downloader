@@ -2,17 +2,13 @@ import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 @pragma("vm:entry-point")
-Future<Task?> onTaskStartFunction(Task original) async {
-  return original;
-}
+Future<Task?> onTaskStartFunction(Task original) async => original;
 
 @pragma("vm:entry-point")
 Future<void> onTaskFinishedCallback(TaskStatusUpdate statusUpdate) async {}
 
 @pragma("vm:entry-point")
-Future<TaskStatusUpdate?> beforeTaskStartCallback(Task task) async {
-  return TaskStatusUpdate(task, TaskStatus.enqueued);
-}
+Future<TaskStatusUpdate?> beforeTaskStartCallback(Task task) async => TaskStatusUpdate(task, TaskStatus.enqueued);
 
 void main() {
   test('onTaskStartCallback', () async {

@@ -75,7 +75,7 @@ class _DownloadProgressIndicatorState extends State<DownloadProgressIndicator> {
     downloadUpdates = widget.updates.listen((update) {
       if (update is TaskStatusUpdate) {
         switch (update.status) {
-          case TaskStatus.running:
+          case .running:
             totalTasks.add(update.task);
             pausedTasks.remove(update.task);
             inProgress[update.task] = (
@@ -83,10 +83,10 @@ class _DownloadProgressIndicatorState extends State<DownloadProgressIndicator> {
               DateTime.now().millisecondsSinceEpoch,
             );
 
-          case TaskStatus.waitingToRetry:
+          case .waitingToRetry:
             break;
 
-          case TaskStatus.paused:
+          case .paused:
             pausedTasks.add(update.task);
 
           default:
@@ -347,8 +347,7 @@ class _ExpandedDownloadProgress extends StatelessWidget {
   final Map<Task, (double, int)> inProgress;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
+  Widget build(BuildContext context) => DecoratedBox(
       decoration: BoxDecoration(
         color: backgroundColor,
         border: Border(top: BorderSide(color: Theme.of(context).dividerColor)),
@@ -360,8 +359,7 @@ class _ExpandedDownloadProgress extends StatelessWidget {
           1: FlexColumnWidth(),
         },
         children:
-            tasks.map((task) {
-              return TableRow(
+            tasks.map((task) => TableRow(
                 decoration: BoxDecoration(
                   border: Border(
                     top: BorderSide(color: Theme.of(context).dividerColor),
@@ -391,9 +389,7 @@ class _ExpandedDownloadProgress extends StatelessWidget {
                     child: LinearProgressIndicator(value: inProgress[task]!.$1),
                   ),
                 ],
-              );
-            }).toList(),
+              )).toList(),
       ),
     );
-  }
 }

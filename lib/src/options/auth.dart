@@ -134,8 +134,7 @@ class Auth {
                : null;
 
   /// Convert the Auth instance to JSON
-  Map<String, dynamic> toJson() {
-    return {
+  Map<String, dynamic> toJson() => {
       'accessToken': accessToken,
       'accessHeaders': accessHeaders,
       'accessQueryParams': accessQueryParams,
@@ -146,7 +145,6 @@ class Auth {
       'refreshQueryParams': refreshQueryParams,
       'onAuthRawHandle': _onAuthRawHandle,
     };
-  }
 
   /// Create an Auth instance from JSON
   Auth.fromJson(Map<String, dynamic> json)
@@ -296,7 +294,7 @@ class Auth {
         if (newAuthToken != null) {
           accessToken = newAuthToken;
           updatedAccessToken = true;
-          var newExpiresIn = data['expires_in'];
+          final newExpiresIn = data['expires_in'];
           if (newExpiresIn != null) {
             accessTokenExpiryTime = DateTime.now().add(
               Duration(seconds: newExpiresIn),

@@ -20,7 +20,7 @@ void main() {
 
     final results = await Future.wait(futures);
     expect(results.length, equals(100));
-    for (var result in results) {
+    for (final result in results) {
       expect(result, isA<DownloadTask>());
     }
   });

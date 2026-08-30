@@ -133,9 +133,7 @@ sealed class UriUtils {
   /// Support directory, subdirectory "com.bbflight.downloader.media" and
   /// returned as a media:// URI.  To access the actual copied file,
   /// use [activate]
-  Future<Uri?> activate(Uri uri) async {
-    return uri;
-  }
+  Future<Uri?> activate(Uri uri) async => uri;
 
   /// Retrieves the file data (bytes) for a given URI.
   ///
@@ -195,7 +193,7 @@ sealed class UriUtils {
     String? mimeType,
   }) async {
     final uri = switch (task) {
-      UriTask t => t.fileUri,
+      final UriTask t => t.fileUri,
       _ => Uri.file(await task.filePath()),
     };
     return uri != null
@@ -277,8 +275,7 @@ sealed class UriUtils {
   }
 
   /// Private helper method to determine the destination URI.
-  Uri _determineDestinationUri(dynamic destination) {
-    return switch (destination) {
+  Uri _determineDestinationUri(dynamic destination) => switch (destination) {
       File() => destination.uri,
       String() => Uri.file(destination),
       Uri() => destination,
@@ -287,7 +284,6 @@ sealed class UriUtils {
           'Invalid destination type. Must be File, String, or Uri.',
         ),
     };
-  }
 }
 
 final class _DesktopUriUtils extends UriUtils {
@@ -468,8 +464,8 @@ final class _NativeUriUtils extends UriUtils {
     ]));
     // uriStrings can be a list of Strings or just one String, or null
     return switch (uriStrings) {
-      String uri => [Uri.parse(uri)],
-      List<Object?>? uris => uris
+      final String uri => [Uri.parse(uri)],
+      final List<Object?>? uris => uris
           ?.where((e) => e != null)
           .map((e) => Uri.parse(e as String))
           .toList(growable: false),

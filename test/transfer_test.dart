@@ -11,17 +11,13 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
           const MethodChannel('plugins.flutter.io/path_provider'),
-          (MethodCall call) async {
-            return '/tmp';
-          },
+          (MethodCall call) async => '/tmp',
         );
 
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
           const MethodChannel('dev.fluttercommunity.plus/connectivity'),
-          (MethodCall call) async {
-            return ['wifi'];
-          },
+          (MethodCall call) async => ['wifi'],
         );
 
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

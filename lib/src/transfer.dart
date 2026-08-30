@@ -176,18 +176,16 @@ class Transfer {
   }
 
   /// Pauses this transfer if supported.
-  Future<bool> pause() {
-    if (task is DownloadTask) {
-      return downloader.pause(task as DownloadTask);
-    }
-    return Future.value(false);
-  }
+  Future<bool> pause() => switch (task) {
+    final DownloadTask dTask => downloader.pause(dTask),
+    _ => Future.value(false),
+  };
 
   /// Resumes this transfer.
   Future<bool> resume() {
     holdReasonNotifier.value = TransferHoldReason.none;
-    if (task is DownloadTask && (task as DownloadTask).allowPause) {
-      return downloader.resume(task as DownloadTask);
+    if (task case final DownloadTask dTask when dTask.allowPause) {
+      return downloader.resume(dTask);
     }
     return downloader.enqueue(task);
   }

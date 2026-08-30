@@ -231,15 +231,15 @@ void main() {
     test('cookieHeader selection', () async {
       // test that the right cookies are included/excluded, based on cookie
       // settings and the url
-      var url = 'https://www.google.com/test/something';
-      var c = Cookie('name', 'value');
+      final url = 'https://www.google.com/test/something';
+      final c = Cookie('name', 'value');
       expect(Request.cookieHeader([c], url), equals({'Cookie': 'name=value'}));
-      var c2 = Cookie('name2', 'value2');
+      final c2 = Cookie('name2', 'value2');
       expect(
         Request.cookieHeader([c, c2], url),
         equals({'Cookie': 'name=value; name2=value2'}),
       );
-      var c3 = Cookie('', 'value3');
+      final c3 = Cookie('', 'value3');
       expect(
         Request.cookieHeader([c, c2, c3], url),
         equals({'Cookie': 'name=value; name2=value2; value3'}),

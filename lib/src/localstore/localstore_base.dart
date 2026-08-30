@@ -26,7 +26,5 @@ final class Localstore implements LocalstoreImpl {
   }
 
   @override
-  CollectionRef collection(String path) {
-    return CollectionRef(path, null, _delegate);
-  }
+  CollectionRef collection(String path) => CollectionRef(path, null, _delegate);
 }

@@ -51,7 +51,7 @@ abstract base class NativeDownloader extends BaseDownloader {
   /// If the task JsonString is empty, a dummy task will be created
   Future<dynamic> _handleBackgroundMessage(MethodCall call) async {
     final args = call.arguments as List<dynamic>;
-    var taskJsonString = args.first as String;
+    final taskJsonString = args.first as String;
     final task =
         taskJsonString.isNotEmpty
             ? await JsonProcessor().decodeTask(taskJsonString)
@@ -64,7 +64,7 @@ abstract base class NativeDownloader extends BaseDownloader {
     );
     switch (message) {
       // simple status update
-      case ('statusUpdate', int statusOrdinal):
+      case ('statusUpdate', final int statusOrdinal):
         final status = TaskStatus.values[statusOrdinal];
         if (task.group != BaseDownloader.chunkGroup) {
           processStatusUpdate(TaskStatusUpdate(task, status));
@@ -85,12 +85,12 @@ abstract base class NativeDownloader extends BaseDownloader {
       case (
         'statusUpdate',
         [
-          int statusOrdinal,
-          String? responseBody,
-          Map<Object?, Object?>? responseHeaders,
-          int? responseStatusCode,
-          String? mimeType,
-          String? charSet,
+          final int statusOrdinal,
+          final String? responseBody,
+          final Map<Object?, Object?>? responseHeaders,
+          final int? responseStatusCode,
+          final String? mimeType,
+          final String? charSet,
         ],
       ):
         final status = TaskStatus.values[statusOrdinal];
@@ -99,7 +99,7 @@ abstract base class NativeDownloader extends BaseDownloader {
               responseHeaders == null
                   ? null
                   : {
-                    for (var entry in responseHeaders.entries.where(
+                    for (final entry in responseHeaders.entries.where(
                       (entry) => entry.key != null && entry.value != null,
                     ))
                       entry.key.toString().toLowerCase():
@@ -134,11 +134,11 @@ abstract base class NativeDownloader extends BaseDownloader {
       case (
         'statusUpdate',
         [
-          int statusOrdinal,
-          String typeString,
-          String description,
-          int httpResponseCode,
-          String? responseBody,
+          final int statusOrdinal,
+          final String typeString,
+          final String description,
+          final int httpResponseCode,
+          final String? responseBody,
         ],
       ):
         final status = TaskStatus.values[statusOrdinal];
@@ -170,10 +170,10 @@ abstract base class NativeDownloader extends BaseDownloader {
       case (
         'progressUpdate',
         [
-          double progress,
-          int expectedFileSize,
-          double networkSpeed,
-          int timeRemaining,
+          final double progress,
+          final int expectedFileSize,
+          final double networkSpeed,
+          final int timeRemaining,
         ],
       ):
         if (task.group != BaseDownloader.chunkGroup) {
@@ -198,39 +198,39 @@ abstract base class NativeDownloader extends BaseDownloader {
           );
         }
 
-      case ('canResume', bool canResume):
+      case ('canResume', final bool canResume):
         setCanResume(task, canResume);
 
       // resumeData Android and Desktop variant
-      case ('resumeData', [String data, int requiredStartByte, String? eTag]):
+      case ('resumeData', [final String data, final int requiredStartByte, final String? eTag]):
         setResumeData(ResumeData(task, data, requiredStartByte, eTag));
 
       // resumeData iOS and ParallelDownloads variant
-      case ('resumeData', String data):
+      case ('resumeData', final String data):
         setResumeData(ResumeData(task, data));
 
-      case ('notificationTap', int notificationTypeOrdinal):
+      case ('notificationTap', final int notificationTypeOrdinal):
         final notificationType =
             NotificationType.values[notificationTypeOrdinal];
         processNotificationTap(task, notificationType);
         return true; // this message requires a confirmation
 
       // from ParallelDownloadTask
-      case ('enqueueChild', String childTaskJsonString):
+      case ('enqueueChild', final String childTaskJsonString):
         final childTask = await JsonProcessor().decodeTask(childTaskJsonString);
         Future.delayed(
           const Duration(milliseconds: 100),
         ).then((_) => FileDownloader().enqueue(childTask));
 
       // from ParallelDownloadTask
-      case ('cancelTasksWithId', String listOfTaskIdsJson):
+      case ('cancelTasksWithId', final String listOfTaskIdsJson):
         final taskIds = List<String>.from(jsonDecode(listOfTaskIdsJson));
         Future.delayed(
           const Duration(milliseconds: 100),
         ).then((_) => FileDownloader().cancelTasksWithIds(taskIds));
 
       // from ParallelDownloadTask
-      case ('pauseTasks', String listOfTasksJson):
+      case ('pauseTasks', final String listOfTasksJson):
         final listOfTasks = await JsonProcessor().decodeDownloadTaskList(
           listOfTasksJson,
         );
@@ -241,7 +241,7 @@ abstract base class NativeDownloader extends BaseDownloader {
         });
 
       // for permission request results
-      case ('permissionRequestResult', int statusOrdinal):
+      case ('permissionRequestResult', final int statusOrdinal):
         permissionsService.onPermissionRequestResult(
           PermissionStatus.values[statusOrdinal],
         );
@@ -261,9 +261,7 @@ abstract base class NativeDownloader extends BaseDownloader {
     final notificationConfig = notificationConfigForTask(task);
     return await methodChannel.invokeMethod<bool>('enqueue', [
           jsonEncode(task.toJson()),
-          notificationConfig != null
-              ? jsonEncode(notificationConfig.toJson())
-              : null,
+          if (notificationConfig != null) jsonEncode(notificationConfig.toJson()) else null,
         ]) ??
         false;
   }
@@ -325,7 +323,7 @@ abstract base class NativeDownloader extends BaseDownloader {
 
   @override
   Future<Task?> taskForId(String taskId) async {
-    var task = await super.taskForId(taskId);
+    final task = await super.taskForId(taskId);
     if (task != null) {
       return task;
     }
@@ -370,9 +368,7 @@ abstract base class NativeDownloader extends BaseDownloader {
         final enqueueSuccess =
             await methodChannel.invokeMethod<bool>('enqueue', [
               jsonEncode(task.toJson()),
-              notificationConfig != null
-                  ? jsonEncode(notificationConfig.toJson())
-                  : null,
+              if (notificationConfig != null) jsonEncode(notificationConfig.toJson()) else null,
               taskResumeData.data,
               taskResumeData.requiredStartByte,
               taskResumeData.eTag,
@@ -392,20 +388,16 @@ abstract base class NativeDownloader extends BaseDownloader {
     RequireWiFi requirement,
     rescheduleRunningTasks,
     alsoRestartUploads,
-  ) async {
-    return await methodChannel.invokeMethod('requireWiFi', [
+  ) async => await methodChannel.invokeMethod('requireWiFi', [
           requirement.index,
           rescheduleRunningTasks,
           alsoRestartUploads,
         ]) ??
         false;
-  }
 
   @override
-  Future<RequireWiFi> getRequireWiFiSetting() async {
-    return RequireWiFi
+  Future<RequireWiFi> getRequireWiFiSetting() async => RequireWiFi
         .values[await methodChannel.invokeMethod('getRequireWiFiSetting') ?? 0];
-  }
 
   @override
   void updateNotification(Task task, TaskStatus? taskStatusOrNull) {
@@ -472,7 +464,7 @@ abstract base class NativeDownloader extends BaseDownloader {
   @override
   Future<bool> openFile(Task? task, String? filePath, String? mimeType) async {
     final result = await methodChannel.invokeMethod<bool>('openFile', [
-      task != null ? jsonEncode(task.toJson()) : null,
+      if (task != null) jsonEncode(task.toJson()) else null,
       filePath,
       mimeType,
     ]);
@@ -480,9 +472,7 @@ abstract base class NativeDownloader extends BaseDownloader {
   }
 
   @override
-  Future<String> platformVersion() async {
-    return (await methodChannel.invokeMethod<String>('platformVersion')) ?? '';
-  }
+  Future<String> platformVersion() async => (await methodChannel.invokeMethod<String>('platformVersion')) ?? '';
 
   @override
   Future<Duration> getTaskTimeout() async {
@@ -513,13 +503,13 @@ abstract base class NativeDownloader extends BaseDownloader {
   @override
   Future<(String, String)> configureItem((String, dynamic) configItem) async {
     switch (configItem) {
-      case (Config.requestTimeout, Duration? duration):
+      case (Config.requestTimeout, final Duration? duration):
         await NativeDownloader.methodChannel.invokeMethod(
           'configRequestTimeout',
           duration?.inSeconds,
         );
 
-      case (Config.proxy, (String address, int port)):
+      case (Config.proxy, (final String address, final int port)):
         await NativeDownloader.methodChannel.invokeMethod(
           'configProxyAddress',
           address,
@@ -539,7 +529,7 @@ abstract base class NativeDownloader extends BaseDownloader {
           null,
         );
 
-      case (Config.checkAvailableSpace, int minimum):
+      case (Config.checkAvailableSpace, final int minimum):
         assert(minimum > 0, 'Minimum available space must be in MB and > 0');
         await NativeDownloader.methodChannel.invokeMethod(
           'configCheckAvailableSpace',
@@ -556,9 +546,9 @@ abstract base class NativeDownloader extends BaseDownloader {
       case (
         Config.holdingQueue,
         (
-          int? maxConcurrent,
-          int? maxConcurrentByHost,
-          int? maxConcurrentByGroup,
+          final int? maxConcurrent,
+          final int? maxConcurrentByHost,
+          final int? maxConcurrentByGroup,
         ),
       ):
         await NativeDownloader.methodChannel
@@ -575,7 +565,7 @@ abstract base class NativeDownloader extends BaseDownloader {
           [],
         );
 
-      case (Config.skipExistingFiles, int value):
+      case (Config.skipExistingFiles, final int value):
         await NativeDownloader.methodChannel.invokeMethod(
           'configSkipExistingFiles',
           value,
@@ -610,9 +600,7 @@ final class AndroidDownloader extends NativeDownloader {
   static final AndroidDownloader _singleton = AndroidDownloader._internal();
   static int? _callbackDispatcherRawHandle;
 
-  factory AndroidDownloader() {
-    return _singleton;
-  }
+  factory AndroidDownloader() => _singleton;
 
   AndroidDownloader._internal();
 
@@ -673,13 +661,13 @@ final class AndroidDownloader extends NativeDownloader {
       return superResult;
     }
     switch (configItem) {
-      case (Config.runInForeground, bool activate):
+      case (Config.runInForeground, final bool activate):
         await NativeDownloader.methodChannel.invokeMethod(
           'configForegroundFileSize',
           activate ? 0 : -1,
         );
 
-      case (Config.runInForeground, String whenTo):
+      case (Config.runInForeground, final String whenTo):
         assert(
           [Config.never, Config.always].contains(whenTo),
           '${Config.runInForeground} expects one of ${[Config.never, Config.always]}',
@@ -689,13 +677,13 @@ final class AndroidDownloader extends NativeDownloader {
           Config.argToInt(whenTo),
         );
 
-      case (Config.runInForegroundIfFileLargerThan, int fileSize):
+      case (Config.runInForegroundIfFileLargerThan, final int fileSize):
         await NativeDownloader.methodChannel.invokeMethod(
           'configForegroundFileSize',
           fileSize,
         );
 
-      case (Config.bypassTLSCertificateValidation, bool bypass):
+      case (Config.bypassTLSCertificateValidation, final bool bypass):
         if (bypass) {
           if (kReleaseMode) {
             throw ArgumentError(
@@ -716,7 +704,7 @@ final class AndroidDownloader extends NativeDownloader {
           );
         }
 
-      case (Config.useCacheDir, String whenTo):
+      case (Config.useCacheDir, final String whenTo):
         assert(
           [Config.never, Config.whenAble, Config.always].contains(whenTo),
           '${Config.useCacheDir} expects one of ${[Config.never, Config.whenAble, Config.always]}',
@@ -726,7 +714,7 @@ final class AndroidDownloader extends NativeDownloader {
           Config.argToInt(whenTo),
         );
 
-      case (Config.useExternalStorage, String whenTo):
+      case (Config.useExternalStorage, final String whenTo):
         assert(
           [Config.never, Config.always].contains(whenTo),
           '${Config.useExternalStorage} expects one of ${[Config.never, Config.always]}',
@@ -737,7 +725,7 @@ final class AndroidDownloader extends NativeDownloader {
         );
         Task.useExternalStorage = whenTo == Config.always;
 
-      case (Config.tempFilePath, String path):
+      case (Config.tempFilePath, final String path):
         final cleanPath =
             (path.isNotEmpty && path != Config.never) ? path : null;
         await NativeDownloader.methodChannel.invokeMethod(
@@ -766,9 +754,7 @@ final class AndroidDownloader extends NativeDownloader {
 final class IOSDownloader extends NativeDownloader {
   static final IOSDownloader _singleton = IOSDownloader._internal();
 
-  factory IOSDownloader() {
-    return _singleton;
-  }
+  factory IOSDownloader() => _singleton;
 
   IOSDownloader._internal();
 
@@ -798,19 +784,19 @@ final class IOSDownloader extends NativeDownloader {
       return superResult;
     }
     switch (configItem) {
-      case (Config.resourceTimeout, Duration? duration):
+      case (Config.resourceTimeout, final Duration? duration):
         await NativeDownloader.methodChannel.invokeMethod(
           'configResourceTimeout',
           duration?.inSeconds,
         );
 
-      case (Config.localize, Map<String, String>? translation):
+      case (Config.localize, final Map<String, String>? translation):
         await NativeDownloader.methodChannel.invokeMethod(
           'configLocalize',
           translation,
         );
 
-      case (Config.excludeFromCloudBackup, dynamic exclude):
+      case (Config.excludeFromCloudBackup, final dynamic exclude):
         assert(
           exclude is bool || [Config.always, Config.never].contains(exclude),
           '${Config.excludeFromCloudBackup} expects one of ${['true', 'false', Config.never, Config.always]}',

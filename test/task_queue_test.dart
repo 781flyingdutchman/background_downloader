@@ -295,12 +295,12 @@ void main() {
       final tasksB = <DownloadTask>[];
 
       for (var n = 0; n < 5; n++) {
-        var t = DownloadTask(taskId: 'A-$n', url: 'testUrl', group: 'A');
+        final t = DownloadTask(taskId: 'A-$n', url: 'testUrl', group: 'A');
         tasksA.add(t);
         tq.add(t);
       }
       for (var n = 0; n < 5; n++) {
-        var t = DownloadTask(taskId: 'B-$n', url: 'testUrl', group: 'B');
+        final t = DownloadTask(taskId: 'B-$n', url: 'testUrl', group: 'B');
         tasksB.add(t);
         tq.add(t);
       }
