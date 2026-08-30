@@ -32,47 +32,72 @@ Note that permissions are very platform and version dependent, e.g. notification
 
 ## Bypassing permissions on iOS
 
-By default, the downloader allows any of the permissions to be requested, but that also means that Apple requires you to add things like Photo Library Usage Description to your Info.plist, even if you never move files to the Photo Library.
+By default, the downloader allows any of the permissions to be requested, but that also means that Apple requires you to add things like Photo Library Usage Description to your `Info.plist`, even if you never move files to the Photo Library.
 
-On iOS, you can bypass the permission code altogether at compile time (and therefore remove the need to provide the Info.plist entry) using either Swift Package Manager or CocoaPods.
+On iOS, you can bypass the permission code altogether at compile time (and therefore remove the need to provide the `Info.plist` entry) using Swift Package Manager (default) or CocoaPods (legacy).
 
-### Using Swift Package Manager (SPM)
+### Using Swift Package Manager (SPM) — Default
 
-When using Swift Package Manager, you can bypass the permission code by setting environment variables in your environment or build script before running the build:
+Starting with Flutter 3.44+, Swift Package Manager is the default dependency manager for iOS. Because Swift packages are built in isolated target modules, they do not inherit compiler flags (`OTHER_SWIFT_FLAGS`) from the consuming app's Xcode target.
+
+Instead, `background_downloader`'s `Package.swift` reads build-time environment variables during package manifest resolution:
 
 * `BYPASS_PERMISSION_NOTIFICATIONS=1`
 * `BYPASS_PERMISSION_IOSADDTOPHOTOLIBRARY=1`
 * `BYPASS_PERMISSION_IOSCHANGEPHOTOLIBRARY=1`
 
-For example, to build your app while bypassing all Photo Library permissions:
+Depending on your build environment, configure these variables as follows:
+
+#### 1. Flutter CLI / Terminal Builds
+Set the environment variables in your shell before invoking `flutter`:
 
 ```bash
+# Bypass Photo Library permissions
 export BYPASS_PERMISSION_IOSADDTOPHOTOLIBRARY=1
 export BYPASS_PERMISSION_IOSCHANGEPHOTOLIBRARY=1
+
+# Run or build the app
+flutter run
+# or
 flutter build ios
 ```
 
-If you are building your iOS app using Xcode directly or using a CI/CD platform, make sure to add these environment variables to your build phase script or environment configuration.
+#### 2. Building from Xcode IDE
+If you build or archive directly from Xcode:
+1. In Xcode, open your workspace (`Runner.xcworkspace`).
+2. Go to **Product > Scheme > Edit Scheme...** (or press `Cmd + <`).
+3. Select **Run** (for debugging) or **Archive** (for release distribution) in the left sidebar.
+4. Under the **Arguments** tab, find **Environment Variables**.
+5. Click **+** and add the desired variable name(s) (e.g. `BYPASS_PERMISSION_IOSADDTOPHOTOLIBRARY`) with value `1`.
 
-### Using CocoaPods
+> **Note on Package Resolution Caching**: Xcode and SwiftPM cache package manifest evaluations. If you add, change, or remove any `BYPASS_PERMISSION_*` environment variables, force a clean evaluation by running `flutter clean` in the terminal or selecting **File > Packages > Reset Package Caches** in Xcode.
 
-To bypass the permission code when using CocoaPods, modify your app's Podfile as follows:
+#### 3. CI/CD Pipelines (GitHub Actions, Bitrise, Xcode Cloud, Fastlane)
+Define the environment variables in your workflow configuration. For example, in GitHub Actions:
+
+```yaml
+- name: Build iOS App
+  env:
+    BYPASS_PERMISSION_IOSADDTOPHOTOLIBRARY: 1
+    BYPASS_PERMISSION_IOSCHANGEPHOTOLIBRARY: 1
+  run: flutter build ios --release --no-codesign
+```
+
+---
+
+### Using CocoaPods (Legacy)
+
+For projects that have not yet migrated to Swift Package Manager and still use CocoaPods, you can bypass the permission code by modifying your app's `ios/Podfile`:
 
 ```ruby
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
     
-    # The following loop has been added to bypass compilation of specific
-    # permissions.
-    # If you want to bypass one or more permissions (so that you don't
-    # have to include things like a Photo Library Usage Description
-    # if you don't add files to the Photo Library) then add this loop
-    # and uncomment the permissions you want to bypass.
-    # If you bypass (by including the line below) then the
-    # check will not happen, and the permission is aways denied. If you
-    # bypass you do not need to include the associated entry in your
-    # Info.plist file
+    # The following loop bypasses compilation of specific permissions.
+    # Uncomment the permissions you want to bypass.
+    # When bypassed, the check is omitted and permission is always denied,
+    # removing the need to include the associated Info.plist entry.
     target.build_configurations.each do |config|
       config.build_settings['OTHER_SWIFT_FLAGS'] ||= ['$(inherited)']
       #config.build_settings['OTHER_SWIFT_FLAGS'] << '-D BYPASS_PERMISSION_NOTIFICATIONS'
@@ -83,4 +108,4 @@ post_install do |installer|
 end
 ```
 
-And uncomment the line items that you want to bypass by deleting the `#` mark at the start of the line.
+Uncomment the relevant line(s) by removing the leading `#`.

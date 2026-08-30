@@ -30,9 +30,6 @@
 /* Begin PBXFileReference section */
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
-		25779C692D310B3E00B2E69C /* background_downloader.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = background_downloader.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		25779C6C2D310B4C00B2E69C /* path_provider_foundation.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = path_provider_foundation.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		25779C6F2D310B5100B2E69C /* integration_test.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = integration_test.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		2595E1E12D44B02F00744D8D /* background_downloader_tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = background_downloader_tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		25B5932828D6C08A00CDC9E0 /* Info-Debug.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "Info-Debug.plist"; sourceTree = "<group>"; };
 		25B5932A28D6C09200CDC9E0 /* Info-Release.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "Info-Release.plist"; sourceTree = "<group>"; };
@@ -92,8 +89,6 @@
 				9740EEB11CF90186004384FC /* Flutter */,
 				97C146F01CF9000F007C117D /* Runner */,
 				97C146EF1CF9000F007C117D /* Products */,
-				C1F0C9BA42247E1D355FBA87 /* Pods */,
-				B0A992670B7F05BAB2A068C5 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -120,23 +115,6 @@
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 			);
 			path = Runner;
-			sourceTree = "<group>";
-		};
-		B0A992670B7F05BAB2A068C5 /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				25779C6F2D310B5100B2E69C /* integration_test.framework */,
-				25779C6C2D310B4C00B2E69C /* path_provider_foundation.framework */,
-				25779C692D310B3E00B2E69C /* background_downloader.framework */,
-			);
-			name = Frameworks;
-			sourceTree = "<group>";
-		};
-		C1F0C9BA42247E1D355FBA87 /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Pods;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
