@@ -61,6 +61,7 @@ Use this index to find documentation for specific topics and keywords.
 *   **Metadata**: [Parameters](parameters.md#metadata-and-displayname) - storing user data with tasks
 *   **Mime type**: [Uploads](uploads.md#mime-type) - specifying file types
 *   **Monitoring**: [Database & Monitoring](database.md) - tracking progress and status
+*   **mTLS**: [Configuration](CONFIG.md#desktop-mutual-tls-mtls-client-certificate-authentication) - mutual TLS client certificate authentication
 *   **Multi-part upload**: [Uploads](uploads.md#multiple-file-upload) - uploading multiple files
 
 ## N
@@ -102,6 +103,8 @@ Use this index to find documentation for specific topics and keywords.
 
 ## T
 *   **Task**: [Downloads](downloads.md) - base object for all operations
+*   **tempFilePath**: [Configuration](CONFIG.md#android-desktop-custom-temporary-directory-path) - configuring custom temporary directory path
+*   **Temporary directory**: [Configuration](CONFIG.md#android-desktop-custom-temporary-directory-path) and [File Storage](storage.md#the-basedirectory-enum) - managing temp storage
 *   **Timeout**: [Configuration](CONFIG.md#timeouts) - setting timeouts
 *   **Tracking**: [Database & Monitoring](database.md) - tracking tasks
 *   **Transfer**: [Transfers](transfers.md) - first-class transfer handle and API

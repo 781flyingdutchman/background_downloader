@@ -67,7 +67,7 @@ When `true`, the task will only run over WiFi or unmetered connections. If WiFi 
 ### `priority`
 Ranges from 0 (highest) to 10 (lowest), default 5.
 - On iOS and Desktop, all priority levels are supported natively.
-- On Android, priority < 5 is treated as expedited. If priority is 0, has an associated notification, and runs on Android 14+, the downloader uses the User Initiated Data Transfer (UIDT) service, removing the 9-minute background limit.
+- On Android, priority < 5 is treated as expedited (subject to a 2-minute execution limit vs 9 minutes for standard tasks). If priority is 0, has an associated notification, and runs on Android 14+, the downloader uses the User Initiated Data Transfer (UIDT) service, removing the background execution time limit. Note that using UIDT requires the `android.permission.RUN_USER_INITIATED_JOBS` permission in your app's `AndroidManifest.xml` (if missing, it automatically falls back to normal operation).
 
 To use UIDT on Android 14+, declare the following in `android/app/src/main/AndroidManifest.xml`:
 ```xml

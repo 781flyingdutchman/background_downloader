@@ -21,6 +21,9 @@ By using `BaseDirectory` (e.g., `.applicationDocuments`), the downloader always 
 *   `BaseDirectory.applicationSupport`: Private directory for app support files.
 *   `BaseDirectory.applicationLibrary`: (iOS/MacOS only) The Library directory.
 
+> [!NOTE]
+> For intermediate temporary files created while a download is in progress, the downloader uses the cache/temporary directory by default. On Android and Desktop, you can configure a custom directory path for these temporary files via `(Config.tempFilePath, path)` (see [Configuration](CONFIG.md#android-desktop-custom-temporary-directory-path)).
+
 ### Using Absolute Paths
 
 If you must use absolute paths, you can set `baseDirectory` to `BaseDirectory.root`. However, you are responsible for ensuring the path is valid. To help with this, you can use `Task.split(absolutePath)` which attempts to split an absolute path into the best matching `BaseDirectory`, `directory`, and `filename`.

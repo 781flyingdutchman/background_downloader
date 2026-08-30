@@ -32,8 +32,11 @@ The following configurations are supported:
   - `(Config.proxy, false)` removes the proxy
 * [Android, Desktop] Bypassing HTTPS (TLS) certificate validation
   - `(Config.bypassTLSCertificateValidation, bool bypass)`  bypasses TLS certificate validation for HTTPS connections. This is insecure, and can not be used in release mode. It is meant to make it easier to use a local server with a self-signed certificate during development only. On Android, to turn the bypass off, restart your app with this configuration removed.
+* [Android, Desktop] Custom temporary directory path
+  - `(Config.tempFilePath, String path)` sets a custom directory path where temporary download files are stored during downloads. On Android, this overrides the default cache / applicationSupport directory selection (and takes precedence over `useCacheDir`). On Desktop, this overrides the system temporary directory (`getTemporaryDirectory()`).
+  - `(Config.tempFilePath, false)`, `(Config.tempFilePath, null)`, `(Config.tempFilePath, '')`, or `(Config.tempFilePath, Config.never)` resets the configuration to use the default temporary location.
 * [Desktop] Mutual TLS (mTLS) client certificate authentication
-  - `(Config.mTLS, MTLSConfig mtlsConfig)` configures client certificate authentication for HTTPS connections on desktop platforms. `MTLSConfig` accepts client certificate and private key files (via `certificatePath` and `privateKeyPath`) or raw bytes (`certificateBytes` and `privateKeyBytes`), an optional key `password`, and an optional `host` filter (e.g. `'api.example.com'`). If `host` is omitted or null, the configuration applies globally.
+  - `(Config.mTLS, MTLSConfig mtlsConfig)` configures client certificate authentication for HTTPS connections on desktop platforms. `MTLSConfig` accepts client certificate and private key files (via `certificatePath` and `privateKeyPath`) or raw bytes (`certificateBytes` and `privateKeyBytes`), an optional key `password`, optional custom trusted server / CA certificates (`serverCertificatePath` or `serverCertificateBytes`), and an optional `host` filter (e.g. `'api.example.com'`). If `host` is omitted or null, the configuration applies globally.
   - `(Config.mTLS, MTLSConfig(host: 'api.example.com'))` resets mTLS configuration for a specific host.
   - `(Config.mTLS, false)` or `(Config.mTLS, null)` resets all mTLS configurations.
 * [Android] run task in foreground (removes 9 minute timeout and may improve chances of task surviving background). 
