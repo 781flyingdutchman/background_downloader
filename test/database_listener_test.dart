@@ -1,10 +1,7 @@
 import 'dart:async';
 
+import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:background_downloader/src/database.dart';
-import 'package:background_downloader/src/persistent_storage.dart';
-import 'package:background_downloader/src/models.dart';
-import 'package:background_downloader/src/task.dart';
 
 final defaultTask = DownloadTask(
   taskId: 'task1',
@@ -30,7 +27,7 @@ void main() {
       final listener = db.updates;
       final completer = Completer<TaskRecord>();
       listener.listen(completer.complete);
-      db.updateRecord(record);
+      await db.updateRecord(record);
       final emittedRecord = await completer.future;
       expect(emittedRecord, equals(record));
     });
@@ -72,75 +69,49 @@ class MockPersistentStorage implements PersistentStorage {
   Future<void> storeTaskRecord(TaskRecord record) => Future.value();
 
   @override
-  Future<TaskRecord?> retrieveTaskRecord(String taskId) => Future.value(TaskRecord(defaultTask, TaskStatus.running, 0.0, 100));
+  Future<TaskRecord?> retrieveTaskRecord(String taskId) =>
+      Future.value(TaskRecord(defaultTask, TaskStatus.running, 0.0, 100));
 
   @override
-  Future<List<TaskRecord>> retrieveAllTaskRecords() => Future.value([
-      TaskRecord(defaultTask, TaskStatus.running, 0.0, 100),
-    ]);
+  Future<List<TaskRecord>> retrieveAllTaskRecords() =>
+      Future.value([TaskRecord(defaultTask, TaskStatus.running, 0.0, 100)]);
 
   @override
   Future<void> removeTaskRecord(String? taskId) => Future.value();
 
   @override
-  // TODO: implement currentDatabaseVersion
   (String, int) get currentDatabaseVersion => throw UnimplementedError();
 
   @override
-  Future<void> initialize() {
-    // TODO: implement initialize
-    throw UnimplementedError();
-  }
+  Future<void> initialize() => throw UnimplementedError();
 
   @override
-  Future<void> removePausedTask(String? taskId) {
-    // TODO: implement removePausedTask
-    throw UnimplementedError();
-  }
+  Future<void> removePausedTask(String? taskId) => throw UnimplementedError();
 
   @override
-  Future<void> removeResumeData(String? taskId) {
-    // TODO: implement removeResumeData
-    throw UnimplementedError();
-  }
+  Future<void> removeResumeData(String? taskId) => throw UnimplementedError();
 
   @override
-  Future<List<Task>> retrieveAllPausedTasks() {
-    // TODO: implement retrieveAllPausedTasks
-    throw UnimplementedError();
-  }
+  Future<List<Task>> retrieveAllPausedTasks() => throw UnimplementedError();
 
   @override
-  Future<List<ResumeData>> retrieveAllResumeData() {
-    // TODO: implement retrieveAllResumeData
-    throw UnimplementedError();
-  }
+  Future<List<ResumeData>> retrieveAllResumeData() =>
+      throw UnimplementedError();
 
   @override
-  Future<Task?> retrievePausedTask(String taskId) {
-    // TODO: implement retrievePausedTask
-    throw UnimplementedError();
-  }
+  Future<Task?> retrievePausedTask(String taskId) => throw UnimplementedError();
 
   @override
-  Future<ResumeData?> retrieveResumeData(String taskId) {
-    // TODO: implement retrieveResumeData
-    throw UnimplementedError();
-  }
+  Future<ResumeData?> retrieveResumeData(String taskId) =>
+      throw UnimplementedError();
 
   @override
-  Future<void> storePausedTask(Task task) {
-    // TODO: implement storePausedTask
-    throw UnimplementedError();
-  }
+  Future<void> storePausedTask(Task task) => throw UnimplementedError();
 
   @override
-  Future<void> storeResumeData(ResumeData resumeData) {
-    // TODO: implement storeResumeData
-    throw UnimplementedError();
-  }
+  Future<void> storeResumeData(ResumeData resumeData) =>
+      throw UnimplementedError();
 
   @override
-  // TODO: implement storedDatabaseVersion
   Future<(String, int)> get storedDatabaseVersion => throw UnimplementedError();
 }

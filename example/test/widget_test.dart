@@ -1,5 +1,5 @@
+import 'package:background_downloader_example/main.dart';
 import 'package:flutter_test/flutter_test.dart';
-import '../lib/main.dart';
 
 void main() {
   testWidgets('MyApp renders background_downloader UI components', (
@@ -20,4 +20,3 @@ void main() {
     expect(find.text('startTransfer'), findsOneWidget);
   });
 }
-
