@@ -3,6 +3,8 @@ import time
 import os
 import json
 import logging
+import threading
+import signal
 
 app = Flask(__name__)
 
@@ -77,6 +79,8 @@ def shutdown():
     shutdown_func = request.environ.get('werkzeug.server.shutdown')
     if shutdown_func:
         shutdown_func()
+    else:
+        threading.Timer(0.2, lambda: os.kill(os.getpid(), signal.SIGTERM)).start()
     return "Server shutting down..."
 
 # ... (fail, echo_post, echo_get, redirect, upload_file, upload_binary unchanged)
