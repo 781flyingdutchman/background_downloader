@@ -695,7 +695,8 @@ final class DesktopDownloader extends BaseDownloader {
     if (config == null || config.isReset) {
       resetMtlsConfig(config?.host);
     } else {
-      _mtlsConfigs.removeWhere((c) => c.host == config.host);
+      final configHost = config.host?.toLowerCase();
+      _mtlsConfigs.removeWhere((c) => c.host?.toLowerCase() == configHost);
       _mtlsConfigs.add(config);
       _recreateClient();
     }
@@ -706,7 +707,8 @@ final class DesktopDownloader extends BaseDownloader {
     if (host == null) {
       _mtlsConfigs.clear();
     } else {
-      _mtlsConfigs.removeWhere((c) => c.host == host);
+      final normHost = host.toLowerCase();
+      _mtlsConfigs.removeWhere((c) => c.host?.toLowerCase() == normHost);
     }
     _recreateClient();
   }
@@ -751,10 +753,11 @@ final class DesktopDownloader extends BaseDownloader {
       return _defaultClient ??= _createRawClient(null);
     }
 
+    final normHost = host?.toLowerCase();
     final matchedConfig =
-        (host != null
+        (normHost != null
             ? _mtlsConfigs.firstWhereOrNull(
-              (c) => c.host == host && c.hasCredentials,
+              (c) => c.host?.toLowerCase() == normHost && c.hasCredentials,
             )
             : null) ??
         _mtlsConfigs.firstWhereOrNull(
@@ -765,7 +768,7 @@ final class DesktopDownloader extends BaseDownloader {
       return _defaultClient ??= _createRawClient(null);
     }
 
-    final cacheKey = matchedConfig.host ?? '*';
+    final cacheKey = matchedConfig.host?.toLowerCase() ?? '*';
     return _clientsCache.putIfAbsent(
       cacheKey,
       () => _createRawClient(matchedConfig),
