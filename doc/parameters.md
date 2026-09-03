@@ -37,7 +37,11 @@ Note that certain failures can be resumed, and retries will therefore attempt to
 
 ### Requiring WiFi
 
-On Android and iOS only: If the `requiresWiFi` field of a `Task` is set to true, the task won't start unless a WiFi network is available. By default `requiresWiFi` is false, and downloads/uploads will use the cellular (or metered) network if WiFi is not available, which may incur cost. Note that every task requires a working internet connection: local server connections that do not reach the internet may not work.
+On Android and iOS only: If the `requiresWiFi` field of a `Task` is set to true, the task is restricted to non-metered / non-cellular connections. By default `requiresWiFi` is false, and downloads/uploads will use cellular or metered networks if available, which may incur cost. Note that every task requires a working internet connection: local server connections that do not reach the internet may not work.
+
+The exact behavior of `requiresWiFi` differs between platforms:
+* **Android**: `requiresWiFi` enforces an **unmetered network connection** constraint (`NETWORK_TYPE_UNMETERED`). This means the task will run on standard unmetered Wi-Fi and unmetered Ethernet connections. However, it will **not** run on cellular data OR on metered Wi-Fi networks (such as mobile Wi-Fi hotspots or Wi-Fi networks explicitly marked as metered in Android system settings).
+* **iOS**: `requiresWiFi` disables cellular access (`allowsCellularAccess = false`). This means the task will run on any non-cellular connection (Wi-Fi or Ethernet), even if the Wi-Fi network is a mobile hotspot or metered. It will **not** run over cellular data connections.
 
 ### Priority
 

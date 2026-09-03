@@ -813,6 +813,11 @@ interface class FileDownloader {
   /// otherwise leaves those running with their prior setting.
   /// Restarts running upload tasks if [alsoRestartUploads] is true (which
   /// requires [rescheduleRunningTasks] to be true as well).
+  ///
+  /// Note that on Android, requiring WiFi enforces an unmetered network
+  /// connection constraint (`NETWORK_TYPE_UNMETERED`), excluding metered Wi-Fi
+  /// hotspots and cellular data. On iOS, requiring WiFi disables cellular access
+  /// (`allowsCellularAccess = false`), allowing execution over any Wi-Fi or Ethernet.
   Future<bool> requireWiFi(
     RequireWiFi requirement, {
     final rescheduleRunningTasks = true,

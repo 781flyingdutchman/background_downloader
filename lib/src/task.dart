@@ -245,7 +245,8 @@ sealed class Task extends Request implements Comparable {
   /// Type of progress updates desired
   final Updates updates;
 
-  /// If true, will not download over cellular (metered) network
+  /// If true, task is restricted to non-metered / non-cellular connections
+  /// (on Android, requires an unmetered network connection; on iOS, disables cellular access).
   final bool requiresWiFi;
 
   /// If true, task will pause if the task fails partly through the execution,
@@ -314,8 +315,9 @@ sealed class Task extends Request implements Comparable {
   /// [group] if set allows different callbacks or processing for different
   /// groups
   /// [updates] the kind of progress updates requested
-  /// [requiresWiFi] if set, will not start download until WiFi is available.
-  /// If not set may start download over cellular network
+  /// [requiresWiFi] if set, restricts task to non-metered / non-cellular connections
+  /// (on Android, requires an unmetered network connection; on iOS, disables cellular access).
+  /// If not set, task may execute over cellular or metered networks.
   /// [retries] if >0 will retry a failed download this many times
   /// [allowPause]
   /// If true, task will pause if the task fails partly through the execution,
@@ -687,8 +689,9 @@ final class DownloadTask extends Task {
   /// [group] if set allows different callbacks or processing for different
   /// groups
   /// [updates] the kind of progress updates requested
-  /// [requiresWiFi] if set, will not start download until WiFi is available.
-  /// If not set may start download over cellular network
+  /// [requiresWiFi] if set, restricts task to non-metered / non-cellular connections
+  /// (on Android, requires an unmetered network connection; on iOS, disables cellular access).
+  /// If not set, task may execute over cellular or metered networks.
   /// [retries] if >0 will retry a failed download this many times
   /// [allowPause] if true, allows pause command
   /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5.
@@ -885,8 +888,9 @@ final class UploadTask extends Task {
   /// [group] if set allows different callbacks or processing for different
   /// groups
   /// [updates] the kind of progress updates requested
-  /// [requiresWiFi] if set, will not start upload until WiFi is available.
-  /// If not set may start upload over cellular network
+  /// [requiresWiFi] if set, restricts task to non-metered / non-cellular connections
+  /// (on Android, requires an unmetered network connection; on iOS, disables cellular access).
+  /// If not set, task may execute over cellular or metered networks.
   /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5.
   /// On Android 14+, setting priority to 0 requires the
   /// `android.permission.RUN_USER_INITIATED_JOBS` permission in AndroidManifest.xml.
@@ -1460,8 +1464,9 @@ final class DataTask extends Task {
   /// [group] if set allows different callbacks or processing for different
   /// groups
   /// [updates] the kind of progress updates requested (only .status or none)
-  /// [requiresWiFi] if set, will not start download until WiFi is available.
-  /// If not set may start download over cellular network
+  /// [requiresWiFi] if set, restricts task to non-metered / non-cellular connections
+  /// (on Android, requires an unmetered network connection; on iOS, disables cellular access).
+  /// If not set, task may execute over cellular or metered networks.
   /// [retries] if >0 will retry a failed download this many times
   /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5.
   /// On Android 14+, setting priority to 0 requires the
