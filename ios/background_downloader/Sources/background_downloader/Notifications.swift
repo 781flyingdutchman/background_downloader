@@ -292,6 +292,10 @@ func updateGroupNotification(
         {
             if !isFinished {
                 addCancelActionToNotificationGroup(content: content)
+            } else {
+                content.categoryIdentifier = hasError
+                    ? NotificationCategory.error.rawValue
+                    : NotificationCategory.complete.rawValue
             }
             let request = UNNotificationRequest(identifier: await groupNotification.notificationId,
                                                 content: content, trigger: nil)
