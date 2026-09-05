@@ -1,3 +1,23 @@
+## 9.6.0
+
+* **Introduce the Transfer API**: A major new high-level reactive abstraction for managing background downloads, uploads, and data tasks:
+  * First-class `Transfer` handle returned by `FileDownloader().transfers.start`, `startAll`, `getOrStart`, and `startOrGetAll`
+  * Direct awaitable futures: `transfer.file` (resolves to the completed `File`), `transfer.result` (resolves to `TaskStatusUpdate`), and `transfer.responseBody`
+  * Reactive `ValueNotifier` properties for Flutter UI: `statusNotifier`, `progressNotifier` (normalized `0.0`–`1.0`), `networkSpeedNotifier` (MB/s), `timeRemainingNotifier`, `holdReasonNotifier`, `exceptionNotifier`, and `notificationTapNotifier`
+  * Direct action controls on the handle: `pause()`, `resume()`, `cancel()`, and `allowCellular()`
+  * Smart tuning with `TransferHint` presets (`userInitiated`, `largeFile`, `smallFile`, `lowPriority`, `useSuggestedFilename`, `binaryUpload`) with automatic Android 14+ UIDT JobScheduler configuration and pause resilience
+  * Pre-built reactive Flutter widgets: `TransferProgressBar`, `TransferButton`, and `TransferListTile`
+  * Scoped namespaces via `FileDownloader.scoped('namespace')` for modular apps, plugins, and feature isolation
+  * Network resilience: Automatic offline holding (`TransferHoldReason.offline`, `waitingForWiFi`) with auto-resumption and configurable `stallTimeout` watchdog
+  * Dedicated transfer manager and collections: `FileDownloader().transfers.notifier`, `all()`, `active()`, and `completed()`
+  * Updated the example app to demonstrate best-practice usage of the new `Transfer` functionality
+* **Modern Dart & SDK Constraints Upgrade**:
+  * Bump minimum Dart SDK to `^3.13.0` and Flutter requirement to `>=3.47.0`
+  * Modernize codebase using latest Dart language features: primary constructors, enum dot shorthands, switch expressions, and pattern matching for improved readability and maintainability
+  * Upgrade `flutter_lints` to `^6.0.0` with updated analysis options
+* [Desktop] Case-insensitive host matching for mTLS client configuration cache
+* [iOS] Modernize Swift Package Manager (SwiftPM) support: add required `FlutterFramework` dependency in `Package.swift`, expand permissions bypass documentation for SwiftPM, and transition example app to pure SwiftPM.
+
 ## 9.5.9
 
 * Add `Config.mTLS` and `MTLSConfig` data class to support mutual TLS client authentication on desktop platforms (closes #711)
