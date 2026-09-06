@@ -38,12 +38,19 @@ class Transfers {
     }
   }
 
+  Task _ensureProvidesStatusUpdates(Task task) => switch (task.updates) {
+    Updates.progress => task.copyWith(updates: Updates.statusAndProgress),
+    Updates.none => task.copyWith(updates: Updates.status),
+    Updates.status || Updates.statusAndProgress => task,
+  };
+
   /// Enqueues a task and returns a [Transfer] object to manage and observe its progress.
   ///
   /// If the task includes a [Task.notificationConfig] or [TransferHint.userInitiated],
   /// notification behavior is configured automatically.
   Future<Transfer> start(Task task) async {
     _ensureTransferAutoClean();
+    task = _ensureProvidesStatusUpdates(task);
     final namespacedTask = downloader.withNamespacedGroup(task);
     _ensureTransferGroupRegistered(namespacedTask.group);
 
@@ -125,7 +132,8 @@ class Transfers {
     final resultTransfers = <Transfer>[];
     final tasksToEnqueue = <Task>[];
 
-    for (final task in tasks) {
+    for (var task in tasks) {
+      task = _ensureProvidesStatusUpdates(task);
       final namespacedTask = downloader.withNamespacedGroup(task);
       namespacedTasks.add(namespacedTask);
       _ensureTransferGroupRegistered(namespacedTask.group);
@@ -213,6 +221,7 @@ class Transfers {
     bool reEnqueueIfFailed = true,
   }) async {
     _ensureTransferAutoClean();
+    task = _ensureProvidesStatusUpdates(task);
     final existing = forTask(task, matchBy: matchBy);
     if (existing != null) {
       if (existing.status == TaskStatus.complete ||
@@ -240,7 +249,8 @@ class Transfers {
     final results = <Transfer>[];
     final tasksToStart = <Task>[];
 
-    for (final task in tasks) {
+    for (var task in tasks) {
+      task = _ensureProvidesStatusUpdates(task);
       final existing = forTask(task, matchBy: matchBy);
       if (existing != null &&
           (existing.status == TaskStatus.complete ||

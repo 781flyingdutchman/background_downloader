@@ -443,6 +443,29 @@ void main() {
       expect(allResults[0].status, equals(TaskStatus.complete));
       expect(allResults[1].taskId, equals('part_2'));
     });
+
+    test('start and startAll automatically ensure providesStatusUpdates', () async {
+      final task = DownloadTask(
+        taskId: 'progress_only_task',
+        url: 'https://example.com/test.bin',
+        filename: 'test.bin',
+        updates: Updates.progress,
+      );
+      final transfer = await downloader.transfers.start(task);
+      expect(transfer.task.updates, equals(Updates.statusAndProgress));
+      expect(transfer.task.providesStatusUpdates, isTrue);
+      expect(transfer.task.providesProgressUpdates, isTrue);
+
+      final batchTask = DownloadTask(
+        taskId: 'none_task',
+        url: 'https://example.com/none.bin',
+        filename: 'none.bin',
+        updates: Updates.none,
+      );
+      final batchTransfers = await downloader.transfers.startAll([batchTask]);
+      expect(batchTransfers.first.task.updates, equals(Updates.status));
+      expect(batchTransfers.first.task.providesStatusUpdates, isTrue);
+    });
   });
 
   group('Transfer Collections & transfers.notifier', () {

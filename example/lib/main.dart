@@ -319,7 +319,7 @@ class _MyAppState extends State<MyApp> {
         filename: 'Batch_File_${Random().nextInt(1000)}.zip',
         group: 'bunch',
         displayName: 'Batch Item #${i + 1}',
-        updates: Updates.progress,
+        updates: Updates.statusAndProgress,
         allowPause: true,
       ),
     );
