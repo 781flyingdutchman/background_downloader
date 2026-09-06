@@ -339,6 +339,21 @@ class Transfers {
   /// Operator lookup for a [Transfer] by taskId.
   Transfer? operator [](String taskId) => _transfers[taskId];
 
+  /// Removes a [Transfer] by its [taskId] from tracking.
+  ///
+  /// If [dispose] is true (the default), disposes the [Transfer] instance.
+  /// Returns the removed [Transfer], or `null` if not found.
+  Transfer? remove(String taskId, {bool dispose = true}) {
+    final transfer = _transfers.remove(taskId);
+    if (transfer != null) {
+      if (dispose) {
+        transfer.dispose();
+      }
+      _notifyTransfersChanged();
+    }
+    return transfer;
+  }
+
   /// Returns the first [Transfer] matching [url], or null.
   Transfer? forUrl(String url) {
     for (final transfer in _transfers.values) {
@@ -574,6 +589,9 @@ class Transfers {
       await cancelAll();
     }
     _transferAutoCleanTriggered = false;
+    for (final transfer in _transfers.values) {
+      transfer.dispose();
+    }
     _transfers.clear();
     _registeredTransferGroups.clear();
     notifier.value = [];
@@ -589,5 +607,9 @@ class Transfers {
   void dispose() {
     _databaseSubscription?.cancel();
     _databaseSubscription = null;
+    for (final transfer in _transfers.values) {
+      transfer.dispose();
+    }
+    _transfers.clear();
   }
 }

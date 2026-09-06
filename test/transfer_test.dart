@@ -1048,4 +1048,87 @@ void main() {
       },
     );
   });
+
+  group('Issue 6: Transfers remove, clear, and dispose lifecycle', () {
+    test(
+      'remove() evicts and disposes the transfer and updates notifier',
+      () async {
+        final task = DownloadTask(
+          taskId: 'rem_1',
+          url: 'https://example.com/rem.bin',
+        );
+        final transfer = await FileDownloader().transfers.start(task);
+
+        expect(FileDownloader().transfers.forId('rem_1'), isNotNull);
+        expect(
+          FileDownloader().transfers.notifier.value.any(
+            (t) => t.taskId == 'rem_1',
+          ),
+          isTrue,
+        );
+
+        final removed = FileDownloader().transfers.remove('rem_1');
+
+        expect(removed, equals(transfer));
+        expect(FileDownloader().transfers.forId('rem_1'), isNull);
+        expect(
+          FileDownloader().transfers.notifier.value.any(
+            (t) => t.taskId == 'rem_1',
+          ),
+          isFalse,
+        );
+
+        // Verifying disposal: modifying a disposed ValueNotifier throws FlutterError
+        expect(
+          () => transfer.statusNotifier.value = TaskStatus.complete,
+          throwsFlutterError,
+        );
+      },
+    );
+
+    test('remove() with dispose: false evicts without disposing', () async {
+      final task = DownloadTask(
+        taskId: 'rem_2',
+        url: 'https://example.com/rem2.bin',
+      );
+      final transfer = await FileDownloader().transfers.start(task);
+
+      final removed = FileDownloader().transfers.remove('rem_2', dispose: false);
+
+      expect(removed, equals(transfer));
+      expect(FileDownloader().transfers.forId('rem_2'), isNull);
+
+      // Not disposed, so ValueNotifier is still valid
+      transfer.statusNotifier.value = TaskStatus.complete;
+      expect(transfer.status, equals(TaskStatus.complete));
+      transfer.dispose();
+    });
+
+    test('clear() disposes all managed transfers', () async {
+      final task1 = DownloadTask(
+        taskId: 'clr_a',
+        url: 'https://example.com/a.bin',
+      );
+      final task2 = DownloadTask(
+        taskId: 'clr_b',
+        url: 'https://example.com/b.bin',
+      );
+      final t1 = await FileDownloader().transfers.start(task1);
+      final t2 = await FileDownloader().transfers.start(task2);
+
+      await FileDownloader().transfers.clear();
+
+      expect(FileDownloader().transfers.all(), isEmpty);
+      expect(FileDownloader().transfers.notifier.value, isEmpty);
+
+      expect(
+        () => t1.statusNotifier.value = TaskStatus.complete,
+        throwsFlutterError,
+      );
+      expect(
+        () => t2.statusNotifier.value = TaskStatus.complete,
+        throwsFlutterError,
+      );
+    });
+  });
 }
