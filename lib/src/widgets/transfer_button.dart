@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models.dart';
+import '../task.dart';
 import '../transfer.dart';
 
 /// An adaptive action button for a [Transfer].
@@ -20,6 +21,11 @@ class TransferButton extends StatelessWidget {
   /// Color override for the icon.
   final Color? color;
 
+  /// Optional callback invoked when the user cancels the transfer.
+  ///
+  /// If omitted, defaults to calling [Transfer.cancel].
+  final VoidCallback? onCancel;
+
   /// Creates a reactive [TransferButton].
   const TransferButton({
     super.key,
@@ -27,6 +33,7 @@ class TransferButton extends StatelessWidget {
     this.iconSize = 24.0,
     this.padding = const EdgeInsets.all(8.0),
     this.color,
+    this.onCancel,
   });
 
   @override
@@ -35,19 +42,30 @@ class TransferButton extends StatelessWidget {
 
     return ValueListenableBuilder<TaskStatus>(
       valueListenable: transfer.statusNotifier,
-      builder: (context, status, _) => switch (status) {
-        .running || .enqueued => IconButton(
-          icon: Icon(Icons.pause_circle_outline, size: iconSize),
-          color: color ?? theme.colorScheme.primary,
-          padding: padding,
-          tooltip: 'Pause',
-          onPressed: () => transfer.pause(),
-        ),
-        .paused || .waitingToRetry => IconButton(
-          icon: Icon(Icons.play_circle_outline, size: iconSize),
-          color: color ?? Colors.orange,
-          padding: padding,
-          tooltip: 'Resume',
+      builder: (context, status, _) {
+        final canPause =
+            transfer.task is DownloadTask && transfer.task.allowPause;
+        return switch (status) {
+          .running || .enqueued => canPause
+              ? IconButton(
+                  icon: Icon(Icons.pause_circle_outline, size: iconSize),
+                  color: color ?? theme.colorScheme.primary,
+                  padding: padding,
+                  tooltip: 'Pause',
+                  onPressed: () => transfer.pause(),
+                )
+              : IconButton(
+                  icon: Icon(Icons.cancel_outlined, size: iconSize),
+                  color: color ?? theme.colorScheme.error,
+                  padding: padding,
+                  tooltip: 'Cancel',
+                  onPressed: onCancel ?? () => transfer.cancel(),
+                ),
+          .paused || .waitingToRetry => IconButton(
+            icon: Icon(Icons.play_circle_outline, size: iconSize),
+            color: color ?? Colors.orange,
+            padding: padding,
+            tooltip: 'Resume',
           onPressed: () => transfer.resume(),
         ),
         .failed || .notFound => IconButton(
@@ -69,8 +87,9 @@ class TransferButton extends StatelessWidget {
           tooltip: 'Restart',
           onPressed: () => transfer.resume(),
         ),
-      },
-    );
+      };
+    },
+  );
   }
 }
 

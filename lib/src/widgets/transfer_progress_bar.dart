@@ -116,16 +116,22 @@ class TransferProgressBar extends StatelessWidget {
                                     ),
                                     const SizedBox(width: 8),
                                   ],
-                                  if (showPercentage &&
-                                      status != TaskStatus.complete &&
-                                      progress != null &&
-                                      progress >= 0.0)
-                                    Text(
-                                      '${(progress * 100).toStringAsFixed(0)}%',
-                                      style: effectiveTextStyle.copyWith(
-                                        fontWeight: FontWeight.bold,
+                                  if (showPercentage) ...[
+                                    if (status == TaskStatus.complete)
+                                      Text(
+                                        '100%',
+                                        style: effectiveTextStyle.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      )
+                                    else if (progress != null && progress >= 0.0)
+                                      Text(
+                                        '${(progress * 100).toStringAsFixed(0)}%',
+                                        style: effectiveTextStyle.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
-                                    ),
+                                  ],
                                 ],
                               ),
                             ],

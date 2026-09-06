@@ -212,7 +212,7 @@ Under Android 14+ (API 34+) system requirements, **User-Initiated Data Transfer 
      url: 'https://example.com/large_video.mp4',
      filename: 'video.mp4',
      transferHints: {TransferHint.userInitiated, TransferHint.largeFile},
-     notificationConfig: const NotificationConfig(
+     notificationConfig: const TaskNotificationConfig(
        running: TaskNotification('Downloading', '{filename}'),
        complete: TaskNotification('Complete', '{filename}'),
        progressBar: true,
@@ -258,12 +258,12 @@ TransferProgressBar(
 ```
 
 ### `TransferButton`
-An action button that dynamically switches icons between pause, resume, cancel, and completed checkmark:
+An action button that dynamically switches icons between pause, resume, cancel, and completed checkmark. For transfers that do not support pausing (such as `UploadTask` or tasks with `allowPause: false`), the button displays a Cancel icon during execution:
 
 ```dart
 TransferButton(
   transfer: transfer,
-  onCancel: () => print('Cancelled'),
+  onCancel: () => print('User clicked cancel'),
 )
 ```
 
@@ -282,5 +282,5 @@ TransferListTile(
 
 ## 9. Network-Aware Offline Resilience & Stall Watchdog
 
-1. **Smart Network Holding**: When a transfer is running and the device loses network connectivity (or drops off Wi-Fi when `requiresWiFi` is set), the transfer is automatically paused or held in `tasksWaitingToRetry` without decrementing retries. `transfer.holdReasonNotifier` emits `TransferHoldReason.offline` or `TransferHoldReason.waitingForWiFi`. Once connectivity is restored, it resumes automatically.
+1. **Native Network Enqueuing & Holding**: When a transfer is enqueued while offline or on cellular (when `requiresWiFi` is set), the task is handed directly to the underlying operating system's native background scheduler (WorkManager / JobScheduler on Android, background URLSession on iOS). This ensures the transfer kicks off as soon as suitable connectivity becomes available, even if your Flutter application is in the background or killed. In Dart, `transfer.holdReasonNotifier` emits `TransferHoldReason.offline` or `TransferHoldReason.waitingForWiFi` so your UI can display reactive status messages (e.g. "Waiting for Wi-Fi") until connectivity is established.
 2. **Stall Watchdog**: Set `stallTimeout` on your task (e.g. `stallTimeout: Duration(seconds: 30)`). If a running transfer experiences no network progress within that window while the app is active, the watchdog will automatically kick or resume the transfer.

@@ -784,6 +784,7 @@ void main() {
         url: 'https://example.com/sample.mp4',
         filename: 'sample.mp4',
         displayName: 'Sample Video',
+        allowPause: true,
       );
       transfer = Transfer(task, downloader);
     });
@@ -831,6 +832,7 @@ void main() {
         await tester.pump();
 
         expect(find.text('Complete'), findsOneWidget);
+        expect(find.text('100%'), findsOneWidget);
       },
     );
 
@@ -854,6 +856,37 @@ void main() {
       await tester.pump();
       expect(find.byIcon(Icons.check_circle), findsOneWidget);
     });
+
+    testWidgets(
+      'TransferButton displays cancel icon when allowPause is false and invokes onCancel',
+      (tester) async {
+        final unpauseableTask = DownloadTask(
+          url: 'https://example.com/unpauseable.mp4',
+          allowPause: false,
+        );
+        final unpauseableTransfer = Transfer(unpauseableTask, downloader);
+        var cancelCalled = false;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: TransferButton(
+                transfer: unpauseableTransfer,
+                onCancel: () => cancelCalled = true,
+              ),
+            ),
+          ),
+        );
+
+        // In enqueued / running state: should show cancel_outlined icon instead of pause
+        expect(find.byIcon(Icons.pause_circle_outline), findsNothing);
+        expect(find.byIcon(Icons.cancel_outlined), findsOneWidget);
+
+        await tester.tap(find.byIcon(Icons.cancel_outlined));
+        await tester.pump();
+        expect(cancelCalled, isTrue);
+      },
+    );
 
     testWidgets('TransferListTile renders title, progress bar and controls', (
       tester,
