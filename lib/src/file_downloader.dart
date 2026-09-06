@@ -813,6 +813,7 @@ interface class FileDownloader {
   }) async {
     if (doTrackTasks) {
       await trackTasks(markDownloadedComplete: markDownloadedComplete);
+      await transfers.rehydrateFromDatabase();
       if (doRescheduleKilledTasks) {
         Timer(const Duration(seconds: 5), () => rescheduleKilledTasks());
       }
@@ -1447,6 +1448,7 @@ interface class FileDownloader {
   /// Destroy the [FileDownloader]. Subsequent use requires initialization
   void destroy() {
     transfers.clear();
+    transfers.dispose();
     _registeredStatusCallbacks.clear();
     _registeredProgressCallbacks.clear();
     _registeredNotificationTapCallbacks.clear();

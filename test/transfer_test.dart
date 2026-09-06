@@ -4,8 +4,66 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:background_downloader/background_downloader.dart';
 
+class InMemoryPersistentStorage implements PersistentStorage {
+  final Map<String, TaskRecord> records = {};
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<void> storeTaskRecord(TaskRecord record) async {
+    records[record.taskId] = record;
+  }
+
+  @override
+  Future<TaskRecord?> retrieveTaskRecord(String taskId) async => records[taskId];
+
+  @override
+  Future<List<TaskRecord>> retrieveAllTaskRecords() async => records.values.toList();
+
+  @override
+  Future<void> removeTaskRecord(String? taskId) async {
+    if (taskId == null) {
+      records.clear();
+    } else {
+      records.remove(taskId);
+    }
+  }
+
+  @override
+  (String, int) get currentDatabaseVersion => ('', 0);
+
+  @override
+  Future<(String, int)> get storedDatabaseVersion async => ('', 0);
+
+  @override
+  Future<void> removePausedTask(String? taskId) async {}
+
+  @override
+  Future<void> removeResumeData(String? taskId) async {}
+
+  @override
+  Future<List<Task>> retrieveAllPausedTasks() async => [];
+
+  @override
+  Future<List<ResumeData>> retrieveAllResumeData() async => [];
+
+  @override
+  Future<Task?> retrievePausedTask(String taskId) async => null;
+
+  @override
+  Future<ResumeData?> retrieveResumeData(String taskId) async => null;
+
+  @override
+  Future<void> storePausedTask(Task task) async {}
+
+  @override
+  Future<void> storeResumeData(ResumeData resumeData) async {}
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  late InMemoryPersistentStorage testStorage;
 
   setUpAll(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -47,6 +105,12 @@ void main() {
             }
           },
         );
+    testStorage = InMemoryPersistentStorage();
+    FileDownloader(persistentStorage: testStorage);
+  });
+
+  setUp(() {
+    testStorage.records.clear();
   });
 
   tearDown(() {
@@ -366,6 +430,53 @@ void main() {
       expect(downloader.transfers['lookup_id_1'], equals(transfer));
       expect(downloader.transfers.forUrl('https://nonexistent.com'), isNull);
     });
+
+    test(
+      'Simulated app restart: getOrStart and rehydrateFromDatabase restore transfer from database',
+      () async {
+        await downloader.trackTasks();
+
+        final persistedTask = DownloadTask(
+          taskId: 'persisted_task_42',
+          url: 'https://example.com/database_model.bin',
+          filename: 'database_model.bin',
+          group: 'models',
+        );
+
+        final namespacedTask = downloader.withNamespacedGroup(persistedTask);
+        final record = TaskRecord(
+          namespacedTask,
+          TaskStatus.complete,
+          1.0,
+          1048576,
+        );
+        await downloader.database.updateRecord(record);
+
+        // Simulate app termination by clearing in-memory state
+        await downloader.transfers.clear();
+        expect(downloader.transfers.all(), isEmpty);
+        expect(downloader.transfers.forId('persisted_task_42'), isNull);
+
+        // getOrStart should find record in database and rehydrate it
+        final rehydratedTransfer = await downloader.transfers.getOrStart(
+          persistedTask,
+        );
+        expect(rehydratedTransfer.taskId, equals('persisted_task_42'));
+        expect(rehydratedTransfer.status, equals(TaskStatus.complete));
+        expect(rehydratedTransfer.progress, equals(1.0));
+        expect(downloader.transfers.forId('persisted_task_42'), equals(rehydratedTransfer));
+
+        // Clear again and test rehydrateFromDatabase
+        await downloader.transfers.clear();
+        expect(downloader.transfers.all(), isEmpty);
+
+        final rehydratedList = await downloader.transfers.rehydrateFromDatabase();
+        expect(rehydratedList.length, equals(1));
+        expect(rehydratedList.first.taskId, equals('persisted_task_42'));
+        expect(downloader.transfers.all().length, equals(1));
+        expect(downloader.transfers.completed().length, equals(1));
+      },
+    );
   });
 
   group('startAll & startOrGetAll (Batch)', () {

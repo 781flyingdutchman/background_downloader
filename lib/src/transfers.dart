@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'base_downloader.dart';
+import 'database.dart';
 import 'exceptions.dart';
 import 'file_downloader.dart';
 import 'models.dart';
@@ -26,8 +27,12 @@ class Transfers {
       ValueNotifier<List<Transfer>>([]);
 
   static bool _transferAutoCleanTriggered = false;
+  StreamSubscription<TaskRecord>? _databaseSubscription;
 
-  Transfers(this.downloader, this._downloader);
+  Transfers(this.downloader, this._downloader) {
+    _databaseSubscription =
+        downloader.database.updates.listen(_onDatabaseRecordUpdate);
+  }
 
   void _ensureTransferAutoClean() {
     if (!_transferAutoCleanTriggered &&
@@ -222,7 +227,10 @@ class Transfers {
   }) async {
     _ensureTransferAutoClean();
     task = _ensureProvidesStatusUpdates(task);
-    final existing = forTask(task, matchBy: matchBy);
+    var existing = forTask(task, matchBy: matchBy);
+    if (existing == null && _downloader.isTrackingTasks) {
+      existing = await _findExistingInDatabase(task, matchBy: matchBy);
+    }
     if (existing != null) {
       if (existing.status == TaskStatus.complete ||
           existing.status.isNotFinalState) {
@@ -251,7 +259,10 @@ class Transfers {
 
     for (var task in tasks) {
       task = _ensureProvidesStatusUpdates(task);
-      final existing = forTask(task, matchBy: matchBy);
+      var existing = forTask(task, matchBy: matchBy);
+      if (existing == null && _downloader.isTrackingTasks) {
+        existing = await _findExistingInDatabase(task, matchBy: matchBy);
+      }
       if (existing != null &&
           (existing.status == TaskStatus.complete ||
               existing.status.isNotFinalState ||
@@ -447,6 +458,120 @@ class Transfers {
     return transfer;
   }
 
+  Transfer _createTransferFromRecord(TaskRecord record) {
+    final cleanTask = downloader.withoutNamespacedGroup(record.task);
+    var transfer = _transfers[cleanTask.taskId];
+    if (transfer != null) {
+      return transfer;
+    }
+    final normalizedProgress =
+        (record.progress >= 0.0 && record.progress <= 1.0)
+            ? record.progress
+            : (record.status == TaskStatus.complete ? 1.0 : 0.0);
+    transfer = Transfer(
+      cleanTask,
+      downloader,
+      record.status,
+      normalizedProgress,
+      record.exception,
+    );
+    _transfers[cleanTask.taskId] = transfer;
+    _notifyTransfersChanged();
+    if (record.status.isNotFinalState) {
+      _ensureTransferGroupRegistered(record.task.group);
+    }
+    return transfer;
+  }
+
+  Future<Transfer?> _findExistingInDatabase(
+    Task task, {
+    bool Function(Task existingTask)? matchBy,
+  }) async {
+    final namespacedTask = downloader.withNamespacedGroup(task);
+    if (matchBy == null) {
+      final record =
+          await downloader.database.recordForId(namespacedTask.taskId);
+      if (record != null) {
+        return _createTransferFromRecord(record);
+      }
+    }
+    final cleanGroup = downloader.originalGroup(
+      downloader.namespacedGroup(task.group),
+    );
+    final allRecords = await downloader.database.allRecords();
+    for (final record in allRecords) {
+      final cleanRecordTask = downloader.withoutNamespacedGroup(record.task);
+      if (cleanRecordTask.group != cleanGroup) continue;
+      if (matchBy != null) {
+        if (matchBy(cleanRecordTask)) {
+          return _createTransferFromRecord(record);
+        }
+        continue;
+      }
+      if (cleanRecordTask.taskId == task.taskId ||
+          (cleanRecordTask.url == task.url &&
+              cleanRecordTask.filename == task.filename &&
+              cleanRecordTask.directory == task.directory &&
+              cleanRecordTask.baseDirectory == task.baseDirectory)) {
+        return _createTransferFromRecord(record);
+      }
+    }
+    return null;
+  }
+
+  void _onDatabaseRecordUpdate(TaskRecord record) {
+    if (downloader.hasNamespace &&
+        !record.task.group.startsWith('${downloader.namespace}.')) {
+      return;
+    }
+    final cleanTask = downloader.withoutNamespacedGroup(record.task);
+    final transfer = _transfers[cleanTask.taskId];
+    if (transfer != null) {
+      transfer.updateStatus(
+        TaskStatusUpdate(
+          cleanTask,
+          record.status,
+          record.exception,
+        ),
+      );
+      if (record.progress >= 0.0 && record.progress <= 1.0) {
+        transfer.updateProgress(
+          TaskProgressUpdate(
+            cleanTask,
+            record.progress,
+            record.expectedFileSize,
+          ),
+        );
+      }
+    } else if (record.status.isNotFinalState) {
+      _createTransferFromRecord(record);
+    }
+  }
+
+  /// Rehydrates [Transfer] handles from the persistent database for previously
+  /// tracked tasks across app restarts.
+  Future<List<Transfer>> rehydrateFromDatabase({String? group}) async {
+    if (!_downloader.isTrackingTasks) {
+      return [];
+    }
+    final namespacedGroupName =
+        group != null ? downloader.namespacedGroup(group) : null;
+    final records = await downloader.database.allRecords();
+    final rehydrated = <Transfer>[];
+    for (final record in records) {
+      if (namespacedGroupName != null &&
+          record.task.group != namespacedGroupName) {
+        continue;
+      }
+      if (downloader.hasNamespace &&
+          !record.task.group.startsWith('${downloader.namespace}.')) {
+        continue;
+      }
+      rehydrated.add(_createTransferFromRecord(record));
+    }
+    return rehydrated;
+  }
+
   void _notifyTransfersChanged() {
     notifier.value = List.unmodifiable(_transfers.values);
   }
@@ -468,5 +593,11 @@ class Transfers {
   Future<void> cancelAll({String? group}) async {
     final activeTransfers = active(group: group);
     await Future.wait(activeTransfers.map((t) => t.cancel()));
+  }
+
+  /// Cancels subscriptions and releases resources held by this [Transfers] manager.
+  void dispose() {
+    _databaseSubscription?.cancel();
+    _databaseSubscription = null;
   }
 }
