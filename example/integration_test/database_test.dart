@@ -267,11 +267,16 @@ void main() {
       final r = TaskRecord(t, TaskStatus.running, 0.5, 1000);
       await database.updateRecord(r);
     }
-    // Triggered just before the 100th insertion. Should delete 99-5=94.
-    await Future.delayed(const Duration(seconds: 30)); // Give it plenty of time
-    // Meanwhile we kept adding, so we end up with 110 - 94 = 16
+    // Triggered around the 100th insertion. Depending on whether record 99 was
+    // committed before allRecords() read the database, deletes 94 or 95 records.
+    // Meanwhile we kept adding, so we end up with 110 - 94 = 16 or 110 - 95 = 15.
+    var attempts = 0;
+    while (attempts < 60 && (await database.allRecords()).length > 16) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      attempts++;
+    }
     final records = await database.allRecords();
-    expect(records.length, equals(16)); // 5 kept
+    expect(records.length, anyOf(15, 16)); // 5 kept from the batch when cleanup triggered
     await database.deleteAllRecords();
   });
 }

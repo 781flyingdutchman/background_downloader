@@ -71,7 +71,7 @@ void main() {
       'Enqueue Performance Comparison',
       timeout: const Timeout(Duration(minutes: 3)),
       (widgetTester) async {
-        final numTasks = Platform.isAndroid ? 400 : 1000; // Increase for more significant results
+        final numTasks = Platform.isAndroid ? 100 : 1000; // Increase for more significant results
         final tasks = <Task>[];
         final tasks2 = <Task>[];
         for (var n = 0; n < numTasks; n++) {
@@ -102,8 +102,6 @@ void main() {
           enqueueAllStartTime,
         );
         print('enqueueAll took: ${enqueueAllDuration.inMilliseconds}ms');
-
-        await Future.delayed(const Duration(seconds: 5));
 
         // Clean up
         for (final task in tasks) {

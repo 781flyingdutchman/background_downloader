@@ -1458,11 +1458,20 @@ void main() {
         FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
         expect(retryTask.retriesRemaining, equals(retryTask.retries));
         expect(await FileDownloader().enqueue(retryTask), isTrue);
-        await Future.delayed(const Duration(seconds: 4));
-        final retriedTask = await FileDownloader().taskForId(retryTask.taskId);
+        Task? retriedTask;
+        var attempts = 0;
+        while (attempts < 40) {
+          await Future.delayed(const Duration(milliseconds: 200));
+          retriedTask = await FileDownloader().taskForId(retryTask.taskId);
+          if (retriedTask != null &&
+              retriedTask.retriesRemaining < retryTask.retries) {
+            break;
+          }
+          attempts++;
+        }
         expect(retriedTask, equals(retryTask));
         if (retriedTask != null) {
-          expect(retriedTask.retriesRemaining, lessThan(retriedTask.retries));
+          expect(retriedTask.retriesRemaining, lessThan(retryTask.retries));
         }
         await statusCallbackCompleter.future;
         expect(lastStatus, equals(TaskStatus.failed));
