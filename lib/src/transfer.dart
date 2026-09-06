@@ -71,7 +71,7 @@ class Transfer {
   final StreamController<TaskUpdate> _updatesController =
       StreamController<TaskUpdate>.broadcast();
 
-  final Completer<TaskStatusUpdate> _resultCompleter =
+  Completer<TaskStatusUpdate> _resultCompleter =
       Completer<TaskStatusUpdate>();
 
   Timer? _stallWatchdogTimer;
@@ -192,6 +192,9 @@ class Transfer {
   /// Otherwise, re-enqueues the task with its retry count reset.
   Future<bool> resume() async {
     holdReasonNotifier.value = TransferHoldReason.none;
+    if (_resultCompleter.isCompleted) {
+      _resultCompleter = Completer<TaskStatusUpdate>();
+    }
     if (task case final DownloadTask dTask when dTask.allowPause) {
       if (await downloader.taskCanResume(dTask)) {
         return downloader.resume(dTask);
@@ -214,6 +217,14 @@ class Transfer {
     statusNotifier.value = update.status;
     if (update.exception != null) {
       exceptionNotifier.value = update.exception;
+    }
+
+    if (update.status == TaskStatus.enqueued ||
+        update.status == TaskStatus.running) {
+      if (_resultCompleter.isCompleted) {
+        _resultCompleter = Completer<TaskStatusUpdate>();
+      }
+      exceptionNotifier.value = null;
     }
 
     if (update.status == TaskStatus.running) {

@@ -934,4 +934,69 @@ void main() {
       },
     );
   });
+
+  group('Issue 4: Renewable _resultCompleter on retries & re-enqueue', () {
+    test(
+      'result completer completes on failure and resets on retry and completes on success',
+      () async {
+        final task = DownloadTask(url: 'https://example.com/retry.mp4');
+        final transfer = Transfer(task);
+
+        // Transition to failed
+        transfer.updateStatus(
+          TaskStatusUpdate(
+            task,
+            TaskStatus.failed,
+            TaskException('Network down'),
+          ),
+        );
+        expect(transfer.status, equals(TaskStatus.failed));
+        final failResult = await transfer.result;
+        expect(failResult.status, equals(TaskStatus.failed));
+        expect(failResult.exception?.description, equals('Network down'));
+
+        // Retry: call resume(), which resets _resultCompleter
+        await transfer.resume();
+
+        // Verify that result is now pending (not immediately completed with the old failure)
+        var newResultCompleted = false;
+        transfer.result.then((_) => newResultCompleted = true);
+        await pumpEventQueue();
+        expect(newResultCompleted, isFalse);
+
+        // Receive running and complete status
+        transfer.updateStatus(TaskStatusUpdate(task, TaskStatus.running));
+        transfer.updateStatus(TaskStatusUpdate(task, TaskStatus.complete));
+
+        final successResult = await transfer.result;
+        expect(successResult.status, equals(TaskStatus.complete));
+        expect(newResultCompleted, isTrue);
+      },
+    );
+
+    test(
+      'result completer resets when enqueued status arrives after reaching a final state',
+      () async {
+        final task = DownloadTask(url: 'https://example.com/retry2.mp4');
+        final transfer = Transfer(task, null, TaskStatus.canceled);
+
+        expect(transfer.status, equals(TaskStatus.canceled));
+        final cancelResult = await transfer.result;
+        expect(cancelResult.status, equals(TaskStatus.canceled));
+
+        // External re-enqueue (without calling transfer.resume directly)
+        transfer.updateStatus(TaskStatusUpdate(task, TaskStatus.enqueued));
+
+        var pending = true;
+        transfer.result.then((_) => pending = false);
+        await pumpEventQueue();
+        expect(pending, isTrue);
+
+        transfer.updateStatus(TaskStatusUpdate(task, TaskStatus.complete));
+        final completeResult = await transfer.result;
+        expect(completeResult.status, equals(TaskStatus.complete));
+        expect(pending, isFalse);
+      },
+    );
+  });
 }
