@@ -519,6 +519,21 @@ void main() {
         expect(notifyCount, greaterThan(0));
       },
     );
+
+    test('clear removes transfers and resets notifier', () async {
+      final task = DownloadTask(
+        taskId: 'clr_1',
+        url: 'https://example.com/c1.bin',
+        filename: 'c1.bin',
+      );
+      await downloader.transfers.start(task);
+      expect(downloader.transfers.all(), isNotEmpty);
+      expect(downloader.transfers.notifier.value, isNotEmpty);
+
+      await downloader.transfers.clear();
+      expect(downloader.transfers.all(), isEmpty);
+      expect(downloader.transfers.notifier.value, isEmpty);
+    });
   });
 
   group('TransferHint & Smart Task Tuning on Task', () {

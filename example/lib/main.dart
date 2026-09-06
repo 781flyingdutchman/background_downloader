@@ -403,6 +403,7 @@ class _MyAppState extends State<MyApp> {
               icon: const Icon(Icons.delete_sweep),
               tooltip: 'Reset and clear transfers',
               onPressed: () async {
+                await FileDownloader().transfers.clear(cancelActive: true);
                 await FileDownloader().reset();
                 setState(() {
                   mainTransfer = null;
@@ -759,6 +760,9 @@ class _MyAppState extends State<MyApp> {
                                 if (transfers.isNotEmpty)
                                   TextButton(
                                     onPressed: () async {
+                                      await FileDownloader().transfers.clear(
+                                        cancelActive: true,
+                                      );
                                       await FileDownloader().reset();
                                       setState(() {
                                         mainTransfer = null;

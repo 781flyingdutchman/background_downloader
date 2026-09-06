@@ -452,10 +452,21 @@ class Transfers {
   }
 
   /// Clears internal transfer state, notifiers, and group listener registrations.
-  void clear() {
+  ///
+  /// If [cancelActive] is true, cancels any active transfers before clearing.
+  Future<void> clear({bool cancelActive = false}) async {
+    if (cancelActive) {
+      await cancelAll();
+    }
     _transferAutoCleanTriggered = false;
     _transfers.clear();
     _registeredTransferGroups.clear();
     notifier.value = [];
+  }
+
+  /// Cancels all currently active transfers, optionally filtered by [group].
+  Future<void> cancelAll({String? group}) async {
+    final activeTransfers = active(group: group);
+    await Future.wait(activeTransfers.map((t) => t.cancel()));
   }
 }
