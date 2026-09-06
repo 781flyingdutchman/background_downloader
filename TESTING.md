@@ -14,6 +14,13 @@ To run integration tests for the `background_downloader` package (which are more
    ```bash
    ./run_tests.sh
    ```
+   You can also target specific devices and/or specific tests:
+   ```bash
+   ./run_tests.sh -d ios                           # Run all tests on iOS only
+   ./run_tests.sh -d android,macos                 # Run all tests on Android and macOS
+   ./run_tests.sh -d macos database_test.dart      # Run specific test on macOS
+   ./run_tests.sh --ios                            # Shortcut for -d ios
+   ```
 
 **Important Notes:**
 - Some integration tests can be a little flaky. A failure doesn't necessarily mean a code change is required.
