@@ -533,6 +533,18 @@ object NotificationService {
             taskWorker.appContext, notificationChannelId
         ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
             .setShowWhen(notificationType != NotificationType.running)
+        if (notificationType == NotificationType.running) {
+            // Keep concurrent download notifications in a stable order.
+            // Without an explicit `when`, every progress update re-stamps
+            // the notification with the current time, and the shade
+            // re-ranks the app's notifications on each tick, so two
+            // running downloads constantly swap places. Pin `when` to the
+            // task's creation time (hidden by setShowWhen above) and add
+            // a deterministic sort key as a tie-breaker.
+            builder.setWhen(taskWorker.task.creationTime)
+                .setSortKey(taskWorker.task.taskId)
+                .setOnlyAlertOnce(true)
+        }
         // use stored progress if notificationType is .paused
         taskWorker.notificationProgress =
             if (notificationType == NotificationType.paused) taskWorker.notificationProgress else progress
