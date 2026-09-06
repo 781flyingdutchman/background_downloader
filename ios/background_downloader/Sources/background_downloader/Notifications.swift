@@ -274,7 +274,8 @@ func updateGroupNotification(
         guard let notification = notification else
         {
             // remove notification
-            notificationCenter.removeDeliveredNotifications(withIdentifiers: [task.taskId])
+            let notificationId = await groupNotification.notificationId
+            notificationCenter.removeDeliveredNotifications(withIdentifiers: [notificationId])
             return
         }
         // need to show a notification
@@ -290,9 +291,9 @@ func updateGroupNotification(
         }
         if previousNotification.isEmpty || previousNotification.first?.request.content.title != content.title || previousNotification.first?.request.content.body != content.body
         {
-            if !isFinished {
-                addCancelActionToNotificationGroup(content: content)
-            }
+            content.categoryIdentifier = !isFinished
+                ? NotificationCategory.runningWithoutPause.rawValue
+                : (hasError ? NotificationCategory.error.rawValue : NotificationCategory.complete.rawValue)
             let request = UNNotificationRequest(identifier: await groupNotification.notificationId,
                                                 content: content, trigger: nil)
             do {
@@ -346,11 +347,6 @@ func addNotificationActions(task: Task, notificationType: NotificationType, cont
             content.categoryIdentifier = NotificationCategory.canceled.rawValue
         }
     })
-}
-
-/// Add cancel action button to the notificationGroup
-func addCancelActionToNotificationGroup(content: UNMutableNotificationContent) {
-    content.categoryIdentifier = NotificationCategory.runningWithoutPause.rawValue
 }
 
 /// Returns the notificationType related to this [status]

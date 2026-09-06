@@ -951,7 +951,7 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
                 let taskAsJsonString = userInfo["task"] as? String,
                 let task = taskFrom(jsonString: taskAsJsonString)
             else {
-                os_log("No task", log: log, type: .error)
+                os_log("No task for notification tap", log: log, type: .info)
                 return
             }
             switch response.actionIdentifier {
