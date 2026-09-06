@@ -128,6 +128,10 @@ By default, whether a task requires WiFi or not is determined by its `requireWiF
 
 When calling `FileDownloader().requireWiFi`, all enqueued tasks will be canceled and rescheduled with the appropriate WiFi requirement setting. If the `rescheduleRunningTasks` parameter is true, all running download tasks will be paused (if possible, independent of the task's `allowPause` property) and resumed with the new WiFi requirement. If the `alsoRestartUploads` parameter is true (which requires `rescheduleRunningTasks` to also be true), running upload tasks will be forcefully canceled and restarted from scratch. All newly enqueued tasks will follow this setting as well.
 
+Note that requiring WiFi enforces platform-specific network constraints:
+* On **Android**, tasks require an unmetered network connection. They will not execute over cellular data or metered Wi-Fi networks (e.g. mobile hotspots), but will execute over unmetered Wi-Fi or unmetered Ethernet.
+* On **iOS**, cellular access is disabled for the tasks. They will execute over any non-cellular connection (Wi-Fi or Ethernet), even if the Wi-Fi network is a mobile hotspot or metered.
+
 The global setting persists across application restarts. Check the current setting by calling `FileDownloader().getRequireWiFiSetting`.
 
 ## Authentication and pre- and post-execution callbacks
