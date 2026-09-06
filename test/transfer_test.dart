@@ -352,6 +352,58 @@ void main() {
       expect(transfer.status, equals(TaskStatus.complete));
       expect(transfer.progress, equals(1.0));
     });
+
+    test('Native enqueuing when requiring Wi-Fi on cellular connection', () async {
+      downloader.isWiFi = false;
+      downloader.isConnected = true;
+
+      final wifiTask = DownloadTask(
+        taskId: 'wifi_task_1',
+        url: 'https://example.com/big_file.zip',
+        filename: 'big_file.zip',
+        requiresWiFi: true,
+      );
+
+      final transfer = await downloader.transfers.start(wifiTask);
+      expect(transfer.status, equals(TaskStatus.enqueued));
+      expect(transfer.holdReason, equals(TransferHoldReason.waitingForWiFi));
+      expect(transfer.isWaitingForWiFi, isTrue);
+
+      // Transition to running clears hold reason
+      transfer.updateStatus(TaskStatusUpdate(transfer.task, TaskStatus.running));
+      expect(transfer.holdReason, equals(TransferHoldReason.none));
+      expect(transfer.isWaitingForWiFi, isFalse);
+
+      // Reset
+      downloader.isWiFi = true;
+    });
+
+    test('Native enqueuing when offline and dynamic hold reason on connection loss', () async {
+      downloader.isConnected = false;
+
+      final offlineTask = DownloadTask(
+        taskId: 'offline_task_1',
+        url: 'https://example.com/offline.zip',
+        filename: 'offline.zip',
+      );
+
+      final transfer = await downloader.transfers.start(offlineTask);
+      expect(transfer.status, equals(TaskStatus.enqueued));
+      expect(transfer.holdReason, equals(TransferHoldReason.offline));
+      expect(transfer.isOffline, isTrue);
+
+      // Transition to running clears hold reason
+      transfer.updateStatus(TaskStatusUpdate(transfer.task, TaskStatus.running));
+      expect(transfer.holdReason, equals(TransferHoldReason.none));
+
+      // Network loss while running transitions to waitingToRetry and sets offline hold reason
+      transfer.updateStatus(TaskStatusUpdate(transfer.task, TaskStatus.waitingToRetry));
+      expect(transfer.holdReason, equals(TransferHoldReason.offline));
+      expect(transfer.isOffline, isTrue);
+
+      // Reset
+      downloader.isConnected = true;
+    });
   });
 
   group('getOrStart & Transfer Lookups', () {

@@ -98,18 +98,10 @@ class Transfers {
 
     if (!isOnline) {
       transfer.holdReasonNotifier.value = TransferHoldReason.offline;
-      transfer.updateStatus(
-        TaskStatusUpdate(cleanTask, TaskStatus.waitingToRetry),
-      );
-      _notifyTransfersChanged();
-      return transfer;
     } else if (needsWiFi && !isWiFi) {
       transfer.holdReasonNotifier.value = TransferHoldReason.waitingForWiFi;
-      transfer.updateStatus(
-        TaskStatusUpdate(cleanTask, TaskStatus.waitingToRetry),
-      );
-      _notifyTransfersChanged();
-      return transfer;
+    } else {
+      transfer.holdReasonNotifier.value = TransferHoldReason.none;
     }
 
     transfer.updateStatus(
@@ -167,17 +159,15 @@ class Transfers {
 
       if (!isOnline) {
         transfer.holdReasonNotifier.value = TransferHoldReason.offline;
-        transfer.updateStatus(
-          TaskStatusUpdate(cleanTask, TaskStatus.waitingToRetry),
-        );
       } else if (needsWiFi && !isWiFi) {
         transfer.holdReasonNotifier.value = TransferHoldReason.waitingForWiFi;
-        transfer.updateStatus(
-          TaskStatusUpdate(cleanTask, TaskStatus.waitingToRetry),
-        );
       } else {
-        tasksToEnqueue.add(namespacedTask);
+        transfer.holdReasonNotifier.value = TransferHoldReason.none;
       }
+      transfer.updateStatus(
+        TaskStatusUpdate(cleanTask, TaskStatus.enqueued),
+      );
+      tasksToEnqueue.add(namespacedTask);
     }
 
     if (tasksToEnqueue.isNotEmpty) {

@@ -120,6 +120,18 @@ interface class FileDownloader {
   /// True when initialization is complete and downloader ready for use
   Future<bool> get ready => _downloader.ready;
 
+  /// True when the device currently has an active network connection
+  bool get isConnected => _downloader.isConnected;
+
+  @visibleForTesting
+  set isConnected(bool value) => _downloader.isConnected = value;
+
+  /// True when the active network connection is Wi-Fi
+  bool get isWiFi => _downloader.isWiFi;
+
+  @visibleForTesting
+  set isWiFi(bool value) => _downloader.isWiFi = value;
+
   /// Stream of [TaskUpdate] updates for downloads that do
   /// not have a registered callback.
   ///

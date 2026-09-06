@@ -208,11 +208,18 @@ class Transfer {
       if (progressNotifier.value == null) {
         progressNotifier.value = 0.0;
       }
+      holdReasonNotifier.value = TransferHoldReason.none;
     } else if (update.status == TaskStatus.complete) {
       progressNotifier.value = 1.0;
       holdReasonNotifier.value = TransferHoldReason.none;
     } else if (update.status.isFinalState) {
       holdReasonNotifier.value = TransferHoldReason.none;
+    } else if (update.status == TaskStatus.waitingToRetry) {
+      if (!downloader.isConnected) {
+        holdReasonNotifier.value = TransferHoldReason.offline;
+      } else if (task.requiresWiFi && !downloader.isWiFi) {
+        holdReasonNotifier.value = TransferHoldReason.waitingForWiFi;
+      }
     }
 
     if (!_updatesController.isClosed) {
