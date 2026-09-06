@@ -1131,4 +1131,94 @@ void main() {
       );
     });
   });
+
+  group('Issue 7: Group callback multiplexing', () {
+    test(
+      'both FileDownloader.registerCallbacks and transfers.start receive updates (registered before)',
+      () async {
+        const customGroup = 'test_group_multiplex';
+        final task = DownloadTask(
+          taskId: 'mux_1',
+          url: 'https://example.com/mux.bin',
+          group: customGroup,
+          updates: Updates.statusAndProgress,
+        );
+
+        final customStatusUpdates = <TaskStatusUpdate>[];
+        final customProgressUpdates = <TaskProgressUpdate>[];
+
+        // 1. Register user callback first
+        FileDownloader().registerCallbacks(
+          group: customGroup,
+          taskStatusCallback: (update) => customStatusUpdates.add(update),
+          taskProgressCallback: (update) => customProgressUpdates.add(update),
+        );
+
+        // 2. Start transfer via transfers
+        final transfer = await FileDownloader().transfers.start(task);
+
+        // 3. Fire status and progress update via processStatusUpdate / processProgressUpdate
+        final statusUpdate = TaskStatusUpdate(task, TaskStatus.running);
+        final progressUpdate = TaskProgressUpdate(task, 0.42);
+
+        FileDownloader().downloaderForTesting.processStatusUpdate(statusUpdate);
+        FileDownloader().downloaderForTesting.processProgressUpdate(progressUpdate);
+
+        // Verify transfers handle received the updates
+        expect(transfer.status, equals(TaskStatus.running));
+        expect(transfer.progress, equals(0.42));
+
+        // Verify custom callback received the updates
+        expect(
+          customStatusUpdates.map((u) => u.status),
+          contains(TaskStatus.running),
+        );
+        expect(
+          customProgressUpdates.map((u) => u.progress),
+          contains(0.42),
+        );
+
+        // Cleanup
+        await FileDownloader().transfers.clear();
+        FileDownloader().unregisterCallbacks(group: customGroup);
+      },
+    );
+
+    test(
+      'registerCallbacks called after transfers.start also preserves both callbacks',
+      () async {
+        const customGroup = 'test_group_multiplex_after';
+        final task = DownloadTask(
+          taskId: 'mux_2',
+          url: 'https://example.com/mux2.bin',
+          group: customGroup,
+        );
+
+        // 1. Start transfer via transfers first
+        final transfer = await FileDownloader().transfers.start(task);
+
+        // 2. Register user callback second
+        final customStatusUpdates = <TaskStatusUpdate>[];
+        FileDownloader().registerCallbacks(
+          group: customGroup,
+          taskStatusCallback: (update) => customStatusUpdates.add(update),
+        );
+
+        // 3. Fire status update
+        final statusUpdate = TaskStatusUpdate(task, TaskStatus.running);
+        FileDownloader().downloaderForTesting.processStatusUpdate(statusUpdate);
+
+        // Both received the status
+        expect(transfer.status, equals(TaskStatus.running));
+        expect(
+          customStatusUpdates.map((u) => u.status),
+          contains(TaskStatus.running),
+        );
+
+        // Cleanup
+        await FileDownloader().transfers.clear();
+        FileDownloader().unregisterCallbacks(group: customGroup);
+      },
+    );
+  });
 }

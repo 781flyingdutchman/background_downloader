@@ -259,9 +259,12 @@ interface class FileDownloader {
     );
     final nGroup = namespacedGroup(group);
     if (taskStatusCallback != null) {
+      final existingStatusCallback =
+          _downloader.groupStatusCallbacks[nGroup];
       if (hasNamespace) {
         _registeredStatusCallbacks[nGroup] = taskStatusCallback;
         _downloader.groupStatusCallbacks[nGroup] = (update) {
+          existingStatusCallback?.call(update);
           taskStatusCallback(
             TaskStatusUpdate(
               withoutNamespacedGroup(update.task),
@@ -276,13 +279,22 @@ interface class FileDownloader {
           );
         };
       } else {
-        _downloader.groupStatusCallbacks[nGroup] = taskStatusCallback;
+        _downloader.groupStatusCallbacks[nGroup] =
+            existingStatusCallback == null
+                ? taskStatusCallback
+                : (update) {
+                    existingStatusCallback(update);
+                    taskStatusCallback(update);
+                  };
       }
     }
     if (taskProgressCallback != null) {
+      final existingProgressCallback =
+          _downloader.groupProgressCallbacks[nGroup];
       if (hasNamespace) {
         _registeredProgressCallbacks[nGroup] = taskProgressCallback;
         _downloader.groupProgressCallbacks[nGroup] = (update) {
+          existingProgressCallback?.call(update);
           taskProgressCallback(
             TaskProgressUpdate(
               withoutNamespacedGroup(update.task),
@@ -294,10 +306,18 @@ interface class FileDownloader {
           );
         };
       } else {
-        _downloader.groupProgressCallbacks[nGroup] = taskProgressCallback;
+        _downloader.groupProgressCallbacks[nGroup] =
+            existingProgressCallback == null
+                ? taskProgressCallback
+                : (update) {
+                    existingProgressCallback(update);
+                    taskProgressCallback(update);
+                  };
       }
     }
     if (taskNotificationTapCallback != null) {
+      final existingTapCallback =
+          _downloader.groupNotificationTapCallbacks[nGroup];
       if (hasNamespace) {
         _registeredNotificationTapCallbacks[nGroup] =
             taskNotificationTapCallback;
@@ -305,6 +325,7 @@ interface class FileDownloader {
           task,
           notificationType,
         ) {
+          existingTapCallback?.call(task, notificationType);
           taskNotificationTapCallback(
             withoutNamespacedGroup(task),
             notificationType,
@@ -312,7 +333,12 @@ interface class FileDownloader {
         };
       } else {
         _downloader.groupNotificationTapCallbacks[nGroup] =
-            taskNotificationTapCallback;
+            existingTapCallback == null
+                ? taskNotificationTapCallback
+                : (task, type) {
+                    existingTapCallback(task, type);
+                    taskNotificationTapCallback(task, type);
+                  };
       }
     }
     return this;

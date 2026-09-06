@@ -387,9 +387,9 @@ class Transfers {
 
     _downloader.trackTasks(namespacedGroup, true);
 
-    _downloader.groupStatusCallbacks[namespacedGroup] = (
-      rawUpdate,
-    ) {
+    final existingStatusCallback =
+        _downloader.groupStatusCallbacks[namespacedGroup];
+    _downloader.groupStatusCallbacks[namespacedGroup] = (rawUpdate) {
       final cleanUpdate = TaskStatusUpdate(
         downloader.withoutNamespacedGroup(rawUpdate.task),
         rawUpdate.status,
@@ -401,11 +401,12 @@ class Transfers {
         rawUpdate.charSet,
       );
       _onTransferStatusUpdate(cleanUpdate);
+      existingStatusCallback?.call(rawUpdate);
     };
 
-    _downloader.groupProgressCallbacks[namespacedGroup] = (
-      rawUpdate,
-    ) {
+    final existingProgressCallback =
+        _downloader.groupProgressCallbacks[namespacedGroup];
+    _downloader.groupProgressCallbacks[namespacedGroup] = (rawUpdate) {
       final cleanUpdate = TaskProgressUpdate(
         downloader.withoutNamespacedGroup(rawUpdate.task),
         rawUpdate.progress,
@@ -414,8 +415,11 @@ class Transfers {
         rawUpdate.timeRemaining,
       );
       _onTransferProgressUpdate(cleanUpdate);
+      existingProgressCallback?.call(rawUpdate);
     };
 
+    final existingNotificationTapCallback =
+        _downloader.groupNotificationTapCallbacks[namespacedGroup];
     _downloader.groupNotificationTapCallbacks[namespacedGroup] = (
       rawTask,
       notificationType,
@@ -424,6 +428,7 @@ class Transfers {
         downloader.withoutNamespacedGroup(rawTask),
         notificationType,
       );
+      existingNotificationTapCallback?.call(rawTask, notificationType);
     };
   }
 
