@@ -355,7 +355,7 @@ sealed class Task extends Request implements Comparable {
     String directory = '',
     this.baseDirectory = BaseDirectory.applicationDocuments,
     this.group = 'default',
-    this.updates = Updates.status,
+    Updates updates = Updates.status,
     this.requiresWiFi = false,
     super.retries,
     this.metaData = '',
@@ -377,6 +377,10 @@ sealed class Task extends Request implements Comparable {
            _startsWithPathSeparatorRegExp.hasMatch(directory)
                ? directory.substring(1)
                : directory,
+       updates =
+           (transferHints?.contains(TransferHint.smallFile) == true)
+               ? Updates.status
+               : updates,
        allowPause =
            allowPause ||
            (transferHints?.contains(TransferHint.userInitiated) == true) ||

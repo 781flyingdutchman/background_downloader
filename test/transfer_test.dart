@@ -744,6 +744,32 @@ void main() {
         transferHints: {TransferHint.binaryUpload},
       );
       expect(uploadTask.post, equals('binary'));
+
+      final smallTask = DownloadTask(
+        url: 'https://example.com/small.bin',
+        filename: 'small.bin',
+        updates: Updates.statusAndProgress,
+        transferHints: {TransferHint.smallFile},
+      );
+      expect(smallTask.updates, equals(Updates.status));
+    });
+
+    test('TransferHint.smallFile overrides updates to Updates.status', () {
+      final taskWithProgress = DownloadTask(
+        url: 'https://example.com/small.bin',
+        filename: 'small.bin',
+        updates: Updates.statusAndProgress,
+        transferHints: {TransferHint.smallFile},
+      );
+      expect(taskWithProgress.updates, equals(Updates.status));
+
+      final uploadWithProgress = UploadTask(
+        url: 'https://example.com/upload',
+        filename: 'small.bin',
+        updates: Updates.statusAndProgress,
+        transferHints: {TransferHint.smallFile},
+      );
+      expect(uploadWithProgress.updates, equals(Updates.status));
     });
   });
 
