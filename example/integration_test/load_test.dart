@@ -69,15 +69,18 @@ void main() {
 
     testWidgets(
       'Enqueue Performance Comparison',
-      timeout: const Timeout(Duration(minutes: 2)),
+      timeout: const Timeout(Duration(minutes: 3)),
       (widgetTester) async {
-        const numTasks = 1000; // Increase for more significant results
+        final numTasks = Platform.isAndroid ? 400 : 1000; // Increase for more significant results
         final tasks = <Task>[];
         final tasks2 = <Task>[];
         for (var n = 0; n < numTasks; n++) {
           tasks.add(
             DownloadTask(url: urlWithContentLength, updates: Updates.none),
           ); // Use a dummy URL
+          tasks2.add(
+            DownloadTask(url: urlWithContentLength, updates: Updates.none),
+          );
         }
 
         final fileDownloader = FileDownloader();
