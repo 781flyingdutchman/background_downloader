@@ -28,7 +28,8 @@ enum TransferHoldReason {
 /// broadcast streams for events, and awaitable [result] and [file] Futures.
 class Transfer {
   /// The underlying [Task] object associated with this transfer.
-  final Task task;
+  Task _task;
+  Task get task => _task;
 
   /// The [FileDownloader] instance orchestrating this transfer.
   final FileDownloader downloader;
@@ -78,13 +79,14 @@ class Transfer {
 
   /// Creates a new [Transfer] handle.
   Transfer(
-    this.task, [
+    Task task, [
     FileDownloader? downloader,
     TaskStatus initialStatus = TaskStatus.enqueued,
     double? initialProgress,
     TaskException? initialException,
     TransferHoldReason initialHoldReason = TransferHoldReason.none,
-  ]) : downloader = downloader ?? FileDownloader() {
+  ])  : _task = task,
+        downloader = downloader ?? FileDownloader() {
     statusNotifier.value = initialStatus;
     holdReasonNotifier.value = initialHoldReason;
     if (initialProgress != null &&
@@ -169,8 +171,11 @@ class Transfer {
   Future<bool> allowCellular() async {
     holdReasonNotifier.value = TransferHoldReason.none;
     final updatedTask = task.copyWith(requiresWiFi: false);
-    if (updatedTask is DownloadTask && updatedTask.allowPause) {
-      return downloader.resume(updatedTask);
+    _task = updatedTask;
+    if (updatedTask case final DownloadTask dTask when dTask.allowPause) {
+      if (await downloader.taskCanResume(dTask)) {
+        return downloader.resume(dTask);
+      }
     }
     return downloader.enqueue(updatedTask);
   }
@@ -182,12 +187,19 @@ class Transfer {
   };
 
   /// Resumes this transfer.
-  Future<bool> resume() {
+  ///
+  /// If this transfer can be resumed using saved resume data, resumes it.
+  /// Otherwise, re-enqueues the task with its retry count reset.
+  Future<bool> resume() async {
     holdReasonNotifier.value = TransferHoldReason.none;
     if (task case final DownloadTask dTask when dTask.allowPause) {
-      return downloader.resume(dTask);
+      if (await downloader.taskCanResume(dTask)) {
+        return downloader.resume(dTask);
+      }
     }
-    return downloader.enqueue(task);
+    final resetTask = task.copyWith(retriesRemaining: task.retries);
+    _task = resetTask;
+    return downloader.enqueue(resetTask);
   }
 
   /// Cancels this transfer.
@@ -198,6 +210,7 @@ class Transfer {
 
   /// Internal status update handler invoked by [FileDownloader].
   void updateStatus(TaskStatusUpdate update) {
+    _task = update.task;
     statusNotifier.value = update.status;
     if (update.exception != null) {
       exceptionNotifier.value = update.exception;
@@ -233,6 +246,7 @@ class Transfer {
 
   /// Internal progress update handler invoked by [FileDownloader].
   void updateProgress(TaskProgressUpdate update) {
+    _task = update.task;
     _lastProgressTime = DateTime.now();
     if (update.progress >= 0.0 && update.progress <= 1.0) {
       progressNotifier.value = update.progress;
@@ -258,12 +272,15 @@ class Transfer {
     if (timeout == null) return;
 
     _stallWatchdogTimer?.cancel();
-    _stallWatchdogTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    _stallWatchdogTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
       if (statusNotifier.value == TaskStatus.running) {
         final elapsed = DateTime.now().difference(_lastProgressTime);
         if (elapsed >= timeout) {
           _lastProgressTime = DateTime.now();
-          resume();
+          if (task case final DownloadTask dTask when dTask.allowPause) {
+            await pause();
+          }
+          await resume();
         }
       }
     });

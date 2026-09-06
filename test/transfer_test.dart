@@ -6,6 +6,8 @@ import 'package:background_downloader/background_downloader.dart';
 
 class InMemoryPersistentStorage implements PersistentStorage {
   final Map<String, TaskRecord> records = {};
+  final Map<String, ResumeData> resumeData = {};
+  final Map<String, Task> pausedTasks = {};
 
   @override
   Future<void> initialize() async {}
@@ -37,28 +39,48 @@ class InMemoryPersistentStorage implements PersistentStorage {
   Future<(String, int)> get storedDatabaseVersion async => ('', 0);
 
   @override
-  Future<void> removePausedTask(String? taskId) async {}
+  Future<void> removePausedTask(String? taskId) async {
+    if (taskId == null) {
+      pausedTasks.clear();
+    } else {
+      pausedTasks.remove(taskId);
+    }
+  }
 
   @override
-  Future<void> removeResumeData(String? taskId) async {}
+  Future<void> removeResumeData(String? taskId) async {
+    if (taskId == null) {
+      resumeData.clear();
+    } else {
+      resumeData.remove(taskId);
+    }
+  }
 
   @override
-  Future<List<Task>> retrieveAllPausedTasks() async => [];
+  Future<List<Task>> retrieveAllPausedTasks() async =>
+      pausedTasks.values.toList();
 
   @override
-  Future<List<ResumeData>> retrieveAllResumeData() async => [];
+  Future<List<ResumeData>> retrieveAllResumeData() async =>
+      resumeData.values.toList();
 
   @override
-  Future<Task?> retrievePausedTask(String taskId) async => null;
+  Future<Task?> retrievePausedTask(String taskId) async =>
+      pausedTasks[taskId];
 
   @override
-  Future<ResumeData?> retrieveResumeData(String taskId) async => null;
+  Future<ResumeData?> retrieveResumeData(String taskId) async =>
+      resumeData[taskId];
 
   @override
-  Future<void> storePausedTask(Task task) async {}
+  Future<void> storePausedTask(Task task) async {
+    pausedTasks[task.taskId] = task;
+  }
 
   @override
-  Future<void> storeResumeData(ResumeData resumeData) async {}
+  Future<void> storeResumeData(ResumeData resumeData) async {
+    this.resumeData[resumeData.taskId] = resumeData;
+  }
 }
 
 void main() {
@@ -818,5 +840,98 @@ void main() {
       expect(find.byType(TransferProgressBar), findsOneWidget);
       expect(find.byType(TransferButton), findsOneWidget);
     });
+  });
+
+  group('Issue 3: Transfer.resume() and allowCellular() fallbacks', () {
+    test(
+      'resume() on a failed task with allowPause: true falls back to enqueue and resets retriesRemaining',
+      () async {
+        final task = DownloadTask(
+          url: 'https://example.com/fail.mp4',
+          allowPause: true,
+          retries: 3,
+        ).copyWith(retriesRemaining: 0);
+        final transfer = Transfer(task, null, TaskStatus.failed);
+
+        expect(await FileDownloader().taskCanResume(task), isFalse);
+        final success = await transfer.resume();
+
+        expect(success, isTrue);
+        expect(transfer.task.retriesRemaining, equals(3));
+        expect(transfer.holdReason, equals(TransferHoldReason.none));
+      },
+    );
+
+    test(
+      'resume() on a paused task with valid resume data calls resume',
+      () async {
+        final task = DownloadTask(
+          url: 'https://example.com/paused.mp4',
+          allowPause: true,
+        );
+        await testStorage.storeResumeData(ResumeData(task, 'resume-token-xyz'));
+        final transfer = Transfer(task, null, TaskStatus.paused);
+
+        expect(await FileDownloader().taskCanResume(task), isTrue);
+        final success = await transfer.resume();
+
+        expect(success, isTrue);
+        expect(transfer.holdReason, equals(TransferHoldReason.none));
+      },
+    );
+
+    test(
+      'allowCellular() on unstarted task without resume data falls back to enqueue and clears requiresWiFi',
+      () async {
+        final task = DownloadTask(
+          url: 'https://example.com/cellular.mp4',
+          allowPause: true,
+          requiresWiFi: true,
+        );
+        final transfer = Transfer(
+          task,
+          null,
+          TaskStatus.enqueued,
+          null,
+          null,
+          TransferHoldReason.waitingForWiFi,
+        );
+
+        expect(transfer.isWaitingForWiFi, isTrue);
+        expect(transfer.task.requiresWiFi, isTrue);
+
+        final success = await transfer.allowCellular();
+
+        expect(success, isTrue);
+        expect(transfer.task.requiresWiFi, isFalse);
+        expect(transfer.holdReason, equals(TransferHoldReason.none));
+      },
+    );
+
+    test(
+      'allowCellular() on paused task with resume data calls resume and clears requiresWiFi',
+      () async {
+        final task = DownloadTask(
+          url: 'https://example.com/cellular_paused.mp4',
+          allowPause: true,
+          requiresWiFi: true,
+        );
+        await testStorage.storeResumeData(ResumeData(task, 'resume-token-abc'));
+        final transfer = Transfer(
+          task,
+          null,
+          TaskStatus.paused,
+          0.5,
+          null,
+          TransferHoldReason.waitingForWiFi,
+        );
+
+        final success = await transfer.allowCellular();
+
+        expect(success, isTrue);
+        expect(transfer.task.requiresWiFi, isFalse);
+        expect(transfer.holdReason, equals(TransferHoldReason.none));
+      },
+    );
   });
 }
