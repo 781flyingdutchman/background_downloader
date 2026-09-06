@@ -999,4 +999,53 @@ void main() {
       },
     );
   });
+
+  group('Issue 5: Suggested filename and DataTask handling in transfer.file', () {
+    test(
+      'transfer.file resolves to server-suggested filename on completion',
+      () async {
+        final initialTask = DownloadTask(
+          url: 'https://example.com/download?id=123',
+          transferHints: {TransferHint.useSuggestedFilename},
+        );
+        expect(initialTask.filename, equals(DownloadTask.suggestedFilename));
+
+        final transfer = Transfer(initialTask);
+
+        // Server discovers suggested filename 'actual_report.pdf'
+        final completedTask = initialTask.copyWith(filename: 'actual_report.pdf');
+        transfer.updateStatus(TaskStatusUpdate(completedTask, TaskStatus.complete));
+
+        // Assert transfer.task is updated
+        expect(transfer.task.filename, equals('actual_report.pdf'));
+
+        final file = await transfer.file;
+        expect(file.path.endsWith('actual_report.pdf'), isTrue);
+      },
+    );
+
+    test(
+      'transfer.file throws TaskException when called on DataTask',
+      () async {
+        final dataTask = DataTask(url: 'https://example.com/api/data');
+        final transfer = Transfer(dataTask);
+
+        transfer.updateStatus(
+          TaskStatusUpdate(dataTask, TaskStatus.complete, null, '{"status":"ok"}'),
+        );
+
+        expect(await transfer.responseBody, equals('{"status":"ok"}'));
+        expect(
+          () => transfer.file,
+          throwsA(
+            isA<TaskException>().having(
+              (e) => e.description,
+              'description',
+              contains('DataTask does not produce a file on disk'),
+            ),
+          ),
+        );
+      },
+    );
+  });
 }

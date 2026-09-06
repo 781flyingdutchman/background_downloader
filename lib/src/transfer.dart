@@ -151,9 +151,12 @@ class Transfer {
   ///
   /// Throws [TaskException] if the transfer fails, is canceled, or is not found.
   Future<File> get file async {
+    if (task is DataTask) {
+      throw TaskException('DataTask does not produce a file on disk');
+    }
     final statusUpdate = await result;
     if (statusUpdate.status == TaskStatus.complete) {
-      final path = await task.filePath();
+      final path = await statusUpdate.task.filePath();
       return File(path);
     }
     throw statusUpdate.exception ??
