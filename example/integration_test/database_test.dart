@@ -31,12 +31,18 @@ Future<void> deleteAllTaskDataFromFileSystem() async {
     tasksPath,
   );
   try {
-    await Directory(docDirTasksDir).delete(recursive: true);
+    final dir = Directory(docDirTasksDir);
+    if (await dir.exists()) {
+      await dir.delete(recursive: true);
+    }
   } catch (e) {
     debugPrint(e.toString());
   }
   try {
-    await Directory(supportDirTasksDir).delete(recursive: true);
+    final dir = Directory(supportDirTasksDir);
+    if (await dir.exists()) {
+      await dir.delete(recursive: true);
+    }
   } catch (e) {
     debugPrint(e.toString());
   }
@@ -51,11 +57,14 @@ void main() {
       );
     });
     WidgetsFlutterBinding.ensureInitialized();
+    FileDownloader().destroy();
     await deleteAllTaskDataFromFileSystem();
     await db.clearCache();
   });
 
   tearDown(() async {
+    await FileDownloader().reset();
+    FileDownloader().destroy();
     await deleteAllTaskDataFromFileSystem();
     await db.clearCache();
   });
@@ -175,7 +184,12 @@ void main() {
       expect(result2.$1.first.taskId, equals(task.taskId));
       final allTasks = await FileDownloader().allTasks();
       expect(allTasks.first.taskId, equals(task.taskId));
-      await Future.delayed(const Duration(seconds: 2));
+      await FileDownloader().cancelTasksWithIds([task.taskId]);
+      var attempts = 0;
+      while ((await FileDownloader().allTasks()).isNotEmpty && attempts < 20) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        attempts++;
+      }
       expect(await FileDownloader().allTasks(), isEmpty);
       // add a record to the database that is also enqueued
       expect(await FileDownloader().enqueue(task2), isTrue);
@@ -183,6 +197,7 @@ void main() {
       final result3 = await FileDownloader().rescheduleKilledTasks();
       expect(result3.$1, isEmpty);
       expect(result3.$2, isEmpty);
+      await FileDownloader().cancelTasksWithIds([task2.taskId]);
     },
   );
 

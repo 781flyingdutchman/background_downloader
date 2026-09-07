@@ -271,7 +271,11 @@ final class DesktopDownloader extends BaseDownloader {
           setCanResume(task, taskCanResume);
 
         case ('resumeData', final String data, final int requiredStartByte, final String? eTag):
-          setResumeData(ResumeData(task, data, requiredStartByte, eTag));
+          try {
+            await setResumeData(ResumeData(task, data, requiredStartByte, eTag));
+          } catch (e) {
+            _log.warning('Failed to store resume data: $e');
+          }
 
         // from [ParallelDownloadTask]
         case ('enqueueChild', final DownloadTask childTask):

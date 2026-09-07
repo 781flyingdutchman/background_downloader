@@ -40,7 +40,9 @@ void main() {
     Localstore.instance.clearCache();
   });
 
-  tearDown(() async {});
+  tearDown(() async {
+    FileDownloader().destroy();
+  });
 
   testWidgets(
     'upgrade from version 0',
@@ -56,8 +58,13 @@ void main() {
         File(path.join(docDir.path, tasksPath, 'test')).existsSync(),
         isTrue,
       );
-      final _ = FileDownloader(); // triggers the initialization and migration
-      await Future.delayed(const Duration(milliseconds: 500));
+      await FileDownloader().ready;
+      var attempts = 0;
+      while (File(path.join(docDir.path, tasksPath, 'test')).existsSync() &&
+          attempts < 20) {
+        await Future.delayed(const Duration(milliseconds: 50));
+        attempts++;
+      }
       // file 'test' in docDir should have been moved to supportDir
       expect(
         File(path.join(docDir.path, tasksPath, 'test')).existsSync(),

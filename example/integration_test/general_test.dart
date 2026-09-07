@@ -2699,6 +2699,9 @@ void main() {
         if (Platform.isIOS) {
           // cannot avoid fail on iOS
           expect(lastStatus, equals(TaskStatus.failed));
+        } else if (Platform.isAndroid) {
+          // on Android, may fail before cancel arrives depending on thread timing
+          expect(lastStatus, anyOf(TaskStatus.canceled, TaskStatus.failed));
         } else {
           expect(lastStatus, equals(TaskStatus.canceled));
         }

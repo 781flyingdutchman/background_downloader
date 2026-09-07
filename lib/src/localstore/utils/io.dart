@@ -227,13 +227,27 @@ final class Utils implements UtilsImpl {
   }
 
   Future<File?> _getFile(String path) async {
-    if (_fileCache.containsKey(path)) return _fileCache[path];
-
     final dbDir = await Localstore.instance.databaseDirectory;
-    final file = File(_resolvePath(dbDir.path, path));
+    final file = _fileCache[path] ?? File(_resolvePath(dbDir.path, path));
 
-    if (!await file.exists()) await file.create(recursive: true);
-    _fileCache.putIfAbsent(path, () => file);
+    if (!await file.exists()) {
+      try {
+        await file.create(recursive: true);
+      } on FileSystemException {
+        // Handle race condition where directory was being deleted/modified concurrently
+        await Future.delayed(const Duration(milliseconds: 50));
+        if (!await file.exists()) {
+          try {
+            await file.create(recursive: true);
+          } on FileSystemException catch (e) {
+            _log.warning('Could not create file $path: $e');
+            _fileCache.remove(path);
+            return null;
+          }
+        }
+      }
+    }
+    _fileCache[path] = file;
 
     return file;
   }
@@ -241,9 +255,10 @@ final class Utils implements UtilsImpl {
   Future _writeFile(Map<String, dynamic> data, String path) => _synchronized(path, () async {
       final serialized = json.encode(data);
       final buffer = utf8.encode(serialized);
-      final file = await _getFile(path);
       try {
-        final randomAccessFile = await file!.open(mode: FileMode.append);
+        final file = await _getFile(path);
+        if (file == null) return;
+        final randomAccessFile = await file.open(mode: FileMode.append);
         try {
           await randomAccessFile.lock();
           await randomAccessFile.setPosition(0);
@@ -253,8 +268,12 @@ final class Utils implements UtilsImpl {
         } finally {
           await randomAccessFile.close();
         }
-      } on PathNotFoundException {
-        // ignore if path not found
+      } on FileSystemException catch (e) {
+        _log.warning('FileSystemException writing file $path: $e');
+        return;
+      } catch (e) {
+        _log.warning('Error writing file $path: $e');
+        return;
       }
       final key = path.replaceAll(lastPathComponentRegEx, '');
       // ignore: close_sinks
@@ -278,6 +297,7 @@ final class Utils implements UtilsImpl {
   Future _deleteDirectory(String path) async {
     final dbDir = await Localstore.instance.databaseDirectory;
     final dir = Directory(_resolvePath(dbDir.path, path));
+    _fileCache.removeWhere((key, value) => key.startsWith(path));
     if (await dir.exists()) {
       try {
         await dir.delete(recursive: true);

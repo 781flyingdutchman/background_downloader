@@ -1221,8 +1221,12 @@ abstract base class BaseDownloader {
     notificationConfigs.clear();
     trackedGroups.clear();
     canResumeTask.clear();
-    removeResumeData(); // removes all
-    removePausedTask(); // removes all
+    unawaited(removeResumeData().catchError((e) {
+      log.fine('Error removing resume data in destroy: $e');
+    }));
+    unawaited(removePausedTask().catchError((e) {
+      log.fine('Error removing paused task in destroy: $e');
+    }));
     resetUpdatesStreamController();
   }
 }

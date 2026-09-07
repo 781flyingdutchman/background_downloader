@@ -1,22 +1,47 @@
 ## 9.6.0
 
-* **Introduce the Transfer API**: A major new high-level reactive abstraction for managing background downloads, uploads, and data tasks:
-  * First-class `Transfer` handle returned by `FileDownloader().transfers.start`, `startAll`, `getOrStart`, and `startOrGetAll`
-  * Direct awaitable futures: `transfer.file` (resolves to the completed `File`), `transfer.result` (resolves to `TaskStatusUpdate`), and `transfer.responseBody`
+* **Introduce the `transfers` Object and Transfer API**: A major new high-level reactive abstraction for managing background downloads, uploads, and data tasks via `FileDownloader().transfers`:
+  * Dedicated transfer manager: accessed via `FileDownloader().transfers` (`Transfers` class), providing methods to start, batch start, reconnect to, and query background transfers
+  * First-class `Transfer` handle returned by `transfers.start`, `startAll`, `getOrStart`, and `startOrGetAll`
+  * Automatic status update promotion: tasks enqueued through `transfers` are automatically ensured to provide status updates (`Updates.statusAndProgress` or `Updates.status`) for reliable lifecycle tracking
+  * Database persistence & rehydration: `getOrStart` and `startOrGetAll` re-attach to existing active transfers or rehydrate matching records from the persistent database across app restarts; `transfers.rehydrateFromDatabase({group})` restores previously tracked transfers into active handles
+  * Direct awaitable futures: `transfer.file` (resolves to the completed `File`, dynamically tracking server-suggested filenames if renamed upon completion), `transfer.result` (resolves to final `TaskStatusUpdate`), and `transfer.responseBody`
   * Reactive `ValueNotifier` properties for Flutter UI: `statusNotifier`, `progressNotifier` (normalized `0.0`–`1.0`), `networkSpeedNotifier` (MB/s), `timeRemainingNotifier`, `holdReasonNotifier`, `exceptionNotifier`, and `notificationTapNotifier`
   * Direct action controls on the handle: `pause()`, `resume()`, `cancel()`, and `allowCellular()`
+  * Robust resumption & retries: `resume()` and `allowCellular()` fall back to re-enqueuing if resume data is missing; resets result completers cleanly upon retry and re-enqueue; native handling for Wi-Fi and network constraints
   * Smart tuning with `TransferHint` presets (`userInitiated`, `largeFile`, `smallFile`, `lowPriority`, `useSuggestedFilename`, `binaryUpload`) with automatic Android 14+ UIDT JobScheduler configuration and pause resilience
-  * Pre-built reactive Flutter widgets: `TransferProgressBar`, `TransferButton`, and `TransferListTile`
+  * Pre-built reactive Flutter widgets: `TransferProgressBar` (with accurate 100% completion display), `TransferButton` (with optional `onCancel` callback), and `TransferListTile`
+  * Transfer collections and reactive notifications: `transfers.notifier` (`ValueNotifier<List<Transfer>>`), `transfers.all()`, `active()`, `completed()`, `failed()`, `forId()`, `forTask()`, and `forUrl()`
+  * Lifecycle management and cleanup: `transfers.remove()`, `removeById()`, `cancelAll()`, and `clear({cancelActive})` with automatic disposal of transfer instances
+  * Chained group callbacks: registers internal group listeners seamlessly without overwriting user-registered callbacks
+  * Automatic database cleanup: activates periodic cleanup (`autoClean`) on first transfer start when task tracking is enabled
   * Scoped namespaces via `FileDownloader.scoped('namespace')` for modular apps, plugins, and feature isolation
-  * Network resilience: Automatic offline holding (`TransferHoldReason.offline`, `waitingForWiFi`) with auto-resumption and configurable `stallTimeout` watchdog
-  * Dedicated transfer manager and collections: `FileDownloader().transfers.notifier`, `all()`, `active()`, and `completed()`
-  * Updated the example app to demonstrate best-practice usage of the new `Transfer` functionality
+  * Network resilience: automatic offline holding (`TransferHoldReason.offline`, `waitingForWiFi`) with auto-resumption and configurable `stallTimeout` watchdog
+  * Dedicated documentation in `doc/transfers.md` and overhauled example app demonstrating `Transfer` best practices
 * **Modern Dart & SDK Constraints Upgrade**:
   * Bump minimum Dart SDK to `^3.13.0` and Flutter requirement to `>=3.47.0`
-  * Modernize codebase using latest Dart language features: primary constructors, enum dot shorthands, switch expressions, and pattern matching for improved readability and maintainability
+  * Modernize codebase using latest Dart language features: primary constructors, concise constructor syntax, enum dot shorthands, switch expressions, and pattern matching for improved readability and maintainability
   * Upgrade `flutter_lints` to `^6.0.0` with updated analysis options
-* [Desktop] Case-insensitive host matching for mTLS client configuration cache
-* [iOS] Modernize Swift Package Manager (SwiftPM) support: add required `FlutterFramework` dependency in `Package.swift`, expand permissions bypass documentation for SwiftPM, and transition example app to pure SwiftPM.
+* [Android] Notifications, stability, and build upgrades:
+  - Keep concurrent running download notifications in stable order: pin notification timestamp (`when`) to task creation time, set task ID as deterministic sort key, and enable `onlyAlertOnce`, preventing notifications from jittering and swapping positions on every progress update (closes #714)
+  - Native Wi-Fi / unmetered queuing: enqueue tasks natively when waiting for Wi-Fi or unmetered network rather than holding in Dart
+  - Upgrade Android Gradle Plugin to 9.0.1, Kotlin to 2.3.20, and Gradle wrapper to 9.1.0 in example app
+  - Remove obsolete `android.defaults.buildfeatures.buildconfig` property from example app `gradle.properties` (closes #674 / AGP 9 compatibility)
+* [iOS] Group notification and SwiftPM improvements:
+  - Fix group notification dismissal: use `groupNotification.notificationId` rather than `task.taskId` in `updateGroupNotification` to properly dismiss group notifications (fixes #718)
+  - Fix notification category for group notifications: explicitly assign `.runningWithoutPause`, `.complete`, or `.error` category so `UNUserNotificationCenterDelegate.willPresent` recognizes and delivers running and finished group notifications (fixes #718)
+  - Log notification taps without an associated task as info instead of error
+  - Modernize Swift Package Manager (SwiftPM) support: add required `FlutterFramework` dependency in `Package.swift`, expand permissions bypass documentation for SwiftPM, and transition example app (`ios` and `macos`) to pure SwiftPM
+* [Desktop] Improvements:
+  - Case-insensitive host matching and cache key normalization for mTLS client configuration cache in `DesktopDownloader`
+* [Documentation] Improvements and clarifications:
+  - Clarify `requireWiFi` platform behavior: enforces an unmetered network connection constraint (`NETWORK_TYPE_UNMETERED`) on Android (excluding cellular and metered Wi-Fi hotspots), while disabling cellular access (`allowsCellularAccess = false`) on iOS (allowing any Wi-Fi or Ethernet connection regardless of metered status)
+  - Document Android 14+ UIDT JobScheduler behavior, 2-minute execution limit for standard expedited tasks, and `android.permission.RUN_USER_INITIATED_JOBS` requirement
+  - Document `Config.tempFilePath` for custom temporary download file storage on Android and Desktop
+  - Document mTLS client certificate configuration with custom server CA certificates (`serverCertificatePath` / `serverCertificateBytes`)
+* [Integration Tests & Example App]:
+  - Add device selection options (`-d`/`--device`, `--ios`, `--android`, `--macos`) and `--dry-run` flag to `run_tests.sh`, grouping test runs by device to prevent redundant app rebuilds
+  - Stabilize flaky integration tests and benchmarks in `load_test.dart`, `database_test.dart`, and `general_test.dart`
 
 ## 9.5.9
 
