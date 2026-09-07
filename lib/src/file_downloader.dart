@@ -181,8 +181,9 @@ interface class FileDownloader {
 
   /// Converts a group name to its namespaced equivalent.
   String namespacedGroup(String? group) {
-    final cleanGroup =
-        (group == null || group.isEmpty) ? FileDownloader.defaultGroup : group;
+    final cleanGroup = (group == null || group.isEmpty)
+        ? FileDownloader.defaultGroup
+        : group;
     if (!hasNamespace) return cleanGroup;
     if (cleanGroup == FileDownloader.defaultGroup) return '$namespace.default';
     if (cleanGroup.startsWith('$namespace.')) return cleanGroup;
@@ -259,8 +260,7 @@ interface class FileDownloader {
     );
     final nGroup = namespacedGroup(group);
     if (taskStatusCallback != null) {
-      final existingStatusCallback =
-          _downloader.groupStatusCallbacks[nGroup];
+      final existingStatusCallback = _downloader.groupStatusCallbacks[nGroup];
       if (hasNamespace) {
         _registeredStatusCallbacks[nGroup] = taskStatusCallback;
         _downloader.groupStatusCallbacks[nGroup] = (update) {
@@ -281,11 +281,11 @@ interface class FileDownloader {
       } else {
         _downloader.groupStatusCallbacks[nGroup] =
             existingStatusCallback == null
-                ? taskStatusCallback
-                : (update) {
-                    existingStatusCallback(update);
-                    taskStatusCallback(update);
-                  };
+            ? taskStatusCallback
+            : (update) {
+                existingStatusCallback(update);
+                taskStatusCallback(update);
+              };
       }
     }
     if (taskProgressCallback != null) {
@@ -308,11 +308,11 @@ interface class FileDownloader {
       } else {
         _downloader.groupProgressCallbacks[nGroup] =
             existingProgressCallback == null
-                ? taskProgressCallback
-                : (update) {
-                    existingProgressCallback(update);
-                    taskProgressCallback(update);
-                  };
+            ? taskProgressCallback
+            : (update) {
+                existingProgressCallback(update);
+                taskProgressCallback(update);
+              };
       }
     }
     if (taskNotificationTapCallback != null) {
@@ -321,24 +321,22 @@ interface class FileDownloader {
       if (hasNamespace) {
         _registeredNotificationTapCallbacks[nGroup] =
             taskNotificationTapCallback;
-        _downloader.groupNotificationTapCallbacks[nGroup] = (
-          task,
-          notificationType,
-        ) {
-          existingTapCallback?.call(task, notificationType);
-          taskNotificationTapCallback(
-            withoutNamespacedGroup(task),
-            notificationType,
-          );
-        };
+        _downloader.groupNotificationTapCallbacks[nGroup] =
+            (task, notificationType) {
+              existingTapCallback?.call(task, notificationType);
+              taskNotificationTapCallback(
+                withoutNamespacedGroup(task),
+                notificationType,
+              );
+            };
       } else {
         _downloader.groupNotificationTapCallbacks[nGroup] =
             existingTapCallback == null
-                ? taskNotificationTapCallback
-                : (task, type) {
-                    existingTapCallback(task, type);
-                    taskNotificationTapCallback(task, type);
-                  };
+            ? taskNotificationTapCallback
+            : (task, type) {
+                existingTapCallback(task, type);
+                taskNotificationTapCallback(task, type);
+              };
       }
     }
     return this;
@@ -580,33 +578,31 @@ interface class FileDownloader {
   }) => _downloader.enqueueAndAwaitBatch(
     tasks.map((t) => withNamespacedGroup(t) as DownloadTask).toList(),
     batchProgressCallback: batchProgressCallback,
-    taskStatusCallback:
-        taskStatusCallback != null
-            ? (update) => taskStatusCallback(
-              TaskStatusUpdate(
-                withoutNamespacedGroup(update.task),
-                update.status,
-                update.exception,
-                update.responseBody,
-                update.responseHeaders,
-                update.responseStatusCode,
-                update.mimeType,
-                update.charSet,
-              ),
-            )
-            : null,
-    taskProgressCallback:
-        taskProgressCallback != null
-            ? (update) => taskProgressCallback(
-              TaskProgressUpdate(
-                withoutNamespacedGroup(update.task),
-                update.progress,
-                update.expectedFileSize,
-                update.networkSpeed,
-                update.timeRemaining,
-              ),
-            )
-            : null,
+    taskStatusCallback: taskStatusCallback != null
+        ? (update) => taskStatusCallback(
+            TaskStatusUpdate(
+              withoutNamespacedGroup(update.task),
+              update.status,
+              update.exception,
+              update.responseBody,
+              update.responseHeaders,
+              update.responseStatusCode,
+              update.mimeType,
+              update.charSet,
+            ),
+          )
+        : null,
+    taskProgressCallback: taskProgressCallback != null
+        ? (update) => taskProgressCallback(
+            TaskProgressUpdate(
+              withoutNamespacedGroup(update.task),
+              update.progress,
+              update.expectedFileSize,
+              update.networkSpeed,
+              update.timeRemaining,
+            ),
+          )
+        : null,
     onElapsedTime: onElapsedTime,
     elapsedTimeInterval: elapsedTimeInterval,
   );
@@ -647,33 +643,31 @@ interface class FileDownloader {
   }) => _downloader.enqueueAndAwaitBatch(
     tasks.map((t) => withNamespacedGroup(t) as UploadTask).toList(),
     batchProgressCallback: batchProgressCallback,
-    taskStatusCallback:
-        taskStatusCallback != null
-            ? (update) => taskStatusCallback(
-              TaskStatusUpdate(
-                withoutNamespacedGroup(update.task),
-                update.status,
-                update.exception,
-                update.responseBody,
-                update.responseHeaders,
-                update.responseStatusCode,
-                update.mimeType,
-                update.charSet,
-              ),
-            )
-            : null,
-    taskProgressCallback:
-        taskProgressCallback != null
-            ? (update) => taskProgressCallback(
-              TaskProgressUpdate(
-                withoutNamespacedGroup(update.task),
-                update.progress,
-                update.expectedFileSize,
-                update.networkSpeed,
-                update.timeRemaining,
-              ),
-            )
-            : null,
+    taskStatusCallback: taskStatusCallback != null
+        ? (update) => taskStatusCallback(
+            TaskStatusUpdate(
+              withoutNamespacedGroup(update.task),
+              update.status,
+              update.exception,
+              update.responseBody,
+              update.responseHeaders,
+              update.responseStatusCode,
+              update.mimeType,
+              update.charSet,
+            ),
+          )
+        : null,
+    taskProgressCallback: taskProgressCallback != null
+        ? (update) => taskProgressCallback(
+            TaskProgressUpdate(
+              withoutNamespacedGroup(update.task),
+              update.progress,
+              update.expectedFileSize,
+              update.networkSpeed,
+              update.timeRemaining,
+            ),
+          )
+        : null,
     onElapsedTime: onElapsedTime,
     elapsedTimeInterval: elapsedTimeInterval,
   );
@@ -706,12 +700,11 @@ interface class FileDownloader {
     String group = defaultGroup,
     bool includeTasksWaitingToRetry = true,
     allGroups = false,
-  }) async =>
-      (await allTasks(
-        group: group,
-        includeTasksWaitingToRetry: includeTasksWaitingToRetry,
-        allGroups: allGroups,
-      )).map((task) => task.taskId).toList();
+  }) async => (await allTasks(
+    group: group,
+    includeTasksWaitingToRetry: includeTasksWaitingToRetry,
+    allGroups: allGroups,
+  )).map((task) => task.taskId).toList();
 
   /// Returns a list of all tasks currently active in this [group]
   ///
@@ -958,16 +951,15 @@ interface class FileDownloader {
     final missingTasks = <Task>{};
     final databaseTasks = await database.allRecords();
     // find missing enqueued/running tasks
-    final enqueuedOrRunningDatabaseTasks =
-        databaseTasks
-            .where(
-              (record) => const [
-                TaskStatus.enqueued,
-                TaskStatus.running,
-              ].contains(record.status),
-            )
-            .map((record) => record.task)
-            .toSet();
+    final enqueuedOrRunningDatabaseTasks = databaseTasks
+        .where(
+          (record) => const [
+            TaskStatus.enqueued,
+            TaskStatus.running,
+          ].contains(record.status),
+        )
+        .map((record) => record.task)
+        .toSet();
     final nativeTasks = Set<Task>.from(await allTasks(allGroups: true));
     missingTasks.addAll(enqueuedOrRunningDatabaseTasks.difference(nativeTasks));
     // find missing tasks waiting to retry
@@ -1028,10 +1020,9 @@ interface class FileDownloader {
     Iterable<DownloadTask>? tasks,
     String? group,
   }) {
-    final nGroup =
-        group != null
-            ? namespacedGroup(group)
-            : (hasNamespace ? namespacedGroup(null) : null);
+    final nGroup = group != null
+        ? namespacedGroup(group)
+        : (hasNamespace ? namespacedGroup(null) : null);
     final nTasks = tasks?.map((t) => withNamespacedGroup(t) as DownloadTask);
     for (final taskQueue in _downloader.taskQueues) {
       taskQueue.pauseAll(tasks: nTasks, group: nGroup);
@@ -1060,23 +1051,22 @@ interface class FileDownloader {
     String? group,
     Duration interval = const Duration(milliseconds: 50),
   }) async {
-    final nGroup =
-        group != null
-            ? namespacedGroup(group)
-            : (hasNamespace ? namespacedGroup(null) : null);
+    final nGroup = group != null
+        ? namespacedGroup(group)
+        : (hasNamespace ? namespacedGroup(null) : null);
     final nTasks = tasks?.map((t) => withNamespacedGroup(t) as DownloadTask);
     final results = <Task>[];
     final tasksToResume = switch ((nTasks, nGroup)) {
       (final Iterable<DownloadTask> tasks, null) => tasks,
-      (null, final String group) => (await _downloader.getPausedTasks())
-          .whereType<DownloadTask>()
-          .where((task) => task.group == group),
+      (null, final String group) =>
+        (await _downloader.getPausedTasks()).whereType<DownloadTask>().where(
+          (task) => task.group == group,
+        ),
       (null, null) =>
         (await _downloader.getPausedTasks()).whereType<DownloadTask>(),
-      _ =>
-        throw AssertionError(
-          "Either 'tasks' or 'group' must be provided, or neither, but not both.",
-        ),
+      _ => throw AssertionError(
+        "Either 'tasks' or 'group' must be provided, or neither, but not both.",
+      ),
     };
     for (final task in tasksToResume) {
       if (await resume(task)) {

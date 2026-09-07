@@ -36,13 +36,12 @@ Future<void> doDownloadTask(
   var filePath = await downloadTask.filePath();
   // tempFilePath is taken from [resumeDataString] if this is a resuming task.
   // Otherwise, it is a generated full path to the temp directory
-  final tempFilePath =
-      isResume && resumeData != null
-          ? resumeData.tempFilepath
-          : p.join(
-            tempFilePathConfig ?? (await getTemporaryDirectory()).path,
-            'com.bbflight.background_downloader${Random().nextInt(1 << 32).toString()}',
-          );
+  final tempFilePath = isResume && resumeData != null
+      ? resumeData.tempFilepath
+      : p.join(
+          tempFilePathConfig ?? (await getTemporaryDirectory()).path,
+          'com.bbflight.background_downloader${Random().nextInt(1 << 32).toString()}',
+        );
   final requiredStartByte =
       resumeData?.requiredStartByte ?? 0; // start for resume
   final eTag = resumeData?.eTag;
@@ -191,9 +190,8 @@ Future<TaskStatus> processOkDownloadResponse(
     // do the actual download
     try {
       Directory(p.dirname(actualTempFilePath)).createSync(recursive: true);
-      outStream = File(
-        actualTempFilePath,
-      ).openWrite(mode: isResume ? FileMode.append : FileMode.write);
+      outStream = File(actualTempFilePath)
+          .openWrite(mode: isResume ? FileMode.append : FileMode.write);
     } catch (e) {
       if (!isResume) {
         // Fallback to the target download directory as a hidden file

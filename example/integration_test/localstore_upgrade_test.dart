@@ -30,9 +30,8 @@ void main() {
         debugPrint('$dir tasksPath was already deleted');
       }
       try {
-        Directory(
-          path.join(dir.path, databaseMetadataPath),
-        ).deleteSync(recursive: true);
+        Directory(path.join(dir.path, databaseMetadataPath))
+            .deleteSync(recursive: true);
       } catch (e) {
         debugPrint('$dir databaseMetadataPath was already deleted');
       }
@@ -51,9 +50,8 @@ void main() {
       final docDir = await getApplicationDocumentsDirectory();
       final supportDir = await getApplicationSupportDirectory();
       Directory(path.join(docDir.path, tasksPath)).createSync();
-      await File(
-        path.join(docDir.path, tasksPath, 'test'),
-      ).writeAsString('contents', flush: true);
+      await File(path.join(docDir.path, tasksPath, 'test'))
+          .writeAsString('contents', flush: true);
       expect(
         File(path.join(docDir.path, tasksPath, 'test')).existsSync(),
         isTrue,
@@ -74,11 +72,10 @@ void main() {
         File(path.join(supportDir.path, tasksPath, 'test')).existsSync(),
         isTrue,
       );
-      final metaData =
-          await Localstore.instance
-              .collection('backgroundDownloaderDatabase')
-              .doc('metaData')
-              .get();
+      final metaData = await Localstore.instance
+          .collection('backgroundDownloaderDatabase')
+          .doc('metaData')
+          .get();
       final version = metaData?['version'] ?? 0;
       expect(version, equals(1)); // BaseDownloader.databaseVersion
       // now initialize again

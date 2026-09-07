@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,10 +19,12 @@ class InMemoryPersistentStorage implements PersistentStorage {
   }
 
   @override
-  Future<TaskRecord?> retrieveTaskRecord(String taskId) async => records[taskId];
+  Future<TaskRecord?> retrieveTaskRecord(String taskId) async =>
+      records[taskId];
 
   @override
-  Future<List<TaskRecord>> retrieveAllTaskRecords() async => records.values.toList();
+  Future<List<TaskRecord>> retrieveAllTaskRecords() async =>
+      records.values.toList();
 
   @override
   Future<void> removeTaskRecord(String? taskId) async {
@@ -65,8 +68,7 @@ class InMemoryPersistentStorage implements PersistentStorage {
       resumeData.values.toList();
 
   @override
-  Future<Task?> retrievePausedTask(String taskId) async =>
-      pausedTasks[taskId];
+  Future<Task?> retrievePausedTask(String taskId) async => pausedTasks[taskId];
 
   @override
   Future<ResumeData?> retrieveResumeData(String taskId) async =>
@@ -375,30 +377,35 @@ void main() {
       expect(transfer.progress, equals(1.0));
     });
 
-    test('Native enqueuing when requiring Wi-Fi on cellular connection', () async {
-      downloader.isWiFi = false;
-      downloader.isConnected = true;
+    test(
+      'Native enqueuing when requiring Wi-Fi on cellular connection',
+      () async {
+        downloader.isWiFi = false;
+        downloader.isConnected = true;
 
-      final wifiTask = DownloadTask(
-        taskId: 'wifi_task_1',
-        url: 'https://example.com/big_file.zip',
-        filename: 'big_file.zip',
-        requiresWiFi: true,
-      );
+        final wifiTask = DownloadTask(
+          taskId: 'wifi_task_1',
+          url: 'https://example.com/big_file.zip',
+          filename: 'big_file.zip',
+          requiresWiFi: true,
+        );
 
-      final transfer = await downloader.transfers.start(wifiTask);
-      expect(transfer.status, equals(TaskStatus.enqueued));
-      expect(transfer.holdReason, equals(TransferHoldReason.waitingForWiFi));
-      expect(transfer.isWaitingForWiFi, isTrue);
+        final transfer = await downloader.transfers.start(wifiTask);
+        expect(transfer.status, equals(TaskStatus.enqueued));
+        expect(transfer.holdReason, equals(TransferHoldReason.waitingForWiFi));
+        expect(transfer.isWaitingForWiFi, isTrue);
 
-      // Transition to running clears hold reason
-      transfer.updateStatus(TaskStatusUpdate(transfer.task, TaskStatus.running));
-      expect(transfer.holdReason, equals(TransferHoldReason.none));
-      expect(transfer.isWaitingForWiFi, isFalse);
+        // Transition to running clears hold reason
+        transfer.updateStatus(
+          TaskStatusUpdate(transfer.task, TaskStatus.running),
+        );
+        expect(transfer.holdReason, equals(TransferHoldReason.none));
+        expect(transfer.isWaitingForWiFi, isFalse);
 
-      // Reset
-      downloader.isWiFi = true;
-    });
+        // Reset
+        downloader.isWiFi = true;
+      },
+    );
 
     test('Native enqueuing when offline and dynamic hold reason on connection loss', () async {
       downloader.isConnected = false;
@@ -415,11 +422,15 @@ void main() {
       expect(transfer.isOffline, isTrue);
 
       // Transition to running clears hold reason
-      transfer.updateStatus(TaskStatusUpdate(transfer.task, TaskStatus.running));
+      transfer.updateStatus(
+        TaskStatusUpdate(transfer.task, TaskStatus.running),
+      );
       expect(transfer.holdReason, equals(TransferHoldReason.none));
 
       // Network loss while running transitions to waitingToRetry and sets offline hold reason
-      transfer.updateStatus(TaskStatusUpdate(transfer.task, TaskStatus.waitingToRetry));
+      transfer.updateStatus(
+        TaskStatusUpdate(transfer.task, TaskStatus.waitingToRetry),
+      );
       expect(transfer.holdReason, equals(TransferHoldReason.offline));
       expect(transfer.isOffline, isTrue);
 
@@ -435,35 +446,32 @@ void main() {
       downloader = FileDownloader.scoped('model_cache');
     });
 
-    test(
-      'Matches existing completed transfer by physical destination across random taskIds',
-      () async {
-        final originalTask = DownloadTask(
-          taskId: 'original_session_task_id',
-          url: 'https://example.com/gemma-2b.bin',
-          filename: 'gemma-2b.bin',
-        );
+    test('Matches existing completed transfer by physical destination across random taskIds', () async {
+      final originalTask = DownloadTask(
+        taskId: 'original_session_task_id',
+        url: 'https://example.com/gemma-2b.bin',
+        filename: 'gemma-2b.bin',
+      );
 
-        final transfer = await downloader.transfers.start(originalTask);
-        transfer.updateStatus(
-          TaskStatusUpdate(transfer.task, TaskStatus.complete),
-        );
-        expect(transfer.status, equals(TaskStatus.complete));
+      final transfer = await downloader.transfers.start(originalTask);
+      transfer.updateStatus(
+        TaskStatusUpdate(transfer.task, TaskStatus.complete),
+      );
+      expect(transfer.status, equals(TaskStatus.complete));
 
-        final newTaskWithRandomId = DownloadTask(
-          taskId: 'new_random_id_54321',
-          url: 'https://example.com/gemma-2b.bin',
-          filename: 'gemma-2b.bin',
-        );
+      final newTaskWithRandomId = DownloadTask(
+        taskId: 'new_random_id_54321',
+        url: 'https://example.com/gemma-2b.bin',
+        filename: 'gemma-2b.bin',
+      );
 
-        final matchedTransfer = await downloader.transfers.getOrStart(
-          newTaskWithRandomId,
-        );
-        expect(matchedTransfer.taskId, equals(originalTask.taskId));
-        expect(matchedTransfer.status, equals(TaskStatus.complete));
-        expect(matchedTransfer.progress, equals(1.0));
-      },
-    );
+      final matchedTransfer = await downloader.transfers.getOrStart(
+        newTaskWithRandomId,
+      );
+      expect(matchedTransfer.taskId, equals(originalTask.taskId));
+      expect(matchedTransfer.status, equals(TaskStatus.complete));
+      expect(matchedTransfer.progress, equals(1.0));
+    });
 
     test('Matches by custom matchBy predicate', () async {
       final task = DownloadTask(
@@ -505,52 +513,52 @@ void main() {
       expect(downloader.transfers.forUrl('https://nonexistent.com'), isNull);
     });
 
-    test(
-      'Simulated app restart: getOrStart and rehydrateFromDatabase restore transfer from database',
-      () async {
-        await downloader.trackTasks();
+    test('Simulated app restart: getOrStart and rehydrateFromDatabase restore transfer from database', () async {
+      await downloader.trackTasks();
 
-        final persistedTask = DownloadTask(
-          taskId: 'persisted_task_42',
-          url: 'https://example.com/database_model.bin',
-          filename: 'database_model.bin',
-          group: 'models',
-        );
+      final persistedTask = DownloadTask(
+        taskId: 'persisted_task_42',
+        url: 'https://example.com/database_model.bin',
+        filename: 'database_model.bin',
+        group: 'models',
+      );
 
-        final namespacedTask = downloader.withNamespacedGroup(persistedTask);
-        final record = TaskRecord(
-          namespacedTask,
-          TaskStatus.complete,
-          1.0,
-          1048576,
-        );
-        await downloader.database.updateRecord(record);
+      final namespacedTask = downloader.withNamespacedGroup(persistedTask);
+      final record = TaskRecord(
+        namespacedTask,
+        TaskStatus.complete,
+        1.0,
+        1048576,
+      );
+      await downloader.database.updateRecord(record);
 
-        // Simulate app termination by clearing in-memory state
-        await downloader.transfers.clear();
-        expect(downloader.transfers.all(), isEmpty);
-        expect(downloader.transfers.forId('persisted_task_42'), isNull);
+      // Simulate app termination by clearing in-memory state
+      await downloader.transfers.clear();
+      expect(downloader.transfers.all(), isEmpty);
+      expect(downloader.transfers.forId('persisted_task_42'), isNull);
 
-        // getOrStart should find record in database and rehydrate it
-        final rehydratedTransfer = await downloader.transfers.getOrStart(
-          persistedTask,
-        );
-        expect(rehydratedTransfer.taskId, equals('persisted_task_42'));
-        expect(rehydratedTransfer.status, equals(TaskStatus.complete));
-        expect(rehydratedTransfer.progress, equals(1.0));
-        expect(downloader.transfers.forId('persisted_task_42'), equals(rehydratedTransfer));
+      // getOrStart should find record in database and rehydrate it
+      final rehydratedTransfer = await downloader.transfers.getOrStart(
+        persistedTask,
+      );
+      expect(rehydratedTransfer.taskId, equals('persisted_task_42'));
+      expect(rehydratedTransfer.status, equals(TaskStatus.complete));
+      expect(rehydratedTransfer.progress, equals(1.0));
+      expect(
+        downloader.transfers.forId('persisted_task_42'),
+        equals(rehydratedTransfer),
+      );
 
-        // Clear again and test rehydrateFromDatabase
-        await downloader.transfers.clear();
-        expect(downloader.transfers.all(), isEmpty);
+      // Clear again and test rehydrateFromDatabase
+      await downloader.transfers.clear();
+      expect(downloader.transfers.all(), isEmpty);
 
-        final rehydratedList = await downloader.transfers.rehydrateFromDatabase();
-        expect(rehydratedList.length, equals(1));
-        expect(rehydratedList.first.taskId, equals('persisted_task_42'));
-        expect(downloader.transfers.all().length, equals(1));
-        expect(downloader.transfers.completed().length, equals(1));
-      },
-    );
+      final rehydratedList = await downloader.transfers.rehydrateFromDatabase();
+      expect(rehydratedList.length, equals(1));
+      expect(rehydratedList.first.taskId, equals('persisted_task_42'));
+      expect(downloader.transfers.all().length, equals(1));
+      expect(downloader.transfers.completed().length, equals(1));
+    });
   });
 
   group('startAll & startOrGetAll (Batch)', () {
@@ -622,35 +630,41 @@ void main() {
       t1.updateStatus(TaskStatusUpdate(task1, TaskStatus.complete));
 
       // Now call startOrGetAll with task1 (completed) and task2 (new)
-      final allResults = await downloader.transfers.startOrGetAll([task1, task2]);
+      final allResults = await downloader.transfers.startOrGetAll([
+        task1,
+        task2,
+      ]);
       expect(allResults.length, equals(2));
       expect(allResults[0], equals(t1));
       expect(allResults[0].status, equals(TaskStatus.complete));
       expect(allResults[1].taskId, equals('part_2'));
     });
 
-    test('start and startAll automatically ensure providesStatusUpdates', () async {
-      final task = DownloadTask(
-        taskId: 'progress_only_task',
-        url: 'https://example.com/test.bin',
-        filename: 'test.bin',
-        updates: Updates.progress,
-      );
-      final transfer = await downloader.transfers.start(task);
-      expect(transfer.task.updates, equals(Updates.statusAndProgress));
-      expect(transfer.task.providesStatusUpdates, isTrue);
-      expect(transfer.task.providesProgressUpdates, isTrue);
+    test(
+      'start and startAll automatically ensure providesStatusUpdates',
+      () async {
+        final task = DownloadTask(
+          taskId: 'progress_only_task',
+          url: 'https://example.com/test.bin',
+          filename: 'test.bin',
+          updates: Updates.progress,
+        );
+        final transfer = await downloader.transfers.start(task);
+        expect(transfer.task.updates, equals(Updates.statusAndProgress));
+        expect(transfer.task.providesStatusUpdates, isTrue);
+        expect(transfer.task.providesProgressUpdates, isTrue);
 
-      final batchTask = DownloadTask(
-        taskId: 'none_task',
-        url: 'https://example.com/none.bin',
-        filename: 'none.bin',
-        updates: Updates.none,
-      );
-      final batchTransfers = await downloader.transfers.startAll([batchTask]);
-      expect(batchTransfers.first.task.updates, equals(Updates.status));
-      expect(batchTransfers.first.task.providesStatusUpdates, isTrue);
-    });
+        final batchTask = DownloadTask(
+          taskId: 'none_task',
+          url: 'https://example.com/none.bin',
+          filename: 'none.bin',
+          updates: Updates.none,
+        );
+        final batchTransfers = await downloader.transfers.startAll([batchTask]);
+        expect(batchTransfers.first.task.updates, equals(Updates.status));
+        expect(batchTransfers.first.task.providesStatusUpdates, isTrue);
+      },
+    );
   });
 
   group('Transfer Collections & transfers.notifier', () {
@@ -840,7 +854,9 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: TransferButton(transfer: transfer))),
+        MaterialApp(
+          home: Scaffold(body: TransferButton(transfer: transfer)),
+        ),
       );
 
       // Enqueued / Running -> Pause button
@@ -892,7 +908,9 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: TransferListTile(transfer: transfer))),
+        MaterialApp(
+          home: Scaffold(body: TransferListTile(transfer: transfer)),
+        ),
       );
 
       expect(find.text('Sample Video'), findsOneWidget);
@@ -902,24 +920,21 @@ void main() {
   });
 
   group('Issue 3: Transfer.resume() and allowCellular() fallbacks', () {
-    test(
-      'resume() on a failed task with allowPause: true falls back to enqueue and resets retriesRemaining',
-      () async {
-        final task = DownloadTask(
-          url: 'https://example.com/fail.mp4',
-          allowPause: true,
-          retries: 3,
-        ).copyWith(retriesRemaining: 0);
-        final transfer = Transfer(task, null, TaskStatus.failed);
+    test('resume() on a failed task with allowPause: true falls back to enqueue and resets retriesRemaining', () async {
+      final task = DownloadTask(
+        url: 'https://example.com/fail.mp4',
+        allowPause: true,
+        retries: 3,
+      ).copyWith(retriesRemaining: 0);
+      final transfer = Transfer(task, null, TaskStatus.failed);
 
-        expect(await FileDownloader().taskCanResume(task), isFalse);
-        final success = await transfer.resume();
+      expect(await FileDownloader().taskCanResume(task), isFalse);
+      final success = await transfer.resume();
 
-        expect(success, isTrue);
-        expect(transfer.task.retriesRemaining, equals(3));
-        expect(transfer.holdReason, equals(TransferHoldReason.none));
-      },
-    );
+      expect(success, isTrue);
+      expect(transfer.task.retriesRemaining, equals(3));
+      expect(transfer.holdReason, equals(TransferHoldReason.none));
+    });
 
     test(
       'resume() on a paused task with valid resume data calls resume',
@@ -939,174 +954,174 @@ void main() {
       },
     );
 
-    test(
-      'allowCellular() on unstarted task without resume data falls back to enqueue and clears requiresWiFi',
-      () async {
-        final task = DownloadTask(
-          url: 'https://example.com/cellular.mp4',
-          allowPause: true,
-          requiresWiFi: true,
-        );
-        final transfer = Transfer(
-          task,
-          null,
-          TaskStatus.enqueued,
-          null,
-          null,
-          TransferHoldReason.waitingForWiFi,
-        );
+    test('allowCellular() on unstarted task without resume data falls back to enqueue and clears requiresWiFi', () async {
+      final task = DownloadTask(
+        url: 'https://example.com/cellular.mp4',
+        allowPause: true,
+        requiresWiFi: true,
+      );
+      final transfer = Transfer(
+        task,
+        null,
+        TaskStatus.enqueued,
+        null,
+        null,
+        TransferHoldReason.waitingForWiFi,
+      );
 
-        expect(transfer.isWaitingForWiFi, isTrue);
-        expect(transfer.task.requiresWiFi, isTrue);
+      expect(transfer.isWaitingForWiFi, isTrue);
+      expect(transfer.task.requiresWiFi, isTrue);
 
-        final success = await transfer.allowCellular();
+      final success = await transfer.allowCellular();
 
-        expect(success, isTrue);
-        expect(transfer.task.requiresWiFi, isFalse);
-        expect(transfer.holdReason, equals(TransferHoldReason.none));
-      },
-    );
+      expect(success, isTrue);
+      expect(transfer.task.requiresWiFi, isFalse);
+      expect(transfer.holdReason, equals(TransferHoldReason.none));
+    });
 
-    test(
-      'allowCellular() on paused task with resume data calls resume and clears requiresWiFi',
-      () async {
-        final task = DownloadTask(
-          url: 'https://example.com/cellular_paused.mp4',
-          allowPause: true,
-          requiresWiFi: true,
-        );
-        await testStorage.storeResumeData(ResumeData(task, 'resume-token-abc'));
-        final transfer = Transfer(
-          task,
-          null,
-          TaskStatus.paused,
-          0.5,
-          null,
-          TransferHoldReason.waitingForWiFi,
-        );
+    test('allowCellular() on paused task with resume data calls resume and clears requiresWiFi', () async {
+      final task = DownloadTask(
+        url: 'https://example.com/cellular_paused.mp4',
+        allowPause: true,
+        requiresWiFi: true,
+      );
+      await testStorage.storeResumeData(ResumeData(task, 'resume-token-abc'));
+      final transfer = Transfer(
+        task,
+        null,
+        TaskStatus.paused,
+        0.5,
+        null,
+        TransferHoldReason.waitingForWiFi,
+      );
 
-        final success = await transfer.allowCellular();
+      final success = await transfer.allowCellular();
 
-        expect(success, isTrue);
-        expect(transfer.task.requiresWiFi, isFalse);
-        expect(transfer.holdReason, equals(TransferHoldReason.none));
-      },
-    );
+      expect(success, isTrue);
+      expect(transfer.task.requiresWiFi, isFalse);
+      expect(transfer.holdReason, equals(TransferHoldReason.none));
+    });
   });
 
   group('Issue 4: Renewable _resultCompleter on retries & re-enqueue', () {
-    test(
-      'result completer completes on failure and resets on retry and completes on success',
-      () async {
-        final task = DownloadTask(url: 'https://example.com/retry.mp4');
-        final transfer = Transfer(task);
+    test('result completer completes on failure and resets on retry and completes on success', () async {
+      final task = DownloadTask(url: 'https://example.com/retry.mp4');
+      final transfer = Transfer(task);
 
-        // Transition to failed
-        transfer.updateStatus(
-          TaskStatusUpdate(
-            task,
-            TaskStatus.failed,
-            TaskException('Network down'),
-          ),
-        );
-        expect(transfer.status, equals(TaskStatus.failed));
-        final failResult = await transfer.result;
-        expect(failResult.status, equals(TaskStatus.failed));
-        expect(failResult.exception?.description, equals('Network down'));
+      // Transition to failed
+      transfer.updateStatus(
+        TaskStatusUpdate(
+          task,
+          TaskStatus.failed,
+          TaskException('Network down'),
+        ),
+      );
+      expect(transfer.status, equals(TaskStatus.failed));
+      final failResult = await transfer.result;
+      expect(failResult.status, equals(TaskStatus.failed));
+      expect(failResult.exception?.description, equals('Network down'));
 
-        // Retry: call resume(), which resets _resultCompleter
-        await transfer.resume();
+      // Retry: call resume(), which resets _resultCompleter
+      await transfer.resume();
 
-        // Verify that result is now pending (not immediately completed with the old failure)
-        var newResultCompleted = false;
-        transfer.result.then((_) => newResultCompleted = true);
-        await pumpEventQueue();
-        expect(newResultCompleted, isFalse);
+      // Verify that result is now pending (not immediately completed with the old failure)
+      var newResultCompleted = false;
+      transfer.result.then((_) => newResultCompleted = true);
+      await pumpEventQueue();
+      expect(newResultCompleted, isFalse);
 
-        // Receive running and complete status
-        transfer.updateStatus(TaskStatusUpdate(task, TaskStatus.running));
-        transfer.updateStatus(TaskStatusUpdate(task, TaskStatus.complete));
+      // Receive running and complete status
+      transfer.updateStatus(TaskStatusUpdate(task, TaskStatus.running));
+      transfer.updateStatus(TaskStatusUpdate(task, TaskStatus.complete));
 
-        final successResult = await transfer.result;
-        expect(successResult.status, equals(TaskStatus.complete));
-        expect(newResultCompleted, isTrue);
-      },
-    );
+      final successResult = await transfer.result;
+      expect(successResult.status, equals(TaskStatus.complete));
+      expect(newResultCompleted, isTrue);
+    });
 
-    test(
-      'result completer resets when enqueued status arrives after reaching a final state',
-      () async {
-        final task = DownloadTask(url: 'https://example.com/retry2.mp4');
-        final transfer = Transfer(task, null, TaskStatus.canceled);
+    test('result completer resets when enqueued status arrives after reaching a final state', () async {
+      final task = DownloadTask(url: 'https://example.com/retry2.mp4');
+      final transfer = Transfer(task, null, TaskStatus.canceled);
 
-        expect(transfer.status, equals(TaskStatus.canceled));
-        final cancelResult = await transfer.result;
-        expect(cancelResult.status, equals(TaskStatus.canceled));
+      expect(transfer.status, equals(TaskStatus.canceled));
+      final cancelResult = await transfer.result;
+      expect(cancelResult.status, equals(TaskStatus.canceled));
 
-        // External re-enqueue (without calling transfer.resume directly)
-        transfer.updateStatus(TaskStatusUpdate(task, TaskStatus.enqueued));
+      // External re-enqueue (without calling transfer.resume directly)
+      transfer.updateStatus(TaskStatusUpdate(task, TaskStatus.enqueued));
 
-        var pending = true;
-        transfer.result.then((_) => pending = false);
-        await pumpEventQueue();
-        expect(pending, isTrue);
+      var pending = true;
+      transfer.result.then((_) => pending = false);
+      await pumpEventQueue();
+      expect(pending, isTrue);
 
-        transfer.updateStatus(TaskStatusUpdate(task, TaskStatus.complete));
-        final completeResult = await transfer.result;
-        expect(completeResult.status, equals(TaskStatus.complete));
-        expect(pending, isFalse);
-      },
-    );
+      transfer.updateStatus(TaskStatusUpdate(task, TaskStatus.complete));
+      final completeResult = await transfer.result;
+      expect(completeResult.status, equals(TaskStatus.complete));
+      expect(pending, isFalse);
+    });
   });
 
-  group('Issue 5: Suggested filename and DataTask handling in transfer.file', () {
-    test(
-      'transfer.file resolves to server-suggested filename on completion',
-      () async {
-        final initialTask = DownloadTask(
-          url: 'https://example.com/download?id=123',
-          transferHints: {TransferHint.useSuggestedFilename},
-        );
-        expect(initialTask.filename, equals(DownloadTask.suggestedFilename));
+  group(
+    'Issue 5: Suggested filename and DataTask handling in transfer.file',
+    () {
+      test(
+        'transfer.file resolves to server-suggested filename on completion',
+        () async {
+          final initialTask = DownloadTask(
+            url: 'https://example.com/download?id=123',
+            transferHints: {TransferHint.useSuggestedFilename},
+          );
+          expect(initialTask.filename, equals(DownloadTask.suggestedFilename));
 
-        final transfer = Transfer(initialTask);
+          final transfer = Transfer(initialTask);
 
-        // Server discovers suggested filename 'actual_report.pdf'
-        final completedTask = initialTask.copyWith(filename: 'actual_report.pdf');
-        transfer.updateStatus(TaskStatusUpdate(completedTask, TaskStatus.complete));
+          // Server discovers suggested filename 'actual_report.pdf'
+          final completedTask = initialTask.copyWith(
+            filename: 'actual_report.pdf',
+          );
+          transfer.updateStatus(
+            TaskStatusUpdate(completedTask, TaskStatus.complete),
+          );
 
-        // Assert transfer.task is updated
-        expect(transfer.task.filename, equals('actual_report.pdf'));
+          // Assert transfer.task is updated
+          expect(transfer.task.filename, equals('actual_report.pdf'));
 
-        final file = await transfer.file;
-        expect(file.path.endsWith('actual_report.pdf'), isTrue);
-      },
-    );
+          final file = await transfer.file;
+          expect(file.path.endsWith('actual_report.pdf'), isTrue);
+        },
+      );
 
-    test(
-      'transfer.file throws TaskException when called on DataTask',
-      () async {
-        final dataTask = DataTask(url: 'https://example.com/api/data');
-        final transfer = Transfer(dataTask);
+      test(
+        'transfer.file throws TaskException when called on DataTask',
+        () async {
+          final dataTask = DataTask(url: 'https://example.com/api/data');
+          final transfer = Transfer(dataTask);
 
-        transfer.updateStatus(
-          TaskStatusUpdate(dataTask, TaskStatus.complete, null, '{"status":"ok"}'),
-        );
-
-        expect(await transfer.responseBody, equals('{"status":"ok"}'));
-        expect(
-          () => transfer.file,
-          throwsA(
-            isA<TaskException>().having(
-              (e) => e.description,
-              'description',
-              contains('DataTask does not produce a file on disk'),
+          transfer.updateStatus(
+            TaskStatusUpdate(
+              dataTask,
+              TaskStatus.complete,
+              null,
+              '{"status":"ok"}',
             ),
-          ),
-        );
-      },
-    );
-  });
+          );
+
+          expect(await transfer.responseBody, equals('{"status":"ok"}'));
+          expect(
+            () => transfer.file,
+            throwsA(
+              isA<TaskException>().having(
+                (e) => e.description,
+                'description',
+                contains('DataTask does not produce a file on disk'),
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
 
   group('Issue 6: Transfers remove, clear, and dispose lifecycle', () {
     test(
@@ -1152,7 +1167,10 @@ void main() {
       );
       final transfer = await FileDownloader().transfers.start(task);
 
-      final removed = FileDownloader().transfers.remove('rem_2', dispose: false);
+      final removed = FileDownloader().transfers.remove(
+        'rem_2',
+        dispose: false,
+      );
 
       expect(removed, equals(transfer));
       expect(FileDownloader().transfers.forId('rem_2'), isNull);
@@ -1192,92 +1210,85 @@ void main() {
   });
 
   group('Issue 7: Group callback multiplexing', () {
-    test(
-      'both FileDownloader.registerCallbacks and transfers.start receive updates (registered before)',
-      () async {
-        const customGroup = 'test_group_multiplex';
-        final task = DownloadTask(
-          taskId: 'mux_1',
-          url: 'https://example.com/mux.bin',
-          group: customGroup,
-          updates: Updates.statusAndProgress,
-        );
+    test('both FileDownloader.registerCallbacks and transfers.start receive updates (registered before)', () async {
+      const customGroup = 'test_group_multiplex';
+      final task = DownloadTask(
+        taskId: 'mux_1',
+        url: 'https://example.com/mux.bin',
+        group: customGroup,
+        updates: Updates.statusAndProgress,
+      );
 
-        final customStatusUpdates = <TaskStatusUpdate>[];
-        final customProgressUpdates = <TaskProgressUpdate>[];
+      final customStatusUpdates = <TaskStatusUpdate>[];
+      final customProgressUpdates = <TaskProgressUpdate>[];
 
-        // 1. Register user callback first
-        FileDownloader().registerCallbacks(
-          group: customGroup,
-          taskStatusCallback: (update) => customStatusUpdates.add(update),
-          taskProgressCallback: (update) => customProgressUpdates.add(update),
-        );
+      // 1. Register user callback first
+      FileDownloader().registerCallbacks(
+        group: customGroup,
+        taskStatusCallback: (update) => customStatusUpdates.add(update),
+        taskProgressCallback: (update) => customProgressUpdates.add(update),
+      );
 
-        // 2. Start transfer via transfers
-        final transfer = await FileDownloader().transfers.start(task);
+      // 2. Start transfer via transfers
+      final transfer = await FileDownloader().transfers.start(task);
 
-        // 3. Fire status and progress update via processStatusUpdate / processProgressUpdate
-        final statusUpdate = TaskStatusUpdate(task, TaskStatus.running);
-        final progressUpdate = TaskProgressUpdate(task, 0.42);
+      // 3. Fire status and progress update via processStatusUpdate / processProgressUpdate
+      final statusUpdate = TaskStatusUpdate(task, TaskStatus.running);
+      final progressUpdate = TaskProgressUpdate(task, 0.42);
 
-        FileDownloader().downloaderForTesting.processStatusUpdate(statusUpdate);
-        FileDownloader().downloaderForTesting.processProgressUpdate(progressUpdate);
+      FileDownloader().downloaderForTesting.processStatusUpdate(statusUpdate);
+      FileDownloader().downloaderForTesting.processProgressUpdate(
+        progressUpdate,
+      );
 
-        // Verify transfers handle received the updates
-        expect(transfer.status, equals(TaskStatus.running));
-        expect(transfer.progress, equals(0.42));
+      // Verify transfers handle received the updates
+      expect(transfer.status, equals(TaskStatus.running));
+      expect(transfer.progress, equals(0.42));
 
-        // Verify custom callback received the updates
-        expect(
-          customStatusUpdates.map((u) => u.status),
-          contains(TaskStatus.running),
-        );
-        expect(
-          customProgressUpdates.map((u) => u.progress),
-          contains(0.42),
-        );
+      // Verify custom callback received the updates
+      expect(
+        customStatusUpdates.map((u) => u.status),
+        contains(TaskStatus.running),
+      );
+      expect(customProgressUpdates.map((u) => u.progress), contains(0.42));
 
-        // Cleanup
-        await FileDownloader().transfers.clear();
-        FileDownloader().unregisterCallbacks(group: customGroup);
-      },
-    );
+      // Cleanup
+      await FileDownloader().transfers.clear();
+      FileDownloader().unregisterCallbacks(group: customGroup);
+    });
 
-    test(
-      'registerCallbacks called after transfers.start also preserves both callbacks',
-      () async {
-        const customGroup = 'test_group_multiplex_after';
-        final task = DownloadTask(
-          taskId: 'mux_2',
-          url: 'https://example.com/mux2.bin',
-          group: customGroup,
-        );
+    test('registerCallbacks called after transfers.start also preserves both callbacks', () async {
+      const customGroup = 'test_group_multiplex_after';
+      final task = DownloadTask(
+        taskId: 'mux_2',
+        url: 'https://example.com/mux2.bin',
+        group: customGroup,
+      );
 
-        // 1. Start transfer via transfers first
-        final transfer = await FileDownloader().transfers.start(task);
+      // 1. Start transfer via transfers first
+      final transfer = await FileDownloader().transfers.start(task);
 
-        // 2. Register user callback second
-        final customStatusUpdates = <TaskStatusUpdate>[];
-        FileDownloader().registerCallbacks(
-          group: customGroup,
-          taskStatusCallback: (update) => customStatusUpdates.add(update),
-        );
+      // 2. Register user callback second
+      final customStatusUpdates = <TaskStatusUpdate>[];
+      FileDownloader().registerCallbacks(
+        group: customGroup,
+        taskStatusCallback: (update) => customStatusUpdates.add(update),
+      );
 
-        // 3. Fire status update
-        final statusUpdate = TaskStatusUpdate(task, TaskStatus.running);
-        FileDownloader().downloaderForTesting.processStatusUpdate(statusUpdate);
+      // 3. Fire status update
+      final statusUpdate = TaskStatusUpdate(task, TaskStatus.running);
+      FileDownloader().downloaderForTesting.processStatusUpdate(statusUpdate);
 
-        // Both received the status
-        expect(transfer.status, equals(TaskStatus.running));
-        expect(
-          customStatusUpdates.map((u) => u.status),
-          contains(TaskStatus.running),
-        );
+      // Both received the status
+      expect(transfer.status, equals(TaskStatus.running));
+      expect(
+        customStatusUpdates.map((u) => u.status),
+        contains(TaskStatus.running),
+      );
 
-        // Cleanup
-        await FileDownloader().transfers.clear();
-        FileDownloader().unregisterCallbacks(group: customGroup);
-      },
-    );
+      // Cleanup
+      await FileDownloader().transfers.clear();
+      FileDownloader().unregisterCallbacks(group: customGroup);
+    });
   });
 }

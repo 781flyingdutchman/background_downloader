@@ -339,20 +339,18 @@ void processProgressUpdateInIsolate(
       }
       final bytesSinceLastUpdate = bytesTotal - bytesTotalAtLastProgressUpdate;
       bytesTotalAtLastProgressUpdate = bytesTotal;
-      final currentNetworkSpeed =
-          timeSinceLastUpdate.inHours > 0
-              ? -1.0
-              : bytesSinceLastUpdate / timeSinceLastUpdate.inMicroseconds;
+      final currentNetworkSpeed = timeSinceLastUpdate.inHours > 0
+          ? -1.0
+          : bytesSinceLastUpdate / timeSinceLastUpdate.inMicroseconds;
       networkSpeed = switch (currentNetworkSpeed) {
         -1.0 => -1.0,
         _ when networkSpeed == -1.0 => currentNetworkSpeed,
         _ => (networkSpeed * 3 + currentNetworkSpeed) / 4.0,
       };
       final remainingBytes = (1 - progress) * expectedFileSize;
-      final timeRemaining =
-          networkSpeed == -1.0 || expectedFileSize < 0
-              ? const Duration(seconds: -1)
-              : Duration(microseconds: (remainingBytes / networkSpeed).round());
+      final timeRemaining = networkSpeed == -1.0 || expectedFileSize < 0
+          ? const Duration(seconds: -1)
+          : Duration(microseconds: (remainingBytes / networkSpeed).round());
       sendPort.send((
         'progressUpdate',
         task,
@@ -456,12 +454,12 @@ bool isJsonString(String string) => _jsonString.hasMatch(string);
 
 /// Encode [value] in the same way browsers do.
 String browserEncode(String value) =>
-// http://tools.ietf.org/html/rfc2388 mandates some complex encodings for
-// field names and file names, but in practice user agents seem not to
-// follow this at all. Instead, they URL-encode `\r`, `\n`, and `\r\n` as
-// `\r\n`; URL-encode `"`; and do nothing else (even for `%` or non-ASCII
-// characters). We follow their behavior.
-value.replaceAll(_newlineRegExp, '%0D%0A').replaceAll('"', '%22');
+    // http://tools.ietf.org/html/rfc2388 mandates some complex encodings for
+    // field names and file names, but in practice user agents seem not to
+    // follow this at all. Instead, they URL-encode `\r`, `\n`, and `\r\n` as
+    // `\r\n`; URL-encode `"`; and do nothing else (even for `%` or non-ASCII
+    // characters). We follow their behavior.
+    value.replaceAll(_newlineRegExp, '%0D%0A').replaceAll('"', '%22');
 
 /// Returns the length of the [string] in bytes when utf-8 encoded
 int lengthInBytes(String string) => utf8.encode(string).length;
@@ -474,7 +472,8 @@ void logError(Task task, String error) {
 /// Set the [taskException] variable based on error e
 void setTaskError(dynamic e) {
   taskException = switch (e) {
-    HttpException() || TimeoutException() => TaskConnectionException(e.toString()),
+    HttpException() ||
+    TimeoutException() => TaskConnectionException(e.toString()),
     IOException() => TaskFileSystemException(e.toString()),
     TaskException() => e,
     _ => TaskException(e.toString()),

@@ -39,10 +39,9 @@ class TransferListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title =
-        transfer.task.displayName.isNotEmpty
-            ? transfer.task.displayName
-            : transfer.task.filename;
+    final title = transfer.task.displayName.isNotEmpty
+        ? transfer.task.displayName
+        : transfer.task.filename;
 
     return ListTile(
       leading: leading ?? _defaultLeading(context),

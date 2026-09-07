@@ -52,10 +52,9 @@ abstract base class NativeDownloader extends BaseDownloader {
   Future<dynamic> _handleBackgroundMessage(MethodCall call) async {
     final args = call.arguments as List<dynamic>;
     final taskJsonString = args.first as String;
-    final task =
-        taskJsonString.isNotEmpty
-            ? await JsonProcessor().decodeTask(taskJsonString)
-            : DownloadTask(url: 'url');
+    final task = taskJsonString.isNotEmpty
+        ? await JsonProcessor().decodeTask(taskJsonString)
+        : DownloadTask(url: 'url');
     final message = (
       call.method,
       args.length > 2
@@ -97,14 +96,13 @@ abstract base class NativeDownloader extends BaseDownloader {
         if (task.group != BaseDownloader.chunkGroup) {
           final Map<String, String>? cleanResponseHeaders =
               responseHeaders == null
-                  ? null
-                  : {
-                    for (final entry in responseHeaders.entries.where(
-                      (entry) => entry.key != null && entry.value != null,
-                    ))
-                      entry.key.toString().toLowerCase():
-                          entry.value.toString(),
-                  };
+              ? null
+              : {
+                  for (final entry in responseHeaders.entries.where(
+                    (entry) => entry.key != null && entry.value != null,
+                  ))
+                    entry.key.toString().toLowerCase(): entry.value.toString(),
+                };
           processStatusUpdate(
             TaskStatusUpdate(
               task,
@@ -202,7 +200,10 @@ abstract base class NativeDownloader extends BaseDownloader {
         setCanResume(task, canResume);
 
       // resumeData Android and Desktop variant
-      case ('resumeData', [final String data, final int requiredStartByte, final String? eTag]):
+      case (
+        'resumeData',
+        [final String data, final int requiredStartByte, final String? eTag],
+      ):
         setResumeData(ResumeData(task, data, requiredStartByte, eTag));
 
       // resumeData iOS and ParallelDownloads variant
@@ -218,16 +219,14 @@ abstract base class NativeDownloader extends BaseDownloader {
       // from ParallelDownloadTask
       case ('enqueueChild', final String childTaskJsonString):
         final childTask = await JsonProcessor().decodeTask(childTaskJsonString);
-        Future.delayed(
-          const Duration(milliseconds: 100),
-        ).then((_) => FileDownloader().enqueue(childTask));
+        Future.delayed(const Duration(milliseconds: 100))
+            .then((_) => FileDownloader().enqueue(childTask));
 
       // from ParallelDownloadTask
       case ('cancelTasksWithId', final String listOfTaskIdsJson):
         final taskIds = List<String>.from(jsonDecode(listOfTaskIdsJson));
-        Future.delayed(
-          const Duration(milliseconds: 100),
-        ).then((_) => FileDownloader().cancelTasksWithIds(taskIds));
+        Future.delayed(const Duration(milliseconds: 100))
+            .then((_) => FileDownloader().cancelTasksWithIds(taskIds));
 
       // from ParallelDownloadTask
       case ('pauseTasks', final String listOfTasksJson):
@@ -261,7 +260,10 @@ abstract base class NativeDownloader extends BaseDownloader {
     final notificationConfig = notificationConfigForTask(task);
     return await methodChannel.invokeMethod<bool>('enqueue', [
           jsonEncode(task.toJson()),
-          if (notificationConfig != null) jsonEncode(notificationConfig.toJson()) else null,
+          if (notificationConfig != null)
+            jsonEncode(notificationConfig.toJson())
+          else
+            null,
         ]) ??
         false;
   }
@@ -356,19 +358,21 @@ abstract base class NativeDownloader extends BaseDownloader {
   @override
   Future<bool> resume(Task task) async {
     if (await super.resume(task)) {
-      task =
-          awaitTasks.containsKey(task)
-              ? awaitTasks.keys.firstWhere(
-                (awaitTask) => awaitTask.taskId == task.taskId,
-              )
-              : task;
+      task = awaitTasks.containsKey(task)
+          ? awaitTasks.keys.firstWhere(
+              (awaitTask) => awaitTask.taskId == task.taskId,
+            )
+          : task;
       final taskResumeData = await getResumeData(task.taskId);
       if (taskResumeData != null) {
         final notificationConfig = notificationConfigForTask(task);
         final enqueueSuccess =
             await methodChannel.invokeMethod<bool>('enqueue', [
               jsonEncode(task.toJson()),
-              if (notificationConfig != null) jsonEncode(notificationConfig.toJson()) else null,
+              if (notificationConfig != null)
+                jsonEncode(notificationConfig.toJson())
+              else
+                null,
               taskResumeData.data,
               taskResumeData.requiredStartByte,
               taskResumeData.eTag,
@@ -388,16 +392,17 @@ abstract base class NativeDownloader extends BaseDownloader {
     RequireWiFi requirement,
     rescheduleRunningTasks,
     alsoRestartUploads,
-  ) async => await methodChannel.invokeMethod('requireWiFi', [
-          requirement.index,
-          rescheduleRunningTasks,
-          alsoRestartUploads,
-        ]) ??
-        false;
+  ) async =>
+      await methodChannel.invokeMethod('requireWiFi', [
+        requirement.index,
+        rescheduleRunningTasks,
+        alsoRestartUploads,
+      ]) ??
+      false;
 
   @override
   Future<RequireWiFi> getRequireWiFiSetting() async => RequireWiFi
-        .values[await methodChannel.invokeMethod('getRequireWiFiSetting') ?? 0];
+      .values[await methodChannel.invokeMethod('getRequireWiFiSetting') ?? 0];
 
   @override
   void updateNotification(Task task, TaskStatus? taskStatusOrNull) {
@@ -472,7 +477,8 @@ abstract base class NativeDownloader extends BaseDownloader {
   }
 
   @override
-  Future<String> platformVersion() async => (await methodChannel.invokeMethod<String>('platformVersion')) ?? '';
+  Future<String> platformVersion() async =>
+      (await methodChannel.invokeMethod<String>('platformVersion')) ?? '';
 
   @override
   Future<Duration> getTaskTimeout() async {
@@ -551,12 +557,14 @@ abstract base class NativeDownloader extends BaseDownloader {
           final int? maxConcurrentByGroup,
         ),
       ):
-        await NativeDownloader.methodChannel
-            .invokeMethod('configHoldingQueue', [
-              maxConcurrent ?? 1 << 20,
-              maxConcurrentByHost ?? 1 << 20,
-              maxConcurrentByGroup ?? 1 << 20,
-            ]);
+        await NativeDownloader.methodChannel.invokeMethod(
+          'configHoldingQueue',
+          [
+            maxConcurrent ?? 1 << 20,
+            maxConcurrentByHost ?? 1 << 20,
+            maxConcurrentByGroup ?? 1 << 20,
+          ],
+        );
 
       case (Config.holdingQueue, Config.never):
       case (Config.holdingQueue, false):
@@ -625,10 +633,9 @@ final class AndroidDownloader extends NativeDownloader {
     // encounter of a task with callbacks
     if (task.options?.hasCallback == true &&
         _callbackDispatcherRawHandle == null) {
-      final rawHandle =
-          PluginUtilities.getCallbackHandle(
-            initCallbackDispatcher,
-          )?.toRawHandle();
+      final rawHandle = PluginUtilities.getCallbackHandle(
+        initCallbackDispatcher,
+      )?.toRawHandle();
       if (rawHandle != null) {
         final success = await NativeDownloader.methodChannel.invokeMethod<bool>(
           'registerCallbackDispatcher',
@@ -726,8 +733,9 @@ final class AndroidDownloader extends NativeDownloader {
         Task.useExternalStorage = whenTo == Config.always;
 
       case (Config.tempFilePath, final String path):
-        final cleanPath =
-            (path.isNotEmpty && path != Config.never) ? path : null;
+        final cleanPath = (path.isNotEmpty && path != Config.never)
+            ? path
+            : null;
         await NativeDownloader.methodChannel.invokeMethod(
           'configTempFilePath',
           cleanPath,
@@ -847,10 +855,9 @@ void initCallbackDispatcher() {
       case 'onAuthCallback':
         final taskJsonString = call.arguments as String;
         final task = Task.createFromJson(jsonDecode(taskJsonString));
-        final callBack =
-            call.method == 'onTaskStartCallback'
-                ? task.options?.onTaskStartCallBack
-                : task.options?.auth?.onAuthCallback;
+        final callBack = call.method == 'onTaskStartCallback'
+            ? task.options?.onTaskStartCallBack
+            : task.options?.auth?.onAuthCallback;
         final newTask = await callBack?.call(task);
         if (newTask == null) {
           return null;

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
+
 import 'dart:async';
 
 import 'base_downloader.dart';
@@ -260,15 +261,13 @@ final class TaskRecord {
   /// Create [TaskRecord] from [json]
   TaskRecord.fromJson(Map<String, dynamic> json)
     : task = Task.createFromJson(json),
-      status =
-          TaskStatus.values[(json['status'] as num?)?.toInt() ??
-              TaskStatus.failed.index],
+      status = TaskStatus
+          .values[(json['status'] as num?)?.toInt() ?? TaskStatus.failed.index],
       progress = (json['progress'] as num?)?.toDouble() ?? progressFailed,
       expectedFileSize = (json['expectedFileSize'] as num?)?.toInt() ?? -1,
-      exception =
-          json['exception'] == null
-              ? null
-              : TaskException.fromJson(json['exception']);
+      exception = json['exception'] == null
+          ? null
+          : TaskException.fromJson(json['exception']);
 
   /// Returns JSON map representation of this [TaskRecord]
   ///
@@ -298,8 +297,9 @@ final class TaskRecord {
   );
 
   @override
-  String toString() => 'DatabaseRecord{task: $task, status: $status, progress: $progress,'
-        ' expectedFileSize: $expectedFileSize, exception: $exception}';
+  String toString() =>
+      'DatabaseRecord{task: $task, status: $status, progress: $progress,'
+      ' expectedFileSize: $expectedFileSize, exception: $exception}';
 
   @override
   bool operator ==(Object other) =>

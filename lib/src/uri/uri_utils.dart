@@ -11,7 +11,9 @@ import 'package:logging/logging.dart';
 
 import '../base_downloader.dart';
 import '../models.dart';
+
 import 'package:path/path.dart' as p;
+
 import '../native_downloader.dart';
 import '../task.dart';
 
@@ -198,11 +200,11 @@ sealed class UriUtils {
     };
     return uri != null
         ? await moveFileToSharedStorage(
-          uri,
-          destination,
-          directory: directory,
-          mimeType: mimeType,
-        )
+            uri,
+            destination,
+            directory: directory,
+            mimeType: mimeType,
+          )
         : null;
   }
 
@@ -276,14 +278,13 @@ sealed class UriUtils {
 
   /// Private helper method to determine the destination URI.
   Uri _determineDestinationUri(dynamic destination) => switch (destination) {
-      File() => destination.uri,
-      String() => Uri.file(destination),
-      Uri() => destination,
-      _ =>
-        throw ArgumentError(
-          'Invalid destination type. Must be File, String, or Uri.',
-        ),
-    };
+    File() => destination.uri,
+    String() => Uri.file(destination),
+    Uri() => destination,
+    _ => throw ArgumentError(
+      'Invalid destination type. Must be File, String, or Uri.',
+    ),
+  };
 }
 
 final class _DesktopUriUtils extends UriUtils {
@@ -294,12 +295,11 @@ final class _DesktopUriUtils extends UriUtils {
     SharedStorage? startLocation,
     Uri? startLocationUri,
     bool persistedUriPermission = false,
-  }) =>
-      throw UnimplementedError(
-        'pickDirectory not implemented for this platform. '
-        'Use the file_picker package and convert the resulting filePath '
-        'to a URI Uri.file(directoryPath, windows: Platform.isWindows)',
-      );
+  }) => throw UnimplementedError(
+    'pickDirectory not implemented for this platform. '
+    'Use the file_picker package and convert the resulting filePath '
+    'to a URI Uri.file(directoryPath, windows: Platform.isWindows)',
+  );
 
   @override
   Future<List<Uri>?> pickFiles({
@@ -308,12 +308,11 @@ final class _DesktopUriUtils extends UriUtils {
     List<String>? allowedExtensions,
     bool multipleAllowed = false,
     bool persistedUriPermission = false,
-  }) =>
-      throw UnimplementedError(
-        'pickFiles not implemented for this platform. '
-        'Use the file_picker package and convert the resulting filePath '
-        'to a URI using Uri.file(filepath, windows: Platform.isWindows)',
-      );
+  }) => throw UnimplementedError(
+    'pickFiles not implemented for this platform. '
+    'Use the file_picker package and convert the resulting filePath '
+    'to a URI using Uri.file(filepath, windows: Platform.isWindows)',
+  );
 
   @override
   Future<Uri> createDirectory(
@@ -324,11 +323,10 @@ final class _DesktopUriUtils extends UriUtils {
     final parentPath = parentDirectoryUri.toFilePath(
       windows: Platform.isWindows,
     );
-    final cleanedSegments =
-        newDirectoryName
-            .split(RegExp(r'[\\/]+'))
-            .where((segment) => segment.isNotEmpty)
-            .toList();
+    final cleanedSegments = newDirectoryName
+        .split(RegExp(r'[\\/]+'))
+        .where((segment) => segment.isNotEmpty)
+        .toList();
     final fullPath = p.joinAll([parentPath, ...cleanedSegments]);
     final createdDirectory = await Directory(fullPath).create(recursive: true);
     return createdDirectory.uri;
@@ -465,14 +463,14 @@ final class _NativeUriUtils extends UriUtils {
     // uriStrings can be a list of Strings or just one String, or null
     return switch (uriStrings) {
       final String uri => [Uri.parse(uri)],
-      final List<Object?>? uris => uris
-          ?.where((e) => e != null)
-          .map((e) => Uri.parse(e as String))
-          .toList(growable: false),
-      _ =>
-        throw ArgumentError(
-          'pickFiles returned invalid value $uriStrings of type ${uriStrings.runtimeType}',
-        ),
+      final List<Object?>? uris =>
+        uris
+            ?.where((e) => e != null)
+            .map((e) => Uri.parse(e as String))
+            .toList(growable: false),
+      _ => throw ArgumentError(
+        'pickFiles returned invalid value $uriStrings of type ${uriStrings.runtimeType}',
+      ),
     };
   }
 

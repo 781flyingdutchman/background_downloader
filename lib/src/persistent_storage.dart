@@ -332,8 +332,8 @@ Future<dynamic> _dispatch(
   _StorageCommand method,
   List<dynamic> args,
 ) => switch (method) {
-  _StorageCommand.getStoredDatabaseVersion => executor.storedDatabaseVersion
-      .then((r) => [r.$1, r.$2]), // tuple to list
+  _StorageCommand.getStoredDatabaseVersion =>
+    executor.storedDatabaseVersion.then((r) => [r.$1, r.$2]), // tuple to list
   _StorageCommand.storeTaskRecord => executor.storeTaskRecord(
     args[0] as Map<String, dynamic>,
   ),
@@ -366,8 +366,9 @@ Future<dynamic> _dispatch(
   ),
   _StorageCommand.retrieveAll => executor.retrieveAll(args[0] as String),
   _StorageCommand.clearCache => executor.clearCache(),
-  _StorageCommand.initialize =>
-    throw StateError('Initialize should be handled in isolate entry'),
+  _StorageCommand.initialize => throw StateError(
+    'Initialize should be handled in isolate entry',
+  ),
 };
 
 /// The executor that runs in the isolate and does the actual work
@@ -465,7 +466,8 @@ class _LocalStorePersistentStorageExecutor {
 
   /// Returns all documents in collection as a [Map<String, dynamic>] keyed by the
   /// document identifier, with the value a [Map<String, dynamic>] representing the document
-  Future<Map<String, dynamic>> retrieveAll(String collection) async => await _db.collection(collection).get() ?? {};
+  Future<Map<String, dynamic>> retrieveAll(String collection) async =>
+      await _db.collection(collection).get() ?? {};
 
   /// Removes document with [identifier] from [collection]
   ///
@@ -487,8 +489,10 @@ class _LocalStorePersistentStorageExecutor {
       id?.replaceAll(_illegalPathCharacters, '_');
 
   Future<(String, int)> get storedDatabaseVersion async {
-    final metaData =
-        await _db.collection(metaDataCollection).doc('metaData').get();
+    final metaData = await _db
+        .collection(metaDataCollection)
+        .doc('metaData')
+        .get();
     return ('Localstore', (metaData?['version'] as num?)?.toInt() ?? 0);
   }
 

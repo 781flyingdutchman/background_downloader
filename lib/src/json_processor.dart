@@ -55,15 +55,18 @@ class JsonProcessor {
 
   /// Public API
 
-  Future<Task> decodeTask(String jsonString) async => await _process<Task>((id) => _TaskFromJson(id, jsonString));
+  Future<Task> decodeTask(String jsonString) async =>
+      await _process<Task>((id) => _TaskFromJson(id, jsonString));
 
-  Future<List<DownloadTask>> decodeDownloadTaskList(String jsonString) async => await _process<List<DownloadTask>>(
-      (id) => _DownloadTaskListFromJson(id, jsonString),
-    );
+  Future<List<DownloadTask>> decodeDownloadTaskList(String jsonString) async =>
+      await _process<List<DownloadTask>>(
+        (id) => _DownloadTaskListFromJson(id, jsonString),
+      );
 
-  Future<List<Task>> decodeTaskList(List<dynamic> jsonStrings) async => await _process<List<Task>>(
-      (id) => _TaskListFromListStrings(id, jsonStrings),
-    );
+  Future<List<Task>> decodeTaskList(List<dynamic> jsonStrings) async =>
+      await _process<List<Task>>(
+        (id) => _TaskListFromListStrings(id, jsonStrings),
+      );
 
   Future<(String, String)> encodeTaskAndNotificationConfig(
     Iterable<Task> tasks,
@@ -231,16 +234,14 @@ Future<dynamic> _executeCommand(JsonCommand command) async {
 
     case final _TaskAndNotificationConfigJsonStrings c:
       final tasksJsonString = jsonEncode(c.tasks);
-      final configs =
-          c.tasks
-              .map(
-                (task) =>
-                    BaseDownloader.notificationConfigForTaskUsingConfigSet(
-                      task,
-                      c.notificationConfigs,
-                    ),
-              )
-              .toList();
+      final configs = c.tasks
+          .map(
+            (task) => BaseDownloader.notificationConfigForTaskUsingConfigSet(
+              task,
+              c.notificationConfigs,
+            ),
+          )
+          .toList();
       final notificationConfigsJsonString = jsonEncode(configs);
       return (tasksJsonString, notificationConfigsJsonString);
   }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 
 import 'exceptions.dart';
@@ -71,8 +72,7 @@ class Transfer {
   final StreamController<TaskUpdate> _updatesController =
       StreamController<TaskUpdate>.broadcast();
 
-  Completer<TaskStatusUpdate> _resultCompleter =
-      Completer<TaskStatusUpdate>();
+  Completer<TaskStatusUpdate> _resultCompleter = Completer<TaskStatusUpdate>();
 
   Timer? _stallWatchdogTimer;
   DateTime _lastProgressTime = DateTime.now();
@@ -85,8 +85,8 @@ class Transfer {
     double? initialProgress,
     TaskException? initialException,
     TransferHoldReason initialHoldReason = TransferHoldReason.none,
-  ])  : _task = task,
-        downloader = downloader ?? FileDownloader() {
+  ]) : _task = task,
+       downloader = downloader ?? FileDownloader() {
     statusNotifier.value = initialStatus;
     holdReasonNotifier.value = initialHoldReason;
     if (initialProgress != null &&

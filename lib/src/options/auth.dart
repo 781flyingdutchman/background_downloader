@@ -128,68 +128,59 @@ class Auth {
     this.refreshHeaders = const {},
     this.refreshQueryParams = const {},
     OnAuthCallback? onAuth,
-  }) : _onAuthRawHandle =
-           onAuth != null
-               ? PluginUtilities.getCallbackHandle(onAuth)?.toRawHandle()
-               : null;
+  }) : _onAuthRawHandle = onAuth != null
+           ? PluginUtilities.getCallbackHandle(onAuth)?.toRawHandle()
+           : null;
 
   /// Convert the Auth instance to JSON
   Map<String, dynamic> toJson() => {
-      'accessToken': accessToken,
-      'accessHeaders': accessHeaders,
-      'accessQueryParams': accessQueryParams,
-      'accessTokenExpiryTime': accessTokenExpiryTime?.millisecondsSinceEpoch,
-      'refreshToken': refreshToken,
-      'refreshUrl': refreshUrl,
-      'refreshHeaders': refreshHeaders,
-      'refreshQueryParams': refreshQueryParams,
-      'onAuthRawHandle': _onAuthRawHandle,
-    };
+    'accessToken': accessToken,
+    'accessHeaders': accessHeaders,
+    'accessQueryParams': accessQueryParams,
+    'accessTokenExpiryTime': accessTokenExpiryTime?.millisecondsSinceEpoch,
+    'refreshToken': refreshToken,
+    'refreshUrl': refreshUrl,
+    'refreshHeaders': refreshHeaders,
+    'refreshQueryParams': refreshQueryParams,
+    'onAuthRawHandle': _onAuthRawHandle,
+  };
 
   /// Create an Auth instance from JSON
   Auth.fromJson(Map<String, dynamic> json)
     : accessToken = json['accessToken'],
-      accessHeaders =
-          json['accessHeaders'] != null
-              ? Map<String, String>.from(json['accessHeaders'])
-              : const {},
-      accessQueryParams =
-          json['accessQueryParams'] != null
-              ? Map<String, String>.from(json['accessQueryParams'])
-              : const {},
-      accessTokenExpiryTime =
-          json['accessTokenExpiryTime'] != null
-              ? DateTime.fromMillisecondsSinceEpoch(
-                json['accessTokenExpiryTime'] as int,
-              )
-              : null,
+      accessHeaders = json['accessHeaders'] != null
+          ? Map<String, String>.from(json['accessHeaders'])
+          : const {},
+      accessQueryParams = json['accessQueryParams'] != null
+          ? Map<String, String>.from(json['accessQueryParams'])
+          : const {},
+      accessTokenExpiryTime = json['accessTokenExpiryTime'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(
+              json['accessTokenExpiryTime'] as int,
+            )
+          : null,
       refreshToken = json['refreshToken'],
       refreshUrl = json['refreshUrl'],
-      refreshHeaders =
-          json['refreshHeaders'] != null
-              ? Map<String, String>.from(json['refreshHeaders'])
-              : const {},
-      refreshQueryParams =
-          json['refreshQueryParams'] != null
-              ? Map<String, String>.from(json['refreshQueryParams'])
-              : const {},
+      refreshHeaders = json['refreshHeaders'] != null
+          ? Map<String, String>.from(json['refreshHeaders'])
+          : const {},
+      refreshQueryParams = json['refreshQueryParams'] != null
+          ? Map<String, String>.from(json['refreshQueryParams'])
+          : const {},
       _onAuthRawHandle = json['onAuthRawHandle'] as int?;
 
   /// Returns the [OnAuthCallback] registered with this [Auth], or null
-  OnAuthCallback? get onAuthCallback =>
-      _onAuthRawHandle != null
-          ? PluginUtilities.getCallbackFromHandle(
-                CallbackHandle.fromRawHandle(_onAuthRawHandle!),
-              )
-              as OnAuthCallback
-          : null;
+  OnAuthCallback? get onAuthCallback => _onAuthRawHandle != null
+      ? PluginUtilities.getCallbackFromHandle(
+          CallbackHandle.fromRawHandle(_onAuthRawHandle!),
+        ) as OnAuthCallback
+      : null;
 
   /// Set the [OnAuthCallback]
   set onAuthCallback(OnAuthCallback? onAuth) =>
-      _onAuthRawHandle =
-          onAuth != null
-              ? PluginUtilities.getCallbackHandle(onAuth)?.toRawHandle()
-              : null;
+      _onAuthRawHandle = onAuth != null
+      ? PluginUtilities.getCallbackHandle(onAuth)?.toRawHandle()
+      : null;
 
   /// Returns the Uri for accessing the resource
   ///

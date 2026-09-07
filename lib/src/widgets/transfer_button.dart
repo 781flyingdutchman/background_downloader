@@ -46,50 +46,51 @@ class TransferButton extends StatelessWidget {
         final canPause =
             transfer.task is DownloadTask && transfer.task.allowPause;
         return switch (status) {
-          .running || .enqueued => canPause
-              ? IconButton(
-                  icon: Icon(Icons.pause_circle_outline, size: iconSize),
-                  color: color ?? theme.colorScheme.primary,
-                  padding: padding,
-                  tooltip: 'Pause',
-                  onPressed: () => transfer.pause(),
-                )
-              : IconButton(
-                  icon: Icon(Icons.cancel_outlined, size: iconSize),
-                  color: color ?? theme.colorScheme.error,
-                  padding: padding,
-                  tooltip: 'Cancel',
-                  onPressed: onCancel ?? () => transfer.cancel(),
-                ),
+          .running || .enqueued =>
+            canPause
+                ? IconButton(
+                    icon: Icon(Icons.pause_circle_outline, size: iconSize),
+                    color: color ?? theme.colorScheme.primary,
+                    padding: padding,
+                    tooltip: 'Pause',
+                    onPressed: () => transfer.pause(),
+                  )
+                : IconButton(
+                    icon: Icon(Icons.cancel_outlined, size: iconSize),
+                    color: color ?? theme.colorScheme.error,
+                    padding: padding,
+                    tooltip: 'Cancel',
+                    onPressed: onCancel ?? () => transfer.cancel(),
+                  ),
           .paused || .waitingToRetry => IconButton(
             icon: Icon(Icons.play_circle_outline, size: iconSize),
             color: color ?? Colors.orange,
             padding: padding,
             tooltip: 'Resume',
-          onPressed: () => transfer.resume(),
-        ),
-        .failed || .notFound => IconButton(
-          icon: Icon(Icons.refresh, size: iconSize),
-          color: color ?? theme.colorScheme.error,
-          padding: padding,
-          tooltip: 'Retry',
-          onPressed: () => transfer.resume(),
-        ),
-        .complete => Icon(
-          Icons.check_circle,
-          size: iconSize,
-          color: color ?? Colors.green,
-        ),
-        .canceled => IconButton(
-          icon: Icon(Icons.replay, size: iconSize),
-          color: color ?? theme.colorScheme.outline,
-          padding: padding,
-          tooltip: 'Restart',
-          onPressed: () => transfer.resume(),
-        ),
-      };
-    },
-  );
+            onPressed: () => transfer.resume(),
+          ),
+          .failed || .notFound => IconButton(
+            icon: Icon(Icons.refresh, size: iconSize),
+            color: color ?? theme.colorScheme.error,
+            padding: padding,
+            tooltip: 'Retry',
+            onPressed: () => transfer.resume(),
+          ),
+          .complete => Icon(
+            Icons.check_circle,
+            size: iconSize,
+            color: color ?? Colors.green,
+          ),
+          .canceled => IconButton(
+            icon: Icon(Icons.replay, size: iconSize),
+            color: color ?? theme.colorScheme.outline,
+            padding: padding,
+            tooltip: 'Restart',
+            onPressed: () => transfer.resume(),
+          ),
+        };
+      },
+    );
   }
 }
 

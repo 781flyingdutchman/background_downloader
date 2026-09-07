@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' hide equals;
 import 'package:path_provider/path_provider.dart';
+
 import 'test_utils.dart';
 
 var statusCallbackCounter = 0;
@@ -255,36 +256,38 @@ void main() {
       },
     );
 
-    testWidgets('no content length', timeout: const Timeout(Duration(minutes: 2)), (
-      widgetTester,
-    ) async {
-      task = task.copyWith(url: 'http://$localServerHostPort/');
-      if (Platform.isIOS) {
-        // different from a normal download task, enqueue fails immediately
-        expect(await FileDownloader().enqueue(task), isFalse);
-      }
-      // as a result, the task fails instead of .notFound, and no responseBody is available
-      final result = await FileDownloader().download(task);
-      expect(result.status, equals(TaskStatus.failed));
-      if (Platform.isIOS) {
-        expect(
-          result.exception?.description.startsWith('Could not enqueue task'),
-          isTrue,
-        );
-      }
-      if (Platform.isAndroid ||
-          Platform.isLinux ||
-          Platform.isMacOS ||
-          Platform.isWindows) {
-        expect(
-          result.exception?.description.endsWith(
-            'Server does not provide content length - cannot chunk download. If you know the length, set Range or Known-Content-Length header',
-          ),
-          isTrue,
-        );
-      }
-      expect(result.responseBody, isNull);
-    });
+    testWidgets(
+      'no content length',
+      timeout: const Timeout(Duration(minutes: 2)),
+      (widgetTester) async {
+        task = task.copyWith(url: 'http://$localServerHostPort/');
+        if (Platform.isIOS) {
+          // different from a normal download task, enqueue fails immediately
+          expect(await FileDownloader().enqueue(task), isFalse);
+        }
+        // as a result, the task fails instead of .notFound, and no responseBody is available
+        final result = await FileDownloader().download(task);
+        expect(result.status, equals(TaskStatus.failed));
+        if (Platform.isIOS) {
+          expect(
+            result.exception?.description.startsWith('Could not enqueue task'),
+            isTrue,
+          );
+        }
+        if (Platform.isAndroid ||
+            Platform.isLinux ||
+            Platform.isMacOS ||
+            Platform.isWindows) {
+          expect(
+            result.exception?.description.endsWith(
+              'Server does not provide content length - cannot chunk download. If you know the length, set Range or Known-Content-Length header',
+            ),
+            isTrue,
+          );
+        }
+        expect(result.responseBody, isNull);
+      },
+    );
 
     testWidgets('not found', timeout: const Timeout(Duration(minutes: 2)), (
       widgetTester,

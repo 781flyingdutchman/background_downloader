@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -21,10 +22,12 @@ void main() {
     });
 
     test('No change if token not expired', () async {
-      final mockClient = MockClient((request) async => http.Response(
+      final mockClient = MockClient(
+        (request) async => http.Response(
           jsonEncode({'access_token': 'newAccessToken', 'expires_in': 3600}),
           200,
-        ));
+        ),
+      );
       auth.accessTokenExpiryTime = null; // never expires
       auth.accessQueryParams = {'accessToken': '{accessToken}'};
       final Uri uri = await auth.getAccessUri(
@@ -51,14 +54,16 @@ void main() {
     test(
       'Token refresh updates accessToken and accessTokenExpiryTime',
       () async {
-        final mockClient = MockClient((request) async => http.Response(
+        final mockClient = MockClient(
+          (request) async => http.Response(
             jsonEncode({
               'access_token': 'newAccessToken',
               'expires_in': 3600,
               'refresh_token': 'newRefreshToken',
             }),
             200,
-          ));
+          ),
+        );
         final (updatedAccessToken, updatedRefreshToken) = await auth
             .refreshAccessToken(httpClient: mockClient);
         // Check if tokens and expiry time are updated
@@ -71,10 +76,12 @@ void main() {
     );
 
     test('getAccessUri refreshes token if expired', () async {
-      final mockClient = MockClient((request) async => http.Response(
+      final mockClient = MockClient(
+        (request) async => http.Response(
           jsonEncode({'access_token': 'newAccessToken', 'expires_in': 3600}),
           200,
-        ));
+        ),
+      );
       auth.accessQueryParams = {'accessToken': '{accessToken}'};
       final Uri uri = await auth.getAccessUri(
         url: 'https://example.com/resource',

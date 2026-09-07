@@ -134,7 +134,9 @@ class _MyAppState extends State<MyApp> {
       if (record.status.isNotFinalState) {
         log.info('Found in-progress task on startup: ${record.taskId}');
         // getOrStart reconnects to the existing active task without duplicating it
-        final transfer = await FileDownloader().transfers.getOrStart(record.task);
+        final transfer = await FileDownloader().transfers.getOrStart(
+          record.task,
+        );
 
         // If this matches our primary sample download, bind it to mainTransfer
         if (record.task.filename == 'zipfile.zip') {
@@ -162,10 +164,9 @@ class _MyAppState extends State<MyApp> {
   ///   requirements and iOS high priority, and enables `allowPause`.
   /// - `TransferHint.largeFile`: Ensures pause capability and handles long downloads.
   DownloadTask _createMainDownloadTask() => DownloadTask(
-    url:
-        downloadWithError
-            ? 'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/get_current_app_data' // returns 403 status code
-            : 'https://storage.googleapis.com/approachcharts/test/5MB-test.ZIP',
+    url: downloadWithError
+        ? 'https://avmaps-dot-bbflightserver-hrd.appspot.com/public/get_current_app_data' // returns 403 status code
+        : 'https://storage.googleapis.com/approachcharts/test/5MB-test.ZIP',
     filename: 'zipfile.zip',
     directory: 'my/directory',
     baseDirectory: BaseDirectory.applicationDocuments,
@@ -189,10 +190,9 @@ class _MyAppState extends State<MyApp> {
     await getPermission(PermissionType.notifications);
     final task = _createMainDownloadTask();
 
-    final transfer =
-        useGetOrStart
-            ? await FileDownloader().transfers.getOrStart(task)
-            : await FileDownloader().transfers.start(task);
+    final transfer = useGetOrStart
+        ? await FileDownloader().transfers.getOrStart(task)
+        : await FileDownloader().transfers.start(task);
 
     if (mounted) {
       setState(() {
@@ -220,8 +220,7 @@ class _MyAppState extends State<MyApp> {
     try {
       await getPermission(PermissionType.notifications);
       final task = DownloadTask(
-        url:
-            'https://i2.wp.com/www.skiptomylou.org/wp-content/uploads/2019/06/dog-drawing.jpg',
+        url: 'https://i2.wp.com/www.skiptomylou.org/wp-content/uploads/2019/06/dog-drawing.jpg',
         baseDirectory: BaseDirectory.applicationSupport,
         filename: 'dog.jpg',
         displayName: 'Dog Drawing',
@@ -354,8 +353,7 @@ class _MyAppState extends State<MyApp> {
     }
     log.fine('Uri = $uri');
     final task = UriDownloadTask(
-      url:
-          'https://i2.wp.com/www.skiptomylou.org/wp-content/uploads/2019/06/dog-drawing.jpg',
+      url: 'https://i2.wp.com/www.skiptomylou.org/wp-content/uploads/2019/06/dog-drawing.jpg',
       directoryUri: uri,
       filename: '?',
       displayName: 'URI Downloaded Dog',
@@ -576,10 +574,8 @@ class _MyAppState extends State<MyApp> {
                             TextButton.icon(
                               icon: const Icon(Icons.refresh, size: 16),
                               label: const Text('New Transfer (start)'),
-                              onPressed:
-                                  () => processMainTransfer(
-                                    useGetOrStart: false,
-                                  ),
+                              onPressed: () =>
+                                  processMainTransfer(useGetOrStart: false),
                             ),
                           ],
                         ),
@@ -589,21 +585,15 @@ class _MyAppState extends State<MyApp> {
                             Expanded(
                               child: ElevatedButton.icon(
                                 icon: const Icon(Icons.download),
-                                label: const Text(
-                                  'Start (getOrStart)',
-                                ),
-                                onPressed:
-                                  () => processMainTransfer(
-                                    useGetOrStart: true,
-                                  ),
+                                label: const Text('Start (getOrStart)'),
+                                onPressed: () =>
+                                    processMainTransfer(useGetOrStart: true),
                               ),
                             ),
                             const SizedBox(width: 8),
                             OutlinedButton(
-                              onPressed:
-                                  () => processMainTransfer(
-                                    useGetOrStart: false,
-                                  ),
+                              onPressed: () =>
+                                  processMainTransfer(useGetOrStart: false),
                               child: const Text('start'),
                             ),
                           ],
@@ -657,18 +647,18 @@ class _MyAppState extends State<MyApp> {
                           'Uses transfers.start and clean await transfer.file',
                         ),
                         trailing: ElevatedButton(
-                          onPressed:
-                              loadAndOpenInProgress ? null : processLoadAndOpen,
-                          child:
-                              loadAndOpenInProgress
-                                  ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                  : const Text('Run'),
+                          onPressed: loadAndOpenInProgress
+                              ? null
+                              : processLoadAndOpen,
+                          child: loadAndOpenInProgress
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text('Run'),
                         ),
                       ),
                       const Divider(),
@@ -686,18 +676,18 @@ class _MyAppState extends State<MyApp> {
                               : 'Uses transfers.startAll with aggregate progress',
                         ),
                         trailing: ElevatedButton(
-                          onPressed:
-                              loadABunchInProgress ? null : processLoadABunch,
-                          child:
-                              loadABunchInProgress
-                                  ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                  : const Text('Start 5'),
+                          onPressed: loadABunchInProgress
+                              ? null
+                              : processLoadABunch,
+                          child: loadABunchInProgress
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text('Start 5'),
                         ),
                       ),
 
@@ -737,42 +727,40 @@ class _MyAppState extends State<MyApp> {
                     children: [
                       ValueListenableBuilder<List<Transfer>>(
                         valueListenable: FileDownloader().transfers.notifier,
-                        builder:
-                            (context, transfers, _) => Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        builder: (context, transfers, _) => Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
                               children: [
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.list_alt,
-                                      color: theme.colorScheme.primary,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Tracked Transfers (${transfers.length})',
-                                      style: theme.textTheme.titleMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                    ),
-                                  ],
+                                Icon(
+                                  Icons.list_alt,
+                                  color: theme.colorScheme.primary,
                                 ),
-                                if (transfers.isNotEmpty)
-                                  TextButton(
-                                    onPressed: () async {
-                                      await FileDownloader().transfers.clear(
-                                        cancelActive: true,
-                                      );
-                                      await FileDownloader().reset();
-                                      setState(() {
-                                        mainTransfer = null;
-                                        batchProgressMessage = '';
-                                      });
-                                    },
-                                    child: const Text('Clear All'),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Tracked Transfers (${transfers.length})',
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
                                   ),
+                                ),
                               ],
                             ),
+                            if (transfers.isNotEmpty)
+                              TextButton(
+                                onPressed: () async {
+                                  await FileDownloader().transfers.clear(
+                                    cancelActive: true,
+                                  );
+                                  await FileDownloader().reset();
+                                  setState(() {
+                                    mainTransfer = null;
+                                    batchProgressMessage = '';
+                                  });
+                                },
+                                child: const Text('Clear All'),
+                              ),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -806,8 +794,8 @@ class _MyAppState extends State<MyApp> {
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
                             itemCount: transfers.length,
-                            separatorBuilder:
-                                (context, index) => const Divider(height: 1),
+                            separatorBuilder: (context, index) =>
+                                const Divider(height: 1),
                             itemBuilder: (context, index) {
                               final transfer = transfers[index];
                               return TransferListTile(
@@ -877,4 +865,3 @@ class _RequireWiFiChoiceState extends State<RequireWiFiChoice> {
     },
   );
 }
-

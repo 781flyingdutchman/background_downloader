@@ -27,8 +27,9 @@ var lastValidNetworkSpeed = -1.0;
 var lastValidTimeRemaining = const Duration(seconds: -1);
 TaskException? lastException;
 
-final localServerHostPort =
-    Platform.isAndroid ? '10.0.2.2:8080' : '127.0.0.1:8080';
+final localServerHostPort = Platform.isAndroid
+    ? '10.0.2.2:8080'
+    : '127.0.0.1:8080';
 
 final urlWithoutContentLength =
     'http://$localServerHostPort/files/1MB-test.bin?no_content_length=true';

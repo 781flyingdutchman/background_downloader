@@ -112,10 +112,9 @@ Future<DownloadTask> taskWithSuggestedFilename(
           extensionRegEx.firstMatch(newTask.filename)?.group(0) ?? '';
       final match = sequenceRegEx.firstMatch(newTask.filename);
       final newSequence = int.parse(match?.group(1) ?? "0") + 1;
-      final newFilename =
-          match == null
-              ? '${path.basenameWithoutExtension(newTask.filename)} ($newSequence)$extension'
-              : '${newTask.filename.substring(0, match.start - 1)} ($newSequence)$extension';
+      final newFilename = match == null
+          ? '${path.basenameWithoutExtension(newTask.filename)} ($newSequence)$extension'
+          : '${newTask.filename.substring(0, match.start - 1)} ($newSequence)$extension';
       newTask = newTask.copyWith(filename: newFilename);
       filePath = await newTask.filePath();
       exists = await File(filePath).exists();
@@ -125,12 +124,11 @@ Future<DownloadTask> taskWithSuggestedFilename(
 
   // start of main function
   try {
-    final disposition =
-        responseHeaders.entries
-            .firstWhere(
-              (element) => element.key.toLowerCase() == 'content-disposition',
-            )
-            .value;
+    final disposition = responseHeaders.entries
+        .firstWhere(
+          (element) => element.key.toLowerCase() == 'content-disposition',
+        )
+        .value;
     // Try filename*=UTF-8'language'"encodedFilename"
     final encodedFilenameRegEx = RegExp(
       'filename\\*=\\s*([^\']+)\'([^\']*)\'"?([^"]+)"?',
@@ -141,10 +139,9 @@ Future<DownloadTask> taskWithSuggestedFilename(
         match.group(1)?.isNotEmpty == true &&
         match.group(3)?.isNotEmpty == true) {
       try {
-        final suggestedFilename =
-            match.group(1)?.toUpperCase() == 'UTF-8'
-                ? Uri.decodeComponent(match.group(3)!)
-                : match.group(3)!;
+        final suggestedFilename = match.group(1)?.toUpperCase() == 'UTF-8'
+            ? Uri.decodeComponent(match.group(3)!)
+            : match.group(3)!;
         return uniqueFilename(
           task.copyWith(filename: suggestedFilename),
           unique,

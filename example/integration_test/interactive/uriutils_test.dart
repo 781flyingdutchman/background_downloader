@@ -154,8 +154,8 @@ void main() {
     testWidgets('createDirectory with single level', (
       WidgetTester tester,
     ) async {
-      final testDirUri =
-          await uriUtils.pickDirectory(); // must be created from picker
+      final testDirUri = await uriUtils
+          .pickDirectory(); // must be created from picker
       final newDirUri = await uriUtils.createDirectory(testDirUri!, 'testDir');
       expect(newDirUri, isNotNull);
       expect(newDirUri.toString(), contains('testDir'));
@@ -165,8 +165,8 @@ void main() {
     testWidgets('createDirectory with multiple levels', (
       WidgetTester tester,
     ) async {
-      final testDirUri =
-          await uriUtils.pickDirectory(); // must be created from picker
+      final testDirUri = await uriUtils
+          .pickDirectory(); // must be created from picker
       final newDirUri = await uriUtils.createDirectory(
         testDirUri!,
         'testDir/level2/level3',
@@ -180,8 +180,8 @@ void main() {
     testWidgets('createDirectory with leading/trailing separators', (
       WidgetTester tester,
     ) async {
-      final testDirUri =
-          await uriUtils.pickDirectory(); // must be created from picker
+      final testDirUri = await uriUtils
+          .pickDirectory(); // must be created from picker
       final newDirUri = await uriUtils.createDirectory(
         testDirUri!,
         '/testDir/level2/',

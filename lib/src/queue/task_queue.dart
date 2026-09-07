@@ -309,10 +309,9 @@ class MemoryTaskQueue implements TaskQueue {
   int get numWaiting => waiting.length;
 
   /// Number of tasks waiting to be enqueued in [group]
-  int numWaitingWithGroup(String group) =>
-      waiting.unorderedElements
-          .where((element) => element.group == group)
-          .length;
+  int numWaitingWithGroup(String group) => waiting.unorderedElements
+      .where((element) => element.group == group)
+      .length;
 
   /// Stream with [Task]s that failed to enqueue correctly
   Stream<Task> get enqueueErrors => _enqueueErrorsStreamController.stream;

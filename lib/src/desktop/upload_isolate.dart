@@ -21,10 +21,9 @@ const lineFeed = '\r\n';
 /// Sends updates via the [sendPort] and can be commanded to cancel via
 /// the [messagesToIsolate] queue
 Future<void> doUploadTask(UploadTask task, SendPort sendPort) async {
-  final (updatedTask, resultStatus) =
-      task.post == 'binary'
-          ? await binaryUpload(task, sendPort)
-          : await multipartUpload(task, sendPort);
+  final (updatedTask, resultStatus) = task.post == 'binary'
+      ? await binaryUpload(task, sendPort)
+      : await multipartUpload(task, sendPort);
   processStatusUpdateInIsolate(updatedTask, resultStatus, sendPort);
 }
 
@@ -81,9 +80,8 @@ Future<(Task, TaskStatus)> binaryUpload(
       }
       task.headers.remove('Range'); // not passed on to server
     }
-    if (task case UriUploadTask(
-      fileUri: final fileUri,
-    ) when fileUri != null && task.filename.isEmpty) {
+    if (task case UriUploadTask(fileUri: final fileUri)
+        when fileUri != null && task.filename.isEmpty) {
       // for UriTasks without a filename, derive it from the Uri
       task = task.copyWith(filename: fileUri.pathSegments.last);
     }
@@ -114,9 +112,9 @@ Future<(Task, TaskStatus)> binaryUpload(
       // request completed, so send status update and finish
       resultStatus =
           transferBytesResult == TaskStatus.complete &&
-                  !okResponses.contains(response.statusCode)
-              ? TaskStatus.failed
-              : transferBytesResult;
+              !okResponses.contains(response.statusCode)
+          ? TaskStatus.failed
+          : transferBytesResult;
       responseBody = await responseContent(response);
       responseHeaders = response.headers;
       responseStatusCode = response.statusCode;
@@ -185,13 +183,12 @@ Future<(Task, TaskStatus)> multipartUpload(
   // and file length, so that we can calculate total size of upload
   const separator = '$lineFeed--$boundary$lineFeed'; // between files
   const terminator = '$lineFeed--$boundary--$lineFeed'; // after last file
-  final filesData =
-      (task is MultiUploadTask)
-          ? await task
-              .extractFilesData() // MultiUpload case
-          : [
-            (task.fileField, await task.filePath(), task.mimeType),
-          ]; // one file Upload case
+  final filesData = (task is MultiUploadTask)
+      ? await task
+            .extractFilesData() // MultiUpload case
+      : [
+          (task.fileField, await task.filePath(), task.mimeType),
+        ]; // one file Upload case
   final contentDispositionStrings = <String>[];
   final contentTypeStrings = <String>[];
   final fileLengths = <int>[];
@@ -208,9 +205,8 @@ Future<(Task, TaskStatus)> multipartUpload(
     final derivedFilename = p.basename(file.path);
     if (filesData.length == 1) {
       // only for single file uploads do we set the task's filename property
-      if (task case UriUploadTask(
-        fileUri: final fileUri,
-      ) when fileUri != null) {
+      if (task case UriUploadTask(fileUri: final fileUri)
+          when fileUri != null) {
         task = task.copyWith(filename: fileUri.pathSegments.last);
       } else {
         task = task.copyWith(filename: derivedFilename);
@@ -260,9 +256,9 @@ Future<(Task, TaskStatus)> multipartUpload(
       // request completed, so send status update and finish
       resultStatus =
           transferBytesResult == TaskStatus.complete &&
-                  !okResponses.contains(response.statusCode)
-              ? TaskStatus.failed
-              : transferBytesResult;
+              !okResponses.contains(response.statusCode)
+          ? TaskStatus.failed
+          : transferBytesResult;
       responseBody = await responseContent(response);
       responseHeaders = response.headers;
       responseStatusCode = response.statusCode;

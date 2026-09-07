@@ -159,12 +159,11 @@ class _DownloadProgressIndicatorState extends State<DownloadProgressIndicator> {
         isCollapsed = true; // only resets when all downloads finish
       }
     }
-    final itemsToShow =
-        isExpanded
-            ? min(numActive, widget.maxExpandable)
-            : isCollapsed
-            ? min(1, numActive)
-            : numActive;
+    final itemsToShow = isExpanded
+        ? min(numActive, widget.maxExpandable)
+        : isCollapsed
+        ? min(1, numActive)
+        : numActive;
     return AnimatedSize(
       duration: const Duration(milliseconds: 200),
       alignment: Alignment.bottomCenter,
@@ -173,22 +172,22 @@ class _DownloadProgressIndicatorState extends State<DownloadProgressIndicator> {
         1 =>
           isCollapsed
               ? _CollapsedDownloadProgress(
-                finishedTasks.length,
-                totalTasks.length,
-                widget.collapsedMessage,
-                widget.height,
-                widget.backgroundColor,
-              )
+                  finishedTasks.length,
+                  totalTasks.length,
+                  widget.collapsedMessage,
+                  widget.height,
+                  widget.backgroundColor,
+                )
               : _DownloadProgressItem(
-                activeTasks.first,
-                inProgress[activeTasks.first]!.$1,
-                widget.message,
-                widget.showPauseButton,
-                widget.showCancelButton,
-                widget.height,
-                widget.backgroundColor,
-                pausedTasks,
-              ),
+                  activeTasks.first,
+                  inProgress[activeTasks.first]!.$1,
+                  widget.message,
+                  widget.showPauseButton,
+                  widget.showCancelButton,
+                  widget.height,
+                  widget.backgroundColor,
+                  pausedTasks,
+                ),
         _ => _ExpandedDownloadProgress(
           activeTasks.take(widget.maxExpandable).toList(growable: false),
           widget.message,
@@ -348,48 +347,51 @@ class _ExpandedDownloadProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        border: Border(top: BorderSide(color: Theme.of(context).dividerColor)),
-      ),
-      child: Table(
-        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-        columnWidths: const <int, TableColumnWidth>{
-          0: IntrinsicColumnWidth(),
-          1: FlexColumnWidth(),
-        },
-        children:
-            tasks.map((task) => TableRow(
-                decoration: BoxDecoration(
-                  border: Border(
-                    top: BorderSide(color: Theme.of(context).dividerColor),
-                  ),
+    decoration: BoxDecoration(
+      color: backgroundColor,
+      border: Border(top: BorderSide(color: Theme.of(context).dividerColor)),
+    ),
+    child: Table(
+      defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+      columnWidths: const <int, TableColumnWidth>{
+        0: IntrinsicColumnWidth(),
+        1: FlexColumnWidth(),
+      },
+      children: tasks
+          .map(
+            (task) => TableRow(
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: Theme.of(context).dividerColor),
                 ),
-                children: [
-                  SizedBox(
-                    height: height,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 8, right: 8),
-                        child: Text(
-                          message
-                              .replaceAll(
-                                _fileNameRegEx,
-                                unpack(task.filename).filename ?? task.filename,
-                              )
-                              .replaceAll(_metadataRegEx, task.metaData),
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
+              ),
+              children: [
+                SizedBox(
+                  height: height,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 8, right: 8),
+                      child: Text(
+                        message
+                            .replaceAll(
+                              _fileNameRegEx,
+                              unpack(task.filename).filename ?? task.filename,
+                            )
+                            .replaceAll(_metadataRegEx, task.metaData),
+                        style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: LinearProgressIndicator(value: inProgress[task]!.$1),
-                  ),
-                ],
-              )).toList(),
-      ),
-    );
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: LinearProgressIndicator(value: inProgress[task]!.$1),
+                ),
+              ],
+            ),
+          )
+          .toList(),
+    ),
+  );
 }

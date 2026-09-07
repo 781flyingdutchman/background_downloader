@@ -55,14 +55,13 @@ void main() {
         ];
         FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
         final enqueueResult = await FileDownloader().enqueueAll(tasks);
-        final expectedResult =
-            Platform.isAndroid
-                ? [true, false, false]
-                : Platform.isIOS
-                // iOS does not catch lack of host until start of download
-                ? [true, false, true]
-                // Desktop does not catch any of these until download
-                : [true, true, true];
+        final expectedResult = Platform.isAndroid
+            ? [true, false, false]
+            : Platform.isIOS
+            // iOS does not catch lack of host until start of download
+            ? [true, false, true]
+            // Desktop does not catch any of these until download
+            : [true, true, true];
         expect(enqueueResult, equals(expectedResult));
       },
     );
@@ -71,7 +70,9 @@ void main() {
       'Enqueue Performance Comparison',
       timeout: const Timeout(Duration(minutes: 3)),
       (widgetTester) async {
-        final numTasks = Platform.isAndroid ? 100 : 1000; // Increase for more significant results
+        final numTasks = Platform.isAndroid
+            ? 100
+            : 1000; // Increase for more significant results
         final tasks = <Task>[];
         final tasks2 = <Task>[];
         for (var n = 0; n < numTasks; n++) {

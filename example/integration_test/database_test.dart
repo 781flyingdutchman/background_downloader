@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
+
 import 'test_utils.dart';
 
 const def = 'default';
@@ -291,7 +292,10 @@ void main() {
       attempts++;
     }
     final records = await database.allRecords();
-    expect(records.length, anyOf(15, 16)); // 5 kept from the batch when cleanup triggered
+    expect(
+      records.length,
+      anyOf(15, 16),
+    ); // 5 kept from the batch when cleanup triggered
     await database.deleteAllRecords();
   });
 }

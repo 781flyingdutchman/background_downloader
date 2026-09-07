@@ -38,14 +38,13 @@ base class PermissionsService implements Permissions {
 
   /// Creates a [PermissionsService] appropriate for this platform
   factory PermissionsService.instance() => switch (defaultTargetPlatform) {
-      .android => AndroidPermissionsService(),
-      .iOS => IOSPermissionsService(),
-      .linux ||
-      .macOS ||
-      .windows => PermissionsService(),
-      _ =>
-        throw ArgumentError('Platform $defaultTargetPlatform is not supported'),
-    };
+    .android => AndroidPermissionsService(),
+    .iOS => IOSPermissionsService(),
+    .linux || .macOS || .windows => PermissionsService(),
+    _ => throw ArgumentError(
+      'Platform $defaultTargetPlatform is not supported',
+    ),
+  };
 
   @override
   Future<PermissionStatus> request(PermissionType permissionType) =>

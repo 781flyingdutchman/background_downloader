@@ -641,7 +641,9 @@ void main() {
             globalConfig: (Config.requestTimeout, const Duration(seconds: 2)),
           );
 
-          FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
+          FileDownloader().registerCallbacks(
+            taskStatusCallback: statusCallback,
+          );
           // Test endpoint /delay/10 delays for 10 seconds before sending headers
           final delayUrl = 'http://$localServerHostPort/delay/10';
           final delayTask = DownloadTask(
@@ -678,4 +680,3 @@ void main() {
     );
   });
 }
-

@@ -8,7 +8,8 @@ Future<Task?> onTaskStartFunction(Task original) async => original;
 Future<void> onTaskFinishedCallback(TaskStatusUpdate statusUpdate) async {}
 
 @pragma("vm:entry-point")
-Future<TaskStatusUpdate?> beforeTaskStartCallback(Task task) async => TaskStatusUpdate(task, TaskStatus.enqueued);
+Future<TaskStatusUpdate?> beforeTaskStartCallback(Task task) async =>
+    TaskStatusUpdate(task, TaskStatus.enqueued);
 
 void main() {
   test('onTaskStartCallback', () async {

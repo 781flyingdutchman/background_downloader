@@ -44,8 +44,9 @@ final class CollectionRef implements CollectionRefImpl {
   }
 
   static String _buildPath(String? parentPath, String path, String? docId) {
-    final docPath =
-        ((docId != null && parentPath != null) ? '$docId.collection' : '');
+    final docPath = ((docId != null && parentPath != null)
+        ? '$docId.collection'
+        : '');
     final pathSep = p.separator;
     return '${parentPath ?? ''}$docPath$pathSep$path$pathSep';
   }
@@ -56,7 +57,8 @@ final class CollectionRef implements CollectionRefImpl {
   Stream<Map<String, dynamic>> get stream => _utils.stream(path, _conditions);
 
   @override
-  Future<Map<String, dynamic>?> get() async => await _utils.get(path, true, _conditions);
+  Future<Map<String, dynamic>?> get() async =>
+      await _utils.get(path, true, _conditions);
 
   @override
   DocumentRef doc([String? id]) {

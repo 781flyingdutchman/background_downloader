@@ -31,17 +31,14 @@ void main() {
       },
     );
 
-    test(
-      'unpack should return original string and null uri for simple filename string',
-      () {
-        const invalidPackedString = 'This is not a packed string';
+    test('unpack should return original string and null uri for simple filename string', () {
+      const invalidPackedString = 'This is not a packed string';
 
-        final (:filename, :uri) = unpack(invalidPackedString);
+      final (:filename, :uri) = unpack(invalidPackedString);
 
-        expect(filename, invalidPackedString);
-        expect(uri, isNull);
-      },
-    );
+      expect(filename, invalidPackedString);
+      expect(uri, isNull);
+    });
 
     test('unpack should return null and a uri for simple uri string', () {
       const uriString = 'https://www.example.com/path/to/resource';
@@ -79,17 +76,14 @@ void main() {
       expect(resultUri, isNull);
     });
 
-    test(
-      'uriFromStringValue should return null for a packed string with invalid Uri',
-      () {
-        const filename = 'myFile.txt';
-        const invalidUri = 'invalid';
-        const packedString = ':::$filename::::::$invalidUri:::';
+    test('uriFromStringValue should return null for a packed string with invalid Uri', () {
+      const filename = 'myFile.txt';
+      const invalidUri = 'invalid';
+      const packedString = ':::$filename::::::$invalidUri:::';
 
-        final resultUri = uriFromStringValue(packedString);
+      final resultUri = uriFromStringValue(packedString);
 
-        expect(resultUri, isNull);
-      },
-    );
+      expect(resultUri, isNull);
+    });
   });
 }

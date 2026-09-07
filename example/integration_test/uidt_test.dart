@@ -160,51 +160,56 @@ void main() {
       },
     );
 
-    testWidgets('Upload with cancel', timeout: const Timeout(Duration(minutes: 2)), (
-      tester,
-    ) async {
-      final isDesktop =
-          Platform.isMacOS || Platform.isWindows || Platform.isLinux;
-      // On desktop, local loopback is extremely fast, so multipart uploads complete instantly
-      // without triggering enough progress updates. We use a 1MB binary upload to the
-      // throttled '/upload_binary' endpoint to ensure the upload is slow enough to cancel.
-      final docDir = await getApplicationDocumentsDirectory();
-      final bigFile = File(join(docDir.path, 'big_upload_file.bin'));
-      final fileSize = isDesktop ? 1 * 1024 * 1024 : 25 * 1024 * 1024;
-      await bigFile.writeAsBytes(Uint8List(fileSize));
+    testWidgets(
+      'Upload with cancel',
+      timeout: const Timeout(Duration(minutes: 2)),
+      (tester) async {
+        final isDesktop =
+            Platform.isMacOS || Platform.isWindows || Platform.isLinux;
+        // On desktop, local loopback is extremely fast, so multipart uploads complete instantly
+        // without triggering enough progress updates. We use a 1MB binary upload to the
+        // throttled '/upload_binary' endpoint to ensure the upload is slow enough to cancel.
+        final docDir = await getApplicationDocumentsDirectory();
+        final bigFile = File(join(docDir.path, 'big_upload_file.bin'));
+        final fileSize = isDesktop ? 1 * 1024 * 1024 : 25 * 1024 * 1024;
+        await bigFile.writeAsBytes(Uint8List(fileSize));
 
-      final task = UploadTask(
-        url: isDesktop ? uploadBinaryTestUrl : uploadTestUrl,
-        filename: 'big_upload_file.bin',
-        post: isDesktop ? 'binary' : null,
-        updates: Updates.statusAndProgress,
-        group: 'uploadTest',
-        priority: 0,
-      );
+        final task = UploadTask(
+          url: isDesktop ? uploadBinaryTestUrl : uploadTestUrl,
+          filename: 'big_upload_file.bin',
+          post: isDesktop ? 'binary' : null,
+          updates: Updates.statusAndProgress,
+          group: 'uploadTest',
+          priority: 0,
+        );
 
-      final Completer<void> runningCompleter = Completer();
-      final Completer<void> canceledCompleter = Completer();
-      final Completer<void> progressCompleter = Completer();
+        final Completer<void> runningCompleter = Completer();
+        final Completer<void> canceledCompleter = Completer();
+        final Completer<void> progressCompleter = Completer();
 
-      listenToTask(
-        task,
-        statusCompleters: {
-          TaskStatus.running: runningCompleter,
-          TaskStatus.canceled: canceledCompleter,
-        },
-        progressCompleter: progressCompleter,
-        progressThreshold: 0.01,
-      );
+        listenToTask(
+          task,
+          statusCompleters: {
+            TaskStatus.running: runningCompleter,
+            TaskStatus.canceled: canceledCompleter,
+          },
+          progressCompleter: progressCompleter,
+          progressThreshold: 0.01,
+        );
 
-      expect(await FileDownloader().enqueue(task), isTrue);
+        expect(await FileDownloader().enqueue(task), isTrue);
 
-      await runningCompleter.future;
-      await progressCompleter.future; // Ensure we made some progress
+        await runningCompleter.future;
+        await progressCompleter.future; // Ensure we made some progress
 
-      expect(await FileDownloader().cancelTasksWithIds([task.taskId]), isTrue);
-      await canceledCompleter.future;
-      await bigFile.delete();
-    });
+        expect(
+          await FileDownloader().cancelTasksWithIds([task.taskId]),
+          isTrue,
+        );
+        await canceledCompleter.future;
+        await bigFile.delete();
+      },
+    );
   });
 
   group('UIDT Parallel Download Tests', () {
@@ -370,10 +375,12 @@ void listenToTask(
 }) {
   listenToTasks(
     [task],
-    statusCompleters:
-        statusCompleters != null ? {task: statusCompleters} : null,
-    progressCompleters:
-        progressCompleter != null ? {task: progressCompleter} : null,
+    statusCompleters: statusCompleters != null
+        ? {task: statusCompleters}
+        : null,
+    progressCompleters: progressCompleter != null
+        ? {task: progressCompleter}
+        : null,
     progressThreshold: progressThreshold,
     callback: callback,
   );

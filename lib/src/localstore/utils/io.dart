@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+
 import 'package:path/path.dart' as p;
 
 import '../localstore.dart';
 import 'utils_impl.dart';
+
 import 'package:logging/logging.dart';
 
 final _log = Logger('Localstore');
@@ -109,7 +111,8 @@ final class Utils implements UtilsImpl {
   }
 
   @override
-  Future<dynamic>? set(Map<String, dynamic> data, String path) => _writeFile(data, path);
+  Future<dynamic>? set(Map<String, dynamic> data, String path) =>
+      _writeFile(data, path);
 
   @override
   Future delete(String path) async {
@@ -138,10 +141,9 @@ final class Utils implements UtilsImpl {
     final dbDir = await Localstore.instance.databaseDirectory;
     for (final e in entries) {
       final relativePath = p.relative(e.path, from: dbDir.path);
-      final path =
-          Platform.isWindows
-              ? relativePath.replaceAll(p.separator, '/')
-              : relativePath;
+      final path = Platform.isWindows
+          ? relativePath.replaceAll(p.separator, '/')
+          : relativePath;
 
       await _synchronized(path, () async {
         final file = await _getFile(path);
@@ -188,10 +190,9 @@ final class Utils implements UtilsImpl {
       for (final e in entries) {
         if (e is! File) continue;
         final relativePath = p.relative(e.path, from: dbDir.path);
-        final filePath =
-            Platform.isWindows
-                ? relativePath.replaceAll(p.separator, '/')
-                : relativePath;
+        final filePath = Platform.isWindows
+            ? relativePath.replaceAll(p.separator, '/')
+            : relativePath;
 
         // We use synchronized reading
         await _synchronized(filePath, () async {
@@ -252,34 +253,35 @@ final class Utils implements UtilsImpl {
     return file;
   }
 
-  Future _writeFile(Map<String, dynamic> data, String path) => _synchronized(path, () async {
-      final serialized = json.encode(data);
-      final buffer = utf8.encode(serialized);
-      try {
-        final file = await _getFile(path);
-        if (file == null) return;
-        final randomAccessFile = await file.open(mode: FileMode.append);
+  Future _writeFile(Map<String, dynamic> data, String path) =>
+      _synchronized(path, () async {
+        final serialized = json.encode(data);
+        final buffer = utf8.encode(serialized);
         try {
-          await randomAccessFile.lock();
-          await randomAccessFile.setPosition(0);
-          await randomAccessFile.writeFrom(buffer);
-          await randomAccessFile.truncate(buffer.length);
-          await randomAccessFile.unlock();
-        } finally {
-          await randomAccessFile.close();
+          final file = await _getFile(path);
+          if (file == null) return;
+          final randomAccessFile = await file.open(mode: FileMode.append);
+          try {
+            await randomAccessFile.lock();
+            await randomAccessFile.setPosition(0);
+            await randomAccessFile.writeFrom(buffer);
+            await randomAccessFile.truncate(buffer.length);
+            await randomAccessFile.unlock();
+          } finally {
+            await randomAccessFile.close();
+          }
+        } on FileSystemException catch (e) {
+          _log.warning('FileSystemException writing file $path: $e');
+          return;
+        } catch (e) {
+          _log.warning('Error writing file $path: $e');
+          return;
         }
-      } on FileSystemException catch (e) {
-        _log.warning('FileSystemException writing file $path: $e');
-        return;
-      } catch (e) {
-        _log.warning('Error writing file $path: $e');
-        return;
-      }
-      final key = path.replaceAll(lastPathComponentRegEx, '');
-      // ignore: close_sinks
-      final storage = _storageCache.putIfAbsent(key, () => _newStream(key));
-      storage.add(data);
-    });
+        final key = path.replaceAll(lastPathComponentRegEx, '');
+        // ignore: close_sinks
+        final storage = _storageCache.putIfAbsent(key, () => _newStream(key));
+        storage.add(data);
+      });
 
   Future _deleteFile(String path) async {
     final dbDir = await Localstore.instance.databaseDirectory;

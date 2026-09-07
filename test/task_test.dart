@@ -439,26 +439,23 @@ void main() {
   });
 
   group('UriUploadTask', () {
-    test(
-      'fileUri should return the correct Uri for valid packed strings with Uris',
-      () {
-        final contentUri = Uri.parse('content://uploads');
-        final taskWithContentUri = UriUploadTask(
-          url: 'https://example.com/upload',
-          fileUri: contentUri,
-          filename: 'test.txt',
-        );
-        expect(taskWithContentUri.fileUri, contentUri);
+    test('fileUri should return the correct Uri for valid packed strings with Uris', () {
+      final contentUri = Uri.parse('content://uploads');
+      final taskWithContentUri = UriUploadTask(
+        url: 'https://example.com/upload',
+        fileUri: contentUri,
+        filename: 'test.txt',
+      );
+      expect(taskWithContentUri.fileUri, contentUri);
 
-        final fileUri = Uri.parse('file:///path/to/file.txt');
-        final taskWithFileUri = UriUploadTask(
-          url: 'https://example.com/upload',
-          fileUri: fileUri,
-        );
+      final fileUri = Uri.parse('file:///path/to/file.txt');
+      final taskWithFileUri = UriUploadTask(
+        url: 'https://example.com/upload',
+        fileUri: fileUri,
+      );
 
-        expect(taskWithFileUri.fileUri, fileUri);
-      },
-    );
+      expect(taskWithFileUri.fileUri, fileUri);
+    });
 
     test(
       'uploadFilename should return filename when set during construction',
@@ -473,17 +470,14 @@ void main() {
       },
     );
 
-    test(
-      'uploadFilename should return empty string when no filename was set during construction',
-      () {
-        final task = UriUploadTask(
-          url: 'https://example.com/upload',
-          fileUri: Uri.parse('content://uploads'),
-        );
-        expect(task.filename, isEmpty);
-        expect(task.fileUri, Uri.parse('content://uploads'));
-      },
-    );
+    test('uploadFilename should return empty string when no filename was set during construction', () {
+      final task = UriUploadTask(
+        url: 'https://example.com/upload',
+        fileUri: Uri.parse('content://uploads'),
+      );
+      expect(task.filename, isEmpty);
+      expect(task.fileUri, Uri.parse('content://uploads'));
+    });
 
     test(
       'constructing UriUploadTask with invalid scheme throws AssertionError',

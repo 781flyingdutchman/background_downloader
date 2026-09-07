@@ -58,7 +58,9 @@ void main() {
           updates: Updates.statusAndProgress,
         );
 
-        final transfer = await FileDownloader().transfers.start(uploadTaskToRun);
+        final transfer = await FileDownloader().transfers.start(
+          uploadTaskToRun,
+        );
         final result = await transfer.result;
 
         expect(result.status, equals(TaskStatus.complete));
@@ -148,7 +150,9 @@ void main() {
           allowPause: true,
         );
 
-        final transfer = await FileDownloader().transfers.start(pauseResumeTask);
+        final transfer = await FileDownloader().transfers.start(
+          pauseResumeTask,
+        );
 
         // Wait for some progress
         final progressCompleter = Completer<void>();
@@ -407,8 +411,8 @@ void main() {
 
         final matched = await FileDownloader().transfers.getOrStart(
           queryTask,
-          matchBy:
-              (existing) => existing.metaData == 'unique_model_checkpoint_v1',
+          matchBy: (existing) =>
+              existing.metaData == 'unique_model_checkpoint_v1',
         );
 
         expect(matched.taskId, equals('metadata_task_123'));
@@ -440,7 +444,10 @@ void main() {
         expect(FileDownloader().transfers.forId('lookup_b'), equals(transferB));
         expect(FileDownloader().transfers.forTask(taskA), equals(transferA));
 
-        expect(FileDownloader().transfers.all().length, greaterThanOrEqualTo(2));
+        expect(
+          FileDownloader().transfers.all().length,
+          greaterThanOrEqualTo(2),
+        );
         expect(
           FileDownloader().transfers.active().length,
           greaterThanOrEqualTo(2),

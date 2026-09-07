@@ -215,8 +215,9 @@ final class UriUploadTask extends UploadTask with _UriTaskMixin {
     super.stallTimeout,
   }) : super(
          baseDirectory: BaseDirectory.root,
-         filename:
-             filename != null ? pack(filename, fileUri) : fileUri.toString(),
+         filename: filename != null
+             ? pack(filename, fileUri)
+             : fileUri.toString(),
          httpRequestMethod: httpRequestMethod ?? 'POST',
          mimeType: mimeType ?? 'application/octet-stream',
          fields: fields ?? {},

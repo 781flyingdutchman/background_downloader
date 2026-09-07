@@ -120,11 +120,10 @@ abstract base class BaseDownloader {
     final instance = switch (defaultTargetPlatform) {
       .android => AndroidDownloader(),
       .iOS => IOSDownloader(),
-      .linux ||
-      .macOS ||
-      .windows => DesktopDownloader(),
-      _ =>
-        throw ArgumentError('Platform $defaultTargetPlatform is not supported'),
+      .linux || .macOS || .windows => DesktopDownloader(),
+      _ => throw ArgumentError(
+        'Platform $defaultTargetPlatform is not supported',
+      ),
     };
     instance._storage = persistentStorage;
     instance.database = database;
@@ -235,8 +234,9 @@ abstract base class BaseDownloader {
       iOSConfig: iOSConfig,
       desktopConfig: desktopConfig,
     );
-    final platform =
-        rawPlatformConfig is List ? rawPlatformConfig : [rawPlatformConfig];
+    final platform = rawPlatformConfig is List
+        ? rawPlatformConfig
+        : [rawPlatformConfig];
     return await Future.wait(
       [
         ...global,
@@ -289,7 +289,8 @@ abstract base class BaseDownloader {
   /// Returns the [TaskNotificationConfig] for this [task] or null
   ///
   /// Matches on task, then on group, then on default
-  TaskNotificationConfig? notificationConfigForTask(Task task) => notificationConfigForTaskUsingConfigSet(task, notificationConfigs);
+  TaskNotificationConfig? notificationConfigForTask(Task task) =>
+      notificationConfigForTaskUsingConfigSet(task, notificationConfigs);
 
   /// Returns the [TaskNotificationConfig] for this [task] or null
   ///
@@ -357,10 +358,9 @@ abstract base class BaseDownloader {
       _taskProgressCallbacks[task.taskId] = taskProgressCallback;
     }
     // make sure the `updates` field is set correctly
-    final requiredUpdates =
-        onProgress != null || taskProgressCallback != null
-            ? Updates.statusAndProgress
-            : Updates.status;
+    final requiredUpdates = onProgress != null || taskProgressCallback != null
+        ? Updates.statusAndProgress
+        : Updates.status;
     final Task taskToEnqueue;
     if (task.updates != requiredUpdates) {
       log.warning(
@@ -452,8 +452,9 @@ abstract base class BaseDownloader {
   ///  Returns the number of tasks canceled
   @mustCallSuper
   Future<int> reset(String group) async {
-    final retryCount =
-        tasksWaitingToRetry.where((task) => task.group == group).length;
+    final retryCount = tasksWaitingToRetry
+        .where((task) => task.group == group)
+        .length;
     tasksWaitingToRetry.removeWhere((task) => task.group == group);
     final pausedTasks = await getPausedTasks();
     var pausedCount = 0;
@@ -463,8 +464,9 @@ abstract base class BaseDownloader {
         pausedCount++;
       }
     }
-    final awaitTasksToRemove =
-        awaitTasks.keys.where((task) => task.group == group).toList();
+    final awaitTasksToRemove = awaitTasks.keys
+        .where((task) => task.group == group)
+        .toList();
     for (final task in awaitTasksToRemove) {
       awaitTasks.remove(task);
     }
@@ -543,12 +545,13 @@ abstract base class BaseDownloader {
   Future<bool> cancelAll({Iterable<Task>? tasks, String? group}) async {
     final tasksToCancel = switch ((tasks, group)) {
       (final Iterable<Task> tasks, null) => tasks,
-      (null, final String group) => await FileDownloader().allTasks(group: group),
+      (null, final String group) => await FileDownloader().allTasks(
+        group: group,
+      ),
       (null, null) => await FileDownloader().allTasks(),
-      _ =>
-        throw AssertionError(
-          "Either 'tasks' or 'group' must be provided, or neither, but not both.",
-        ),
+      _ => throw AssertionError(
+        "Either 'tasks' or 'group' must be provided, or neither, but not both.",
+      ),
     };
     return cancelTasksWithIds(tasksToCancel.map((task) => task.taskId));
   }
@@ -575,8 +578,8 @@ abstract base class BaseDownloader {
               jsonDecode(resumeData.data, reviver: Chunk.listReviver),
             );
             for (final chunk in chunks) {
-              final tempFilePath =
-                  (await getResumeData(chunk.task.taskId))?.tempFilepath;
+              final tempFilePath = (await getResumeData(chunk.task.taskId))
+                  ?.tempFilepath;
               if (tempFilePath != null) {
                 try {
                   await File(tempFilePath).delete();
@@ -680,19 +683,21 @@ abstract base class BaseDownloader {
     Iterable<DownloadTask>? tasks,
     String? group,
   }) async {
-    final tasksToPause = switch ((tasks, group)) {
-          (final Iterable<DownloadTask> tasks, null) => tasks,
-          (null, final String group) =>
-            (await FileDownloader().allTasks(group: group)) as Iterable<Task>,
-          (null, null) => (await FileDownloader().allTasks()) as Iterable<Task>,
-          _ =>
-            throw AssertionError(
-              "Either 'tasks' or 'group' must be provided, or neither, but not both.",
-            ),
-        }
-        .whereType<DownloadTask>()
-        .where((task) => task.allowPause && task.post == null)
-        .toList(growable: false);
+    final tasksToPause =
+        switch ((tasks, group)) {
+              (final Iterable<DownloadTask> tasks, null) => tasks,
+              (null, final String group) => (await FileDownloader().allTasks(
+                group: group,
+              )) as Iterable<Task>,
+              (null, null) =>
+                (await FileDownloader().allTasks()) as Iterable<Task>,
+              _ => throw AssertionError(
+                "Either 'tasks' or 'group' must be provided, or neither, but not both.",
+              ),
+            }
+            .whereType<DownloadTask>()
+            .where((task) => task.allowPause && task.post == null)
+            .toList(growable: false);
     final results = await pauseTaskList(tasksToPause);
     return tasksToPause
         .asMap() // Convert to a Map (index -> Task)
@@ -1221,12 +1226,16 @@ abstract base class BaseDownloader {
     notificationConfigs.clear();
     trackedGroups.clear();
     canResumeTask.clear();
-    unawaited(removeResumeData().catchError((e) {
-      log.fine('Error removing resume data in destroy: $e');
-    }));
-    unawaited(removePausedTask().catchError((e) {
-      log.fine('Error removing paused task in destroy: $e');
-    }));
+    unawaited(
+      removeResumeData().catchError((e) {
+        log.fine('Error removing resume data in destroy: $e');
+      }),
+    );
+    unawaited(
+      removePausedTask().catchError((e) {
+        log.fine('Error removing paused task in destroy: $e');
+      }),
+    );
     resetUpdatesStreamController();
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import 'base_downloader.dart';
@@ -23,15 +24,17 @@ class Transfers {
   final Set<String> _registeredTransferGroups = {};
 
   /// ValueNotifier containing the list of all currently tracked [Transfer] objects.
-  final ValueNotifier<List<Transfer>> notifier =
-      ValueNotifier<List<Transfer>>([]);
+  final ValueNotifier<List<Transfer>> notifier = ValueNotifier<List<Transfer>>(
+    [],
+  );
 
   static bool _transferAutoCleanTriggered = false;
   StreamSubscription<TaskRecord>? _databaseSubscription;
 
   Transfers(this.downloader, this._downloader) {
-    _databaseSubscription =
-        downloader.database.updates.listen(_onDatabaseRecordUpdate);
+    _databaseSubscription = downloader.database.updates.listen(
+      _onDatabaseRecordUpdate,
+    );
   }
 
   void _ensureTransferAutoClean() {
@@ -104,9 +107,7 @@ class Transfers {
       transfer.holdReasonNotifier.value = TransferHoldReason.none;
     }
 
-    transfer.updateStatus(
-      TaskStatusUpdate(cleanTask, TaskStatus.enqueued),
-    );
+    transfer.updateStatus(TaskStatusUpdate(cleanTask, TaskStatus.enqueued));
     _notifyTransfersChanged();
 
     await downloader.enqueue(namespacedTask);
@@ -164,9 +165,7 @@ class Transfers {
       } else {
         transfer.holdReasonNotifier.value = TransferHoldReason.none;
       }
-      transfer.updateStatus(
-        TaskStatusUpdate(cleanTask, TaskStatus.enqueued),
-      );
+      transfer.updateStatus(TaskStatusUpdate(cleanTask, TaskStatus.enqueued));
       tasksToEnqueue.add(namespacedTask);
     }
 
@@ -420,16 +419,14 @@ class Transfers {
 
     final existingNotificationTapCallback =
         _downloader.groupNotificationTapCallbacks[namespacedGroup];
-    _downloader.groupNotificationTapCallbacks[namespacedGroup] = (
-      rawTask,
-      notificationType,
-    ) {
-      _onTransferNotificationTap(
-        downloader.withoutNamespacedGroup(rawTask),
-        notificationType,
-      );
-      existingNotificationTapCallback?.call(rawTask, notificationType);
-    };
+    _downloader.groupNotificationTapCallbacks[namespacedGroup] =
+        (rawTask, notificationType) {
+          _onTransferNotificationTap(
+            downloader.withoutNamespacedGroup(rawTask),
+            notificationType,
+          );
+          existingNotificationTapCallback?.call(rawTask, notificationType);
+        };
   }
 
   void _onTransferStatusUpdate(TaskStatusUpdate update) {
@@ -476,8 +473,8 @@ class Transfers {
     }
     final normalizedProgress =
         (record.progress >= 0.0 && record.progress <= 1.0)
-            ? record.progress
-            : (record.status == TaskStatus.complete ? 1.0 : 0.0);
+        ? record.progress
+        : (record.status == TaskStatus.complete ? 1.0 : 0.0);
     transfer = Transfer(
       cleanTask,
       downloader,
@@ -499,8 +496,9 @@ class Transfers {
   }) async {
     final namespacedTask = downloader.withNamespacedGroup(task);
     if (matchBy == null) {
-      final record =
-          await downloader.database.recordForId(namespacedTask.taskId);
+      final record = await downloader.database.recordForId(
+        namespacedTask.taskId,
+      );
       if (record != null) {
         return _createTransferFromRecord(record);
       }
@@ -538,11 +536,7 @@ class Transfers {
     final transfer = _transfers[cleanTask.taskId];
     if (transfer != null) {
       transfer.updateStatus(
-        TaskStatusUpdate(
-          cleanTask,
-          record.status,
-          record.exception,
-        ),
+        TaskStatusUpdate(cleanTask, record.status, record.exception),
       );
       if (record.progress >= 0.0 && record.progress <= 1.0) {
         transfer.updateProgress(
@@ -564,8 +558,9 @@ class Transfers {
     if (!_downloader.isTrackingTasks) {
       return [];
     }
-    final namespacedGroupName =
-        group != null ? downloader.namespacedGroup(group) : null;
+    final namespacedGroupName = group != null
+        ? downloader.namespacedGroup(group)
+        : null;
     final records = await downloader.database.allRecords();
     final rehydrated = <Transfer>[];
     for (final record in records) {

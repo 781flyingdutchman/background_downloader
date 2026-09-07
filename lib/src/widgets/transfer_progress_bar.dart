@@ -53,96 +53,95 @@ class TransferProgressBar extends StatelessWidget {
 
     return ValueListenableBuilder<TaskStatus>(
       valueListenable: transfer.statusNotifier,
-      builder: (context, status, _) => ValueListenableBuilder<TransferHoldReason>(
-          valueListenable: transfer.holdReasonNotifier,
-          builder: (context, holdReason, _) => ValueListenableBuilder<double?>(
+      builder: (context, status, _) =>
+          ValueListenableBuilder<TransferHoldReason>(
+            valueListenable: transfer.holdReasonNotifier,
+            builder: (context, holdReason, _) => ValueListenableBuilder<double?>(
               valueListenable: transfer.progressNotifier,
               builder: (context, progress, _) => ValueListenableBuilder<double>(
-                  valueListenable: transfer.networkSpeedNotifier,
-                  builder: (context, speed, _) {
-                    final effectiveColor = _colorForStatus(
-                      status,
-                      holdReason,
-                      theme,
-                    );
+                valueListenable: transfer.networkSpeedNotifier,
+                builder: (context, speed, _) {
+                  final effectiveColor = _colorForStatus(
+                    status,
+                    holdReason,
+                    theme,
+                  );
 
-                    return Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(height / 2),
-                          child: SizedBox(
-                            height: height,
-                            child: LinearProgressIndicator(
-                              value:
-                                  status == TaskStatus.complete
-                                      ? 1.0
-                                      : (progress != null && progress >= 0.0
-                                          ? progress
-                                          : null),
-                              color: effectiveColor,
-                              backgroundColor:
-                                  backgroundColor ??
-                                  theme.colorScheme.surfaceContainerHighest,
-                            ),
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(height / 2),
+                        child: SizedBox(
+                          height: height,
+                          child: LinearProgressIndicator(
+                            value: status == TaskStatus.complete
+                                ? 1.0
+                                : (progress != null && progress >= 0.0
+                                      ? progress
+                                      : null),
+                            color: effectiveColor,
+                            backgroundColor:
+                                backgroundColor ??
+                                theme.colorScheme.surfaceContainerHighest,
                           ),
                         ),
-                        if (showPercentage || showStatusText || showSpeed) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              if (showStatusText)
-                                Text(
-                                  _statusLabel(status, holdReason),
-                                  style: effectiveTextStyle.copyWith(
-                                    color: effectiveColor,
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                      ),
+                      if (showPercentage || showStatusText || showSpeed) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            if (showStatusText)
+                              Text(
+                                _statusLabel(status, holdReason),
+                                style: effectiveTextStyle.copyWith(
+                                  color: effectiveColor,
+                                  fontWeight: FontWeight.w500,
                                 ),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (showSpeed &&
-                                      speed > 0 &&
-                                      status == TaskStatus.running) ...[
+                              ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (showSpeed &&
+                                    speed > 0 &&
+                                    status == TaskStatus.running) ...[
+                                  Text(
+                                    _formatSpeed(speed),
+                                    style: effectiveTextStyle.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                if (showPercentage) ...[
+                                  if (status == TaskStatus.complete)
                                     Text(
-                                      _formatSpeed(speed),
+                                      '100%',
                                       style: effectiveTextStyle.copyWith(
-                                        color:
-                                            theme.colorScheme.onSurfaceVariant,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    )
+                                  else if (progress != null && progress >= 0.0)
+                                    Text(
+                                      '${(progress * 100).toStringAsFixed(0)}%',
+                                      style: effectiveTextStyle.copyWith(
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
-                                  ],
-                                  if (showPercentage) ...[
-                                    if (status == TaskStatus.complete)
-                                      Text(
-                                        '100%',
-                                        style: effectiveTextStyle.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      )
-                                    else if (progress != null && progress >= 0.0)
-                                      Text(
-                                        '${(progress * 100).toStringAsFixed(0)}%',
-                                        style: effectiveTextStyle.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                  ],
                                 ],
-                              ),
-                            ],
-                          ),
-                        ],
+                              ],
+                            ),
+                          ],
+                        ),
                       ],
-                    );
-                  },
-                ),
+                    ],
+                  );
+                },
+              ),
             ),
-        ),
+          ),
     );
   }
 

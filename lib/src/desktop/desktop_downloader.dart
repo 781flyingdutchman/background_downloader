@@ -239,9 +239,8 @@ final class DesktopDownloader extends BaseDownloader {
             }
             processStatusUpdate(taskStatusUpdate);
           } else {
-            _parallelTaskSendPort(
-              Chunk.getParentTaskId(updatedTask),
-            )?.send(taskStatusUpdate);
+            _parallelTaskSendPort(Chunk.getParentTaskId(updatedTask))
+                ?.send(taskStatusUpdate);
           }
 
         case (
@@ -262,17 +261,23 @@ final class DesktopDownloader extends BaseDownloader {
           if (updatedTask.group != BaseDownloader.chunkGroup) {
             processProgressUpdate(taskProgressUpdate);
           } else {
-            _parallelTaskSendPort(
-              Chunk.getParentTaskId(updatedTask),
-            )?.send(taskProgressUpdate);
+            _parallelTaskSendPort(Chunk.getParentTaskId(updatedTask))
+                ?.send(taskProgressUpdate);
           }
 
         case ('taskCanResume', final bool taskCanResume):
           setCanResume(task, taskCanResume);
 
-        case ('resumeData', final String data, final int requiredStartByte, final String? eTag):
+        case (
+          'resumeData',
+          final String data,
+          final int requiredStartByte,
+          final String? eTag,
+        ):
           try {
-            await setResumeData(ResumeData(task, data, requiredStartByte, eTag));
+            await setResumeData(
+              ResumeData(task, data, requiredStartByte, eTag),
+            );
           } catch (e) {
             _log.warning('Failed to store resume data: $e');
           }
@@ -333,13 +338,12 @@ final class DesktopDownloader extends BaseDownloader {
 
   /// Return the [SendPort] for the [ParallelDownloadTask] represented by [taskId]
   /// or null if not a [ParallelDownloadTask] or not found
-  SendPort? _parallelTaskSendPort(String taskId) =>
-      _isolateSendPorts.entries
-          .firstWhereOrNull(
-            (entry) =>
-                entry.key is ParallelDownloadTask && entry.key.taskId == taskId,
-          )
-          ?.value;
+  SendPort? _parallelTaskSendPort(String taskId) => _isolateSendPorts.entries
+      .firstWhereOrNull(
+        (entry) =>
+            entry.key is ParallelDownloadTask && entry.key.taskId == taskId,
+      )
+      ?.value;
 
   @override
   Future<int> reset(String group) async {
@@ -443,12 +447,11 @@ final class DesktopDownloader extends BaseDownloader {
   @override
   Future<bool> resume(Task task) async {
     if (await super.resume(task)) {
-      task =
-          awaitTasks.containsKey(task)
-              ? awaitTasks.keys.firstWhere(
-                (awaitTask) => awaitTask.taskId == task.taskId,
-              )
-              : task;
+      task = awaitTasks.containsKey(task)
+          ? awaitTasks.keys.firstWhere(
+              (awaitTask) => awaitTask.taskId == task.taskId,
+            )
+          : task;
       _resume.add(task);
       if (await enqueue(task)) {
         if (task is ParallelDownloadTask) {
@@ -550,12 +553,11 @@ final class DesktopDownloader extends BaseDownloader {
 
   @override
   Future<bool> openFile(Task? task, String? filePath, String? mimeType) async {
-    final executable =
-        defaultTargetPlatform == TargetPlatform.linux
-            ? 'xdg-open'
-            : defaultTargetPlatform == TargetPlatform.macOS
-            ? 'open'
-            : 'start';
+    final executable = defaultTargetPlatform == TargetPlatform.linux
+        ? 'xdg-open'
+        : defaultTargetPlatform == TargetPlatform.macOS
+        ? 'open'
+        : 'start';
     filePath ??= await task!.filePath();
     if (!await File(filePath).exists()) {
       _log.fine('File to open does not exist: $filePath');
@@ -583,10 +585,9 @@ final class DesktopDownloader extends BaseDownloader {
     DownloadTask task,
     String contentDisposition,
   ) async {
-    final h =
-        contentDisposition.isNotEmpty
-            ? {'Content-disposition': contentDisposition}
-            : <String, String>{};
+    final h = contentDisposition.isNotEmpty
+        ? {'Content-disposition': contentDisposition}
+        : <String, String>{};
     final t = await taskWithSuggestedFilename(task, h, false);
     return t.filename;
   }
@@ -761,8 +762,8 @@ final class DesktopDownloader extends BaseDownloader {
     final matchedConfig =
         (normHost != null
             ? _mtlsConfigs.firstWhereOrNull(
-              (c) => c.host?.toLowerCase() == normHost && c.hasCredentials,
-            )
+                (c) => c.host?.toLowerCase() == normHost && c.hasCredentials,
+              )
             : null) ??
         _mtlsConfigs.firstWhereOrNull(
           (c) => c.host == null && c.hasCredentials,
@@ -798,14 +799,13 @@ final class DesktopDownloader extends BaseDownloader {
     }
     final client = HttpClient(context: securityContext);
     client.connectionTimeout = requestTimeout;
-    client.findProxy =
-        proxy.isNotEmpty
-            ? (_) => 'PROXY ${_proxy['address']}:${_proxy['port']}'
-            : null;
+    client.findProxy = proxy.isNotEmpty
+        ? (_) => 'PROXY ${_proxy['address']}:${_proxy['port']}'
+        : null;
     client.badCertificateCallback =
         bypassTLSCertificateValidation && !kReleaseMode
-            ? (X509Certificate cert, String host, int port) => true
-            : null;
+        ? (X509Certificate cert, String host, int port) => true
+        : null;
     return IOClient(client);
   }
 

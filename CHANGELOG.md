@@ -27,12 +27,14 @@
   - Native Wi-Fi / unmetered queuing: enqueue tasks natively when waiting for Wi-Fi or unmetered network rather than holding in Dart
   - Upgrade Android Gradle Plugin to 9.0.1, Kotlin to 2.3.20, and Gradle wrapper to 9.1.0 in example app
   - Remove obsolete `android.defaults.buildfeatures.buildconfig` property from example app `gradle.properties` (closes #674 / AGP 9 compatibility)
+  - Apply `readTimeout` matching `requestTimeout` on `HttpURLConnection` and properly classify `SocketTimeoutException` as a connection exception, preventing tasks from blocking indefinitely when waiting for response headers
 * [iOS] Group notification and SwiftPM improvements:
   - Fix group notification dismissal: use `groupNotification.notificationId` rather than `task.taskId` in `updateGroupNotification` to properly dismiss group notifications (fixes #718)
   - Fix notification category for group notifications: explicitly assign `.runningWithoutPause`, `.complete`, or `.error` category so `UNUserNotificationCenterDelegate.willPresent` recognizes and delivers running and finished group notifications (fixes #718)
   - Log notification taps without an associated task as info instead of error
   - Modernize Swift Package Manager (SwiftPM) support: add required `FlutterFramework` dependency in `Package.swift`, expand permissions bypass documentation for SwiftPM, and transition example app (`ios` and `macos`) to pure SwiftPM
-* [Desktop] Improvements:
+* [Desktop] Fixes and improvements:
+  - Apply `requestTimeout` to `client.send(request)` in `doDownloadTask` and `doDataTask`, and to `head` in `doParallelDownloadTask`, preventing tasks from hanging indefinitely in `running` status if the network drops or the server stalls while waiting for response headers (fixes #721)
   - Case-insensitive host matching and cache key normalization for mTLS client configuration cache in `DesktopDownloader`
 * [Documentation] Improvements and clarifications:
   - Clarify `requireWiFi` platform behavior: enforces an unmetered network connection constraint (`NETWORK_TYPE_UNMETERED`) on Android (excluding cellular and metered Wi-Fi hotspots), while disabling cellular access (`allowsCellularAccess = false`) on iOS (allowing any Wi-Fi or Ethernet connection regardless of metered status)

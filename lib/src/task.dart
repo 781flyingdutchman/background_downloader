@@ -88,12 +88,11 @@ base class Request {
        headers = headers ?? {},
        httpRequestMethod =
            httpRequestMethod?.toUpperCase() ?? (post == null ? 'GET' : 'POST'),
-       post =
-           post is Uint8List
-               ? String.fromCharCodes(post)
-               : post is Map || post is List
-               ? jsonEncode(post)
-               : post,
+       post = post is Uint8List
+           ? String.fromCharCodes(post)
+           : post is Map || post is List
+           ? jsonEncode(post)
+           : post,
        retriesRemaining = retries,
        creationTime = creationTime ?? DateTime.now() {
     if (retries < 0 || retries > 10) {
@@ -155,10 +154,9 @@ base class Request {
       ),
       final List<Cookie> list => list,
       String _ => cookiesFromSetCookie(cookies),
-      _ =>
-        throw ArgumentError(
-          'cookies parameter must be a http.Response object, a String or a List<Cookie>',
-        ),
+      _ => throw ArgumentError(
+        'cookies parameter must be a http.Response object, a String or a List<Cookie>',
+      ),
     };
     final path = uri.path.isNotEmpty ? uri.path : '/';
     final validCookies = cookieList.where(
@@ -208,9 +206,10 @@ base class Request {
   int get hashCode => url.hashCode;
 
   @override
-  String toString() => 'Request{url: $url, headers: $headers, httpRequestMethod: '
-        '$httpRequestMethod, post: ${post == null ? "null" : "not null"}, '
-        'retries: $retries, retriesRemaining: $retriesRemaining}';
+  String toString() =>
+      'Request{url: $url, headers: $headers, httpRequestMethod: '
+      '$httpRequestMethod, post: ${post == null ? "null" : "not null"}, '
+      'retries: $retries, retriesRemaining: $retriesRemaining}';
 }
 
 /// RegExp to match a path separator and root directory
@@ -373,26 +372,24 @@ sealed class Task extends Request implements Comparable {
            ((transferHints?.contains(TransferHint.useSuggestedFilename) == true)
                ? DownloadTask.suggestedFilename
                : _random.nextInt(1 << 32).toString()),
-       directory =
-           _startsWithPathSeparatorRegExp.hasMatch(directory)
-               ? directory.substring(1)
-               : directory,
-       updates =
-           (transferHints?.contains(TransferHint.smallFile) == true)
-               ? Updates.status
-               : updates,
+       directory = _startsWithPathSeparatorRegExp.hasMatch(directory)
+           ? directory.substring(1)
+           : directory,
+       updates = (transferHints?.contains(TransferHint.smallFile) == true)
+           ? Updates.status
+           : updates,
        allowPause =
            allowPause ||
            (transferHints?.contains(TransferHint.userInitiated) == true) ||
            (transferHints?.contains(TransferHint.largeFile) == true),
        priority =
            (transferHints?.contains(TransferHint.userInitiated) == true &&
-                   priority == 5)
-               ? 0
-               : (transferHints?.contains(TransferHint.lowPriority) == true &&
-                   priority == 5)
-               ? 10
-               : priority {
+               priority == 5)
+           ? 0
+           : (transferHints?.contains(TransferHint.lowPriority) == true &&
+                 priority == 5)
+           ? 10
+           : priority {
     if (filename?.isEmpty == true) {
       throw ArgumentError('Filename cannot be empty');
     }
@@ -412,24 +409,23 @@ sealed class Task extends Request implements Comparable {
   /// Create a new [Task] subclass from the provided [json]
   ///
   /// Use [Task.createFromJson] to create a properly subclassed [Task] from the [json]
-  factory Task.createFromJson(
-    Map<String, dynamic> json,
-  ) => switch (json['taskType']) {
-    'DownloadTask' => DownloadTask.fromJson(json),
-    'UriDownloadTask' => UriDownloadTask.fromJson(json),
-    'UploadTask' => UploadTask.fromJson(json),
-    'UriUploadTask' => UriUploadTask.fromJson(json),
-    'MultiUploadTask' => MultiUploadTask.fromJson(json),
-    'ParallelDownloadTask' => ParallelDownloadTask.fromJson(json),
-    'DataTask' => DataTask.fromJson(json),
-    _ =>
-      throw ArgumentError(
-        'taskType not in [DownloadTask, UploadTask, MultiUploadTask, ParallelDownloadTask, DataTask]',
-      ),
-  };
+  factory Task.createFromJson(Map<String, dynamic> json) =>
+      switch (json['taskType']) {
+        'DownloadTask' => DownloadTask.fromJson(json),
+        'UriDownloadTask' => UriDownloadTask.fromJson(json),
+        'UploadTask' => UploadTask.fromJson(json),
+        'UriUploadTask' => UriUploadTask.fromJson(json),
+        'MultiUploadTask' => MultiUploadTask.fromJson(json),
+        'ParallelDownloadTask' => ParallelDownloadTask.fromJson(json),
+        'DataTask' => DataTask.fromJson(json),
+        _ => throw ArgumentError(
+          'taskType not in [DownloadTask, UploadTask, MultiUploadTask, ParallelDownloadTask, DataTask]',
+        ),
+      };
 
   /// Create a new [Task] subclass from provided [jsonString]
-  factory Task.createFromJsonString(String jsonString) => Task.createFromJson(jsonDecode(jsonString));
+  factory Task.createFromJsonString(String jsonString) =>
+      Task.createFromJson(jsonDecode(jsonString));
 
   /// Returns the absolute path to the file represented by this task
   /// based on the [Task.filename] (default) or [withFilename]
@@ -498,8 +494,7 @@ sealed class Task extends Request implements Comparable {
       (.applicationDocuments, false) =>
         await getApplicationDocumentsDirectory(),
       (.temporary, false) => await getTemporaryDirectory(),
-      (.applicationSupport, false) =>
-        await getApplicationSupportDirectory(),
+      (.applicationSupport, false) => await getApplicationSupportDirectory(),
       (.applicationLibrary, false)
           when defaultTargetPlatform == TargetPlatform.macOS ||
               defaultTargetPlatform == TargetPlatform.iOS =>
@@ -520,9 +515,9 @@ sealed class Task extends Request implements Comparable {
     };
     final path =
         (defaultTargetPlatform == TargetPlatform.windows &&
-                baseDirectory == BaseDirectory.root)
-            ? ''
-            : baseDir.absolute.path;
+            baseDirectory == BaseDirectory.root)
+        ? ''
+        : baseDir.absolute.path;
     _baseDirectoryPathCache[cacheKey] = path;
     return path;
   }
@@ -550,10 +545,10 @@ sealed class Task extends Request implements Comparable {
     // Order matters, as some may be subdirs of others
     final testSequence =
         defaultTargetPlatform == TargetPlatform.android ||
-                defaultTargetPlatform == TargetPlatform.linux ||
-                defaultTargetPlatform == TargetPlatform.windows
-            ? _androidBaseDirs
-            : _otherBaseDirs;
+            defaultTargetPlatform == TargetPlatform.linux ||
+            defaultTargetPlatform == TargetPlatform.windows
+        ? _androidBaseDirs
+        : _otherBaseDirs;
     for (final baseDirectoryEnum in testSequence) {
       final baseDirPath = await baseDirectoryPath(baseDirectoryEnum);
       final (match, directory) = _contains(baseDirPath, absoluteDirectoryPath);
@@ -628,21 +623,18 @@ sealed class Task extends Request implements Comparable {
       priority = (json['priority'] as num?)?.toInt() ?? 5,
       metaData = json['metaData'] ?? '',
       displayName = json['displayName'] ?? '',
-      options =
-          json['options'] != null
-              ? TaskOptions.fromJson(json['options'])
-              : null,
-      transferHints =
-          json['transferHints'] != null
-              ? (json['transferHints'] as List)
-                  .map((e) => TransferHint.values[(e as num).toInt()])
-                  .toSet()
-              : null,
+      options = json['options'] != null
+          ? TaskOptions.fromJson(json['options'])
+          : null,
+      transferHints = json['transferHints'] != null
+          ? (json['transferHints'] as List)
+                .map((e) => TransferHint.values[(e as num).toInt()])
+                .toSet()
+          : null,
       notificationConfig = null,
-      stallTimeout =
-          json['stallTimeout'] != null
-              ? Duration(milliseconds: (json['stallTimeout'] as num).toInt())
-              : null,
+      stallTimeout = json['stallTimeout'] != null
+          ? Duration(milliseconds: (json['stallTimeout'] as num).toInt())
+          : null,
       super.fromJson();
 
   /// Creates JSON map of this object
@@ -706,8 +698,9 @@ sealed class Task extends Request implements Comparable {
   }
 
   @override
-  String toString() => '$taskType{taskId: $taskId, url: $url, filename: $filename, headers: '
-        '$headers, httpRequestMethod: $httpRequestMethod, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, updates: $updates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, allowPause: $allowPause, priority: $priority, metaData: $metaData, displayName: $displayName}';
+  String toString() =>
+      '$taskType{taskId: $taskId, url: $url, filename: $filename, headers: '
+      '$headers, httpRequestMethod: $httpRequestMethod, post: ${post == null ? "null" : "not null"}, directory: $directory, baseDirectory: $baseDirectory, group: $group, updates: $updates, requiresWiFi: $requiresWiFi, retries: $retries, retriesRemaining: $retriesRemaining, allowPause: $allowPause, priority: $priority, metaData: $metaData, displayName: $displayName}';
 }
 
 /// Information related to a download task
@@ -1099,12 +1092,11 @@ final class UploadTask extends Task {
     final result = <(String, String, String)>[];
     for (int i = 0; i < fileFields.length; i++) {
       final fileUri = Uri.tryParse(filenames[i]);
-      final filenameOrPath =
-          (fileUri?.scheme == 'file')
-              ? fileUri!.toFilePath(
-                windows: defaultTargetPlatform == TargetPlatform.windows,
-              )
-              : filenames[i];
+      final filenameOrPath = (fileUri?.scheme == 'file')
+          ? fileUri!.toFilePath(
+              windows: defaultTargetPlatform == TargetPlatform.windows,
+            )
+          : filenames[i];
       final file = File(filenameOrPath);
       if (await file.exists()) {
         result.add((fileFields[i], filenameOrPath, mimeTypes[i]));
@@ -1397,11 +1389,8 @@ final class MultiUploadTask extends UploadTask {
 
   /// Zips the fileField, filename and mimeType at an index to
   /// a record
-  (String, String, String) _toRecord((int, String) record) => (
-    fileFields[record.$1],
-    filenames[record.$1],
-    mimeTypes[record.$1],
-  );
+  (String, String, String) _toRecord((int, String) record) =>
+      (fileFields[record.$1], filenames[record.$1], mimeTypes[record.$1]);
 
   @override
   String get taskType => 'MultiUploadTask';
@@ -1485,12 +1474,11 @@ final class ParallelDownloadTask extends DownloadTask {
          url is String || (url is List<String> && url.isNotEmpty),
          'The list of urls must not be empty',
        ),
-       urls =
-           url is String
-               ? [urlWithQueryParameters(url, urlQueryParameters)]
-               : List.from(
-                 url.map((e) => urlWithQueryParameters(e, urlQueryParameters)),
-               ),
+       urls = url is String
+           ? [urlWithQueryParameters(url, urlQueryParameters)]
+           : List.from(
+               url.map((e) => urlWithQueryParameters(e, urlQueryParameters)),
+             ),
        super(url: url is String ? url : url.first) {
     retriesRemaining = 0; // chunk tasks will retry instead, based on [retries]
   }
@@ -1643,8 +1631,9 @@ final class DataTask extends Task {
             (post != null) ^ (json != null),
             'Only post or json can be set, not both',
           );
-          headers['Content-Type'] =
-              json != null ? 'application/json' : 'text/plain; charset=utf-8';
+          headers['Content-Type'] = json != null
+              ? 'application/json'
+              : 'text/plain; charset=utf-8';
         }
       } on UnsupportedError {
         _log.warning(

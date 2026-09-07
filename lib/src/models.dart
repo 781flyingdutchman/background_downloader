@@ -56,14 +56,8 @@ enum TaskStatus {
   /// True if this state is one of the 'final' states, meaning no more
   /// state changes are possible
   bool get isFinalState => switch (this) {
-    .complete ||
-    .notFound ||
-    .failed ||
-    .canceled => true,
-    .enqueued ||
-    .running ||
-    .waitingToRetry ||
-    .paused => false,
+    .complete || .notFound || .failed || .canceled => true,
+    .enqueued || .running || .waitingToRetry || .paused => false,
   };
 
   /// True if this state is not a 'final' state, meaning more
@@ -131,8 +125,10 @@ typedef TaskProgressCallback = void Function(TaskProgressUpdate update);
 
 /// Signature for function you can register to be called when a notification
 /// is tapped by the user
-typedef TaskNotificationTapCallback =
-    void Function(Task task, NotificationType notificationType);
+typedef TaskNotificationTapCallback = void Function(
+  Task task,
+  NotificationType notificationType,
+);
 
 /// Signature for a function you can provide to the [FileDownloader.downloadBatch] or
 /// [FileDownloader.uploadBatch] that will be called upon completion of each task
@@ -143,7 +139,10 @@ typedef TaskNotificationTapCallback =
 typedef BatchProgressCallback = void Function(int succeeded, int failed);
 
 /// Contains tasks and results related to a batch of tasks
-class Batch(final List<Task> tasks, final BatchProgressCallback? batchProgressCallback) {
+class Batch(
+  final List<Task> tasks,
+  final BatchProgressCallback? batchProgressCallback,
+) {
   final results = <Task, TaskStatus>{};
 
   /// Returns an Iterable with successful tasks in this batch
@@ -212,15 +211,13 @@ class TaskStatusUpdate extends TaskUpdate {
   /// Create object from [json]
   TaskStatusUpdate.fromJson(super.json)
     : status = TaskStatus.values[(json['taskStatus'] as num?)?.toInt() ?? 0],
-      exception =
-          json['exception'] != null
-              ? TaskException.fromJson(json['exception'])
-              : null,
+      exception = json['exception'] != null
+          ? TaskException.fromJson(json['exception'])
+          : null,
       responseBody = json['responseBody'],
-      responseHeaders =
-          json['responseHeaders'] != null
-              ? Map.from(json['responseHeaders'])
-              : null,
+      responseHeaders = json['responseHeaders'] != null
+          ? Map.from(json['responseHeaders'])
+          : null,
       responseStatusCode = (json['responseStatusCode'] as num?)?.toInt(),
       mimeType = json['mimeType'],
       charSet = json['charSet'],
@@ -352,7 +349,8 @@ class TaskProgressUpdate extends TaskUpdate {
   };
 
   @override
-  String toString() => 'TaskProgressUpdate{progress: $progress, expectedFileSize: $expectedFileSize, networkSpeed: $networkSpeed, timeRemaining: $timeRemaining}';
+  String toString() =>
+      'TaskProgressUpdate{progress: $progress, expectedFileSize: $expectedFileSize, networkSpeed: $networkSpeed, timeRemaining: $timeRemaining}';
 }
 
 // Progress values representing a status

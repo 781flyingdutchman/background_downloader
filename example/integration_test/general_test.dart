@@ -551,8 +551,8 @@ void main() {
         // NOTE: to test this, set the taskTimeoutMillis to a low value to
         // force an early timeout.
         if (Platform.isAndroid) {
-          final timeOut =
-              await FileDownloader().downloaderForTesting.getTaskTimeout();
+          final timeOut = await FileDownloader().downloaderForTesting
+              .getTaskTimeout();
           if (timeOut < const Duration(minutes: 1)) {
             FileDownloader().registerCallbacks(
               taskStatusCallback: statusCallback,
@@ -1251,9 +1251,8 @@ void main() {
         result = await FileDownloader().download(
           task,
           onStatus: (status) => statusCallback(TaskStatusUpdate(task, status)),
-          onProgress:
-              (progress) =>
-                  progressCallback(TaskProgressUpdate(task, progress)),
+          onProgress: (progress) =>
+              progressCallback(TaskProgressUpdate(task, progress)),
         );
         expect(result.status, equals(TaskStatus.complete));
         expect(statusCallbackCounter, equals(3));
@@ -1331,8 +1330,8 @@ void main() {
         );
         final failingResult = FileDownloader().download(
           failTask,
-          onStatus:
-              (status) => statusCallback(TaskStatusUpdate(failTask, status)),
+          onStatus: (status) =>
+              statusCallback(TaskStatusUpdate(failTask, status)),
         );
         final successResult = FileDownloader().download(
           task,
@@ -1370,9 +1369,7 @@ void main() {
     testWidgets('not found', timeout: const Timeout(Duration(minutes: 2)), (
       widgetTester,
     ) async {
-      task = DownloadTask(
-        url: 'http://$localServerHostPort/something',
-      );
+      task = DownloadTask(url: 'http://$localServerHostPort/something');
       final result = await FileDownloader().download(task);
       expect(result.status, equals(TaskStatus.notFound));
       expect(
@@ -2498,8 +2495,8 @@ void main() {
       (widgetTester) async {
         var result = await FileDownloader().upload(
           uploadTask,
-          onStatus:
-              (status) => statusCallback(TaskStatusUpdate(uploadTask, status)),
+          onStatus: (status) =>
+              statusCallback(TaskStatusUpdate(uploadTask, status)),
         );
         expect(result.status, equals(TaskStatus.complete));
         expect(statusCallbackCounter, equals(3));
@@ -2514,9 +2511,8 @@ void main() {
         result = await FileDownloader().upload(
           task2,
           onStatus: (status) => statusCallback(TaskStatusUpdate(task2, status)),
-          onProgress:
-              (progress) =>
-                  progressCallback(TaskProgressUpdate(task2, progress)),
+          onProgress: (progress) =>
+              progressCallback(TaskProgressUpdate(task2, progress)),
         );
         expect(result.status, equals(TaskStatus.complete));
         expect(statusCallbackCounter, equals(3));
@@ -3212,11 +3208,10 @@ void main() {
         unawaited(
           FileDownloader().download(
             task,
-            onStatus:
-                (status) => statusCallback(TaskStatusUpdate(task, status)),
-            onProgress:
-                (progress) =>
-                    progressCallback(TaskProgressUpdate(task, progress)),
+            onStatus: (status) =>
+                statusCallback(TaskStatusUpdate(task, status)),
+            onProgress: (progress) =>
+                progressCallback(TaskProgressUpdate(task, progress)),
           ),
         );
         await someProgressCompleter.future;
@@ -3679,14 +3674,13 @@ void main() {
       timeout: const Timeout(Duration(minutes: 2)),
       () async {
         // test skips .images and .video for iOS as that blocks on permission
-        final valuesToTest =
-            Platform.isIOS
-                ? SharedStorage.values.where(
-                  (element) =>
-                      element != SharedStorage.video &&
-                      element != SharedStorage.images,
-                )
-                : SharedStorage.values;
+        final valuesToTest = Platform.isIOS
+            ? SharedStorage.values.where(
+                (element) =>
+                    element != SharedStorage.video &&
+                    element != SharedStorage.images,
+              )
+            : SharedStorage.values;
         for (final destination in valuesToTest) {
           await FileDownloader().download(task);
           var filePath = await task.filePath();
@@ -4151,7 +4145,10 @@ void main() {
         final batchFuture = FileDownloader().downloadBatch(tasks);
         print('Wait a second after enqueuing all non-priority tasks');
         await Future.delayed(const Duration(milliseconds: 1000));
-        final priorityTask = DownloadTask(url: urlWithContentLength, priority: 0);
+        final priorityTask = DownloadTask(
+          url: urlWithContentLength,
+          priority: 0,
+        );
         print('PriorityTask taskId = ${priorityTask.taskId}');
         final result = await FileDownloader().download(priorityTask);
         expect(result.status, equals(TaskStatus.complete));
@@ -4421,8 +4418,8 @@ void main() {
         for (final baseDirectoryEnum in BaseDirectory.values) {
           final subdirName =
               (Platform.isWindows && baseDirectoryEnum == BaseDirectory.root)
-                  ? 'C:\\'
-                  : '';
+              ? 'C:\\'
+              : '';
           final task = DownloadTask(
             url: urlWithoutContentLength,
             baseDirectory: baseDirectoryEnum,
@@ -4451,8 +4448,8 @@ void main() {
           for (final baseDirectoryEnum in BaseDirectory.values) {
             final modifiedSubdirName =
                 (Platform.isWindows && baseDirectoryEnum == BaseDirectory.root)
-                    ? 'C:\\$subdirName'
-                    : subdirName;
+                ? 'C:\\$subdirName'
+                : subdirName;
             final task = DownloadTask(
               url: urlWithoutContentLength,
               baseDirectory: baseDirectoryEnum,
@@ -4479,8 +4476,8 @@ void main() {
           for (final baseDirectoryEnum in BaseDirectory.values) {
             final modifiedSubdirName =
                 (Platform.isWindows && baseDirectoryEnum == BaseDirectory.root)
-                    ? 'C:\\$subdirName'
-                    : subdirName;
+                ? 'C:\\$subdirName'
+                : subdirName;
             final task = DownloadTask(
               url: urlWithoutContentLength,
               baseDirectory: baseDirectoryEnum,

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider/path_provider.dart';
+
 import 'test_utils.dart';
 
 // Helper function to get a temporary directory for file operations.
@@ -369,8 +370,7 @@ void main() {
         () async {
           const taskId = 'head-download-test';
           final task = DownloadTask(
-            url:
-                'http://$localServerHostPort/get?taskId=$taskId', //Use get for HEAD
+            url: 'http://$localServerHostPort/get?taskId=$taskId', //Use get for HEAD
             httpRequestMethod: 'HEAD',
             taskId: taskId,
           );
