@@ -7,6 +7,8 @@ import android.app.job.JobScheduler
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.Build
 import android.Manifest
 import android.content.pm.PackageManager
@@ -212,9 +214,18 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     }
                     
                     val jobInfoBuilder = JobInfo.Builder(task.taskId.hashCode(), componentName)
-                        .setRequiredNetworkType(if (taskRequiresWifi) JobInfo.NETWORK_TYPE_UNMETERED else JobInfo.NETWORK_TYPE_ANY)
                         .setRequiresCharging(false)
                         .setExtras(extras)
+
+                    if (taskRequiresWifi) {
+                        if (Build.VERSION.SDK_INT >= 28) {
+                            jobInfoBuilder.setRequiredNetwork(wifiNetworkRequest())
+                        } else {
+                            jobInfoBuilder.setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED)
+                        }
+                    } else {
+                        jobInfoBuilder.setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                    }
                     
                     if (Build.VERSION.SDK_INT >= 34) {
                         jobInfoBuilder.setUserInitiated(true)
@@ -254,9 +265,17 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 }
                 val data = dataBuilder.build()
                 
-                val constraints = Constraints.Builder().setRequiredNetworkType(
-                    if (taskRequiresWifi) NetworkType.UNMETERED else NetworkType.CONNECTED
-                ).build()
+                val constraints = Constraints.Builder().apply {
+                    if (taskRequiresWifi) {
+                        if (Build.VERSION.SDK_INT >= 28) {
+                            setRequiredNetworkRequest(wifiNetworkRequest(), NetworkType.UNMETERED)
+                        } else {
+                            setRequiredNetworkType(NetworkType.UNMETERED)
+                        }
+                    } else {
+                        setRequiredNetworkType(NetworkType.CONNECTED)
+                    }
+                }.build()
                 val requestBuilder: OneTimeWorkRequest.Builder =
                     createRequestBuilder(task, data, constraints) ?: return false
                 if (actualDelayMillis != 0L) {
@@ -329,6 +348,13 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         fun taskRequiresWifi(task: Task): Boolean {
             return (requireWifi == RequireWiFi.forAllTasks || (requireWifi == RequireWiFi.asSetByTask && task.requiresWiFi))
         }
+
+        /** Create a NetworkRequest requiring Wi-Fi and internet capability */
+        private fun wifiNetworkRequest(): NetworkRequest =
+            NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                .build()
 
         /**
          * Create a [OneTimeWorkRequestBuilder] for the given [task], [data] and [constraints]

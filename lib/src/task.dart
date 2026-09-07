@@ -324,7 +324,7 @@ sealed class Task extends Request implements Comparable {
   /// groups
   /// [updates] the kind of progress updates requested
   /// [requiresWiFi] if set, restricts task to non-metered / non-cellular connections
-  /// (on Android, requires an unmetered network connection; on iOS, disables cellular access).
+  /// (on Android API 28+, requires a Wi-Fi connection; on older Android versions, requires an unmetered connection; on iOS, disables cellular access).
   /// If not set, task may execute over cellular or metered networks.
   /// [retries] if >0 will retry a failed download this many times
   /// [allowPause]
@@ -732,7 +732,7 @@ final class DownloadTask extends Task {
   /// groups
   /// [updates] the kind of progress updates requested
   /// [requiresWiFi] if set, restricts task to non-metered / non-cellular connections
-  /// (on Android, requires an unmetered network connection; on iOS, disables cellular access).
+  /// (on Android API 28+, requires a Wi-Fi connection; on older Android versions, requires an unmetered connection; on iOS, disables cellular access).
   /// If not set, task may execute over cellular or metered networks.
   /// [retries] if >0 will retry a failed download this many times
   /// [allowPause] if true, allows pause command
@@ -943,7 +943,7 @@ final class UploadTask extends Task {
   /// groups
   /// [updates] the kind of progress updates requested
   /// [requiresWiFi] if set, restricts task to non-metered / non-cellular connections
-  /// (on Android, requires an unmetered network connection; on iOS, disables cellular access).
+  /// (on Android API 28+, requires a Wi-Fi connection; on older Android versions, requires an unmetered connection; on iOS, disables cellular access).
   /// If not set, task may execute over cellular or metered networks.
   /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5.
   /// On Android 14+, setting priority to 0 requires the
@@ -1575,7 +1575,7 @@ final class DataTask extends Task {
   /// groups
   /// [updates] the kind of progress updates requested (only .status or none)
   /// [requiresWiFi] if set, restricts task to non-metered / non-cellular connections
-  /// (on Android, requires an unmetered network connection; on iOS, disables cellular access).
+  /// (on Android API 28+, requires a Wi-Fi connection; on older Android versions, requires an unmetered connection; on iOS, disables cellular access).
   /// If not set, task may execute over cellular or metered networks.
   /// [retries] if >0 will retry a failed download this many times
   /// [priority] in range 0 <= priority <= 10 with 0 highest, defaults to 5.
