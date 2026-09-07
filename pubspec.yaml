@@ -46,3 +46,6 @@ flutter:
 
 funding:
   - https://github.com/sponsors/781flyingdutchman
+
+false_secrets:
+  - /test/mtls_test.dart
