@@ -69,7 +69,7 @@ Future<void> doDownloadTask(
   }
   var resultStatus = TaskStatus.failed;
   try {
-    final response = await client.send(request);
+    final response = await client.send(request).timeout(requestTimeout);
     if (!isCanceled) {
       eTagHeader = response.headers['etag'] ?? response.headers['ETag'];
       final acceptRangesHeader = response.headers['accept-ranges'];

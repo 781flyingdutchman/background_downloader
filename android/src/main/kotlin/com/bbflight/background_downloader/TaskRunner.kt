@@ -29,6 +29,7 @@ import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.SocketException
+import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.URLDecoder
 import java.net.MalformedURLException
@@ -602,6 +603,7 @@ open class TaskRunner(
                 try {
                     requestMethod = task.httpRequestMethod
                     connectTimeout = requestTimeoutSeconds * 1000
+                    readTimeout = requestTimeoutSeconds * 1000
                     for (header in task.headers) {
                         // For UploadTask, copy headers unless it's "Range" or "Content-Disposition".
                         // For other task types, copy all headers.
@@ -660,7 +662,7 @@ open class TaskRunner(
 
             setTaskException(e)
             when (e) {
-                is SocketException -> Log.i(
+                is SocketException, is SocketTimeoutException -> Log.i(
                     TAG,
                     "Socket exception for taskId ${task.taskId}: ${e.message}"
                 )
@@ -924,7 +926,7 @@ open class TaskRunner(
         if (e is IOException) {
             exceptionType = ExceptionType.fileSystem
         }
-        if (e is SocketException) {
+        if (e is SocketException || e is SocketTimeoutException) {
             exceptionType = ExceptionType.connection
         }
         taskException = TaskException(exceptionType, description = e.toString())

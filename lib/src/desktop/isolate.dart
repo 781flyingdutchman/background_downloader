@@ -127,7 +127,11 @@ Future<void> doTask((RootIsolateToken, SendPort) isolateArguments) async {
         sendPort,
       ),
       UploadTask() => doUploadTask(task, sendPort),
-      DataTask() => doDataTask(task, sendPort),
+      DataTask() => doDataTask(
+        task,
+        requestTimeout ?? const Duration(seconds: 60),
+        sendPort,
+      ),
       _ => throw UnimplementedError(),
     };
   }

@@ -27,6 +27,9 @@ void main() {
       globalConfig: (Config.tempFilePath, Config.never),
     );
     await FileDownloader().configure(globalConfig: (Config.mTLS, false));
+    await FileDownloader().configure(
+      globalConfig: (Config.requestTimeout, null),
+    );
     await defaultTearDown();
   });
 
@@ -626,4 +629,53 @@ void main() {
       skip: !(Platform.isMacOS || Platform.isLinux || Platform.isWindows),
     );
   });
+
+  group('Config.requestTimeout', () {
+    testWidgets(
+      'task fails with connection timeout when server delays response beyond requestTimeout',
+      timeout: const Timeout(Duration(minutes: 2)),
+      (widgetTester) async {
+        try {
+          // Configure requestTimeout to 2 seconds
+          await FileDownloader().configure(
+            globalConfig: (Config.requestTimeout, const Duration(seconds: 2)),
+          );
+
+          FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
+          // Test endpoint /delay/10 delays for 10 seconds before sending headers
+          final delayUrl = 'http://$localServerHostPort/delay/10';
+          final delayTask = DownloadTask(
+            url: delayUrl,
+            filename: 'delay_test.txt',
+            updates: Updates.status,
+            retries: 0,
+          );
+
+          statusCallbackCompleter = Completer<void>();
+          final stopwatch = Stopwatch()..start();
+          expect(await FileDownloader().enqueue(delayTask), isTrue);
+          await statusCallbackCompleter.future;
+          stopwatch.stop();
+
+          expect(lastStatus, equals(TaskStatus.failed));
+          expect(lastException, isA<TaskConnectionException>());
+          // Ensure it timed out around requestTimeout (~2-5 seconds), well before 10 seconds
+          expect(stopwatch.elapsed.inSeconds, lessThan(8));
+          expect(
+            (await FileDownloader().allTasks()).where(
+              (t) => t.taskId == delayTask.taskId,
+            ),
+            isEmpty,
+          );
+        } finally {
+          // Always reset requestTimeout to default
+          await FileDownloader().configure(
+            globalConfig: (Config.requestTimeout, null),
+          );
+        }
+      },
+      skip: Platform.isIOS, // iOS background URLSession ignores timeoutIntervalForRequest by Apple design
+    );
+  });
 }
+

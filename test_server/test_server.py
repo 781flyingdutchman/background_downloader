@@ -432,6 +432,14 @@ def response_headers():
         resp.headers[key] = value
     return resp
 
+@app.route('/delay/<int:seconds>', methods=['GET', 'POST', 'HEAD'])
+def delay(seconds):
+    """
+    Delays the response for `seconds` before sending headers.
+    """
+    time.sleep(seconds)
+    return Response(f"Delayed {seconds}s", mimetype='text/plain')
+
 if __name__ == '__main__':
     # Use threaded=True to handle multiple concurrent requests if needed (Flask dev server default is threaded)
     app.run(host='127.0.0.1', port=8080)
