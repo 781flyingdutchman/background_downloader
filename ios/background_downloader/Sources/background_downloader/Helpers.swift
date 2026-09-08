@@ -64,49 +64,38 @@ func createTempFileWithRange(from fileURL: URL, start: UInt64, contentLength: UI
     let fileManager = FileManager.default
     let tempDir = fileManager.temporaryDirectory
     let tempFileURL = tempDir.appendingPathComponent(UUID().uuidString) // Create a unique temporary file
-    
+
     // Create the temporary file
     fileManager.createFile(atPath: tempFileURL.path, contents: nil, attributes: nil)
-    guard let inputStream = InputStream(url: fileURL),
-          let outputStream = OutputStream(toFileAtPath: tempFileURL.path, append: false) else {
-        os_log("Cannot create input or output stream for partial upload temporary file creation", log: log, type: .error)
+    guard let inputHandle = try? FileHandle(forReadingFrom: fileURL),
+          let outputHandle = try? FileHandle(forWritingTo: tempFileURL) else {
+        os_log("Cannot open file handles for partial upload temporary file creation", log: log, type: .error)
         return nil
     }
-    inputStream.open()
-    outputStream.open()
     defer {
-        inputStream.close()
-        outputStream.close()
+        try? inputHandle.close()
+        try? outputHandle.close()
     }
-    let chunkSize = 1024 * 1024 // 1MB chunks
-    let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: chunkSize)
-    defer { buffer.deallocate() }
+    let bufferSize = 1024 * 1024 // 1MB chunks
     var remainingBytes = contentLength
-    var totalRead: UInt64 = 0
-    
-    // Seek to the start position
-    while totalRead < start {
-        let seekBytes = min(chunkSize, Int(start - totalRead))
-        let bytesRead = inputStream.read(buffer, maxLength: seekBytes)
-        if bytesRead < 0 {
-            os_log("Cannot read data up to desired start from original file for partial upload temporary file creation", log: log, type: .error)
-            return nil
+    do {
+        // Seek to the start position, rather than reading and discarding every
+        // byte before it. Slicing one file into N chunks calls this function N
+        // times with an increasing `start`, so discarding made the total work
+        // quadratic in N: uploading a 800MB file in 61 chunks read ~24GB.
+        try inputHandle.seek(toOffset: start)
+        while remainingBytes > 0 {
+            let bytesToRead = Int(min(UInt64(bufferSize), remainingBytes))
+            guard let data = try inputHandle.read(upToCount: bytesToRead), !data.isEmpty else {
+                break // EOF
+            }
+            try outputHandle.write(contentsOf: data)
+            remainingBytes -= UInt64(data.count)
         }
-        if bytesRead == 0 { break } // EOF
-        totalRead += UInt64(bytesRead)
-    }
-    
-    // Read only the required range
-    while remainingBytes > 0 {
-        let bytesToRead = min(chunkSize, Int(remainingBytes))
-        let bytesRead = inputStream.read(buffer, maxLength: bytesToRead)
-        if bytesRead <= 0 { break } // EOF
-        let bytesWritten = outputStream.write(buffer, maxLength: bytesRead)
-        if bytesWritten < 0 {
-            os_log("Cannot write data to new temporary file for partial upload", log: log, type: .error)
-            return nil
-        }
-        remainingBytes -= UInt64(bytesWritten)
+    } catch {
+        os_log("Cannot create temporary file for partial upload: %@", log: log, type: .error,
+               error.localizedDescription)
+        return nil
     }
     return tempFileURL
 }
