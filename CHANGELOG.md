@@ -1,5 +1,6 @@
 ## 9.6.1
 
+* Expand `connectivity_plus` version constraint to `>=6.1.3 <8.0.0` to support `connectivity_plus` 7.x (fixes #722)
 * [Android] Enforce Wi-Fi constraint via `NetworkRequest` on Android API 28+: require `TRANSPORT_WIFI` and `NET_CAPABILITY_INTERNET` for tasks requiring Wi-Fi, preventing downloads over cellular even when reported as unmetered by the carrier, with fallback to `NETWORK_TYPE_UNMETERED` on older Android versions (fixes #717)
 * [Documentation] Clarify `requiresWiFi` behavior on Android API 28+ vs earlier Android versions
 
