@@ -16,8 +16,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # This is Dart 3.7.0
-  FLUTTER_MIN_SDK: '3.29.0'
+  # This is Dart 3.13.0
+  FLUTTER_MIN_SDK: '3.47.0'
 
 jobs:
   format:
