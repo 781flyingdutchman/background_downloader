@@ -91,3 +91,68 @@ In addition to normal percentage values (0.0 to 1.0), the `progress` field can a
 *   `progressPaused` (-5.0): Task is `paused`
 
 For example, if you receive a `TaskProgressUpdate` with a `progress` of `-1.0` (`progressFailed`), you know the task has failed, and the UI can reflect an error state on the progress bar.
+
+## Advanced: Observing Updates from Native iOS Code
+
+> [!NOTE]
+> This is an **advanced feature** specifically for iOS applications that need to update native platform UI (such as **ActivityKit Live Activities**, the **Dynamic Island**, or **WidgetKit** timelines) while the Flutter app is suspended.
+>
+> **Normal Flutter applications do not need this.** Standard task monitoring via `FileDownloader().updates.listen(...)` or `FileDownloader().registerCallbacks(...)` in Dart is sufficient for almost all use cases and requires **zero native code changes**.
+
+### Background Context
+
+On iOS, background downloads and uploads run via Apple's native `URLSession` background transfer service. When transfers complete or fail while the application is suspended or terminated, iOS temporarily wakes the app process in the background. However, the Flutter engine and Dart isolate may not be actively running during this brief background wake-up, and background isolates do not have access to UI plugins.
+
+Because Live Activities, Dynamic Island widgets, and WidgetKit extensions are native iOS frameworks written in Swift/SwiftUI, any updates to them during background wake-ups must be executed directly in native Swift.
+
+### Using Native Hooks in Swift
+
+`BDPlugin` provides two optional static closures that you can assign in your iOS `AppDelegate.swift` (or custom native coordinator):
+
+*   `BDPlugin.onNativeTaskStatusChange`: Called whenever a task status changes (e.g. `.running`, `.complete`, `.failed`). Receives the strongly typed `Task` and `TaskStatusUpdate`.
+*   `BDPlugin.onNativeTaskProgressChange`: Called with throttled progress updates (0.0 to 1.0) while the task is executing. Receives the `Task` and `progress` (`Double`).
+
+Because these closures are `nil` by default, they incur zero runtime overhead or allocations if not used.
+
+### Example Usage in `AppDelegate.swift`
+
+```swift
+import UIKit
+import Flutter
+import background_downloader
+
+@main
+@objc class AppDelegate: FlutterAppDelegate {
+  override func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+  ) -> Bool {
+    GeneratedPluginRegistrant.register(with: self)
+
+    // Optional: Observe task status changes in native Swift
+    BDPlugin.onNativeTaskStatusChange = { task, statusUpdate in
+      // Filter by group if desired
+      guard task.group == "downloads" else { return }
+
+      switch statusUpdate.taskStatus {
+      case .complete:
+        // Update Live Activity or reload widget timeline:
+        // TaskActivityManager.shared.update(taskId: task.taskId, isComplete: true)
+        print("Native status update: Task \(task.taskId) (\(task.filename)) completed")
+      case .failed:
+        print("Native status update: Task \(task.taskId) failed: \(statusUpdate.exception?.description ?? "unknown error")")
+      default:
+        break
+      }
+    }
+
+    // Optional: Observe progress updates in native Swift
+    BDPlugin.onNativeTaskProgressChange = { task, progress in
+      // Update a Live Activity progress bar (progress is 0.0 .. 1.0)
+      // TaskActivityManager.shared.updateProgress(taskId: task.taskId, progress: progress)
+    }
+
+    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+}
+```

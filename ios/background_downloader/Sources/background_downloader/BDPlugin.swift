@@ -56,6 +56,14 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     public static var backgroundChannel: FlutterMethodChannel? // for native <-> plugin comms
     public static var callbackChannel: FlutterMethodChannel? // for native to trigger task callbacks
     public static var flutterPluginRegistrantCallback: FlutterPluginRegistrantCallback?
+
+    /// Optional closure called on task status changes.
+    /// Set in native iOS code (e.g. AppDelegate) for advanced use cases like Live Activities or Widgets.
+    public static var onNativeTaskStatusChange: ((Task, TaskStatusUpdate) -> Void)?
+
+    /// Optional closure called on task progress updates.
+    /// Set in native iOS code (e.g. AppDelegate) for advanced use cases like Live Activity progress bars.
+    public static var onNativeTaskProgressChange: ((Task, Double) -> Void)?
     
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "com.bbflight.background_downloader", binaryMessenger: registrar.messenger())

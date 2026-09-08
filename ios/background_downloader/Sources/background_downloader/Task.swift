@@ -9,34 +9,34 @@ import Foundation
 
 
 /// Partial version of the Dart side DownloadTask, only used for background loading
-struct Task : Codable, Hashable {
-    var taskId: String = "\(Int.random(in: 1..<(1 << 32)))"
-    var url: String
-    var urls: [String]? = []
-    var filename: String
-    var headers: [String:String] = [:]
-    var httpRequestMethod: String = "GET"
-    var chunks: Int? = 1
-    var post: String?
-    var fileField: String?
-    var mimeType: String?
-    var fields: [String:String]?
-    var directory: String = ""
-    var baseDirectory: Int
-    var group: String
-    var updates: Int
-    var requiresWiFi: Bool = false
-    var retries: Int = 0
-    var retriesRemaining: Int = 0
-    var allowPause: Bool = false
-    var priority: Int = 5
-    var metaData: String = ""
-    var displayName: String = ""
-    var creationTime: Int64 = Int64((Date().timeIntervalSince1970 * 1000.0).rounded())
+public struct Task : Codable, Hashable {
+    public var taskId: String = "\(Int.random(in: 1..<(1 << 32)))"
+    public var url: String
+    public var urls: [String]? = []
+    public var filename: String
+    public var headers: [String:String] = [:]
+    public var httpRequestMethod: String = "GET"
+    public var chunks: Int? = 1
+    public var post: String?
+    public var fileField: String?
+    public var mimeType: String?
+    public var fields: [String:String]?
+    public var directory: String = ""
+    public var baseDirectory: Int
+    public var group: String
+    public var updates: Int
+    public var requiresWiFi: Bool = false
+    public var retries: Int = 0
+    public var retriesRemaining: Int = 0
+    public var allowPause: Bool = false
+    public var priority: Int = 5
+    public var metaData: String = ""
+    public var displayName: String = ""
+    public var creationTime: Int64 = Int64((Date().timeIntervalSince1970 * 1000.0).rounded())
     var options: TaskOptions?
     var transferHints: [Int]?
     var stallTimeout: Int64?
-    var taskType: String
+    public var taskType: String
 }
 
 extension Task {
@@ -227,7 +227,7 @@ struct TaskOptions : Codable, Hashable {
 }
 
 /// Defines a set of possible states which a [DownloadTask] can be in.
-enum TaskStatus: Int, Codable {
+public enum TaskStatus: Int, Codable {
     case enqueued,
          running,
          complete,
@@ -239,15 +239,15 @@ enum TaskStatus: Int, Codable {
 }
 
 /** Holds data associated with a task status update, for local storage */
-struct TaskStatusUpdate: Codable {
-    var task: Task
-    var taskStatus: TaskStatus
-    var exception: TaskException?
-    var responseBody: String?
-    var responseStatusCode: Int?
-    var responseHeaders: [String: String]?
-    var mimeType: String?
-    var charSet: String?
+public struct TaskStatusUpdate: Codable {
+    public var task: Task
+    public var taskStatus: TaskStatus
+    public var exception: TaskException?
+    public var responseBody: String?
+    public var responseStatusCode: Int?
+    public var responseHeaders: [String: String]?
+    public var mimeType: String?
+    public var charSet: String?
     
     func argList() -> [Any?] {
         let finalState = isFinalState(status: taskStatus)
@@ -280,7 +280,7 @@ struct ResumeData: Encodable {
 }
 
 /// The type of [TaskException]
-enum ExceptionType: String, Codable {
+public enum ExceptionType: String, Codable {
     case
     
     // General error
@@ -312,10 +312,10 @@ enum ExceptionType: String, Codable {
  * The [description] is typically taken from the platform-generated
  * error message, or from the plugin. The localization is undefined
  */
-struct TaskException : Codable {
-    var type: ExceptionType
-    var httpResponseCode: Int = -1
-    var description: String
+public struct TaskException : Codable {
+    public var type: ExceptionType
+    public var httpResponseCode: Int = -1
+    public var description: String
 }
 
 func taskException(jsonString: String) -> TaskException {

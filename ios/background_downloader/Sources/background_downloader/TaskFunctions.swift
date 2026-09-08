@@ -417,6 +417,9 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
                            mimeType: mimeType,
                            charSet: charSet)
         : TaskStatusUpdate(task: task, taskStatus: status)
+    if let onNativeTaskStatusChange = BDPlugin.onNativeTaskStatusChange {
+        onNativeTaskStatusChange(task, statusUpdate)
+    }
     if providesStatusUpdates(downloadTask: task) || retryNeeded {
         let arg = statusUpdate.argList()
         if !postOnBackgroundChannel(method: "statusUpdate", task: task, arg: arg) {
@@ -457,6 +460,9 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
 ///
 /// Sends progress update via the background channel to Dart, if requested
 func processProgressUpdate(task: Task, progress: Double, expectedFileSize: Int64 = -1, networkSpeed: Double = -1.0, timeRemaining: TimeInterval = -1.0) {
+    if let onNativeTaskProgressChange = BDPlugin.onNativeTaskProgressChange {
+        onNativeTaskProgressChange(task, progress)
+    }
     if providesProgressUpdates(task: task) {
         if (!postOnBackgroundChannel(method: "progressUpdate", task: task, arg: [progress, expectedFileSize, networkSpeed, Int(timeRemaining * 1000.0)] as [Any])) {
             // store update locally as a merged task/progress JSON string
