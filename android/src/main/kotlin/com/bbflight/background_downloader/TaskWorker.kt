@@ -13,8 +13,8 @@ import android.util.Log
 /**
  * The worker to execute one task
  *
- * It is now a wrapper around [TaskRunner], delegating the actual work to it.
- * This class implements [TaskJobContext] to provide the context for the [TaskRunner].
+ * Wraps [TaskRunner], delegating the actual work to it, and implements
+ * [TaskJobContext] to provide the context for the [TaskRunner].
  */
 @Suppress("ConstPropertyName")
 open class TaskWorker(
@@ -137,13 +137,7 @@ open class TaskWorker(
                 notificationConfig = bdJson.decodeFromString(notificationConfigJsonString!!)
             }
             
-            // Check runInForeground pre-requisite (shared pref check done in Runner mostly, 
-            // but might need initial value for context?)
-             val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
-             val runInForegroundFileSize = prefs.getInt(BDPlugin.keyConfigForegroundFileSize, -1)
-             // simplified check, Runner does full check
-             // But we need to set runInForeground to false initially
-             runInForeground = false 
+            runInForeground = false 
 
             val runner = createRunner()
             runner.run()
@@ -160,10 +154,6 @@ open class TaskWorker(
      * Must be overridden by subclasses
      */
     open fun createRunner(): TaskRunner {
-        // Should not be called directly on TaskWorker, but abstract not allowed on non-abstract class
-        // And TaskWorker needs to be instantiable for UpdateNotificationWorker?
-        // UpdateNotificationWorker overrides doWork entirely, so createRunner is not called.
-        // But for other workers, it must be overridden.
         throw NotImplementedError("Subclasses must override createRunner")
     }
 }

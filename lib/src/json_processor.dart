@@ -167,12 +167,7 @@ class JsonProcessor {
 
   void _shutdown() {
     if (_pendingCompleters.isNotEmpty) {
-      // Requests are still in flight (the isolate may be starved of CPU under
-      // heavy load, e.g. during a large download on a memory-pressured
-      // device). Killing it now would fail those requests with a StateError
-      // that surfaces as an unhandled 'Background isolate shut down' error in
-      // the app. Defer the shutdown instead; the timer is reset again when a
-      // request completes.
+      // Defer shutdown while requests are still in flight
       _resetShutdownTimer();
       return;
     }

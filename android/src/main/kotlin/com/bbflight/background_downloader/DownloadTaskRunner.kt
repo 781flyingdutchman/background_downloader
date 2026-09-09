@@ -578,12 +578,10 @@ class DownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) {
     }
 
     /**
-     * Sets the group ownership of the downloaded file.
+     * Sets the group ownership of the downloaded file to unmark the file as a cache file.
      *
      * Determines the app's GID and then calls Os.chown. Logs success or failure.
      * Likely to fail if the file is in external storage.
-     *
-     * Reason for changing ownership os to unmark file as a cache file (issue #498)
      */
     private fun setFileOwnership(destFile: File) {
         try {

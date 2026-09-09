@@ -79,10 +79,7 @@ func createTempFileWithRange(from fileURL: URL, start: UInt64, contentLength: UI
     let bufferSize = 1024 * 1024 // 1MB chunks
     var remainingBytes = contentLength
     do {
-        // Seek to the start position, rather than reading and discarding every
-        // byte before it. Slicing one file into N chunks calls this function N
-        // times with an increasing `start`, so discarding made the total work
-        // quadratic in N: uploading a 800MB file in 61 chunks read ~24GB.
+        // Seek to the start position
         try inputHandle.seek(toOffset: start)
         while remainingBytes > 0 {
             let bytesToRead = Int(min(UInt64(bufferSize), remainingBytes))

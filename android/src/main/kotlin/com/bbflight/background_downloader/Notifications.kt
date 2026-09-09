@@ -191,12 +191,7 @@ class NotificationReceiver : BroadcastReceiver() {
         val bundle = intent.getBundleExtra(keyBundle)
         val taskId = bundle?.getString(keyTaskId)
         if (taskId != null) {
-            // BroadcastReceiver.onReceive runs on the main thread, so we cannot
-            // use runBlocking here - it would block the UI thread for the
-            // duration of WorkManager cancel / re-enqueue operations (which
-            // internally `.get()` on ListenableFutures). Use goAsync() instead
-            // and run the work on a background dispatcher. BroadcastReceiver
-            // is allowed up to ~10s of async work via goAsync().
+            // Run on a background dispatcher via goAsync() to avoid blocking the main thread
             val pendingResult = goAsync()
             CoroutineScope(Dispatchers.Default).launch {
                 try {
@@ -275,9 +270,8 @@ class NotificationReceiver : BroadcastReceiver() {
                             )
                         } catch (e: Exception) {
                             if (Build.VERSION.SDK_INT > Build.VERSION_CODES.S && e is ForegroundServiceStartNotAllowedException) {
-                                // See issue #363: https://github.com/bbflight/background_downloader/issues/363
-                                // ForegroundServiceStartNotAllowedException if resume button is clicked
-                                // when app is in background -> Bring app to foreground first.
+                                // If resume button is clicked when app is in background,
+                                // bring app to foreground before attempting resume.
                                 val launchIntent =
                                     context.packageManager.getLaunchIntentForPackage(
                                         context.packageName
@@ -534,13 +528,7 @@ object NotificationService {
         ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
             .setShowWhen(notificationType != NotificationType.running)
         if (notificationType == NotificationType.running) {
-            // Keep concurrent download notifications in a stable order.
-            // Without an explicit `when`, every progress update re-stamps
-            // the notification with the current time, and the shade
-            // re-ranks the app's notifications on each tick, so two
-            // running downloads constantly swap places. Pin `when` to the
-            // task's creation time (hidden by setShowWhen above) and add
-            // a deterministic sort key as a tie-breaker.
+            // Keep concurrent download notifications in a stable order
             builder.setWhen(taskWorker.task.creationTime)
                 .setSortKey(taskWorker.task.taskId)
                 .setOnlyAlertOnce(true)

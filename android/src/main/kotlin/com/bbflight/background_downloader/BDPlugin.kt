@@ -114,11 +114,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         var requireWifi = RequireWiFi.asSetByTask // global setting
         val localResumeData =
             Collections.synchronizedMap(mutableMapOf<String, ResumeData>()) // by taskId, for pause notifications
-        // ConcurrentHashMap (not synchronizedMap): canSendCancellation prunes stale
-        // entries by iterating this map, and synchronizedMap does not synchronize
-        // iteration, which raced with concurrent status-update processing and threw
-        // ConcurrentModificationException. ConcurrentHashMap's iterators are
-        // weakly-consistent and never throw CME.
         val cancelUpdateSentForTaskId =
             ConcurrentHashMap<String, Long>() // <taskId, timeMillis>
         val pausedTaskIds =
@@ -126,7 +121,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         val canceledTaskIds =
             Collections.synchronizedSet(mutableSetOf<String>()) // <taskId>, acts as flag
         val parallelDownloadTaskWorkers =
-            Collections.synchronizedMap(HashMap<String, ParallelDownloadTaskRunner>()) //Was a HashMap
+            Collections.synchronizedMap(HashMap<String, ParallelDownloadTaskRunner>())
         val tasksToReEnqueue =
             Collections.synchronizedSet(mutableSetOf<Task>()) // for when WiFi requirement changes
         val taskIdsRequiringWiFi =
@@ -602,11 +597,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         uriUtilsChannel.setMethodCallHandler(UriUtilsMethodCallHelper(this))
         val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
         requireWifi = RequireWiFi.entries[prefs.getInt(keyRequireWiFi, 0)]
-        // clear expired items - moved off the main thread because
-        // WorkManager.getWorkInfosByTag(...).get() blocks until the WorkManager
-        // executor responds, which can stall the UI thread on cold start
-        // (especially after the Flutter Great Thread Merge where plugin
-        // callbacks run on Main).
+        // Clear expired items on a background dispatcher to avoid blocking the main thread
         defaultScope.launch {
             val workManager = WorkManager.getInstance(applicationContext)
             val allWorkInfos = withContext(Dispatchers.IO) {

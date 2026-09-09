@@ -372,8 +372,6 @@ Future<dynamic> _dispatch(
 };
 
 /// The executor that runs in the isolate and does the actual work
-///
-/// This code is identical to the previous [LocalStorePersistentStorage]
 class _LocalStorePersistentStorageExecutor {
   final log = Logger('LocalStorePersistentStorageExecutor');
   final _db = Localstore.instance;
@@ -383,9 +381,6 @@ class _LocalStorePersistentStorageExecutor {
   static const resumeDataPath = 'backgroundDownloaderResumeData';
   static const pausedTasksPath = 'backgroundDownloaderPausedTasks';
   static const metaDataCollection = 'backgroundDownloaderDatabase';
-
-  // Helper methods modified to take/return objects instead of maps where possible
-  // to perform json deserialization in the isolate
 
   Future<void> storeTaskRecord(Map<String, dynamic> recordJson) async {
     final taskId = recordJson['taskId'] as String;

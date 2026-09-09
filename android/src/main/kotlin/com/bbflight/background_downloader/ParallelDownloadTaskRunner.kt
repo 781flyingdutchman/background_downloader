@@ -50,12 +50,6 @@ class ParallelDownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) 
     override suspend fun process(
         connection: HttpURLConnection,
     ): TaskStatus {
-         // We need to register here as well or ensure it is registered.
-         // Since connectAndProcess calls super which calls process, we are fine.
-         // But let's handle the registration in a way that respects the architecture.
-         // Ideally, BDPlugin should interact with a TaskManager or TaskRunnerManager.
-         // For now, to mimic existing behavior, we will need to update BDPlugin.
-         
         return withContext(Dispatchers.Default) {
             var enqueueJob: Job? = null
             var testerJob: Job? = null

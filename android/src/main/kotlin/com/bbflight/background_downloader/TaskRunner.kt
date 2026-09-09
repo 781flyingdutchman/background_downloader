@@ -305,11 +305,7 @@ open class TaskRunner(
          */
         private fun canSendCancellation(task: Task): Boolean {
             val now = currentTimeMillis()
-            // Prune stale entries in place. cancelUpdateSentForTaskId is a
-            // ConcurrentHashMap, so removing while iterating is safe even when other
-            // workers are processing status updates concurrently (the previous
-            // reassignment via .filter{} iterated a synchronizedMap without holding
-            // its monitor and threw ConcurrentModificationException).
+            // Prune stale cancellation entries older than 3 seconds
             BDPlugin.cancelUpdateSentForTaskId.entries.removeAll { now - it.value >= 3000 }
             return BDPlugin.cancelUpdateSentForTaskId[task.taskId] == null
         }
@@ -786,15 +782,7 @@ open class TaskRunner(
                         // check if task is stopped (canceled), paused or timed out
                         if (context.isTaskStopped) {
                             activeConnection?.disconnect()
-                            var stopReasonStr = "Unknown"
-                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                                // We cannot easily get StopReason inside TaskRunner without passing more context
-                                // For now, we just log generic message or rely on WorkManager specific implementation if we were inside WorkManager.
-                                // But since we are abstracting, we just assume stopped.
-                                // If needed, we can add getStopReason to TaskJobContext.
-                                // For UIDT/JobService, onStopJob passes params, but here we just check isStopped flag.
-                            }
-                             Log.w( TAG, "Task ${task.taskId} stopped") // simplified log
+                            Log.w(TAG, "Task ${task.taskId} stopped")
                             doneCompleter.complete(TaskStatus.failed)
                             break
                         }
