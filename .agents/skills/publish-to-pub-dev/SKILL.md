@@ -16,7 +16,7 @@ This skill guides the full release process of the `background_downloader` packag
 ## Release Workflow Overview
 
 The release consists of 11 sequential steps:
-1. **Run Integration Tests with Flaky Test Handling** (iOS emulator, Android emulator, macOS)
+1. **Clean Test Artifacts & Run Integration Tests** (clean slate, iOS emulator, Android emulator, macOS)
 2. **Check pub.dev Version & Determine Version Bump** (respect manual bumps; otherwise patch/minor)
 3. **Verify and Update CHANGELOG.md** (ensure all changes since previous release are documented)
 4. **Pre-Commit Quality Verification** (ensure 0 analyzer issues and clean `dart format`)
@@ -30,13 +30,33 @@ The release consists of 11 sequential steps:
 
 ---
 
-## Step 1: Run Integration Tests Across All Platforms
+## Step 1: Clean Test Artifacts & Run Integration Tests Across All Platforms
+
+### 1. Clean Safe-to-Delete Artifacts (Clean Slate)
+
+To prevent disk space exhaustion and memory pressure during lengthy multi-platform test runs, start with a clean slate by running the cleanup script:
+
+```bash
+./.agents/skills/publish-to-pub-dev/scripts/clean_test_artifacts.sh
+```
+
+This automatically and safely deletes:
+- **macOS example app documents and caches**: files in `~/Library/Containers/com.bbflight.example/Data/Documents`, `Library/Caches`, and `tmp` accumulated from test runs.
+- **Xcode DerivedData**: `~/Library/Developer/Xcode/DerivedData`.
+- **iOS Simulator caches & test data**: wipes temporary test data and resets the simulator runtime.
+- **Project build artifacts**: `example/build/`, `build/`, and `example/android/.gradle/`.
+- **Android emulator downloads & test apps**: uninstalls old test packages and removes temporary files on `emulator-5554`.
+- **Old integration test logs**: clears `example/integration_test/logs/`.
+
+*(Note: `test_runner_with_retry.sh` also invokes this cleanup automatically before starting tests).*
+
+### 2. Run Integration Tests
 
 Run the full integration test suite across all three supported local platforms: **Android emulator**, **iOS simulator/emulator**, and **macOS**.
 
-### Execution
+#### Execution
 
-Use the automated test runner script that handles initial execution and flaky test retries:
+Use the automated test runner script that handles cleanup, execution, and flaky test retries:
 
 ```bash
 ./.agents/skills/publish-to-pub-dev/scripts/test_runner_with_retry.sh
@@ -345,5 +365,7 @@ git status
   Verifies that `dart format` changes 0 files and `flutter analyze` returns 0 issues in both root and example packages.
 - **`./.agents/skills/publish-to-pub-dev/scripts/wait_for_gh_action.sh`**:
   Monitors and streams the GitHub Actions CI build (`.github/workflows/build.yml`) for the pushed `dev` commit, ensuring all matrix builds and lint checks pass before publishing.
+- **`./.agents/skills/publish-to-pub-dev/scripts/clean_test_artifacts.sh`**:
+  Safely clears macOS example app documents/caches, Xcode DerivedData, iOS simulator caches and test data, project build/gradle artifacts, and Android emulator temporary downloads to prevent out-of-disk and out-of-memory errors during test runs. Excluded via `.gitignore`.
 - **`./.agents/skills/publish-to-pub-dev/scripts/test_runner_with_retry.sh`**:
-  Wraps `example/run_tests.sh`, runs the full suite across iOS, Android, and macOS, isolates specific failed test names, retries only those tests using `flutter test --plain-name`, and identifies flaky tests versus persistent failures.
+  Wraps `example/run_tests.sh`, automatically invokes `clean_test_artifacts.sh`, runs the full suite across iOS, Android, and macOS, isolates specific failed test names, retries only those tests using `flutter test --plain-name`, and identifies flaky tests versus persistent failures.

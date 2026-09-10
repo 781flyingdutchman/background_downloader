@@ -22,6 +22,12 @@ else
   PYTHON_EXEC="python3"
 fi
 
+# Clean safe-to-delete artifacts before running tests if script exists
+CLEANUP_SCRIPT="$SCRIPT_DIR/clean_test_artifacts.sh"
+if [ -x "$CLEANUP_SCRIPT" ]; then
+  "$CLEANUP_SCRIPT"
+fi
+
 echo "=================================================="
 echo "Running full integration test suite..."
 echo "Platforms: iOS emulator, Android emulator, macOS"

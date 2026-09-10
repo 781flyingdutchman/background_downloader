@@ -49,3 +49,7 @@ Gemfile*
 
 # test files for uploading and downloading
 test_server/files/
+
+# Test artifacts cleanup script
+clean_test_artifacts.sh
+.agents/skills/publish-to-pub-dev/scripts/clean_test_artifacts.sh
