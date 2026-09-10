@@ -23,7 +23,7 @@ The release consists of 11 sequential steps:
 5. **Commit to `dev` Branch and Push to Trigger CI** (stage release files, commit on `dev`, push to `origin/dev`)
 6. **Wait for GitHub Action CI to Pass** (monitor `.github/workflows/build.yml` until completion with 0 errors)
 7. **Run `pub publish --dry-run`** (ensure 0 errors and 0 warnings)
-8. **Execute `pub publish`** (confirm version and publish to pub.dev)
+8. **Execute `pub publish`** (request user confirmation, confirm version, and publish to pub.dev)
 9. **Fast-forward `main` Branch** (bring `main` to the release commit)
 10. **Add Git Tag** (`V<version>`, e.g. `V9.6.1`)
 11. **Push `main` and Tags to Origin** (push `main` and release tags to `origin`)
@@ -49,20 +49,54 @@ Alternatively, to run manually:
 
 ### Flaky Test Handling
 
-The script `example/run_tests.sh` outputs summary and failed tests in the format:
+The script `example/run_tests.sh` outputs a summary of failed test files and devices:
 ```text
 Summary: X failed, Y passed.
 Failed tests:
-  - <test_name> on <device_label> (<device_id>)
+  - <test_file> on <device_label> (<device_id>)
+```
+
+Along with the failure details and specific failing test case description (marked with `[E]`):
+```text
+---FAILED--- Test: <test_file> on device: <device_id> (Duration: Xs)
+00:15 +1 -1: <specific_test_name> [E]
 ```
 
 - **If all tests pass initially**: Proceed immediately to Step 2.
 - **If any test fails initially**:
-  - Re-run each failed test individually on that specific device to check for flakiness:
+  - **Do NOT rerun using `run_tests.sh`**. Re-running the entire test file takes a long time and may introduce new flaky test results from unrelated tests in that file.
+  - Instead, identify the failing test file, target device, and the **specific test name** (within the test file) that failed from the log or failure output (`example/integration_test/logs/<timestamp>.log`).
+  - Use `flutter test` directly with `--plain-name` to retry **only** that specific test on that specific device:
     ```bash
-    ./example/run_tests.sh -d "<device_id>" "<test_name>"
+    flutter test example/integration_test/<test_file> -d "<device_id>" --plain-name "<specific_test_name>"
     ```
-    *(For example: `./example/run_tests.sh -d emulator-5554 uidt_test.dart` or `./example/run_tests.sh -d ios database_test.dart`)*
+    *(For example: `flutter test example/integration_test/uidt_test.dart -d emulator-5554 --plain-name "Enqueue and wait for completion"` or `flutter test example/integration_test/database_test.dart -d 8715BE69-FDE4-4A44-A205-D9F3258EA31C --plain-name "records without path or with relative path have default path"`)*
+
+    > [!IMPORTANT]
+    > **Ensure `test_server.py` is running in its venv prior to retrying tests.**
+    > Since `example/run_tests.sh` automatically shuts down the test server upon exiting, check and restart it if needed using its virtual environment:
+    > ```bash
+    > SERVER_URL="http://127.0.0.1:8080"
+    > if ! curl --output /dev/null --silent --head --fail "$SERVER_URL"; then
+    >   if [ -d ".venv" ]; then
+    >     PYTHON_EXEC=".venv/bin/python3"
+    >   elif [ -d "example/.venv" ]; then
+    >     PYTHON_EXEC="example/.venv/bin/python3"
+    >   else
+    >     PYTHON_EXEC="python3"
+    >   fi
+    >   $PYTHON_EXEC test_server/test_server.py > /dev/null 2>&1 &
+    >   for i in {1..10}; do
+    >     sleep 1
+    >     curl --output /dev/null --silent --head --fail "$SERVER_URL" && break
+    >   done
+    > fi
+    > ```
+    > When test retries are finished, shut down the server:
+    > ```bash
+    > curl -X POST "http://127.0.0.1:8080/shutdown" > /dev/null 2>&1
+    > ```
+
   - **Passed on Retry**: Confirm that the failure was caused by flakiness. Log the flaky test in the release notes or output and continue.
   - **Failed on Retry**: **STOP IMMEDIATELY**. This is a persistent test failure. Report the failure to the user and do not proceed with the release until fixed.
 
@@ -229,18 +263,22 @@ dart pub publish --dry-run
 1. Display the target version and confirm:
    - Target version: `<version>`
    - Confirm against `pubspec.yaml` and `CHANGELOG.md`.
-2. Execute publish command:
+2. **Request User Confirmation (MANDATORY)**:
+   > [!IMPORTANT]
+   > **Always ask for user confirmation before executing the `dart pub publish` command.**
+   > State the package name, the target version, and key release notes. You must stop, prompt the user, and wait for explicit approval before running `dart pub publish`.
+3. Once user approval is granted, execute publish command:
    ```bash
    dart pub publish
    ```
-3. When prompted:
+4. When prompted:
    ```text
    Publishing background_downloader <version> to https://pub.dev:
    ...
    Do you want to publish background_downloader <version> (y/N)?
    ```
    Respond with `y` to confirm publication.
-4. Verify that publication completes successfully (HTTP 200 / "Package successfully published").
+5. Verify that publication completes successfully (HTTP 200 / "Package successfully published").
 
 ---
 
@@ -308,4 +346,4 @@ git status
 - **`./.agents/skills/publish-to-pub-dev/scripts/wait_for_gh_action.sh`**:
   Monitors and streams the GitHub Actions CI build (`.github/workflows/build.yml`) for the pushed `dev` commit, ensuring all matrix builds and lint checks pass before publishing.
 - **`./.agents/skills/publish-to-pub-dev/scripts/test_runner_with_retry.sh`**:
-  Wraps `example/run_tests.sh`, runs the full suite across iOS, Android, and macOS, automatically isolates and retries any failing test against its target device, and identifies flaky tests versus persistent failures.
+  Wraps `example/run_tests.sh`, runs the full suite across iOS, Android, and macOS, isolates specific failed test names, retries only those tests using `flutter test --plain-name`, and identifies flaky tests versus persistent failures.

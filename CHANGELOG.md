@@ -1,7 +1,10 @@
 ## 9.6.1
 
 * Expand `connectivity_plus` version constraint to `>=6.1.3 <8.0.0` to support `connectivity_plus` 7.x (fixes #722)
+* [iOS] Native task status and progress closures on BDPlugin: add optional static closures `BDPlugin.onNativeTaskStatusChange` and `BDPlugin.onNativeTaskProgressChange` to allow native iOS host apps to observe task status and throttled progress directly in Swift (e.g. for Live Activities and WidgetKit) when the Dart isolate is suspended during background URLSession wake-ups (closes #702, refs #705)
+* [iOS] Partial upload slicing optimization: use `FileHandle.seek(toOffset:)` instead of reading and discarding leading bytes in `createTempFileWithRange`, eliminating quadratic disk reads when slicing chunked uploads (#723)
 * [Android] Enforce Wi-Fi constraint via `NetworkRequest` on Android API 28+: require `TRANSPORT_WIFI` and `NET_CAPABILITY_INTERNET` for tasks requiring Wi-Fi, preventing downloads over cellular even when reported as unmetered by the carrier, with fallback to `NETWORK_TYPE_UNMETERED` on older Android versions (fixes #717)
+* [Android] Fix Android R8 build error in CI and update minimum Flutter SDK in CI (#725)
 * [Documentation] Clarify `requiresWiFi` behavior on Android API 28+ vs earlier Android versions
 
 ## 9.6.0
