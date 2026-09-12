@@ -932,9 +932,9 @@ object DirectoryCreator {
  * Gets the initial directory URI based on the specified shared storage location.
  *
  * @param location The shared storage location.
- * @return The URI of the corresponding directory, or null if the location is unknown or not applicable.
+ * @return The URI of the corresponding directory.
  */
-private fun getInitialDirectoryUri(location: SharedStorage): Uri? {
+private fun getInitialDirectoryUri(location: SharedStorage): Uri {
     return when (location) {
         SharedStorage.downloads -> {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -987,7 +987,5 @@ private fun getInitialDirectoryUri(location: SharedStorage): Uri? {
                 Environment.getDataDirectory().toUri()
             }
         }
-
-        else -> null // Handle unknown or unsupported locations
     }
 }

@@ -43,7 +43,7 @@ enum class BaseDirectory {
     root // system root directory
 }
 
-private class BaseDirectorySerializer : EnumAsIntSerializer<BaseDirectory>(
+class BaseDirectorySerializer : EnumAsIntSerializer<BaseDirectory>(
     "BaseDirectory",
     { it.ordinal },
     { v -> BaseDirectory.entries.first { it.ordinal == v } }
@@ -58,7 +58,7 @@ enum class Updates {
     statusAndProgress // calls also for progress along the way
 }
 
-private class UpdatesSerializer : EnumAsIntSerializer<Updates>(
+class UpdatesSerializer : EnumAsIntSerializer<Updates>(
     "Updates",
     { it.ordinal },
     { v -> Updates.entries.first { it.ordinal == v } }
@@ -405,7 +405,7 @@ enum class TaskStatus {
     }
 }
 
-private class TaskStatusSerializer : EnumAsIntSerializer<TaskStatus>(
+class TaskStatusSerializer : EnumAsIntSerializer<TaskStatus>(
     "TaskStatus",
     { it.ordinal },
     { v -> TaskStatus.entries.first { it.ordinal == v } }

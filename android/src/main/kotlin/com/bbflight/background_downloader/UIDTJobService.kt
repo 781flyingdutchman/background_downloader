@@ -110,11 +110,11 @@ class UIDTJobService : JobService() {
 
 
         override fun getInputLong(key: String, defaultValue: Long): Long {
-            return params.extras?.getLong(key, defaultValue) ?: defaultValue
+            return params.extras.getLong(key, defaultValue)
         }
 
         override fun getInputString(key: String): String? {
-            return params.extras?.getString(key)
+            return params.extras.getString(key)
         }
 
         override suspend fun setForegroundNotification(
