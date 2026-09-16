@@ -79,11 +79,21 @@ abstract base class BaseDownloader {
   /// Registered [TaskProgressCallback] for each group
   final groupProgressCallbacks = <String, TaskProgressCallback>{};
 
+  /// Registered [TaskStatusCallback] for Transfers manager for each group
+  final groupTransferStatusCallbacks = <String, TaskStatusCallback>{};
+
+  /// Registered [TaskProgressCallback] for Transfers manager for each group
+  final groupTransferProgressCallbacks = <String, TaskProgressCallback>{};
+
   /// Active batches
   final _batches = <Batch>[];
 
   /// Registered [TaskNotificationTapCallback] for each group
   final groupNotificationTapCallbacks = <String, TaskNotificationTapCallback>{};
+
+  /// Registered [TaskNotificationTapCallback] for Transfers manager for each group
+  final groupTransferNotificationTapCallbacks =
+      <String, TaskNotificationTapCallback>{};
 
   /// List of notification configurations
   final notificationConfigs = <TaskNotificationConfig>{};
@@ -995,6 +1005,10 @@ abstract base class BaseDownloader {
     Task task,
     NotificationType notificationType,
   ) async {
+    groupTransferNotificationTapCallbacks[task.group]?.call(
+      task,
+      notificationType,
+    );
     var retries = 0;
     var success = false;
     while (retries < 5 && !success) {
@@ -1021,6 +1035,7 @@ abstract base class BaseDownloader {
       taskException: update.exception,
     );
     if (task.providesStatusUpdates) {
+      groupTransferStatusCallbacks[task.group]?.call(update);
       // handle the statusUpdate in order of priority:
       // handle [awaitTasks], otherwise try [groupStatusCallbacks],
       // otherwise try [updates] listener, otherwise log warning
@@ -1061,6 +1076,7 @@ abstract base class BaseDownloader {
         progress: update.progress,
         expectedFileSize: update.expectedFileSize,
       );
+      groupTransferProgressCallbacks[task.group]?.call(update);
       if (awaitTasks.containsKey(task)) {
         _awaitTaskProgressCallBack(update);
       } else {
@@ -1223,6 +1239,9 @@ abstract base class BaseDownloader {
     _taskProgressCallbacks.clear();
     groupStatusCallbacks.clear();
     groupProgressCallbacks.clear();
+    groupTransferStatusCallbacks.clear();
+    groupTransferProgressCallbacks.clear();
+    groupTransferNotificationTapCallbacks.clear();
     notificationConfigs.clear();
     trackedGroups.clear();
     canResumeTask.clear();

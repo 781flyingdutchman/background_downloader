@@ -32,7 +32,11 @@ class Transfers {
   StreamSubscription<TaskRecord>? _databaseSubscription;
 
   Transfers(this.downloader, this._downloader) {
-    _databaseSubscription = downloader.database.updates.listen(
+    _ensureDatabaseSubscription();
+  }
+
+  void _ensureDatabaseSubscription() {
+    _databaseSubscription ??= downloader.database.updates.listen(
       _onDatabaseRecordUpdate,
     );
   }
@@ -57,6 +61,7 @@ class Transfers {
   /// If the task includes a [Task.notificationConfig] or [TransferHint.userInitiated],
   /// notification behavior is configured automatically.
   Future<Transfer> start(Task task) async {
+    _ensureDatabaseSubscription();
     _ensureTransferAutoClean();
     task = _ensureProvidesStatusUpdates(task);
     final namespacedTask = downloader.withNamespacedGroup(task);
@@ -124,6 +129,7 @@ class Transfers {
   }) async {
     if (tasks.isEmpty) return [];
 
+    _ensureDatabaseSubscription();
     _ensureTransferAutoClean();
 
     final namespacedTasks = <Task>[];
@@ -386,9 +392,7 @@ class Transfers {
 
     _downloader.trackTasks(namespacedGroup, true);
 
-    final existingStatusCallback =
-        _downloader.groupStatusCallbacks[namespacedGroup];
-    _downloader.groupStatusCallbacks[namespacedGroup] = (rawUpdate) {
+    _downloader.groupTransferStatusCallbacks[namespacedGroup] = (rawUpdate) {
       final cleanUpdate = TaskStatusUpdate(
         downloader.withoutNamespacedGroup(rawUpdate.task),
         rawUpdate.status,
@@ -400,12 +404,9 @@ class Transfers {
         rawUpdate.charSet,
       );
       _onTransferStatusUpdate(cleanUpdate);
-      existingStatusCallback?.call(rawUpdate);
     };
 
-    final existingProgressCallback =
-        _downloader.groupProgressCallbacks[namespacedGroup];
-    _downloader.groupProgressCallbacks[namespacedGroup] = (rawUpdate) {
+    _downloader.groupTransferProgressCallbacks[namespacedGroup] = (rawUpdate) {
       final cleanUpdate = TaskProgressUpdate(
         downloader.withoutNamespacedGroup(rawUpdate.task),
         rawUpdate.progress,
@@ -414,18 +415,14 @@ class Transfers {
         rawUpdate.timeRemaining,
       );
       _onTransferProgressUpdate(cleanUpdate);
-      existingProgressCallback?.call(rawUpdate);
     };
 
-    final existingNotificationTapCallback =
-        _downloader.groupNotificationTapCallbacks[namespacedGroup];
-    _downloader.groupNotificationTapCallbacks[namespacedGroup] =
+    _downloader.groupTransferNotificationTapCallbacks[namespacedGroup] =
         (rawTask, notificationType) {
           _onTransferNotificationTap(
             downloader.withoutNamespacedGroup(rawTask),
             notificationType,
           );
-          existingNotificationTapCallback?.call(rawTask, notificationType);
         };
   }
 
@@ -555,6 +552,7 @@ class Transfers {
   /// Rehydrates [Transfer] handles from the persistent database for previously
   /// tracked tasks across app restarts.
   Future<List<Transfer>> rehydrateFromDatabase({String? group}) async {
+    _ensureDatabaseSubscription();
     if (!_downloader.isTrackingTasks) {
       return [];
     }
@@ -593,6 +591,11 @@ class Transfers {
       transfer.dispose();
     }
     _transfers.clear();
+    for (final group in _registeredTransferGroups) {
+      _downloader.groupTransferStatusCallbacks.remove(group);
+      _downloader.groupTransferProgressCallbacks.remove(group);
+      _downloader.groupTransferNotificationTapCallbacks.remove(group);
+    }
     _registeredTransferGroups.clear();
     notifier.value = [];
   }
@@ -607,6 +610,12 @@ class Transfers {
   void dispose() {
     _databaseSubscription?.cancel();
     _databaseSubscription = null;
+    for (final group in _registeredTransferGroups) {
+      _downloader.groupTransferStatusCallbacks.remove(group);
+      _downloader.groupTransferProgressCallbacks.remove(group);
+      _downloader.groupTransferNotificationTapCallbacks.remove(group);
+    }
+    _registeredTransferGroups.clear();
     for (final transfer in _transfers.values) {
       transfer.dispose();
     }

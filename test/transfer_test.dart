@@ -1290,5 +1290,90 @@ void main() {
       await FileDownloader().transfers.clear();
       FileDownloader().unregisterCallbacks(group: customGroup);
     });
+
+    test('updates stream receives all updates when task is tracked and no user callbacks registered (issue #727)', () async {
+      const customGroup = 'test_group_tracked_updates';
+      await FileDownloader().trackTasksInGroup(customGroup);
+
+      final task = DownloadTask(
+        taskId: 'tracked_updates_task',
+        url: 'https://example.com/tracked.bin',
+        group: customGroup,
+      );
+
+      final streamUpdates = <TaskStatus>[];
+      final subscription = FileDownloader().updates.listen((update) {
+        if (update is TaskStatusUpdate && update.task.taskId == task.taskId) {
+          streamUpdates.add(update.status);
+        }
+      });
+
+      final enqueued = await FileDownloader().enqueue(task);
+      expect(enqueued, isTrue);
+
+      final enqueuedUpdate = TaskStatusUpdate(task, TaskStatus.enqueued);
+      final runningUpdate = TaskStatusUpdate(task, TaskStatus.running);
+      final completeUpdate = TaskStatusUpdate(task, TaskStatus.complete);
+
+      FileDownloader().downloaderForTesting.processStatusUpdate(enqueuedUpdate);
+      await Future.delayed(const Duration(milliseconds: 50));
+      FileDownloader().downloaderForTesting.processStatusUpdate(runningUpdate);
+      await Future.delayed(const Duration(milliseconds: 50));
+      FileDownloader().downloaderForTesting.processStatusUpdate(completeUpdate);
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      expect(
+        streamUpdates,
+        containsAllInOrder([
+          TaskStatus.enqueued,
+          TaskStatus.running,
+          TaskStatus.complete,
+        ]),
+      );
+
+      await subscription.cancel();
+      FileDownloader().downloaderForTesting.trackedGroups.remove(customGroup);
+      await FileDownloader().transfers.clear();
+    });
+
+    test(
+      'unregisterCallbacks by callback reference successfully removes callback',
+      () async {
+        const customGroup = 'test_group_unregister_ref';
+        final statusUpdates = <TaskStatusUpdate>[];
+        void onStatus(TaskStatusUpdate update) => statusUpdates.add(update);
+
+        FileDownloader().registerCallbacks(
+          group: customGroup,
+          taskStatusCallback: onStatus,
+        );
+
+        final task = DownloadTask(
+          taskId: 'unreg_task',
+          url: 'https://example.com/unreg.bin',
+          group: customGroup,
+        );
+
+        // Verify callback works
+        FileDownloader().downloaderForTesting.processStatusUpdate(
+          TaskStatusUpdate(task, TaskStatus.running),
+        );
+        expect(statusUpdates.length, equals(1));
+
+        // Unregister specific callback reference
+        FileDownloader().unregisterCallbacks(
+          group: customGroup,
+          callback: onStatus,
+        );
+
+        // Verify callback no longer receives updates
+        FileDownloader().downloaderForTesting.processStatusUpdate(
+          TaskStatusUpdate(task, TaskStatus.complete),
+        );
+        expect(statusUpdates.length, equals(1));
+
+        FileDownloader().unregisterCallbacks(group: customGroup);
+      },
+    );
   });
 }
