@@ -1,3 +1,8 @@
+## 9.6.2
+
+* Fix task updates stream suppression when task tracking or transfers is enabled: isolate internal `Transfers` callbacks from user-registered callbacks using dedicated `groupTransfer` callback maps in `BaseDownloader`, preventing internal callbacks from suppressing events on `FileDownloader().updates`, and preserving callback reference equality in `registerCallbacks`/`unregisterCallbacks` (fixes #727)
+* [Android] Fix Kotlin compiler warnings: align serializer visibility with public enums in `Models.kt`, remove unnecessary safe calls in `UIDTJobService.kt`, and streamline `UriUtils.kt`
+
 ## 9.6.1
 
 * Expand `connectivity_plus` version constraint to `>=6.1.3 <8.0.0` to support `connectivity_plus` 7.x (fixes #722)
