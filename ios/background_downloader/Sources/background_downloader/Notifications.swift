@@ -279,11 +279,15 @@ func updateGroupNotification(
             content.body = await replaceTokens(input: notification.body, task: task, progress: await groupNotification.progress, notificationGroup: groupNotification)
             // check if the notification title or body have changed relative to what may
             // already be delivered, to avoid flashing notifications without change
-            let existingNotifications = await notificationCenter.deliveredNotifications()
-            let previousNotification = existingNotifications.filter { 
-                $0.request.identifier == notificationId
+            var shouldPost = isFinished
+            if !shouldPost {
+                let existingNotifications = await notificationCenter.deliveredNotifications()
+                let previousNotification = existingNotifications.filter { 
+                    $0.request.identifier == notificationId
+                }
+                shouldPost = previousNotification.isEmpty || previousNotification.first?.request.content.title != content.title || previousNotification.first?.request.content.body != content.body
             }
-            if previousNotification.isEmpty || previousNotification.first?.request.content.title != content.title || previousNotification.first?.request.content.body != content.body
+            if shouldPost
             {
                 content.categoryIdentifier = !isFinished
                     ? NotificationCategory.runningWithoutPause.rawValue
