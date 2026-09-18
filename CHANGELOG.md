@@ -1,6 +1,7 @@
 ## 9.6.2
 
 * Fix task updates stream suppression when task tracking or transfers is enabled: isolate internal `Transfers` callbacks from user-registered callbacks using dedicated `groupTransfer` callback maps in `BaseDownloader`, preventing internal callbacks from suppressing events on `FileDownloader().updates`, and preserving callback reference equality in `registerCallbacks`/`unregisterCallbacks` (fixes #727)
+* [iOS] Fix group notification completion cleanup when notification is unconfigured: ensure `GroupNotification` registry cleanup is executed upon group completion regardless of whether `error` or `complete` notification contents are configured, preventing an unconfigured slot from permanently suppressing subsequent group completion notifications (fixes #728)
 * [Android] Fix Kotlin compiler warnings: align serializer visibility with public enums in `Models.kt`, remove unnecessary safe calls in `UIDTJobService.kt`, and streamline `UriUtils.kt`
 
 ## 9.6.1

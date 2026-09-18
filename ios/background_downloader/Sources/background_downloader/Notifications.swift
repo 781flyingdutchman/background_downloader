@@ -271,36 +271,34 @@ func updateGroupNotification(
         } else {
             notification = groupNotification.notificationConfig.running
         }
-        guard let notification = notification else
-        {
-            // remove notification
-            let notificationId = await groupNotification.notificationId
-            notificationCenter.removeDeliveredNotifications(withIdentifiers: [notificationId])
-            return
-        }
-        // need to show a notification
-        let content = UNMutableNotificationContent()
-        content.title = await replaceTokens(input: notification.title, task: task, progress: await groupNotification.progress, notificationGroup: groupNotification)
-        content.body = await replaceTokens(input: notification.body, task: task, progress: await groupNotification.progress, notificationGroup: groupNotification)
-        // check if the notification title or body have changed relative to what may
-        // already be delivered, to avoid flashing notifications without change
-        let existingNotifications = await notificationCenter.deliveredNotifications()
         let notificationId = await groupNotification.notificationId
-        let previousNotification = existingNotifications.filter { 
-            $0.request.identifier == notificationId
-        }
-        if previousNotification.isEmpty || previousNotification.first?.request.content.title != content.title || previousNotification.first?.request.content.body != content.body
-        {
-            content.categoryIdentifier = !isFinished
-                ? NotificationCategory.runningWithoutPause.rawValue
-                : (hasError ? NotificationCategory.error.rawValue : NotificationCategory.complete.rawValue)
-            let request = UNNotificationRequest(identifier: await groupNotification.notificationId,
-                                                content: content, trigger: nil)
-            do {
-                try await notificationCenter.add(request)
-            } catch {
-                os_log("Notification error %@", log: log, type: .info, error.localizedDescription)
+        if let notification = notification {
+            // need to show a notification
+            let content = UNMutableNotificationContent()
+            content.title = await replaceTokens(input: notification.title, task: task, progress: await groupNotification.progress, notificationGroup: groupNotification)
+            content.body = await replaceTokens(input: notification.body, task: task, progress: await groupNotification.progress, notificationGroup: groupNotification)
+            // check if the notification title or body have changed relative to what may
+            // already be delivered, to avoid flashing notifications without change
+            let existingNotifications = await notificationCenter.deliveredNotifications()
+            let previousNotification = existingNotifications.filter { 
+                $0.request.identifier == notificationId
             }
+            if previousNotification.isEmpty || previousNotification.first?.request.content.title != content.title || previousNotification.first?.request.content.body != content.body
+            {
+                content.categoryIdentifier = !isFinished
+                    ? NotificationCategory.runningWithoutPause.rawValue
+                    : (hasError ? NotificationCategory.error.rawValue : NotificationCategory.complete.rawValue)
+                let request = UNNotificationRequest(identifier: notificationId,
+                                                    content: content, trigger: nil)
+                do {
+                    try await notificationCenter.add(request)
+                } catch {
+                    os_log("Notification error %@", log: log, type: .info, error.localizedDescription)
+                }
+            }
+        } else {
+            // remove notification
+            notificationCenter.removeDeliveredNotifications(withIdentifiers: [notificationId])
         }
         if isFinished {
             // remove only if not re-activated within 5 seconds
