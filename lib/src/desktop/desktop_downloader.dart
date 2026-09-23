@@ -780,12 +780,16 @@ final class DesktopDownloader extends BaseDownloader {
     );
   }
 
+  static const defaultMaxRedirects = 10;
+
   /// Default HTTP client getter for backward compatibility
   static http.Client get httpClient => httpClientForHost(null);
 
   /// Sets the default HTTP client (primarily for testing)
   static set httpClient(http.Client client) {
-    _defaultClient = client;
+    _defaultClient = client is _RedirectClient
+        ? client
+        : _RedirectClient(client);
   }
 
   static http.Client _createRawClient(MTLSConfig? mtlsConfig) {
@@ -806,7 +810,7 @@ final class DesktopDownloader extends BaseDownloader {
         bypassTLSCertificateValidation && !kReleaseMode
         ? (X509Certificate cert, String host, int port) => true
         : null;
-    return IOClient(client);
+    return _RedirectClient(IOClient(client));
   }
 
   /// Recreates the HTTP client instances used for Requests and isolate downloads/uploads
@@ -847,5 +851,34 @@ final class DesktopDownloader extends BaseDownloader {
     _queue.remove(task);
     _running.remove(task);
     _isolateSendPorts.remove(task);
+  }
+}
+
+/// The default maximum number of redirects to follow for HTTP requests (10).
+///
+/// On Desktop platforms (macOS, Windows, Linux) and for [FileDownloader.request],
+/// up to 10 redirects are followed. Mobile platforms follow their native defaults
+/// (iOS allows up to 16, Android allows up to 20).
+const defaultMaxRedirects = DesktopDownloader.defaultMaxRedirects;
+
+/// Wrapper around [http.Client] that raises [http.BaseRequest.maxRedirects] to
+/// [defaultMaxRedirects] if it is still at the Dart default of 5.
+final class _RedirectClient extends http.BaseClient {
+  final http.Client _inner;
+
+  _RedirectClient(this._inner);
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    if (request.maxRedirects == 5) {
+      request.maxRedirects = defaultMaxRedirects;
+    }
+    return _inner.send(request);
+  }
+
+  @override
+  void close() {
+    _inner.close();
+    super.close();
   }
 }

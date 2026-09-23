@@ -55,10 +55,15 @@ class TestServerTestCase(unittest.TestCase):
         response = requests.get(f"{BASE_URL}/redirect", allow_redirects=True)
         self.assertEqual(response.status_code, 200)
         # Should end up at echo_get?redirected=true. 
-        # But echo_get only returns json if json=true.
         # The redirect URL is '/echo_get?redirected=true'.
         # So we expect the string representation.
         self.assertIn("'redirected': 'true'", response.text)
+
+    def test_multiple_redirects(self):
+        response = requests.get(f"{BASE_URL}/redirect?count=10", allow_redirects=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("'redirected': 'true'", response.text)
+        self.assertIn("'hops': '10'", response.text)
 
     def test_upload_file(self):
         files = {'file': ('test.txt', 'content')}

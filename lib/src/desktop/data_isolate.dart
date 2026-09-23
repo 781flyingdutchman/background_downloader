@@ -20,6 +20,7 @@ Future<void> doDataTask(
   final client = DesktopDownloader.httpClientForUrl(task.url);
   final request = http.Request(task.httpRequestMethod, Uri.parse(task.url));
   request.headers.addAll(task.headers);
+  request.maxRedirects = defaultMaxRedirects;
   if (task.post is String) {
     request.body = task.post!;
   }

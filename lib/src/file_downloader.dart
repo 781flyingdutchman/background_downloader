@@ -1328,7 +1328,8 @@ interface class FileDownloader {
   /// details in the [http.Response.reasonPhrase]
   ///
   /// The request will abide by the [Request.retries] set on the [request], and set
-  /// [Request.headers] included in the [request]
+  /// [Request.headers] included in the [request]. Redirects are followed automatically
+  /// (up to 10 redirects).
   ///
   /// The [http.Client] object used for this request is the [DesktopDownloader.httpClient] field of
   /// the downloader. If not set, the default [http.Client] will be used.

@@ -54,6 +54,7 @@ Future<void> doDownloadTask(
     Uri.parse(downloadTask.url),
   );
   request.headers.addAll(downloadTask.headers);
+  request.maxRedirects = defaultMaxRedirects;
   request.persistentConnection = false;
   if (isResume) {
     final taskRangeHeader = downloadTask.headers['Range'] ?? '';

@@ -523,6 +523,29 @@ void main() {
     );
 
     testWidgets(
+      'enqueue with 10 redirects',
+      timeout: const Timeout(Duration(minutes: 2)),
+      (widgetTester) async {
+        task = DownloadTask(
+          url: '$getRedirectTestUrl?count=10',
+          filename: defaultFilename,
+        );
+        final path = join(
+          (await getApplicationDocumentsDirectory()).path,
+          task.filename,
+        );
+        FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
+        expect(await FileDownloader().enqueue(task), isTrue);
+        await statusCallbackCompleter.future;
+        expect(lastStatus, equals(TaskStatus.complete));
+        final contents = await File(path).readAsString();
+        expect(contents.contains("'redirected': 'true'"), isTrue);
+        expect(contents.contains("'hops': '10'"), isTrue);
+        File(path).deleteSync();
+      },
+    );
+
+    testWidgets(
       'enqueue and test file equality',
       timeout: const Timeout(Duration(minutes: 2)),
       (widgetTester) async {
@@ -2120,6 +2143,19 @@ void main() {
           response.body.startsWith("{'args': {'redirected': 'true'}"),
           isTrue,
         );
+      },
+    );
+
+    testWidgets(
+      'get request with 10 redirects',
+      timeout: const Timeout(Duration(minutes: 2)),
+      (widgetTester) async {
+        final request = Request(url: '$getRedirectTestUrl?count=10');
+        final response = await FileDownloader().request(request);
+        print('code = ${response.statusCode} and body is ${response.body}');
+        expect(response.statusCode, equals(200));
+        expect(response.body.contains("'redirected': 'true'"), isTrue);
+        expect(response.body.contains("'hops': '10'"), isTrue);
       },
     );
   });

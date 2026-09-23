@@ -6,7 +6,7 @@ To make a regular server request (e.g. to obtain a response from an API end poin
 
 ## Request: immediate execution
 
-A regular foreground request works similar to the `download` method, except you pass a `Request` object that has fewer fields than the `DownloadTask`, but is similar in structure.  You `await` the response, which will be a [Response](https://pub.dev/documentation/http/latest/http/Response-class.html) object as defined in the dart [http package](https://pub.dev/packages/http), and includes getters for the response body (as a `String` or as `UInt8List`), `statusCode` and `reasonPhrase`.
+A regular foreground request works similar to the `download` method, except you pass a `Request` object that has fewer fields than the `DownloadTask`, but is similar in structure.  You `await` the response, which will be a [Response](https://pub.dev/documentation/http/latest/http/Response-class.html) object as defined in the dart [http package](https://pub.dev/packages/http), and includes getters for the response body (as a `String` or as `UInt8List`), `statusCode` and `reasonPhrase`. HTTP redirects are followed automatically (up to 10 redirects).
 
 Because requests are meant to be immediate, they are not enqueued like a `Task` is, and do not allow for status/progress monitoring.
 

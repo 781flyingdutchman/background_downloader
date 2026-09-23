@@ -15,6 +15,7 @@ import 'task.dart';
 /// but it is not an actual implementation for the Web.
 
 final class DesktopDownloader extends BaseDownloader {
+  static const defaultMaxRedirects = 10;
   static var httpClient = http.Client();
   static Duration? requestTimeout;
   static var proxy = <String, dynamic>{}; // 'address' and 'port'
@@ -107,3 +108,6 @@ final class DesktopDownloader extends BaseDownloader {
     throw UnimplementedError();
   }
 }
+
+/// The default maximum number of redirects to follow for HTTP requests
+const defaultMaxRedirects = DesktopDownloader.defaultMaxRedirects;

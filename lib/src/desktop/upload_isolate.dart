@@ -91,6 +91,7 @@ Future<(Task, TaskStatus)> binaryUpload(
       task.httpRequestMethod,
       Uri.parse(task.url),
     );
+    request.maxRedirects = defaultMaxRedirects;
     request.headers.addAll(task.headers);
     request.contentLength = contentLength;
     request.headers['Content-Type'] = task.mimeType;
@@ -240,6 +241,7 @@ Future<(Task, TaskStatus)> multipartUpload(
       task.httpRequestMethod,
       Uri.parse(task.url),
     );
+    request.maxRedirects = defaultMaxRedirects;
     request.contentLength = contentLength;
     request.headers.addAll(task.headers);
     request.headers.addAll({

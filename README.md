@@ -157,4 +157,5 @@ Add the client network entitlement to `macos/Runner/DebugProfile.entitlements` a
 
 * **iOS**: Minimum iOS 14.0. Background transfers must complete within the system resource timeout (defaults to 4 hours, configurable via [CONFIG.md](doc/CONFIG.md)).
 * **Android**: Minimum API 21. Standard background tasks are limited to 9 minutes by WorkManager. To allow longer downloads, set `allowPause: true` (or `TransferHint.largeFile` / `userInitiated`), which automatically resumes across 9-minute cycles, or set `priority: 0` on Android 14+ to use UIDT (see [parameters.md](doc/parameters.md#priority)).
+* **Redirects**: HTTP redirects are followed automatically. Desktop platforms (macOS, Windows, Linux) and foreground server requests follow up to 10 redirects. Mobile platforms follow native platform defaults (iOS allows up to 16, Android allows up to 20).
 * **OS Termination**: If the user forcefully swipes the app away from the iOS App Switcher or Android Recents, the OS may terminate background transfers without notification.

@@ -136,9 +136,16 @@ def echo_get():
 @app.route('/redirect')
 def redirect_endpoint():
     """
-    Redirects to /echo_get with one argument redirected=true
+    Redirects to /echo_get with argument redirected=true.
+    Optional count argument allows chaining multiple redirects.
     """
-    return redirect('/echo_get?redirected=true')
+    if 'count' not in request.args:
+        return redirect('/echo_get?redirected=true')
+    count = int(request.args.get('count'))
+    hops = int(request.args.get('hops', 0)) + 1
+    if count > 1:
+        return redirect(f'/redirect?count={count - 1}&hops={hops}')
+    return redirect(f'/echo_get?redirected=true&hops={hops}')
 
 @app.route('/upload_file', methods=['POST'])
 def upload_file():
