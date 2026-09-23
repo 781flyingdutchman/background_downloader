@@ -6,11 +6,11 @@ Uses native `URLSession` on iOS and MacOS, and `DownloadWorker` (WorkManager) / 
 
 ---
 
-## 🌟 The Modern Transfer API (Recommended)
+## Transfer API (Preferred)
 
-The easiest and most powerful way to use `background_downloader` is via the **Transfer API**.
+For most use cases, the **Transfer API** (`FileDownloader().transfers`) is the preferred approach. It manages tasks through a [`Transfer`](doc/transfers.md) handle that encapsulates progress tracking, status updates, awaitable futures, and control methods (such as pause, resume, and cancel) for an individual task.
 
-On app startup (e.g. in `main()` or your top-level `initState()`), call `FileDownloader().start(autoCleanDatabase: true)` to activate persistent database tracking, automatically purge old task records, and reconcile transfers that completed or were interrupted while the app was suspended or closed. Then simply define a [`DownloadTask`](doc/downloads.md) or [`UploadTask`](doc/uploads.md), start it using `FileDownloader().transfers.start`, and receive a reactive [`Transfer`](doc/transfers.md) handle:
+On app startup (e.g. in `main()` or your top-level `initState()`), call `FileDownloader().start(autoCleanDatabase: true)` to activate persistent database tracking, automatically purge old task records, and reconcile transfers that completed or were interrupted while the app was suspended or closed. Then define a [`DownloadTask`](doc/downloads.md) or [`UploadTask`](doc/uploads.md), start it using `FileDownloader().transfers.start`, and receive a [`Transfer`](doc/transfers.md) handle:
 
 ```dart
 // 1. Activate database tracking & auto-cleanup on app launch (recommended)
@@ -24,7 +24,7 @@ FileDownloader().configureNotification(
   tapOpensFile: true,
 );
 
-// 3. Define the task with smart hints
+// 3. Define the task (hints help configure platform behavior)
 final task = DownloadTask(
   url: 'https://example.com/large_video.mp4',
   filename: 'video.mp4',
@@ -34,30 +34,30 @@ final task = DownloadTask(
 // 4. Start the transfer
 final transfer = await FileDownloader().transfers.start(task);
 
-// 5. Directly await the completed File:
+// 5. Await the completed File:
 final file = await transfer.file;
 print('Downloaded to: ${file.path}');
 ```
 
-### Why use `Transfer`?
+### Key Capabilities
 
 - **Awaitable Futures**: Await [`transfer.file`](doc/transfers.md#awaitable-futures) for the completed `File`, [`transfer.result`](doc/transfers.md#awaitable-futures) for the `TaskStatusUpdate`, or [`transfer.responseBody`](doc/transfers.md#awaitable-futures) for server response text.
-- **Reactive UI Notifiers**: Direct `ValueNotifier` bindings for Flutter widgets: `transfer.progressNotifier` (clean `0.0`–`1.0`), `transfer.statusNotifier`, `transfer.networkSpeedNotifier`, `transfer.timeRemainingNotifier`, and `transfer.notificationTapNotifier`.
-- **Plug-and-Play Widgets**: Pre-built UI components including [`TransferProgressBar`](doc/transfers.md#transferprogressbar), [`TransferButton`](doc/transfers.md#transferbutton), and [`TransferListTile`](doc/transfers.md#transferlisttile).
-- **Direct Controls**: Pause, resume, cancel, or allow cellular without managing task IDs: `await transfer.pause()`, `await transfer.resume()`, `await transfer.cancel()`.
-- **Batch Processing**: Enqueue hundreds of transfers with aggregate progress using `FileDownloader().transfers.startAll(tasks, onProgress: ...)`.
-- **Smart Auto-Tuning & Android 14+ UIDT**: Use [`TransferHint`](doc/transfers.md#6-smart-tuning-with-transferhint--android-14-uidt) (`userInitiated`, `largeFile`, `smallFile`, `lowPriority`, `useSuggestedFilename`, `binaryUpload`) to configure optimal priority, Android 14+ UIDT, and pause resilience automatically.
+- **Reactive UI Notifiers**: Direct `ValueNotifier` bindings for Flutter widgets: `transfer.progressNotifier` (`0.0`–`1.0`), `transfer.statusNotifier`, `transfer.networkSpeedNotifier`, `transfer.timeRemainingNotifier`, and `transfer.notificationTapNotifier`.
+- **Pre-built Widgets**: UI components including [`TransferProgressBar`](doc/transfers.md#transferprogressbar), [`TransferButton`](doc/transfers.md#transferbutton), and [`TransferListTile`](doc/transfers.md#transferlisttile).
+- **Direct Controls**: Pause, resume, cancel, or allow cellular directly on the transfer: `await transfer.pause()`, `await transfer.resume()`, `await transfer.cancel()`.
+- **Batch Processing**: Enqueue multiple transfers with aggregate progress using `FileDownloader().transfers.startAll(tasks, onProgress: ...)`.
+- **Platform Tuning with TransferHint**: Use [`TransferHint`](doc/transfers.md#6-smart-tuning-with-transferhint--android-14-uidt) (`userInitiated`, `largeFile`, `smallFile`, `lowPriority`, `useSuggestedFilename`, `binaryUpload`) to configure priority, Android 14+ UIDT, and pause resilience.
 - **Notification Tap Integration**: React directly to user notification taps per transfer via `transfer.notificationTapNotifier` or open downloaded files automatically with `tapOpensFile: true`.
 - **Scoping & Isolation**: Modularize downloads in plugins or sub-features with isolated namespaces using [`FileDownloader.scoped('my_feature')`](doc/transfers.md#7-scoping-with-filedownloaderscoped).
 - **Network Resilience**: Automatic offline holding and resume, plus configurable stall detection (`stallTimeout`).
 
-👉 **[Read the complete Transfers Guide](doc/transfers.md)**
+See the **[Transfers Guide](doc/transfers.md)** for complete details and examples.
 
 ---
 
-## 🛠️ Lower-Level APIs
+## Direct FileDownloader Methods (Lower-Level API)
 
-For specialized workflows or legacy integration, `FileDownloader` continues to provide direct lower-level methods:
+The original direct methods on `FileDownloader()` (i.e. not under the `transfers` object) provide lower-level constructs that are very relevant and appropriate for more complex or nuanced situations. Use these methods when you need fine-grained control, centralized stream-based architectures, custom queue management, or direct task handling without the `Transfer` wrapper:
 
 ### Direct Awaitable Download (`download`)
 Execute a task and wait for completion in a single call with inline callbacks:
@@ -97,7 +97,7 @@ final enqueued = await FileDownloader().enqueue(task);
 
 ---
 
-## 📁 File Locations
+## File Locations
 
 To ensure file paths work robustly across platform restarts (especially on iOS and Android where container paths can change between app launches), the downloader uses a combination of `BaseDirectory`, `directory` (subdirectory) and `filename`:
 
@@ -109,7 +109,7 @@ See [File Storage](doc/storage.md) for details on shared and scoped storage.
 
 ---
 
-## 📚 Documentation Index
+## Documentation Index
 
 Check the **[Topic Index](doc/topic_index.md)** or specific guides:
 
@@ -129,7 +129,7 @@ Check the **[Topic Index](doc/topic_index.md)** or specific guides:
 
 ---
 
-## ⚙️ Initial Setup
+## Initial Setup
 
 No setup is required for Windows or Linux.
 
@@ -153,7 +153,7 @@ Add the client network entitlement to `macos/Runner/DebugProfile.entitlements` a
 
 ---
 
-## ⚠️ Platform Notes & Limitations
+## Platform Notes & Limitations
 
 * **iOS**: Minimum iOS 14.0. Background transfers must complete within the system resource timeout (defaults to 4 hours, configurable via [CONFIG.md](doc/CONFIG.md)).
 * **Android**: Minimum API 21. Standard background tasks are limited to 9 minutes by WorkManager. To allow longer downloads, set `allowPause: true` (or `TransferHint.largeFile` / `userInitiated`), which automatically resumes across 9-minute cycles, or set `priority: 0` on Android 14+ to use UIDT (see [parameters.md](doc/parameters.md#priority)).
