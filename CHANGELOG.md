@@ -1,5 +1,7 @@
 ## 9.6.3
 
+* Raise HTTP redirect limit to 10 for desktop and foreground requests
+* [Android] Remove `androidx.test:monitor` from implementation dependencies
 * [iOS] Fix group notification completion cleanup when notification is unconfigured: ensure `GroupNotification` registry cleanup is executed upon group completion regardless of whether `error` or `complete` notification contents are configured, preventing an unconfigured slot from permanently suppressing subsequent group completion notifications (fixes #728)
 * [iOS] Fix group completion notification de-duplication: always post finished group notifications (`isFinished == true`), bypassing delivered notification de-duplication so consecutive batches with identical completion text are not skipped (fixes #729)
 
