@@ -949,6 +949,13 @@ object NotificationService {
      */
     private fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationManager: NotificationManager = context.getSystemService(
+                Context.NOTIFICATION_SERVICE
+            ) as NotificationManager
+            if (notificationManager.getNotificationChannel(notificationChannelId) != null) {
+                createdNotificationChannel = true
+                return
+            }
             val name = context.getString(R.string.bg_downloader_notification_channel_name)
             val descriptionText = context.getString(
                 R.string.bg_downloader_notification_channel_description
@@ -960,9 +967,6 @@ object NotificationService {
                 description = descriptionText
             }
             // Register the channel with the system
-            val notificationManager: NotificationManager = context.getSystemService(
-                Context.NOTIFICATION_SERVICE
-            ) as NotificationManager
             notificationManager.createNotificationChannel(channel)
         }
         createdNotificationChannel = true
