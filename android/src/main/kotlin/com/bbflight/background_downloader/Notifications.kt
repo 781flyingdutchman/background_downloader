@@ -949,20 +949,25 @@ object NotificationService {
      */
     private fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationManager: NotificationManager = context.getSystemService(
+                Context.NOTIFICATION_SERVICE
+            ) as NotificationManager
             val name = context.getString(R.string.bg_downloader_notification_channel_name)
             val descriptionText = context.getString(
                 R.string.bg_downloader_notification_channel_description
             )
-            val importance = NotificationManager.IMPORTANCE_LOW
+            // Keep the importance of an existing channel (e.g. pre-created by the app),
+            // as re-creating it with a lower importance would downgrade it.
+            // Name and description are still updated, e.g. after a locale change
+            val importance =
+                notificationManager.getNotificationChannel(notificationChannelId)?.importance
+                    ?: NotificationManager.IMPORTANCE_LOW
             val channel = NotificationChannel(
                 notificationChannelId, name, importance
             ).apply {
                 description = descriptionText
             }
             // Register the channel with the system
-            val notificationManager: NotificationManager = context.getSystemService(
-                Context.NOTIFICATION_SERVICE
-            ) as NotificationManager
             notificationManager.createNotificationChannel(channel)
         }
         createdNotificationChannel = true
