@@ -262,13 +262,15 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         // Check if the file should be skipped
         if !isResume {
             let skipThreshold = UserDefaults.standard.object(forKey: BDPlugin.keyConfigSkipExistingFiles) as? Int ?? -1
-            if skipThreshold != -1 {
+            // (not possible if the filename will be suggested by the server)
+            if skipThreshold != -1 && task.filename != "?" {
                 let filePath = getFilePath(for: task)
                 if let path = filePath, FileManager.default.fileExists(atPath: path) {
                     do {
                         let attributes = try FileManager.default.attributesOfItem(atPath: path)
                         if let fileSize = attributes[.size] as? Int64 {
-                            if fileSize > skipThreshold * 1024 * 1024 {
+                            // threshold 0 skips any existing file, including an empty one
+                            if skipThreshold == 0 || fileSize > skipThreshold * 1024 * 1024 {
                                 processStatusUpdate(task: task, status: .complete, responseStatusCode: 304)
                                 return true
                             }

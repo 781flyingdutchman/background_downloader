@@ -67,13 +67,15 @@ class DownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) {
         connection: HttpURLConnection,
     ): TaskStatus {
         // Check if the file should be skipped
+        // (not possible if the filename will be suggested by the server)
         val skipThreshold = prefs.getInt(BDPlugin.keyConfigSkipExistingFiles, -1)
-        if (skipThreshold != -1) {
+        if (skipThreshold != -1 && task.filename != "?") {
             val filePath = task.filePath(context.appContext)
             val file = File(filePath)
             if (file.exists()) {
                 val fileSize = file.length()
-                if (fileSize > skipThreshold * 1024L * 1024L) {
+                // threshold 0 skips any existing file, including an empty one
+                if (skipThreshold == 0 || fileSize > skipThreshold * 1024L * 1024L) {
                     responseStatusCode = 304
                     return TaskStatus.complete
                 }

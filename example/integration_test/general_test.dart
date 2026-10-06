@@ -1468,6 +1468,51 @@ void main() {
         await File(path).delete();
       },
     );
+
+    testWidgets(
+      'skipExistingFiles edge cases: empty file and suggested filename',
+      timeout: const Timeout(Duration(minutes: 2)),
+      (widgetTester) async {
+        final docsDir = (await getApplicationDocumentsDirectory()).path;
+        await FileDownloader().configure(
+          globalConfig: (Config.skipExistingFiles, Config.always),
+        );
+        try {
+          // an existing empty file is skipped with Config.always
+          final task = DownloadTask(
+            url: urlWithoutContentLength,
+            filename: 'existing_empty.html',
+          );
+          final path = join(docsDir, task.filename);
+          await File(path).writeAsString('');
+          var result = await FileDownloader().download(task);
+          expect(result.status, equals(TaskStatus.complete));
+          expect(result.responseStatusCode, equals(304));
+          expect(File(path).lengthSync(), equals(0));
+          await File(path).delete();
+
+          // a task with a suggested filename is not skipped because a file
+          // named '?' exists
+          final placeholderFile = File(join(docsDir, '?'));
+          await placeholderFile.writeAsString('placeholder');
+          final suggestTask = DownloadTask(
+            url: urlWithContentLength,
+            filename: DownloadTask.suggestedFilename,
+          );
+          result = await FileDownloader().download(suggestTask);
+          expect(result.status, equals(TaskStatus.complete));
+          expect(result.responseStatusCode, equals(200));
+          await placeholderFile.delete();
+          final downloaded = File(await result.task.filePath());
+          if (downloaded.existsSync()) await downloaded.delete();
+        } finally {
+          await FileDownloader().configure(
+            globalConfig: (Config.skipExistingFiles, Config.never),
+          );
+        }
+      },
+      skip: Platform.isWindows, // '?' is not a valid filename on Windows
+    );
   });
 
   group('Retries', () {

@@ -149,12 +149,15 @@ final class DesktopDownloader extends BaseDownloader {
   /// [FileDownloader]
   Future<void> _executeTask(Task task) async {
     // Check if the file should be skipped
-    if (task is DownloadTask && _skipExistingFiles != -1) {
+    // (not possible if the filename will be suggested by the server)
+    if (task is DownloadTask && _skipExistingFiles != -1 && task.hasFilename) {
       final filePath = await task.filePath();
       final file = File(filePath);
       if (await file.exists()) {
         final fileSize = await file.length();
-        if (fileSize > _skipExistingFiles * 1024 * 1024) {
+        // threshold 0 skips any existing file, including an empty one
+        if (_skipExistingFiles == 0 ||
+            fileSize > _skipExistingFiles * 1024 * 1024) {
           processStatusUpdate(
             TaskStatusUpdate(task, TaskStatus.complete, null, null, null, 304),
           );
