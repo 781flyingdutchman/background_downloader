@@ -255,8 +255,11 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
                 }
                 // check if the task is resumable
                 if task.allowPause {
-                    let acceptRangesHeader = (downloadTask.response as? HTTPURLResponse)?.allHeaderFields["Accept-Ranges"]
-                    let taskCanResume = acceptRangesHeader as? String == "bytes"
+                    // header lookup must be case-insensitive, and a partial
+                    // response also implies the server accepts ranges
+                    let httpResponse = downloadTask.response as? HTTPURLResponse
+                    let acceptRangesHeader = httpResponse?.value(forHTTPHeaderField: "Accept-Ranges")
+                    let taskCanResume = acceptRangesHeader == "bytes" || httpResponse?.statusCode == 206
                     processCanResume(task: task, taskCanResume: taskCanResume)
                     if taskCanResume {
                         BDPlugin.propertyLock.withLock({

@@ -414,6 +414,10 @@ def serve_file(filename):
     if not no_content_length:
         headers['Content-Length'] = str(content_length)
 
+    # optionally send the Accept-Ranges header name in lowercase, as HTTP/2 does
+    if request.args.get('lowercase_accept_ranges') == 'true':
+        headers['accept-ranges'] = headers.pop('Accept-Ranges')
+
     if status_code == 206:
         headers['Content-Range'] = f'bytes {start_byte}-{end_byte}/{total_size}'
 

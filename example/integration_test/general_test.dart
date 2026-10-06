@@ -3302,6 +3302,35 @@ void main() {
     );
 
     testWidgets(
+      'task can resume when Accept-Ranges header name is lowercase',
+      timeout: const Timeout(Duration(minutes: 2)),
+      (widgetTester) async {
+        final canResumeCompleter = Completer<bool>();
+        FileDownloader().registerCallbacks(
+          taskStatusCallback: statusCallback,
+          taskProgressCallback: (update) async {
+            if (update.progress > 0 && !canResumeCompleter.isCompleted) {
+              canResumeCompleter.complete(
+                await FileDownloader().taskCanResume(update.task),
+              );
+            }
+          },
+        );
+        task = DownloadTask(
+          url: urlWithContentLength,
+          urlQueryParameters: {'lowercase_accept_ranges': 'true'},
+          filename: defaultFilename,
+          updates: Updates.statusAndProgress,
+          allowPause: true,
+        );
+        expect(await FileDownloader().enqueue(task), equals(true));
+        expect(await canResumeCompleter.future, isTrue);
+        await statusCallbackCompleter.future;
+        expect(lastStatus, equals(TaskStatus.complete));
+      },
+    );
+
+    testWidgets(
       'pause task that cannot be paused',
       timeout: const Timeout(Duration(minutes: 2)),
       (widgetTester) async {
