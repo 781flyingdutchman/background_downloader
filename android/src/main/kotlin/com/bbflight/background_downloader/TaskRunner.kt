@@ -651,11 +651,11 @@ open class TaskRunner(
             }
             if (BDPlugin.pausedTaskIds.contains(task.taskId)) {
                 Log.i(TAG, "Task ${task.taskId} was paused, ignoring exception: ${e.message}")
-                return TaskStatus.paused
+                return handlePause()
             }
             if (isTimedOut && !runInForeground) {
                 Log.i(TAG, "Task ${task.taskId} timed out, ignoring exception: ${e.message}")
-                return TaskStatus.enqueued
+                return handleTimeout()
             }
 
             setTaskException(e)
@@ -701,6 +701,32 @@ open class TaskRunner(
             // clean up remaining bytes tracking
             BDPlugin.remainingBytesToDownload.remove(task.taskId)
         }
+        return TaskStatus.failed
+    }
+
+    /**
+     * Handle a pause request that interrupted the task outside of [transferBytes]
+     *
+     * Returns the final [TaskStatus], which is [TaskStatus.paused] only if
+     * resume data was posted. Overridden by subclasses that can pause
+     */
+    open suspend fun handlePause(): TaskStatus {
+        BDPlugin.pausedTaskIds.remove(task.taskId)
+        taskException = TaskException(
+            ExceptionType.resume,
+            description = "Task was paused but cannot resume"
+        )
+        return TaskStatus.failed
+    }
+
+    /**
+     * Handle a timeout that interrupted the task outside of [transferBytes]
+     *
+     * Returns the final [TaskStatus], never the special [TaskStatus.enqueued].
+     * Overridden by subclasses that can resume after a timeout
+     */
+    open suspend fun handleTimeout(): TaskStatus {
+        taskException = TaskException(ExceptionType.connection, description = "Task timed out")
         return TaskStatus.failed
     }
 

@@ -678,5 +678,66 @@ void main() {
       },
       skip: Platform.isIOS, // iOS background URLSession ignores timeoutIntervalForRequest by Apple design
     );
+
+    testWidgets(
+      'pause while waiting for response, then timeout, does not leave task paused without resume data',
+      timeout: const Timeout(Duration(minutes: 2)),
+      (widgetTester) async {
+        try {
+          await FileDownloader().configure(
+            globalConfig: (Config.requestTimeout, const Duration(seconds: 3)),
+          );
+          final statuses = <TaskStatus>[];
+          final runningCompleter = Completer<void>();
+          final endCompleter = Completer<void>();
+          FileDownloader().registerCallbacks(
+            taskStatusCallback: (update) {
+              statuses.add(update.status);
+              lastException = update.exception;
+              if (update.status == TaskStatus.running &&
+                  !runningCompleter.isCompleted) {
+                runningCompleter.complete();
+              }
+              if ((update.status.isFinalState ||
+                      update.status == TaskStatus.paused) &&
+                  !endCompleter.isCompleted) {
+                endCompleter.complete();
+              }
+            },
+          );
+          // Test endpoint /delay/10 delays for 10 seconds before sending headers
+          final delayTask = DownloadTask(
+            url: 'http://$localServerHostPort/delay/10',
+            filename: 'delay_pause_test.txt',
+            updates: Updates.status,
+            allowPause: true,
+          );
+          expect(await FileDownloader().enqueue(delayTask), isTrue);
+          await runningCompleter.future;
+          await Future.delayed(const Duration(milliseconds: 500));
+          await FileDownloader().pause(delayTask);
+          await endCompleter.future.timeout(const Duration(seconds: 30));
+          print('Statuses: $statuses');
+          // a paused task must be resumable, otherwise the task must fail
+          if (statuses.last == TaskStatus.paused) {
+            expect(await FileDownloader().resume(delayTask), isTrue);
+            await FileDownloader().cancel(delayTask);
+          } else {
+            expect(statuses.last, equals(TaskStatus.failed));
+          }
+          await Future.delayed(const Duration(seconds: 1));
+          // after running, internal 'enqueued' timeout signal must not leak
+          expect(
+            statuses.skipWhile((s) => s != TaskStatus.running),
+            isNot(contains(TaskStatus.enqueued)),
+          );
+        } finally {
+          await FileDownloader().configure(
+            globalConfig: (Config.requestTimeout, null),
+          );
+        }
+      },
+      skip: Platform.isIOS, // iOS background URLSession ignores timeoutIntervalForRequest by Apple design
+    );
   });
 }

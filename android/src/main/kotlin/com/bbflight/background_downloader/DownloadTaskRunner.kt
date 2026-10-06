@@ -303,76 +303,11 @@ class DownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) {
                     return TaskStatus.canceled
                 }
 
-                TaskStatus.paused -> {
-                    BDPlugin.pausedTaskIds.remove(task.taskId)
-                    if (taskCanResume) {
-                        Log.i(TAG, "Task ${task.taskId} paused")
-                        processResumeData(
-                            ResumeData(
-                                task, tempFilePath, bytesTotal + startByte, eTagHeader
-                            ), prefs
-                        )
-                        return TaskStatus.paused
-                    }
-                    if (BDPlugin.tasksToReEnqueue.contains(task) && serverAcceptsRanges) {
-                        // pause was triggered by re-enqueue request due to WiFi requirement change
-                        // so we only store local resumeData without posting it
-                        Log.i(TAG, "Task ${task.taskId} paused in order to re-enqueue")
-                        BDPlugin.localResumeData[task.taskId] = ResumeData(
-                            task, tempFilePath, bytesTotal + startByte, eTagHeader
-                        )
-                        return TaskStatus.paused
-                    }
-                    Log.i(TAG, "Task ${task.taskId} cannot resume, therefore pause failed")
-                    taskException = TaskException(
-                        ExceptionType.resume,
-                        description = "Task was paused but cannot resume"
-                    )
-                    cleanup(usesUri, destUri)
-                    return TaskStatus.failed
-                }
+                TaskStatus.paused -> return pauseResult(usesUri, destUri, bytesTotal + startByte)
 
                 TaskStatus.enqueued -> {
                     // Special status, in this context means that the task timed out
-                    // so if allowed, pause it and schedule the resume task immediately
-                    if (!task.allowPause) {
-                        Log.i(TAG, "Task ${task.taskId} timed out")
-                        taskException =
-                            TaskException(
-                                ExceptionType.connection,
-                                description = "Task timed out"
-                            )
-                        return TaskStatus.failed
-                    }
-                    if (taskCanResume) {
-                        Log.i(
-                            TAG,
-                            "Task ${task.taskId} paused due to timeout, will resume in 1 second"
-                        )
-                        val start = bytesTotal + startByte
-                        val success = BDPlugin.doEnqueue(
-                            context.appContext,
-                            task,
-                            notificationConfigJsonString,
-                            ResumeData(task, tempFilePath, start, eTagHeader),
-                            1000
-                        )
-                        if (!success) {
-                            Log.w(TAG, "Task ${task.taskId} timed out and could not re-enqueue to resume")
-                            taskException = TaskException(
-                                ExceptionType.general,
-                                description = "Task timed out and could not re-enqueue to resume"
-                            )
-                            cleanup(usesUri, destUri)
-                            return TaskStatus.failed
-                        }
-                        return TaskStatus.paused
-                    }
-                    Log.i(TAG, "Task ${task.taskId} timed out and cannot pause/resume")
-                    taskException =
-                        TaskException(ExceptionType.connection, description = "Task timed out")
-                    cleanup(usesUri, destUri)
-                    return TaskStatus.failed
+                    return timeoutResult(usesUri, destUri, bytesTotal + startByte)
                 }
 
                 TaskStatus.failed -> {
@@ -404,6 +339,127 @@ class DownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) {
                 TaskStatus.failed
             }
         }
+    }
+
+    /**
+     * Returns the final [TaskStatus] for a task that was paused, with [resumeStart]
+     * the number of bytes in the temp file.
+     *
+     * Posts resume data if the task can resume, otherwise fails the task
+     */
+    private suspend fun pauseResult(usesUri: Boolean, destUri: Uri?, resumeStart: Long): TaskStatus {
+        BDPlugin.pausedTaskIds.remove(task.taskId)
+        if (taskCanResume) {
+            Log.i(TAG, "Task ${task.taskId} paused")
+            processResumeData(
+                ResumeData(
+                    task, tempFilePath, resumeStart, eTagHeader
+                ), prefs
+            )
+            return TaskStatus.paused
+        }
+        if (BDPlugin.tasksToReEnqueue.contains(task) && serverAcceptsRanges) {
+            // pause was triggered by re-enqueue request due to WiFi requirement change
+            // so we only store local resumeData without posting it
+            Log.i(TAG, "Task ${task.taskId} paused in order to re-enqueue")
+            BDPlugin.localResumeData[task.taskId] = ResumeData(
+                task, tempFilePath, resumeStart, eTagHeader
+            )
+            return TaskStatus.paused
+        }
+        Log.i(TAG, "Task ${task.taskId} cannot resume, therefore pause failed")
+        taskException = TaskException(
+            ExceptionType.resume,
+            description = "Task was paused but cannot resume"
+        )
+        cleanup(usesUri, destUri)
+        return TaskStatus.failed
+    }
+
+    /**
+     * Returns the final [TaskStatus] for a task that timed out, with [resumeStart]
+     * the number of bytes in the temp file.
+     *
+     * If allowed, pauses the task and schedules the resume task immediately,
+     * otherwise fails the task. Never returns [TaskStatus.enqueued]
+     */
+    private suspend fun timeoutResult(usesUri: Boolean, destUri: Uri?, resumeStart: Long): TaskStatus {
+        if (!task.allowPause) {
+            Log.i(TAG, "Task ${task.taskId} timed out")
+            taskException =
+                TaskException(
+                    ExceptionType.connection,
+                    description = "Task timed out"
+                )
+            return TaskStatus.failed
+        }
+        if (taskCanResume) {
+            Log.i(
+                TAG,
+                "Task ${task.taskId} paused due to timeout, will resume in 1 second"
+            )
+            val success = BDPlugin.doEnqueue(
+                context.appContext,
+                task,
+                notificationConfigJsonString,
+                ResumeData(task, tempFilePath, resumeStart, eTagHeader),
+                1000
+            )
+            if (!success) {
+                Log.w(TAG, "Task ${task.taskId} timed out and could not re-enqueue to resume")
+                taskException = TaskException(
+                    ExceptionType.general,
+                    description = "Task timed out and could not re-enqueue to resume"
+                )
+                cleanup(usesUri, destUri)
+                return TaskStatus.failed
+            }
+            return TaskStatus.paused
+        }
+        Log.i(TAG, "Task ${task.taskId} timed out and cannot pause/resume")
+        taskException =
+            TaskException(ExceptionType.connection, description = "Task timed out")
+        cleanup(usesUri, destUri)
+        return TaskStatus.failed
+    }
+
+    /**
+     * Pause interrupted the task outside of [transferBytes], e.g. while waiting
+     * for the response. Resume from whatever is in the temp file, if possible
+     */
+    override suspend fun handlePause(): TaskStatus {
+        prepareInterruptedResume()
+        return pauseResult(usesUriDestination(), unpack(task.filename).second, tempFileLength())
+    }
+
+    /**
+     * Timeout interrupted the task outside of [transferBytes], e.g. while
+     * waiting for the response. Resume from whatever is in the temp file, if possible
+     */
+    override suspend fun handleTimeout(): TaskStatus {
+        prepareInterruptedResume()
+        return timeoutResult(usesUriDestination(), unpack(task.filename).second, tempFileLength())
+    }
+
+    /**
+     * Prepare state for [handlePause] and [handleTimeout]: resume is only
+     * possible if the temp file holds data, and if the task already
+     * established that it can resume (in this or in a previous run)
+     */
+    private fun prepareInterruptedResume() {
+        val hasTempData = !usesUriDestination() && tempFileLength() > 0
+        taskCanResume = task.allowPause && hasTempData && (taskCanResume || isResume)
+        eTagHeader = eTagHeader ?: eTag
+    }
+
+    /** True if the destination of this task is a Uri */
+    private fun usesUriDestination() = UriUtils.uriFromStringValue(task.directory) != null
+
+    /** Length of the temp file, or 0 if it does not exist */
+    private fun tempFileLength(): Long {
+        if (tempFilePath.isEmpty()) return 0
+        val tempFile = File(tempFilePath)
+        return if (tempFile.exists()) tempFile.length() else 0
     }
 
     /**
