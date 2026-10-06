@@ -633,7 +633,9 @@ open class TaskRunner(
     open suspend fun connectAndProcess(connection: HttpURLConnection): TaskStatus {
         try {
             if ((task.isDownloadTask() || task.isDataTask()) && task.post != null) {
-                val bytes = task.post!!.toByteArray()
+                // binary post holds one byte per character, so encode as Latin-1
+                val bytes =
+                    task.post!!.toByteArray(if (task.postIsBinary) Charsets.ISO_8859_1 else Charsets.UTF_8)
                 connection.doOutput = true
                 connection.setFixedLengthStreamingMode(bytes.size)
                 DataOutputStream(connection.outputStream).use {

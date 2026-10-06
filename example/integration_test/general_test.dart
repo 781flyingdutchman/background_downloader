@@ -1984,6 +1984,50 @@ void main() {
     );
 
     testWidgets(
+      'post DownloadTask with post is Uint8List containing bytes >= 0x80',
+      timeout: const Timeout(Duration(minutes: 2)),
+      (widgetTester) async {
+        // utf8 encoding of 'é', which must arrive at the server unchanged
+        final task = DownloadTask(
+          url: postTestUrl,
+          urlQueryParameters: {'request-type': 'post-Uint8List-high'},
+          filename: postFilename,
+          headers: {'Content-Type': 'application/octet-stream'},
+          post: Uint8List.fromList(utf8.encode('café')),
+        );
+        expect(task.postIsBinary, isTrue);
+        final path = join(
+          (await getApplicationDocumentsDirectory()).path,
+          task.filename,
+        );
+        expect(
+          (await FileDownloader().download(task)).status,
+          equals(TaskStatus.complete),
+        );
+        final result = jsonDecode(await File(path).readAsString());
+        print(result);
+        expect(result['args']['request-type'], equals('post-Uint8List-high'));
+        expect(result['data'], equals('café'));
+      },
+    );
+
+    testWidgets(
+      'post request with post is Uint8List containing bytes >= 0x80',
+      timeout: const Timeout(Duration(minutes: 2)),
+      (widgetTester) async {
+        final request = Request(
+          url: postTestUrl,
+          urlQueryParameters: {'request-type': 'post-Uint8List-high'},
+          post: Uint8List.fromList(utf8.encode('café')),
+        );
+        final response = await FileDownloader().request(request);
+        expect(response.statusCode, equals(200));
+        final result = jsonDecode(response.body);
+        expect(result['data'], equals('café'));
+      },
+    );
+
+    testWidgets(
       'post request with post is Uint8List',
       timeout: const Timeout(Duration(minutes: 2)),
       (widgetTester) async {

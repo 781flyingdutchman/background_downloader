@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
@@ -64,8 +65,11 @@ Future<void> doDownloadTask(
     final newRangeString = 'bytes=${resumeRange.$1}-${resumeRange.$2 ?? ""}';
     request.headers['Range'] = newRangeString;
   }
-  if (downloadTask.post case final String post) {
-    request.body = post;
+  switch (downloadTask.postBody) {
+    case final Uint8List bytes:
+      request.bodyBytes = bytes;
+    case final String post:
+      request.body = post;
   }
   var resultStatus = TaskStatus.failed;
   try {

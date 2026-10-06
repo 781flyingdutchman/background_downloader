@@ -330,7 +330,8 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     private func scheduleDownload(task: Task, taskDescription: String, baseRequest: URLRequest, resumeData: Data?, notificationConfigJsonString: String?) async -> Bool {
         var request = baseRequest
         if task.post != nil {
-            request.httpBody = Data((task.post ?? "").data(using: .utf8)!)
+            // binary post holds one byte per character, so encode as Latin-1
+            request.httpBody = (task.post ?? "").data(using: task.postIsBinary == true ? .isoLatin1 : .utf8)
         }
         let urlSessionDownloadTask = resumeData == nil ? UrlSessionDelegate.urlSession!.downloadTask(with: request) : UrlSessionDelegate.urlSession!.downloadTask(withResumeData: resumeData!)
         urlSessionDownloadTask.taskDescription = taskDescription

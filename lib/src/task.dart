@@ -48,8 +48,14 @@ base class Request {
   ///   and set as the POST body
   /// - a List: map will be jsonEncoded to a String and set as the POST body
   ///
-  /// The field [post] will be a String
+  /// The field [post] will be a String. If the constructor was given a list
+  /// of bytes, [postIsBinary] is true and each character of [post] represents
+  /// one byte, which is sent as-is (not utf8 encoded)
   final String? post;
+
+  /// True if [post] holds binary data, one byte per character, that must be
+  /// sent without utf8 encoding
+  final bool postIsBinary;
 
   /// Maximum number of retries the downloader should attempt
   ///
@@ -93,6 +99,7 @@ base class Request {
            : post is Map || post is List
            ? jsonEncode(post)
            : post,
+       postIsBinary = post is Uint8List,
        retriesRemaining = retries,
        creationTime = creationTime ?? DateTime.now() {
     if (retries < 0 || retries > 10) {
@@ -113,6 +120,7 @@ base class Request {
           json['httpRequestMethod'] as String? ??
           (json['post'] == null ? 'GET' : 'POST'),
       post = json['post'] as String?,
+      postIsBinary = json['postIsBinary'] as bool? ?? false,
       retries = (json['retries'] as num?)?.toInt() ?? 0,
       retriesRemaining = (json['retriesRemaining'] as num?)?.toInt() ?? 0,
       creationTime = DateTime.fromMillisecondsSinceEpoch(
@@ -125,10 +133,18 @@ base class Request {
     'headers': headers,
     'httpRequestMethod': httpRequestMethod,
     'post': post,
+    if (postIsBinary) 'postIsBinary': true, // omitted if false, for compatibility
     'retries': retries,
     'retriesRemaining': retriesRemaining,
     'creationTime': creationTime.millisecondsSinceEpoch,
   };
+
+  /// The [post] body as raw bytes if [postIsBinary], otherwise the [post] String.
+  ///
+  /// Use this when sending the body, or when passing [post] on to a copy of
+  /// this [Request], so that binary data is not utf8 encoded
+  Object? get postBody =>
+      postIsBinary ? Uint8List.fromList(post?.codeUnits ?? []) : post;
 
   /// The regex pattern to split the cookies in `Set-Cookie`.
   static final _splitSetCookiesRegExp = RegExp(',(?=[^ ])');
@@ -821,7 +837,7 @@ final class DownloadTask extends Task {
     filename: filename ?? this.filename,
     headers: headers ?? this.headers,
     httpRequestMethod: httpRequestMethod ?? this.httpRequestMethod,
-    post: post ?? this.post,
+    post: post ?? postBody,
     directory: directory ?? this.directory,
     baseDirectory: baseDirectory ?? this.baseDirectory,
     group: group ?? this.group,

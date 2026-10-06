@@ -1505,23 +1505,23 @@ Future<http.Response> _doRequest(
         'POST' => client.post(
           Uri.parse(request.url),
           headers: request.headers,
-          body: request.post,
+          body: request.postBody,
         ),
         'HEAD' => client.head(Uri.parse(request.url), headers: request.headers),
         'PUT' => client.put(
           Uri.parse(request.url),
           headers: request.headers,
-          body: request.post,
+          body: request.postBody,
         ),
         'DELETE' => client.delete(
           Uri.parse(request.url),
           headers: request.headers,
-          body: request.post,
+          body: request.postBody,
         ),
         'PATCH' => client.patch(
           Uri.parse(request.url),
           headers: request.headers,
-          body: request.post,
+          body: request.postBody,
         ),
         _ => Future.value(response),
       };

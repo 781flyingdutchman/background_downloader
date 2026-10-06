@@ -515,4 +515,33 @@ void main() {
       expect(updatedTask2.fileUri, testUriWithFileScheme);
     });
   });
+
+  group('Binary post', () {
+    test('Uint8List post is flagged, survives json and copyWith', () {
+      final bytes = Uint8List.fromList([0, 0x41, 0x80, 0xc3, 0xa9, 0xff]);
+      final task = DownloadTask(url: workingUrl, post: bytes);
+      expect(task.postIsBinary, isTrue);
+      expect(task.post, equals(String.fromCharCodes(bytes)));
+      expect(task.postBody, equals(bytes));
+      final fromJson = Task.createFromJson(task.toJson()) as DownloadTask;
+      expect(fromJson.postIsBinary, isTrue);
+      expect(fromJson.postBody, equals(bytes));
+      final copy = task.copyWith(filename: 'other');
+      expect(copy.postIsBinary, isTrue);
+      expect(copy.postBody, equals(bytes));
+      final stringCopy = task.copyWith(post: 'text');
+      expect(stringCopy.postIsBinary, isFalse);
+      expect(stringCopy.postBody, equals('text'));
+    });
+
+    test('String post is not binary, and old json defaults to not binary', () {
+      final task = DownloadTask(url: workingUrl, post: 'café');
+      expect(task.postIsBinary, isFalse);
+      expect(task.postBody, equals('café'));
+      final json = task.toJson()..remove('postIsBinary');
+      final fromJson = Task.createFromJson(json);
+      expect(fromJson.postIsBinary, isFalse);
+      expect(fromJson.post, equals('café'));
+    });
+  });
 }

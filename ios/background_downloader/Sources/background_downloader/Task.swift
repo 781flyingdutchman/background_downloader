@@ -18,6 +18,7 @@ public struct Task : Codable, Hashable {
     public var httpRequestMethod: String = "GET"
     public var chunks: Int? = 1
     public var post: String?
+    public var postIsBinary: Bool?
     public var fileField: String?
     public var mimeType: String?
     public var fields: [String:String]?

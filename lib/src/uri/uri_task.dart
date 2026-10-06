@@ -161,7 +161,7 @@ final class UriDownloadTask extends DownloadTask with _UriTaskMixin {
     filename: filename ?? this.filename,
     headers: headers ?? this.headers,
     httpRequestMethod: httpRequestMethod ?? this.httpRequestMethod,
-    post: post ?? this.post,
+    post: post ?? postBody,
     directoryUri: directoryUri ?? this.directoryUri ?? Uri.base,
     group: group ?? this.group,
     updates: updates ?? this.updates,
