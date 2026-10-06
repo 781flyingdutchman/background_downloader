@@ -647,7 +647,7 @@ open class TaskRunner(
             }
             return process(connection)
         } catch (e: Exception) {
-            if (context.isTaskStopped || BDPlugin.canceledTaskIds.contains(task.taskId)) {
+            if (BDPlugin.canceledTaskIds.contains(task.taskId)) {
                 Log.i(TAG, "Task ${task.taskId} was canceled, ignoring exception: ${e.message}")
                 return TaskStatus.canceled
             }
@@ -658,6 +658,16 @@ open class TaskRunner(
             if (isTimedOut && !runInForeground) {
                 Log.i(TAG, "Task ${task.taskId} timed out, ignoring exception: ${e.message}")
                 return handleTimeout()
+            }
+            if (context.isTaskStopped) {
+                // stopped by the system (e.g. constraint no longer met), not by
+                // the user, so fail (as in [transferBytes]) to allow a retry
+                Log.i(TAG, "Task ${task.taskId} was stopped, ignoring exception: ${e.message}")
+                taskException = TaskException(
+                    ExceptionType.general,
+                    description = "Task was stopped by the system"
+                )
+                return TaskStatus.failed
             }
 
             setTaskException(e)
