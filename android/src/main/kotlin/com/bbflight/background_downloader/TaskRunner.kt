@@ -531,6 +531,8 @@ open class TaskRunner(
             } finally {
                 withContext(NonCancellable) {
                     // NonCancellable to make sure we clean up even if job is being cancelled
+                    // a pause request that was not acted upon must not affect a later run
+                    BDPlugin.pausedTaskIds.remove(task.taskId)
                     processStatusUpdate(
                         task,
                         status,

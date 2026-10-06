@@ -346,6 +346,7 @@ class NotificationReceiver : BroadcastReceiver() {
         resumeData: ResumeData,
         notificationConfigJsonString: String?
     ) {
+        BDPlugin.pausedTaskIds.remove(taskId) // reset flag from an earlier pause
         if (!BDPlugin.doEnqueue(
                 context,
                 resumeData.task,

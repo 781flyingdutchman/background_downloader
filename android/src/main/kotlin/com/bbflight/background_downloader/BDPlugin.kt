@@ -713,6 +713,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             val args = call.arguments as List<*>
             val taskJsonMapString = args[0] as String
             val task = bdJson.decodeFromString<Task>(taskJsonMapString)
+            pausedTaskIds.remove(task.taskId) // reset flag from an earlier pause
             val notificationConfigJsonString = args[1] as String?
             val isResume = args.size == 5
             val resumeData: ResumeData? = if (isResume) {
@@ -782,6 +783,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     )
                 val results = mutableListOf<Boolean>()
                 for ((index, task) in tasks.withIndex()) {
+                    pausedTaskIds.remove(task.taskId) // reset flag from an earlier pause
                     val notificationConfig = notificationConfigs.getOrNull(index)
                     val notificationConfigJsonString =
                         notificationConfig?.let { bdJson.encodeToString(it) }

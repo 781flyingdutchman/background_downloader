@@ -3245,6 +3245,33 @@ void main() {
     );
 
     testWidgets(
+      'pause of a finished task does not pause a later run with the same taskId',
+      timeout: const Timeout(Duration(minutes: 2)),
+      (widgetTester) async {
+        task = DownloadTask(
+          url: urlWithContentLength,
+          filename: defaultFilename,
+          allowPause: true,
+        );
+        expect(
+          (await FileDownloader().download(task)).status,
+          equals(TaskStatus.complete),
+        );
+        // pause after the task has finished: nothing to pause
+        await FileDownloader().pause(task);
+        await Future.delayed(const Duration(milliseconds: 500));
+        // run the same task again: must not pause itself
+        final statuses = <TaskStatus>[];
+        final result = await FileDownloader()
+            .download(task, onStatus: statuses.add)
+            .timeout(const Duration(seconds: 60));
+        print('Statuses: $statuses');
+        expect(statuses, isNot(contains(TaskStatus.paused)));
+        expect(result.status, equals(TaskStatus.complete));
+      },
+    );
+
+    testWidgets(
       'multiple pause and resume',
       timeout: const Timeout(Duration(minutes: 2)),
       (widgetTester) async {
