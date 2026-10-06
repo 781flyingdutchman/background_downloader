@@ -96,4 +96,29 @@ void main() {
       await subscription.cancel();
     });
   });
+
+  group('enqueueAndAwait when enqueue fails', () {
+    test('callbacks and elapsed time timer are removed', () async {
+      enqueueResult = false;
+      final statuses = <TaskStatus>[];
+      var elapsedTimeCalls = 0;
+      final task = DownloadTask(url: 'https://example.com/file.bin');
+      final result = await FileDownloader().download(
+        task,
+        onStatus: statuses.add,
+        onElapsedTime: (_) => elapsedTimeCalls++,
+        elapsedTimeInterval: const Duration(milliseconds: 10),
+      );
+      expect(result.status, equals(TaskStatus.failed));
+      await Future.delayed(const Duration(milliseconds: 100));
+      expect(elapsedTimeCalls, equals(0));
+      // a later update for the same task must not reach the stale callback
+      FileDownloader().downloaderForTesting.processStatusUpdate(
+        TaskStatusUpdate(task, TaskStatus.complete),
+      );
+      await Future.delayed(const Duration(milliseconds: 50));
+      expect(statuses, isEmpty);
+      expect(FileDownloader().downloaderForTesting.awaitTasks, isEmpty);
+    });
+  });
 }

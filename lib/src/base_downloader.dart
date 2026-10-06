@@ -397,6 +397,12 @@ abstract base class BaseDownloader {
     final enqueueSuccess = await enqueue(taskToEnqueue);
     if (!enqueueSuccess) {
       log.warning('Could not enqueue task $taskToEnqueue');
+      timer?.cancel();
+      awaitTasks.remove(taskToEnqueue);
+      _shortTaskStatusCallbacks.remove(task.taskId);
+      _shortTaskProgressCallbacks.remove(task.taskId);
+      _taskStatusCallbacks.remove(task.taskId);
+      _taskProgressCallbacks.remove(task.taskId);
       return Future.value(
         TaskStatusUpdate(
           taskToEnqueue,
