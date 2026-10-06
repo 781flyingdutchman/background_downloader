@@ -524,8 +524,19 @@ final class DesktopDownloader extends BaseDownloader {
     try {
       await File(filePath).rename(destFilePath);
     } on FileSystemException catch (e) {
-      _log.warning('Error moving $filePath to shared storage: $e');
-      return null;
+      // rename fails across volumes (e.g. EXDEV), so fall back to copy + delete
+      _log.fine('Could not rename $filePath ($e), trying copy and delete');
+      try {
+        await File(filePath).copy(destFilePath);
+      } on FileSystemException catch (e) {
+        _log.warning('Error moving $filePath to shared storage: $e');
+        return null;
+      }
+      try {
+        await File(filePath).delete();
+      } on FileSystemException catch (e) {
+        _log.warning('Could not delete $filePath after copying: $e');
+      }
     }
     return asUriString ? Uri.file(destFilePath).toString() : destFilePath;
   }
