@@ -127,9 +127,10 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
                 if (error! as NSError).code == NSURLErrorTimedOut {
                     os_log("Task with id %@ timed out", log: log, type: .info, bgdTask.taskId)
                     processStatusUpdate(task: bgdTask, status: .failed, taskException: TaskException(type: .connection, httpResponseCode: -1, description: error!.localizedDescription))
-                    return
+                    // replace the 'running' notification, unless the task will be retried
+                    notificationType = bgdTask.retriesRemaining > 0 ? nil : .error
                 }
-                if (error! as NSError).code == NSURLErrorCancelled {
+                else if (error! as NSError).code == NSURLErrorCancelled {
                     // cancelled with resumedata implies 'pause'
                     if canResume {
                         os_log("Paused task with id %@", log: log, type: .info, bgdTask.taskId)
