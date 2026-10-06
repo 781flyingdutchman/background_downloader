@@ -230,7 +230,7 @@ Future<TaskStatus> processOkDownloadResponse(
         resultStatus = TaskStatus.complete;
 
       case .canceled:
-        deleteTempFile(actualTempFilePath);
+        // temp file is deleted in finally, after closing outStream
         resultStatus = TaskStatus.canceled;
 
       case .paused:
@@ -273,7 +273,8 @@ Future<TaskStatus> processOkDownloadResponse(
           bytesTotal + startByte,
           eTagHeader,
         ));
-      } else if (resultStatus != TaskStatus.paused) {
+      } else if (resultStatus != TaskStatus.paused &&
+          File(actualTempFilePath).existsSync()) {
         File(actualTempFilePath).deleteSync();
       }
     } catch (e) {
@@ -331,7 +332,7 @@ Future<bool> prepareResume(
   try {
     final file = await tempFile.open(mode: FileMode.writeOnlyAppend);
     await file.truncate(startByte);
-    file.close();
+    await file.close();
   } on FileSystemException {
     log.fine('Could not truncate temp file');
     taskException = TaskResumeException('Could not truncate temp file');
