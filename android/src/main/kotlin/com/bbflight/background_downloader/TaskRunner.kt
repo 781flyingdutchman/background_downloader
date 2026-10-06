@@ -471,7 +471,7 @@ open class TaskRunner(
             task = context.task
             val isExpedited = task.priority < 5 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
             val timeout = if (isExpedited) expeditedTaskTimeoutMillis else taskTimeoutMillis
-            CoroutineScope(Dispatchers.Default).launch {
+            val timeoutJob = CoroutineScope(Dispatchers.Default).launch {
                 delay(timeout)
                 isTimedOut = true
             }
@@ -493,6 +493,7 @@ open class TaskRunner(
                         context = context.appContext
                     )
                     BDPlugin.holdingQueue?.taskFinished(task)
+                    timeoutJob.cancel()
                     return@withContext // task interrupted
                 }
             }
@@ -529,6 +530,7 @@ open class TaskRunner(
                 }
                 setTaskException(e)
             } finally {
+                timeoutJob.cancel()
                 withContext(NonCancellable) {
                     // NonCancellable to make sure we clean up even if job is being cancelled
                     // a pause request that was not acted upon must not affect a later run
