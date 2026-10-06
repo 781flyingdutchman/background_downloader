@@ -590,9 +590,14 @@ sealed class Task extends Request implements Comparable {
   /// [dirPath] should not contain a filename - if it does, it is returned
   /// as part of the subdir.
   static (bool, String) _contains(String baseDirPath, String dirPath) {
-    final escapedBaseDirPath = '$baseDirPath${Platform.pathSeparator}?'
-        .replaceAll(r'\', r'\\');
-    final match = RegExp('^$escapedBaseDirPath(.*)').firstMatch(dirPath);
+    final separator = Platform.pathSeparator;
+    final basePath = baseDirPath.length > 1 && baseDirPath.endsWith(separator)
+        ? baseDirPath.substring(0, baseDirPath.length - 1)
+        : baseDirPath;
+    // baseDirPath must be followed by a separator or the end of dirPath
+    final match = RegExp(
+      '^${RegExp.escape(basePath)}(?:${RegExp.escape(separator)}(.*))?\$',
+    ).firstMatch(dirPath);
     return (match != null, match?.group(1) ?? '');
   }
 
