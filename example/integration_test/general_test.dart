@@ -3180,6 +3180,64 @@ void main() {
     );
 
     testWidgets(
+      'failed resume with invalid ETag leaves no resume data for deleted temp file',
+      timeout: const Timeout(Duration(minutes: 2)),
+      (widgetTester) async {
+        // iOS manages resume for us, so we cannot test this
+        if (!Platform.isIOS) {
+          final waitingToRetry = Completer<void>();
+          FileDownloader().registerCallbacks(
+            taskStatusCallback: (update) {
+              statusCallback(update);
+              if (update.status == TaskStatus.waitingToRetry &&
+                  !waitingToRetry.isCompleted) {
+                waitingToRetry.complete();
+              }
+            },
+            taskProgressCallback: progressCallback,
+          );
+          task = DownloadTask(
+            url: urlWithContentLength,
+            filename: defaultFilename,
+            updates: Updates.statusAndProgress,
+            allowPause: true,
+            retries: 1,
+          );
+          expect(await FileDownloader().enqueue(task), equals(true));
+          while (lastProgress < 0.3) {
+            await Future.delayed(const Duration(milliseconds: 50));
+          }
+          expect(await FileDownloader().pause(task), isTrue);
+          await Future.delayed(const Duration(milliseconds: 500));
+          expect(lastStatus, equals(TaskStatus.paused));
+          final resumeData = await FileDownloader().database.storage
+              .retrieveResumeData(task.taskId);
+          await FileDownloader().database.storage.storeResumeData(
+            ResumeData(
+              task,
+              resumeData!.data,
+              resumeData.requiredStartByte,
+              'differentTag',
+            ),
+          );
+          expect(await FileDownloader().resume(task), isTrue);
+          // ETag mismatch fails the task, which then waits to retry
+          await waitingToRetry.future;
+          await Future.delayed(const Duration(milliseconds: 500));
+          // apart from the stale resume data stored above, no resume data may
+          // be posted after the failure that refers to the deleted temp file
+          final newResumeData = await FileDownloader().database.storage
+              .retrieveResumeData(task.taskId);
+          if (newResumeData != null && newResumeData.eTag != 'differentTag') {
+            expect(File(newResumeData.data).existsSync(), isTrue);
+          }
+          await statusCallbackCompleter.future;
+          expect(lastStatus, equals(TaskStatus.complete));
+        }
+      },
+    );
+
+    testWidgets(
       'pause task that cannot be paused',
       timeout: const Timeout(Duration(minutes: 2)),
       (widgetTester) async {

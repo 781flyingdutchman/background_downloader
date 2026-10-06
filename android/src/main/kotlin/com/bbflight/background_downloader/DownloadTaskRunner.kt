@@ -248,13 +248,14 @@ class DownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) {
             context.updateEstimatedNetworkBytes(contentLength, 0L)
             // transfer the bytes from the server to the output stream
             val transferBytesResult: TaskStatus
-            BufferedInputStream(connection.inputStream).use { inputStream ->
-                transferBytesResult = transferBytes(
-                    inputStream, outputStream, contentLength, task
-                )
+            outputStream.use { os ->
+                BufferedInputStream(connection.inputStream).use { inputStream ->
+                    transferBytesResult = transferBytes(
+                        inputStream, os, contentLength, task
+                    )
+                }
+                os.flush()
             }
-            outputStream.flush()
-            outputStream.close()
             // act on the result of the bytes transfer
             when (transferBytesResult) {
                 TaskStatus.complete -> {
@@ -311,7 +312,7 @@ class DownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) {
                 }
 
                 TaskStatus.failed -> {
-                    prepResumeAfterFailure()
+                    // resume after failure is prepared in [connectAndProcess]
                     return TaskStatus.failed
                 }
 
@@ -584,7 +585,9 @@ class DownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) {
      * If this is not possible, the temp file will be deleted
      */
     private suspend fun prepResumeAfterFailure() {
-        if (serverAcceptsRanges && bytesTotal + startByte > 1 shl 20) {
+        // a Uri download has no temp file, and the temp file may have been deleted already
+        val hasTempFile = tempFilePath.isNotEmpty() && File(tempFilePath).exists()
+        if (hasTempFile && serverAcceptsRanges && bytesTotal + startByte > 1 shl 20) {
             // if failure can be resumed, post resume data
             processResumeData(
                 ResumeData(
