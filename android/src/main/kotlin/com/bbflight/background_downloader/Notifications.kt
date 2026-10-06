@@ -1026,7 +1026,7 @@ object NotificationService {
         val output2 = progressRegEx.replace(output, progressString)
         // download speed
         val networkSpeedString =
-            if (networkSpeed <= 0.0) "-- MB/s" else if (networkSpeed > 1) "${networkSpeed.roundToInt()} MB/s" else "${(networkSpeed * 1000).roundToInt()} kB/s"
+            if (networkSpeed <= 0.0 || !networkSpeed.isFinite()) "-- MB/s" else if (networkSpeed > 1) "${networkSpeed.roundToInt()} MB/s" else "${(networkSpeed * 1000).roundToInt()} kB/s"
         val output3 = networkSpeedRegEx.replace(output2, networkSpeedString)
         // time remaining
         var output4 = output3

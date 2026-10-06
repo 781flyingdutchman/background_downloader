@@ -884,13 +884,20 @@ open class TaskRunner(
             bytesTotal = (progress * expectedFileSize).toLong()
         }
         val timeSinceLastUpdate = now - lastProgressUpdateTime
-        lastProgressUpdateTime = now
-        val bytesSinceLastUpdate = bytesTotal - bytesTotalAtLastProgressUpdate
-        bytesTotalAtLastProgressUpdate = bytesTotal
-        val currentNetworkSpeed: Double = if (timeSinceLastUpdate > 3600000)
-            -1.0 else bytesSinceLastUpdate / (timeSinceLastUpdate * 1000.0)
-        networkSpeed =
-            if (networkSpeed == -1.0) currentNetworkSpeed else (networkSpeed * 3.0 + currentNetworkSpeed) / 4.0
+        // updates within the same millisecond (e.g. from parallel download chunks) would
+        // divide by zero and make networkSpeed NaN or Infinity, so they keep the current
+        // speed, and their bytes count towards the next update
+        if (timeSinceLastUpdate > 0) {
+            lastProgressUpdateTime = now
+            val bytesSinceLastUpdate = bytesTotal - bytesTotalAtLastProgressUpdate
+            bytesTotalAtLastProgressUpdate = bytesTotal
+            val currentNetworkSpeed: Double = if (timeSinceLastUpdate > 3600000)
+                -1.0 else bytesSinceLastUpdate / (timeSinceLastUpdate * 1000.0)
+            networkSpeed =
+                if (networkSpeed == -1.0) currentNetworkSpeed else (networkSpeed * 3.0 + currentNetworkSpeed) / 4.0
+        } else if (timeSinceLastUpdate < 0) {
+            lastProgressUpdateTime = now // clock moved backwards
+        }
         val remainingBytes = (1 - progress) * expectedFileSize
         val timeRemaining: Long =
             if (networkSpeed == -1.0) -1000 else (remainingBytes / networkSpeed / 1000).toLong()
