@@ -259,8 +259,9 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
             os_log("Could not decode %@ to Task", log: log, taskJsonString)
             return false
         }
-        // Check if the file should be skipped
-        if !isResume {
+        // Check if the file should be skipped (only for downloads, as an
+        // upload's file always exists)
+        if !isResume && isDownloadTask(task: task) {
             let skipThreshold = UserDefaults.standard.object(forKey: BDPlugin.keyConfigSkipExistingFiles) as? Int ?? -1
             // (not possible if the filename will be suggested by the server)
             if skipThreshold != -1 && task.filename != "?" {

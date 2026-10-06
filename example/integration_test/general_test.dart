@@ -1470,6 +1470,25 @@ void main() {
     );
 
     testWidgets(
+      'skipExistingFiles does not skip uploads',
+      timeout: const Timeout(Duration(minutes: 2)),
+      (widgetTester) async {
+        await FileDownloader().configure(
+          globalConfig: (Config.skipExistingFiles, Config.always),
+        );
+        try {
+          final result = await FileDownloader().upload(uploadTask);
+          expect(result.status, equals(TaskStatus.complete));
+          expect(result.responseStatusCode, equals(200));
+        } finally {
+          await FileDownloader().configure(
+            globalConfig: (Config.skipExistingFiles, Config.never),
+          );
+        }
+      },
+    );
+
+    testWidgets(
       'skipExistingFiles edge cases: empty file and suggested filename',
       timeout: const Timeout(Duration(minutes: 2)),
       (widgetTester) async {
