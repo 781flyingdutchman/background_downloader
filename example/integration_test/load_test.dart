@@ -132,15 +132,17 @@ void main() {
         const numTasks = 10;
         final tasks = <DownloadTask>[];
         for (var n = 0; n < numTasks; n++) {
-          tasks.add(DownloadTask(url: urlWithContentLength, allowPause: true));
+          tasks.add(
+            DownloadTask(url: urlWithLongContentLength, allowPause: true),
+          );
         }
         FileDownloader().registerCallbacks(taskStatusCallback: statusCallback);
         final enqueueResults = await FileDownloader().enqueueAll(tasks);
         for (final result in enqueueResults) {
           expect(result, isTrue);
         }
-        // Wait a short time to let downloads start.
-        await Future.delayed(const Duration(milliseconds: 500));
+        // Wait 5 seconds to let downloads make solid progress without completing.
+        await Future.delayed(const Duration(seconds: 5));
         // Pause all tasks.
         final pauseResults = await FileDownloader().pauseAll();
         // Verify that all tasks were paused.
