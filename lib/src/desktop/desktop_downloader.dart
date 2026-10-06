@@ -84,10 +84,27 @@ final class DesktopDownloader extends BaseDownloader {
       final task = _getNextTask();
       if (task != null) {
         _running.add(task);
-        _executeTask(task).then((_) {
-          _remove(task);
-          _advanceQueue();
-        });
+        _executeTask(task)
+            .catchError((Object e, StackTrace stackTrace) {
+              // an unexpected error must not leave the task without a final
+              // status, or keep occupying its slot in the run queue
+              _log.warning('Error executing taskId ${task.taskId}: $e');
+              _log.fine('Stack trace: $stackTrace');
+              if (!_running.contains(task)) {
+                return; // final status was already sent
+              }
+              processStatusUpdate(
+                TaskStatusUpdate(
+                  task,
+                  TaskStatus.failed,
+                  TaskException('Error executing task: $e'),
+                ),
+              );
+            })
+            .whenComplete(() {
+              _remove(task);
+              _advanceQueue();
+            });
       } else {
         return; // if no suitable task, done
       }
@@ -179,135 +196,142 @@ final class DesktopDownloader extends BaseDownloader {
       );
       return;
     }
-    log.finer('${isResume ? "Resuming" : "Starting"} taskId ${task.taskId}');
-    await Isolate.spawn(doTask, (
-      rootIsolateToken,
-      receivePort.sendPort,
-    ), onError: errorPort.sendPort);
-    final messagesFromIsolate = StreamQueue<dynamic>(receivePort);
-    final sendPort = await messagesFromIsolate.next as SendPort;
-    sendPort.send((
-      task,
-      resumeData,
-      isResume,
-      requestTimeout,
-      proxy,
-      bypassTLSCertificateValidation,
-      _mtlsConfigs,
-      tempFilePath,
-    ));
-    if (_isolateSendPorts.keys.contains(task)) {
-      // if already registered with null value, cancel immediately
-      sendPort.send('cancel');
-    }
-    // store the isolate's sendPort so we can send it messages for
-    // cancellation, and for managing parallel downloads
-    _isolateSendPorts[task] = sendPort;
-    // listen for messages sent back from the isolate, until 'done'
-    // note that the task sent by the isolate may have changed. Therefore, we
-    // use updatedTask instead of task from here on
-    while (await messagesFromIsolate.hasNext) {
-      final message = await messagesFromIsolate.next;
-      switch (message) {
-        case 'done':
-          receivePort.close();
-
-        case (
-          'statusUpdate',
-          final Task updatedTask,
-          final TaskStatus status,
-          final TaskException? exception,
-          final String? responseBody,
-          final Map<String, String>? responseHeaders,
-          final int? responseCode,
-          final String? mimeType,
-          final String? charSet,
-        ):
-          final taskStatusUpdate = TaskStatusUpdate(
-            updatedTask,
-            status,
-            exception,
-            responseBody,
-            responseHeaders,
-            responseCode,
-            mimeType,
-            charSet,
-          );
-          if (updatedTask.group != BaseDownloader.chunkGroup) {
-            if (status.isFinalState) {
-              _remove(updatedTask);
-            }
-            processStatusUpdate(taskStatusUpdate);
-          } else {
-            _parallelTaskSendPort(Chunk.getParentTaskId(updatedTask))
-                ?.send(taskStatusUpdate);
-          }
-
-        case (
-          'progressUpdate',
-          final Task updatedTask,
-          final double progress,
-          final int expectedFileSize,
-          final double downloadSpeed,
-          final Duration timeRemaining,
-        ):
-          final taskProgressUpdate = TaskProgressUpdate(
-            updatedTask,
-            progress,
-            expectedFileSize,
-            downloadSpeed,
-            timeRemaining,
-          );
-          if (updatedTask.group != BaseDownloader.chunkGroup) {
-            processProgressUpdate(taskProgressUpdate);
-          } else {
-            _parallelTaskSendPort(Chunk.getParentTaskId(updatedTask))
-                ?.send(taskProgressUpdate);
-          }
-
-        case ('taskCanResume', final bool taskCanResume):
-          setCanResume(task, taskCanResume);
-
-        case (
-          'resumeData',
-          final String data,
-          final int requiredStartByte,
-          final String? eTag,
-        ):
-          try {
-            await setResumeData(
-              ResumeData(task, data, requiredStartByte, eTag),
-            );
-          } catch (e) {
-            _log.warning('Failed to store resume data: $e');
-          }
-
-        // from [ParallelDownloadTask]
-        case ('enqueueChild', final DownloadTask childTask):
-          await FileDownloader().enqueue(childTask);
-
-        // from [ParallelDownloadTask]
-        case ('cancelTasksWithId', final List<String> taskIds):
-          await FileDownloader().cancelTasksWithIds(taskIds);
-
-        // from [ParallelDownloadTask]
-        case ('pauseTasks', final List<DownloadTask> tasks):
-          for (final chunkTask in tasks) {
-            await FileDownloader().pause(chunkTask);
-          }
-
-        case ('log', final String logMessage):
-          _log.finest(logMessage);
-
-        default:
-          _log.warning(
-            'Received message with unknown type '
-            '$message from Isolate',
-          );
+    try {
+      log.finer('${isResume ? "Resuming" : "Starting"} taskId ${task.taskId}');
+      await Isolate.spawn(doTask, (
+        rootIsolateToken,
+        receivePort.sendPort,
+      ), onError: errorPort.sendPort);
+      final messagesFromIsolate = StreamQueue<dynamic>(receivePort);
+      if (!await messagesFromIsolate.hasNext) {
+        return; // isolate failed before starting, reported via errorPort
       }
+      final sendPort = await messagesFromIsolate.next as SendPort;
+      sendPort.send((
+        task,
+        resumeData,
+        isResume,
+        requestTimeout,
+        proxy,
+        bypassTLSCertificateValidation,
+        _mtlsConfigs,
+        tempFilePath,
+      ));
+      if (_isolateSendPorts.keys.contains(task)) {
+        // if already registered with null value, cancel immediately
+        sendPort.send('cancel');
+      }
+      // store the isolate's sendPort so we can send it messages for
+      // cancellation, and for managing parallel downloads
+      _isolateSendPorts[task] = sendPort;
+      // listen for messages sent back from the isolate, until 'done'
+      // note that the task sent by the isolate may have changed. Therefore, we
+      // use updatedTask instead of task from here on
+      while (await messagesFromIsolate.hasNext) {
+        final message = await messagesFromIsolate.next;
+        switch (message) {
+          case 'done':
+            receivePort.close();
+
+          case (
+            'statusUpdate',
+            final Task updatedTask,
+            final TaskStatus status,
+            final TaskException? exception,
+            final String? responseBody,
+            final Map<String, String>? responseHeaders,
+            final int? responseCode,
+            final String? mimeType,
+            final String? charSet,
+          ):
+            final taskStatusUpdate = TaskStatusUpdate(
+              updatedTask,
+              status,
+              exception,
+              responseBody,
+              responseHeaders,
+              responseCode,
+              mimeType,
+              charSet,
+            );
+            if (updatedTask.group != BaseDownloader.chunkGroup) {
+              if (status.isFinalState) {
+                _remove(updatedTask);
+              }
+              processStatusUpdate(taskStatusUpdate);
+            } else {
+              _parallelTaskSendPort(Chunk.getParentTaskId(updatedTask))
+                  ?.send(taskStatusUpdate);
+            }
+
+          case (
+            'progressUpdate',
+            final Task updatedTask,
+            final double progress,
+            final int expectedFileSize,
+            final double downloadSpeed,
+            final Duration timeRemaining,
+          ):
+            final taskProgressUpdate = TaskProgressUpdate(
+              updatedTask,
+              progress,
+              expectedFileSize,
+              downloadSpeed,
+              timeRemaining,
+            );
+            if (updatedTask.group != BaseDownloader.chunkGroup) {
+              processProgressUpdate(taskProgressUpdate);
+            } else {
+              _parallelTaskSendPort(Chunk.getParentTaskId(updatedTask))
+                  ?.send(taskProgressUpdate);
+            }
+
+          case ('taskCanResume', final bool taskCanResume):
+            setCanResume(task, taskCanResume);
+
+          case (
+            'resumeData',
+            final String data,
+            final int requiredStartByte,
+            final String? eTag,
+          ):
+            try {
+              await setResumeData(
+                ResumeData(task, data, requiredStartByte, eTag),
+              );
+            } catch (e) {
+              _log.warning('Failed to store resume data: $e');
+            }
+
+          // from [ParallelDownloadTask]
+          case ('enqueueChild', final DownloadTask childTask):
+            await FileDownloader().enqueue(childTask);
+
+          // from [ParallelDownloadTask]
+          case ('cancelTasksWithId', final List<String> taskIds):
+            await FileDownloader().cancelTasksWithIds(taskIds);
+
+          // from [ParallelDownloadTask]
+          case ('pauseTasks', final List<DownloadTask> tasks):
+            for (final chunkTask in tasks) {
+              await FileDownloader().pause(chunkTask);
+            }
+
+          case ('log', final String logMessage):
+            _log.finest(logMessage);
+
+          default:
+            _log.warning(
+              'Received message with unknown type '
+              '$message from Isolate',
+            );
+        }
+      }
+    } finally {
+      receivePort.close();
+      errorPort.close();
+      _isolateSendPorts.remove(task);
     }
-    errorPort.close();
-    _isolateSendPorts.remove(task);
   }
 
   // intercept the status and progress updates for tasks that are 'chunks', i.e.
