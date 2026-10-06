@@ -909,8 +909,7 @@ abstract base class BaseDownloader {
         (update.exception?.description.toLowerCase().contains('timeout') ==
             true) ||
         (update.exception?.description.toLowerCase().contains('network') ==
-            true) ||
-        !isConnected;
+            true);
 
     if (update.status == TaskStatus.failed &&
         (task.retriesRemaining > 0 || (!isConnected && isConnectionError))) {
