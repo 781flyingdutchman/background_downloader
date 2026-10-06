@@ -587,7 +587,11 @@ final class DesktopDownloader extends BaseDownloader {
       _log.fine('File to open does not exist: $filePath');
       return false;
     }
-    final result = await Process.run(executable, [filePath], runInShell: true);
+    // On Windows, 'start' treats its first quoted argument as the window
+    // title, so pass an empty title before the (possibly quoted) filePath
+    final result = defaultTargetPlatform == TargetPlatform.windows
+        ? await Process.run('cmd', ['/c', 'start', '', filePath])
+        : await Process.run(executable, [filePath], runInShell: true);
     if (result.exitCode != 0) {
       _log.fine(
         'openFile command $executable returned exit code ${result.exitCode}',
