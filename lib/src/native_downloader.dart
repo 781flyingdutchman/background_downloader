@@ -273,6 +273,7 @@ abstract base class NativeDownloader extends BaseDownloader {
     for (final task in tasks.where((task) => task.allowPause)) {
       canResumeTask[task] = Completer();
     }
+    tasks.forEach(registerTaskNotificationConfig);
     final (
       String tasksJsonString,
       String notificationConfigsJsonString,

@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   var enqueueResult = true;
+  MethodCall? lastEnqueueCall;
 
   setUpAll(() {
     final messenger =
@@ -22,7 +23,10 @@ void main() {
     messenger.setMockMethodCallHandler(
       const MethodChannel('com.bbflight.background_downloader'),
       (MethodCall call) async => switch (call.method) {
-        'enqueue' => enqueueResult,
+        'enqueue' => () {
+          lastEnqueueCall = call;
+          return enqueueResult;
+        }(),
         'pause' || 'resume' || 'cancelTasksWithIds' => true,
         'enqueueAll' => (jsonDecode(
           call.arguments[0] as String,
@@ -39,6 +43,7 @@ void main() {
 
   setUp(() {
     enqueueResult = true;
+    lastEnqueueCall = null;
     FileDownloader().destroy();
   });
 
@@ -119,6 +124,54 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 50));
       expect(statuses, isEmpty);
       expect(FileDownloader().downloaderForTesting.awaitTasks, isEmpty);
+    });
+  });
+
+  group('Task.notificationConfig', () {
+    test('is used on enqueue, overrides group config, survives json', () async {
+      FileDownloader().configureNotificationForGroup(
+        FileDownloader.defaultGroup,
+        complete: const TaskNotification('Group complete', ''),
+      );
+      final task = DownloadTask(
+        url: 'https://example.com/file.bin',
+        notificationConfig: TaskNotificationConfig(
+          complete: const TaskNotification('Task complete', ''),
+        ),
+      );
+      expect(await FileDownloader().enqueue(task), isTrue);
+      final sentConfig = jsonDecode(
+        (lastEnqueueCall!.arguments as List)[1] as String,
+      );
+      expect(sentConfig['complete']['title'], equals('Task complete'));
+      // a task restored from json (e.g. for a retry) has no notificationConfig,
+      // but the registered configuration still applies
+      final restoredTask = Task.createFromJson(
+        FileDownloader().withNamespacedGroup(task).toJson()
+            as Map<String, dynamic>,
+      );
+      expect(restoredTask.notificationConfig, isNull);
+      expect(
+        FileDownloader().downloaderForTesting
+            .notificationConfigForTask(restoredTask)
+            ?.complete
+            ?.title,
+        equals('Task complete'),
+      );
+    });
+
+    test('is used on enqueueAll', () async {
+      final task = DownloadTask(
+        url: 'https://example.com/file.bin',
+        notificationConfig: TaskNotificationConfig(
+          running: const TaskNotification('Task running', ''),
+        ),
+      );
+      expect(await FileDownloader().enqueueAll([task]), equals([true]));
+      expect(
+        FileDownloader().notificationConfigForTask(task)?.running?.title,
+        equals('Task running'),
+      );
     });
   });
 }

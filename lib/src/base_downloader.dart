@@ -325,9 +325,36 @@ abstract base class BaseDownloader {
         );
   }
 
+  /// Registers the [Task.notificationConfig] of this [task], if set, as the
+  /// notification configuration for this task, overriding any configuration
+  /// for its group or the default.
+  ///
+  /// [Task.notificationConfig] is not serialized, so registering it (keyed on
+  /// the task) ensures it is also used when the task is retried or resumed
+  void registerTaskNotificationConfig(Task task) {
+    final config = task.notificationConfig;
+    if (config == null) {
+      return;
+    }
+    final taskConfig = TaskNotificationConfig(
+      taskOrGroup: task,
+      running: config.running,
+      complete: config.complete,
+      error: config.error,
+      paused: config.paused,
+      canceled: config.canceled,
+      progressBar: config.progressBar,
+      tapOpensFile: config.tapOpensFile,
+      groupNotificationId: config.groupNotificationId,
+    );
+    notificationConfigs.remove(taskConfig); // equality is based on taskOrGroup
+    notificationConfigs.add(taskConfig);
+  }
+
   /// Enqueue the task
   @mustCallSuper
   Future<bool> enqueue(Task task) async {
+    registerTaskNotificationConfig(task);
     if (task.allowPause) {
       canResumeTask[task] = Completer();
     }
