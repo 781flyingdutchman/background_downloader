@@ -215,6 +215,8 @@ func updateNotification(task: Task, notificationType: NotificationType, notifica
                 notification = notificationConfig?.canceled
             }
             if notification == nil {
+                // remove a previous notification for this task (e.g. 'running'), as on Android
+                notificationCenter.removeDeliveredNotifications(withIdentifiers: [task.taskId])
                 return
             }
             let content = UNMutableNotificationContent()
