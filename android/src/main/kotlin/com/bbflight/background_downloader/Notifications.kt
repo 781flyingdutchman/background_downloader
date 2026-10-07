@@ -1,6 +1,7 @@
 package com.bbflight.background_downloader
 
 import android.annotation.SuppressLint
+import android.app.ActivityManager
 import android.app.ForegroundServiceStartNotAllowedException
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -528,6 +529,7 @@ object NotificationService {
             taskWorker.appContext, notificationChannelId
         ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
             .setShowWhen(notificationType != NotificationType.running)
+            .setSilent(appIsInForeground())
         if (notificationType == NotificationType.running) {
             // Keep concurrent download notifications in a stable order
             builder.setWhen(taskWorker.task.creationTime)
@@ -642,6 +644,7 @@ object NotificationService {
                     taskWorker.appContext, notificationChannelId
                 ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
                     .setShowWhen(isFinished)
+                    .setSilent(appIsInForeground())
                 // title and body interpolation of tokens
                 val progress = groupNotification.progress
                 val title = replaceTokens(
@@ -944,6 +947,19 @@ object NotificationService {
         }
     }
 
+
+    /**
+     * Returns true if the app is in the foreground, i.e. one of its activities is visible.
+     *
+     * Notifications are then posted silently (no sound, vibration or heads-up), even if the
+     * app raised the channel's importance, matching iOS, where notifications are not presented
+     * as a banner while the app is in the foreground
+     */
+    private fun appIsInForeground(): Boolean {
+        val appProcessInfo = ActivityManager.RunningAppProcessInfo()
+        ActivityManager.getMyMemoryState(appProcessInfo)
+        return appProcessInfo.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
+    }
 
     /**
      * Create the notification channel to use for download notifications
