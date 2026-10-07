@@ -23,20 +23,22 @@ void main() {
         );
   });
 
-  test('split matches a base directory containing regex metacharacters',
-      () async {
-    final (baseDirectory, directory, filename) = await Task.split(
-      filePath: '$basePath/sub/dir/file.txt',
-    );
-    expect(baseDirectory, equals(BaseDirectory.applicationDocuments));
-    expect(directory, equals('sub/dir'));
-    expect(filename, equals('file.txt'));
-    final (baseDirectory2, directory2, _) = await Task.split(
-      filePath: '$basePath/file.txt',
-    );
-    expect(baseDirectory2, equals(baseDirectory));
-    expect(directory2, equals(''));
-  });
+  test(
+    'split matches a base directory containing regex metacharacters',
+    () async {
+      final (baseDirectory, directory, filename) = await Task.split(
+        filePath: '$basePath/sub/dir/file.txt',
+      );
+      expect(baseDirectory, equals(BaseDirectory.applicationDocuments));
+      expect(directory, equals('sub/dir'));
+      expect(filename, equals('file.txt'));
+      final (baseDirectory2, directory2, _) = await Task.split(
+        filePath: '$basePath/file.txt',
+      );
+      expect(baseDirectory2, equals(baseDirectory));
+      expect(directory2, equals(''));
+    },
+  );
 
   test('split does not match a sibling directory sharing a prefix', () async {
     final (baseDirectory, directory, filename) = await Task.split(

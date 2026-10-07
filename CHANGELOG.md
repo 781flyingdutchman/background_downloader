@@ -1,3 +1,8 @@
+## 9.6.4
+
+* [Android] Reuse pre-created notification channel and preserve its importance (#732, #733)
+* Bug fixes
+
 ## 9.6.3
 
 * Raise HTTP redirect limit to 10 for desktop and foreground requests

@@ -133,7 +133,8 @@ base class Request {
     'headers': headers,
     'httpRequestMethod': httpRequestMethod,
     'post': post,
-    if (postIsBinary) 'postIsBinary': true, // omitted if false, for compatibility
+    if (postIsBinary)
+      'postIsBinary': true, // omitted if false, for compatibility
     'retries': retries,
     'retriesRemaining': retriesRemaining,
     'creationTime': creationTime.millisecondsSinceEpoch,
