@@ -147,8 +147,7 @@ void main() {
       // a task restored from json (e.g. for a retry) has no notificationConfig,
       // but the registered configuration still applies
       final restoredTask = Task.createFromJson(
-        FileDownloader().withNamespacedGroup(task).toJson()
-            as Map<String, dynamic>,
+        FileDownloader().withNamespacedGroup(task).toJson(),
       );
       expect(restoredTask.notificationConfig, isNull);
       expect(
