@@ -45,14 +45,12 @@ class WiFiQueue {
                         guard let task = getTaskFrom(urlSessionTask: urlSessionTask) else {
                             return
                         }
+                        // compare with the request the task was created with, which the URLSession
+                        // keeps across app launches, so tasks created by an earlier launch are included
+                        let urlSessionTaskRequiresWiFi = urlSessionTask.originalRequest?.allowsCellularAccess == false
                         BDPlugin.propertyLock.withLock {
-                            if taskRequiresWiFi(task: task) != BDPlugin.taskIdsRequiringWiFi.contains(task.taskId) {
+                            if taskRequiresWiFi(task: task) != urlSessionTaskRequiresWiFi {
                                 // requirement differs, so we need to re-enqueue
-                                if taskRequiresWiFi(task: task) {
-                                    BDPlugin.taskIdsRequiringWiFi.insert(task.taskId)
-                                } else {
-                                    BDPlugin.taskIdsRequiringWiFi.remove(task.taskId)
-                                }
                                 if BDPlugin.progressInfo[task.taskId] == nil {
                                     // enqueued only, so ensure it is re-enqueued and cancel
                                     haveReEnqueued = true
