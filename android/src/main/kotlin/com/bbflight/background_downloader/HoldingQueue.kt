@@ -255,7 +255,7 @@ class HoldingQueue(private val context: Context, private val workManager: WorkMa
         stateMutex.withLock {
             val workInfos = workManager.getWorkInfosByTag(BDPlugin.TAG).get()
                 .filter { !it.state.isFinished }
-            var totalCount = workInfos.size
+            var totalCount = 0
             concurrentByHost.clear()
             concurrentByGroup.clear()
             taskIdsHoldingSlot.clear()
@@ -264,7 +264,10 @@ class HoldingQueue(private val context: Context, private val workManager: WorkMa
                 try {
                     val taskIdTag = workInfo.tags.first { it.startsWith("taskId=") }
                     val taskId = taskIdTag.substring(startIndex = 7)
-                    taskIdsHoldingSlot.add(taskId)
+                    if (!taskIdsHoldingSlot.add(taskId)) {
+                        // a task holds one slot, however many unfinished works it has
+                        continue
+                    }
                     val host = hostByTaskId[taskId] ?: ""
                     if (!concurrentByHost.containsKey(host)) {
                         concurrentByHost[host] = AtomicInteger(0)
@@ -272,6 +275,7 @@ class HoldingQueue(private val context: Context, private val workManager: WorkMa
                     concurrentByHost[host]?.incrementAndGet()
                 } catch (_: NoSuchElementException) {
                 }
+                totalCount++
                 // update concurrentByGroup
                 try {
                     val groupTag = workInfo.tags.first { it.startsWith("group=") }
@@ -293,9 +297,11 @@ class HoldingQueue(private val context: Context, private val workManager: WorkMa
                           if (taskJson != null) {
                               try {
                                   val task = bdJson.decodeFromString<Task>(taskJson)
+                                  if (!taskIdsHoldingSlot.add(task.taskId)) {
+                                      continue
+                                  }
                                   totalCount++
-                                  taskIdsHoldingSlot.add(task.taskId)
-                                  
+
                                   val host = task.host()
                                   val group = task.group
 
