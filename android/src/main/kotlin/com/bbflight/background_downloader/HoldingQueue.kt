@@ -44,6 +44,8 @@ class HoldingQueue(private val context: Context, private val workManager: WorkMa
     val enqueuedTaskIds: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
 
     private val concurrent = AtomicInteger(0)
+    // so each slot is released only once. Guarded by [stateMutex]
+    private val taskIdsHoldingSlot = HashSet<String>()
     private val concurrentByHost = ConcurrentHashMap<String, AtomicInteger>()
     private val concurrentByGroup = ConcurrentHashMap<String, AtomicInteger>()
 
@@ -66,7 +68,9 @@ class HoldingQueue(private val context: Context, private val workManager: WorkMa
                         val item = queue.poll() ?: break
                         val host = item.task.host()
                         val group = item.task.group
-                        if ((concurrentByHost[host]?.get()
+                        // a task re-enqueued while its canceled run is still ending waits for
+                        // that run to release its slot, so two runs of a task never overlap
+                        if (!taskIdsHoldingSlot.contains(item.task.taskId) && (concurrentByHost[host]?.get()
                                 ?: 0) < maxConcurrentByHost && (concurrentByGroup[group]?.get()
                                 ?: 0) < maxConcurrentByGroup
                         ) {
@@ -74,6 +78,7 @@ class HoldingQueue(private val context: Context, private val workManager: WorkMa
                             concurrent.incrementAndGet()
                             concurrentByHost.computeIfAbsent(host) { AtomicInteger(0) }.incrementAndGet()
                             concurrentByGroup.computeIfAbsent(group) { AtomicInteger(0) }.incrementAndGet()
+                            taskIdsHoldingSlot.add(item.task.taskId)
                             item.enqueue(afterDelayMillis = 0)
                         } else {
                             // this item has to wait
@@ -231,9 +236,11 @@ class HoldingQueue(private val context: Context, private val workManager: WorkMa
         val host = task.host()
         val group = task.group
         stateMutex.withLock {
-            concurrent.decrementAndGet()
-            concurrentByHost[host]?.decrementAndGet()
-            concurrentByGroup[group]?.decrementAndGet()
+            if (taskIdsHoldingSlot.remove(task.taskId)) {
+                concurrent.decrementAndGet()
+                concurrentByHost[host]?.decrementAndGet()
+                concurrentByGroup[group]?.decrementAndGet()
+            }
         }
         advanceQueue()
     }
@@ -251,11 +258,13 @@ class HoldingQueue(private val context: Context, private val workManager: WorkMa
             var totalCount = workInfos.size
             concurrentByHost.clear()
             concurrentByGroup.clear()
+            taskIdsHoldingSlot.clear()
             for (workInfo in workInfos) {
                 // update concurrentByHost
                 try {
                     val taskIdTag = workInfo.tags.first { it.startsWith("taskId=") }
                     val taskId = taskIdTag.substring(startIndex = 7)
+                    taskIdsHoldingSlot.add(taskId)
                     val host = hostByTaskId[taskId] ?: ""
                     if (!concurrentByHost.containsKey(host)) {
                         concurrentByHost[host] = AtomicInteger(0)
@@ -285,6 +294,7 @@ class HoldingQueue(private val context: Context, private val workManager: WorkMa
                               try {
                                   val task = bdJson.decodeFromString<Task>(taskJson)
                                   totalCount++
+                                  taskIdsHoldingSlot.add(task.taskId)
                                   
                                   val host = task.host()
                                   val group = task.group
@@ -328,10 +338,7 @@ class EnqueueItem(
 
     /** Execute the re-enqueue after an appropriate delay */
     suspend fun enqueue(afterDelayMillis: Int = 1000) {
-        val timeSinceCreatedMillis = Date().time - created.time
-        if (timeSinceCreatedMillis < afterDelayMillis) {
-            delay(afterDelayMillis - timeSinceCreatedMillis)
-        }
+        delayUntil(afterDelayMillis)
         if (!BDPlugin.doEnqueue(
                 context = context,
                 task = task,
@@ -352,6 +359,28 @@ class EnqueueItem(
             NotificationService.registerEnqueue(this, success = false)
         }
         delay(20)
+    }
+
+    /**
+     * Re-enqueue after [afterDelayMillis] since creation, through the [HoldingQueue] if there is
+     * one, so the task waits for a slot like any other
+     */
+    suspend fun reEnqueue(afterDelayMillis: Int = 1000) {
+        val holdingQueue = BDPlugin.holdingQueue
+        if (holdingQueue == null) {
+            enqueue(afterDelayMillis)
+        } else {
+            delayUntil(afterDelayMillis)
+            Log.i(BDPlugin.TAG, "Re-enqueueing task with id ${task.taskId} to the HoldingQueue")
+            holdingQueue.add(this)
+        }
+    }
+
+    private suspend fun delayUntil(afterDelayMillis: Int) {
+        val timeSinceCreatedMillis = Date().time - created.time
+        if (timeSinceCreatedMillis < afterDelayMillis) {
+            delay(afterDelayMillis - timeSinceCreatedMillis)
+        }
     }
 
     /**

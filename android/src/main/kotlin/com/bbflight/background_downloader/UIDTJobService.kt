@@ -94,6 +94,7 @@ class UIDTJobService : JobService() {
         override var networkSpeed: Double = -1.0
         override var taskCanResume: Boolean = false
         override var notificationConfigJsonString: String? = null
+        override val runId: String? = null
         override var runInForeground: Boolean = true // UIDT always runs in foreground service
 
         @Volatile

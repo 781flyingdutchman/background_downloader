@@ -70,6 +70,18 @@ class TestServerTestCase(unittest.TestCase):
         response = requests.post(f"{BASE_URL}/upload_file", files=files)
         self.assertEqual(response.status_code, 200)
 
+    def test_upload_concurrency(self):
+        requests.get(f"{BASE_URL}/upload_concurrency") # reset the maximum
+        # 3 uploads of 20KB at once, each taking ~1s at 50ms per KB
+        threads = [threading.Thread(target=requests.post, args=(f"{BASE_URL}/upload_binary",),
+                                    kwargs={'data': b'A' * 20 * 1024}) for _ in range(3)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(requests.get(f"{BASE_URL}/upload_concurrency").text, '3')
+        self.assertEqual(requests.get(f"{BASE_URL}/upload_concurrency").text, '0')
+
     def test_httpbin_get(self):
         response = requests.get(f"{BASE_URL}/get?p=1")
         self.assertEqual(response.status_code, 200)

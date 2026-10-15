@@ -166,24 +166,38 @@ def upload_file():
     logger.info(f'Fields={json_data}')
     return Response(json_data, mimetype='application/json')
 
+# /upload_binary requests in flight, and the most in flight at once since the
+# last /upload_concurrency request
+upload_lock = threading.Lock()
+uploads_in_flight = 0
+max_uploads_in_flight = 0
+
 @app.route('/upload_binary', methods=['POST'])
 def upload_binary():
     """
     Returns the file body, or the length if > 100 characters.
     Delays the read to simulate slow upload.
     """
+    global uploads_in_flight, max_uploads_in_flight
     chunk_size = 1024 # Use small chunk size to ensure we loop a few times
     data = bytearray()
-    
+
     # We sleep per chunk.
-    
-    while True:
-        chunk = request.stream.read(chunk_size)
-        if not chunk:
-            break
-        data.extend(chunk)
-        time.sleep(0.05) # Sleep 50ms per 1KB chunk
-        
+
+    with upload_lock:
+        uploads_in_flight += 1
+        max_uploads_in_flight = max(max_uploads_in_flight, uploads_in_flight)
+    try:
+        while True:
+            chunk = request.stream.read(chunk_size)
+            if not chunk:
+                break
+            data.extend(chunk)
+            time.sleep(0.05) # Sleep 50ms per 1KB chunk
+    finally:
+        with upload_lock:
+            uploads_in_flight -= 1
+
     data_bytes = bytes(data)
     data_len = len(data_bytes)
     logger.info(f'Body length={data_len}')
@@ -192,6 +206,18 @@ def upload_binary():
         return Response(data_bytes.decode("utf-8"))
     else:
         return Response(f'{data_len}')
+
+@app.route('/upload_concurrency', methods=['GET'])
+def upload_concurrency():
+    """
+    Returns the most /upload_binary requests in flight at once since the last
+    call, and resets that maximum to the number in flight now.
+    """
+    global max_uploads_in_flight
+    with upload_lock:
+        result = max_uploads_in_flight
+        max_uploads_in_flight = uploads_in_flight
+    return Response(f'{result}')
 
 @app.route('/upload_multi', methods=['POST'])
 def upload_multi():
