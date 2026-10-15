@@ -156,8 +156,12 @@ open class TaskRunner(
             context: Context
         ) {
             // Intercept status updates resulting from re-enqueue request, which
-            // themselves are triggered by a change in WiFi requirement
-            if (BDPlugin.tasksToReEnqueue.remove(task)) {
+            // themselves are triggered by a change in WiFi requirement. Only an update that ends
+            // a run counts: a task collected while enqueued can start before its cancel, and its
+            // running update must leave the entry for the cancel's update
+            if ((status.isFinalState() || status == TaskStatus.paused) &&
+                BDPlugin.tasksToReEnqueue.remove(task)
+            ) {
                 if (status == TaskStatus.paused || status == TaskStatus.canceled || status == TaskStatus.failed) {
                     WiFi.reEnqueue(
                         EnqueueItem(
