@@ -1,5 +1,7 @@
 from flask import Flask, request, Response, send_from_directory, redirect, jsonify, stream_with_context
 import time
+import select
+import socket
 import os
 import json
 import logging
@@ -192,6 +194,59 @@ def upload_binary():
         return Response(data_bytes.decode("utf-8"))
     else:
         return Response(f'{data_len}')
+
+# /upload_hold requests whose client is still connected, and the most at once
+# since the last /upload_concurrency request
+upload_lock = threading.Lock()
+uploads_in_flight = 0
+max_uploads_in_flight = 0
+
+def client_closed(sock):
+    """
+    Returns True if the client has closed its end of the connection.
+    """
+    try:
+        readable, _, _ = select.select([sock], [], [], 0)
+        return bool(readable) and sock.recv(1, socket.MSG_PEEK) == b''
+    except OSError:
+        return True
+
+@app.route('/upload_hold', methods=['POST'])
+def upload_hold():
+    """
+    Reads the body, then holds the response for `seconds` (default 15), or
+    until the client disconnects. The upload counts as in flight while the
+    client is connected, so a client that gives up early stops counting even
+    if its body was already sent. Returns the body length.
+    """
+    global uploads_in_flight, max_uploads_in_flight
+    seconds = float(request.args.get('seconds', '15'))
+    sock = request.environ.get('werkzeug.socket')
+    with upload_lock:
+        uploads_in_flight += 1
+        max_uploads_in_flight = max(max_uploads_in_flight, uploads_in_flight)
+    try:
+        data_len = len(request.get_data())
+        deadline = time.time() + seconds
+        while time.time() < deadline and not (sock is not None and client_closed(sock)):
+            time.sleep(0.05)
+    finally:
+        with upload_lock:
+            uploads_in_flight -= 1
+    logger.info(f'Held upload, body length={data_len}')
+    return Response(f'{data_len}')
+
+@app.route('/upload_concurrency', methods=['GET'])
+def upload_concurrency():
+    """
+    Returns the most /upload_hold requests in flight at once since the last
+    call, and resets that maximum to the number in flight now.
+    """
+    global max_uploads_in_flight
+    with upload_lock:
+        result = max_uploads_in_flight
+        max_uploads_in_flight = uploads_in_flight
+    return Response(f'{result}')
 
 @app.route('/upload_multi', methods=['POST'])
 def upload_multi():

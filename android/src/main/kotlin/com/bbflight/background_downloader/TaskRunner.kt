@@ -54,6 +54,7 @@ interface TaskJobContext {
     var taskCanResume: Boolean
     var notificationConfigJsonString: String?
     val isTaskStopped: Boolean
+    val runId: String? // the WorkManager request id, or null where runs can't be told apart
 
     // Foreground control
     var runInForeground: Boolean
@@ -155,8 +156,12 @@ open class TaskRunner(
             context: Context
         ) {
             // Intercept status updates resulting from re-enqueue request, which
-            // themselves are triggered by a change in WiFi requirement
-            if (BDPlugin.tasksToReEnqueue.remove(task)) {
+            // themselves are triggered by a change in WiFi requirement. Only an update that ends
+            // a run counts: a task collected while enqueued can start before its cancel, and its
+            // running update must leave the entry for the cancel's update
+            if ((status.isFinalState() || status == TaskStatus.paused) &&
+                BDPlugin.tasksToReEnqueue.remove(task)
+            ) {
                 if (status == TaskStatus.paused || status == TaskStatus.canceled || status == TaskStatus.failed) {
                     WiFi.reEnqueue(
                         EnqueueItem(
@@ -171,6 +176,28 @@ open class TaskRunner(
                     WiFi.reEnqueue(null) // signal end of batch
                 }
                 if (status == TaskStatus.paused || status == TaskStatus.canceled || status == TaskStatus.failed) {
+                    // the task gives up its slot and waits in the holding queue for a new one.
+                    // Posted directly, as a normal update for a canceled task becomes canceled
+                    if (BDPlugin.holdingQueue != null && task.providesStatusUpdates()) {
+                        val enqueuedUpdate = TaskStatusUpdate(
+                            task = task,
+                            taskStatus = TaskStatus.enqueued,
+                            exception = null,
+                            responseBody = null,
+                            responseStatusCode = null,
+                            responseHeaders = null,
+                            mimeType = null,
+                            charSet = null
+                        )
+                        postOnBackgroundChannel("statusUpdate", task, enqueuedUpdate.argList, onFail = {
+                            storeLocally(
+                                BDPlugin.keyStatusUpdateMap,
+                                task.taskId,
+                                bdJson.encodeToString<TaskStatusUpdate>(enqueuedUpdate),
+                                prefs
+                            )
+                        })
+                    }
                     return
                 }
             }
@@ -492,7 +519,9 @@ open class TaskRunner(
                         responseStatusCode = statusUpdate.responseStatusCode,
                         context = context.appContext
                     )
-                    BDPlugin.holdingQueue?.taskFinished(task)
+                    if (!slotReleasedByCancel()) {
+                        BDPlugin.holdingQueue?.taskFinished(task)
+                    }
                     timeoutJob.cancel()
                     return@withContext // task interrupted
                 }
@@ -500,6 +529,8 @@ open class TaskRunner(
 
             var status = TaskStatus.failed
             try {
+                // from here a cancel leaves this run its slot, released in the finally block
+                context.runId?.let { BDPlugin.startedRunIds.add(it) }
                 task = getModifiedTask(
                     context = context.appContext,
                     task = task
@@ -523,7 +554,7 @@ open class TaskRunner(
             } catch (e: Exception) {
                 Log.w(TAG, "TaskRunner.run execution failed for taskId ${task.taskId}: $e")
                 if (e is CancellationException) {
-                    if (BDPlugin.cancelUpdateSentForTaskId.contains(task.taskId)) {
+                    if (BDPlugin.cancelUpdateSentForTaskId.containsKey(task.taskId)) {
                         status = TaskStatus.canceled
                     }
                     // else status remains .failed (system cancellation)
@@ -535,6 +566,7 @@ open class TaskRunner(
                     // NonCancellable to make sure we clean up even if job is being cancelled
                     // a pause request that was not acted upon must not affect a later run
                     BDPlugin.pausedTaskIds.remove(task.taskId)
+                    val slotReleased = slotReleasedByCancel()
                     processStatusUpdate(
                         task,
                         status,
@@ -551,16 +583,24 @@ open class TaskRunner(
                         // update only if not failed, or no retries remaining
                         context.updateNotification(task, status)
                     }
-                    if (status != TaskStatus.canceled) {
+                    if (!slotReleased && (context.runId != null || status != TaskStatus.canceled)) {
                         // let the holdingQueue know this task is no longer active
-                        // except TaskStatus.canceled is handled directly in cancellation and reset methods
+                        // except a canceled UIDT run, handled directly in cancellation and reset methods
                         BDPlugin.holdingQueue?.taskFinished(task)
                     }
+                    context.runId?.let { BDPlugin.startedRunIds.remove(it) }
                 }
             }
         }
         hasDeliveredResult = true
     }
+
+    /**
+     * Returns true if a cancel already released this run's holding queue slot, which a
+     * re-enqueued task may hold by now
+     */
+    private fun slotReleasedByCancel() =
+        context.runId?.let { BDPlugin.slotReleasedRunIds.remove(it) } == true
 
     /** Return true if resume is possible - defaults to false */
     open fun determineIfResume(): Boolean {
@@ -685,7 +725,7 @@ open class TaskRunner(
                 )
 
                 is CancellationException -> {
-                    if (BDPlugin.cancelUpdateSentForTaskId.contains(task.taskId)) {
+                    if (BDPlugin.cancelUpdateSentForTaskId.containsKey(task.taskId)) {
                         Log.i(
                             TAG,
                             "Canceled task with id ${task.taskId}: ${e.message}"

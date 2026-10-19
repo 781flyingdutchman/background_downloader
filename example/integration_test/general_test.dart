@@ -4666,6 +4666,38 @@ void main() {
         await waitForTasksToClear();
       },
     );
+
+    test(
+      'holdingQueue respects maxConcurrent across requireWiFi changes',
+      timeout: const Timeout(Duration(minutes: 4)),
+      skip: !Platform.isAndroid,
+      () async {
+        // the test server holds each upload's response for 15s, and counts it
+        // as in flight only while the client stays connected
+        const stallFilename = 'holding_queue_stall.bin';
+        final stallFile = File(
+          join((await getApplicationDocumentsDirectory()).path, stallFilename),
+        )..writeAsBytesSync(List<int>.filled(300 * 1024, 65));
+        addTearDown(stallFile.deleteSync);
+        await expectHoldingQueueCapAcrossRequireWiFiChanges(
+          () => UploadTask(
+            url: uploadHoldTestUrl,
+            filename: stallFilename,
+            post: 'binary',
+          ),
+          alsoRestartUploads: true,
+        );
+      },
+    );
+
+    test(
+      'holdingQueue respects maxConcurrent when running downloads are rescheduled',
+      timeout: const Timeout(Duration(minutes: 4)),
+      skip: !Platform.isAndroid,
+      () => expectHoldingQueueCapAcrossRequireWiFiChanges(
+        () => DownloadTask(url: urlWithLongContentLength, allowPause: true),
+      ),
+    );
   });
 
   group('Task functions', () {
@@ -5254,4 +5286,139 @@ Future<void> enqueueAndFileExists(String path) async {
   } on FileSystemException {}
   // Expect 3 status callbacks: enqueued + running + complete
   expect(statusCallbackCounter, equals(3));
+}
+
+/// Expects the holdingQueue limit to hold while the requireWiFi requirement
+/// flips for all tasks, and the queue to drain afterwards
+Future<void> expectHoldingQueueCapAcrossRequireWiFiChanges(
+  Task Function() createTask, {
+  bool alsoRestartUploads = false,
+}) async {
+  await waitForTasksToClear();
+  const maxConcurrent = 3;
+  const numTasks = 12;
+  expect(
+    (await FileDownloader().configure(
+      globalConfig: (Config.holdingQueue, (maxConcurrent, null, null)),
+    )).toString(),
+    equals('[(holdingQueue, )]'),
+  );
+  // every status in arrival order, with whether it came after the flips
+  final statuses = <(String, TaskStatus, bool)>[];
+  var flipsDone = false;
+  final latestStatus = <String, TaskStatus>{};
+  final drained = Completer<void>();
+  FileDownloader().registerCallbacks(
+    taskStatusCallback: (update) {
+      statuses.add((update.task.taskId, update.status, flipsDone));
+      latestStatus[update.task.taskId] = update.status;
+      // a restarted upload's old run reports its own final status
+      if (latestStatus.length == numTasks &&
+          latestStatus.values.every((s) => s == TaskStatus.complete) &&
+          !drained.isCompleted) {
+        drained.complete();
+      }
+    },
+  );
+  await _maxUploadsAtServer(); // resets the test server's maximum
+  for (var n = 0; n < numTasks; n++) {
+    await FileDownloader().enqueue(createTask());
+  }
+  await Future.delayed(const Duration(seconds: 3));
+  final (maxRunningBeforeFlips, _) = _maxRunning(statuses);
+  expect(
+    maxRunningBeforeFlips,
+    greaterThan(0),
+    reason: 'no task reported running, so the cap check proves nothing',
+  );
+  expect(maxRunningBeforeFlips, lessThanOrEqualTo(maxConcurrent));
+  // each change flips the requirement for every task, so all are re-enqueued
+  addTearDown(() => FileDownloader().requireWiFi(RequireWiFi.asSetByTask));
+  for (var n = 0; n < 3; n++) {
+    await FileDownloader().requireWiFi(
+      RequireWiFi.forAllTasks,
+      alsoRestartUploads: alsoRestartUploads,
+    );
+    await Future.delayed(const Duration(seconds: 3));
+    await FileDownloader().requireWiFi(
+      RequireWiFi.forNoTasks,
+      alsoRestartUploads: alsoRestartUploads,
+    );
+    await Future.delayed(const Duration(seconds: 3));
+  }
+  flipsDone = true;
+  await drained.future.timeout(
+    const Duration(minutes: 2),
+    onTimeout: () => fail('queue did not drain: $latestStatus'),
+  );
+  final (maxRunning, maxRunningAfterFlips) = _maxRunning(statuses);
+  // the status updates can't show a canceled upload that keeps transferring,
+  // the test server can
+  final maxUploadsAtServer = await _maxUploadsAtServer();
+  final counts =
+      'maxRunning $maxRunning, maxUploadsAtServer $maxUploadsAtServer';
+  expect(maxRunning, lessThanOrEqualTo(maxConcurrent), reason: counts);
+  expect(maxUploadsAtServer, lessThanOrEqualTo(maxConcurrent), reason: counts);
+  expect(
+    maxRunningAfterFlips,
+    equals(maxConcurrent),
+    reason:
+        'fewer than maxConcurrent tasks ran after the flips, so a slot was '
+        'not released',
+  );
+  // every slot is free again, so a new batch runs maxConcurrent at once
+  final batchStart = statuses.length;
+  for (var n = 0; n < maxConcurrent; n++) {
+    await FileDownloader().enqueue(createTask());
+  }
+  await waitForTasksToClear();
+  final (maxRunningInNewBatch, _) = _maxRunning(statuses.sublist(batchStart));
+  expect(
+    maxRunningInNewBatch,
+    equals(maxConcurrent),
+    reason:
+        'fewer than maxConcurrent tasks ran after the drain, so a slot was '
+        'not released',
+  );
+}
+
+/// Returns the most uploads the test server received at once since the last
+/// call, and resets that maximum
+Future<int> _maxUploadsAtServer() async {
+  final response = await FileDownloader().request(
+    Request(url: uploadConcurrencyTestUrl),
+  );
+  return int.parse(response.body);
+}
+
+/// Replays [statuses] and returns the most tasks running at once, overall and
+/// as counted at runs starting after the flips (below maxConcurrent if a slot
+/// is never released)
+///
+/// A run ends when its task is enqueued again or at the task's last final
+/// status. An earlier final status comes from an old run of a restarted
+/// upload, which can finish after the task's new run has started
+(int, int) _maxRunning(List<(String, TaskStatus, bool)> statuses) {
+  final lastFinal = <String, int>{};
+  for (var i = 0; i < statuses.length; i++) {
+    if (statuses[i].$2.isFinalState) {
+      lastFinal[statuses[i].$1] = i;
+    }
+  }
+  final running = <String>{};
+  var maxRunning = 0;
+  var maxRunningAfterFlips = 0;
+  for (var i = 0; i < statuses.length; i++) {
+    final (taskId, status, afterFlips) = statuses[i];
+    if (status == TaskStatus.running) {
+      running.add(taskId);
+      if (afterFlips) {
+        maxRunningAfterFlips = max(maxRunningAfterFlips, running.length);
+      }
+    } else if (status == TaskStatus.enqueued || lastFinal[taskId] == i) {
+      running.remove(taskId);
+    }
+    maxRunning = max(maxRunning, running.length);
+  }
+  return (maxRunning, maxRunningAfterFlips);
 }
