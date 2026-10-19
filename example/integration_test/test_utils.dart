@@ -42,6 +42,7 @@ final getRedirectTestUrl = 'http://$localServerHostPort/redirect';
 final postTestUrl = 'http://$localServerHostPort/echo_post';
 final uploadTestUrl = 'http://$localServerHostPort/upload_file';
 final uploadBinaryTestUrl = 'http://$localServerHostPort/upload_binary';
+final uploadHoldTestUrl = 'http://$localServerHostPort/upload_hold';
 final uploadConcurrencyTestUrl =
     'http://$localServerHostPort/upload_concurrency';
 final uploadMultiTestUrl = 'http://$localServerHostPort/upload_multi';
