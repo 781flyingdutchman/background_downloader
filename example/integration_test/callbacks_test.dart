@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' hide equals;
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
+import 'package:logging/logging.dart';
 
 import 'test_utils.dart';
 
@@ -575,6 +576,52 @@ void main() {
           equals('Bearer new_access_token'),
         );
         await File(path).delete();
+      },
+    );
+  });
+
+  group('callbackDispatcher registration', () {
+    test(
+      'the callbackDispatcher is registered once',
+      timeout: const Timeout(Duration(minutes: 2)),
+      skip: !Platform.isAndroid,
+      () async {
+        Logger.root.level = Level.ALL;
+        final messages = <String>[];
+        final subscription = Logger.root.onRecord.listen(
+          (record) => messages.add(record.message),
+        );
+        addTearDown(subscription.cancel);
+        final tasks = [
+          for (var n = 0; n < 3; n++)
+            DownloadTask(
+              url: getTestUrl,
+              urlQueryParameters: {'json': 'true'},
+              filename: 'callback_dispatcher_$n.txt',
+              options: TaskOptions(
+                beforeTaskStart: beforeTaskStartCallbackNoChange,
+              ),
+            ),
+        ];
+        expect(await FileDownloader().enqueueAll(tasks), everyElement(isTrue));
+        expect(
+          messages.where((m) => m == 'Could not register callbackDispatcher'),
+          isEmpty,
+        );
+        // an earlier test may have registered it already
+        expect(
+          messages.where((m) => m.startsWith('Registered callbackDispatcher')),
+          hasLength(lessThanOrEqualTo(1)),
+        );
+        while ((await FileDownloader().allTaskIds()).isNotEmpty) {
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
+        for (final task in tasks) {
+          final file = File(await task.filePath());
+          if (file.existsSync()) {
+            file.deleteSync();
+          }
+        }
       },
     );
   });
