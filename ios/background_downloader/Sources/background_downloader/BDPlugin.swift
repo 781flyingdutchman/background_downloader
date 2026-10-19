@@ -39,7 +39,6 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
     static var taskIdsProgrammaticallyCanceledBeforeStart = Set<String>() // skips completion processing for these tasks
     static var taskIdsProgrammaticallyCanceledAfterStart = Set<String>() // skips error handling for these tasks
     static var tasksToReEnqueue = Set<Task>() // for when WiFi requirement changes
-    static var taskIdsRequiringWiFi = Set<String>() // ensures correctness when enqueueing task
     static var notificationConfigJsonStrings = [String:String]() // by taskId
     static var localResumeData = [String : String]() // locally stored to enable notification resume
     static var remainingBytesToDownload = [String : Int64]()  // keyed by taskId
@@ -311,9 +310,6 @@ public class BDPlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate
         let requiresWiFi = taskRequiresWiFi(task: task)
         if requiresWiFi {
             baseRequest.allowsCellularAccess = false
-            BDPlugin.propertyLock.withLock {
-                _ = BDPlugin.taskIdsRequiringWiFi.insert(task.taskId)
-            }
         }
         if isParallelDownloadTask(task: task) {
             // ParallelDownloadTask itself is not part of a urlSession, so handled separately
