@@ -9,10 +9,13 @@ import androidx.preference.PreferenceManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -614,7 +617,7 @@ open class TaskRunner(
                             setRequestProperty(header.key, header.value)
                         }
                     }
-                    return connectAndProcess(this)
+                    return connectAndProcessUntilCanceled(this)
                 } finally {
                     activeConnection = null
                 }
@@ -626,6 +629,36 @@ open class TaskRunner(
             setTaskException(e)
         }
         return TaskStatus.failed
+    }
+
+    /**
+     * Calls [connectAndProcess], and disconnects the [connection] if this run is cancelled, or
+     * stopped by WorkManager, before that returns
+     *
+     * Blocking reads and writes on the connection ignore coroutine cancellation, so without the
+     * disconnect a cancelled run keeps transferring, and can complete. The disconnect runs in a
+     * child of this run's job, not in a coroutineScope, which would turn the status
+     * [connectAndProcess] returns after a cancel into a CancellationException
+     */
+    private suspend fun connectAndProcessUntilCanceled(connection: HttpURLConnection): TaskStatus {
+        var finished = false
+        val disconnectOnCancel = CoroutineScope(currentCoroutineContext()).launch(
+            start = CoroutineStart.UNDISPATCHED
+        ) {
+            try {
+                awaitCancellation()
+            } finally {
+                if (!finished) {
+                    connection.disconnect()
+                }
+            }
+        }
+        try {
+            return connectAndProcess(connection)
+        } finally {
+            finished = true
+            disconnectOnCancel.cancel()
+        }
     }
 
     /**
