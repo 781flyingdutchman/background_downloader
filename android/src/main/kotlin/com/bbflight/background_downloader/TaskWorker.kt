@@ -6,7 +6,10 @@ import android.content.SharedPreferences
 import androidx.preference.PreferenceManager
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
+import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import android.util.Log
 
@@ -69,6 +72,8 @@ open class TaskWorker(
 
     override val appContext: Context
         get() = applicationContext
+    override val runId: String
+        get() = id.toString()
 
     // TaskJobContext Mutable properties
     override lateinit var task: Task
@@ -139,12 +144,53 @@ open class TaskWorker(
             
             runInForeground = false 
 
+            if (runAttemptCount > 0 && skipReRun()) {
+                return Result.success()
+            }
             val runner = createRunner()
             runner.run()
             
             return Result.success()
         } catch (e: Exception) {
             return Result.failure()
+        }
+    }
+
+    /**
+     * Returns true if this WorkManager re-run must end without running its task, because the
+     * task already finished or another work supersedes it, and gives back a finished task's slot
+     *
+     * WorkManager starts a work again after it stopped it, and after a process death for works
+     * it didn't see finish, without asking the holding queue
+     */
+    private suspend fun skipReRun(): Boolean {
+        val prefs = PreferenceManager.getDefaultSharedPreferences(applicationContext)
+        val taskInTasksMap = getTaskMap(prefs).containsKey(task.taskId)
+        val otherUnfinishedWorkIds = withContext(Dispatchers.IO) {
+            WorkManager.getInstance(applicationContext)
+                .getWorkInfosByTag("taskId=${task.taskId}").get()
+        }.filter { !it.state.isFinished && it.id != id }.map { it.id.toString() }
+        val attempt = "WorkManager re-run (attempt $runAttemptCount) of taskId ${task.taskId}"
+        return when (reRunDecision(runAttemptCount, taskInTasksMap, otherUnfinishedWorkIds)) {
+            ReRunDecision.run -> {
+                Log.i(BDPlugin.TAG, "Running $attempt")
+                false
+            }
+
+            ReRunDecision.skipFinished -> {
+                Log.i(BDPlugin.TAG, "Skipping $attempt: finished")
+                // the slot the holding queue counted for this work, unless a cancel released it
+                if (!BDPlugin.slotReleasedRunIds.remove(runId)) {
+                    BDPlugin.holdingQueue?.taskFinished(task)
+                }
+                true
+            }
+
+            ReRunDecision.skipSuperseded -> {
+                // the other work holds the task's slot, and releases it when it ends
+                Log.i(BDPlugin.TAG, "Skipping $attempt: superseded by ${otherUnfinishedWorkIds.first()}")
+                true
+            }
         }
     }
 
@@ -156,4 +202,30 @@ open class TaskWorker(
     open fun createRunner(): TaskRunner {
         throw NotImplementedError("Subclasses must override createRunner")
     }
+}
+
+/** What a WorkManager run of a task does, see [reRunDecision] */
+@Suppress("EnumEntryName")
+enum class ReRunDecision {
+    run,
+    skipFinished, // the task's final state was already processed
+    skipSuperseded // another unfinished work for the task exists
+}
+
+/**
+ * Decides whether a WorkManager run with [runAttemptCount] runs its task, given whether the task
+ * is still in the tasks map ([taskInTasksMap]) and the ids of other unfinished works for it
+ *
+ * A first run (attempt 0) always runs. A re-run is skipped if another work supersedes it, or else
+ * if its task already finished
+ */
+fun reRunDecision(
+    runAttemptCount: Int,
+    taskInTasksMap: Boolean,
+    otherUnfinishedWorkIds: List<String>
+): ReRunDecision = when {
+    runAttemptCount == 0 -> ReRunDecision.run
+    otherUnfinishedWorkIds.isNotEmpty() -> ReRunDecision.skipSuperseded
+    !taskInTasksMap -> ReRunDecision.skipFinished
+    else -> ReRunDecision.run
 }
