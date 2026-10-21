@@ -1,8 +1,12 @@
 package com.bbflight.background_downloader
 
 import android.content.Context
+import android.net.NetworkCapabilities
+import android.os.Build
 import android.util.Log
 import androidx.preference.PreferenceManager
+import androidx.work.Constraints
+import androidx.work.NetworkType
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import kotlinx.coroutines.CoroutineScope
@@ -129,14 +133,9 @@ class RequireWiFiChange(
                 val taskId = tags.first().substring(7)
                 val task = tasksMap[taskId]
                 if (task != null && (task.isDownloadTask() || task.isUploadTask())) {
-                    if (BDPlugin.taskRequiresWifi(task) != BDPlugin.taskIdsRequiringWiFi.contains(
-                            task.taskId
-                        )
-                    ) {
-                        when (BDPlugin.taskRequiresWifi(task)) {
-                            false -> BDPlugin.taskIdsRequiringWiFi.remove(task.taskId)
-                            true -> BDPlugin.taskIdsRequiringWiFi.add(task.taskId)
-                        }
+                    // compare with the constraints the work was enqueued with, which WorkManager
+                    // keeps across app restarts, so work enqueued by an earlier process is included
+                    if (BDPlugin.taskRequiresWifi(task) != workInfo.constraints.requiresWifi()) {
                         when (workInfo.state) {
                             WorkInfo.State.ENQUEUED -> {
                                 haveReEnqueued = true
@@ -178,4 +177,15 @@ class RequireWiFiChange(
         }
         return haveReEnqueued
     }
+
+    /**
+     * Return true if these [Constraints] restrict the work to WiFi, as set in [BDPlugin.doEnqueue]
+     *
+     * From API 28 the WiFi requirement is a NetworkRequest, and WorkManager then stores
+     * NetworkType.NOT_REQUIRED as the network type. Before API 28 it is NetworkType.UNMETERED
+     */
+    private fun Constraints.requiresWifi(): Boolean =
+        (Build.VERSION.SDK_INT >= 28 &&
+                requiredNetworkRequest?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) ||
+                requiredNetworkType == NetworkType.UNMETERED
 }

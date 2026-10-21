@@ -124,8 +124,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             Collections.synchronizedMap(HashMap<String, ParallelDownloadTaskRunner>())
         val tasksToReEnqueue =
             Collections.synchronizedSet(mutableSetOf<Task>()) // for when WiFi requirement changes
-        val taskIdsRequiringWiFi =
-            Collections.synchronizedSet(mutableSetOf<String>()) // ensures correctness when enqueueing task
         val notificationConfigJsonStrings =
             Collections.synchronizedMap(mutableMapOf<String, String>()) // by taskId
         var forceFailPostOnBackgroundChannel = false
@@ -187,9 +185,6 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             }
 
             val taskRequiresWifi = taskRequiresWifi(task)
-            if (taskRequiresWifi) {
-                taskIdsRequiringWiFi.add(task.taskId)
-            }
 
             var success = false
             if (useJobScheduler) {
