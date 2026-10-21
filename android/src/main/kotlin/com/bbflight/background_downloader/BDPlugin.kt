@@ -1413,7 +1413,7 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     Log.d(TAG, "Registering callbackDispatcher handle $handle")
                     putLong(keyCallbackDispatcherRawHandle, handle)
                 } else {
-                    remove(keyConfigProxyAddress)
+                    remove(keyCallbackDispatcherRawHandle)
                 }
                 apply()
             }
