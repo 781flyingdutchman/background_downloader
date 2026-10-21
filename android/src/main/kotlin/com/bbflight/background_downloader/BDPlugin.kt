@@ -339,10 +339,18 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             return (requireWifi == RequireWiFi.forAllTasks || (requireWifi == RequireWiFi.asSetByTask && task.requiresWiFi))
         }
 
-        /** Create a NetworkRequest requiring Wi-Fi and internet capability */
+        /**
+         * Create a NetworkRequest requiring Wi-Fi and internet capability
+         *
+         * [NetworkRequest.Builder] requires NET_CAPABILITY_NOT_VPN by default, which would
+         * block the task whenever a VPN is active. A VPN network reports the transport of its
+         * underlying network, so VPNs running over Wi-Fi are allowed while VPNs over cellular
+         * still do not satisfy the request
+         */
         private fun wifiNetworkRequest(): NetworkRequest =
             NetworkRequest.Builder()
                 .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
                 .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
                 .build()
 
