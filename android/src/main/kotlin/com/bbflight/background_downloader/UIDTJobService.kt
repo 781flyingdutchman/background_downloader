@@ -65,6 +65,7 @@ class UIDTJobService : JobService() {
                 jobs.remove(params.jobId)
                 jobContexts.remove(params.jobId)
                 jobFinished(params, false) // retries managed internally
+                NotificationService.onUIDTJobFinished(jobContext)
             }
         }
         jobs[params.jobId] = job

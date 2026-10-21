@@ -369,6 +369,7 @@ class NotificationReceiver : BroadcastReceiver() {
 @Suppress("ConstPropertyName")
 object NotificationService {
     var groupNotifications = ConcurrentHashMap<String, GroupNotification>()
+    private val removedNotificationIds: MutableSet<Int> = ConcurrentHashMap.newKeySet()
 
     private const val notificationChannelId = "background_downloader"
 
@@ -689,12 +690,10 @@ object NotificationService {
             }
             if (isFinished) {
                 // remove only if not re-activated within 5 seconds
-                withContext(Dispatchers.Default) {
-                    launch {
-                        delay(5000)
-                        if (groupNotification.isFinished) {
-                            groupNotifications.remove(groupNotificationId)
-                        }
+                scope.launch {
+                    delay(5000)
+                    if (groupNotification.isFinished) {
+                        groupNotifications.remove(groupNotificationId)
                     }
                 }
             }
@@ -1086,9 +1085,34 @@ object NotificationService {
         builder: Builder? = null
     ) {
         mutex.withLock {
+            if (taskWorker.notificationId != 0) {
+                if (notificationType != null && builder != null) {
+                    removedNotificationIds.remove(taskWorker.notificationId)
+                } else {
+                    removedNotificationIds.add(taskWorker.notificationId)
+                }
+            }
             pendingNotifications.add(NotificationData(taskWorker, notificationType, builder))
         }
         queue.send(Unit)
+    }
+
+    /**
+     * Cancel a notification that was marked for removal while a UIDT job owned it,
+     * once [JobService.jobFinished] has detached the notification from the job
+     */
+    fun onUIDTJobFinished(jobContext: UIDTJobService.UIDTJobContext) {
+        val notificationId = jobContext.notificationId
+        if (notificationId != 0 && removedNotificationIds.contains(notificationId)) {
+            scope.launch {
+                // jobFinished posts to the main looper before detaching in system_server
+                withContext(Dispatchers.Main) {}
+                delay(200)
+                if (removedNotificationIds.remove(notificationId)) {
+                    NotificationManagerCompat.from(jobContext.appContext).cancel(notificationId)
+                }
+            }
+        }
     }
 
     /**
