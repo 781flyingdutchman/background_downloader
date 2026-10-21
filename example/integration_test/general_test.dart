@@ -2847,6 +2847,51 @@ void main() {
         }
       },
     );
+
+    testWidgets(
+      'cancelled running upload never completes',
+      timeout: const Timeout(Duration(minutes: 2)),
+      skip: !Platform.isAndroid,
+      (widgetTester) async {
+        // the test server sleeps 50ms per KB, so a 300KB upload takes ~15s
+        const stallFilename = 'cancel_stall.bin';
+        final stallFile = File(
+          join((await getApplicationDocumentsDirectory()).path, stallFilename),
+        )..writeAsBytesSync(List<int>.filled(300 * 1024, 65));
+        addTearDown(stallFile.deleteSync);
+        final task = UploadTask(
+          url: uploadBinaryTestUrl,
+          filename: stallFilename,
+          post: 'binary',
+        );
+        final running = Completer<void>();
+        final sinceReEnqueue = Stopwatch();
+        final completedAt = <Duration>[];
+        FileDownloader().registerCallbacks(
+          taskStatusCallback: (update) {
+            if (update.status == TaskStatus.running && !running.isCompleted) {
+              running.complete();
+            }
+            if (update.status == TaskStatus.complete) {
+              completedAt.add(sinceReEnqueue.elapsed);
+            }
+          },
+        );
+        expect(await FileDownloader().enqueue(task), isTrue);
+        await running.future;
+        await Future.delayed(const Duration(seconds: 8));
+        expect(await FileDownloader().cancelTaskWithId(task.taskId), isTrue);
+        await Future.delayed(const Duration(seconds: 1));
+        // enqueuing the task again clears its cancel, so a canceled run that
+        // kept transferring reports its own complete, before the new run can
+        sinceReEnqueue.start();
+        expect(await FileDownloader().enqueue(task), isTrue);
+        await Future.delayed(const Duration(seconds: 25));
+        expect(completedAt, hasLength(1), reason: 'completed at $completedAt');
+        // the new run takes at least 15s
+        expect(completedAt.single, greaterThan(const Duration(seconds: 12)));
+      },
+    );
   });
 
   group('Tracking', () {
