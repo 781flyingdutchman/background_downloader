@@ -3,6 +3,7 @@ import unittest
 import requests
 import time
 import threading
+import socket
 import os
 import sys
 
@@ -69,6 +70,31 @@ class TestServerTestCase(unittest.TestCase):
         files = {'file': ('test.txt', 'content')}
         response = requests.post(f"{BASE_URL}/upload_file", files=files)
         self.assertEqual(response.status_code, 200)
+
+    def test_upload_concurrency(self):
+        requests.get(f"{BASE_URL}/upload_concurrency") # reset the maximum
+        # 3 uploads at once, each held for 1s
+        threads = [threading.Thread(target=requests.post, args=(f"{BASE_URL}/upload_hold?seconds=1",),
+                                    kwargs={'data': b'A' * 20 * 1024}) for _ in range(3)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(requests.get(f"{BASE_URL}/upload_concurrency").text, '3')
+        self.assertEqual(requests.get(f"{BASE_URL}/upload_concurrency").text, '0')
+
+    def test_upload_hold_stops_counting_when_client_disconnects(self):
+        requests.get(f"{BASE_URL}/upload_concurrency") # reset the maximum
+        body = b'A' * 1024
+        sock = socket.create_connection(('127.0.0.1', TEST_PORT))
+        sock.sendall(b'POST /upload_hold?seconds=10 HTTP/1.1\r\nHost: 127.0.0.1\r\n'
+                     + f'Content-Length: {len(body)}\r\n\r\n'.encode() + body)
+        time.sleep(0.5)
+        self.assertEqual(requests.get(f"{BASE_URL}/upload_concurrency").text, '1')
+        sock.close()
+        time.sleep(0.5)
+        requests.get(f"{BASE_URL}/upload_concurrency") # returns the 1 in flight at the last reset
+        self.assertEqual(requests.get(f"{BASE_URL}/upload_concurrency").text, '0')
 
     def test_httpbin_get(self):
         response = requests.get(f"{BASE_URL}/get?p=1")

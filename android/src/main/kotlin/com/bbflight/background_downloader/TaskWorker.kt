@@ -69,6 +69,8 @@ open class TaskWorker(
 
     override val appContext: Context
         get() = applicationContext
+    override val runId: String
+        get() = id.toString()
 
     // TaskJobContext Mutable properties
     override lateinit var task: Task

@@ -23,7 +23,6 @@ import androidx.work.Data
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
-import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.bbflight.background_downloader.BDPlugin.Companion.backgroundChannel
 import com.bbflight.background_downloader.TaskWorker.Companion.processStatusUpdate
@@ -114,7 +113,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         var requireWifi = RequireWiFi.asSetByTask // global setting
         val localResumeData =
             Collections.synchronizedMap(mutableMapOf<String, ResumeData>()) // by taskId, for pause notifications
-        val cancelUpdateSentForTaskId =
+        // MutableMap, so contains checks keys: ConcurrentHashMap.contains checks values
+        val cancelUpdateSentForTaskId: MutableMap<String, Long> =
             ConcurrentHashMap<String, Long>() // <taskId, timeMillis>
         val pausedTaskIds =
             Collections.synchronizedSet(mutableSetOf<String>()) // <taskId>, acts as flag
@@ -124,6 +124,10 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             Collections.synchronizedMap(HashMap<String, ParallelDownloadTaskRunner>())
         val tasksToReEnqueue =
             Collections.synchronizedSet(mutableSetOf<Task>()) // for when WiFi requirement changes
+        val slotReleasedRunIds: MutableSet<String> =
+            ConcurrentHashMap.newKeySet() // <runId> of canceled runs whose holding queue slot was released
+        val startedRunIds: MutableSet<String> =
+            ConcurrentHashMap.newKeySet() // <runId> of runs that release their own slot when they end
         val notificationConfigJsonStrings =
             Collections.synchronizedMap(mutableMapOf<String, String>()) // by taskId
         var forceFailPostOnBackgroundChannel = false
@@ -468,19 +472,23 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             val prefs = PreferenceManager.getDefaultSharedPreferences(context)
             val tasksMap = getTaskMap(prefs)
             for (workInfo in workInfos) {
-                if (workInfo.state != WorkInfo.State.SUCCEEDED) {
-                    // send cancellation update for tasks that have not yet succeeded
+                // skip WorkInfos of earlier runs, whose slot was already released
+                if (!workInfo.state.isFinished) {
+                    // send cancellation update for tasks that have not yet finished
                     // and remove associated notification
                     val task = tasksMap[taskId]
                     if (task != null) {
                         canceledTaskIds.add(task.taskId)
+                        val releaseSlot = releaseSlotAtCancel(workInfo.id.toString())
                         processStatusUpdate(
                             task,
                             TaskStatus.canceled,
                             prefs,
                             context = context
                         )
-                        holdingQueue?.taskFinished(task)
+                        if (releaseSlot) {
+                            holdingQueue?.taskFinished(task)
+                        }
                         // remove outstanding notification for task or group
                         val notificationGroup =
                             NotificationService.groupNotificationWithTaskId(taskId)
@@ -511,6 +519,21 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     return false
                 }
             }
+            return true
+        }
+
+        /**
+         * Returns true if the holding queue slot of the canceled WorkManager run [runId] must be
+         * released now, because the run hasn't started. A run that has started releases its slot
+         * when it ends, so its transfer counts towards maxConcurrent until it stops
+         */
+        fun releaseSlotAtCancel(runId: String): Boolean {
+            if (startedRunIds.contains(runId)) {
+                return false
+            }
+            // the run can still start and finish, and must not then release the slot again,
+            // which a re-enqueued task may hold by then
+            slotReleasedRunIds.add(runId)
             return true
         }
 
@@ -868,13 +891,16 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 val task = tasksMap[taskId]
                 if (task != null) {
                     canceledTaskIds.add(task.taskId)
+                    val releaseSlot = releaseSlotAtCancel(workInfo.id.toString())
                     processStatusUpdate(
                         task,
                         TaskStatus.canceled,
                         prefs,
                         context = applicationContext
                     )
-                    holdingQueue?.taskFinished(task)
+                    if (releaseSlot) {
+                        holdingQueue?.taskFinished(task)
+                    }
                 }
             }
             workManager.cancelWorkById(workInfo.id)
