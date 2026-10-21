@@ -36,9 +36,11 @@ import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.URLDecoder
 import java.net.MalformedURLException
+import java.util.UUID
 import kotlin.concurrent.read
 import kotlin.concurrent.write
 import androidx.core.content.edit
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 
 
@@ -592,6 +594,26 @@ open class TaskRunner(
                         BDPlugin.holdingQueue?.taskFinished(task)
                     }
                     context.runId?.let { BDPlugin.startedRunIds.remove(it) }
+                    val runId = context.runId
+                    if (context.isTaskStopped && runId != null) {
+                        // WorkManager sets a worker it stopped back to ENQUEUED and runs it again
+                        // later, outside the holding queue. A cancel also stops the worker, and
+                        // leaves its work CANCELLED. Cancelled by id, as cancelling by tag would
+                        // also cancel a newer work for this task
+                        try {
+                            val workManager = WorkManager.getInstance(context.appContext)
+                            val workId = UUID.fromString(runId)
+                            if (workManager.getWorkInfoById(workId).get()?.state != WorkInfo.State.CANCELLED) {
+                                workManager.cancelWorkById(workId).result.get()
+                                Log.i(
+                                    TAG,
+                                    "Cancelled work $runId of taskId ${task.taskId} after a WorkManager stop"
+                                )
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Could not cancel work $runId of taskId ${task.taskId}: $e")
+                        }
+                    }
                 }
             }
         }
