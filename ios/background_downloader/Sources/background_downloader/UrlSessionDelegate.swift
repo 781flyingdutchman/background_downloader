@@ -147,9 +147,12 @@ public class UrlSessionDelegate : NSObject, URLSessionDelegate, URLSessionDownlo
                         return
                     }
                     // cancelled without resumedata implies 'cancel'
+                    let isReEnqueuing = BDPlugin.propertyLock.withLock {
+                        BDPlugin.tasksToReEnqueue.contains(bgdTask)
+                    }
                     os_log("Canceled task with id %@", log: log, type: .info, bgdTask.taskId)
                     processStatusUpdate(task: bgdTask, status: .canceled)
-                    notificationType = .canceled
+                    notificationType = isReEnqueuing ? nil : .canceled
                 }
                 else {
                     os_log("Error for taskId %@: %@", log: log, type: .error, bgdTask.taskId, error!.localizedDescription)

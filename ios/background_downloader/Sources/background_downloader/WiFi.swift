@@ -57,14 +57,10 @@ class WiFiQueue {
                                     BDPlugin.tasksToReEnqueue.insert(task)
                                     urlSessionTask.cancel()
                                 } else {
-                                    if rescheduleRunningTasks && isDownloadTask(task: task) {
-                                        // already running, so pause instead of cancel
-                                        haveReEnqueued = true
-                                        BDPlugin.tasksToReEnqueue.insert(task)
-                                        _Concurrency.Task{
-                                            await (urlSessionTask as! URLSessionDownloadTask).cancelByProducingResumeData()
-                                        }
-                                    } else if alsoRestartUploads && isUploadTask(task: task) {
+                                    if (rescheduleRunningTasks && isDownloadTask(task: task)) || (alsoRestartUploads && isUploadTask(task: task)) {
+                                        // cancel without resume data so the new URLRequest (with the updated
+                                        // allowsCellularAccess setting) is used; downloadTask(withResumeData:)
+                                        // would reuse the request embedded in the resume data
                                         haveReEnqueued = true
                                         BDPlugin.tasksToReEnqueue.insert(task)
                                         urlSessionTask.cancel()

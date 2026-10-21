@@ -365,7 +365,13 @@ func processStatusUpdate(task: Task, status: TaskStatus, taskException: TaskExce
                 }
             }
             if [TaskStatus.paused, TaskStatus.canceled, TaskStatus.failed].contains(status) {
-                let reEnqueueData = EnqueueItem(task: task, notificationConfigJsonString: BDPlugin.notificationConfigJsonStrings[task.taskId], resumeDataAsBase64String: BDPlugin.localResumeData[task.taskId] ?? "")
+                _ = BDPlugin.progressInfo.removeValue(forKey: task.taskId) // ensure .running update on re-enqueue
+                BDPlugin.initialResponseDataProcessed.remove(task.taskId)
+                let resumeDataAsBase64String = status == .paused ? (BDPlugin.localResumeData[task.taskId] ?? "") : ""
+                if status != .paused {
+                    BDPlugin.localResumeData.removeValue(forKey: task.taskId)
+                }
+                let reEnqueueData = EnqueueItem(task: task, notificationConfigJsonString: BDPlugin.notificationConfigJsonStrings[task.taskId], resumeDataAsBase64String: resumeDataAsBase64String)
                 WiFiQueue.shared.reEnqueue(reEnqueueData)
                 return true // intercepted
             }
