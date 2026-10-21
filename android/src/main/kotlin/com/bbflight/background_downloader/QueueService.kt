@@ -83,9 +83,11 @@ object QueueService {
                             success.complete(false)
                         }
                     }
-                    val onFail = bgPost.onFail
-                    if (onFail != null && (BDPlugin.forceFailPostOnBackgroundChannel || !success.await())) {
-                        onFail.invoke()
+                    val posted = !BDPlugin.forceFailPostOnBackgroundChannel && success.await()
+                    if (posted) {
+                        bgPost.onSuccess?.invoke()
+                    } else {
+                        bgPost.onFail?.invoke()
                     }
                 }
             }
@@ -117,5 +119,6 @@ data class BackgroundPost(
     val task: Task,
     val method: String,
     val arg: Any,
-    val onFail: (suspend () -> Unit)? = null
+    val onFail: (suspend () -> Unit)? = null,
+    val onSuccess: (suspend () -> Unit)? = null
 )

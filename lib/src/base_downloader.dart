@@ -119,7 +119,13 @@ abstract base class BaseDownloader {
 
   /// Stream to serialize database updates
   final _databaseUpdates =
-      StreamController<(Task, TaskStatus?, double?, int, TaskException?)>();
+      StreamController<
+        (Task, TaskStatus?, double?, int, TaskException?, Completer<void>)
+      >();
+  Future<void> _lastDatabaseUpdate = Future.value();
+
+  /// Wait for all pending database updates to complete
+  Future<void> flushDatabaseUpdates() => _lastDatabaseUpdate;
 
   BaseDownloader();
 
@@ -160,13 +166,17 @@ abstract base class BaseDownloader {
     await _storage.initialize();
     _databaseUpdates.stream
         .asyncMap((data) async {
-          await _consumeUpdateTaskInDatabase(
-            data.$1,
-            data.$2,
-            data.$3,
-            data.$4,
-            data.$5,
-          );
+          try {
+            await _consumeUpdateTaskInDatabase(
+              data.$1,
+              data.$2,
+              data.$3,
+              data.$4,
+              data.$5,
+            );
+          } finally {
+            data.$6.complete();
+          }
         })
         .listen((_) {});
     _initConnectivity();
@@ -292,6 +302,7 @@ abstract base class BaseDownloader {
       for (final jsonString in progressUpdateMap.values) {
         processProgressUpdate(TaskProgressUpdate.fromJsonString(jsonString));
       }
+      await flushDatabaseUpdates();
       retrievedLocallyStoredData = true;
     }
   }
@@ -1195,12 +1206,15 @@ abstract base class BaseDownloader {
     int expectedFileSize = -1,
     TaskException? taskException,
   }) async {
+    final completer = Completer<void>();
+    _lastDatabaseUpdate = completer.future;
     _databaseUpdates.add((
       task,
       status,
       progress,
       expectedFileSize,
       taskException,
+      completer,
     ));
   }
 

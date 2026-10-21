@@ -251,6 +251,7 @@ abstract base class NativeDownloader extends BaseDownloader {
           'Background channel: no match for message $message',
         );
     }
+    await flushDatabaseUpdates();
     return true;
   }
 

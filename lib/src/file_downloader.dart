@@ -923,6 +923,7 @@ interface class FileDownloader {
       'rescheduleKilledTasks should only be called if you are tracking tasks. '
       'Did you call trackTasks or trackTasksInGroup?',
     );
+    await _downloader.flushDatabaseUpdates();
     final missingTasks = <Task>{};
     final databaseTasks = await database.allRecords();
     // find missing enqueued/running tasks

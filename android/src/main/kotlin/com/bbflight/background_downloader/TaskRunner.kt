@@ -133,9 +133,13 @@ open class TaskRunner(
          * [arg] can be single variable or a MutableList
          */
         suspend fun postOnBackgroundChannel(
-            method: String, task: Task, arg: Any, onFail: (suspend () -> Unit)? = null
+            method: String,
+            task: Task,
+            arg: Any,
+            onFail: (suspend () -> Unit)? = null,
+            onSuccess: (suspend () -> Unit)? = null
         ) {
-            val bgPost = BackgroundPost(task, method, arg, onFail)
+            val bgPost = BackgroundPost(task, method, arg, onFail, onSuccess)
             QueueService.postOnBackgroundChannel(bgPost)
         }
 
@@ -278,17 +282,43 @@ open class TaskRunner(
 
             // Post update if task expects one, or if failed and retry is needed
             if (canSendStatusUpdate && (task.providesStatusUpdates() || retryNeeded)) {
-                val arg = taskStatusUpdate.argList
-                postOnBackgroundChannel("statusUpdate", task, arg, onFail = {
-                    // unsuccessful post, so store in local prefs
-                    Log.d(TAG, "Could not post status update -> storing locally")
+                val statusUpdateJson = bdJson.encodeToString<TaskStatusUpdate>(taskStatusUpdate)
+                if (modifiedStatus.isFinalState()) {
+                    // Store final status locally before removing task from keyTasksMap so that if
+                    // the process dies before Dart persists the update, resumeFromBackground will
+                    // replay it instead of rescheduleKilledTasks re-enqueuing a finished task
                     storeLocally(
                         BDPlugin.keyStatusUpdateMap,
                         task.taskId,
-                        bdJson.encodeToString<TaskStatusUpdate>(taskStatusUpdate),
+                        statusUpdateJson,
                         prefs
                     )
-                })
+                }
+                val arg = taskStatusUpdate.argList
+                postOnBackgroundChannel(
+                    "statusUpdate",
+                    task,
+                    arg,
+                    onFail = {
+                        // unsuccessful post, so store in local prefs
+                        Log.d(TAG, "Could not post status update -> storing locally")
+                        storeLocally(
+                            BDPlugin.keyStatusUpdateMap,
+                            task.taskId,
+                            statusUpdateJson,
+                            prefs
+                        )
+                    },
+                    onSuccess = if (modifiedStatus.isFinalState()) {
+                        {
+                            removeLocally(
+                                BDPlugin.keyStatusUpdateMap,
+                                task.taskId,
+                                prefs
+                            )
+                        }
+                    } else null
+                )
             }
             // if task is in final state, cancel the WorkManager job (if failed),
             // remove task from persistent storage, clean up references to taskId
@@ -429,6 +459,27 @@ open class TaskRunner(
                     putString(
                         prefsKey, bdJson.encodeToString<MutableMap<String, String>>(mapByTaskId)
                     )
+                }
+            }
+        }
+
+        /**
+         * Remove the entry for [taskId] from preferences under [prefsKey]
+         */
+        private fun removeLocally(
+            prefsKey: String,
+            taskId: String,
+            prefs: SharedPreferences
+        ) {
+            BDPlugin.prefsLock.write {
+                val jsonString = prefs.getString(prefsKey, "{}") as String
+                val mapByTaskId = bdJson.decodeFromString<MutableMap<String, String>>(jsonString)
+                if (mapByTaskId.remove(taskId) != null) {
+                    prefs.edit {
+                        putString(
+                            prefsKey, bdJson.encodeToString<MutableMap<String, String>>(mapByTaskId)
+                        )
+                    }
                 }
             }
         }
