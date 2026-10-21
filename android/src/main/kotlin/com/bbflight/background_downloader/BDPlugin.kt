@@ -1377,9 +1377,9 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
      * that Dart is listening to the methodChannel before calling the callback.
      */
     private suspend fun methodRegisterCallbackDispatcher(call: MethodCall): Any? {
+        val handle = call.arguments as Long?
         withContext(defaultScope.coroutineContext) {
             PreferenceManager.getDefaultSharedPreferences(applicationContext).edit().apply {
-                val handle = call.arguments as Long?
                 if (handle != null) {
                     Log.d(TAG, "Registering callbackDispatcher handle $handle")
                     putLong(keyCallbackDispatcherRawHandle, handle)
@@ -1389,7 +1389,8 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                 apply()
             }
         }
-        return null
+        // the Dart side keeps the handle, and stops registering it, only when this is true
+        return handle != null
     }
 
 
