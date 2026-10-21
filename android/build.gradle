@@ -9,8 +9,8 @@ if (agpMajor < 9 || isBuiltInKotlinFalse) {
     apply plugin: ['kotlin', 'android'].join('-')
 }
 
-group 'com.bbflight.background_downloader'
-version '1.0-SNAPSHOT'
+group = 'com.bbflight.background_downloader'
+version = '1.0-SNAPSHOT'
 
 allprojects {
     repositories {
@@ -20,7 +20,7 @@ allprojects {
 }
 
 android {
-    compileSdk 36
+    compileSdk = 36
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -32,10 +32,10 @@ android {
     }
 
     defaultConfig {
-        minSdkVersion 23
+        minSdk = 23
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-    if (project.android.hasProperty("namespace")) { namespace 'com.bbflight.background_downloader' }
+    if (project.android.hasProperty("namespace")) { namespace = 'com.bbflight.background_downloader' }
 
 
 }
