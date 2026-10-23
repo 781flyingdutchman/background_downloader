@@ -97,6 +97,13 @@ class DownloadTaskRunner(context: TaskJobContext) : TaskRunner(context) {
                     task,
                     taskCanResume
                 )
+                if (taskCanResume &&
+                    context.notificationConfig?.groupNotificationId?.isNotEmpty() == true
+                ) {
+                    // a group notification ignores progress updates: tell it this
+                    // task can now pause, so it can show its Pause button
+                    context.updateNotification(task, TaskStatus.running)
+                }
             }
             isResume = isResume && connection.responseCode == 206  // confirm resume response
             if (isResume && !prepareResume(connection)) {

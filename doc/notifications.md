@@ -62,6 +62,8 @@ await FileDownloader().enqueue(DownloadTask(
 
 All tasks in group `bunchOfFiles` will now use the notification group configuration with ID `myNotificationGroup`. Any other task that uses a configuration with `groupNotificationId` set to 'myGroupNotification' will also be added to that group notification. Notification tap detection is not implemented for notification groups.
 
+__On Android__: a running group notification has a Cancel button, which cancels every running task in the group. If the configuration has a `paused` notification and every running task can pause (as for the Pause button of a single task), it also has a Pause button, which pauses every running task. While no task runs and at least one is paused, the group shows its `paused` notification and stays active, so resuming the tasks (e.g. with `FileDownloader().resume`) brings the `running` notification back.
+
 __On iOS__: If your `running` group notification contains a dynamic item (such as `{numFinished}` in the example above) then a new notification will be issued every time the notification message changes (different from Android, where the existing notification is updated so does not trigger a new one).
 
 ## Tapping a notification
