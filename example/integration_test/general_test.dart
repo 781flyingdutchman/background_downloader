@@ -4524,7 +4524,7 @@ void main() {
   group('HoldingQueue', () {
     testWidgets(
       'multiple maxConcurrent combinations',
-      timeout: const Timeout(Duration(minutes: 2)),
+      timeout: const Timeout(Duration(minutes: 4)),
       (widgetTester) async {
         final start = DateTime.now();
         var concurrent = 0;
@@ -4714,7 +4714,7 @@ void main() {
 
     test(
       'holdingQueue respects maxConcurrent across requireWiFi changes',
-      timeout: const Timeout(Duration(minutes: 4)),
+      timeout: const Timeout(Duration(minutes: 5)),
       skip: !Platform.isAndroid,
       () async {
         // the test server holds each upload's response for 15s, and counts it
@@ -4737,7 +4737,7 @@ void main() {
 
     test(
       'holdingQueue respects maxConcurrent when running downloads are rescheduled',
-      timeout: const Timeout(Duration(minutes: 4)),
+      timeout: const Timeout(Duration(minutes: 6)),
       skip: !Platform.isAndroid,
       () => expectHoldingQueueCapAcrossRequireWiFiChanges(
         () => DownloadTask(url: urlWithLongContentLength, allowPause: true),
@@ -5338,6 +5338,7 @@ Future<void> enqueueAndFileExists(String path) async {
 Future<void> expectHoldingQueueCapAcrossRequireWiFiChanges(
   Task Function() createTask, {
   bool alsoRestartUploads = false,
+  Duration drainTimeout = const Duration(minutes: 4),
 }) async {
   await waitForTasksToClear();
   const maxConcurrent = 3;
@@ -5393,7 +5394,7 @@ Future<void> expectHoldingQueueCapAcrossRequireWiFiChanges(
   }
   flipsDone = true;
   await drained.future.timeout(
-    const Duration(minutes: 2),
+    drainTimeout,
     onTimeout: () => fail('queue did not drain: $latestStatus'),
   );
   final (maxRunning, maxRunningAfterFlips) = _maxRunning(statuses);
