@@ -703,9 +703,11 @@ object NotificationService {
                         builder.setProgress(100, 0, true)
                     }
                 }
+                // buttons follow the group's state, not this task's: a file that
+                // completes while others run must not drop the running buttons
                 addGroupNotificationActions(
                     taskWorker,
-                    notificationType,
+                    if (isFinished) notificationType else NotificationType.running,
                     groupNotification,
                     builder
                 )
