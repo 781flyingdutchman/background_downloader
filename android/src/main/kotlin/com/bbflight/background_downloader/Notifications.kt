@@ -118,6 +118,19 @@ class GroupNotification(
     /** True if all tasks finished, regardless of outcome */
     val isFinished get() = numFinished == numTotal
 
+    /** True if no task is running and at least one is paused, none failed:
+     * the group can be resumed, so it is neither complete nor dropped */
+    val isPaused
+        get() = isFinished && !hasError &&
+                notifications.values.any { it == NotificationType.paused }
+
+    /** Ids of running tasks that can't resume (yet: a download learns it
+     * can once the server accepts ranges) */
+    val cannotResume: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    /** True if every running task in this group can be paused */
+    val canPause get() = cannotResume.isEmpty()
+
     /**
      * Return true if this group has an error
      */
@@ -201,8 +214,7 @@ class NotificationReceiver : BroadcastReceiver() {
                 }
             }
         } else {
-            // no taskId -> groupNotification, and can only be a cancel action so
-            // no need to check
+            // no taskId -> groupNotification: a pause or a cancel action
             val groupNotificationName = bundle?.getString(keyGroupNotificationName)
             if (groupNotificationName != null) {
                 // cancel all tasks associated with this group that have not yet completed
@@ -212,9 +224,13 @@ class NotificationReceiver : BroadcastReceiver() {
                     val pendingResult = goAsync()
                     CoroutineScope(Dispatchers.Default).launch {
                         try {
-                            BDPlugin.cancelTasksWithIds(
-                                context,
-                                groupNotification.runningTasks.map { task -> task.taskId })
+                            val taskIds =
+                                groupNotification.runningTasks.map { task -> task.taskId }
+                            if (intent.action == actionPause) {
+                                taskIds.forEach { BDPlugin.pauseTaskWithId(it) }
+                            } else {
+                                BDPlugin.cancelTasksWithIds(context, taskIds)
+                            }
                         } finally {
                             pendingResult.finish()
                         }
@@ -609,6 +625,7 @@ object NotificationService {
         taskWorker: TaskJobContext, groupNotificationId: String, notificationType: NotificationType
     ) {
         val stateChange: Boolean
+        val pauseChange: Boolean
         val groupNotification: GroupNotification
         mutex.withLock {
             groupNotification =
@@ -616,14 +633,26 @@ object NotificationService {
                     groupNotificationId, taskWorker.notificationConfig!!
                 )
             stateChange = groupNotification.update(taskWorker.task, notificationType)
+            val couldPause = groupNotification.canPause
+            if (notificationType == NotificationType.running && !taskWorker.taskCanResume) {
+                groupNotification.cannotResume.add(taskWorker.task.taskId)
+            } else {
+                groupNotification.cannotResume.remove(taskWorker.task.taskId)
+            }
+            // a download learns it can resume after it starts: show Pause then
+            pauseChange = couldPause != groupNotification.canPause
             groupNotifications[groupNotificationId] = groupNotification
         }
-        if (stateChange || taskWorker.runInForeground) {
+        if (stateChange || pauseChange || taskWorker.runInForeground) {
             // need to update the group notification
             taskWorker.notificationId = groupNotification.notificationId
             val hasError = groupNotification.hasError
             val isFinished = groupNotification.isFinished
-            val notification = if (isFinished) {
+            val isPaused = groupNotification.isPaused
+            val notification = if (isPaused) {
+                groupNotification.notificationConfig.paused
+                    ?: groupNotification.notificationConfig.running
+            } else if (isFinished) {
                 if (hasError) groupNotification.notificationConfig.error else groupNotification.notificationConfig.complete
             } else groupNotification.notificationConfig.running
             if (notification == null) {
@@ -633,7 +662,9 @@ object NotificationService {
                 if (!createdNotificationChannel) {
                     createNotificationChannel(taskWorker.appContext)
                 }
-                val iconDrawable = if (isFinished) {
+                val iconDrawable = if (isPaused) {
+                    R.drawable.outline_pause_24
+                } else if (isFinished) {
                     if (hasError) R.drawable.outline_error_outline_24 else R.drawable.outline_download_done_24
                 } else {
                     if (taskWorker.task.isDownloadTask()) R.drawable.outline_file_download_24 else R.drawable.outline_file_upload_24
@@ -684,12 +715,12 @@ object NotificationService {
                     builder
                 ) // shows notification
             }
-            if (isFinished) {
+            if (isFinished && !isPaused) {
                 // remove only if not re-activated within 5 seconds
                 withContext(Dispatchers.Default) {
                     launch {
                         delay(5000)
-                        if (groupNotification.isFinished) {
+                        if (groupNotification.isFinished && !groupNotification.isPaused) {
                             groupNotifications.remove(groupNotificationId)
                         }
                     }
@@ -856,7 +887,8 @@ object NotificationService {
     }
 
     /**
-     * Add Cancel action to groupNotification notification
+     * Add Cancel action, and Pause when every running task can pause, to
+     * groupNotification notification
      */
     private fun addGroupNotificationActions(
         taskWorker: TaskJobContext,
@@ -887,6 +919,26 @@ object NotificationService {
                 BDPlugin.notificationButtonText["Cancel"],
                 cancelPendingIntent
             )
+            if (groupNotification.canPause && groupNotification.notificationConfig.paused != null) {
+                // pause button when every running task can resume and a paused
+                // notification is configured, as for a single task
+                val pauseIntent =
+                    Intent(taskWorker.appContext, NotificationReceiver::class.java).apply {
+                        action = NotificationReceiver.actionPause
+                        putExtra(NotificationReceiver.keyBundle, cancelBundle)
+                    }
+                val pausePendingIntent: PendingIntent = PendingIntent.getBroadcast(
+                    taskWorker.appContext,
+                    groupNotification.notificationId + 1,
+                    pauseIntent,
+                    PendingIntent.FLAG_IMMUTABLE
+                )
+                builder.addAction(
+                    R.drawable.outline_pause_24,
+                    BDPlugin.notificationButtonText["Pause"],
+                    pausePendingIntent
+                )
+            }
         }
     }
 
