@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'base_downloader.dart';
 import 'database.dart';
 import 'localstore/localstore.dart';
+import 'localstore/migration.dart';
 import 'models.dart';
 import 'task.dart';
 
@@ -377,10 +378,10 @@ class _LocalStorePersistentStorageExecutor {
   final _db = Localstore.instance;
   final _illegalPathCharacters = RegExp(r'[\\/:*?"<>|]');
 
-  static const taskRecordsPath = 'backgroundDownloaderTaskRecords';
-  static const resumeDataPath = 'backgroundDownloaderResumeData';
-  static const pausedTasksPath = 'backgroundDownloaderPausedTasks';
-  static const metaDataCollection = 'backgroundDownloaderDatabase';
+  static const taskRecordsPath = LocalStoreMigration.taskRecordsPath;
+  static const resumeDataPath = LocalStoreMigration.resumeDataPath;
+  static const pausedTasksPath = LocalStoreMigration.pausedTasksPath;
+  static const metaDataCollection = LocalStoreMigration.metaDataCollection;
 
   Future<void> storeTaskRecord(Map<String, dynamic> recordJson) async {
     final taskId = recordJson['taskId'] as String;
@@ -483,63 +484,14 @@ class _LocalStorePersistentStorageExecutor {
   String? _safeIdOrNull(String? id) =>
       id?.replaceAll(_illegalPathCharacters, '_');
 
-  Future<(String, int)> get storedDatabaseVersion async {
-    final metaData = await _db
-        .collection(metaDataCollection)
-        .doc('metaData')
-        .get();
-    return ('Localstore', (metaData?['version'] as num?)?.toInt() ?? 0);
-  }
+  late final _migration = LocalStoreMigration(_db, log);
 
-  (String, int) get currentDatabaseVersion => ('Localstore', 1);
+  Future<(String, int)> get storedDatabaseVersion =>
+      _migration.storedDatabaseVersion;
 
-  Future<void> initialize() async {
-    final (currentName, currentVersion) = currentDatabaseVersion;
-    final (storedName, storedVersion) = await storedDatabaseVersion;
-    if (storedName != currentName) {
-      log.warning('Cannot migrate from database name $storedName');
-      return;
-    }
-    if (storedVersion == currentVersion) {
-      return;
-    }
-    log.fine(
-      'Migrating $currentName database from version $storedVersion to $currentVersion',
-    );
-    switch (storedVersion) {
-      case 0:
-        // move files from docDir to supportDir
-        final docDir = await getApplicationDocumentsDirectory();
-        final supportDir = await getApplicationSupportDirectory();
-        await Future.wait(
-          [resumeDataPath, pausedTasksPath, taskRecordsPath].map((path) async {
-            try {
-              final fromPath = join(docDir.path, path);
-              if (await Directory(fromPath).exists()) {
-                log.finest('Moving $path to support directory');
-                final toPath = join(supportDir.path, path);
-                await Directory(toPath).create(recursive: true);
-                final entities = await Directory(fromPath).list().toList();
-                await Future.wait(
-                  entities.whereType<File>().map(
-                    (file) => file.copy(join(toPath, basename(file.path))),
-                  ),
-                );
-                await Directory(fromPath).delete(recursive: true);
-              }
-            } catch (e) {
-              log.fine('Error migrating database for path $path: $e');
-            }
-          }),
-        );
+  (String, int) get currentDatabaseVersion => _migration.currentDatabaseVersion;
 
-      default:
-        log.warning('Illegal starting version: $storedVersion');
-    }
-    await _db.collection(metaDataCollection).doc('metaData').set({
-      'version': currentVersion,
-    });
-  }
+  Future<void> initialize() => _migration.initialize();
 
   Future<void> clearCache() async {
     Localstore.instance.clearCache();
