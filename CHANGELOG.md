@@ -1,3 +1,7 @@
+## Unreleased
+
+* [Windows] Fix storage initialization when the Documents directory is unavailable during database migration
+
 ## 9.6.4
 
 * [Android] Reuse pre-created notification channel and preserve its importance (#732, #733)
