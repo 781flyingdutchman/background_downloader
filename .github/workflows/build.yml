@@ -71,7 +71,7 @@ jobs:
       - run: flutter pub get
       - name: Build example APK
         working-directory: example
-        run: flutter build apk
+        run: flutter build apk ${{ matrix.sdk == 'beta' && '--android-skip-build-dependency-validation' || '' }}
       - name: Upload apk as artifact
         uses: actions/upload-artifact@v7
         if: ${{ matrix.sdk == 'stable' }}
