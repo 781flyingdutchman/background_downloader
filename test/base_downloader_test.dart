@@ -172,5 +172,32 @@ void main() {
         equals('Task running'),
       );
     });
+
+    test('groupNotificationId configuration with tokens', () async {
+      FileDownloader().configureNotificationForGroup(
+        'packs',
+        running: const TaskNotification(
+          'My app',
+          'Downloading: {numFinished} of {numTotal}, {progress}',
+        ),
+        error: const TaskNotification('My app', 'Download failed'),
+        progressBar: true,
+        groupNotificationId: 'packs-run',
+      );
+      final task = DownloadTask(
+        url: 'https://example.com/file.bin',
+        group: 'packs',
+      );
+      final config = FileDownloader().notificationConfigForTask(task);
+      expect(config?.groupNotificationId, equals('packs-run'));
+      expect(config?.running?.title, equals('My app'));
+      expect(
+        config?.running?.body,
+        equals('Downloading: {numFinished} of {numTotal}, {progress}'),
+      );
+      expect(config?.complete, isNull);
+      expect(config?.error?.body, equals('Download failed'));
+      expect(config?.progressBar, isTrue);
+    });
   });
 }

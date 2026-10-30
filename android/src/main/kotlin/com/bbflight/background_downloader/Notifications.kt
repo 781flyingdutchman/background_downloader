@@ -420,10 +420,27 @@ object NotificationService {
                                 // Found a newer progress update, supersede the current candidate
                                 candidate = next
                                 iterator.remove()
+                            } else if (next.notificationType == null && next.builder == null) {
+                                // Found a removal for this notification, supersede candidate and remove
+                                candidate = next
+                                iterator.remove()
+                                break
                             } else {
                                 // Found a non-running update (barrier), stop looking for this task
                                 break
                             }
+                        }
+                    }
+                }
+                if (candidate.notificationType == null && candidate.builder == null) {
+                    // Deduplicate subsequent removals for the same notificationId
+                    val iterator = pendingNotifications.iterator()
+                    while (iterator.hasNext()) {
+                        val next = iterator.next()
+                        if (next.taskWorker.notificationId == candidate.taskWorker.notificationId &&
+                            next.notificationType == null && next.builder == null
+                        ) {
+                            iterator.remove()
                         }
                     }
                 }
@@ -611,89 +628,100 @@ object NotificationService {
     private suspend fun updateGroupNotification(
         taskWorker: TaskJobContext, groupNotificationId: String, notificationType: NotificationType
     ) {
-        val stateChange: Boolean
-        val groupNotification: GroupNotification
         mutex.withLock {
-            groupNotification =
+            val groupNotification =
                 groupNotifications[groupNotificationId] ?: GroupNotification(
                     groupNotificationId, taskWorker.notificationConfig!!
                 )
-            stateChange = groupNotification.update(taskWorker.task, notificationType)
+            val stateChange = groupNotification.update(taskWorker.task, notificationType)
             groupNotifications[groupNotificationId] = groupNotification
-        }
-        if (stateChange || taskWorker.runInForeground) {
-            // need to update the group notification
-            taskWorker.notificationId = groupNotification.notificationId
-            val hasError = groupNotification.hasError
-            val isFinished = groupNotification.isFinished
-            val notification = if (isFinished) {
-                if (hasError) groupNotification.notificationConfig.error else groupNotification.notificationConfig.complete
-            } else groupNotification.notificationConfig.running
-            if (notification == null) {
-                addToNotificationQueue(taskWorker) // removes notification
-            } else {
-                // need to show a notification
-                if (!createdNotificationChannel) {
-                    createNotificationChannel(taskWorker.appContext)
-                }
-                val iconDrawable = if (isFinished) {
-                    if (hasError) R.drawable.outline_error_outline_24 else R.drawable.outline_download_done_24
+            if (stateChange || taskWorker.runInForeground) {
+                // need to update the group notification
+                taskWorker.notificationId = groupNotification.notificationId
+                val hasError = groupNotification.hasError
+                val isFinished = groupNotification.isFinished
+                val notification = if (isFinished) {
+                    if (hasError) groupNotification.notificationConfig.error else groupNotification.notificationConfig.complete
+                } else groupNotification.notificationConfig.running
+                if (notification == null) {
+                    addToNotificationQueueLocked(taskWorker) // removes notification
                 } else {
-                    if (taskWorker.task.isDownloadTask()) R.drawable.outline_file_download_24 else R.drawable.outline_file_upload_24
-                }
-                val builder = Builder(
-                    taskWorker.appContext, notificationChannelId
-                ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
-                    .setShowWhen(isFinished)
-                    .setSilent(appIsInForeground())
-                // title and body interpolation of tokens
-                val progress = groupNotification.progress
-                val title = replaceTokens(
-                    notification.title,
-                    taskWorker.task,
-                    progress,
-                    groupNotification = groupNotification
-                )
-                if (title.isNotEmpty()) {
-                    builder.setContentTitle(title)
-                }
-                val body = replaceTokens(
-                    notification.body,
-                    taskWorker.task,
-                    progress,
-                    groupNotification = groupNotification
-                )
-                if (body.isNotEmpty()) {
-                    builder.setContentText(body)
-                }
-                // progress bar
-                val progressBar =
-                    groupNotification.notificationConfig.progressBar && (notification == groupNotification.notificationConfig.running)
-                if (progressBar && progress >= 0) {
-                    if (progress <= 1) {
-                        builder.setProgress(100, (progress * 100).roundToInt(), false)
-                    } else { // > 1 means indeterminate
-                        builder.setProgress(100, 0, true)
+                    // need to show a notification
+                    if (!createdNotificationChannel) {
+                        createNotificationChannel(taskWorker.appContext)
                     }
+                    val iconDrawable = if (isFinished) {
+                        if (hasError) R.drawable.outline_error_outline_24 else R.drawable.outline_download_done_24
+                    } else {
+                        if (taskWorker.task.isDownloadTask()) R.drawable.outline_file_download_24 else R.drawable.outline_file_upload_24
+                    }
+                    val builder = Builder(
+                        taskWorker.appContext, notificationChannelId
+                    ).setPriority(NotificationCompat.PRIORITY_LOW).setSmallIcon(iconDrawable)
+                        .setShowWhen(isFinished)
+                        .setSilent(appIsInForeground())
+                    // title and body interpolation of tokens
+                    val progress = groupNotification.progress
+                    val numTotal = groupNotification.numTotal
+                    val numFinished = groupNotification.numFinished
+                    val numFailed = groupNotification.numFailed
+                    val title = replaceTokens(
+                        notification.title,
+                        taskWorker.task,
+                        progress,
+                        numTotal = numTotal,
+                        numFinished = numFinished,
+                        numFailed = numFailed
+                    )
+                    if (title.isNotEmpty()) {
+                        builder.setContentTitle(title)
+                    }
+                    val body = replaceTokens(
+                        notification.body,
+                        taskWorker.task,
+                        progress,
+                        numTotal = numTotal,
+                        numFinished = numFinished,
+                        numFailed = numFailed
+                    )
+                    if (body.isNotEmpty()) {
+                        builder.setContentText(body)
+                    }
+                    // progress bar
+                    val progressBar =
+                        groupNotification.notificationConfig.progressBar && (notification == groupNotification.notificationConfig.running)
+                    if (progressBar && progress >= 0) {
+                        if (progress <= 1) {
+                            builder.setProgress(100, (progress * 100).roundToInt(), false)
+                        } else { // > 1 means indeterminate
+                            builder.setProgress(100, 0, true)
+                        }
+                    }
+                    val groupNotificationType = if (isFinished) {
+                        if (hasError) NotificationType.error else NotificationType.complete
+                    } else NotificationType.running
+
+                    addGroupNotificationActions(
+                        taskWorker,
+                        groupNotificationType,
+                        groupNotification,
+                        builder
+                    )
+                    addToNotificationQueueLocked(
+                        taskWorker,
+                        groupNotificationType,
+                        builder
+                    ) // shows notification
                 }
-                addGroupNotificationActions(
-                    taskWorker,
-                    notificationType,
-                    groupNotification,
-                    builder
-                )
-                addToNotificationQueue(
-                    taskWorker,
-                    notificationType,
-                    builder
-                ) // shows notification
-            }
-            if (isFinished) {
-                // remove only if not re-activated within 5 seconds
-                scope.launch {
-                    delay(5000)
-                    if (groupNotification.isFinished) {
-                        groupNotifications.remove(groupNotificationId)
+                if (isFinished) {
+                    // remove only if not re-activated within 5 seconds
+                    scope.launch {
+                        delay(5000)
+                        mutex.withLock {
+                            if (groupNotifications[groupNotificationId]?.isFinished == true) {
+                                groupNotifications.remove(groupNotificationId)
+                            }
+                        }
                     }
                 }
             }
@@ -1018,13 +1046,16 @@ object NotificationService {
      * Replace special tokens {displayName}, {filename}, {metadata}, {progress}, {networkSpeed},
      * {timeRemaining}, {numFinished} and {numTotal} with their respective values.
      */
-    private fun replaceTokens(
+    internal fun replaceTokens(
         input: String,
         task: Task,
         progress: Double,
         networkSpeed: Double = -1.0,
         timeRemaining: Long? = null,
-        groupNotification: GroupNotification? = null
+        groupNotification: GroupNotification? = null,
+        numTotal: Int? = null,
+        numFinished: Int? = null,
+        numFailed: Int? = null
     ): String {
         val (unpackedFilename, _) = UriUtils.unpack(task.filename)
         val safeFilename = unpackedFilename ?: task.filename
@@ -1064,12 +1095,15 @@ object NotificationService {
                 )
             output4 = timeRemainingRegEx.replace(output3, timeRemainingString)
         }
-        return if (groupNotification != null) {
+        val effectiveNumTotal = numTotal ?: groupNotification?.numTotal
+        val effectiveNumFinished = numFinished ?: groupNotification?.numFinished
+        val effectiveNumFailed = numFailed ?: groupNotification?.numFailed
+        return if (effectiveNumTotal != null && effectiveNumFinished != null && effectiveNumFailed != null) {
             numFailedRegEx.replace(
                 numFinishedRegEx.replace(
-                    numTotalRegEx.replace(output4, "${groupNotification.numTotal}"),
-                    "${groupNotification.numFinished}"
-                ), "${groupNotification.numFailed}"
+                    numTotalRegEx.replace(output4, "$effectiveNumTotal"),
+                    "$effectiveNumFinished"
+                ), "$effectiveNumFailed"
             )
         } else {
             output4
@@ -1085,16 +1119,25 @@ object NotificationService {
         builder: Builder? = null
     ) {
         mutex.withLock {
-            if (taskWorker.notificationId != 0) {
-                if (notificationType != null && builder != null) {
-                    removedNotificationIds.remove(taskWorker.notificationId)
-                } else {
-                    removedNotificationIds.add(taskWorker.notificationId)
-                }
-            }
-            pendingNotifications.add(NotificationData(taskWorker, notificationType, builder))
+            addToNotificationQueueLocked(taskWorker, notificationType, builder)
         }
-        queue.send(Unit)
+    }
+
+    /** Add display notification request to the queue while [mutex] is already held */
+    private fun addToNotificationQueueLocked(
+        taskWorker: TaskJobContext,
+        notificationType: NotificationType? = null,
+        builder: Builder? = null
+    ) {
+        if (taskWorker.notificationId != 0) {
+            if (notificationType != null && builder != null) {
+                removedNotificationIds.remove(taskWorker.notificationId)
+            } else {
+                removedNotificationIds.add(taskWorker.notificationId)
+            }
+        }
+        pendingNotifications.add(NotificationData(taskWorker, notificationType, builder))
+        queue.trySend(Unit)
     }
 
     /**
