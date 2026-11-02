@@ -96,7 +96,9 @@ class UIDTJobService : JobService() {
         override var taskCanResume: Boolean = false
         override var notificationConfigJsonString: String? = null
         override val runId: String? = null
-        override var runInForeground: Boolean = true // UIDT always runs in foreground service
+        override var runInForeground: Boolean
+            get() = true
+            set(_) {} // UIDT always runs in foreground service
 
         @Volatile
         var isStopped: Boolean = false
