@@ -425,7 +425,7 @@ def serve_file(filename):
 
     content_length = end_byte - start_byte + 1
     
-    target_duration = FILE_DELAYS.get(filename, 0)
+    target_duration = float(request.args.get('duration', FILE_DELAYS.get(filename, 0)))
     
     # Check for no_content_length flag
     no_content_length = request.args.get('no_content_length') == 'true'

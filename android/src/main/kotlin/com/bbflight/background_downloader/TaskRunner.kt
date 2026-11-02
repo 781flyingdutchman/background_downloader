@@ -594,8 +594,8 @@ open class TaskRunner(
                 notificationConfig = context.notificationConfig
                 notificationConfigJsonString = if (notificationConfig != null) bdJson.encodeToString<NotificationConfig>(notificationConfig!!) else null
 
-                canRunInForeground = runInForegroundFileSize >= 0 &&
-                        notificationConfig?.running != null // must have notification
+                canRunInForeground = (context is UIDTJobService.UIDTJobContext) || (runInForegroundFileSize >= 0 &&
+                        notificationConfig?.running != null) // must have notification
                 isResume = determineIfResume()
                 Log.i(
                     TAG,
@@ -1072,6 +1072,10 @@ open class TaskRunner(
      * Based on [canRunInForeground] and [contentLength] > [runInForegroundFileSize]
      */
     fun determineRunInForeground(task: Task, contentLength: Long) {
+        if (context is UIDTJobService.UIDTJobContext) {
+            Log.i(TAG, "TaskId ${task.taskId} will run in foreground (UIDT)")
+            return
+        }
         val wasRunInForeground = runInForeground
         runInForeground =
             canRunInForeground && contentLength > (runInForegroundFileSize.toLong() shl 20)

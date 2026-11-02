@@ -903,7 +903,7 @@ object NotificationService {
         taskWorker: TaskJobContext, notificationType: NotificationType, builder: Builder
     ) {
         with(NotificationManagerCompat.from(taskWorker.appContext)) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (!taskWorker.runInForeground && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 // On Android 33+, check/ask for permission
                 val status = PermissionsService.getPermissionStatus(
                     taskWorker.appContext,

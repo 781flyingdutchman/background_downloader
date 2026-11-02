@@ -133,6 +133,37 @@ void main() {
         await failedCompleter.future.timeout(const Duration(minutes: 1));
       },
     );
+
+    testWidgets(
+      'Download taking longer than 10 seconds without Config.runInForeground',
+      timeout: const Timeout(Duration(minutes: 2)),
+      (tester) async {
+        final task = DownloadTask(
+          url: '$urlWithContentLength?duration=15',
+          filename: 'uidt_long_download.bin',
+          updates: Updates.statusAndProgress,
+          priority: 0,
+        );
+
+        final Completer<void> runningCompleter = Completer();
+        final Completer<void> completeCompleter = Completer();
+
+        listenToTask(
+          task,
+          statusCompleters: {
+            TaskStatus.running: runningCompleter,
+            TaskStatus.complete: completeCompleter,
+          },
+        );
+
+        expect(await FileDownloader().enqueue(task), isTrue);
+        await runningCompleter.future;
+        await completeCompleter.future;
+
+        expect(File(await task.filePath()).existsSync(), isTrue);
+        await File(await task.filePath()).delete();
+      },
+    );
   });
 
   group('UIDT Upload Tests', () {
