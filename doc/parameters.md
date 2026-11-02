@@ -86,6 +86,9 @@ To use UIDT on Android 14+, declare the following in `android/app/src/main/Andro
     android:foregroundServiceType="dataSync" />
 ```
 
+> [!NOTE]
+> When an app is in the background, Android 14+ may disallow scheduling new UIDT jobs, causing the downloader to fall back to WorkManager. If you also use `Config.runInForeground`, ensure your `AndroidManifest.xml` includes `androidx.work.impl.foreground.SystemForegroundService` with `android:foregroundServiceType="dataSync"` as described in [CONFIG.md](CONFIG.md#android-run-task-in-foreground).
+
 ### `allowPause`
 When `true`, enables manual pausing via `transfer.pause()` or `FileDownloader().pause(task)`, and allows the downloader to recover and resume interrupted downloads when connectivity changes.
 
