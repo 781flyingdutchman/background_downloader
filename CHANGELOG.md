@@ -1,3 +1,7 @@
+## 9.6.6
+
+* Bug fixes
+
 ## 9.6.5
 
 * Bug fixes
