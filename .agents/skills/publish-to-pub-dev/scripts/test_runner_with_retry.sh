@@ -137,6 +137,7 @@ fi
 
 # Ensure test_server.py is running in its venv for retries
 SERVER_URL="http://127.0.0.1:8080"
+sleep 1
 if curl --output /dev/null --silent --head --fail "$SERVER_URL"; then
   echo "Test server is already running."
 else
