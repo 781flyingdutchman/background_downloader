@@ -100,11 +100,15 @@ try:
             m_desc = fail_desc_re.match(line)
             if m_desc and current_file and current_device:
                 desc = m_desc.group(1).strip()
-                failures.append({
-                    "file": current_file,
-                    "device": current_device,
-                    "name": desc
-                })
+                desc = re.sub(r'\s+-\s+did not complete$', '', desc).strip()
+                if desc and desc != "(tearDownAll)":
+                    item = {
+                        "file": current_file,
+                        "device": current_device,
+                        "name": desc
+                    }
+                    if item not in failures:
+                        failures.append(item)
 except Exception as e:
     pass
 
