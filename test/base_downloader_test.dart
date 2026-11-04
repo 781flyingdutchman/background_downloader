@@ -52,54 +52,50 @@ void main() {
     FileDownloader().isConnected = true;
   });
 
-  group('Failure while offline', () {
-    test(
-      'non-connection failure while offline fails a task without retries',
-      () async {
-        final downloader = FileDownloader().downloaderForTesting;
-        final statuses = <TaskStatus>[];
-        final subscription = FileDownloader().updates.listen((update) {
-          if (update is TaskStatusUpdate) statuses.add(update.status);
-        });
-        final task = DownloadTask(url: 'https://example.com/file.bin');
-        FileDownloader().isConnected = false;
-        downloader.processStatusUpdate(
-          TaskStatusUpdate(
-            task,
-            TaskStatus.failed,
-            TaskHttpException('Forbidden', 403),
-          ),
-        );
-        await Future.delayed(const Duration(milliseconds: 50));
-        expect(statuses, equals([TaskStatus.failed]));
-        expect(downloader.tasksWaitingToRetry, isEmpty);
-        await subscription.cancel();
-      },
-    );
+  group('Failure handling', () {
+    test('failure fails a task without retries immediately', () async {
+      final downloader = FileDownloader().downloaderForTesting;
+      final statuses = <TaskStatus>[];
+      final subscription = FileDownloader().updates.listen((update) {
+        if (update is TaskStatusUpdate) statuses.add(update.status);
+      });
+      final task = DownloadTask(url: 'https://example.com/file.bin');
+      downloader.processStatusUpdate(
+        TaskStatusUpdate(
+          task,
+          TaskStatus.failed,
+          TaskConnectionException('Connection lost'),
+        ),
+      );
+      await Future.delayed(const Duration(milliseconds: 50));
+      expect(statuses, equals([TaskStatus.failed]));
+      expect(downloader.tasksWaitingToRetry, isEmpty);
+      await subscription.cancel();
+    });
 
-    test(
-      'connection failure while offline is held until network restored',
-      () async {
-        final downloader = FileDownloader().downloaderForTesting;
-        final statuses = <TaskStatus>[];
-        final subscription = FileDownloader().updates.listen((update) {
-          if (update is TaskStatusUpdate) statuses.add(update.status);
-        });
-        final task = DownloadTask(url: 'https://example.com/file.bin');
-        FileDownloader().isConnected = false;
-        downloader.processStatusUpdate(
-          TaskStatusUpdate(
-            task,
-            TaskStatus.failed,
-            TaskConnectionException('Connection lost'),
-          ),
-        );
-        await Future.delayed(const Duration(milliseconds: 50));
-        expect(statuses, equals([TaskStatus.waitingToRetry]));
-        expect(downloader.tasksWaitingToRetry, contains(task));
-        await subscription.cancel();
-      },
-    );
+    test('failure on task with retries schedules retry via backoff', () async {
+      final downloader = FileDownloader().downloaderForTesting;
+      final statuses = <TaskStatus>[];
+      final subscription = FileDownloader().updates.listen((update) {
+        if (update is TaskStatusUpdate) statuses.add(update.status);
+      });
+      final task = DownloadTask(
+        url: 'https://example.com/file.bin',
+        retries: 2,
+      );
+      downloader.processStatusUpdate(
+        TaskStatusUpdate(
+          task,
+          TaskStatus.failed,
+          TaskConnectionException('Connection lost'),
+        ),
+      );
+      await Future.delayed(const Duration(milliseconds: 50));
+      expect(statuses, equals([TaskStatus.waitingToRetry]));
+      expect(downloader.tasksWaitingToRetry, contains(task));
+      expect(task.retriesRemaining, equals(1));
+      await subscription.cancel();
+    });
   });
 
   group('enqueueAndAwait when enqueue fails', () {

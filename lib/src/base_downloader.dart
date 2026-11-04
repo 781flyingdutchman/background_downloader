@@ -209,23 +209,8 @@ abstract base class BaseDownloader {
   }
 
   void _onConnectivityChanged(bool connected, bool wifi) {
-    final wasConnected = isConnected;
-    final wasWiFi = isWiFi;
     isConnected = connected;
     isWiFi = wifi;
-
-    if (connected && (!wasConnected || (!wasWiFi && wifi))) {
-      final tasksToRetry = List<Task>.from(tasksWaitingToRetry);
-      for (final task in tasksToRetry) {
-        if (!task.requiresWiFi || isWiFi) {
-          tasksWaitingToRetry.remove(task);
-          log.info('Network available, resuming held task ${task.taskId}');
-          resume(task).then((resumed) {
-            if (!resumed) enqueue(task);
-          });
-        }
-      }
-    }
   }
 
   /// Configures the downloader
@@ -946,29 +931,9 @@ abstract base class BaseDownloader {
     // has retriesRemaining > 0: those are always sent here, and are
     // intercepted to hold the task and reschedule in the near future
     final task = update.task;
-    final isConnectionError =
-        update.exception is TaskConnectionException ||
-        (update.exception?.description.toLowerCase().contains('socket') ==
-            true) ||
-        (update.exception?.description.toLowerCase().contains('timeout') ==
-            true) ||
-        (update.exception?.description.toLowerCase().contains('network') ==
-            true);
-
-    if (update.status == TaskStatus.failed &&
-        (task.retriesRemaining > 0 || (!isConnected && isConnectionError))) {
+    if (update.status == TaskStatus.failed && task.retriesRemaining > 0) {
       _emitStatusUpdate(TaskStatusUpdate(task, TaskStatus.waitingToRetry));
       _emitProgressUpdate(TaskProgressUpdate(task, progressWaitingToRetry));
-
-      // If device is offline, hold without decrementing retry budget
-      if (!isConnected) {
-        tasksWaitingToRetry.add(task);
-        log.info(
-          'TaskId ${task.taskId} failed while offline, holding until network restored',
-        );
-        return;
-      }
-
       task.decreaseRetriesRemaining();
       tasksWaitingToRetry.add(task);
       final waitTime = Duration(
