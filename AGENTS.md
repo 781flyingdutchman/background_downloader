@@ -41,3 +41,10 @@ Example command to run integration tests:
 ```bash
 flutter test example/integration_test/uidt_test.dart
 ```
+
+### Integration Test Expected Runtimes & Hang Detection
+
+- **Total run_tests.sh runtime:** ~1500 seconds across all platforms.
+- **Longest test file (`general_test.dart`):** ~500 seconds maximum.
+- **Hang detection:** If a test run exceeds these thresholds and no progress is observed in the logs, the test run is hung and should be terminated and investigated.
+

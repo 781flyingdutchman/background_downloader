@@ -67,6 +67,11 @@ Alternatively, to run manually:
 ./example/run_tests.sh
 ```
 
+#### Expected Runtimes & Hang Detection
+- **Total `run_tests.sh` runtime:** ~1500 seconds across all platforms.
+- **Longest test file (`general_test.dart`):** ~500 seconds maximum.
+- **Hang detection:** If a test run exceeds these thresholds and no progress is observed in the logs, the test is hanging. Abort the run and investigate.
+
 ### Flaky Test Handling
 
 The script `example/run_tests.sh` outputs a summary of failed test files and devices:
