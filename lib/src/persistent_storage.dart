@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart';
@@ -278,6 +279,18 @@ class LocalStorePersistentStorage implements PersistentStorage {
   }
 
   Future<void> clearCache() => _sendRequest(_StorageCommand.clearCache, []);
+
+  @visibleForTesting
+  static Future<void> testInitializeExecutor() async {
+    final executor = _LocalStorePersistentStorageExecutor();
+    await executor.initialize();
+  }
+
+  @visibleForTesting
+  static Future<(String, int)> testStoredDatabaseVersion() async {
+    final executor = _LocalStorePersistentStorageExecutor();
+    return executor.storedDatabaseVersion;
+  }
 }
 
 // Entry point for the isolate
@@ -509,29 +522,35 @@ class _LocalStorePersistentStorageExecutor {
     switch (storedVersion) {
       case 0:
         // move files from docDir to supportDir
-        final docDir = await getApplicationDocumentsDirectory();
-        final supportDir = await getApplicationSupportDirectory();
-        await Future.wait(
-          [resumeDataPath, pausedTasksPath, taskRecordsPath].map((path) async {
-            try {
-              final fromPath = join(docDir.path, path);
-              if (await Directory(fromPath).exists()) {
-                log.finest('Moving $path to support directory');
-                final toPath = join(supportDir.path, path);
-                await Directory(toPath).create(recursive: true);
-                final entities = await Directory(fromPath).list().toList();
-                await Future.wait(
-                  entities.whereType<File>().map(
-                    (file) => file.copy(join(toPath, basename(file.path))),
-                  ),
-                );
-                await Directory(fromPath).delete(recursive: true);
+        try {
+          final docDir = await getApplicationDocumentsDirectory();
+          final supportDir = await getApplicationSupportDirectory();
+          await Future.wait(
+            [resumeDataPath, pausedTasksPath, taskRecordsPath].map((
+              path,
+            ) async {
+              try {
+                final fromPath = join(docDir.path, path);
+                if (await Directory(fromPath).exists()) {
+                  log.finest('Moving $path to support directory');
+                  final toPath = join(supportDir.path, path);
+                  await Directory(toPath).create(recursive: true);
+                  final entities = await Directory(fromPath).list().toList();
+                  await Future.wait(
+                    entities.whereType<File>().map(
+                      (file) => file.copy(join(toPath, basename(file.path))),
+                    ),
+                  );
+                  await Directory(fromPath).delete(recursive: true);
+                }
+              } catch (e) {
+                log.fine('Error migrating database for path $path: $e');
               }
-            } catch (e) {
-              log.fine('Error migrating database for path $path: $e');
-            }
-          }),
-        );
+            }),
+          );
+        } catch (e) {
+          log.fine('Skipping database migration from documents directory: $e');
+        }
 
       default:
         log.warning('Illegal starting version: $storedVersion');

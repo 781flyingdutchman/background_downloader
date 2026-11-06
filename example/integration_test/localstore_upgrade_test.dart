@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:background_downloader/background_downloader.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/logging.dart';
@@ -100,6 +101,43 @@ void main() {
         isTrue,
       );
       debugPrint('Upgrade done');
+    },
+  );
+
+  testWidgets(
+    'upgrade from version 0 without documents directory',
+    timeout: const Timeout(Duration(minutes: 2)),
+    (widgetTester) async {
+      final actualSupportDir = await getApplicationSupportDirectory();
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(
+        const MethodChannel('plugins.flutter.io/path_provider'),
+        (call) async {
+          if (call.method == 'getApplicationDocumentsDirectory') {
+            return null; // Triggers MissingPlatformDirectoryException
+          }
+          if (call.method == 'getApplicationSupportDirectory') {
+            return actualSupportDir.path;
+          }
+          return null;
+        },
+      );
+      try {
+        await LocalStorePersistentStorage.testInitializeExecutor();
+        final metaData = await Localstore.instance
+            .collection('backgroundDownloaderDatabase')
+            .doc('metaData')
+            .get();
+        final version = metaData?['version'] ?? 0;
+        expect(version, equals(1));
+        debugPrint('Upgrade without documents directory done');
+      } finally {
+        messenger.setMockMethodCallHandler(
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          null,
+        );
+      }
     },
   );
 }
