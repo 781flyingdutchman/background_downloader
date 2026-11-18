@@ -339,7 +339,7 @@ func updateProgress(task: Task, totalBytesExpected: Int64, totalBytesDone: Int64
             let currentNetworkSpeed: Double = timeSinceLastUpdate > 3600 ? -1.0 : Double(bytesSinceLastUpdate) / timeSinceLastUpdate / 1000000.0
             let newNetworkSpeed = info.lastNetworkSpeed == -1.0 ? currentNetworkSpeed : (info.lastNetworkSpeed * 3.0 + currentNetworkSpeed) / 4.0
             let remainingBytes = (1.0 - progress) * Double(totalBytesExpected)
-            let timeRemaining: TimeInterval = newNetworkSpeed == -1.0 ? -1.0 : (remainingBytes / newNetworkSpeed / 1000000.0)
+            let timeRemaining: TimeInterval = newNetworkSpeed > 0 ? (remainingBytes / newNetworkSpeed / 1000000.0) : -1.0
             BDPlugin.propertyLock.withLock({
                 BDPlugin.progressInfo[task.taskId] = (lastProgressUpdateTime: now, lastProgressValue: progress, lastTotalBytesDone: totalBytesDone, lastNetworkSpeed: newNetworkSpeed)
             })
@@ -470,7 +470,8 @@ func processProgressUpdate(task: Task, progress: Double, expectedFileSize: Int64
         onNativeTaskProgressChange(task, progress)
     }
     if providesProgressUpdates(task: task) {
-        if (!postOnBackgroundChannel(method: "progressUpdate", task: task, arg: [progress, expectedFileSize, networkSpeed, Int(timeRemaining * 1000.0)] as [Any])) {
+        let timeRemainingMillis = timeRemaining.isFinite ? Int(timeRemaining * 1000.0) : -1000
+        if (!postOnBackgroundChannel(method: "progressUpdate", task: task, arg: [progress, expectedFileSize, networkSpeed, timeRemainingMillis] as [Any])) {
             // store update locally as a merged task/progress JSON string
             guard let jsonData = try? JSONEncoder().encode(TaskProgressUpdate(task: task, progress: progress, expectedFileSize: expectedFileSize))
             else {
