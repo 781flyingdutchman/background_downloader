@@ -63,14 +63,21 @@ flutter build ios
 ```
 
 #### 2. Building from Xcode IDE
-If you build or archive directly from Xcode:
-1. In Xcode, open your workspace (`Runner.xcworkspace`).
-2. Go to **Product > Scheme > Edit Scheme...** (or press `Cmd + <`).
-3. Select **Run** (for debugging) or **Archive** (for release distribution) in the left sidebar.
-4. Under the **Arguments** tab, find **Environment Variables**.
-5. Click **+** and add the desired variable name(s) (e.g. `BYPASS_PERMISSION_IOSADDTOPHOTOLIBRARY`) with value `1`.
+SwiftPM evaluates `Package.swift` during package resolution in the environment of the Xcode process itself. **Xcode Scheme environment variables** (**Product > Scheme > Edit Scheme > Arguments > Environment Variables**) apply at app launch time and are **not** passed to SwiftPM manifest evaluation.
 
-> **Note on Package Resolution Caching**: Xcode and SwiftPM cache package manifest evaluations. If you add, change, or remove any `BYPASS_PERMISSION_*` environment variables, force a clean evaluation by running `flutter clean` in the terminal or selecting **File > Packages > Reset Package Caches** in Xcode.
+To build or archive from the Xcode GUI with bypass flags active:
+1. Quit Xcode completely if it is already running.
+2. In a terminal, export the desired `BYPASS_PERMISSION_*` variables and launch Xcode from that shell:
+   ```bash
+   export BYPASS_PERMISSION_IOSADDTOPHOTOLIBRARY=1
+   export BYPASS_PERMISSION_IOSCHANGEPHOTOLIBRARY=1
+   open ios/Runner.xcworkspace
+   ```
+3. If Xcode previously resolved packages without those variables, select **File > Packages > Reset Package Caches** so `Package.swift` is re-evaluated with the updated environment.
+
+> **Note on Package Resolution Caching**: Xcode and SwiftPM cache package manifest evaluations. Whenever you add, change, or remove any `BYPASS_PERMISSION_*` environment variables, force a clean evaluation by running `flutter clean` in the terminal or selecting **File > Packages > Reset Package Caches** in Xcode.
+
+> **Note on committed configuration under SPM**: SwiftPM evaluates `Package.swift` inside a sandbox without access to the consuming app's `pubspec.yaml`, and Flutter's `FlutterGeneratedPluginSwiftPackage` auto-generates a single product dependency per plugin. As a result, compile-time bypass flags under SPM currently depend on build-time environment variables (such as a committed build/CI script). If you require the bypass flags to live directly in a checked-in configuration file without environment variables, you can temporarily fall back to CocoaPods (`flutter config --no-enable-swift-package-manager`) and configure `ios/Podfile` as shown below.
 
 #### 3. CI/CD Pipelines (GitHub Actions, Bitrise, Xcode Cloud, Fastlane)
 Define the environment variables in your workflow configuration. For example, in GitHub Actions:
