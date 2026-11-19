@@ -198,7 +198,7 @@ def upload_binary():
 # /upload_hold requests whose client is still connected, and the most at once
 # since the last /upload_concurrency request
 upload_lock = threading.Lock()
-uploads_in_flight = 0
+active_uploads = {}
 max_uploads_in_flight = 0
 
 def client_closed(sock):
@@ -211,6 +211,18 @@ def client_closed(sock):
     except OSError:
         return True
 
+def _prune_closed_uploads():
+    """
+    Removes entries from `active_uploads` whose socket has already closed.
+    Caller must hold `upload_lock`.
+    """
+    closed = [
+        tok for tok, s in active_uploads.items()
+        if s is not None and client_closed(s)
+    ]
+    for tok in closed:
+        active_uploads.pop(tok, None)
+
 @app.route('/upload_hold', methods=['POST'])
 def upload_hold():
     """
@@ -219,20 +231,33 @@ def upload_hold():
     client is connected, so a client that gives up early stops counting even
     if its body was already sent. Returns the body length.
     """
-    global uploads_in_flight, max_uploads_in_flight
+    global max_uploads_in_flight
     seconds = float(request.args.get('seconds', '15'))
     sock = request.environ.get('werkzeug.socket')
+    token = object()
     with upload_lock:
-        uploads_in_flight += 1
-        max_uploads_in_flight = max(max_uploads_in_flight, uploads_in_flight)
+        _prune_closed_uploads()
+        active_uploads[token] = None
+        max_uploads_in_flight = max(max_uploads_in_flight, len(active_uploads))
     try:
         data_len = len(request.get_data())
+        with upload_lock:
+            if token in active_uploads:
+                active_uploads[token] = sock
         deadline = time.time() + seconds
-        while time.time() < deadline and not (sock is not None and client_closed(sock)):
-            time.sleep(0.05)
+        while True:
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                break
+            if sock is None:
+                time.sleep(min(0.05, remaining))
+                continue
+            select.select([sock], [], [], min(0.2, remaining))
+            if client_closed(sock):
+                break
     finally:
         with upload_lock:
-            uploads_in_flight -= 1
+            active_uploads.pop(token, None)
     logger.info(f'Held upload, body length={data_len}')
     return Response(f'{data_len}')
 
@@ -244,8 +269,9 @@ def upload_concurrency():
     """
     global max_uploads_in_flight
     with upload_lock:
+        _prune_closed_uploads()
         result = max_uploads_in_flight
-        max_uploads_in_flight = uploads_in_flight
+        max_uploads_in_flight = len(active_uploads)
     return Response(f'{result}')
 
 @app.route('/upload_multi', methods=['POST'])
