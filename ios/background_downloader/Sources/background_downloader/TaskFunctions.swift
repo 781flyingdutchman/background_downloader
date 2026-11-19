@@ -329,17 +329,23 @@ func updateProgress(task: Task, totalBytesExpected: Int64, totalBytesDone: Int64
         return BDPlugin.progressInfo[task.taskId] ?? (lastProgressUpdateTime: 0.0, lastProgressValue: 0.0, lastTotalBytesDone: 0, lastNetworkSpeed: -1.0)
     })
     let now = Date().timeIntervalSince1970
-    if totalBytesExpected != NSURLSessionTransferSizeUnknown && now > info.lastProgressUpdateTime + 0.5 {
+    if totalBytesExpected > 0 && now > info.lastProgressUpdateTime + 0.5 {
         let progress = min(Double(totalBytesDone) / Double(totalBytesExpected), 0.999)
         if (progress - info.lastProgressValue > 0.02) || (progress > info.lastProgressValue && now > info.lastProgressUpdateTime + 2.5) {
             // calculate network speed and time remaining
             let now = Date().timeIntervalSince1970
             let timeSinceLastUpdate = now - info.lastProgressUpdateTime
             let bytesSinceLastUpdate = totalBytesDone - info.lastTotalBytesDone
-            let currentNetworkSpeed: Double = timeSinceLastUpdate > 3600 ? -1.0 : Double(bytesSinceLastUpdate) / timeSinceLastUpdate / 1000000.0
-            let newNetworkSpeed = info.lastNetworkSpeed == -1.0 ? currentNetworkSpeed : (info.lastNetworkSpeed * 3.0 + currentNetworkSpeed) / 4.0
+            let currentNetworkSpeed: Double = (timeSinceLastUpdate > 3600 || timeSinceLastUpdate <= 0 || bytesSinceLastUpdate < 0)
+                ? -1.0
+                : Double(bytesSinceLastUpdate) / timeSinceLastUpdate / 1000000.0
+            let newNetworkSpeed = currentNetworkSpeed == -1.0
+                ? -1.0
+                : (info.lastNetworkSpeed == -1.0 ? currentNetworkSpeed : (info.lastNetworkSpeed * 3.0 + currentNetworkSpeed) / 4.0)
             let remainingBytes = (1.0 - progress) * Double(totalBytesExpected)
-            let timeRemaining: TimeInterval = newNetworkSpeed == -1.0 ? -1.0 : (remainingBytes / newNetworkSpeed / 1000000.0)
+            let timeRemaining: TimeInterval = newNetworkSpeed > 0 && newNetworkSpeed.isFinite && remainingBytes >= 0
+                ? (remainingBytes / newNetworkSpeed / 1000000.0)
+                : -1.0
             BDPlugin.propertyLock.withLock({
                 BDPlugin.progressInfo[task.taskId] = (lastProgressUpdateTime: now, lastProgressValue: progress, lastTotalBytesDone: totalBytesDone, lastNetworkSpeed: newNetworkSpeed)
             })
@@ -470,7 +476,10 @@ func processProgressUpdate(task: Task, progress: Double, expectedFileSize: Int64
         onNativeTaskProgressChange(task, progress)
     }
     if providesProgressUpdates(task: task) {
-        if (!postOnBackgroundChannel(method: "progressUpdate", task: task, arg: [progress, expectedFileSize, networkSpeed, Int(timeRemaining * 1000.0)] as [Any])) {
+        let millis = timeRemaining * 1000.0
+        // Guard against NaN, infinity, and out-of-range finite values (Double(Int.max) rounds up to 2^63)
+        let timeRemainingMillis = millis >= Double(Int.min) && millis < Double(Int.max) ? Int(millis) : -1000
+        if (!postOnBackgroundChannel(method: "progressUpdate", task: task, arg: [progress, expectedFileSize, networkSpeed, timeRemainingMillis] as [Any])) {
             // store update locally as a merged task/progress JSON string
             guard let jsonData = try? JSONEncoder().encode(TaskProgressUpdate(task: task, progress: progress, expectedFileSize: expectedFileSize))
             else {

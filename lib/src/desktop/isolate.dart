@@ -331,26 +331,33 @@ void processProgressUpdateInIsolate(
     if (progress > 0 && progress < 1) {
       // calculate download speed and time remaining
       final now = DateTime.now();
-      final timeSinceLastUpdate = now.difference(lastProgressUpdateTime);
-      lastProgressUpdateTime = now;
-      if (task is ParallelDownloadTask) {
+      if (task is ParallelDownloadTask && expectedFileSize > 0) {
         // approximate based on aggregate progress
         bytesTotal = (progress * expectedFileSize).floor();
       }
-      final bytesSinceLastUpdate = bytesTotal - bytesTotalAtLastProgressUpdate;
-      bytesTotalAtLastProgressUpdate = bytesTotal;
-      final currentNetworkSpeed = timeSinceLastUpdate.inHours > 0
-          ? -1.0
-          : bytesSinceLastUpdate / timeSinceLastUpdate.inMicroseconds;
-      networkSpeed = switch (currentNetworkSpeed) {
-        -1.0 => -1.0,
-        _ when networkSpeed == -1.0 => currentNetworkSpeed,
-        _ => (networkSpeed * 3 + currentNetworkSpeed) / 4.0,
-      };
-      final remainingBytes = (1 - progress) * expectedFileSize;
-      final timeRemaining = networkSpeed == -1.0 || expectedFileSize < 0
-          ? const Duration(seconds: -1)
-          : Duration(microseconds: (remainingBytes / networkSpeed).round());
+      final timeSinceLastUpdate = now.difference(lastProgressUpdateTime);
+      if (timeSinceLastUpdate.inMicroseconds > 0) {
+        lastProgressUpdateTime = now;
+        final bytesSinceLastUpdate =
+            bytesTotal - bytesTotalAtLastProgressUpdate;
+        bytesTotalAtLastProgressUpdate = bytesTotal;
+        final currentNetworkSpeed =
+            timeSinceLastUpdate.inHours > 0 || bytesSinceLastUpdate < 0
+            ? -1.0
+            : bytesSinceLastUpdate / timeSinceLastUpdate.inMicroseconds;
+        networkSpeed = switch (currentNetworkSpeed) {
+          -1.0 => -1.0,
+          _ when networkSpeed == -1.0 => currentNetworkSpeed,
+          _ => (networkSpeed * 3 + currentNetworkSpeed) / 4.0,
+        };
+      } else if (timeSinceLastUpdate.inMicroseconds < 0) {
+        lastProgressUpdateTime = now;
+      }
+      final timeRemaining = calculateTimeRemaining(
+        progress: progress,
+        expectedFileSize: expectedFileSize,
+        networkSpeed: networkSpeed,
+      );
       sendPort.send((
         'progressUpdate',
         task,
@@ -371,6 +378,30 @@ void processProgressUpdateInIsolate(
       ));
     }
   }
+}
+
+/// Calculates the remaining time for a transfer, returning `-1` second if
+/// the estimate is unavailable, non-finite, or outside 64-bit Duration range.
+Duration calculateTimeRemaining({
+  required double progress,
+  required int expectedFileSize,
+  required double networkSpeed,
+}) {
+  if (networkSpeed <= 0 ||
+      !networkSpeed.isFinite ||
+      expectedFileSize <= 0 ||
+      progress < 0 ||
+      progress > 1) {
+    return const Duration(seconds: -1);
+  }
+  final remainingBytes = (1 - progress) * expectedFileSize;
+  final timeRemainingMicros = remainingBytes / networkSpeed;
+  if (!timeRemainingMicros.isFinite ||
+      timeRemainingMicros < 0 ||
+      timeRemainingMicros >= 9223372036854775808.0) {
+    return const Duration(seconds: -1);
+  }
+  return Duration(microseconds: timeRemainingMicros.round());
 }
 
 /// Returns a [task] that may be modified through callbacks

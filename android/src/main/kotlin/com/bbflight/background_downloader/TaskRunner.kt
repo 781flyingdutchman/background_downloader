@@ -1025,7 +1025,7 @@ open class TaskRunner(
         task: Task
     ) {
         val now = currentTimeMillis()
-        if (task.isParallelDownloadTask()) {
+        if (task.isParallelDownloadTask() && expectedFileSize > 0) {
             // approximate based on aggregate progress
             bytesTotal = (progress * expectedFileSize).toLong()
         }
@@ -1037,16 +1037,33 @@ open class TaskRunner(
             lastProgressUpdateTime = now
             val bytesSinceLastUpdate = bytesTotal - bytesTotalAtLastProgressUpdate
             bytesTotalAtLastProgressUpdate = bytesTotal
-            val currentNetworkSpeed: Double = if (timeSinceLastUpdate > 3600000)
-                -1.0 else bytesSinceLastUpdate / (timeSinceLastUpdate * 1000.0)
-            networkSpeed =
-                if (networkSpeed == -1.0) currentNetworkSpeed else (networkSpeed * 3.0 + currentNetworkSpeed) / 4.0
+            val currentNetworkSpeed: Double =
+                if (timeSinceLastUpdate > 3600000 || bytesSinceLastUpdate < 0)
+                    -1.0 else bytesSinceLastUpdate / (timeSinceLastUpdate * 1000.0)
+            networkSpeed = when {
+                currentNetworkSpeed == -1.0 -> -1.0
+                networkSpeed == -1.0 -> currentNetworkSpeed
+                else -> (networkSpeed * 3.0 + currentNetworkSpeed) / 4.0
+            }
         } else if (timeSinceLastUpdate < 0) {
             lastProgressUpdateTime = now // clock moved backwards
         }
         val remainingBytes = (1 - progress) * expectedFileSize
+        val timeRemainingMillis =
+            if (networkSpeed > 0 && networkSpeed.isFinite() && expectedFileSize > 0 && remainingBytes >= 0) {
+                remainingBytes / networkSpeed / 1000.0
+            } else {
+                -1000.0
+            }
         val timeRemaining: Long =
-            if (networkSpeed == -1.0) -1000 else (remainingBytes / networkSpeed / 1000).toLong()
+            if (timeRemainingMillis.isFinite() &&
+                timeRemainingMillis >= Long.MIN_VALUE.toDouble() &&
+                timeRemainingMillis < Long.MAX_VALUE.toDouble()
+            ) {
+                timeRemainingMillis.toLong()
+            } else {
+                -1000L
+            }
         // update progress and notification
         processProgressUpdate(
             task,
