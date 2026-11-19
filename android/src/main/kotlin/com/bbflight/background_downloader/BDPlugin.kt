@@ -173,11 +173,20 @@ class BDPlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
             
             val prefs = PreferenceManager.getDefaultSharedPreferences(context)
             val runInForegroundFileSize = prefs.getInt(keyConfigForegroundFileSize, -1)
-            // UIDT (JobScheduler) is used only if task priority is 0 (max priority)
-            // and notificationConfigJsonString is set (required for foreground)
+            // UIDT (JobScheduler) is used only if task priority is 0 (max priority),
+            // notificationConfig has a running notification (required for foreground),
             // and API level is >= 34 (Upside Down Cake)
+            val hasRunningNotification = if (notificationConfigJsonString != null) {
+                try {
+                    bdJson.decodeFromString<NotificationConfig>(notificationConfigJsonString).running != null
+                } catch (_: Exception) {
+                    false
+                }
+            } else {
+                false
+            }
             var useJobScheduler = task.priority == 0 &&
-                                  notificationConfigJsonString != null && 
+                                  hasRunningNotification &&
                                   Build.VERSION.SDK_INT >= 34
             if (useJobScheduler) {
                 // UIDT requires the RUN_USER_INITIATED_JOBS permission. If not granted, fallback to WorkManager.

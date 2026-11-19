@@ -404,47 +404,7 @@ object NotificationService {
                 delay(MIN_NOTIFICATION_INTERVAL_MS - timeSinceLastNotification)
             }
             val notificationData = mutex.withLock {
-                if (pendingNotifications.isEmpty()) {
-                    return@withLock null
-                }
-                var candidate = pendingNotifications.removeFirst()
-                // if the candidate is a progress update, check if there are more
-                // progress updates for the same notificationId in the queue
-                // and if so, use the last one
-                if (candidate.notificationType == NotificationType.running) {
-                    val iterator = pendingNotifications.iterator()
-                    while (iterator.hasNext()) {
-                        val next = iterator.next()
-                        if (next.taskWorker.notificationId == candidate.taskWorker.notificationId) {
-                            if (next.notificationType == NotificationType.running) {
-                                // Found a newer progress update, supersede the current candidate
-                                candidate = next
-                                iterator.remove()
-                            } else if (next.notificationType == null && next.builder == null) {
-                                // Found a removal for this notification, supersede candidate and remove
-                                candidate = next
-                                iterator.remove()
-                                break
-                            } else {
-                                // Found a non-running update (barrier), stop looking for this task
-                                break
-                            }
-                        }
-                    }
-                }
-                if (candidate.notificationType == null && candidate.builder == null) {
-                    // Deduplicate subsequent removals for the same notificationId
-                    val iterator = pendingNotifications.iterator()
-                    while (iterator.hasNext()) {
-                        val next = iterator.next()
-                        if (next.taskWorker.notificationId == candidate.taskWorker.notificationId &&
-                            next.notificationType == null && next.builder == null
-                        ) {
-                            iterator.remove()
-                        }
-                    }
-                }
-                candidate
+                dequeueNextNotificationLocked(pendingNotifications)
             }
             if (notificationData != null) {
                 processNotificationData(notificationData)
@@ -453,6 +413,68 @@ object NotificationService {
                 break
             }
         }
+    }
+
+    /**
+     * Pops the next [NotificationData] from [queue], collapsing subsequent updates
+     * when appropriate while preserving distinct foreground/UIDT workers.
+     *
+     * Must be called while holding [mutex].
+     */
+    internal fun dequeueNextNotificationLocked(
+        queue: java.util.ArrayDeque<NotificationData>
+    ): NotificationData? {
+        if (queue.isEmpty()) {
+            return null
+        }
+        var candidate = queue.removeFirst()
+        // if the candidate is a progress update, check if there are more
+        // progress updates for the same notificationId in the queue
+        // and if so, use the last one
+        if (candidate.notificationType == NotificationType.running) {
+            val iterator = queue.iterator()
+            while (iterator.hasNext()) {
+                val next = iterator.next()
+                if (next.taskWorker.notificationId == candidate.taskWorker.notificationId) {
+                    val canCollapseAcrossWorkers =
+                        next.taskWorker === candidate.taskWorker ||
+                            (!candidate.taskWorker.runInForeground && !next.taskWorker.runInForeground)
+                    if (next.notificationType == NotificationType.running) {
+                        // Only collapse updates from the same worker (or non-foreground workers),
+                        // so foreground/UIDT jobs sharing a group notificationId never lose their
+                        // required setForegroundNotification call.
+                        if (canCollapseAcrossWorkers) {
+                            // Found a newer progress update, supersede the current candidate
+                            candidate = next
+                            iterator.remove()
+                        }
+                    } else if (next.notificationType == null && next.builder == null) {
+                        // Found a removal for this notification, supersede candidate and remove
+                        if (canCollapseAcrossWorkers) {
+                            candidate = next
+                            iterator.remove()
+                            break
+                        }
+                    } else if (canCollapseAcrossWorkers) {
+                        // Found a non-running update (barrier), stop looking for this task
+                        break
+                    }
+                }
+            }
+        }
+        if (candidate.notificationType == null && candidate.builder == null) {
+            // Deduplicate subsequent removals for the same notificationId
+            val iterator = queue.iterator()
+            while (iterator.hasNext()) {
+                val next = iterator.next()
+                if (next.taskWorker.notificationId == candidate.taskWorker.notificationId &&
+                    next.notificationType == null && next.builder == null
+                ) {
+                    iterator.remove()
+                }
+            }
+        }
+        return candidate
     }
 
     /**
