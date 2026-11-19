@@ -1336,13 +1336,22 @@ interface class FileDownloader {
   /// the downloader. If not set, the default [http.Client] will be used.
   /// The request is executed on an Isolate, to ensure minimal interference
   /// with the main Isolate
-  Future<http.Response> request(Request request) => compute(_doRequest, (
-    request,
-    DesktopDownloader.requestTimeout,
-    DesktopDownloader.proxy,
-    DesktopDownloader.bypassTLSCertificateValidation,
-    DesktopDownloader.mtlsConfigs,
-  ));
+  Future<http.Response> request(Request request) async {
+    final (response, warnings) = await compute(_doRequest, (
+      request,
+      DesktopDownloader.requestTimeout,
+      DesktopDownloader.proxy,
+      DesktopDownloader.bypassTLSCertificateValidation,
+      DesktopDownloader.mtlsConfigs,
+    ));
+    if (warnings.isNotEmpty) {
+      final log = Logger('FileDownloader.request');
+      for (final warning in warnings) {
+        log.warning(warning);
+      }
+    }
+    return response;
+  }
 
   /// Move the file represented by the [task] to a shared storage
   /// [destination] and potentially a [directory] within that destination. If
@@ -1470,7 +1479,7 @@ interface class FileDownloader {
 ///
 /// This function is run on an Isolate to ensure performance on the main
 /// Isolate is not affected
-Future<http.Response> _doRequest(
+Future<(http.Response, List<String>)> _doRequest(
   (Request, Duration?, Map<String, dynamic>, bool, List<MTLSConfig>) params,
 ) async {
   final (
@@ -1480,13 +1489,7 @@ Future<http.Response> _doRequest(
     bypassTLSCertificateValidation,
     mtlsConfigs,
   ) = params;
-  Logger.root.level = Level.ALL;
-  Logger.root.onRecord.listen((LogRecord rec) {
-    if (kDebugMode) {
-      print('${rec.loggerName}>${rec.level.name}: ${rec.time}: ${rec.message}');
-    }
-  });
-  final log = Logger('FileDownloader.request');
+  final warnings = <String>[];
   DesktopDownloader.setHttpClient(
     requestTimeout,
     proxy,
@@ -1536,16 +1539,16 @@ Future<http.Response> _doRequest(
         206,
         404,
       ].contains(response.statusCode)) {
-        return response;
+        return (response, warnings);
       }
     } catch (e) {
-      log.warning(e);
+      warnings.add(e.toString());
       response = http.Response('', 499, reasonPhrase: e.toString());
     }
     // error, retry if allowed
     request.decreaseRetriesRemaining();
     if (request.retriesRemaining < 0) {
-      return response; // final response with error
+      return (response, warnings); // final response with error
     }
     final waitTime = Duration(
       seconds: pow(2, (request.retries - request.retriesRemaining)).toInt(),
