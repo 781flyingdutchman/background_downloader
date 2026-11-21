@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:background_downloader/background_downloader.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:logging/logging.dart';
 
 void main() {
