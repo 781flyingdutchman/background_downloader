@@ -71,12 +71,19 @@ actor GroupNotification {
     let name: String
     let notificationConfig: NotificationConfig
     
-    private var notifications: [Task : NotificationType]
+    /// Notification type for each task in this group, keyed by taskId: a task that is
+    /// enqueued again (a retry decrements retriesRemaining, so it is a different [Task]
+    /// value) replaces its earlier entry instead of adding one (matches Android)
+    private var notifications: [String : NotificationType]
+    
+    /// Most recent [Task] for each taskId in [notifications]
+    private var tasks: [String : Task]
     
     init(name: String, notificationConfig: NotificationConfig) {
         self.name = name
         self.notificationConfig = notificationConfig
         self.notifications = [:]
+        self.tasks = [:]
     }
     
     /// NotificationId derived from group name
@@ -148,7 +155,7 @@ actor GroupNotification {
         get {
             return Set(notifications.filter { (_, notificationType) in
                 notificationType == NotificationType.running
-            }.keys)
+            }.keys.compactMap { tasks[$0] })
         }
     }
     
@@ -166,11 +173,12 @@ actor GroupNotification {
     /// Update a [task] and [notificationType] to this group,
     /// and return True if this led to change in [groupState]
     func update(task: Task, notificationType: NotificationType) -> Bool {
-        guard notifications[task] != notificationType else {
+        tasks[task.taskId] = task
+        guard notifications[task.taskId] != notificationType else {
             return false
         }
         let priorState = groupState
-        notifications[task] = notificationType
+        notifications[task.taskId] = notificationType
         return priorState != groupState
     }
 }
